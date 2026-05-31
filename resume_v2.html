@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Matan Malka — Resume</title>
+<title>Matan Malka - Resume</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -15,7 +15,7 @@
     --rule: #e5e0d8;
     --bg: #ffffff;
     --serif: 'DM Serif Display', Georgia, serif;
-    --sans: 'DM Sans', sans-serif;
+    --sans: 'DM Sans', Arial, sans-serif;
   }
 
   html, body {
@@ -28,7 +28,6 @@
     margin: 0 auto;
   }
 
-  /* ── PAGE SHELL ── */
   .page {
     width: 210mm;
     min-height: 297mm;
@@ -37,7 +36,6 @@
     grid-template-rows: auto 1fr;
   }
 
-  /* ── HEADER ── */
   header {
     display: grid;
     grid-template-columns: 1fr auto;
@@ -72,12 +70,8 @@
   .contacts a { color: var(--muted); text-decoration: none; }
   .contacts a:hover { color: var(--accent); }
 
-  /* ── BODY ── */
-  .body {
-    display: block;
-  }
+  .body { display: block; }
 
-  /* ── SECTION ── */
   .section { margin-bottom: 14px; }
 
   .section-label {
@@ -91,14 +85,12 @@
     border-bottom: 1px solid var(--rule);
   }
 
-  /* ── ABOUT ── */
   .about p {
     font-size: 10pt;
     color: #3a3a3c;
     line-height: 1.6;
   }
 
-  /* ── JOBS ── */
   .job { margin-bottom: 12px; }
   .job:last-child { margin-bottom: 0; }
 
@@ -128,9 +120,7 @@
     margin-bottom: 4px;
   }
 
-  ul {
-    padding-left: 15px;
-  }
+  ul { padding-left: 15px; }
 
   ul li {
     font-size: 10pt;
@@ -139,7 +129,6 @@
     line-height: 1.5;
   }
 
-  /* ── EDUCATION ── */
   .edu-title {
     font-size: 11pt;
     font-weight: 600;
@@ -151,31 +140,25 @@
     margin-bottom: 4px;
   }
 
-  /* ── SKILLS TABLE ── */
-  .skills-table {
-    width: 100%;
-    border-collapse: collapse;
-  }
+  .skills-list { list-style: none; padding: 0; }
 
-  .skills-table td {
-    padding: 3.5px 8px 3.5px 0;
-    vertical-align: top;
-    line-height: 1.5;
+  .skills-list li {
+    display: flex;
+    gap: 0;
     font-size: 10pt;
+    margin-bottom: 4px;
+    line-height: 1.5;
+    color: #3a3a3c;
   }
 
-  .skills-table td:first-child {
+  .skill-cat {
     font-weight: 600;
     white-space: nowrap;
-    width: 130px;
+    width: 140px;
+    flex-shrink: 0;
     color: var(--ink);
   }
 
-  .skills-table td:last-child {
-    color: var(--muted);
-  }
-
-  /* ── LANGUAGES ── */
   .languages-row {
     display: flex;
     gap: 40px;
@@ -191,7 +174,6 @@
     font-size: 9.5pt;
   }
 
-  /* ── PRINT ── */
   @media print {
     @page {
       size: A4;
@@ -228,105 +210,95 @@
 <body>
 <div class="page">
 
-  <!-- HEADER -->
   <header>
     <div>
       <div class="name">Matan Malka</div>
-      <div class="tagline">Full Stack Developer &nbsp;·&nbsp; Python &nbsp;·&nbsp; Node.js &nbsp;·&nbsp; React &nbsp;·&nbsp; AI/ML</div>
+      <div class="tagline">Full-Stack Developer - Python, Node.js, React, AI/ML</div>
     </div>
     <div class="contacts">
       Tel Aviv<br>
       +972-50-668-8386<br>
       <a href="mailto:matan1391@gmail.com">matan1391@gmail.com</a><br>
-      <a href="https://github.com" target="_blank">GitHub</a> &nbsp;·&nbsp; <a href="https://linkedin.com" target="_blank">LinkedIn</a>
+      <a href="https://github.com" target="_blank">GitHub</a> - <a href="https://linkedin.com" target="_blank">LinkedIn</a>
     </div>
   </header>
 
-  <!-- BODY -->
   <div class="body">
-
-    <!-- MAIN COLUMN -->
     <div class="main">
 
-      <!-- ABOUT -->
       <div class="section about">
         <div class="section-label">Profile</div>
-        <p>Full Stack Developer with hands-on professional experience building scalable web applications and integrating AI/ML solutions. Adept at designing robust backends, efficient database schemas, and dynamic user-centric frontends. Committed to clean code, performance optimisation, and shipping production-ready software that drives measurable business impact.</p>
+        <p>Full-Stack Developer with hands-on professional experience building scalable web applications and integrating AI/ML solutions. Adept at designing robust backends, efficient database schemas, and dynamic user-centric frontends. Committed to clean code, performance optimization, and shipping production-ready software that drives measurable business impact.</p>
       </div>
 
-      <!-- EXPERIENCE -->
       <div class="section">
-        <div class="section-label">Experience</div>
+        <div class="section-label">Work Experience</div>
 
         <div class="job">
           <div class="job-header">
-            <span class="job-title">Full Stack Developer</span>
-            <span class="job-date">2025 – 2026</span>
+            <span class="job-title">Full-Stack Developer</span>
+            <span class="job-date">2025 - 2026</span>
           </div>
-          <div class="job-company">PH.Digital · Tel Aviv</div>
+          <div class="job-company">PH.Digital, Tel Aviv</div>
           <ul>
-            <li>Designed and maintained end-to-end web applications with <strong>React</strong> (frontend) and <strong>Node.js / Python</strong> (backend), serving production traffic.</li>
+            <li>Designed and maintained end-to-end web applications with React (frontend) and Node.js, Python (backend), serving production traffic.</li>
             <li>Integrated third-party REST APIs and implemented complex business logic, reducing manual processing time for key workflows.</li>
-            <li>Optimised PostgreSQL/MongoDB queries and backend performance, improving average API response time significantly.</li>
-            <li>Delivered features iteratively in an Agile team, collaborating with product, design, and QA to meet sprint goals.</li>
+            <li>Optimized PostgreSQL and MongoDB queries and backend performance, improving average API response time significantly.</li>
+            <li>Delivered features iteratively in an Agile/Scrum team, collaborating with product, design, and QA to meet sprint goals.</li>
           </ul>
         </div>
 
         <div class="job">
           <div class="job-header">
             <span class="job-title">Sales Team Leader</span>
-            <span class="job-date">2019 – 2025</span>
+            <span class="job-date">2019 - 2025</span>
           </div>
-          <div class="job-company">Pcom Solutions · Tel Aviv</div>
+          <div class="job-company">Pcom Solutions, Tel Aviv</div>
           <ul>
-            <li>Grew team revenue by <strong>30%</strong> year-on-year through rigorous KPI tracking, pipeline ownership, and data-driven coaching.</li>
+            <li>Grew team revenue by 30% year-on-year through rigorous KPI tracking, pipeline ownership, and data-driven coaching.</li>
             <li>Managed high-stakes enterprise negotiations and long-term client relationships across multiple industries.</li>
             <li>Mentored and upskilled team members on sales methodologies, improving funnel conversion and forecast accuracy.</li>
           </ul>
         </div>
       </div>
 
-      <!-- EDUCATION -->
       <div class="section">
         <div class="section-label">Education</div>
-        <div class="edu-title">Full Stack Development Bootcamp — John Bryce, Tel Aviv</div>
-        <div class="edu-sub">990 hours · 2024 – 2025</div>
+        <div class="edu-title">Full-Stack Development Bootcamp - John Bryce, Tel Aviv</div>
+        <div class="edu-sub">990 hours, 2024 - 2025</div>
         <ul>
-          <li>Intensive program covering end-to-end web development with <strong>Python, React, and Node.js</strong>.</li>
-          <li>Built data-driven applications integrating Machine Learning models; practised Clean Code and SOLID principles.</li>
-          <li>Gained proficiency in DevOps workflows: <strong>Git/GitHub, Docker, AWS EC2</strong> deployment.</li>
+          <li>Intensive program covering end-to-end web development with Python, React, and Node.js.</li>
+          <li>Built data-driven applications integrating Machine Learning (ML) models; practiced Clean Code and SOLID principles.</li>
+          <li>Gained proficiency in DevOps workflows: Git, GitHub, Docker, AWS EC2 deployment.</li>
         </ul>
       </div>
 
-      <!-- SKILLS -->
       <div class="section">
-        <div class="section-label">Technical Skills</div>
-        <table class="skills-table">
-          <tr><td>Backend</td><td>Python (FastAPI / Flask) · Node.js (Express) · RESTful APIs</td></tr>
-          <tr><td>Frontend</td><td>React · TypeScript · HTML5 · CSS3</td></tr>
-          <tr><td>AI / ML</td><td>PyTorch · TensorFlow · OpenCV · Computer Vision (ResNet) · Scikit-learn · NumPy</td></tr>
-          <tr><td>Generative AI</td><td>Prompt Engineering · OpenAI API · Anthropic API</td></tr>
-          <tr><td>Databases &amp; ORM</td><td>PostgreSQL · MySQL · MongoDB · SQLAlchemy · Sequelize</td></tr>
-          <tr><td>Web Scraping</td><td>BeautifulSoup · Selenium · Scrapy</td></tr>
-          <tr><td>Tools &amp; Cloud</td><td>Git / GitHub · Docker · Postman · AWS EC2</td></tr>
-        </table>
+        <div class="section-label">Skills</div>
+        <ul class="skills-list">
+          <li><span class="skill-cat">Backend</span><span>Python (FastAPI, Flask), Node.js (Express), RESTful APIs, JavaScript</span></li>
+          <li><span class="skill-cat">Frontend</span><span>React, TypeScript, JavaScript, HTML5, CSS3</span></li>
+          <li><span class="skill-cat">AI / ML</span><span>PyTorch, TensorFlow, OpenCV, Computer Vision (ResNet), Scikit-learn, NumPy</span></li>
+          <li><span class="skill-cat">Generative AI</span><span>Prompt Engineering, OpenAI API, Anthropic API, LLM integration</span></li>
+          <li><span class="skill-cat">Databases and ORM</span><span>PostgreSQL, MySQL, MongoDB, SQLAlchemy, Sequelize</span></li>
+          <li><span class="skill-cat">Web Scraping</span><span>BeautifulSoup, Selenium, Scrapy</span></li>
+          <li><span class="skill-cat">Tools and Cloud</span><span>Git, GitHub, Docker, Postman, AWS EC2, CI/CD</span></li>
+        </ul>
       </div>
 
-      <!-- LANGUAGES -->
       <div class="section">
         <div class="section-label">Languages</div>
         <div class="languages-row">
-          <div class="lang-item"><strong>Hebrew</strong> <span class="lang-level">Native</span></div>
-          <div class="lang-item"><strong>English</strong> <span class="lang-level">Fluent</span></div>
-          <div class="lang-item"><strong>Arabic</strong> <span class="lang-level">Conversational</span></div>
-          <div class="lang-item"><strong>French</strong> <span class="lang-level">Conversational</span></div>
+          <div class="lang-item">Hebrew <span class="lang-level">- Native</span></div>
+          <div class="lang-item">English <span class="lang-level">- Fluent</span></div>
+          <div class="lang-item">Arabic <span class="lang-level">- Conversational</span></div>
+          <div class="lang-item">French <span class="lang-level">- Conversational</span></div>
         </div>
       </div>
 
-    </div><!-- /main -->
+    </div>
+  </div>
 
-  </div><!-- /body -->
-
-</div><!-- /page -->
+</div>
 </body>
 </html>
