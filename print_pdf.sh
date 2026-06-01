@@ -15,7 +15,12 @@ ABS_PATH="$(cd "$(dirname "$HTML_FILE")" && pwd)/$(basename "$HTML_FILE")"
 HTML_DIR="$(dirname "$ABS_PATH")"
 PDF_DIR="$(dirname "$HTML_DIR")/cv-pdf"
 mkdir -p "$PDF_DIR"
-PDF_PATH="$PDF_DIR/$(basename "${ABS_PATH%.html}.pdf")"
+
+if [ -n "${2}" ]; then
+  PDF_PATH="$PDF_DIR/${2%.pdf}.pdf"
+else
+  PDF_PATH="$PDF_DIR/$(basename "${ABS_PATH%.html}.pdf")"
+fi
 
 CHROME=$(command -v "Google Chrome" 2>/dev/null \
   || command -v google-chrome 2>/dev/null \
