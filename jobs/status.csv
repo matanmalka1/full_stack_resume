@@ -1,3 +1,4 @@
 company,role,url,cv_file,status,date_sent,notes
 example,fullstack-developer,https://example.com/job,outputs/cv_example_fullstack-developer.pdf,draft,,,
 rayzone-group,junior-full-stack-developer,,outputs/rayzone-group/cv_rayzone-group_junior-full-stack-developer.pdf,draft,2026-06-01,
+wedev-technologies,junior-fullstack-developer,,outputs/wedev-technologies/cv-pdf/cv_wedev-technologies_junior-fullstack-developer.pdf,draft,2026-06-01,

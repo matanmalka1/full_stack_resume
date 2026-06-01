@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matan Malka - Resume</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --ink: #1c1c1e;
+    --muted: #6b7280;
+    --accent: #3f41c3;
+    --rule: #e5e0d8;
+    --bg: #ffffff;
+    --serif: 'DM Serif Display', Georgia, serif;
+    --sans: 'DM Sans', Arial, sans-serif;
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 11.5pt;
+    line-height: 1.5;
+    width: 210mm;
+    margin: 0 auto;
+  }
+
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 13mm 16mm 13mm;
+    display: grid;
+    grid-template-rows: auto 1fr;
+  }
+
+  header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--ink);
+    margin-bottom: 14px;
+  }
+
+  .name {
+    font-family: var(--serif);
+    font-size: 34pt;
+    line-height: 1;
+    letter-spacing: -0.5px;
+    color: var(--ink);
+  }
+
+  .tagline {
+    font-size: 10pt;
+    color: var(--muted);
+    margin-top: 4px;
+    letter-spacing: 0.3px;
+  }
+
+  .contacts {
+    text-align: right;
+    font-size: 9.5pt;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  .contacts a { color: var(--muted); text-decoration: none; }
+  .contacts a:hover { color: var(--accent); }
+
+  .body { display: block; }
+
+  .section { margin-bottom: 14px; }
+
+  .section-label {
+    font-size: 7.5pt;
+    font-weight: 600;
+    letter-spacing: 1.8px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 7px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .about p {
+    font-size: 11pt;
+    color: #3a3a3c;
+    line-height: 1.6;
+  }
+
+  .job { margin-bottom: 12px; }
+  .job:last-child { margin-bottom: 0; }
+
+  .job-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .job-title {
+    font-size: 11pt;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .job-date {
+    font-size: 9pt;
+    color: var(--muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .job-company {
+    font-size: 9.5pt;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+
+  ul { padding-left: 15px; }
+
+  ul li {
+    font-size: 11pt;
+    color: #3a3a3c;
+    margin-bottom: 3px;
+    line-height: 1.5;
+  }
+
+  .edu-title {
+    font-size: 11pt;
+    font-weight: 600;
+  }
+
+  .edu-sub {
+    font-size: 9.5pt;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+
+  .skills-list { list-style: none; padding: 0; }
+
+  .skills-list li {
+    display: flex;
+    gap: 0;
+    font-size: 11pt;
+    margin-bottom: 4px;
+    line-height: 1.5;
+    color: #3a3a3c;
+  }
+
+  .skill-cat {
+    font-weight: 600;
+    white-space: nowrap;
+    width: 160px;
+    flex-shrink: 0;
+    color: var(--ink);
+  }
+
+  .languages-row {
+    display: flex;
+    gap: 40px;
+  }
+
+  .lang-item {
+    font-size: 10pt;
+    color: var(--ink);
+  }
+
+  .lang-level {
+    color: var(--muted);
+    font-size: 9.5pt;
+  }
+
+  @media print {
+    @page {
+      size: A4;
+      margin: 0;
+    }
+
+    html, body {
+      width: 210mm;
+      height: 297mm;
+      margin: 0;
+      background: #fff;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .page {
+      padding: 10mm 13mm 8mm;
+      min-height: unset;
+      height: 297mm;
+      overflow: hidden;
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+
+    * {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    a { color: inherit !important; text-decoration: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div>
+      <div class="name">Matan Malka</div>
+      <div class="tagline">Full-Stack Developer · React · Node.js · Python</div>
+    </div>
+    <div class="contacts">
+      Tel Aviv<br>
+      <a href="tel:+972506688386">+972-50-668-8386</a><br>
+      <a href="mailto:matan1391@gmail.com">matan1391@gmail.com</a><br>
+      <a href="https://github.com/matanmalka1" target="_blank">GitHub</a> · <a href="https://www.linkedin.com/in/matanmalka1" target="_blank">LinkedIn</a>
+    </div>
+  </header>
+
+  <div class="body">
+    <div class="main">
+
+      <div class="section about">
+        <div class="section-label">Profile</div>
+        <p>Full-Stack Developer with production experience across the entire web stack: React frontends, Node.js and Python backends, and both SQL and NoSQL databases. Built and shipped business platforms end-to-end: from database schema and REST API design to UI and third-party integrations. Strong problem-solving skills developed through real-world feature delivery in Agile teams.</p>
+      </div>
+
+      <div class="section">
+        <div class="section-label">Work Experience</div>
+
+        <div class="job">
+          <div class="job-header">
+            <span class="job-title">Full-Stack Developer</span>
+            <span class="job-date">2025 – 2026</span>
+          </div>
+          <div class="job-company">PH.Digital, Tel Aviv</div>
+          <ul>
+            <li>Designed and maintained end-to-end web applications with <strong>React</strong> (frontend) and <strong>Python/FastAPI</strong> (backend), owning the full stack from database schema to API layer.</li>
+            <li>Built and maintained a production business platform with <strong>PostgreSQL</strong>, implementing complex business logic, secure <strong>JWT</strong> authentication, and async background job scheduling.</li>
+            <li>Integrated third-party <strong>REST APIs</strong> and external business systems, building automated workflows for document generation, client communication, and financial reporting processes.</li>
+            <li>Delivered features consistently in <strong>Agile</strong> sprints (stand-ups, sprint planning, retrospectives), collaborating across frontend and product teams.</li>
+          </ul>
+        </div>
+
+        <div class="job">
+          <div class="job-header">
+            <span class="job-title">Sales Team Leader</span>
+            <span class="job-date">2019 – 2025</span>
+          </div>
+          <div class="job-company">Pcom Solutions, Tel Aviv</div>
+          <ul>
+            <li>Led a team of 3–4 sales representatives; managed pipeline, KPIs, and enterprise client relationships.</li>
+            <li>Grew team revenue <strong>30% YoY</strong> through structured performance tracking and process improvements.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-label">Education</div>
+        <div class="edu-title">Full-Stack Development — John Bryce, Tel Aviv</div>
+        <div class="edu-sub">990 hours, 2024 – 2025</div>
+        <ul>
+          <li>Program covering end-to-end web development with <strong>React</strong>, <strong>Node.js</strong>, and Python (FastAPI, Django, Flask).</li>
+          <li>Built full-stack projects with relational (<strong>PostgreSQL</strong>, <strong>MySQL</strong>) and non-relational (<strong>MongoDB</strong>) databases; applied Clean Code and SOLID principles.</li>
+          <li>Gained hands-on experience with DevOps workflows: <strong>Git</strong>, <strong>GitHub</strong>, <strong>Docker</strong>, <strong>AWS EC2</strong> deployment.</li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <div class="section-label">Skills</div>
+        <ul class="skills-list">
+          <li><span class="skill-cat">Frontend</span><span>React, TypeScript, JavaScript, HTML5, CSS3</span></li>
+          <li><span class="skill-cat">Backend</span><span>Node.js (Express), Python (FastAPI, Flask), RESTful APIs</span></li>
+          <li><span class="skill-cat">Databases</span><span>PostgreSQL, MySQL, MongoDB, SQLAlchemy, SQL</span></li>
+          <li><span class="skill-cat">Tools &amp; Cloud</span><span>Git, GitHub, Docker, Postman, AWS EC2</span></li>
+          <li><span class="skill-cat">Generative AI</span><span>OpenAI API, Anthropic API, Prompt Engineering, LLM integration</span></li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <div class="section-label">Languages</div>
+        <div class="languages-row">
+          <div class="lang-item">Hebrew <span class="lang-level">— Native</span></div>
+          <div class="lang-item">English <span class="lang-level">— Fluent</span></div>
+          <div class="lang-item">Arabic <span class="lang-level">— Conversational</span></div>
+          <div class="lang-item">French <span class="lang-level">— Conversational</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

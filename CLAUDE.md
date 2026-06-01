@@ -107,3 +107,4 @@ If an output file already exists — move it to `outputs/archive/` before writin
 - Backend-oriented when relevant
 - No exaggerated claims
 - ATS-optimized: job keywords embedded naturally
+- No em dashes (—) in prose text — use a colon or restructure the sentence
