@@ -19,7 +19,7 @@ Full-Stack Developer with hands-on professional experience in Python/FastAPI, No
 ## Work Experience
 
 ### Full-Stack Developer — PH.Digital, Tel Aviv
-**2025 – Present**
+**2025 – 2026**
 
 - Built and maintained custom APIs and backend services using **Python/FastAPI** and **Node.js**, integrating external REST APIs and automating client-specific business workflows.
 - Worked with **PostgreSQL** and **MySQL** to design queries, model business data, and support reporting and data transformation workflows.

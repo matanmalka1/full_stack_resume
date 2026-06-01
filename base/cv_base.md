@@ -17,7 +17,7 @@ Full-Stack Developer focused on Python/FastAPI, React, and PostgreSQL. Experienc
 ## Work Experience
 
 ### Full-Stack Developer — PH.Digital, Tel Aviv
-**2025 – Present**
+**2025 – 2026**
 
 - Designed and maintained end-to-end web applications with React (frontend) and Python/FastAPI (backend), owning the full stack from database schema to API layer.
 - Built and maintained a production business platform with PostgreSQL, implementing complex business logic, secure JWT authentication, and async background job scheduling.
