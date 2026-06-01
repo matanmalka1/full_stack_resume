@@ -12,7 +12,10 @@ if [ ! -f "$HTML_FILE" ]; then
 fi
 
 ABS_PATH="$(cd "$(dirname "$HTML_FILE")" && pwd)/$(basename "$HTML_FILE")"
-PDF_PATH="${ABS_PATH%.html}.pdf"
+HTML_DIR="$(dirname "$ABS_PATH")"
+PDF_DIR="$(dirname "$HTML_DIR")/cv-pdf"
+mkdir -p "$PDF_DIR"
+PDF_PATH="$PDF_DIR/$(basename "${ABS_PATH%.html}.pdf")"
 
 CHROME=$(command -v "Google Chrome" 2>/dev/null \
   || command -v google-chrome 2>/dev/null \

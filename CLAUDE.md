@@ -24,23 +24,67 @@ Generate tailored CV versions from a base CV and a job description.
    - **B — Balanced**
    - **C — AI/GenAI focused**
 
-4. Generate tailored CV → save to `outputs/cv_<company>_<role>.md`
+4. Generate tailored CV → save to `outputs/<company>/cv-drafts/cv_<company>_<role>.md`
    - Clean CV only — no notes inside
+   - Include front-matter at top:
+     ```yaml
+     ---
+     created: YYYY-MM-DD
+     modified: YYYY-MM-DD
+     ---
+     ```
 
-5. Save tailoring decisions → `outputs/cv_<company>_<role>.notes.md`
+5. Save tailoring decisions → `outputs/<company>/cv-drafts/cv_<company>_<role>.notes.md`
+   - Include front-matter at top:
+     ```yaml
+     ---
+     created: YYYY-MM-DD
+     modified: YYYY-MM-DD
+     ---
+     ```
 
 6. Convert `.md` → `.html` using `resume_base.html` as visual template
-   → save as `outputs/cv_<company>_<role>.html`
+   → save as `outputs/<company>/cv-html/cv_<company>_<role>.html`
 
-7. Remind user:
+7. Automatically save job description → `outputs/<company>/job-description/<company>_<role>.md`
+   - Use the template format from `jobs/job_description_example.md`
+   - Include front-matter at top:
+     ```yaml
+     ---
+     created: YYYY-MM-DD
+     modified: YYYY-MM-DD
+     ---
+     ```
+
+8. Automatically add row to `jobs/status.csv`:
+   - Fields: company, role, url, cv_file, status (draft), date_sent (today), notes
+   - cv_file field: `outputs/<company>/cv-pdf/cv_<company>_<role>.pdf`
+
+9. Remind user:
    ```bash
-   bash print_pdf.sh outputs/cv_<company>_<role>.html
+   bash print_pdf.sh outputs/<company>/cv-html/cv_<company>_<role>.html
    ```
 
-8. Remind user to:
-   - Save job description to `jobs/<company>_<role>.md`
-   - Add row to `jobs/status.csv`
-   - Run through `CHECKLIST.md` before sending
+10. Remind user to:
+    - Run through `CHECKLIST.md` before sending
+    - Update `jobs/status.csv` status when sent
+
+## Output folder structure
+Each company gets its own subfolder under `outputs/`, split by output type:
+```
+outputs/
+  <company>/
+    job-description/
+      <company>_<role>.md          ← job description
+    cv-drafts/
+      cv_<company>_<role>.md
+      cv_<company>_<role>.notes.md
+    cv-html/
+      cv_<company>_<role>.html
+    cv-pdf/
+      cv_<company>_<role>.pdf
+  archive/
+```
 
 ## PDF Flow — never break this order
 1. `.md` → `.html` (via `resume_base.html` template)
