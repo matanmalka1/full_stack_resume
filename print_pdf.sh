@@ -16,11 +16,7 @@ HTML_DIR="$(dirname "$ABS_PATH")"
 PDF_DIR="$(dirname "$HTML_DIR")/cv-pdf"
 mkdir -p "$PDF_DIR"
 
-if [ -n "${2}" ]; then
-  PDF_PATH="$PDF_DIR/${2%.pdf}.pdf"
-else
-  PDF_PATH="$PDF_DIR/$(basename "${ABS_PATH%.html}.pdf")"
-fi
+PDF_PATH="$PDF_DIR/Matan Malka - Full Stack Developer.pdf"
 
 CHROME=$(command -v "Google Chrome" 2>/dev/null \
   || command -v google-chrome 2>/dev/null \
