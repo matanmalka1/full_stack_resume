@@ -48,7 +48,7 @@ Full-Stack Developer focused on Python/FastAPI, React, and PostgreSQL. Experienc
 | Category | Technologies |
 |----------|-------------|
 | Backend | Python (FastAPI, Flask), Node.js (Express), RESTful APIs |
-| Frontend | React, TypeScript, JavaScript, HTML5, CSS3 |
+| Frontend | React, TypeScript, JavaScript |
 | Generative AI | Prompt Engineering, OpenAI API, Anthropic API, LLM integration |
 | Databases & SQL | PostgreSQL, MySQL, MongoDB, SQLAlchemy, SQL |
 | Tools & Cloud | Git, GitHub, Docker, Postman, AWS EC2 |
