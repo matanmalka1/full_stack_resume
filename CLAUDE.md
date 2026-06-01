@@ -5,8 +5,8 @@ Generate tailored CV versions from a base CV and a job description.
 
 ## Always read before starting
 - `base/cv_base.md` — source of truth, never modify
-- `rules/cv_generation_rules.md` — full process and hard rules
-- `examples/cv_example_backend.md` — reference output format
+- `config/cv_generation_rules.md` — full process and hard rules
+- `config/cv_example_backend.md` — reference output format
 
 ## Workflow
 
@@ -43,11 +43,11 @@ Generate tailored CV versions from a base CV and a job description.
      ---
      ```
 
-6. Convert `.md` → `.html` using `resume_base.html` as visual template
+6. Convert `.md` → `.html` using `config/resume_base.html` as visual template
    → save as `outputs/<company>/cv-html/cv_<company>_<role>.html`
 
 7. Automatically save job description → `outputs/<company>/job-description/<company>_<role>.md`
-   - Use the template format from `jobs/job_description_example.md`
+   - Use the template format from `config/job_description_example.md`
    - Include front-matter at top:
      ```yaml
      ---
