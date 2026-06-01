@@ -10,7 +10,7 @@
 ---
 
 ## Profile
-Full-Stack Developer focused on Python/FastAPI, React, and PostgreSQL. Experienced in building internal CRM and workflow systems, designing backend APIs, database models, authentication flows, and business logic-heavy features. Strong background in sales operations, giving practical product sense and understanding of business workflows.
+Full-Stack Developer focused on Python/FastAPI, React, and PostgreSQL. Experienced in building internal business platforms and workflow systems, designing backend APIs, database models, authentication flows, and business logic-heavy features. Strong background in sales operations, providing practical product sense and understanding of business workflows.
 
 ---
 
@@ -20,7 +20,7 @@ Full-Stack Developer focused on Python/FastAPI, React, and PostgreSQL. Experienc
 **2025 – Present**
 
 - Designed and maintained end-to-end web applications with React (frontend) and Python/FastAPI (backend), owning the full stack from database schema to API layer.
-- Architected a production CRM with PostgreSQL, implementing complex business logic, secure JWT authentication, and async background job scheduling.
+- Designed and built a production business platform with PostgreSQL, implementing complex business logic, secure JWT authentication, and async background job scheduling.
 - Integrated third-party REST APIs (WhatsApp, email) and built automated document generation pipelines (PDF, Excel) for financial reporting workflows.
 - Delivered features consistently in Agile sprints (stand-ups, sprint planning, retrospectives), collaborating with frontend and product teams.
 
@@ -39,7 +39,7 @@ Full-Stack Developer focused on Python/FastAPI, React, and PostgreSQL. Experienc
 
 - Intensive program covering end-to-end web development with Python (Django, FastAPI, Flask), React, and Node.js.
 - Built full-stack projects with GenAI integrations (OpenAI API, LLM pipelines); practiced Clean Code and SOLID principles.
-- Gained proficiency in DevOps workflows: Git, GitHub, Docker, AWS EC2 deployment.
+- Gained hands-on experience with DevOps workflows: Git, GitHub, Docker, AWS EC2 deployment.
 
 ---
 
@@ -50,7 +50,7 @@ Full-Stack Developer focused on Python/FastAPI, React, and PostgreSQL. Experienc
 | Backend | Python (FastAPI, Flask), Node.js (Express), RESTful APIs |
 | Frontend | React, TypeScript, JavaScript, HTML5, CSS3 |
 | Generative AI | Prompt Engineering, OpenAI API, Anthropic API, LLM integration |
-| Databases & ORM | PostgreSQL, MySQL, MongoDB, SQLAlchemy |
+| Databases & ORM | PostgreSQL, MySQL, MongoDB, SQLAlchemy, SQL |
 | Tools & Cloud | Git, GitHub, Docker, Postman, AWS EC2 |
 
 ---
