@@ -61,6 +61,7 @@ when the job description explicitly requires that specific item, and note in
 the tailoring notes file why it was included.
 
 - Testing: wrote unit and integration tests (pytest) as part of the development workflow at PH.Digital.
+- AI-assisted development: uses AI coding assistants (Claude Code, GitHub Copilot, Cursor, Codex) as part of daily development workflow, with critical review of AI-generated code before merging.
 
 ---
 
