@@ -55,6 +55,15 @@ Full-Stack Developer focused on Python/FastAPI, React, and PostgreSQL. Experienc
 
 ---
 
+## Situational Skills (use only if job explicitly requires)
+Real, verified facts. Do not include by default in generated CVs — pull in only
+when the job description explicitly requires that specific item, and note in
+the tailoring notes file why it was included.
+
+- Testing: wrote unit and integration tests (pytest) as part of the development workflow at PH.Digital.
+
+---
+
 ## Languages
 - Hebrew — Native
 - English — Fluent

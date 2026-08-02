@@ -21,6 +21,9 @@ Generate tailored CV versions from a base CV and a job description.
    - If found: tell the user, show its status/date, and ask whether this is an update to that draft or a genuinely new role before continuing.
 
 3. Run gap analysis — return table: required vs. present vs. missing
+   - Check both the main CV content and the `Situational Skills` section of `base/cv_base.md`.
+   - If a job requirement matches a Situational Skills item, mark it as available (not a gap) and note in the tailoring notes that it was pulled from Situational Skills.
+   - Do not include Situational Skills items by default — only when the job explicitly requires that specific item.
 
 4. Offer tone choice and wait for response:
    - **A — Technical depth**
@@ -104,7 +107,8 @@ If an output file already exists — move it to `outputs/archive/` before writin
 - Never invent experience, technologies, metrics, or dates
 - Never inflate seniority or change title beyond allowed variants
 - Never use buzzwords: passionate, ninja, rockstar, dynamic, results-driven
-- Only facts from `base/cv_base.md`
+- Only facts from `base/cv_base.md`, including its `Situational Skills` section when job-relevant
+- Never include Situational Skills items unless the job description explicitly requires that specific item
 
 ## Tone
 - Professional, concise, direct
