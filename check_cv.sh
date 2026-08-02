@@ -19,8 +19,30 @@ if grep -Eion "$BUZZWORDS" "$FILE"; then
   FAIL=1
 fi
 
-if grep -n "—" "$FILE"; then
-  echo "FAIL: em dash found above (use ':' or restructure)"
+# The "no em dash" rule applies to prose only (Profile paragraph, bullets).
+# Headers (#/##/###), date-range lines, and the Languages section use em/en
+# dash natively (matches base/cv_base.md) and are not prose, so they're
+# excluded here before checking the rest of the file.
+PROSE=$(awk '
+  /^## Languages/ {skip=1; next}
+  /^---$/ {skip=0}
+  skip {next}
+  /^#/ {next}
+  {print}
+' "$FILE")
+
+if echo "$PROSE" | grep -n "—" >/dev/null; then
+  echo "$PROSE" | grep -n "—"
+  echo "FAIL: em dash found in prose text above (use ':' or restructure)"
+  FAIL=1
+fi
+
+# En dash in prose is allowed only in digit-to-digit ranges (e.g. "2025 – 2026",
+# "3–4 reps"). Any other use in prose fails.
+BAD_ENDASH=$(echo "$PROSE" | grep -n "–" | grep -vE '[0-9][[:space:]]*–[[:space:]]*([0-9]|Present)' || true)
+if [ -n "$BAD_ENDASH" ]; then
+  echo "$BAD_ENDASH"
+  echo "FAIL: en dash used in prose outside a date/number range (use ':' or restructure)"
   FAIL=1
 fi
 

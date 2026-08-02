@@ -7,7 +7,7 @@ Tel Aviv · +972-50-668-8386 · matan1391@gmail.com
 
 ## Profile
 
-Full-Stack Developer with hands-on production experience in Python/FastAPI and PostgreSQL. Built a domain-heavy CRM from the ground up — database schema, business logic, authentication, async job scheduling, and third-party API integrations. Comfortable owning the backend end-to-end while collaborating with frontend and product teams in Agile sprints.
+Full-Stack Developer with hands-on production experience in Python/FastAPI and PostgreSQL. Built a domain-heavy CRM from the ground up: database schema, business logic, authentication, async job scheduling, and third-party API integrations. Comfortable owning the backend end-to-end while collaborating with frontend and product teams in Agile sprints.
 
 ---
 
@@ -16,16 +16,16 @@ Full-Stack Developer with hands-on production experience in Python/FastAPI and P
 ### Full-Stack Developer — PH.Digital, Tel Aviv
 **2025 – Present**
 
-- Architected and maintained a production CRM using **FastAPI** and **PostgreSQL**, covering complex business logic, relational data modeling, and async background tasks.
-- Implemented secure **JWT** authentication with role-based access control across the full request lifecycle.
-- Integrated **WhatsApp** and email REST APIs; built automated **PDF** and **Excel** generation pipelines for financial reporting.
-- Shipped features in **Agile** sprints alongside frontend and product teams; participated in stand-ups, planning, and retrospectives.
+- Architected and maintained a production CRM using FastAPI and PostgreSQL, covering complex business logic, relational data modeling, and async background tasks.
+- Implemented secure JWT authentication with role-based access control across the full request lifecycle.
+- Integrated WhatsApp and email REST APIs; built automated PDF and Excel generation pipelines for financial reporting.
+- Shipped features in Agile sprints alongside frontend and product teams; participated in stand-ups, planning, and retrospectives.
 
 ### Sales Team Leader — Pcom Solutions, Tel Aviv
 **2019 – 2025**
 
 - Led a team of 3–4 sales reps; managed pipeline, KPIs, and enterprise client relationships.
-- Grew team revenue **30% YoY** through structured performance tracking and process improvements.
+- Grew team revenue 30% YoY through structured performance tracking and process improvements.
 
 ---
 
@@ -35,8 +35,8 @@ Full-Stack Developer with hands-on production experience in Python/FastAPI and P
 **990 hours, 2024 – 2025**
 
 - Covered Python (FastAPI, Django, Flask), React, Node.js, and relational/non-relational databases.
-- Built full-stack projects with **GenAI** integrations (OpenAI API, LLM pipelines); applied Clean Code and SOLID principles.
-- DevOps: **Git**, **Docker**, **AWS EC2**.
+- Built full-stack projects with GenAI integrations (OpenAI API, LLM pipelines); applied Clean Code and SOLID principles.
+- DevOps: Git, Docker, AWS EC2.
 
 ---
 
@@ -53,7 +53,10 @@ Full-Stack Developer with hands-on production experience in Python/FastAPI and P
 ---
 
 ## Languages
-- Hebrew — Native · English — Fluent · Arabic — Conversational · French — Conversational
+- Hebrew — Native
+- English — Fluent
+- Arabic — Conversational
+- French — Conversational
 
 ---
 

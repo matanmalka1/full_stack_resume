@@ -100,6 +100,7 @@ outputs/
 
 ## Archive rule
 If an output file already exists — move it to `outputs/archive/` before writing the new version.
+- This applies even when the new draft gets a different filename (e.g. a second draft for the same company+role with a different slug). If `jobs/status.csv` already has an unresolved (`status` != `sent`) row for the same company + a similar role, do not create a second live draft — resolve step 2 first (ask the user whether to update the existing draft in place or archive it before creating a new one).
 
 ## Hard Rules
 - Never modify `base/cv_base.md`
