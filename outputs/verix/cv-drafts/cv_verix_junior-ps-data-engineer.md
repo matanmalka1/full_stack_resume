@@ -24,7 +24,7 @@ Developer with hands-on production experience in Python, SQL, and PostgreSQL. Bu
 **2025 – 2026**
 
 - Designed and maintained relational database schemas in PostgreSQL; wrote complex SQL queries supporting business logic, reporting, and financial data processing.
-- Built automated data pipelines using Python/FastAPI for document generation, client communication workflows, and financial reporting — translating business requirements into reliable backend processes.
+- Integrated third-party REST APIs and external business systems, building automated workflows for document generation, client communication, and financial reporting processes: translating business requirements into reliable backend processes.
 - Integrated third-party REST APIs and external systems to automate data ingestion and transformation workflows.
 - Delivered features in Agile sprints, collaborating with product teams to translate requirements into production-ready solutions.
 
