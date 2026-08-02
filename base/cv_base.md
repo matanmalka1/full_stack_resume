@@ -63,6 +63,7 @@ the tailoring notes file why it was included.
 - Testing: wrote unit and integration tests (pytest) as part of the development workflow at PH.Digital.
 - AI-assisted development: uses AI coding assistants (Claude Code, GitHub Copilot, Cursor, Codex) as part of daily development workflow, with critical review of AI-generated code before merging.
 - Frontend markup/styling: HTML5, CSS3 as part of React frontend work at PH.Digital.
+- Structured configuration: YAML/JSON config files used to drive application behavior at PH.Digital.
 
 ---
 
