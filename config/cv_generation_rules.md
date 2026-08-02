@@ -2,8 +2,8 @@
 
 ## Input
 - Source of truth: `base/cv_base.md`
-- Job description: provided inline or from `jobs/<company>_<role>.md`
-- Reference output: `examples/cv_example_backend.md`
+- Job description: provided inline or from `outputs/<company>/job-description/<company>_<role>.md`
+- Reference output: `config/cv_example_backend.md`
 
 ## Process
 
@@ -27,9 +27,9 @@
    - Rephrase bullets using job keywords (do not change facts)
    - Keep one page worth of content when possible
 
-5. **Save CV** to `outputs/cv_<company>_<role>.md` — clean CV only, no notes
+5. **Save CV** to `outputs/<company>/cv-drafts/cv_<company>_<role>.md` — clean CV only, no notes
 
-6. **Save tailoring notes** to `outputs/cv_<company>_<role>.notes.md`:
+6. **Save tailoring notes** to `outputs/<company>/cv-drafts/cv_<company>_<role>.notes.md`:
    ```
    ## Tailoring Notes — <company> <role>
    - Tone chosen: A / B / C
@@ -40,8 +40,8 @@
    ```
 
 7. **PDF flow** (remind user):
-   - Convert `.md` → `.html` using `resume_base.html` as template
-   - Run: `bash print_pdf.sh outputs/cv_<company>_<role>.html`
+   - Convert `.md` → `.html` using `config/resume_base.html` as template → save as `outputs/<company>/cv-html/cv_<company>_<role>.html`
+   - Run: `bash print_pdf.sh outputs/<company>/cv-html/cv_<company>_<role>.html`
    - Never run `print_pdf.sh` on a `.md` file
 
 8. **Archive** old versions before overwriting: move to `outputs/archive/`
@@ -77,10 +77,10 @@ Not allowed:
 ## Output Files
 | File | Content |
 |------|---------|
-| `outputs/cv_<company>_<role>.md` | Clean tailored CV |
-| `outputs/cv_<company>_<role>.notes.md` | Tailoring decisions and gaps |
-| `outputs/cv_<company>_<role>.html` | HTML for PDF export |
-| `outputs/cv_<company>_<role>.pdf` | Final output |
+| `outputs/<company>/cv-drafts/cv_<company>_<role>.md` | Clean tailored CV |
+| `outputs/<company>/cv-drafts/cv_<company>_<role>.notes.md` | Tailoring decisions and gaps |
+| `outputs/<company>/cv-html/cv_<company>_<role>.html` | HTML for PDF export |
+| `outputs/<company>/cv-pdf/cv_<company>_<role>.pdf` | Final output |
 
 File name format: lowercase, hyphens for spaces.
-Example: `outputs/cv_monday_fullstack-developer.md`
+Example: `outputs/monday/cv-drafts/cv_monday_fullstack-developer.md`

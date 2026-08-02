@@ -46,7 +46,7 @@ Full-Stack Developer with hands-on production experience in Python/FastAPI and P
 |----------|-------------|
 | Backend | Python (FastAPI, Flask), Node.js (Express), RESTful APIs |
 | Databases & ORM | PostgreSQL, MySQL, MongoDB, SQLAlchemy |
-| Frontend | React, TypeScript, JavaScript, HTML5, CSS3 |
+| Frontend | React, TypeScript, JavaScript |
 | Generative AI | OpenAI API, Anthropic API, Prompt Engineering, LLM integration |
 | Tools & Cloud | Git, GitHub, Docker, Postman, AWS EC2 |
 
