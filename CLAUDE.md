@@ -17,14 +17,17 @@ Generate tailored CV versions from a base CV and a job description.
    Job description: ...
    ```
 
-2. Run gap analysis — return table: required vs. present vs. missing
+2. Check `jobs/status.csv` for an existing row with the same company + a similar role.
+   - If found: tell the user, show its status/date, and ask whether this is an update to that draft or a genuinely new role before continuing.
 
-3. Offer tone choice and wait for response:
+3. Run gap analysis — return table: required vs. present vs. missing
+
+4. Offer tone choice and wait for response:
    - **A — Technical depth**
    - **B — Balanced**
    - **C — AI/GenAI focused**
 
-4. Generate tailored CV → save to `outputs/<company>/cv-drafts/cv_<company>_<role>.md`
+5. Generate tailored CV → save to `outputs/<company>/cv-drafts/cv_<company>_<role>.md`
    - Clean CV only — no notes inside
    - Include front-matter at top:
      ```yaml
@@ -34,7 +37,7 @@ Generate tailored CV versions from a base CV and a job description.
      ---
      ```
 
-5. Save tailoring decisions → `outputs/<company>/cv-drafts/cv_<company>_<role>.notes.md`
+6. Save tailoring decisions → `outputs/<company>/cv-drafts/cv_<company>_<role>.notes.md`
    - Include front-matter at top:
      ```yaml
      ---
@@ -43,10 +46,13 @@ Generate tailored CV versions from a base CV and a job description.
      ---
      ```
 
-6. Convert `.md` → `.html` using `config/resume_base.html` as visual template
+7. Run `bash check_cv.sh outputs/<company>/cv-drafts/cv_<company>_<role>.md`
+   - Checks for buzzwords and em dashes. Fix the draft and re-run until it passes before continuing.
+
+8. Convert `.md` → `.html` using `config/resume_base.html` as visual template
    → save as `outputs/<company>/cv-html/cv_<company>_<role>.html`
 
-7. Automatically save job description → `outputs/<company>/job-description/<company>_<role>.md`
+9. Automatically save job description → `outputs/<company>/job-description/<company>_<role>.md`
    - Use the template format from `config/job_description_example.md`
    - Include front-matter at top:
      ```yaml
@@ -56,18 +62,16 @@ Generate tailored CV versions from a base CV and a job description.
      ---
      ```
 
-8. Automatically add row to `jobs/status.csv`:
-   - Fields: company, role, url, cv_file, status (draft), date_sent (today), notes
-   - cv_file field: `outputs/<company>/cv-pdf/cv_<company>_<role>.pdf`
+10. Automatically add row to `jobs/status.csv`:
+    - Fields: company, role, url, cv_file, status (draft), date_created (today), date_sent (leave empty), notes
+    - cv_file field: `outputs/<company>/cv-pdf/cv_<company>_<role>.pdf`
+    - `date_sent` only gets filled in when the user confirms the application was actually sent (step 12) — never at draft time.
 
-9. Remind user:
-   ```bash
-   bash print_pdf.sh outputs/<company>/cv-html/cv_<company>_<role>.html
-   ```
+11. Run `bash print_pdf.sh outputs/<company>/cv-html/cv_<company>_<role>.html` directly (local, reversible — no need to ask first). Report the resulting PDF path to the user.
 
-10. Remind user to:
+12. Remind user to:
     - Run through `CHECKLIST.md` before sending
-    - Update `jobs/status.csv` status when sent
+    - When sent: update `jobs/status.csv` — set `status` to `sent` and fill in `date_sent`
 
 ## Output folder structure
 Each company gets its own subfolder under `outputs/`, split by output type:

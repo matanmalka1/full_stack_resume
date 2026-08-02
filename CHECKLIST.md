@@ -24,5 +24,6 @@ Run before sending any application.
 - [ ] File name matches pattern: `cv_<company>_<role>.pdf`
 
 ## Tracking
-- [ ] Job description saved to `jobs/<company>_<role>.md`
+- [ ] Job description saved to `outputs/<company>/job-description/<company>_<role>.md`
 - [ ] Row added to `jobs/status.csv`
+- [ ] No duplicate/unresolved draft for same company+role in `jobs/status.csv`
