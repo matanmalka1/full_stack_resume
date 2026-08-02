@@ -21,6 +21,8 @@ Full-Stack Developer focused on Python/FastAPI, React, and PostgreSQL. Experienc
 
 - Designed and maintained end-to-end web applications with React (frontend) and Python/FastAPI (backend), owning the full stack from database schema to API layer.
 - Built and maintained a production business platform with PostgreSQL, implementing complex business logic, secure JWT authentication, and async background job scheduling.
+- Set up CI/CD pipelines (GitHub Actions) covering linting, automated tests, database migration checks, and OpenAPI contract sync between backend and frontend.
+- Built and maintained a customer-facing marketing site with Next.js (App Router, React Server Components), TypeScript, and Tailwind CSS, including form validation, RTL Hebrew localization, Sentry error monitoring, and a Vitest test suite.
 - Integrated third-party REST APIs and external business systems, building automated workflows for document generation, client communication, and financial reporting processes.
 - Delivered features consistently in Agile sprints (stand-ups, sprint planning, retrospectives), collaborating with frontend and product teams.
 
@@ -48,10 +50,10 @@ Full-Stack Developer focused on Python/FastAPI, React, and PostgreSQL. Experienc
 | Category | Technologies |
 |----------|-------------|
 | Backend | Python (FastAPI, Flask), Node.js (Express), RESTful APIs |
-| Frontend | React, TypeScript, JavaScript |
+| Frontend | React, Next.js (App Router, RSC), TypeScript, JavaScript |
 | Generative AI | Prompt Engineering, OpenAI API, Anthropic API, LLM integration |
 | Databases & SQL | PostgreSQL, MySQL, MongoDB, SQLAlchemy, SQL |
-| Tools & Cloud | Git, GitHub, Docker, Postman, AWS EC2 |
+| Tools & Cloud | Git, GitHub, GitHub Actions (CI/CD), Docker, Postman, AWS EC2 |
 
 ---
 
