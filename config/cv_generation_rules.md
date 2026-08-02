@@ -12,18 +12,60 @@ checked, it does not belong in this file.
 
 Do not change the candidate's title to one that overstates seniority or specialization.
 
-Allowed tagline variants (pick exactly one):
-- `Full-Stack Developer · Python/FastAPI · React · AI Integrations`
-- `Full-Stack Developer · Python/FastAPI · React`
-- `Backend-Oriented Full-Stack Developer`
-- `Full-Stack Developer · AI Integrations`
+The tagline is built from a fixed base title plus up to three technology terms.
+Nothing else is permitted.
 
-Not allowed:
+### Base title (required, exact)
+
+One of:
+- `Full-Stack Developer`
+- `Backend-Oriented Full-Stack Developer`
+
+### Technology terms (optional, 0 to 3)
+
+Appended to the base title, each separated by ` · `. Only these terms are allowed,
+because each maps to an entry in the Skills table of `base/cv_base.md`:
+
+```
+Python/FastAPI   FastAPI          Python           Node.js
+React            Next.js          TypeScript       JavaScript
+PostgreSQL       SQL              MongoDB          SQLAlchemy
+REST APIs        Docker           AWS              CI/CD
+AI Integrations  GenAI            LLM Integration  Prompt Engineering
+```
+
+`AI Integrations`, `GenAI`, `LLM Integration`, and `Prompt Engineering` map to the
+`Generative AI` row. The rest map to their literal entries. A term not on this list
+is an invented claim even when it sounds harmless: `Data Pipelines` and
+`Data Workflows` are not in the base CV and are not allowed.
+
+Order the terms by relevance to the job. Do not exceed three: the tagline has to fit
+one line in the rendered header.
+
+### Examples
+
+Valid:
+- `Full-Stack Developer`
+- `Full-Stack Developer · Python/FastAPI · React`
+- `Full-Stack Developer · React · Node.js · TypeScript`
+- `Backend-Oriented Full-Stack Developer · Python/FastAPI · PostgreSQL`
+
+Invalid:
+- `Full-Stack Developer · Python/FastAPI · Node.js · React · TypeScript` (four terms)
+- `Full-Stack Developer · Python/Node.js · APIs · Data Workflows` (terms not in the list)
+- `Backend-Oriented Full-Stack Developer · Python · SQL · Data Pipelines` (`Data Pipelines`)
+
+### Never allowed, at any position
+
 - Senior Full-Stack Developer
 - AI Engineer
 - Backend Architect
 - Lead Developer
 - any title implying a seniority level not stated in `base/cv_base.md`
+
+The base title carries the seniority claim and it is fixed. The technology terms
+carry emphasis only. That split is the point of this rule: tailoring the emphasis to
+a job is expected, tailoring the seniority is not.
 
 ---
 

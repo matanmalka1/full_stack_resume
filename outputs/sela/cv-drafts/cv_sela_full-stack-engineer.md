@@ -5,6 +5,8 @@ modified: 2026-08-02
 
 # Matan Malka
 
+Full-Stack Developer · React · AI Integrations
+
 Tel Aviv · +972-50-668-8386 · matan1391@gmail.com
 [GitHub](https://github.com/matanmalka1) · [LinkedIn](https://www.linkedin.com/in/matanmalka1)
 

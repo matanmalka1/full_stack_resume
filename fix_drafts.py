@@ -35,12 +35,35 @@ OUTPUTS = REPO / "outputs"
 EM = "\u2014"
 EN = "\u2013"
 
-ALLOWED_TAGLINES = [
-    "Full-Stack Developer \u00b7 Python/FastAPI \u00b7 React \u00b7 AI Integrations",
-    "Full-Stack Developer \u00b7 Python/FastAPI \u00b7 React",
+BASE_TITLES = [
     "Backend-Oriented Full-Stack Developer",
-    "Full-Stack Developer \u00b7 AI Integrations",
+    "Full-Stack Developer",
 ]
+
+TAGLINE_TERMS = {
+    "Python/FastAPI", "FastAPI", "Python", "Node.js",
+    "React", "Next.js", "TypeScript", "JavaScript",
+    "PostgreSQL", "SQL", "MongoDB", "SQLAlchemy",
+    "REST APIs", "Docker", "AWS", "CI/CD",
+    "AI Integrations", "GenAI", "LLM Integration", "Prompt Engineering",
+}
+
+MAX_TAGLINE_TERMS = 3
+DOT = "\u00b7"
+
+
+def tagline_reason(tagline):
+    """None if valid, otherwise why not. Mirrors build_html.py."""
+    parts = [x.strip() for x in tagline.split(DOT)]
+    if parts[0] not in BASE_TITLES:
+        return f"base title {parts[0]!r} is not allowed"
+    terms = parts[1:]
+    if len(terms) > MAX_TAGLINE_TERMS:
+        return f"{len(terms)} technology terms, the maximum is {MAX_TAGLINE_TERMS}"
+    unknown = [x for x in terms if x not in TAGLINE_TERMS]
+    if unknown:
+        return "term(s) not approved: " + ", ".join(repr(u) for u in unknown)
+    return None
 
 # Ordered: the em dash form is already correct, everything else is rewritten to it.
 SEPARATORS = [f" {EM} ", f" {EN} ", " \u00b7 ", " - ", ", "]
@@ -104,28 +127,30 @@ def fix(md_path):
                         f"output skeleton: {candidate!r}")
         return lines, changes, blockers
 
-    if candidate in ALLOWED_TAGLINES:
+    if tagline_reason(candidate) is None:
         pass
     elif candidate.startswith("**") and candidate.endswith("**"):
         stripped = candidate.strip("*").strip()
-        if stripped in ALLOWED_TAGLINES:
+        reason = tagline_reason(stripped)
+        if reason is None:
             lines[nxt] = stripped
             changes.append("tagline unbolded")
         else:
-            blockers.append(f"line {nxt + 1}: tagline is not an allowed variant: "
-                            f"{stripped!r}")
+            blockers.append(f"line {nxt + 1}: tagline invalid: {reason}")
     else:
         recovered = tagline_from_html(md_path)
         if recovered is None:
             blockers.append("tagline missing and no sibling cv-html file to recover "
                             "it from")
-        elif recovered not in ALLOWED_TAGLINES:
-            blockers.append(f"tagline missing; the HTML says {recovered!r}, which is "
-                            f"not an allowed variant")
         else:
-            lines.insert(nxt, "")
-            lines.insert(nxt, recovered)
-            changes.append(f"tagline inserted from HTML: {recovered}")
+            reason = tagline_reason(recovered)
+            if reason:
+                blockers.append(f"tagline missing; the HTML says {recovered!r}: "
+                                f"{reason}")
+            else:
+                lines.insert(nxt, "")
+                lines.insert(nxt, recovered)
+                changes.append(f"tagline inserted from HTML: {recovered}")
 
     # ---- section-aware line fixes
     section = None

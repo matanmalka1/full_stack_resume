@@ -23,12 +23,44 @@ import re
 import sys
 from pathlib import Path
 
-ALLOWED_TAGLINES = {
-    "Full-Stack Developer · Python/FastAPI · React · AI Integrations",
-    "Full-Stack Developer · Python/FastAPI · React",
+BASE_TITLES = [
     "Backend-Oriented Full-Stack Developer",
-    "Full-Stack Developer · AI Integrations",
+    "Full-Stack Developer",
+]
+
+# Each term maps to an entry in the Skills table of base/cv_base.md.
+TAGLINE_TERMS = {
+    "Python/FastAPI", "FastAPI", "Python", "Node.js",
+    "React", "Next.js", "TypeScript", "JavaScript",
+    "PostgreSQL", "SQL", "MongoDB", "SQLAlchemy",
+    "REST APIs", "Docker", "AWS", "CI/CD",
+    "AI Integrations", "GenAI", "LLM Integration", "Prompt Engineering",
 }
+
+MAX_TAGLINE_TERMS = 3
+
+DOT = "\u00b7"
+
+
+def validate_tagline(tagline):
+    """Return None if the tagline is valid, otherwise a reason string."""
+    parts = [p.strip() for p in tagline.split(DOT)]
+    base = parts[0]
+    terms = parts[1:]
+
+    if base not in BASE_TITLES:
+        return (f"base title must be one of {BASE_TITLES}, got {base!r}")
+
+    if len(terms) > MAX_TAGLINE_TERMS:
+        return (f"{len(terms)} technology terms, the maximum is "
+                f"{MAX_TAGLINE_TERMS}")
+
+    unknown = [t for t in terms if t not in TAGLINE_TERMS]
+    if unknown:
+        return (f"technology term(s) not in the approved list: "
+                f"{', '.join(repr(u) for u in unknown)}")
+
+    return None
 
 BUZZWORDS = ["passionate", "ninja", "rockstar", "dynamic", "results-driven"]
 
@@ -111,8 +143,13 @@ def parse(path):
         i += 1
     if i < len(body):
         doc["tagline"] = body[i].strip()
-        if doc["tagline"] not in ALLOWED_TAGLINES:
-            fail(f"tagline not in the allowed list: {doc['tagline']!r}", ln(i))
+        if doc["tagline"].startswith("[") or "@" in doc["tagline"]:
+            fail("tagline line is missing: the line after '# Matan Malka' is the "
+                 "contact block. Insert an allowed tagline above it.", ln(i))
+        else:
+            reason = validate_tagline(doc["tagline"])
+            if reason:
+                fail(f"tagline invalid: {reason}", ln(i))
         i += 1
 
     while i < len(body) and not body[i].strip():
