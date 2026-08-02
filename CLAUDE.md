@@ -5,7 +5,7 @@ Generate tailored CV versions from a base CV and a job description.
 
 ## Always read before starting
 - `base/cv_base.md` — source of truth, never modify
-- `config/cv_generation_rules.md` — title rules and additional hard rules (supplements this file)
+- `config/cv_generation_rules.md` — the output contract: title rules, fixed skeleton, dash and bold rules. Binding. Where this file and the contract disagree, the contract wins.
 - `config/cv_example_backend.md` — reference output format
 
 ## Workflow
@@ -49,11 +49,14 @@ Generate tailored CV versions from a base CV and a job description.
      ---
      ```
 
-7. Run `bash check_cv.sh outputs/<company>/cv-drafts/cv_<company>_<role>.md`
-   - Checks for buzzwords and em dashes. Fix the draft and re-run until it passes before continuing.
+7. Run `python3 build_html.py --check outputs/<company>/cv-drafts/cv_<company>_<role>.md`
+   - Validates the draft against the output contract in `config/cv_generation_rules.md`.
+   - Fix the draft and re-run until it passes. Never edit the generated `.html` to work around a failure: the `.md` is the source of truth.
 
-8. Convert `.md` → `.html` using `config/resume_base.html` as visual template
-   → save as `outputs/<company>/cv-html/cv_<company>_<role>.html`
+8. Run `python3 build_html.py outputs/<company>/cv-drafts/cv_<company>_<role>.md`
+   - Renders `.md` → `.html` through `config/resume_base.html` and writes
+     `outputs/<company>/cv-html/cv_<company>_<role>.html`.
+   - Never hand-write or hand-edit the `.html`.
 
 9. Automatically save job description → `outputs/<company>/job-description/<company>_<role>.md`
    - Use the template format from `config/job_description_example.md`
@@ -67,10 +70,12 @@ Generate tailored CV versions from a base CV and a job description.
 
 10. Automatically add row to `jobs/status.csv`:
     - Fields: company, role, url, cv_file, status (draft), date_created (today), date_sent (leave empty), notes
-    - cv_file field: `outputs/<company>/cv-pdf/Matan Malka - Full Stack Developer.pdf` (fixed filename produced by `print_pdf.sh`)
+    - cv_file field: `outputs/<company>/cv-pdf/<role>/Matan Malka - Full Stack Developer.pdf`. The filename is fixed because that is what a recruiter sees; the `<role>` folder is what keeps two roles at the same company apart. `print_pdf.sh` prints this exact path on success: copy it, do not retype it.
     - `date_sent` only gets filled in when the user confirms the application was actually sent (step 12) — never at draft time.
 
 11. Run `bash print_pdf.sh outputs/<company>/cv-html/cv_<company>_<role>.html` directly (local, reversible — no need to ask first). Report the resulting PDF path to the user.
+
+11a. Run `python3 check_status.py`. It reconciles `jobs/status.csv` against disk: missing files, drafts with no row, duplicate unresolved rows. Fix anything it reports before continuing.
 
 12. Remind user to:
     - Run through `CHECKLIST.md` before sending
@@ -89,14 +94,16 @@ outputs/
     cv-html/
       cv_<company>_<role>.html
     cv-pdf/
-      Matan Malka - Full Stack Developer.pdf   ← fixed filename from print_pdf.sh
+      <role>/
+        Matan Malka - Full Stack Developer.pdf   ← fixed filename from print_pdf.sh
   archive/
 ```
 
 ## PDF Flow — never break this order
-1. `.md` → `.html` (via `resume_base.html` template)
+1. `.md` → `.html` (via `build_html.py`, which renders `config/resume_base.html`)
 2. `.html` → `.pdf` (via `print_pdf.sh`)
 3. Never run `print_pdf.sh` on a `.md` file
+4. Never edit the `.html` by hand. It is generated output: change the `.md` and re-run `build_html.py`
 
 ## Archive rule
 If an output file already exists — move it to `outputs/archive/` before writing the new version.
@@ -116,4 +123,4 @@ If an output file already exists — move it to `outputs/archive/` before writin
 - Backend-oriented when relevant
 - No exaggerated claims
 - ATS-optimized: job keywords embedded naturally
-- No em dashes (—) in prose text — use a colon or restructure the sentence
+- Formatting, dash placement, and bold: see `config/cv_generation_rules.md`. Do not restate those rules here.
