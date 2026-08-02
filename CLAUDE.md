@@ -67,7 +67,7 @@ Generate tailored CV versions from a base CV and a job description.
 
 10. Automatically add row to `jobs/status.csv`:
     - Fields: company, role, url, cv_file, status (draft), date_created (today), date_sent (leave empty), notes
-    - cv_file field: `outputs/<company>/cv-pdf/cv_<company>_<role>.pdf`
+    - cv_file field: `outputs/<company>/cv-pdf/Matan Malka - Full Stack Developer.pdf` (fixed filename produced by `print_pdf.sh`)
     - `date_sent` only gets filled in when the user confirms the application was actually sent (step 12) — never at draft time.
 
 11. Run `bash print_pdf.sh outputs/<company>/cv-html/cv_<company>_<role>.html` directly (local, reversible — no need to ask first). Report the resulting PDF path to the user.
@@ -89,7 +89,7 @@ outputs/
     cv-html/
       cv_<company>_<role>.html
     cv-pdf/
-      cv_<company>_<role>.pdf
+      Matan Malka - Full Stack Developer.pdf   ← fixed filename from print_pdf.sh
   archive/
 ```
 

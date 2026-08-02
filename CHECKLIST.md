@@ -21,7 +21,7 @@ Run before sending any application.
 - [ ] Email correct
 - [ ] GitHub link correct
 - [ ] LinkedIn link correct
-- [ ] File name matches pattern: `cv_<company>_<role>.pdf`
+- [ ] File name is `Matan Malka - Full Stack Developer.pdf` (fixed name from `print_pdf.sh`)
 
 ## Tracking
 - [ ] Job description saved to `outputs/<company>/job-description/<company>_<role>.md`
