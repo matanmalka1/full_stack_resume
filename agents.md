@@ -5,7 +5,7 @@ Generate tailored CV versions from a base CV and a job description.
 
 ## Always read before starting
 - `base/cv_base.md` — source of truth, never modify
-- `config/cv_generation_rules.md` — full process and hard rules
+- `config/cv_generation_rules.md` — title rules and additional hard rules (supplements this file)
 - `config/cv_example_backend.md` — reference output format
 
 ## Workflow
