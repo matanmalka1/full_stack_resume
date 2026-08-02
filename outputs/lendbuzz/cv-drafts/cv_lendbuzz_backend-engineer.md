@@ -19,7 +19,7 @@ Backend-oriented Full-Stack Developer with production experience in Python/FastA
 ## Work Experience
 
 ### Full-Stack Developer - PH.Digital, Tel Aviv
-**2025 – Present**
+**2025 – 2026**
 
 - Designed and maintained backend systems with **Python/FastAPI**, owning API design, **PostgreSQL** database schema, and business logic end-to-end.
 - Implemented secure **JWT** authentication with role-based access control, and async background job scheduling for a production business platform.
