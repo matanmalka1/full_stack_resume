@@ -1,21 +1,21 @@
 company,role,url,cv_file,status,date_created,date_sent,notes
-rayzone-group,junior-full-stack-developer,,outputs/rayzone-group/cv-pdf/cv_rayzone-group_junior-full-stack-developer.pdf,draft,2026-06-01,,
-wedev-technologies,junior-fullstack-developer,,outputs/wedev-technologies/cv-pdf/cv_wedev-technologies_junior-fullstack-developer.pdf,draft,2026-06-01,,
-unit,internal-tools-engineer,,outputs/unit/cv-pdf/Matan Malka - Full Stack Developer.pdf,draft,2026-06-01,,
-sela,full-stack-engineer,,outputs/sela/cv-pdf/Matan Malka - Full Stack Developer.pdf,draft,2026-06-01,,
-jeen-ai,ai-automation-engineer,,outputs/jeen-ai/cv-pdf/Matan Malka - Full Stack Developer.pdf,draft,2026-06-01,,
-verix,junior-ps-data-engineer,,outputs/verix/cv-pdf/Matan Malka - Full Stack Developer.pdf,draft,2026-06-01,,
-colors,full-stack-engineer,,outputs/colors/cv-pdf/Matan Malka - Full Stack Developer.pdf,draft,2026-06-01,,
-helfy,junior-ai-full-stack-developer,,outputs/helfy/cv-pdf/Matan Malka - Full Stack Developer.pdf,draft,2026-06-02,,
-unframe,full-stack-software-engineer,,outputs/unframe/cv-pdf/Matan Malka - Full Stack Developer.pdf,draft,2026-06-03,,
-finonex,full-stack-engineer,,outputs/finonex/cv-pdf/cv_finonex_full-stack-engineer.pdf,draft,2026-06-22,,Trading-platform co; JD wants 5+ yrs full-stack & 4+ yrs Node/React
-sourcix,full-stack-developer,,outputs/sourcix/cv-pdf/Matan Malka - Full Stack Developer.pdf,draft,2026-07-29,,
-moveo,full-stack-ai-developer,,outputs/moveo/cv-pdf/Matan Malka - Full Stack Developer.pdf,draft,2026-07-29,,
-medulla,senior-fullstack-developer,https://www.linkedin.com/company/medulla-/life/,outputs/medulla/cv-pdf/Matan Malka - Full Stack Developer.pdf,draft,2026-07-29,,Strong React and end-to-end fit; 5-year seniority requirement remains a gap
-lendbuzz,backend-engineer,,outputs/lendbuzz/cv-pdf/Matan Malka - Full Stack Developer.pdf,draft,2026-08-02,,Tone A (technical depth); testing/pytest + AI-assisted dev tools pulled from Situational Skills since JD requires both
-rise,software-engineer-oneplatform-team,,outputs/rise/cv-pdf/Matan Malka - Full Stack Developer.pdf,draft,2026-08-02,,
-evonet,full-stack-developer,,outputs/evonet/cv-pdf/Matan Malka - Full Stack Developer.pdf,draft,2026-08-02,,Listing titled "Web Developer" but JD body full-stack; tone A+C; pytest pulled from Situational Skills (JD explicit)
-compie-technologies,backend-developer,,outputs/compie-technologies/cv-pdf/Matan Malka - Full Stack Developer.pdf,draft,2026-08-02,,Tone A (technical depth); testing/pytest pulled from Situational Skills since JD requires testing methodologies; queuing/caching/e-commerce/PySpark gaps not fabricated
-ey,junior-technology-consultant,,"outputs/ey/cv-pdf/Matan Malka - Full Stack Developer.pdf",draft,2026-08-02,,"Consulting role, not pure dev; profile foregrounds client-facing Sales Team Leader background alongside technical stack. Bachelor's degree gap not fabricated; CI/CD not present in base CV, not fabricated"
-ethosia,ai-engineer,,outputs/ethosia/cv-pdf/Matan Malka - Full Stack Developer.pdf,draft,2026-08-02,,"Tone C (AI/GenAI focused); JD title AI Engineer not usable per title rules, used Full-Stack Developer AI Integrations tagline; AI-assisted dev tools pulled from Situational Skills since JD requires it; agent-building/RAG/message-queues/CS degree/3yr-prod gaps not fabricated"
-bridgify,full-stack-nextjs-developer,,outputs/bridgify/cv-pdf/Matan Malka - Full Stack Developer.pdf,draft,2026-08-02,,"Tone A (technical depth); Senior title not used per title rules; base CV updated permanently this session with real Next.js/App Router/RSC work (from nir-devtools-sandbox) and CI/CD via GitHub Actions (from YM Tax CRM), both confirmed as PH.Digital work; AI-assisted dev (Claude Code) pulled from Situational Skills since JD requires it explicitly; Django/SEO-GEO/CRO/Core-Web-Vitals/Azure/Figma gaps not fabricated"
+rayzone-group,junior-full-stack-developer,,outputs/rayzone-group/cv-pdf/junior-full-stack-developer/Matan Malka - Full Stack Developer.pdf,draft,2026-06-01,,
+wedev-technologies,junior-fullstack-developer,,outputs/wedev-technologies/cv-pdf/junior-fullstack-developer/Matan Malka - Full Stack Developer.pdf,draft,2026-06-01,,
+unit,internal-tools-engineer,,outputs/unit/cv-pdf/internal-tools-engineer/Matan Malka - Full Stack Developer.pdf,draft,2026-06-01,,
+sela,full-stack-engineer,,outputs/sela/cv-pdf/full-stack-engineer/Matan Malka - Full Stack Developer.pdf,draft,2026-06-01,,
+jeen-ai,ai-automation-engineer,,outputs/jeen-ai/cv-pdf/ai-automation-engineer/Matan Malka - Full Stack Developer.pdf,draft,2026-06-01,,
+verix,junior-ps-data-engineer,,outputs/verix/cv-pdf/junior-ps-data-engineer/Matan Malka - Full Stack Developer.pdf,draft,2026-06-01,,
+colors,full-stack-engineer,,outputs/colors/cv-pdf/full-stack-engineer/Matan Malka - Full Stack Developer.pdf,draft,2026-06-01,,
+helfy,junior-ai-full-stack-developer,,outputs/helfy/cv-pdf/junior-ai-full-stack-developer/Matan Malka - Full Stack Developer.pdf,draft,2026-06-02,,
+unframe,full-stack-software-engineer,,outputs/unframe/cv-pdf/full-stack-software-engineer/Matan Malka - Full Stack Developer.pdf,draft,2026-06-03,,
+finonex,full-stack-engineer,,outputs/finonex/cv-pdf/full-stack-engineer/Matan Malka - Full Stack Developer.pdf,draft,2026-06-22,,Trading-platform co; JD wants 5+ yrs full-stack & 4+ yrs Node/React
+sourcix,full-stack-developer,,outputs/sourcix/cv-pdf/full-stack-developer/Matan Malka - Full Stack Developer.pdf,draft,2026-07-29,,
+moveo,full-stack-ai-developer,,outputs/moveo/cv-pdf/full-stack-ai-developer/Matan Malka - Full Stack Developer.pdf,draft,2026-07-29,,
+medulla,senior-fullstack-developer,https://www.linkedin.com/company/medulla-/life/,outputs/medulla/cv-pdf/senior-fullstack-developer/Matan Malka - Full Stack Developer.pdf,draft,2026-07-29,,Strong React and end-to-end fit; 5-year seniority requirement remains a gap
+lendbuzz,backend-engineer,,outputs/lendbuzz/cv-pdf/backend-engineer/Matan Malka - Full Stack Developer.pdf,draft,2026-08-02,,Tone A (technical depth); testing/pytest + AI-assisted dev tools pulled from Situational Skills since JD requires both
+rise,software-engineer-oneplatform-team,,outputs/rise/cv-pdf/software-engineer-oneplatform-team/Matan Malka - Full Stack Developer.pdf,draft,2026-08-02,,
+evonet,full-stack-developer,,outputs/evonet/cv-pdf/full-stack-developer/Matan Malka - Full Stack Developer.pdf,draft,2026-08-02,,"Listing titled ""Web Developer"" but JD body full-stack; tone A+C; pytest pulled from Situational Skills (JD explicit)"
+compie-technologies,backend-developer,,outputs/compie-technologies/cv-pdf/backend-developer/Matan Malka - Full Stack Developer.pdf,draft,2026-08-02,,Tone A (technical depth); testing/pytest pulled from Situational Skills since JD requires testing methodologies; queuing/caching/e-commerce/PySpark gaps not fabricated
+ey,junior-technology-consultant,,outputs/ey/cv-pdf/junior-technology-consultant/Matan Malka - Full Stack Developer.pdf,draft,2026-08-02,,"Consulting role, not pure dev; profile foregrounds client-facing Sales Team Leader background alongside technical stack. Bachelor's degree gap not fabricated; CI/CD not present in base CV, not fabricated"
+ethosia,ai-engineer,,outputs/ethosia/cv-pdf/ai-engineer/Matan Malka - Full Stack Developer.pdf,draft,2026-08-02,,"Tone C (AI/GenAI focused); JD title AI Engineer not usable per title rules, used Full-Stack Developer AI Integrations tagline; AI-assisted dev tools pulled from Situational Skills since JD requires it; agent-building/RAG/message-queues/CS degree/3yr-prod gaps not fabricated"
+bridgify,full-stack-nextjs-developer,,outputs/bridgify/cv-pdf/full-stack-nextjs-developer/Matan Malka - Full Stack Developer.pdf,draft,2026-08-02,,"Tone A (technical depth); Senior title not used per title rules; base CV updated permanently this session with real Next.js/App Router/RSC work (from nir-devtools-sandbox) and CI/CD via GitHub Actions (from YM Tax CRM), both confirmed as PH.Digital work; AI-assisted dev (Claude Code) pulled from Situational Skills since JD requires it explicitly; Django/SEO-GEO/CRO/Core-Web-Vitals/Azure/Figma gaps not fabricated"
