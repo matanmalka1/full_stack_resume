@@ -16,7 +16,7 @@ Full-Stack Developer with hands-on production experience in Next.js (App Router,
 
 ## Work Experience
 
-### Full-Stack Developer · PH.Digital, Tel Aviv
+### Full-Stack Developer — PH.Digital, Tel Aviv
 **2025 - 2026**
 
 - Built and maintained a customer-facing marketing site with Next.js (App Router, React Server Components), TypeScript, and Tailwind CSS, including form validation, RTL Hebrew localization, Sentry error monitoring, and a Vitest test suite.
@@ -24,7 +24,7 @@ Full-Stack Developer with hands-on production experience in Next.js (App Router,
 - Used AI coding assistants (Claude Code, GitHub Copilot, Cursor, Codex) daily as part of the development workflow, with critical review of AI-generated code before merging.
 - Delivered features in Agile sprints, collaborating with frontend and product teams through stand-ups, sprint planning, and retrospectives.
 
-### Sales Team Leader · Pcom Solutions, Tel Aviv
+### Sales Team Leader — Pcom Solutions, Tel Aviv
 **2019 - 2025**
 
 - Led a team of 3-4 sales representatives and managed pipeline, KPIs, and enterprise client relationships.
@@ -32,7 +32,7 @@ Full-Stack Developer with hands-on production experience in Next.js (App Router,
 
 ## Education
 
-### Full-Stack Development · John Bryce, Tel Aviv
+### Full-Stack Development — John Bryce, Tel Aviv
 **990 hours, 2024 - 2025**
 
 - Completed an end-to-end development program covering Python with Django, FastAPI, and Flask, plus React and Node.js.

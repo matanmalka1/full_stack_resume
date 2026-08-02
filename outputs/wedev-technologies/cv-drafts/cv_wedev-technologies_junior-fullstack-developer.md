@@ -1,6 +1,6 @@
 ---
 created: 2026-06-01
-modified: 2026-06-01
+modified: 2026-08-02
 ---
 
 # Matan Malka
@@ -21,16 +21,16 @@ Full-Stack Developer with production experience across the entire web stack: Rea
 ### Full-Stack Developer — PH.Digital, Tel Aviv
 **2025 – 2026**
 
-- Designed and maintained end-to-end web applications with **React** (frontend) and **Python/FastAPI** (backend), owning the full stack from database schema to API layer.
-- Built and maintained a production business platform with **PostgreSQL**, implementing complex business logic, secure **JWT** authentication, and async background job scheduling.
-- Integrated third-party **REST APIs** and external business systems, building automated workflows for document generation, client communication, and financial reporting processes.
-- Delivered features consistently in **Agile** sprints (stand-ups, sprint planning, retrospectives), collaborating across frontend and product teams.
+- Designed and maintained end-to-end web applications with React (frontend) and Python/FastAPI (backend), owning the full stack from database schema to API layer.
+- Built and maintained a production business platform with PostgreSQL, implementing complex business logic, secure JWT authentication, and async background job scheduling.
+- Integrated third-party REST APIs and external business systems, building automated workflows for document generation, client communication, and financial reporting processes.
+- Delivered features consistently in Agile sprints (stand-ups, sprint planning, retrospectives), collaborating across frontend and product teams.
 
 ### Sales Team Leader — Pcom Solutions, Tel Aviv
 **2019 – 2025**
 
 - Led a team of 3–4 sales representatives; managed pipeline, KPIs, and enterprise client relationships.
-- Grew team revenue **30% YoY** through structured performance tracking and process improvements.
+- Grew team revenue 30% YoY through structured performance tracking and process improvements.
 
 ---
 
@@ -39,9 +39,9 @@ Full-Stack Developer with production experience across the entire web stack: Rea
 ### Full-Stack Development — John Bryce, Tel Aviv
 **990 hours, 2024 – 2025**
 
-- Program covering end-to-end web development with **React**, **Node.js**, and Python (FastAPI, Django, Flask).
-- Built full-stack projects with relational (**PostgreSQL**, **MySQL**) and non-relational (**MongoDB**) databases; applied Clean Code and SOLID principles.
-- Gained hands-on experience with DevOps workflows: **Git**, **GitHub**, **Docker**, **AWS EC2** deployment.
+- Program covering end-to-end web development with React, Node.js, and Python (FastAPI, Django, Flask).
+- Built full-stack projects with relational (PostgreSQL, MySQL) and non-relational (MongoDB) databases; applied Clean Code and SOLID principles.
+- Gained hands-on experience with DevOps workflows: Git, GitHub, Docker, AWS EC2 deployment.
 
 ---
 

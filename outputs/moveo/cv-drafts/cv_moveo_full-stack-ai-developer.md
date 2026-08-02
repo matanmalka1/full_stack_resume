@@ -1,6 +1,6 @@
 ---
 created: 2026-07-29
-modified: 2026-07-29
+modified: 2026-08-02
 ---
 
 # Matan Malka
@@ -16,7 +16,7 @@ Full-Stack Developer with production experience building end-to-end business app
 
 ## Work Experience
 
-### Full-Stack Developer · PH.Digital, Tel Aviv
+### Full-Stack Developer — PH.Digital, Tel Aviv
 **2025 - 2026**
 
 - Designed and maintained end-to-end web applications with React and Python/FastAPI, owning the full stack from database schema through the REST API layer.
@@ -24,7 +24,7 @@ Full-Stack Developer with production experience building end-to-end business app
 - Integrated third-party REST APIs and external business systems, building automated workflows for document generation, client communication, and financial reporting.
 - Delivered features in Agile sprints, collaborating with frontend and product teams through stand-ups, sprint planning, and retrospectives.
 
-### Sales Team Leader · Pcom Solutions, Tel Aviv
+### Sales Team Leader — Pcom Solutions, Tel Aviv
 **2019 - 2025**
 
 - Led a team of 3-4 sales representatives and managed pipeline, KPIs, and enterprise client relationships.
@@ -32,7 +32,7 @@ Full-Stack Developer with production experience building end-to-end business app
 
 ## Education
 
-### Full-Stack Development · John Bryce, Tel Aviv
+### Full-Stack Development — John Bryce, Tel Aviv
 **990 hours, 2024 - 2025**
 
 - Completed an end-to-end development program covering Python with Django, FastAPI, and Flask, plus React and Node.js.

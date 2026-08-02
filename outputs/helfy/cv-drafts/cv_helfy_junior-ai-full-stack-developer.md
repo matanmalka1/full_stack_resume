@@ -1,6 +1,6 @@
 ---
 created: 2026-06-02
-modified: 2026-06-02
+modified: 2026-08-02
 ---
 
 # Matan Malka — Full-Stack Developer · AI Integrations

@@ -5,6 +5,8 @@ modified: 2026-08-02
 
 # Matan Malka
 
+Full-Stack Developer · Python/FastAPI · React
+
 Tel Aviv · +972-50-668-8386 · matan1391@gmail.com
 [GitHub](https://github.com/matanmalka1) · [LinkedIn](https://www.linkedin.com/in/matanmalka1)
 
@@ -20,15 +22,15 @@ Full-Stack Developer with production experience in Python/FastAPI, React, and Po
 
 ## Work Experience
 
-### Full-Stack Developer, PH.Digital, Tel Aviv
+### Full-Stack Developer — PH.Digital, Tel Aviv
 **2025 – 2026**
 
-- Designed and maintained end-to-end web applications using **React** (frontend, incl. HTML5/CSS3) and **Python/FastAPI** (backend), owning the full stack from database schema to API layer.
-- Built and maintained a production business platform with **PostgreSQL**, implementing complex business logic, secure JWT authentication, and async background job scheduling, driven by structured **YAML/JSON** configuration.
-- Wrote unit and integration tests (**pytest**) as part of the workflow; integrated third-party REST APIs for document generation, client communication, and financial reporting.
+- Designed and maintained end-to-end web applications using React (frontend, incl. HTML5/CSS3) and Python/FastAPI (backend), owning the full stack from database schema to API layer.
+- Built and maintained a production business platform with PostgreSQL, implementing complex business logic, secure JWT authentication, and async background job scheduling, driven by structured YAML/JSON configuration.
+- Wrote unit and integration tests (pytest) as part of the workflow; integrated third-party REST APIs for document generation, client communication, and financial reporting.
 - Delivered features in Agile sprints via Git/GitHub pull requests and code review; used AI-assisted development tools daily, with critical review and validation of generated code before merging.
 
-### Sales Team Leader, Pcom Solutions, Tel Aviv
+### Sales Team Leader — Pcom Solutions, Tel Aviv
 **2019 – 2025**
 
 - Led a team of 3–4 sales representatives; managed pipeline, KPIs, and enterprise client relationships.
@@ -38,7 +40,7 @@ Full-Stack Developer with production experience in Python/FastAPI, React, and Po
 
 ## Education
 
-### Full-Stack Development, John Bryce, Tel Aviv
+### Full-Stack Development — John Bryce, Tel Aviv
 **990 hours, 2024 – 2025**
 
 - Program covering end-to-end web development with Python (Django, FastAPI, Flask), React, and Node.js.
@@ -60,7 +62,7 @@ Full-Stack Developer with production experience in Python/FastAPI, React, and Po
 ---
 
 ## Languages
-- Hebrew · Native
-- English · Fluent
-- Arabic · Conversational
-- French · Conversational
+- Hebrew — Native
+- English — Fluent
+- Arabic — Conversational
+- French — Conversational
