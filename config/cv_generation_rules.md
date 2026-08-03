@@ -114,13 +114,16 @@ modified: YYYY-MM-DD
 Full-Stack Developer · Python/FastAPI · React
 
 Tel Aviv · +972-50-668-8386 · matan1391@gmail.com
-[GitHub](https://github.com/matanmalka1) · [LinkedIn](https://www.linkedin.com/in/matanmalka1)
+[github.com/matanmalka1](https://github.com/matanmalka1) · [linkedin.com/in/matanmalka1](https://www.linkedin.com/in/matanmalka1)
 ```
 
 - **Tagline**: its own line, plain text, no bold, no heading marker. One of the four
   allowed variants above, copied character for character. It lives in the `.md`,
   not only in the `.html`.
-- **Contact block**: exactly two lines, in the order shown, no bullets.
+- **Contact block**: exactly two lines, in the order shown, no bullets. GitHub/LinkedIn
+  link text must be the full visible address (`github.com/...`, `linkedin.com/in/...`),
+  never a bare label like `GitHub`/`LinkedIn` — ATS parsers read link text only, not
+  the href, and a label-only link loses the address.
 - **Job / education title line**: `### <Title> — <Company/School>, <City>`
 - **Date line**: bold, immediately under the title line: `**2025 – 2026**`,
   `**990 hours, 2024 – 2025**`

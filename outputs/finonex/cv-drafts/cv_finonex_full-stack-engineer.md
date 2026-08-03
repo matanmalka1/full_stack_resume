@@ -1,6 +1,6 @@
 ---
 created: 2026-06-22
-modified: 2026-08-02
+modified: 2026-08-03
 ---
 
 # Matan Malka
@@ -8,7 +8,7 @@ modified: 2026-08-02
 Full-Stack Developer · Python/FastAPI · Node.js · React
 
 Tel Aviv · +972-50-668-8386 · matan1391@gmail.com
-[GitHub](https://github.com/matanmalka1) · [LinkedIn](https://www.linkedin.com/in/matanmalka1)
+[github.com/matanmalka1](https://github.com/matanmalka1) · [linkedin.com/in/matanmalka1](https://www.linkedin.com/in/matanmalka1)
 
 ---
 
