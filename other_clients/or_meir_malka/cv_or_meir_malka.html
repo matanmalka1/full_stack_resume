@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>אור מאיר מלכה - קורות חיים</title>
+<link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700&family=Rubik:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --ink: #1c1c1e;
+    --muted: #6b7280;
+    --accent: #3f41c3;
+    --rule: #e5e0d8;
+    --bg: #ffffff;
+    --serif: 'Frank Ruhl Libre', 'David', serif;
+    --sans: 'Rubik', 'Arial Hebrew', Arial, sans-serif;
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 11.5pt;
+    line-height: 1.6;
+    width: 210mm;
+    margin: 0 auto;
+  }
+
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 13mm 16mm 13mm;
+    display: grid;
+    grid-template-rows: auto 1fr;
+  }
+
+  header {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: end;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--ink);
+    margin-bottom: 14px;
+  }
+
+  .name {
+    font-family: var(--serif);
+    font-size: 30pt;
+    line-height: 1;
+    color: var(--ink);
+  }
+
+  .tagline {
+    font-size: 11pt;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .contacts {
+    text-align: left;
+    font-size: 9.5pt;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  .contacts a { color: var(--muted); text-decoration: none; direction: ltr; unicode-bidi: embed; }
+  .contacts a:hover { color: var(--accent); }
+
+  .section { margin-bottom: 14px; }
+
+  .section-label {
+    font-size: 8.5pt;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: var(--accent);
+    margin-bottom: 7px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .about p {
+    font-size: 11pt;
+    color: #3a3a3c;
+    line-height: 1.7;
+  }
+
+  .job { margin-bottom: 12px; }
+  .job:last-child { margin-bottom: 0; }
+
+  .job-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .job-title {
+    font-size: 11pt;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .job-date {
+    font-size: 9pt;
+    color: var(--muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .job-company {
+    font-size: 9.5pt;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+
+  ul { padding-right: 15px; padding-left: 0; }
+
+  ul li {
+    font-size: 11pt;
+    color: #3a3a3c;
+    margin-bottom: 3px;
+    line-height: 1.6;
+  }
+
+  .edu { margin-bottom: 10px; }
+  .edu:last-child { margin-bottom: 0; }
+
+  .skills-list, .mil-list { list-style: none; padding: 0; }
+  .skills-list li, .mil-list li {
+    font-size: 11pt;
+    margin-bottom: 3px;
+    color: #3a3a3c;
+    line-height: 1.6;
+    padding-right: 14px;
+    position: relative;
+  }
+  .skills-list li::before, .mil-list li::before, ul:not(.skills-list):not(.mil-list) li {
+    content: none;
+  }
+  ul:not(.skills-list):not(.mil-list) li {
+    list-style: disc;
+  }
+
+  .languages-row {
+    font-size: 10pt;
+    color: var(--ink);
+  }
+
+  .lang-level {
+    color: var(--muted);
+    font-size: 9.5pt;
+  }
+
+  @media print {
+    @page { size: A4; margin: 0; }
+    html, body {
+      width: 210mm; height: 297mm; margin: 0; background: #fff;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    .page {
+      padding: 10mm 13mm 8mm;
+      min-height: unset;
+      height: 297mm;
+      overflow: hidden;
+    }
+    * { page-break-inside: avoid; break-inside: avoid; }
+    a { color: inherit !important; text-decoration: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div>
+      <div class="name">אור מאיר מלכה</div>
+      <div class="tagline">עורכת דין</div>
+    </div>
+    <div class="contacts">
+      בת ים<br>
+      <a href="tel:+972528393066">052-839-3066</a><br>
+      <a href="mailto:Ormeir1357@gmail.com">Ormeir1357@gmail.com</a>
+    </div>
+  </header>
+
+  <div class="body">
+
+    <div class="section about">
+      <div class="section-label">תמצית מקצועית</div>
+      <p>עורכת דין בעלת השכלה משפטית מלאה וניסיון מעשי כמתמחה במשרד המתמחה בדיני חדלות פירעון. בעלת רקע נוסף בניהול חשבונות במשרד ייעוץ מס, המקנה הבנה פיננסית-עסקית מעמיקה. מחפשת תפקיד ראשון כעורכת דין במשרד עורכי דין.</p>
+    </div>
+
+    <div class="section">
+      <div class="section-label">ניסיון תעסוקתי</div>
+
+      <div class="job">
+        <div class="job-header">
+          <span class="job-title">מתמחה בעריכת דין</span>
+          <span class="job-date">פברואר 2025 – פברואר 2026</span>
+        </div>
+        <div class="job-company">משרד עו״ד ליאור כספי — חדלות פירעון</div>
+        <ul>
+          <li>ביצוע התמחות מלאה במשרד המתמחה בתחום חדלות פירעון ופירוק תאגידים.</li>
+          <li>ליווי משפטי של תיקים בתחום חדלות הפירעון, לרבות הכנת מסמכים והתנהלות מול גורמים רלוונטיים.</li>
+          <li>רכישת ניסיון מעשי בעבודה משרדית שוטפת לצד עורכי דין בכירים.</li>
+        </ul>
+      </div>
+
+      <div class="job">
+        <div class="job-header">
+          <span class="job-title">מתנדבת בקליניקה משפטית</span>
+          <span class="job-date">2023 – 2024</span>
+        </div>
+        <div class="job-company">בית המשפט לענייני משפחה, ראשון לציון (במסגרת המכללה)</div>
+        <ul>
+          <li>ליווי וסיוע משפטי במסגרת קליניקה אקדמית בבית המשפט לענייני משפחה, במשך שנה.</li>
+          <li>חשיפה מעשית להליכים משפטיים בדיני משפחה וצפייה בדיונים.</li>
+        </ul>
+      </div>
+
+      <div class="job">
+        <div class="job-header">
+          <span class="job-title">מנהלת חשבונות</span>
+          <span class="job-date">2021 – 2025</span>
+        </div>
+        <div class="job-company">משרד ייעוץ מס</div>
+        <ul>
+          <li>ניהול הנהלת חשבונות שוטפת במשרד ייעוץ מס במשך 4 שנים.</li>
+          <li>טיפול בדוחות כספיים, התנהלות מול לקוחות ורשויות המס.</li>
+          <li>פיתוח מיומנויות ארגון, דיוק ועמידה בלוחות זמנים.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">השכלה והסמכה</div>
+      <div class="edu">
+        <ul>
+          <li>תואר ראשון במשפטים (LL.B) — המרכז האקדמי פרס, אוקטובר 2025</li>
+          <li>עברה בהצלחה את בחינות לשכת עורכי הדין — יוני 2026</li>
+          <li>כתיבת שתי עבודות סמינריון בדיני משפחה</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">שירות צבאי</div>
+      <ul class="mil-list">
+        <li style="list-style:disc;">שירות צבאי מלא</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <div class="section-label">כישורים</div>
+      <ul class="skills-list">
+        <li style="list-style:disc;">שליטה מלאה בסביבת Office (Word, Excel, Outlook, PowerPoint)</li>
+        <li style="list-style:disc;">יכולות ניסוח וכתיבה משפטית</li>
+        <li style="list-style:disc;">יחסי אנוש, שירותיות ועבודה תחת לחץ</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <div class="section-label">שפות</div>
+      <div class="languages-row">עברית <span class="lang-level">— שפת אם</span> &nbsp;|&nbsp; אנגלית <span class="lang-level">— ברמה טובה</span></div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>
