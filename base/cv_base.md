@@ -42,11 +42,9 @@ Full-Stack Developer specializing in Python/FastAPI and React, with hands-on exp
 ## Education
 
 ### Full-Stack Development — John Bryce, Tel Aviv
-**990 hours, 2024 – 2025**
+**990-hour professional program, 2024 – 2025**
 
-- Program covering end-to-end web development with Python (Django, FastAPI, Flask), React, and Node.js.
-- Built full-stack projects with GenAI integrations (OpenAI API, LLM pipelines); practiced Clean Code and SOLID principles.
-- Gained hands-on experience with DevOps workflows: Git, GitHub, Docker, AWS EC2 deployment.
+Python, FastAPI, Django, React, Node.js, databases, Docker, AWS, and GenAI integrations.
 
 ---
 
