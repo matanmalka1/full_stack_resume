@@ -23,7 +23,7 @@ Full-Stack Developer specializing in Python/FastAPI and React, with hands-on exp
 - Architected a production CRM on PostgreSQL, implementing workflow automation, role-based authentication, scheduled background jobs, and state-driven business processes across core operational flows.
 - Set up CI/CD pipelines (GitHub Actions) covering linting, automated tests, database migration checks, and OpenAPI contract sync between backend and frontend.
 - Built and maintained a customer-facing marketing site with Next.js (App Router, React Server Components), TypeScript, and Tailwind CSS, including form validation, RTL Hebrew localization, Sentry error monitoring, and a Vitest test suite.
-- Integrated third-party REST APIs and external business systems, building automated workflows for document generation, client communication, and financial reporting processes.
+- Built production-grade WhatsApp and email integrations and asynchronous PDF/Excel generation pipelines using reusable service abstractions, background jobs, retries, scheduling, and status tracking for automated financial reporting workflows.
 - Delivered features consistently in Agile sprints (stand-ups, sprint planning, retrospectives), collaborating with frontend and product teams.
 
 ### Pcom Solutions, Tel Aviv
