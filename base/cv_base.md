@@ -10,7 +10,7 @@
 ---
 
 ## Profile
-Full-Stack Developer focused on Python/FastAPI, React, and PostgreSQL. Experienced in building internal business platforms and workflow systems, designing backend APIs, database models, authentication flows, and business logic-heavy features. Prior client-facing experience translates directly into product sense and business context.
+Full-Stack Developer specializing in Python/FastAPI and React, with hands-on experience building production CRM and workflow systems end-to-end, from PostgreSQL data models and APIs to authentication, background jobs, integrations, and frontend features. Product-oriented background with strong understanding of business processes and operational workflows.
 
 ---
 
