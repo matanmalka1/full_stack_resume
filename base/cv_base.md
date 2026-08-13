@@ -35,7 +35,6 @@ Full-Stack Developer specializing in Python/FastAPI and React, with hands-on exp
 - Promoted from Field Sales Representative (B2B) after 1.5 years.
 
 **Field Sales Representative (B2B)** — Mar 2019 – Aug 2020
-- B2B field sales representative; promoted to Team Leader / Sales Supervisor in August 2020.
 
 ---
 
