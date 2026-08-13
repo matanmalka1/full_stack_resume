@@ -20,7 +20,7 @@ Full-Stack Developer specializing in Python/FastAPI and React, with hands-on exp
 **2025 – 2026**
 
 - Built and maintained production web applications with React and Python/FastAPI, owning features end-to-end from PostgreSQL data modeling and backend APIs to frontend implementation.
-- Built and maintained a production business platform with PostgreSQL, implementing complex business logic, secure JWT authentication, and async background job scheduling.
+- Architected a production CRM on PostgreSQL, implementing workflow automation, role-based authentication, scheduled background jobs, and state-driven business processes across core operational flows.
 - Set up CI/CD pipelines (GitHub Actions) covering linting, automated tests, database migration checks, and OpenAPI contract sync between backend and frontend.
 - Built and maintained a customer-facing marketing site with Next.js (App Router, React Server Components), TypeScript, and Tailwind CSS, including form validation, RTL Hebrew localization, Sentry error monitoring, and a Vitest test suite.
 - Integrated third-party REST APIs and external business systems, building automated workflows for document generation, client communication, and financial reporting processes.
