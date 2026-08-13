@@ -52,11 +52,11 @@ Python, FastAPI, Django, React, Node.js, databases, Docker, AWS, and GenAI integ
 
 | Category | Technologies |
 |----------|-------------|
-| Backend | Python (FastAPI, Flask), Node.js (Express), RESTful APIs |
-| Frontend | React, Next.js (App Router, RSC), TypeScript, JavaScript |
-| Generative AI | Prompt Engineering, OpenAI API, Anthropic API, LLM integration |
-| Databases & SQL | PostgreSQL, MySQL, MongoDB, SQLAlchemy, SQL |
-| Tools & Cloud | Git, GitHub, GitHub Actions (CI/CD), Docker, Postman, AWS EC2 |
+| Backend | Python, FastAPI, Flask, Node.js, Express, REST APIs |
+| Frontend | React, Next.js, TypeScript, JavaScript |
+| AI & LLM Integrations | OpenAI API, Anthropic API, LLM integrations, Prompt Engineering |
+| Databases | PostgreSQL, MySQL, MongoDB, SQLAlchemy, SQL |
+| DevOps & Tools | Docker, GitHub Actions, Git, GitHub, Postman, AWS EC2 |
 
 ---
 
