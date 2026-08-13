@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matan Malka - Resume</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --ink: #1c1c1e;
+    --muted: #6b7280;
+    --accent: #3f41c3;
+    --rule: #e5e0d8;
+    --bg: #ffffff;
+    --serif: 'DM Serif Display', Georgia, serif;
+    --sans: 'DM Sans', Arial, sans-serif;
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 10.3pt;
+    line-height: 1.35;
+    width: 210mm;
+    margin: 0 auto;
+  }
+
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 13mm 16mm 13mm;
+    display: grid;
+    grid-template-rows: auto 1fr;
+  }
+
+  header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    padding-bottom: 7px;
+    border-bottom: 2px solid var(--ink);
+    margin-bottom: 9px;
+  }
+
+  .name {
+    font-family: var(--serif);
+    font-size: 27pt;
+    line-height: 1;
+    letter-spacing: -0.5px;
+    color: var(--ink);
+  }
+
+  .tagline {
+    font-size: 9pt;
+    color: var(--muted);
+    margin-top: 2px;
+    letter-spacing: 0.3px;
+  }
+
+  .contacts {
+    text-align: right;
+    font-size: 8.7pt;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+
+  .contacts a { color: var(--muted); text-decoration: none; }
+  .contacts a:hover { color: var(--accent); }
+
+  .body { display: block; }
+
+  .section { margin-bottom: 8px; }
+
+  .section-label {
+    font-size: 7pt;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 4px;
+    padding-bottom: 2px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .about p {
+    font-size: 10pt;
+    color: #3a3a3c;
+    line-height: 1.4;
+  }
+
+  .job { margin-bottom: 7px; }
+  .job:last-child { margin-bottom: 0; }
+
+  .job-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .job-title {
+    font-size: 10pt;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .job-date {
+    font-size: 8.3pt;
+    color: var(--muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .job-company {
+    font-size: 8.7pt;
+    color: var(--accent);
+    margin-bottom: 2px;
+  }
+
+  ul { padding-left: 15px; }
+
+  ul li {
+    font-size: 10pt;
+    color: #3a3a3c;
+    margin-bottom: 1.5px;
+    line-height: 1.35;
+  }
+
+  .edu { margin-bottom: 7px; }
+  .edu:last-child { margin-bottom: 0; }
+
+  .edu-title {
+    font-size: 10pt;
+    font-weight: 600;
+  }
+
+  .edu-sub {
+    font-size: 8.7pt;
+    color: var(--accent);
+    margin-bottom: 2px;
+  }
+
+  .skills-list { list-style: none; padding: 0; }
+
+  .skills-list li {
+    display: flex;
+    gap: 0;
+    font-size: 10pt;
+    margin-bottom: 2px;
+    line-height: 1.35;
+    color: #3a3a3c;
+  }
+
+  .skill-cat {
+    font-weight: 600;
+    white-space: nowrap;
+    width: 160px;
+    flex-shrink: 0;
+    color: var(--ink);
+  }
+
+  .languages-row {
+    display: flex;
+    gap: 40px;
+  }
+
+  .lang-item {
+    font-size: 9pt;
+    color: var(--ink);
+  }
+
+  .lang-level {
+    color: var(--muted);
+    font-size: 8.7pt;
+  }
+
+  @media print {
+    @page {
+      size: A4;
+      margin: 0;
+    }
+
+    html, body {
+      width: 210mm;
+      height: 297mm;
+      margin: 0;
+      background: #fff;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .page {
+      padding: 8mm 13mm 6mm;
+      min-height: unset;
+      height: 297mm;
+      overflow: hidden;
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+
+    * {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    a { color: inherit !important; text-decoration: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div>
+      <div class="name">Matan Malka</div>
+      <div class="tagline">Full-Stack Developer</div>
+    </div>
+    <div class="contacts">
+      Tel Aviv<br>
+      <a href="tel:+972506688386">+972-50-668-8386</a><br>
+      <a href="mailto:matan1391@gmail.com">matan1391@gmail.com</a><br>
+      <a href="https://github.com/matanmalka1" target="_blank">github.com/matanmalka1</a> · <a href="https://www.linkedin.com/in/matanmalka1" target="_blank">linkedin.com/in/matanmalka1</a>
+    </div>
+  </header>
+
+  <div class="body">
+    <div class="main">
+
+      <div class="section about">
+        <div class="section-label">Profile</div>
+        <p>Full-Stack Developer focused on Python/FastAPI, React, and PostgreSQL. Experienced in building internal business platforms and workflow systems, designing backend APIs, database models, authentication flows, and business logic-heavy features. Prior client-facing experience translates directly into product sense and business context.</p>
+      </div>
+
+      <div class="section">
+        <div class="section-label">Work Experience</div>
+        <div class="job">
+          <div class="job-header">
+            <span class="job-title">Full-Stack Developer</span>
+            <span class="job-date">2025 – 2026</span>
+          </div>
+          <div class="job-company">PH.Digital, Tel Aviv</div>
+          <ul>
+            <li>Designed and maintained end-to-end web applications with React (frontend) and Python/FastAPI (backend), owning the full stack from database schema to API layer.</li>
+            <li>Built and maintained a production business platform with PostgreSQL, implementing complex business logic, secure JWT authentication, and async background job scheduling.</li>
+            <li>Set up CI/CD pipelines (GitHub Actions) covering linting, automated tests, database migration checks, and OpenAPI contract sync between backend and frontend.</li>
+            <li>Built and maintained a customer-facing marketing site with Next.js (App Router, React Server Components), TypeScript, and Tailwind CSS, including form validation, RTL Hebrew localization, Sentry error monitoring, and a Vitest test suite.</li>
+            <li>Integrated third-party REST APIs and external business systems, building automated workflows for document generation, client communication, and financial reporting processes.</li>
+            <li>Delivered features consistently in Agile sprints (stand-ups, sprint planning, retrospectives), collaborating with frontend and product teams.</li>
+          </ul>
+        </div>
+        <div class="job">
+          <div class="job-header">
+            <span class="job-title">Team Leader / Sales Supervisor</span>
+            <span class="job-date">2020 – 2025</span>
+          </div>
+          <div class="job-company">Pcom Solutions, Tel Aviv</div>
+          <ul>
+            <li>Led a team of 3–4 sales representatives; managed pipeline, KPIs, and enterprise client relationships.</li>
+            <li>Grew team revenue 30% YoY.</li>
+            <li>Promoted from Field Sales Representative (B2B) after 1.5 years.</li>
+          </ul>
+        </div>
+        <div class="job">
+          <div class="job-header">
+            <span class="job-title">Field Sales Representative</span>
+            <span class="job-date">2019 – 2020</span>
+          </div>
+          <div class="job-company">Pcom Solutions, Tel Aviv</div>
+          <ul>
+            <li>B2B field sales representative; promoted to Team Leader / Sales Supervisor in August 2020.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-label">Education</div>
+        <div class="edu">
+          <div class="edu-title">Full-Stack Development — John Bryce, Tel Aviv</div>
+          <div class="edu-sub">990 hours, 2024 – 2025</div>
+          <ul>
+            <li>Program covering end-to-end web development with Python (Django, FastAPI, Flask), React, and Node.js.</li>
+            <li>Built full-stack projects with GenAI integrations (OpenAI API, LLM pipelines); practiced Clean Code and SOLID principles.</li>
+            <li>Gained hands-on experience with DevOps workflows: Git, GitHub, Docker, AWS EC2 deployment.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-label">Skills</div>
+        <ul class="skills-list">
+          <li><span class="skill-cat">Backend</span><span>Python (FastAPI, Flask), Node.js (Express), RESTful APIs</span></li>
+          <li><span class="skill-cat">Frontend</span><span>React, Next.js (App Router, RSC), TypeScript, JavaScript</span></li>
+          <li><span class="skill-cat">Generative AI</span><span>Prompt Engineering, OpenAI API, Anthropic API, LLM integration</span></li>
+          <li><span class="skill-cat">Databases &amp; SQL</span><span>PostgreSQL, MySQL, MongoDB, SQLAlchemy, SQL</span></li>
+          <li><span class="skill-cat">Tools &amp; Cloud</span><span>Git, GitHub, GitHub Actions (CI/CD), Docker, Postman, AWS EC2</span></li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <div class="section-label">Languages</div>
+        <div class="languages-row">
+          <div class="lang-item">Hebrew <span class="lang-level">- Native</span></div>
+          <div class="lang-item">English <span class="lang-level">- Fluent</span></div>
+          <div class="lang-item">Arabic <span class="lang-level">- Conversational</span></div>
+          <div class="lang-item">French <span class="lang-level">- Conversational</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

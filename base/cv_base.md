@@ -16,7 +16,7 @@ Full-Stack Developer focused on Python/FastAPI, React, and PostgreSQL. Experienc
 
 ## Work Experience
 
-### Full-Stack Developer — PH.Digital, Tel Aviv
+### Full-Stack Developer — PH.Digital, Herzliya
 **2025 – 2026**
 
 - Designed and maintained end-to-end web applications with React (frontend) and Python/FastAPI (backend), owning the full stack from database schema to API layer.
@@ -26,11 +26,16 @@ Full-Stack Developer focused on Python/FastAPI, React, and PostgreSQL. Experienc
 - Integrated third-party REST APIs and external business systems, building automated workflows for document generation, client communication, and financial reporting processes.
 - Delivered features consistently in Agile sprints (stand-ups, sprint planning, retrospectives), collaborating with frontend and product teams.
 
-### Sales Team Leader — Pcom Solutions, Tel Aviv
-**2019 – 2025**
+### Pcom Solutions, Tel Aviv
+**Mar 2019 – Jan 2025**
 
+**Team Leader / Sales Supervisor** — Aug 2020 – Jan 2025
 - Led a team of 3–4 sales representatives; managed pipeline, KPIs, and enterprise client relationships.
 - Grew team revenue 30% YoY.
+- Promoted from Field Sales Representative (B2B) after 1.5 years.
+
+**Field Sales Representative (B2B)** — Mar 2019 – Aug 2020
+- B2B field sales representative; promoted to Team Leader / Sales Supervisor in August 2020.
 
 ---
 
