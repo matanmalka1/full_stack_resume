@@ -14,7 +14,7 @@ Tel Aviv · +972-50-668-8386 · matan1391@gmail.com
 
 ## Profile
 
-Full-Stack Developer focused on Python/FastAPI, React, and PostgreSQL. Experienced in building internal business platforms and workflow systems, designing backend APIs, database models, authentication flows, and business logic-heavy features. Prior client-facing experience translates directly into product sense and business context.
+Full-Stack Developer specializing in Python/FastAPI and React, with hands-on experience building production CRM and workflow systems end-to-end, from PostgreSQL data models and APIs to authentication, background jobs, integrations, and frontend features. Product-oriented background with strong understanding of business processes and operational workflows.
 
 ---
 
@@ -23,11 +23,11 @@ Full-Stack Developer focused on Python/FastAPI, React, and PostgreSQL. Experienc
 ### Full-Stack Developer — PH.Digital, Herzliya
 **2025 – 2026**
 
-- Designed and maintained end-to-end web applications with React (frontend) and Python/FastAPI (backend), owning the full stack from database schema to API layer.
-- Built and maintained a production business platform with PostgreSQL, implementing complex business logic, secure JWT authentication, and async background job scheduling.
+- Built and maintained production web applications with React and Python/FastAPI, owning features end-to-end from PostgreSQL data modeling and backend APIs to frontend implementation.
+- Architected a production CRM on PostgreSQL, implementing workflow automation, role-based authentication, scheduled background jobs, and state-driven business processes across core operational flows.
 - Set up CI/CD pipelines (GitHub Actions) covering linting, automated tests, database migration checks, and OpenAPI contract sync between backend and frontend.
 - Built and maintained a customer-facing marketing site with Next.js (App Router, React Server Components), TypeScript, and Tailwind CSS, including form validation, RTL Hebrew localization, Sentry error monitoring, and a Vitest test suite.
-- Integrated third-party REST APIs and external business systems, building automated workflows for document generation, client communication, and financial reporting processes.
+- Built production-grade WhatsApp and email integrations and asynchronous PDF/Excel generation pipelines using reusable service abstractions, background jobs, retries, scheduling, and status tracking for automated financial reporting workflows.
 - Delivered features consistently in Agile sprints (stand-ups, sprint planning, retrospectives), collaborating with frontend and product teams.
 
 ### Team Leader / Sales Supervisor — Pcom Solutions, Tel Aviv
@@ -37,21 +37,17 @@ Full-Stack Developer focused on Python/FastAPI, React, and PostgreSQL. Experienc
 - Grew team revenue 30% YoY.
 - Promoted from Field Sales Representative (B2B) after 1.5 years.
 
-### Field Sales Representative — Pcom Solutions, Tel Aviv
+### Field Sales Representative (B2B) — Pcom Solutions, Tel Aviv
 **2019 – 2020**
-
-- B2B field sales representative; promoted to Team Leader / Sales Supervisor in August 2020.
 
 ---
 
 ## Education
 
 ### Full-Stack Development — John Bryce, Tel Aviv
-**990 hours, 2024 – 2025**
+**990-hour professional program, 2024 – 2025**
 
-- Program covering end-to-end web development with Python (Django, FastAPI, Flask), React, and Node.js.
-- Built full-stack projects with GenAI integrations (OpenAI API, LLM pipelines); practiced Clean Code and SOLID principles.
-- Gained hands-on experience with DevOps workflows: Git, GitHub, Docker, AWS EC2 deployment.
+- Python, FastAPI, Django, React, Node.js, databases, Docker, AWS, and GenAI integrations.
 
 ---
 
@@ -59,11 +55,11 @@ Full-Stack Developer focused on Python/FastAPI, React, and PostgreSQL. Experienc
 
 | Category | Technologies |
 |----------|-------------|
-| Backend | Python (FastAPI, Flask), Node.js (Express), RESTful APIs |
-| Frontend | React, Next.js (App Router, RSC), TypeScript, JavaScript |
-| Generative AI | Prompt Engineering, OpenAI API, Anthropic API, LLM integration |
-| Databases & SQL | PostgreSQL, MySQL, MongoDB, SQLAlchemy, SQL |
-| Tools & Cloud | Git, GitHub, GitHub Actions (CI/CD), Docker, Postman, AWS EC2 |
+| Backend | Python, FastAPI, Flask, Node.js, Express, REST APIs |
+| Frontend | React, Next.js, TypeScript, JavaScript |
+| AI & LLM Integrations | OpenAI API, Anthropic API, LLM integrations, Prompt Engineering |
+| Databases | PostgreSQL, MySQL, MongoDB, SQLAlchemy, SQL |
+| DevOps & Tools | Docker, GitHub Actions, Git, GitHub, Postman, AWS EC2 |
 
 ---
 
