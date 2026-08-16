@@ -56,14 +56,26 @@ Use the returned application ID:
 ./.venv/bin/cv validate <application-id>
 ```
 
-`draft` stops for review. It never renders by default. A constrained wording edit can
-be linked to canonical facts with:
+`draft` stops for review. It never renders by default. Manual edits are classified as
+exact canonical wording, a versioned deterministic composite, conservatively
+extractive derived wording, or a pending claim that blocks approval. Edit one claim
+through the unified CLI flow with:
 
 ```bash
-./.venv/bin/cv link-claim <application-id> <claim-id> \
-  --text 'Reordered wording using only the supported fact vocabulary' \
+./.venv/bin/cv edit-claim <application-id> <claim-id> \
+  --text 'A complete clause preserved from the canonical rendering' \
   --fact-id sales.cycle.discovery
+
+./.venv/bin/cv edit-claim <application-id> <claim-id> \
+  --template canonical-renderings \
+  --fact-id sales.metric.recurring_customers \
+  --fact-id sales.metric.performance
 ```
+
+Edits made directly to existing marked claim lines in `resume.md` are extracted and
+classified by `validate`, or explicitly with `cv sync-draft <application-id>`. Structural
+Markdown edits or removed markers remain hard failures. Unsupported wording is retained
+as `pending`; it is never silently discarded and cannot be approved.
 
 Then approve, render, and inspect the complete ready result:
 
@@ -130,6 +142,15 @@ agree.
 ./.venv/bin/cv migrate dry-run --snapshot data/snapshots/<timestamp>
 ./.venv/bin/cv migrate apply --snapshot data/snapshots/<timestamp>
 ./.venv/bin/cv migrate reconcile
+```
+
+For a migration that was completed before the hardened gate existed, reproduce the
+current migration against the pre-migration snapshot in a temporary directory and
+compare its database semantics, canonical fact hashes, and historical artifact hashes
+to the live state without modifying it:
+
+```bash
+./.venv/bin/cv migrate verify-live --snapshot data/snapshots/<timestamp>
 ```
 
 Restore instructions are in

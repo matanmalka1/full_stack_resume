@@ -620,6 +620,161 @@ def apply_migration(
     return final_report
 
 
+FACT_SOURCE_NAMES = ("common.md", "sales.md", "development.md", "situational_skills.md")
+
+
+def _read_only_rows(
+    database: Path,
+    query: str,
+    parameters: tuple[Any, ...] = (),
+) -> list[dict[str, Any]]:
+    uri = f"file:{database.resolve().as_posix()}?mode=ro"
+    connection = sqlite3.connect(uri, uri=True)
+    connection.row_factory = sqlite3.Row
+    try:
+        return [dict(row) for row in connection.execute(query, parameters)]
+    finally:
+        connection.close()
+
+
+def _semantic_migration_state(database: Path) -> dict[str, list[dict[str, Any]]]:
+    return {
+        "applications": _read_only_rows(database, """
+            SELECT id, company, target_role, normalized_role, source_url, language, track, profile,
+                   emphasis, classification_confidence, fit_level, current_status, last_contact_date,
+                   next_action, next_action_date, notes, source, created_at
+            FROM applications WHERE source='legacy-csv' ORDER BY id
+        """),
+        "job_snapshots": _read_only_rows(database, """
+            SELECT js.id, js.application_id, js.version_number, js.original_text, js.source_url,
+                   js.captured_at, js.source_metadata_json, js.content_hash, js.prior_snapshot_id
+            FROM job_snapshots js JOIN applications a ON a.id=js.application_id
+            WHERE a.source='legacy-csv' ORDER BY js.id
+        """),
+        "status_history": _read_only_rows(database, """
+            SELECT sh.application_id, sh.from_status, sh.to_status, sh.reason
+            FROM status_history sh JOIN applications a ON a.id=sh.application_id
+            WHERE a.source='legacy-csv'
+            ORDER BY sh.application_id, sh.id
+        """),
+        "artifact_versions": _read_only_rows(database, """
+            SELECT a.application_id, a.artifact_type, a.logical_name, av.version_number,
+                   av.lifecycle_status, av.path, av.content_hash, av.approved_at, av.submitted_at,
+                   av.track, av.profile, av.emphasis, av.facts_version, av.job_snapshot_id,
+                   av.metadata_json
+            FROM artifact_versions av JOIN artifacts a ON a.id=av.artifact_id
+            WHERE a.logical_name LIKE 'legacy-%'
+            ORDER BY a.application_id, a.artifact_type, a.logical_name, av.version_number
+        """),
+    }
+
+
+def retrospective_verify_migration(root: Path, snapshot_dir: Path) -> dict[str, Any]:
+    snapshot = verify_snapshot(snapshot_dir)
+    problems: list[str] = []
+    live_database = root / "data/applications.sqlite3"
+    if not snapshot.get("passed"):
+        problems.append("pre-migration snapshot verification failed")
+    if not live_database.is_file():
+        problems.append("live migrated database is missing")
+    for name in FACT_SOURCE_NAMES:
+        if not (root / "base" / name).is_file():
+            problems.append(f"live canonical fact source is missing: base/{name}")
+    if problems:
+        return _seal_report({
+            "schema_version": "1.0.0",
+            "passed": False,
+            "snapshot_id": snapshot.get("snapshot_id"),
+            "problems": problems,
+        })
+
+    with tempfile.TemporaryDirectory(prefix="cv-retrospective-verification-") as directory:
+        temporary = Path(directory)
+        restored = temporary / "restored"
+        restored.mkdir()
+        with tarfile.open(snapshot_dir / "repository.tar.gz", "r:gz") as tar:
+            _safe_extract(tar, restored)
+        expected = temporary / "expected"
+        expected.mkdir()
+        migration_report = migrate_legacy_state(restored, expected, dry_run=True)
+        if not migration_report["passed"]:
+            problems.append(f"current migration failed on restored snapshot: {migration_report['problems']}")
+
+        expected_database = expected / "data/applications.sqlite3"
+        live_state = _semantic_migration_state(live_database)
+        expected_state = _semantic_migration_state(expected_database)
+        semantic_counts: dict[str, int] = {}
+        semantic_hashes: dict[str, str] = {}
+        for group, expected_rows in expected_state.items():
+            live_rows = live_state[group]
+            semantic_counts[group] = len(live_rows)
+            semantic_hashes[group] = sha256_text(canonical_json(live_rows))
+            if live_rows != expected_rows:
+                problems.append(
+                    f"live {group} semantics differ from current migration output "
+                    f"(live={len(live_rows)}, expected={len(expected_rows)})"
+                )
+
+        fact_hashes: dict[str, str] = {}
+        for name in FACT_SOURCE_NAMES:
+            live_path = root / "base" / name
+            expected_path = expected / "base" / name
+            live_hash = sha256_file(live_path)
+            expected_hash = sha256_file(expected_path)
+            fact_hashes[name] = live_hash
+            if live_hash != expected_hash:
+                problems.append(f"canonical fact source differs from current migration output: base/{name}")
+
+        expected_artifacts = expected_state["artifact_versions"]
+        artifact_hashes_checked = 0
+        for artifact in expected_artifacts:
+            path = root / artifact["path"]
+            if not path.is_file():
+                problems.append(f"live historical artifact is missing: {artifact['path']}")
+            elif sha256_file(path) != artifact["content_hash"]:
+                problems.append(f"live historical artifact hash mismatch: {artifact['path']}")
+            else:
+                artifact_hashes_checked += 1
+
+        integrity = _read_only_rows(live_database, "PRAGMA integrity_check")
+        foreign_keys = _read_only_rows(live_database, "PRAGMA foreign_key_check")
+        if integrity != [{"integrity_check": "ok"}]:
+            problems.append(f"live SQLite integrity check failed: {integrity}")
+        if foreign_keys:
+            problems.append(f"live SQLite foreign-key check failed: {foreign_keys}")
+
+        matching_runs = _read_only_rows(
+            live_database,
+            "SELECT snapshot_id, manifest_hash, row_count, artifact_count FROM migration_runs "
+            "WHERE snapshot_id=?",
+            (snapshot["snapshot_id"],),
+        )
+        if len(matching_runs) != 1:
+            problems.append(f"expected one live migration run for snapshot, found {len(matching_runs)}")
+        else:
+            run = matching_runs[0]
+            if run["manifest_hash"] != snapshot.get("manifest_hash"):
+                problems.append("live migration run manifest hash does not match the verified snapshot")
+            if run["row_count"] != migration_report["application_count"]:
+                problems.append("live migration run row count differs from current migration output")
+            if run["artifact_count"] != migration_report["artifact_version_count"]:
+                problems.append("live migration run artifact count differs from current migration output")
+
+    return _seal_report({
+        "schema_version": "1.0.0",
+        "passed": not problems,
+        "snapshot_id": snapshot.get("snapshot_id"),
+        "manifest_hash": snapshot.get("manifest_hash"),
+        "snapshot_archive_sha256": snapshot.get("archive_sha256"),
+        "semantic_counts": semantic_counts,
+        "semantic_hashes": semantic_hashes,
+        "canonical_fact_hashes": fact_hashes,
+        "artifact_hashes_checked": artifact_hashes_checked,
+        "live_database": live_database.relative_to(root).as_posix(),
+        "problems": problems,
+    })
+
+
 def reconcile_migration(root: Path) -> dict[str, Any]:
     db_path = root / "data/applications.sqlite3"
     if not db_path.is_file():

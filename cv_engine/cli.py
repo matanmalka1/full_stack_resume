@@ -14,6 +14,7 @@ from .migration import (
     create_snapshot,
     dry_run_migration,
     reconcile_migration,
+    retrospective_verify_migration,
     run_migration_tests,
     verify_snapshot,
     write_inventory,
@@ -98,7 +99,17 @@ def build_parser() -> argparse.ArgumentParser:
     action.add_argument("application_id")
     action.add_argument("--next-action")
     action.add_argument("--date")
-    link = sub.add_parser("link-claim", help="link exact canonical wording to a draft claim")
+    edit = sub.add_parser("edit-claim", help="classify and save a canonical, derived, composite, or pending claim edit")
+    edit.add_argument("application_id")
+    edit.add_argument("claim_id")
+    edit_mode = edit.add_mutually_exclusive_group(required=True)
+    edit_mode.add_argument("--text")
+    edit_mode.add_argument("--template", choices=["canonical-renderings"])
+    edit.add_argument("--template-version", default="1.0.0")
+    edit.add_argument("--fact-id", action="append", required=True)
+    sync = sub.add_parser("sync-draft", help="extract marked manual Markdown edits and classify their claims")
+    sync.add_argument("application_id")
+    link = sub.add_parser("link-claim", help="compatibility alias for a text-based claim edit")
     link.add_argument("application_id")
     link.add_argument("claim_id")
     link.add_argument("--text", required=True)
@@ -118,6 +129,8 @@ def build_parser() -> argparse.ArgumentParser:
     dry_run.add_argument("--snapshot", type=Path, required=True)
     apply = migrate_sub.add_parser("apply")
     apply.add_argument("--snapshot", type=Path, required=True)
+    verify_live = migrate_sub.add_parser("verify-live", help="read-only semantic verification of the completed migration")
+    verify_live.add_argument("--snapshot", type=Path, required=True)
     migrate_sub.add_parser("reconcile")
     return parser
 
@@ -179,6 +192,10 @@ def main(argv: list[str] | None = None) -> int:
             elif args.migration_command == "apply":
                 path = apply_migration(root, args.snapshot.resolve())
                 _print(json.loads(path.read_text(encoding="utf-8")))
+            elif args.migration_command == "verify-live":
+                report = retrospective_verify_migration(root, args.snapshot.resolve())
+                _print(report)
+                return 0 if report["passed"] else 1
             elif args.migration_command == "reconcile":
                 report = reconcile_migration(root)
                 _print(report)
@@ -248,6 +265,21 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "action":
             engine.repo.set_next_action(args.application_id, args.next_action, args.date)
             _print(engine.repo.get_application(args.application_id))
+        elif args.command == "edit-claim":
+            markdown, report = engine.edit_claim(
+                args.application_id,
+                args.claim_id,
+                args.fact_id,
+                text=args.text,
+                template_id=args.template,
+                template_version=args.template_version,
+            )
+            _print({"markdown": str(markdown), "validation": report.model_dump(mode="json")})
+            return 0 if report.passed else 1
+        elif args.command == "sync-draft":
+            markdown, report = engine.sync_working_claims(args.application_id)
+            _print({"markdown": str(markdown), "validation": report.model_dump(mode="json")})
+            return 0 if report.passed else 1
         elif args.command == "link-claim":
             markdown, report = engine.link_claim(args.application_id, args.claim_id, args.text, args.fact_id)
             _print({"markdown": str(markdown), "validation": report.model_dump(mode="json")})

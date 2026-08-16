@@ -17,6 +17,7 @@ from cv_engine.migration import (
     dry_run_migration,
     migration_gate,
     migrate_legacy_state,
+    retrospective_verify_migration,
     verify_snapshot,
 )
 from cv_engine.util import canonical_json, sha256_text
@@ -89,6 +90,30 @@ def _gate_fixture(root: Path) -> Path:
     snapshot = create_snapshot(root)
     dry_run_migration(root, snapshot)
     _write_passing_test_report(root)
+    return snapshot
+
+
+def _completed_migration_fixture(root: Path) -> Path:
+    _legacy_fixture(root)
+    snapshot = create_snapshot(root)
+    verification = verify_snapshot(snapshot)
+    report = migrate_legacy_state(root, root, dry_run=False)
+    with connect(root / "data/applications.sqlite3") as connection:
+        connection.execute(
+            "INSERT INTO migration_runs(id, snapshot_id, manifest_hash, dry_run_report_hash, "
+            "row_count, artifact_count, report_json, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "fixture-migration-run",
+                verification["snapshot_id"],
+                verification["manifest_hash"],
+                "fixture-dry-run-hash",
+                report["application_count"],
+                report["artifact_version_count"],
+                "{}",
+                "2026-01-01T00:00:00+00:00",
+            ),
+        )
+        connection.commit()
     return snapshot
 
 
@@ -234,3 +259,49 @@ def test_apply_rechecks_inventory_immediately_before_staging(tmp_path: Path, mon
 
     with pytest.raises(MigrationSafetyError, match="live inventory changed after the migration gate"):
         apply_migration(root, snapshot, migration_test_runner=_passing_test_runner)
+
+
+def test_retrospective_verification_reproduces_completed_migration(tmp_path: Path) -> None:
+    root = tmp_path / "legacy"
+    root.mkdir()
+    snapshot = _completed_migration_fixture(root)
+
+    report = retrospective_verify_migration(root, snapshot)
+
+    assert report["passed"], report
+    assert report["semantic_counts"] == {
+        "applications": 2,
+        "job_snapshots": 2,
+        "status_history": 4,
+        "artifact_versions": 13,
+    }
+    assert report["artifact_hashes_checked"] == 13
+
+
+def test_retrospective_verification_detects_live_database_drift(tmp_path: Path) -> None:
+    root = tmp_path / "legacy"
+    root.mkdir()
+    snapshot = _completed_migration_fixture(root)
+    with connect(root / "data/applications.sqlite3") as connection:
+        connection.execute("UPDATE applications SET notes='changed after migration' WHERE company='alpha'")
+        connection.commit()
+
+    report = retrospective_verify_migration(root, snapshot)
+
+    assert not report["passed"]
+    assert any("applications semantics differ" in problem for problem in report["problems"])
+
+
+def test_retrospective_verification_detects_fact_and_artifact_drift(tmp_path: Path) -> None:
+    root = tmp_path / "legacy"
+    root.mkdir()
+    snapshot = _completed_migration_fixture(root)
+    (root / "base/sales.md").write_text("changed canonical facts\n", encoding="utf-8")
+    artifact = root / "outputs/alpha/cv-drafts/cv_alpha_account-manager.md"
+    artifact.write_text("changed historical artifact\n", encoding="utf-8")
+
+    report = retrospective_verify_migration(root, snapshot)
+
+    assert not report["passed"]
+    assert "canonical fact source differs from current migration output: base/sales.md" in report["problems"]
+    assert any("historical artifact hash mismatch" in problem for problem in report["problems"])

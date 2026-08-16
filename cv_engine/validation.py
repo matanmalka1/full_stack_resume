@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from .drafts import render_composite_claim, serialize_markdown
+from .drafts import render_composite_claim, serialize_markdown, validate_derived_wording
 from .facts import FactStore, FactStoreError
 from .models import DraftDocument, JobAnalysis, Profile, ValidationIssue, ValidationReport
 from .util import sha256_text
@@ -50,14 +50,29 @@ def validate_draft(
             groups["content"] = False
             issues.append(ValidationIssue(group="content", code="unlinked-claim", message=claim.text))
         if claim.claim_type == "derived":
+            try:
+                validate_derived_wording(
+                    claim.text,
+                    claim.fact_ids,
+                    facts,
+                    draft.language,
+                    claim.style,
+                    claim.derivation_id or "",
+                    claim.derivation_version or "",
+                )
+            except (FactStoreError, ValueError) as exc:
+                groups["content"] = False
+                issues.append(ValidationIssue(
+                    group="content",
+                    code="unsupported-derived-claim",
+                    message=f"claim {claim.claim_id}: {exc}",
+                ))
+        if claim.claim_type == "pending":
             groups["content"] = False
             issues.append(ValidationIssue(
                 group="content",
-                code="free-form-derived-claim",
-                message=(
-                    f"claim {claim.claim_id} uses an arbitrary derived statement; "
-                    "link exact canonical wording or confirm a new canonical fact"
-                ),
+                code="pending-claim",
+                message=f"claim {claim.claim_id}: {claim.pending_reason}",
             ))
         if claim.claim_type == "canonical" and len(claim.fact_ids) != 1:
             groups["content"] = False
@@ -72,6 +87,7 @@ def validate_draft(
                     claim.fact_ids,
                     facts,
                     draft.language,
+                    claim.style,
                     claim.template_id or "",
                     claim.template_version or "",
                 )
@@ -174,7 +190,7 @@ def validate_draft(
         ))
     historical_title_ids = {
         fact_id for fact_id in draft.selected_fact_ids
-        if "historical-title" in facts.get(fact_id).tags
+        if fact_id in facts.facts and "historical-title" in facts.get(fact_id).tags
     }
     heading_ids = {
         fact_id for section in draft.sections for claim in section.claims

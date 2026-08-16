@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 
 from .facts import FactStore
@@ -17,6 +19,27 @@ CONTACT_FACTS = [
 ]
 CLAIM_NAMESPACE = uuid.UUID("e47cfc95-7f5c-4dd2-acd4-19be02c8f988")
 CANONICAL_JOIN_TEMPLATE = ("canonical-renderings", "1.0.0")
+EXTRACTIVE_DERIVATION = ("extractive-clauses", "1.0.0")
+EDITABLE_STYLES = frozenset({"paragraph", "bullet", "item"})
+CLAIM_MARKER = re.compile(r"^<!-- claim:([^:]+):[0-9a-f]{64} -->$")
+
+
+@dataclass(frozen=True)
+class CompositeTemplate:
+    template_id: str
+    version: str
+    input_styles: frozenset[str]
+    output_styles: frozenset[str]
+
+
+COMPOSITE_TEMPLATES = {
+    CANONICAL_JOIN_TEMPLATE: CompositeTemplate(
+        template_id=CANONICAL_JOIN_TEMPLATE[0],
+        version=CANONICAL_JOIN_TEMPLATE[1],
+        input_styles=EDITABLE_STYLES,
+        output_styles=EDITABLE_STYLES,
+    ),
+}
 
 
 def _claim(
@@ -27,6 +50,9 @@ def _claim(
     *,
     template_id: str | None = None,
     template_version: str | None = None,
+    derivation_id: str | None = None,
+    derivation_version: str | None = None,
+    pending_reason: str | None = None,
 ) -> ClaimLine:
     identity = {
         "style": style,
@@ -36,6 +62,10 @@ def _claim(
     }
     if template_id is not None or template_version is not None:
         identity.update({"template_id": template_id, "template_version": template_version})
+    if derivation_id is not None or derivation_version is not None:
+        identity.update({"derivation_id": derivation_id, "derivation_version": derivation_version})
+    if pending_reason is not None:
+        identity["pending_reason"] = pending_reason
     return ClaimLine(
         claim_id=str(uuid.uuid5(CLAIM_NAMESPACE, canonical_json(identity))),
         style=style,
@@ -45,6 +75,9 @@ def _claim(
         text_hash=sha256_text(text),
         template_id=template_id,
         template_version=template_version,
+        derivation_id=derivation_id,
+        derivation_version=derivation_version,
+        pending_reason=pending_reason,
     )
 
 
@@ -181,6 +214,186 @@ def load_draft(manifest_path: Path) -> DraftDocument:
     return DraftDocument.model_validate_json(manifest_path.read_text(encoding="utf-8"))
 
 
+def _claims(draft: DraftDocument) -> list[ClaimLine]:
+    return [
+        draft.headline,
+        *draft.contacts,
+        *(claim for section in draft.sections for claim in section.claims),
+    ]
+
+
+def _replace_claim(draft: DraftDocument, claim_id: str, replacement: ClaimLine) -> None:
+    if draft.headline.claim_id == claim_id:
+        draft.headline = replacement
+        return
+    for index, claim in enumerate(draft.contacts):
+        if claim.claim_id == claim_id:
+            draft.contacts[index] = replacement
+            return
+    for section in draft.sections:
+        for index, claim in enumerate(section.claims):
+            if claim.claim_id == claim_id:
+                section.claims[index] = replacement
+                return
+    raise KeyError(claim_id)
+
+
+def _refresh_selection(draft: DraftDocument, facts: FactStore) -> DraftDocument:
+    selected = {fact_id for claim in _claims(draft) for fact_id in claim.fact_ids}
+    draft.selected_fact_ids = sorted(selected)
+    draft.omitted_facts = {
+        fact_id: "not selected by the active Profile and rendering budget"
+        for fact_id in sorted(set(facts.facts) - selected)
+    }
+    return draft.model_copy(update={"content_hash": sha256_text(serialize_markdown(draft))})
+
+
+def _normalized_clause(text: str) -> str:
+    return re.sub(r"\s+", " ", text.strip().rstrip(".;!?")).casefold()
+
+
+def _canonical_clauses(text: str) -> list[str]:
+    return [part for part in re.split(r"(?<=[.;!?])\s+", text.strip()) if part.strip()]
+
+
+def validate_derived_wording(
+    text: str,
+    fact_ids: list[str],
+    facts: FactStore,
+    language: str,
+    style: str,
+    derivation_id: str,
+    derivation_version: str,
+) -> None:
+    if (derivation_id, derivation_version) != EXTRACTIVE_DERIVATION:
+        raise ValueError(f"unknown derivation contract: {derivation_id}@{derivation_version}")
+    if len(fact_ids) != 1:
+        raise ValueError("extractive derived wording must link exactly one canonical fact")
+    fact = facts.get(fact_ids[0], canonical_only=True)
+    if style not in EDITABLE_STYLES or fact.resume_style != style:
+        raise ValueError(
+            f"extractive derived wording requires matching editable styles; "
+            f"fact={fact.resume_style!r}, output={style!r}"
+        )
+    source_clauses = _canonical_clauses(facts.rendering(fact.fact_id, language))
+    candidate = _normalized_clause(text)
+    allowed = {
+        _normalized_clause(" ".join(source_clauses[start:end]))
+        for start in range(len(source_clauses))
+        for end in range(start + 1, len(source_clauses) + 1)
+    }
+    if not candidate or candidate not in allowed:
+        raise ValueError(
+            "derived wording must preserve one or more complete canonical clauses in their original order"
+        )
+
+
+def render_composite_claim(
+    fact_ids: list[str],
+    facts: FactStore,
+    language: str,
+    output_style: str,
+    template_id: str,
+    template_version: str,
+) -> str:
+    try:
+        template = COMPOSITE_TEMPLATES[(template_id, template_version)]
+    except KeyError as exc:
+        raise ValueError(f"unknown deterministic claim template: {template_id}@{template_version}") from exc
+    if len(fact_ids) < 2 or len(fact_ids) != len(set(fact_ids)):
+        raise ValueError("deterministic composite claims require at least two distinct canonical facts")
+    if output_style not in template.output_styles:
+        raise ValueError(f"template {template_id}@{template_version} does not allow output style {output_style!r}")
+    support = [facts.get(fact_id, canonical_only=True) for fact_id in fact_ids]
+    invalid_styles = sorted({fact.resume_style for fact in support if fact.resume_style not in template.input_styles})
+    if invalid_styles or any(fact.resume_style != output_style for fact in support):
+        raise ValueError(
+            f"template {template_id}@{template_version} requires every input style to equal "
+            f"output style {output_style!r}"
+        )
+    return " ".join(facts.rendering(fact.fact_id, language) for fact in support)
+
+
+def apply_claim_edit(
+    draft: DraftDocument,
+    claim_id: str,
+    fact_ids: list[str],
+    facts: FactStore,
+    *,
+    text: str | None = None,
+    template_id: str | None = None,
+    template_version: str | None = None,
+) -> DraftDocument:
+    try:
+        current = next(claim for claim in _claims(draft) if claim.claim_id == claim_id)
+    except StopIteration as exc:
+        raise KeyError(claim_id) from exc
+    if template_id is not None:
+        if text is not None:
+            raise ValueError("a claim edit must use either text or a deterministic template, not both")
+        version = template_version or CANONICAL_JOIN_TEMPLATE[1]
+        rendered = render_composite_claim(
+            fact_ids,
+            facts,
+            draft.language,
+            current.style,
+            template_id,
+            version,
+        )
+        replacement = _claim(
+            current.style,
+            rendered,
+            fact_ids,
+            "composite",
+            template_id=template_id,
+            template_version=version,
+        )
+    else:
+        edited = (text or "").strip()
+        if not edited:
+            raise ValueError("manual claim text cannot be empty")
+        replacement = None
+        if len(fact_ids) == 1:
+            try:
+                fact = facts.get(fact_ids[0], canonical_only=True)
+                canonical_text = facts.rendering(fact.fact_id, draft.language)
+            except ValueError:
+                fact = None
+                canonical_text = None
+            if fact is not None and edited == canonical_text and fact.resume_style == current.style:
+                replacement = _claim(current.style, edited, fact_ids, "canonical")
+        if replacement is None:
+            try:
+                validate_derived_wording(
+                    edited,
+                    fact_ids,
+                    facts,
+                    draft.language,
+                    current.style,
+                    EXTRACTIVE_DERIVATION[0],
+                    EXTRACTIVE_DERIVATION[1],
+                )
+            except ValueError as exc:
+                replacement = _claim(
+                    current.style,
+                    edited,
+                    fact_ids,
+                    "pending",
+                    pending_reason=str(exc),
+                )
+            else:
+                replacement = _claim(
+                    current.style,
+                    edited,
+                    fact_ids,
+                    "derived",
+                    derivation_id=EXTRACTIVE_DERIVATION[0],
+                    derivation_version=EXTRACTIVE_DERIVATION[1],
+                )
+    _replace_claim(draft, claim_id, replacement.model_copy(update={"claim_id": claim_id}))
+    return _refresh_selection(draft, facts)
+
+
 def register_linked_claim(
     draft: DraftDocument,
     claim_id: str,
@@ -188,60 +401,7 @@ def register_linked_claim(
     fact_ids: list[str],
     facts: FactStore,
 ) -> DraftDocument:
-    if not new_text.strip() or len(fact_ids) != 1:
-        raise ValueError(
-            "free-form derived statements are disabled; link exactly one canonical fact "
-            "or confirm a new fact before using it"
-        )
-    fact = facts.get(fact_ids[0], canonical_only=True)
-    canonical_text = facts.rendering(fact.fact_id, draft.language)
-    if new_text.strip() != canonical_text:
-        raise ValueError(
-            "free-form derived statements are disabled; claim text must exactly match "
-            f"the {draft.language} rendering of canonical fact {fact.fact_id}"
-        )
-    replacement = None
-    for section in draft.sections:
-        for index, claim in enumerate(section.claims):
-            if claim.claim_id == claim_id:
-                if claim.style in {"heading", "date"}:
-                    raise ValueError("historical titles and dates cannot be relinked")
-                if fact.resume_style != claim.style:
-                    raise ValueError(
-                        f"canonical fact {fact.fact_id} uses {fact.resume_style!r}, "
-                        f"not the target claim style {claim.style!r}"
-                    )
-                replacement = _claim(claim.style, canonical_text, fact_ids, "canonical")
-                replacement = replacement.model_copy(update={"claim_id": claim_id})
-                section.claims[index] = replacement
-    if replacement is None:
-        raise KeyError(claim_id)
-    selected = {
-        fact_id
-        for claim in [draft.headline, *draft.contacts, *(claim for section in draft.sections for claim in section.claims)]
-        for fact_id in claim.fact_ids
-    }
-    draft.selected_fact_ids = sorted(selected)
-    draft.omitted_facts = {
-        fact_id: "not selected by the active Profile and rendering budget"
-        for fact_id in sorted(set(facts.facts) - selected)
-    }
-    markdown = serialize_markdown(draft)
-    return draft.model_copy(update={"content_hash": sha256_text(markdown)})
-
-
-def render_composite_claim(
-    fact_ids: list[str],
-    facts: FactStore,
-    language: str,
-    template_id: str,
-    template_version: str,
-) -> str:
-    if (template_id, template_version) != CANONICAL_JOIN_TEMPLATE:
-        raise ValueError(f"unknown deterministic claim template: {template_id}@{template_version}")
-    if len(fact_ids) < 2 or len(fact_ids) != len(set(fact_ids)):
-        raise ValueError("deterministic composite claims require at least two distinct canonical facts")
-    return " ".join(facts.rendering(fact_id, language) for fact_id in fact_ids)
+    return apply_claim_edit(draft, claim_id, fact_ids, facts, text=new_text)
 
 
 def register_composite_claim(
@@ -253,39 +413,68 @@ def register_composite_claim(
     template_id: str = CANONICAL_JOIN_TEMPLATE[0],
     template_version: str = CANONICAL_JOIN_TEMPLATE[1],
 ) -> DraftDocument:
-    text = render_composite_claim(
+    return apply_claim_edit(
+        draft,
+        claim_id,
         fact_ids,
         facts,
-        draft.language,
-        template_id,
-        template_version,
+        template_id=template_id,
+        template_version=template_version,
     )
-    replacement = None
-    for section in draft.sections:
-        for index, claim in enumerate(section.claims):
-            if claim.claim_id == claim_id:
-                if claim.style in {"heading", "date"}:
-                    raise ValueError("historical titles and dates cannot become composite claims")
-                replacement = _claim(
-                    claim.style,
-                    text,
-                    fact_ids,
-                    "composite",
-                    template_id=template_id,
-                    template_version=template_version,
-                ).model_copy(update={"claim_id": claim_id})
-                section.claims[index] = replacement
-    if replacement is None:
-        raise KeyError(claim_id)
-    selected = {
-        fact_id
-        for claim in [draft.headline, *draft.contacts, *(claim for section in draft.sections for claim in section.claims)]
-        for fact_id in claim.fact_ids
-    }
-    draft.selected_fact_ids = sorted(selected)
-    draft.omitted_facts = {
-        fact_id: "not selected by the active Profile and rendering budget"
-        for fact_id in sorted(set(facts.facts) - selected)
-    }
-    markdown = serialize_markdown(draft)
-    return draft.model_copy(update={"content_hash": sha256_text(markdown)})
+
+
+def _decode_claim_line(line: str, style: str) -> str:
+    if style == "heading" and line.startswith("### "):
+        return line[4:]
+    if style == "date" and line.startswith("**") and line.endswith("**"):
+        return line[2:-2]
+    if style in {"bullet", "item"} and line.startswith("- "):
+        return line[2:]
+    if style in {"paragraph", "contact", "headline"}:
+        return line
+    raise ValueError(f"edited claim line does not preserve its {style!r} Markdown style")
+
+
+def _extract_marked_claims(markdown: str, claims: dict[str, ClaimLine]) -> tuple[dict[str, str], str]:
+    lines = markdown.splitlines()
+    extracted: dict[str, str] = {}
+    skeleton: list[str] = []
+    index = 0
+    while index < len(lines):
+        match = CLAIM_MARKER.fullmatch(lines[index])
+        if not match:
+            skeleton.append(lines[index])
+            index += 1
+            continue
+        claim_id = match.group(1)
+        if claim_id not in claims or claim_id in extracted or index + 1 >= len(lines):
+            raise ValueError(f"invalid or duplicate claim marker: {claim_id}")
+        extracted[claim_id] = _decode_claim_line(lines[index + 1], claims[claim_id].style)
+        skeleton.extend([f"<!-- claim:{claim_id}:<hash> -->", f"<claim:{claim_id}>"])
+        index += 2
+    return extracted, "\n".join(skeleton)
+
+
+def synchronize_markdown_claims(
+    draft: DraftDocument,
+    markdown_path: Path,
+    facts: FactStore,
+) -> DraftDocument:
+    current_claims = {claim.claim_id: claim for claim in _claims(draft)}
+    actual = markdown_path.read_text(encoding="utf-8")
+    extracted, actual_skeleton = _extract_marked_claims(actual, current_claims)
+    expected, expected_skeleton = _extract_marked_claims(serialize_markdown(draft), current_claims)
+    if actual_skeleton != expected_skeleton or set(extracted) != set(current_claims):
+        raise ValueError("manual Markdown changed document structure or removed claim markers")
+    updated = draft
+    for claim_id, edited_text in extracted.items():
+        prior = current_claims[claim_id]
+        if edited_text != expected[claim_id]:
+            updated = apply_claim_edit(
+                updated,
+                claim_id,
+                prior.fact_ids,
+                facts,
+                text=edited_text,
+            )
+    return updated

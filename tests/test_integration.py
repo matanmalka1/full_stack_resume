@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from cv_engine.db import connect
+from cv_engine.drafts import load_draft
 from cv_engine.workflow import Engine
 
 
@@ -46,6 +47,101 @@ def test_csv_export(v1_repo: Path, tmp_path: Path) -> None:
     text = output.read_text(encoding="utf-8")
     assert "current_status" in text
     assert app_id in text
+
+
+def _working_claim(engine: Engine, application_id: str, fact_id: str):
+    manifest = engine.root / "artifacts/working" / application_id / "resume.claims.json"
+    draft = load_draft(manifest)
+    return next(
+        claim
+        for section in draft.sections
+        for claim in section.claims
+        if fact_id in claim.fact_ids
+    )
+
+
+def test_validate_extracts_safe_manual_markdown_wording(v1_repo: Path) -> None:
+    engine = Engine(v1_repo)
+    app_id, _ = engine.ingest(
+        "Manual Edit",
+        "Account Manager",
+        "Account Manager responsible for retention, portfolio growth, negotiation, and customer relationships.",
+    )
+    engine.analyze(app_id)
+    markdown, _manifest, _report = engine.draft(app_id)
+    claim = _working_claim(engine, app_id, "sales.metric.performance")
+    markdown.write_text(
+        markdown.read_text(encoding="utf-8").replace(claim.text, claim.text.rstrip("."), 1),
+        encoding="utf-8",
+    )
+
+    report = engine.validate_working(app_id)
+
+    assert report.passed, report.model_dump()
+    assert _working_claim(engine, app_id, "sales.metric.performance").claim_type == "derived"
+
+
+def test_validate_preserves_unsupported_manual_markdown_as_pending(v1_repo: Path) -> None:
+    engine = Engine(v1_repo)
+    app_id, _ = engine.ingest(
+        "Pending Edit",
+        "Account Manager",
+        "Account Manager responsible for retention, portfolio growth, negotiation, and customer relationships.",
+    )
+    engine.analyze(app_id)
+    markdown, _manifest, _report = engine.draft(app_id)
+    claim = _working_claim(engine, app_id, "sales.metric.performance")
+    markdown.write_text(
+        markdown.read_text(encoding="utf-8").replace(
+            claim.text,
+            "Delivered 30% improvement in direct SaaS Sales.",
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+    report = engine.validate_working(app_id)
+
+    assert not report.passed
+    assert any(issue.code == "pending-claim" for issue in report.issues)
+    assert _working_claim(engine, app_id, "sales.metric.performance").claim_type == "pending"
+
+
+def test_cli_exposes_style_safe_composite_edit(v1_repo: Path) -> None:
+    engine = Engine(v1_repo)
+    app_id, _ = engine.ingest(
+        "Composite CLI",
+        "Account Manager",
+        "Account Manager responsible for retention, portfolio growth, negotiation, and customer relationships.",
+    )
+    engine.analyze(app_id)
+    engine.draft(app_id)
+    claim = _working_claim(engine, app_id, "sales.metric.recurring_customers")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "cv_engine.cli",
+            "--repo",
+            str(v1_repo),
+            "edit-claim",
+            app_id,
+            claim.claim_id,
+            "--template",
+            "canonical-renderings",
+            "--fact-id",
+            "sales.metric.recurring_customers",
+            "--fact-id",
+            "sales.metric.performance",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _working_claim(engine, app_id, "sales.metric.recurring_customers").claim_type == "composite"
 
 
 def test_render_revalidates_approved_markdown_before_browser(v1_repo: Path) -> None:

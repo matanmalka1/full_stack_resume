@@ -8,7 +8,14 @@ from typing import Any
 from . import __version__
 from .analysis import classify_job
 from .db import Repository
-from .drafts import build_draft, load_draft, register_linked_claim, write_working_draft
+from .drafts import (
+    apply_claim_edit,
+    build_draft,
+    load_draft,
+    serialize_markdown,
+    synchronize_markdown_claims,
+    write_working_draft,
+)
 from .facts import FactStore
 from .models import ApplicationStatus, JobAnalysis, ValidationReport
 from .profiles import ProfileStore
@@ -150,19 +157,59 @@ class Engine:
         _, analysis = self.repo.latest_analysis(application_id)
         target = self.root / "artifacts" / "working" / application_id
         draft = load_draft(target / "resume.claims.json")
-        report = validate_draft(draft, target / "resume.md", facts, profiles.get(draft.profile), analysis)
+        markdown_path = target / "resume.md"
+        actual = markdown_path.read_text(encoding="utf-8") if markdown_path.is_file() else ""
+        if actual != serialize_markdown(draft):
+            try:
+                draft = synchronize_markdown_claims(draft, markdown_path, facts)
+            except ValueError:
+                pass
+            else:
+                markdown_path, _ = write_working_draft(self.root, draft)
+        report = validate_draft(draft, markdown_path, facts, profiles.get(draft.profile), analysis)
         self.repo.record_validation(application_id, "pre-render", report)
         return report
 
-    def link_claim(self, application_id: str, claim_id: str, text: str, fact_ids: list[str]) -> tuple[Path, ValidationReport]:
+    def edit_claim(
+        self,
+        application_id: str,
+        claim_id: str,
+        fact_ids: list[str],
+        *,
+        text: str | None = None,
+        template_id: str | None = None,
+        template_version: str | None = None,
+    ) -> tuple[Path, ValidationReport]:
         facts, profiles = self.knowledge()
         _, analysis = self.repo.latest_analysis(application_id)
         target = self.root / "artifacts" / "working" / application_id
         draft = load_draft(target / "resume.claims.json")
-        updated = register_linked_claim(draft, claim_id, text, fact_ids, facts)
+        updated = apply_claim_edit(
+            draft,
+            claim_id,
+            fact_ids,
+            facts,
+            text=text,
+            template_id=template_id,
+            template_version=template_version,
+        )
         markdown, _ = write_working_draft(self.root, updated)
         report = validate_draft(updated, markdown, facts, profiles.get(updated.profile), analysis)
-        self.repo.record_validation(application_id, "manual-claim-linkage", report)
+        self.repo.record_validation(application_id, "manual-claim-edit", report)
+        return markdown, report
+
+    def link_claim(self, application_id: str, claim_id: str, text: str, fact_ids: list[str]) -> tuple[Path, ValidationReport]:
+        return self.edit_claim(application_id, claim_id, fact_ids, text=text)
+
+    def sync_working_claims(self, application_id: str) -> tuple[Path, ValidationReport]:
+        facts, profiles = self.knowledge()
+        _, analysis = self.repo.latest_analysis(application_id)
+        target = self.root / "artifacts" / "working" / application_id
+        draft = load_draft(target / "resume.claims.json")
+        updated = synchronize_markdown_claims(draft, target / "resume.md", facts)
+        markdown, _ = write_working_draft(self.root, updated)
+        report = validate_draft(updated, markdown, facts, profiles.get(updated.profile), analysis)
+        self.repo.record_validation(application_id, "manual-markdown-sync", report)
         return markdown, report
 
     def ready_report(self, application_id: str) -> ValidationReport:

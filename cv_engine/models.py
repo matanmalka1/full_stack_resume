@@ -150,10 +150,13 @@ class ClaimLine(StrictModel):
     style: Literal["paragraph", "heading", "date", "bullet", "item", "contact", "headline"]
     text: str
     fact_ids: list[str] = []
-    claim_type: Literal["canonical", "composite", "derived", "headline"]
+    claim_type: Literal["canonical", "composite", "derived", "pending", "headline"]
     text_hash: str
     template_id: str | None = None
     template_version: str | None = None
+    derivation_id: str | None = None
+    derivation_version: str | None = None
+    pending_reason: str | None = None
 
     @model_validator(mode="after")
     def validate_template_identity(self) -> "ClaimLine":
@@ -162,6 +165,15 @@ class ClaimLine(StrictModel):
             raise ValueError("composite claims require a template ID and version")
         if self.claim_type != "composite" and has_template:
             raise ValueError("only composite claims may identify a template")
+        has_derivation = self.derivation_id is not None or self.derivation_version is not None
+        if self.claim_type == "derived" and not (self.derivation_id and self.derivation_version):
+            raise ValueError("derived claims require a derivation ID and version")
+        if self.claim_type != "derived" and has_derivation:
+            raise ValueError("only derived claims may identify a derivation contract")
+        if self.claim_type == "pending" and not self.pending_reason:
+            raise ValueError("pending claims require a reason")
+        if self.claim_type != "pending" and self.pending_reason is not None:
+            raise ValueError("only pending claims may include a pending reason")
         return self
 
 
