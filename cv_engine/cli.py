@@ -98,7 +98,7 @@ def build_parser() -> argparse.ArgumentParser:
     action.add_argument("application_id")
     action.add_argument("--next-action")
     action.add_argument("--date")
-    link = sub.add_parser("link-claim", help="register a constrained derived manual statement")
+    link = sub.add_parser("link-claim", help="link exact canonical wording to a draft claim")
     link.add_argument("application_id")
     link.add_argument("claim_id")
     link.add_argument("--text", required=True)

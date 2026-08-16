@@ -49,6 +49,23 @@ def validate_draft(
         if claim.claim_type != "headline" and not claim.fact_ids:
             groups["content"] = False
             issues.append(ValidationIssue(group="content", code="unlinked-claim", message=claim.text))
+        if claim.claim_type == "derived":
+            groups["content"] = False
+            issues.append(ValidationIssue(
+                group="content",
+                code="free-form-derived-claim",
+                message=(
+                    f"claim {claim.claim_id} uses an arbitrary derived statement; "
+                    "link exact canonical wording or confirm a new canonical fact"
+                ),
+            ))
+        if claim.claim_type == "canonical" and len(claim.fact_ids) != 1:
+            groups["content"] = False
+            issues.append(ValidationIssue(
+                group="content",
+                code="canonical-claim-cardinality",
+                message=f"claim {claim.claim_id} must link exactly one canonical fact",
+            ))
         for fact_id in claim.fact_ids:
             try:
                 fact = facts.get(fact_id, canonical_only=True)
@@ -56,12 +73,23 @@ def validate_draft(
                 groups["content"] = False
                 issues.append(ValidationIssue(group="content", code="invalid-fact-link", message=str(exc)))
                 continue
-            if claim.claim_type == "canonical" and claim.text not in fact.renderings.values():
-                groups["content"] = False
-                issues.append(ValidationIssue(
-                    group="content", code="canonical-wording-mismatch",
-                    message=f"claim {claim.claim_id} does not equal an approved rendering of {fact_id}",
-                ))
+            if claim.claim_type == "canonical":
+                expected_rendering = facts.rendering(fact_id, draft.language)
+                if claim.text != expected_rendering:
+                    groups["content"] = False
+                    issues.append(ValidationIssue(
+                        group="content", code="canonical-wording-mismatch",
+                        message=(
+                            f"claim {claim.claim_id} does not equal the {draft.language} "
+                            f"canonical rendering of {fact_id}"
+                        ),
+                    ))
+                if claim.style != fact.resume_style:
+                    groups["content"] = False
+                    issues.append(ValidationIssue(
+                        group="content", code="canonical-style-mismatch",
+                        message=f"claim {claim.claim_id} changes the canonical style of {fact_id}",
+                    ))
 
     if draft.fact_store_version != facts.version:
         groups["content"] = False
@@ -100,6 +128,25 @@ def validate_draft(
         issues.append(ValidationIssue(
             group="structure", code="section-order",
             message=f"expected {expected_sections}, got {actual_sections}",
+        ))
+    for section, spec in zip(draft.sections, profile.sections, strict=False):
+        allowed_fact_ids = set(spec.fact_ids)
+        for claim in section.claims:
+            disallowed = sorted(set(claim.fact_ids) - allowed_fact_ids)
+            if disallowed:
+                groups["profile"] = False
+                issues.append(ValidationIssue(
+                    group="profile",
+                    code="fact-outside-profile-section",
+                    message=f"claim {claim.claim_id} links facts outside {section.name}: {disallowed}",
+                ))
+    linked_fact_ids = sorted({fact_id for claim in claims for fact_id in claim.fact_ids})
+    if draft.selected_fact_ids != linked_fact_ids:
+        groups["content"] = False
+        issues.append(ValidationIssue(
+            group="content",
+            code="selected-fact-set-mismatch",
+            message="selected_fact_ids does not exactly match the claims in the untrusted manifest",
         ))
     historical_title_ids = {
         fact_id for fact_id in draft.selected_fact_ids

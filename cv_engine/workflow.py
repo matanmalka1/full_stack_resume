@@ -8,7 +8,7 @@ from typing import Any
 from . import __version__
 from .analysis import classify_job
 from .db import Repository
-from .drafts import build_draft, load_draft, register_derived_claim, write_working_draft
+from .drafts import build_draft, load_draft, register_linked_claim, write_working_draft
 from .facts import FactStore
 from .models import ApplicationStatus, JobAnalysis, ValidationReport
 from .profiles import ProfileStore
@@ -159,7 +159,7 @@ class Engine:
         _, analysis = self.repo.latest_analysis(application_id)
         target = self.root / "artifacts" / "working" / application_id
         draft = load_draft(target / "resume.claims.json")
-        updated = register_derived_claim(draft, claim_id, text, fact_ids, facts)
+        updated = register_linked_claim(draft, claim_id, text, fact_ids, facts)
         markdown, _ = write_working_draft(self.root, updated)
         report = validate_draft(updated, markdown, facts, profiles.get(updated.profile), analysis)
         self.repo.record_validation(application_id, "manual-claim-linkage", report)

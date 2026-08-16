@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import uuid
 from pathlib import Path
 
@@ -165,42 +164,50 @@ def load_draft(manifest_path: Path) -> DraftDocument:
     return DraftDocument.model_validate_json(manifest_path.read_text(encoding="utf-8"))
 
 
-def register_derived_claim(
+def register_linked_claim(
     draft: DraftDocument,
     claim_id: str,
     new_text: str,
     fact_ids: list[str],
     facts: FactStore,
 ) -> DraftDocument:
-    if not new_text.strip() or not fact_ids:
-        raise ValueError("derived statement requires text and supporting fact IDs")
-    support = [facts.get(fact_id, canonical_only=True) for fact_id in fact_ids]
-    support_text = " ".join(
-        text for fact in support for text in [fact.meaning, *fact.renderings.values()]
-    )
-    allowed_numbers = set(re.findall(r"\d+(?:\.\d+)?%?", support_text))
-    introduced = set(re.findall(r"\d+(?:\.\d+)?%?", new_text)) - allowed_numbers
-    if introduced:
-        raise ValueError(f"derived statement introduces unsupported numbers: {sorted(introduced)}")
+    if not new_text.strip() or len(fact_ids) != 1:
+        raise ValueError(
+            "free-form derived statements are disabled; link exactly one canonical fact "
+            "or confirm a new fact before using it"
+        )
+    fact = facts.get(fact_ids[0], canonical_only=True)
+    canonical_text = facts.rendering(fact.fact_id, draft.language)
+    if new_text.strip() != canonical_text:
+        raise ValueError(
+            "free-form derived statements are disabled; claim text must exactly match "
+            f"the {draft.language} rendering of canonical fact {fact.fact_id}"
+        )
     replacement = None
-    allowed_connectives = {
-        "a", "an", "and", "as", "at", "by", "for", "from", "in", "of", "on", "or", "the", "to", "with",
-        "את", "או", "ב", "ה", "ו", "עם", "על", "של", "ל", "מ",
-    }
-    support_tokens = set(re.findall(r"[\w.+/-]+", support_text.casefold())) | allowed_connectives
-    new_tokens = set(re.findall(r"[\w.+/-]+", new_text.casefold()))
-    unsupported_tokens = sorted(new_tokens - support_tokens)
-    if unsupported_tokens:
-        raise ValueError(f"derived statement introduces unsupported wording: {unsupported_tokens}")
     for section in draft.sections:
         for index, claim in enumerate(section.claims):
             if claim.claim_id == claim_id:
                 if claim.style in {"heading", "date"}:
-                    raise ValueError("historical titles and dates cannot be rewritten as derived statements")
-                replacement = _claim(claim.style, new_text.strip(), fact_ids, "derived")
+                    raise ValueError("historical titles and dates cannot be relinked")
+                if fact.resume_style != claim.style:
+                    raise ValueError(
+                        f"canonical fact {fact.fact_id} uses {fact.resume_style!r}, "
+                        f"not the target claim style {claim.style!r}"
+                    )
+                replacement = _claim(claim.style, canonical_text, fact_ids, "canonical")
                 replacement = replacement.model_copy(update={"claim_id": claim_id})
                 section.claims[index] = replacement
     if replacement is None:
         raise KeyError(claim_id)
+    selected = {
+        fact_id
+        for claim in [draft.headline, *draft.contacts, *(claim for section in draft.sections for claim in section.claims)]
+        for fact_id in claim.fact_ids
+    }
+    draft.selected_fact_ids = sorted(selected)
+    draft.omitted_facts = {
+        fact_id: "not selected by the active Profile and rendering budget"
+        for fact_id in sorted(set(facts.facts) - selected)
+    }
     markdown = serialize_markdown(draft)
     return draft.model_copy(update={"content_hash": sha256_text(markdown)})
