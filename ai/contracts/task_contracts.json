@@ -1,0 +1,11 @@
+{
+  "version": "1.0.0",
+  "tasks": {
+    "classify_job": {"output": "JobAnalysis", "critical_state": true},
+    "analyze_gaps": {"output": "JobAnalysis", "critical_state": true},
+    "select_relevant_facts": {"output": "fact_ids_and_omissions", "critical_state": true},
+    "draft_resume": {"output": "claim_lines_with_fact_ids", "critical_state": true},
+    "extract_claims": {"output": "claim_lines_with_fact_ids", "critical_state": true},
+    "explain_decisions": {"output": "decision_summary", "critical_state": false}
+  }
+}

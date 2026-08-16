@@ -1,0 +1,13 @@
+{
+  "profile_id": "sales.tech-sales.v1", "version": "1.0.0", "track": "tech-sales", "profile": "tech-sales",
+  "default_emphasis": "tech-consultative-sales", "allowed_emphases": ["tech-consultative-sales", "new-business", "account-growth", "balanced-sales"],
+  "normalized_role": "Tech Sales", "safe_headlines": ["Tech Sales", "B2B Sales | Technology | Account Management"],
+  "required_tags": ["tech-sales"], "tag_weights": {"technical": 100, "sales": 100},
+  "sections": [
+    {"name_en": "Professional Summary", "name_he": "תקציר מקצועי", "fact_ids": ["sales.summary.tech"]},
+    {"name_en": "Sales Experience", "name_he": "ניסיון במכירות", "fact_ids": ["sales.role.leader.title", "sales.role.leader.dates", "sales.metric.team_size", "sales.metric.performance", "sales.cycle.discovery", "sales.cycle.negotiation", "sales.role.field.title", "sales.role.field.dates", "sales.cycle.account_management"]},
+    {"name_en": "Technology Background", "name_he": "רקע טכנולוגי", "fact_ids": ["development.phdigital.role", "development.phdigital.dates", "development.phdigital.fullstack", "development.phdigital.crm"]},
+    {"name_en": "Tools", "name_he": "כלים", "fact_ids": ["sales.tool.priority", "sales.tool.excel", "development.skills.backend", "development.skills.frontend"]},
+    {"name_en": "Languages", "name_he": "שפות", "fact_ids": ["common.language.hebrew", "common.language.english", "common.language.arabic", "common.language.french"]}
+  ]
+}

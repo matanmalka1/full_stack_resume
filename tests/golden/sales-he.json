@@ -1,0 +1,12 @@
+{
+  "job": "דרוש מנהל תיקי לקוחות לעבודה מול לקוחות עסקיים, שימור קשרים, הגדלת פעילות ומשא ומתן",
+  "track": "sales",
+  "profile": "account-manager",
+  "emphasis": "account-growth",
+  "language": "he",
+  "overrides": {
+    "track": "sales",
+    "profile": "account-manager",
+    "emphasis": "account-growth"
+  }
+}

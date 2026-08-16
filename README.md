@@ -1,114 +1,153 @@
-# CV Tailor Project
+# Multi-Track CV Engine v1
 
-> **v1 upgrade status:** the repository is being prepared for a multi-track
-> Development, Sales, and Tech Sales architecture. The binding v1 product and
-> implementation specification is
-> [`docs/v1-upgrade-handoff.md`](docs/v1-upgrade-handoff.md). The commands and folder
-> layout documented below describe the current legacy Development-only workflow until
-> migration is completed.
+Fact-safe CV generation and application tracking for Development, Sales, and Tech
+Sales. The product is CLI-first; no Web UI is required.
 
-Tailored CV versions generated from a base CV using Claude Code or Codex.
-No application code: the project is a set of markdown instruction files plus two
-bash scripts.
+The binding specification is [`docs/v1-upgrade-handoff.md`](docs/v1-upgrade-handoff.md).
+Architecture, review evidence, and the staged plan are in `docs/v1-architecture.md`,
+`docs/v1-review.md`, and `docs/v1-implementation-plan.md`.
 
-## Structure
-
-```
-├── AGENTS.md                          # Agent instructions; symlink to CLAUDE.md
-├── CLAUDE.md                          # Same repository instructions for Claude Code
-├── README.md
-├── CHECKLIST.md                       # Pre-send review checklist
-├── build_html.py                      # Validate a draft and render it to HTML
-├── check_status.py                    # Reconcile status.csv against disk
-├── print_pdf.sh                       # Export HTML → PDF via Chrome headless
-├── base/
-│   ├── cv_base.md                     # Source of truth — never edited for a specific job
-│   └── cv-pdf/                        # Untailored PDF of the base CV
-├── config/
-│   ├── cv_generation_rules.md         # Output contract: title rules, fixed skeleton
-│   ├── cv_example_backend.md          # Reference output (backend tone)
-│   ├── cv_example_backend.notes.md    # Reference notes file
-│   ├── job_description_example.md     # Template for saving job descriptions
-│   └── resume_base.html               # HTML template for PDF export
-├── docs/
-│   └── v1-upgrade-handoff.md          # Binding v1 product/implementation specification
-├── jobs/
-│   └── status.csv                     # Application tracking
-└── outputs/
-    ├── <company>/
-    │   ├── job-description/<company>_<role>.md
-    │   ├── cv-drafts/cv_<company>_<role>.md         # Clean tailored CV
-    │   ├── cv-drafts/cv_<company>_<role>.notes.md   # Tailoring decisions (never in the CV)
-    │   ├── cv-html/cv_<company>_<role>.html         # HTML for PDF export
-    │   └── cv-pdf/<role>/Matan Malka - Full Stack Developer.pdf
-    └── archive/                       # Previous versions, moved here before overwrite
-```
-
-## Usage
-
-Open Claude Code or Codex in this directory and paste a job description:
-
-```
-Company: monday.com
-Role: Full-Stack Developer
-Job description: ...
-```
-
-The agent will:
-
-1. Check `jobs/status.csv` for an existing draft for the same company and a similar role
-2. Run gap analysis (required vs. present vs. missing), including `Situational Skills`
-3. Ask for tone (A technical / B balanced / C AI-focused)
-4. Write `outputs/monday/cv-drafts/cv_monday_full-stack-developer.md`
-5. Write `outputs/monday/cv-drafts/cv_monday_full-stack-developer.notes.md`
-6. Run `build_html.py --check` on the draft and fix it until it passes
-7. Run `build_html.py` to render `outputs/monday/cv-html/cv_monday_full-stack-developer.html`
-8. Save the job description under `outputs/monday/job-description/`
-9. Add a row to `jobs/status.csv` with `status=draft` and an empty `date_sent`
-10. Run `print_pdf.sh` and report the PDF path
-11. Run `check_status.py` and resolve anything it reports
-
-## Validate a draft
+## Setup
 
 ```bash
-python3 build_html.py --check outputs/<company>/cv-drafts/cv_<company>_<role>.md
+python3 -m venv .venv
+./.venv/bin/pip install -e '.[test]'
 ```
 
-## Render to HTML
+PDF generation uses Playwright. The engine will use local Google Chrome when present;
+otherwise install Playwright Chromium:
 
 ```bash
-python3 build_html.py outputs/<company>/cv-drafts/cv_<company>_<role>.md
+./.venv/bin/playwright install chromium
 ```
 
-The builder is the only way HTML is produced. It fails loudly on any violation of the
-output contract and writes nothing. Never hand-edit a generated `.html`.
+## Architecture
 
-## Export to PDF
+- `base/common.md`, `base/sales.md`, `base/development.md`, and
+  `base/situational_skills.md` are the modular canonical fact store after migration.
+- `profiles/` selects and weights facts without duplicating content.
+- `rendering/rules/` and `rendering/templates/` define Development, Sales LTR, and
+  Sales RTL output.
+- `cv_engine/` owns deterministic workflow, validation, persistence, rendering, AI
+  boundaries, and migration.
+- `data/applications.sqlite3` stores mutable application state and immutable history.
+- `artifacts/working/` contains replaceable working drafts; approved/rendered versions
+  are immutable version directories under `artifacts/<application-id>/`.
+- Legacy files under `outputs/`, `jobs/status.csv`, and `base/cv_base.md` remain
+  immutable historical evidence.
+
+## Default workflow
+
+Create the application and immutable job snapshot:
 
 ```bash
-bash print_pdf.sh outputs/<company>/cv-html/cv_<company>_<role>.html
+./.venv/bin/cv ingest \
+  --company 'Example' \
+  --role 'Account Manager' \
+  --job-file /path/to/job-description.txt \
+  --url 'https://example.com/job'
 ```
 
-`print_pdf.sh` writes to `outputs/<company>/cv-pdf/<role>/Matan Malka - Full Stack Developer.pdf`.
-The filename is fixed because that is what a recruiter sees. The `<role>` folder is what
-keeps two live roles at the same company from overwriting each other. An existing PDF at
-that path is moved to `outputs/archive/` first, never replaced in place.
-
-## Check tracking
+Use the returned application ID:
 
 ```bash
-python3 check_status.py
+./.venv/bin/cv analyze <application-id>
+./.venv/bin/cv draft <application-id>
+./.venv/bin/cv validate <application-id>
 ```
 
-**Flow:** `.md` → `.html` (`build_html.py` + `config/resume_base.html`) → `.pdf`
-Never export a PDF directly from a `.md` file.
+`draft` stops for review. It never renders by default. A constrained wording edit can
+be linked to canonical facts with:
 
-## Rules
+```bash
+./.venv/bin/cv link-claim <application-id> <claim-id> \
+  --text 'Reordered wording using only the supported fact vocabulary' \
+  --fact-id sales.cycle.discovery
+```
 
-- `base/cv_base.md` is never modified
-- Output files are archived before overwrite, never silently deleted
-- No invented experience, technologies, metrics, or dates
-- Title variants are restricted: no seniority inflation
-- `Situational Skills` items are pulled in only when a job explicitly requires that item
+Then approve, render, and inspect the complete ready result:
 
-The full output contract lives in `config/cv_generation_rules.md`.
+```bash
+./.venv/bin/cv approve <application-id>
+./.venv/bin/cv render <application-id>
+./.venv/bin/cv ready <application-id>
+```
+
+Explicit fast mode removes the review pause but runs the same content, claim,
+rendering, PDF, ATS, link, direction, filename, and visual gates:
+
+```bash
+./.venv/bin/cv fast \
+  --company 'Example' \
+  --role 'Account Manager' \
+  --job-file /path/to/job-description.txt
+```
+
+Low fit and material classification ambiguity stop by default. Record explicit
+overrides through `analyze --track ... --profile ... --emphasis ...` and, when the user
+accepts a low fit, `--accept-low-fit`. Overrides never authorize fabricated facts.
+
+## Tracking and inspection
+
+```bash
+./.venv/bin/cv list
+./.venv/bin/cv show <application-id>
+./.venv/bin/cv versions <application-id>
+./.venv/bin/cv decision <application-id>
+./.venv/bin/cv status <application-id> applied --reason 'Submitted to employer'
+./.venv/bin/cv action <application-id> --next-action 'Follow up' --date 2026-08-20
+./.venv/bin/cv export data/applications.csv
+./.venv/bin/cv reconcile
+```
+
+Marking an application `applied` records the exact validated PDF version as the
+submission. Status history and submission records are append-only.
+
+## Optional AI provider
+
+The deterministic engine completes the entire workflow offline. To request an OpenAI
+classification proposal through the provider-neutral structured task contract:
+
+```bash
+export OPENAI_API_KEY='...'
+./.venv/bin/cv analyze <application-id> --provider openai --model gpt-5.6
+```
+
+Provider output is Pydantic-validated and deterministic hard gaps remain authoritative.
+The adapter uses strict Structured Outputs through the Responses API.
+
+## Guarded migration
+
+Run these commands in order. `apply` refuses to run unless the exact inventory,
+snapshot, restored-copy verification, migration test report, and dry-run report all
+agree.
+
+```bash
+./.venv/bin/cv migrate inventory
+./.venv/bin/cv migrate test
+./.venv/bin/cv migrate snapshot
+./.venv/bin/cv migrate verify-snapshot --snapshot data/snapshots/<timestamp>
+./.venv/bin/cv migrate dry-run --snapshot data/snapshots/<timestamp>
+./.venv/bin/cv migrate apply --snapshot data/snapshots/<timestamp>
+./.venv/bin/cv migrate reconcile
+```
+
+Restore instructions are in
+[`docs/v1-migration-restore.md`](docs/v1-migration-restore.md). Never extract a snapshot
+over the live repository.
+
+## Tests
+
+```bash
+./.venv/bin/python -m pytest -q
+```
+
+The suite covers unit contracts, default workflow, golden Development/English
+Sales/Hebrew Sales/Tech Sales cases, RTL/LTR rendering, PDF/ATS checks, migration,
+immutability, and targeted regressions.
+
+## Legacy compatibility
+
+`build_html.py`, `print_pdf.sh`, and the legacy assets remain available for historical
+Development artifacts. New v1 work uses `cv`. Generated historical HTML/PDF files must
+not be hand-edited or overwritten.

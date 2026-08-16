@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ name }} - {{ headline_text }} - CV</title>
+  <style>
+    @page { size: A4; margin: 0; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 210mm; color: #17202a; font-family: Arial, Helvetica, sans-serif; font-size: 9.5pt; line-height: 1.34; }
+    .page { width: 210mm; min-height: 297mm; padding: 12mm 14mm 10mm; overflow: hidden; }
+    header { display: flex; justify-content: space-between; gap: 12mm; border-bottom: 2px solid #17202a; padding-bottom: 4mm; }
+    h1 { margin: 0; font-size: 25pt; line-height: 1; letter-spacing: -.4px; }
+    .headline { margin-top: 1.5mm; color: #334f8d; font-weight: 700; font-size: 10pt; }
+    .contacts { max-width: 82mm; text-align: right; font-size: 8.3pt; color: #465362; }
+    .contacts a { color: inherit; text-decoration: none; }
+    section { margin-top: 4mm; break-inside: avoid; }
+    h2 { margin: 0 0 1.6mm; border-bottom: 1px solid #cfd6df; color: #334f8d; font-size: 8pt; letter-spacing: 1.1px; text-transform: uppercase; padding-bottom: .8mm; }
+    p { margin: 0 0 1.4mm; }
+    h3 { margin: 1.7mm 0 0; font-size: 10pt; }
+    .date { margin: .2mm 0 1mm; color: #5e6a78; font-size: 8.2pt; }
+    .bullet { display: grid; grid-template-columns: 3.2mm 1fr; margin: 0 0 .8mm; }
+    .bullet-dot { font-weight: 700; }
+    .item { margin: 0 0 .8mm; }
+    .claim { break-inside: avoid; }
+  </style>
+</head>
+<body>
+<main class="page" data-cv-page>
+  <header>
+    <div><h1>{{ name }}</h1><div class="headline">{{ headline }}</div></div>
+    <div class="contacts">{% for contact in contacts %}<div>{{ contact }}</div>{% endfor %}</div>
+  </header>
+  {% for section in sections %}
+  <section data-section="{{ section.name }}">
+    <h2>{{ section.name }}</h2>
+    {% for claim in section.claims %}
+      {% if claim.style == "heading" %}<h3 class="claim">{{ claim.html }}</h3>
+      {% elif claim.style == "date" %}<div class="date claim">{{ claim.html }}</div>
+      {% elif claim.style == "paragraph" %}<p class="claim">{{ claim.html }}</p>
+      {% elif claim.style == "item" %}<div class="item claim">{{ claim.html }}</div>
+      {% else %}<div class="bullet claim"><span class="bullet-dot">•</span><span>{{ claim.html }}</span></div>{% endif %}
+    {% endfor %}
+  </section>
+  {% endfor %}
+</main>
+</body>
+</html>

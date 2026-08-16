@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0.0",
+  "track": "sales",
+  "default_pages": 1,
+  "maximum_pages": 2,
+  "required_concepts": ["Professional Summary", "Work Experience", "Core Skills"],
+  "conditional_sections": ["Leadership", "Tools", "Technology Background", "Selected Achievements", "Education", "Languages"],
+  "contact_links": ["email", "linkedin"],
+  "directions": ["ltr", "rtl"]
+}

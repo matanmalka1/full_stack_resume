@@ -1,0 +1,13 @@
+{
+  "profile_id": "sales.business-development.v1", "version": "1.0.0", "track": "sales", "profile": "business-development",
+  "default_emphasis": "new-business", "allowed_emphases": ["new-business", "account-growth", "tech-consultative-sales", "balanced-sales"],
+  "normalized_role": "Business Development", "safe_headlines": ["Business Development", "B2B Sales | Account Management | Business Development"],
+  "required_tags": ["new-business"], "tag_weights": {"new-business": 100, "portfolio-growth": 90},
+  "sections": [
+    {"name_en": "Professional Summary", "name_he": "תקציר מקצועי", "fact_ids": ["sales.summary.new_business"]},
+    {"name_en": "Work Experience", "name_he": "ניסיון מקצועי", "fact_ids": ["sales.role.leader.title", "sales.role.leader.dates", "sales.metric.portfolio_growth", "sales.metric.new_customers", "sales.achievement.account_expansion", "sales.role.field.title", "sales.role.field.dates", "sales.cycle.prospecting", "sales.cycle.discovery", "sales.cycle.closing"]},
+    {"name_en": "Core Skills", "name_he": "מיומנויות ליבה", "fact_ids": ["sales.achievement.reactivation", "sales.achievement.complex_deals"]},
+    {"name_en": "Tools", "name_he": "כלים", "fact_ids": ["sales.tool.priority", "sales.tool.excel"]},
+    {"name_en": "Languages", "name_he": "שפות", "fact_ids": ["common.language.hebrew", "common.language.english", "common.language.arabic", "common.language.french"]}
+  ]
+}

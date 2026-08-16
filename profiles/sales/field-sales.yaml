@@ -1,0 +1,13 @@
+{
+  "profile_id": "sales.field-sales.v1", "version": "1.0.0", "track": "sales", "profile": "field-sales",
+  "default_emphasis": "new-business", "allowed_emphases": ["new-business", "account-growth", "balanced-sales"],
+  "normalized_role": "Field Sales", "safe_headlines": ["Field Sales", "B2B Sales | Account Management | Business Development"],
+  "required_tags": ["sales"], "tag_weights": {"field-sales": 100, "new-business": 80},
+  "sections": [
+    {"name_en": "Professional Summary", "name_he": "תקציר מקצועי", "fact_ids": ["sales.summary.field"]},
+    {"name_en": "Work Experience", "name_he": "ניסיון מקצועי", "fact_ids": ["sales.role.leader.title", "sales.role.leader.dates", "sales.metric.team_size", "sales.metric.performance", "sales.role.field.title", "sales.role.field.dates", "sales.cycle.prospecting", "sales.cycle.discovery", "sales.cycle.negotiation", "sales.metric.new_customers"]},
+    {"name_en": "Core Skills", "name_he": "מיומנויות ליבה", "fact_ids": ["sales.cycle.account_management", "sales.activity.work_mode", "common.logistics.nationwide_sales"]},
+    {"name_en": "Tools", "name_he": "כלים", "fact_ids": ["sales.tool.priority", "sales.tool.excel"]},
+    {"name_en": "Languages", "name_he": "שפות", "fact_ids": ["common.language.hebrew", "common.language.english", "common.language.arabic", "common.language.french"]}
+  ]
+}

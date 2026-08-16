@@ -47,6 +47,24 @@ def similar(a, b):
 
 
 def main():
+    v1_db = REPO / "data" / "applications.sqlite3"
+    if v1_db.is_file():
+        try:
+            from cv_engine.cli import generic_reconcile
+            from cv_engine.db import Repository
+        except ImportError as exc:
+            print(f"v1 database exists but v1 dependencies are unavailable: {exc}")
+            print("Run: ./.venv/bin/python check_status.py")
+            return 1
+        report = generic_reconcile(REPO, Repository(v1_db))
+        if report["passed"]:
+            print(f"OK: v1 SQLite and {report['artifact_versions_checked']} artifact versions reconcile")
+            return 0
+        print("FAIL: v1 SQLite/artifact reconciliation")
+        for problem in report["problems"]:
+            print(f"  {problem}")
+        return 1
+
     if not STATUS.is_file():
         print(f"status.csv not found: {STATUS}")
         return 1
@@ -95,6 +113,11 @@ def main():
         if draft.name.endswith(".notes.md"):
             continue
         company = draft.parent.parent.name
+        if company == "base":
+            notes.append(
+                f"base CV artifact is intentionally not an application: "
+                f"{draft.relative_to(REPO)}")
+            continue
         stem = draft.stem
         prefix = f"cv_{company}_"
         role = stem[len(prefix):] if stem.startswith(prefix) else ""
