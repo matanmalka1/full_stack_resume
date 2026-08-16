@@ -370,8 +370,21 @@ class Repository:
             raise KeyError(f"no analysis for application {application_id}")
         return row["id"], JobAnalysis.model_validate_json(row["structured_json"])
 
-    def transition_status(self, application_id: str, target: ApplicationStatus | str, reason: str = "") -> None:
+    def transition_status(
+        self,
+        application_id: str,
+        target: ApplicationStatus | str,
+        reason: str = "",
+        *,
+        verified_pdf_artifact_version_id: str | None = None,
+    ) -> None:
         target_status = ApplicationStatus(target)
+        if target_status is ApplicationStatus.READY:
+            raise ValueError(
+                "ready is an engine-owned state derived from a passing render/ready "
+                "pipeline; it cannot be set through the generic status transition. "
+                "Use the render pipeline (Engine.render)."
+            )
         now = utc_now()
         with self.transaction() as connection:
             row = connection.execute("SELECT current_status FROM applications WHERE id=?", (application_id,)).fetchone()
@@ -383,17 +396,24 @@ class Repository:
             if target_status not in ALLOWED_TRANSITIONS[current]:
                 raise ValueError(f"invalid status transition: {current.value} -> {target_status.value}")
             if target_status is ApplicationStatus.APPLIED:
+                if not verified_pdf_artifact_version_id:
+                    raise ValueError(
+                        "applied requires a freshly verified exact PDF artifact version; "
+                        "use Engine.submit() rather than a raw status transition"
+                    )
                 pdf = connection.execute(
                     "SELECT av.id FROM artifact_versions av JOIN artifacts a ON a.id=av.artifact_id "
-                    "WHERE a.application_id=? AND a.artifact_type='resume_pdf' AND av.lifecycle_status='rendered' "
-                    "ORDER BY av.created_at DESC, av.version_number DESC LIMIT 1",
-                    (application_id,),
+                    "WHERE av.id=? AND a.application_id=? AND a.artifact_type='resume_pdf' AND av.lifecycle_status='rendered'",
+                    (verified_pdf_artifact_version_id, application_id),
                 ).fetchone()
                 if pdf is None:
-                    raise ValueError("cannot mark applied without an exact validated rendered PDF version")
+                    raise ValueError(
+                        "verified PDF artifact version does not exist or is not a rendered "
+                        "resume PDF belonging to this application"
+                    )
                 connection.execute(
                     "INSERT INTO submissions(id, application_id, artifact_version_id, submitted_at, metadata_json) VALUES(?, ?, ?, ?, ?)",
-                    (str(uuid.uuid4()), application_id, pdf["id"], now, canonical_json({"reason": reason})),
+                    (str(uuid.uuid4()), application_id, verified_pdf_artifact_version_id, now, canonical_json({"reason": reason})),
                 )
             connection.execute(
                 "UPDATE applications SET current_status=?, updated_at=? WHERE id=?",
@@ -402,6 +422,49 @@ class Repository:
             connection.execute(
                 "INSERT INTO status_history(application_id, from_status, to_status, changed_at, reason) VALUES(?, ?, ?, ?, ?)",
                 (application_id, current.value, target_status.value, now, reason),
+            )
+
+    def mark_ready(self, application_id: str, pdf_artifact_version_id: str, reason: str = "") -> None:
+        """The only path that may set READY.
+
+        Self-sufficient at the DB layer: it re-derives proof from already-stored
+        records (a passing post-render validation tied to this exact PDF artifact
+        version) instead of trusting the caller, so no public Repository method
+        allows READY without a real passing validation already on record.
+        """
+        now = utc_now()
+        with self.transaction() as connection:
+            row = connection.execute("SELECT current_status FROM applications WHERE id=?", (application_id,)).fetchone()
+            if row is None:
+                raise KeyError(application_id)
+            current = ApplicationStatus(row["current_status"])
+            if current not in (ApplicationStatus.PREPARING, ApplicationStatus.READY):
+                raise ValueError(f"ready may only follow preparing, not {current.value}")
+            pdf_row = connection.execute(
+                "SELECT av.id FROM artifact_versions av JOIN artifacts a ON a.id=av.artifact_id "
+                "WHERE av.id=? AND a.application_id=? AND a.artifact_type='resume_pdf' AND av.lifecycle_status='rendered'",
+                (pdf_artifact_version_id, application_id),
+            ).fetchone()
+            if pdf_row is None:
+                raise ValueError("ready requires an exact rendered resume PDF artifact version belonging to this application")
+            validation_row = connection.execute(
+                "SELECT report_json FROM validation_runs WHERE application_id=? AND phase='post-render' AND artifact_version_id=? "
+                "ORDER BY created_at DESC LIMIT 1",
+                (application_id, pdf_artifact_version_id),
+            ).fetchone()
+            if validation_row is None:
+                raise ValueError("ready requires a post-render validation referencing this exact PDF artifact version")
+            if not json.loads(validation_row["report_json"]).get("passed"):
+                raise ValueError("ready requires a passing post-render validation for this exact PDF artifact version")
+            if current is ApplicationStatus.READY:
+                return
+            connection.execute(
+                "UPDATE applications SET current_status=?, updated_at=? WHERE id=?",
+                (ApplicationStatus.READY.value, now, application_id),
+            )
+            connection.execute(
+                "INSERT INTO status_history(application_id, from_status, to_status, changed_at, reason) VALUES(?, ?, ?, ?, ?)",
+                (application_id, current.value, ApplicationStatus.READY.value, now, reason),
             )
 
     def record_event(self, application_id: str, event_type: str, payload: dict[str, Any]) -> str:
@@ -536,6 +599,16 @@ class Repository:
             raise KeyError(f"no decision record for application {application_id}")
         return dict(row)
 
+    def decision_for_artifact_version(self, artifact_version_id: str) -> dict[str, Any]:
+        with connect(self.path) as connection:
+            row = connection.execute(
+                "SELECT * FROM decision_records WHERE artifact_version_id=? ORDER BY created_at DESC LIMIT 1",
+                (artifact_version_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"no decision record for artifact version {artifact_version_id}")
+        return dict(row)
+
     def record_generation_run(self, values: dict[str, Any]) -> str:
         run_id = values.get("id") or str(uuid.uuid4())
         with self.transaction() as connection:
@@ -587,6 +660,17 @@ class Repository:
             row = connection.execute(query, params).fetchone()
         if row is None:
             raise KeyError(f"no validation report for application {application_id}")
+        return ValidationReport.model_validate_json(row["report_json"])
+
+    def validation_for_artifact(self, application_id: str, phase: str, artifact_version_id: str) -> ValidationReport:
+        with connect(self.path) as connection:
+            row = connection.execute(
+                "SELECT report_json FROM validation_runs WHERE application_id=? AND phase=? AND artifact_version_id=? "
+                "ORDER BY created_at DESC LIMIT 1",
+                (application_id, phase, artifact_version_id),
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"no {phase} validation references artifact version {artifact_version_id}")
         return ValidationReport.model_validate_json(row["report_json"])
 
     def integrity_check(self) -> list[str]:

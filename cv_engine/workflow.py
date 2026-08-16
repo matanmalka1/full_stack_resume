@@ -20,6 +20,7 @@ from .facts import FactStore
 from .models import ApplicationStatus, JobAnalysis, ValidationReport
 from .profiles import ProfileStore
 from .providers import OpenAIResponsesProvider
+from .ready import verify_ready_integrity
 from .rendering import normalized_role_filename, render_html, render_pdf, validate_rendered
 from .util import sha256_file, utc_now
 from .validation import validate_draft
@@ -214,10 +215,9 @@ class Engine:
 
     def ready_report(self, application_id: str) -> ValidationReport:
         application = self.repo.get_application(application_id)
-        report = self.repo.latest_validation(application_id, "post-render")
-        if application["current_status"] != ApplicationStatus.READY.value or not report.passed:
+        if application["current_status"] != ApplicationStatus.READY.value:
             raise WorkflowError("application is not ready")
-        return report
+        return verify_ready_integrity(self.root, self.repo, application_id)
 
     def approve(self, application_id: str) -> dict[str, Any]:
         report = self.validate_working(application_id)
@@ -352,8 +352,37 @@ class Engine:
             ))
         self.repo.record_validation(application_id, "post-render", report, artifact_ids[1])
         if report.passed:
-            self.repo.transition_status(application_id, ApplicationStatus.READY, "all ready validation groups passed")
+            integrity = verify_ready_integrity(self.root, self.repo, application_id)
+            if not integrity.passed:
+                raise WorkflowError(
+                    "render succeeded but fresh ready integrity verification failed: "
+                    f"{[issue.code for issue in integrity.issues]}"
+                )
+            self.repo.mark_ready(application_id, artifact_ids[1], "all ready validation groups passed")
         return pdf_path, report
+
+    def submit(self, application_id: str, reason: str = "submitted to employer") -> dict[str, Any]:
+        application = self.repo.get_application(application_id)
+        if application["current_status"] != ApplicationStatus.READY.value:
+            raise WorkflowError("applied requires a currently valid ready application")
+        integrity = verify_ready_integrity(self.root, self.repo, application_id)
+        if not integrity.passed:
+            raise WorkflowError(
+                "applied blocked by stale or tampered ready state: "
+                f"{[issue.code for issue in integrity.issues]}"
+            )
+        pdf_artifact_version_id = integrity.evidence["pdf_artifact_version_id"]
+        self.repo.transition_status(
+            application_id,
+            ApplicationStatus.APPLIED,
+            reason,
+            verified_pdf_artifact_version_id=pdf_artifact_version_id,
+        )
+        return {
+            "application_id": application_id,
+            "pdf_artifact_version_id": pdf_artifact_version_id,
+            **self.repo.get_application(application_id),
+        }
 
     def fast(
         self,

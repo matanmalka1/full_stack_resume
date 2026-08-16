@@ -93,7 +93,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("list", help="list applications")
     status = sub.add_parser("status", help="transition application status with immutable history")
     status.add_argument("application_id")
-    status.add_argument("status", choices=[item.value for item in ApplicationStatus])
+    status.add_argument(
+        "status",
+        choices=[item.value for item in ApplicationStatus if item is not ApplicationStatus.READY],
+        help="ready is engine-owned and cannot be set manually; it is reached only via the render pipeline",
+    )
     status.add_argument("--reason", default="manual CLI transition")
     action = sub.add_parser("action", help="set or clear the next action")
     action.add_argument("application_id")
@@ -236,7 +240,9 @@ def main(argv: list[str] | None = None) -> int:
             _print({"pdf": str(pdf), "ready_validation": report.model_dump(mode="json")})
             return 0 if report.passed else 1
         elif args.command == "ready":
-            _print(engine.ready_report(args.application_id).model_dump(mode="json"))
+            report = engine.ready_report(args.application_id)
+            _print(report.model_dump(mode="json"))
+            return 0 if report.passed else 1
         elif args.command == "fast":
             _print(engine.fast(
                 args.company, args.role, _job_text(args), url=args.url,
@@ -260,8 +266,11 @@ def main(argv: list[str] | None = None) -> int:
             record["structured"] = json.loads(record.pop("structured_json"))
             _print(record)
         elif args.command == "status":
-            engine.repo.transition_status(args.application_id, args.status, args.reason)
-            _print(engine.repo.get_application(args.application_id))
+            if args.status == ApplicationStatus.APPLIED.value:
+                _print(engine.submit(args.application_id, args.reason))
+            else:
+                engine.repo.transition_status(args.application_id, args.status, args.reason)
+                _print(engine.repo.get_application(args.application_id))
         elif args.command == "action":
             engine.repo.set_next_action(args.application_id, args.next_action, args.date)
             _print(engine.repo.get_application(args.application_id))

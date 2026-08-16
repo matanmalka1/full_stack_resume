@@ -32,10 +32,12 @@ def test_default_flow_stops_for_review_then_reaches_ready(v1_repo: Path) -> None
     assert engine.ready_report(app_id).passed
     decision = engine.repo.latest_decision(app_id)
     assert decision["job_snapshot_id"] == snapshot_id
-    engine.repo.transition_status(app_id, "applied", "submitted to employer")
+    submission_result = engine.submit(app_id, "submitted to employer")
+    assert submission_result["current_status"] == "applied"
     with connect(engine.repo.path) as connection:
         submission = connection.execute("SELECT artifact_version_id FROM submissions WHERE application_id=?", (app_id,)).fetchone()
     assert submission is not None
+    assert submission["artifact_version_id"] == submission_result["pdf_artifact_version_id"]
 
 
 def test_csv_export(v1_repo: Path, tmp_path: Path) -> None:
