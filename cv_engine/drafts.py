@@ -16,18 +16,35 @@ CONTACT_FACTS = [
     "common.contact.linkedin",
 ]
 CLAIM_NAMESPACE = uuid.UUID("e47cfc95-7f5c-4dd2-acd4-19be02c8f988")
+CANONICAL_JOIN_TEMPLATE = ("canonical-renderings", "1.0.0")
 
 
-def _claim(style: str, text: str, fact_ids: list[str], claim_type: str = "canonical") -> ClaimLine:
+def _claim(
+    style: str,
+    text: str,
+    fact_ids: list[str],
+    claim_type: str = "canonical",
+    *,
+    template_id: str | None = None,
+    template_version: str | None = None,
+) -> ClaimLine:
+    identity = {
+        "style": style,
+        "text": text,
+        "fact_ids": fact_ids,
+        "claim_type": claim_type,
+    }
+    if template_id is not None or template_version is not None:
+        identity.update({"template_id": template_id, "template_version": template_version})
     return ClaimLine(
-        claim_id=str(uuid.uuid5(CLAIM_NAMESPACE, canonical_json({
-            "style": style, "text": text, "fact_ids": fact_ids, "claim_type": claim_type,
-        }))),
+        claim_id=str(uuid.uuid5(CLAIM_NAMESPACE, canonical_json(identity))),
         style=style,
         text=text,
         fact_ids=fact_ids,
         claim_type=claim_type,
         text_hash=sha256_text(text),
+        template_id=template_id,
+        template_version=template_version,
     )
 
 
@@ -196,6 +213,67 @@ def register_linked_claim(
                     )
                 replacement = _claim(claim.style, canonical_text, fact_ids, "canonical")
                 replacement = replacement.model_copy(update={"claim_id": claim_id})
+                section.claims[index] = replacement
+    if replacement is None:
+        raise KeyError(claim_id)
+    selected = {
+        fact_id
+        for claim in [draft.headline, *draft.contacts, *(claim for section in draft.sections for claim in section.claims)]
+        for fact_id in claim.fact_ids
+    }
+    draft.selected_fact_ids = sorted(selected)
+    draft.omitted_facts = {
+        fact_id: "not selected by the active Profile and rendering budget"
+        for fact_id in sorted(set(facts.facts) - selected)
+    }
+    markdown = serialize_markdown(draft)
+    return draft.model_copy(update={"content_hash": sha256_text(markdown)})
+
+
+def render_composite_claim(
+    fact_ids: list[str],
+    facts: FactStore,
+    language: str,
+    template_id: str,
+    template_version: str,
+) -> str:
+    if (template_id, template_version) != CANONICAL_JOIN_TEMPLATE:
+        raise ValueError(f"unknown deterministic claim template: {template_id}@{template_version}")
+    if len(fact_ids) < 2 or len(fact_ids) != len(set(fact_ids)):
+        raise ValueError("deterministic composite claims require at least two distinct canonical facts")
+    return " ".join(facts.rendering(fact_id, language) for fact_id in fact_ids)
+
+
+def register_composite_claim(
+    draft: DraftDocument,
+    claim_id: str,
+    fact_ids: list[str],
+    facts: FactStore,
+    *,
+    template_id: str = CANONICAL_JOIN_TEMPLATE[0],
+    template_version: str = CANONICAL_JOIN_TEMPLATE[1],
+) -> DraftDocument:
+    text = render_composite_claim(
+        fact_ids,
+        facts,
+        draft.language,
+        template_id,
+        template_version,
+    )
+    replacement = None
+    for section in draft.sections:
+        for index, claim in enumerate(section.claims):
+            if claim.claim_id == claim_id:
+                if claim.style in {"heading", "date"}:
+                    raise ValueError("historical titles and dates cannot become composite claims")
+                replacement = _claim(
+                    claim.style,
+                    text,
+                    fact_ids,
+                    "composite",
+                    template_id=template_id,
+                    template_version=template_version,
+                ).model_copy(update={"claim_id": claim_id})
                 section.claims[index] = replacement
     if replacement is None:
         raise KeyError(claim_id)

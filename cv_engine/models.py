@@ -150,8 +150,19 @@ class ClaimLine(StrictModel):
     style: Literal["paragraph", "heading", "date", "bullet", "item", "contact", "headline"]
     text: str
     fact_ids: list[str] = []
-    claim_type: Literal["canonical", "derived", "headline"]
+    claim_type: Literal["canonical", "composite", "derived", "headline"]
     text_hash: str
+    template_id: str | None = None
+    template_version: str | None = None
+
+    @model_validator(mode="after")
+    def validate_template_identity(self) -> "ClaimLine":
+        has_template = self.template_id is not None or self.template_version is not None
+        if self.claim_type == "composite" and not (self.template_id and self.template_version):
+            raise ValueError("composite claims require a template ID and version")
+        if self.claim_type != "composite" and has_template:
+            raise ValueError("only composite claims may identify a template")
+        return self
 
 
 class ResumeSection(StrictModel):

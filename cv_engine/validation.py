@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from .drafts import serialize_markdown
+from .drafts import render_composite_claim, serialize_markdown
 from .facts import FactStore, FactStoreError
 from .models import DraftDocument, JobAnalysis, Profile, ValidationIssue, ValidationReport
 from .util import sha256_text
@@ -66,6 +66,30 @@ def validate_draft(
                 code="canonical-claim-cardinality",
                 message=f"claim {claim.claim_id} must link exactly one canonical fact",
             ))
+        if claim.claim_type == "composite":
+            try:
+                expected_composite = render_composite_claim(
+                    claim.fact_ids,
+                    facts,
+                    draft.language,
+                    claim.template_id or "",
+                    claim.template_version or "",
+                )
+            except (FactStoreError, ValueError) as exc:
+                groups["content"] = False
+                issues.append(ValidationIssue(
+                    group="content",
+                    code="invalid-composite-claim",
+                    message=f"claim {claim.claim_id}: {exc}",
+                ))
+            else:
+                if claim.text != expected_composite:
+                    groups["content"] = False
+                    issues.append(ValidationIssue(
+                        group="content",
+                        code="composite-wording-mismatch",
+                        message=f"claim {claim.claim_id} does not match its deterministic template",
+                    ))
         for fact_id in claim.fact_ids:
             try:
                 fact = facts.get(fact_id, canonical_only=True)

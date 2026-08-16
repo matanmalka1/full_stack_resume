@@ -239,7 +239,7 @@ class Engine:
             "omitted_facts": draft.omitted_facts,
             "derived_statements": [
                 claim.model_dump(mode="json") for section in draft.sections
-                for claim in section.claims if claim.claim_type == "derived"
+                for claim in section.claims if claim.claim_type in {"composite", "derived"}
             ],
             "accepted_warnings_or_gaps": analysis.user_override,
             "user_overrides": analysis.user_override,

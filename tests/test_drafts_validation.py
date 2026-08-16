@@ -5,7 +5,13 @@ from pathlib import Path
 import pytest
 
 from cv_engine.analysis import classify_job
-from cv_engine.drafts import build_draft, register_linked_claim, serialize_markdown, write_working_draft
+from cv_engine.drafts import (
+    build_draft,
+    register_composite_claim,
+    register_linked_claim,
+    serialize_markdown,
+    write_working_draft,
+)
 from cv_engine.facts import FactStore
 from cv_engine.profiles import ProfileStore
 from cv_engine.util import sha256_text
@@ -98,3 +104,70 @@ def test_forged_derived_claim_manifest_blocks_approval(v1_repo: Path) -> None:
 
     assert not report.passed
     assert any(issue.code == "free-form-derived-claim" for issue in report.issues)
+
+
+def test_known_composite_template_preserves_canonical_renderings(v1_repo: Path) -> None:
+    facts, profile, analysis, draft, _markdown = _draft(
+        v1_repo,
+        "Account Manager retention portfolio customer relationships",
+    )
+    claim = next(
+        claim
+        for section in draft.sections
+        for claim in section.claims
+        if claim.fact_ids == ["sales.metric.recurring_customers"]
+    )
+    claim_id = claim.claim_id
+    updated = register_composite_claim(
+        draft,
+        claim_id,
+        ["sales.metric.recurring_customers", "sales.metric.performance"],
+        facts,
+    )
+    markdown, _manifest = write_working_draft(v1_repo, updated)
+
+    report = validate_draft(updated, markdown, facts, profile, analysis)
+
+    assert report.passed, report.model_dump()
+    composite = next(
+        item
+        for section in updated.sections
+        for item in section.claims
+        if item.claim_id == claim_id
+    )
+    assert composite.template_id == "canonical-renderings"
+    assert composite.template_version == "1.0.0"
+
+
+def test_forged_composite_wording_blocks_approval(v1_repo: Path) -> None:
+    facts, profile, analysis, draft, _markdown = _draft(
+        v1_repo,
+        "Account Manager retention portfolio customer relationships",
+    )
+    claim = next(
+        claim
+        for section in draft.sections
+        for claim in section.claims
+        if claim.fact_ids == ["sales.metric.performance"]
+    )
+    updated = register_composite_claim(
+        draft,
+        claim.claim_id,
+        ["sales.metric.performance", "sales.tech_sales.boundary"],
+        facts,
+    )
+    composite = next(
+        item
+        for section in updated.sections
+        for item in section.claims
+        if item.claim_id == claim.claim_id
+    )
+    composite.text = "Delivered 30% improvement in direct SaaS Sales."
+    composite.text_hash = sha256_text(composite.text)
+    updated.content_hash = sha256_text(serialize_markdown(updated))
+    markdown, _manifest = write_working_draft(v1_repo, updated)
+
+    report = validate_draft(updated, markdown, facts, profile, analysis)
+
+    assert not report.passed
+    assert any(issue.code == "composite-wording-mismatch" for issue in report.issues)
