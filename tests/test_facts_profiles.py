@@ -7,11 +7,10 @@ import pytest
 
 from cv_engine.facts import FactStore, FactStoreError
 from cv_engine.models import FactStatus
-from cv_engine.profiles import ProfileStore
 
 
-def test_canonical_fact_store_has_unique_stable_ids(v1_repo: Path) -> None:
-    facts = FactStore.load(v1_repo / "base")
+def test_canonical_fact_store_has_unique_stable_ids(fact_store) -> None:
+    facts = fact_store
     assert len(facts.facts) == 85
     assert facts.get("sales.metric.team_size").renderings["en"].startswith("Managed a team of approximately 2-3")
     assert "YoY" not in facts.get("sales.metric.performance").renderings["en"]
@@ -28,8 +27,8 @@ def test_duplicate_fact_id_is_rejected(v1_repo: Path) -> None:
         FactStore.load(v1_repo / "base")
 
 
-def test_fact_lifecycle_requires_confirmation(v1_repo: Path) -> None:
-    store = FactStore.load(v1_repo / "base")
+def test_fact_lifecycle_requires_confirmation(fact_store) -> None:
+    store = fact_store
     fact = store.get("situational.testing")
     store.facts[fact.fact_id] = fact.model_copy(update={"status": FactStatus.PENDING})
     with pytest.raises(FactStoreError, match="explicit confirmation"):
@@ -40,9 +39,9 @@ def test_fact_lifecycle_requires_confirmation(v1_repo: Path) -> None:
     assert canonical.status is FactStatus.CANONICAL
 
 
-def test_all_required_profiles_reference_existing_facts(v1_repo: Path) -> None:
-    facts = FactStore.load(v1_repo / "base")
-    profiles = ProfileStore.load(v1_repo, facts)
+def test_all_required_profiles_reference_existing_facts(fact_store, profile_store) -> None:
+    facts = fact_store
+    profiles = profile_store
     assert len(profiles.profiles) == 10
     assert profiles.get("tech-sales").track.value == "tech-sales"
     assert profiles.get("sales-management").default_emphasis.value == "leadership"

@@ -1,21 +1,18 @@
 from __future__ import annotations
 
 import json
-import subprocess
-import sys
 from pathlib import Path
 
 from cv_engine.db import connect
-from cv_engine.drafts import load_draft
 from cv_engine.workflow import Engine
+from helpers import ACCOUNT_MANAGER_JOB, working_claim as _working_claim
 
 
-def test_default_flow_stops_for_review_then_reaches_ready(v1_repo: Path) -> None:
-    engine = Engine(v1_repo)
+def test_default_flow_stops_for_review_then_reaches_ready(engine: Engine) -> None:
     app_id, snapshot_id = engine.ingest(
         "Acme",
         "Account Manager",
-        "Account Manager responsible for retention, portfolio growth, negotiation, and customer relationships.",
+        ACCOUNT_MANAGER_JOB,
     )
     engine.analyze(app_id)
     markdown, manifest, report = engine.draft(app_id)
@@ -40,10 +37,9 @@ def test_default_flow_stops_for_review_then_reaches_ready(v1_repo: Path) -> None
     assert submission["artifact_version_id"] == submission_result["pdf_artifact_version_id"]
 
 
-def test_csv_export(v1_repo: Path, tmp_path: Path) -> None:
+def test_csv_export(engine: Engine, tmp_path: Path) -> None:
     from cv_engine.cli import export_csv
 
-    engine = Engine(v1_repo)
     app_id, _ = engine.ingest("Acme", "Developer", "Python developer role")
     output = export_csv(engine.repo, tmp_path / "applications.csv")
     text = output.read_text(encoding="utf-8")
@@ -51,26 +47,10 @@ def test_csv_export(v1_repo: Path, tmp_path: Path) -> None:
     assert app_id in text
 
 
-def _working_claim(engine: Engine, application_id: str, fact_id: str):
-    manifest = engine.root / "artifacts/working" / application_id / "resume.claims.json"
-    draft = load_draft(manifest)
-    return next(
-        claim
-        for section in draft.sections
-        for claim in section.claims
-        if fact_id in claim.fact_ids
-    )
-
-
-def test_validate_extracts_safe_manual_markdown_wording(v1_repo: Path) -> None:
-    engine = Engine(v1_repo)
-    app_id, _ = engine.ingest(
-        "Manual Edit",
-        "Account Manager",
-        "Account Manager responsible for retention, portfolio growth, negotiation, and customer relationships.",
-    )
-    engine.analyze(app_id)
-    markdown, _manifest, _report = engine.draft(app_id)
+def test_validate_extracts_safe_manual_markdown_wording(drafted_application) -> None:
+    setup = drafted_application("Manual Edit")
+    engine, app_id = setup
+    markdown = setup.markdown
     claim = _working_claim(engine, app_id, "sales.metric.performance")
     markdown.write_text(
         markdown.read_text(encoding="utf-8").replace(claim.text, claim.text.rstrip("."), 1),
@@ -83,15 +63,10 @@ def test_validate_extracts_safe_manual_markdown_wording(v1_repo: Path) -> None:
     assert _working_claim(engine, app_id, "sales.metric.performance").claim_type == "derived"
 
 
-def test_validate_preserves_unsupported_manual_markdown_as_pending(v1_repo: Path) -> None:
-    engine = Engine(v1_repo)
-    app_id, _ = engine.ingest(
-        "Pending Edit",
-        "Account Manager",
-        "Account Manager responsible for retention, portfolio growth, negotiation, and customer relationships.",
-    )
-    engine.analyze(app_id)
-    markdown, _manifest, _report = engine.draft(app_id)
+def test_validate_preserves_unsupported_manual_markdown_as_pending(drafted_application) -> None:
+    setup = drafted_application("Pending Edit")
+    engine, app_id = setup
+    markdown = setup.markdown
     claim = _working_claim(engine, app_id, "sales.metric.performance")
     markdown.write_text(
         markdown.read_text(encoding="utf-8").replace(
@@ -109,51 +84,32 @@ def test_validate_preserves_unsupported_manual_markdown_as_pending(v1_repo: Path
     assert _working_claim(engine, app_id, "sales.metric.performance").claim_type == "pending"
 
 
-def test_cli_exposes_style_safe_composite_edit(v1_repo: Path) -> None:
-    engine = Engine(v1_repo)
-    app_id, _ = engine.ingest(
-        "Composite CLI",
-        "Account Manager",
-        "Account Manager responsible for retention, portfolio growth, negotiation, and customer relationships.",
-    )
-    engine.analyze(app_id)
-    engine.draft(app_id)
+def test_cli_exposes_style_safe_composite_edit(drafted_application, cli_runner) -> None:
+    engine, app_id = drafted_application("Composite CLI")
     claim = _working_claim(engine, app_id, "sales.metric.recurring_customers")
 
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "cv_engine.cli",
-            "--repo",
-            str(v1_repo),
-            "edit-claim",
-            app_id,
-            claim.claim_id,
-            "--template",
-            "canonical-renderings",
-            "--fact-id",
-            "sales.metric.recurring_customers",
-            "--fact-id",
-            "sales.metric.performance",
-        ],
-        text=True,
-        capture_output=True,
-        check=False,
+    result = cli_runner(
+        "edit-claim",
+        app_id,
+        claim.claim_id,
+        "--template",
+        "canonical-renderings",
+        "--fact-id",
+        "sales.metric.recurring_customers",
+        "--fact-id",
+        "sales.metric.performance",
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert _working_claim(engine, app_id, "sales.metric.recurring_customers").claim_type == "composite"
 
 
-def test_render_revalidates_approved_markdown_before_browser(v1_repo: Path) -> None:
+def test_render_revalidates_approved_markdown_before_browser(approved_application) -> None:
     from cv_engine.workflow import WorkflowError
 
-    engine = Engine(v1_repo)
-    app_id, _ = engine.ingest("Acme", "Developer", "Python backend developer API React")
-    engine.analyze(app_id)
-    engine.draft(app_id)
-    approved = engine.approve(app_id)
+    setup = approved_application("Acme", "Developer", "Python backend developer API React")
+    engine, app_id = setup
+    approved = setup.approved
     markdown = approved["directory"] / "resume.md"
     markdown.write_text(markdown.read_text(encoding="utf-8") + "\nUnsupported claim.\n", encoding="utf-8")
     try:
@@ -164,25 +120,15 @@ def test_render_revalidates_approved_markdown_before_browser(v1_repo: Path) -> N
         raise AssertionError("modified approved source reached rendering")
 
 
-def test_cli_fast_mode_completes_definition_of_done(v1_repo: Path) -> None:
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "cv_engine.cli",
-            "--repo",
-            str(v1_repo),
-            "fast",
-            "--company",
-            "CLI Example",
-            "--role",
-            "Account Manager",
-            "--job-text",
-            "Account Manager responsible for retention, portfolio growth, negotiation, and customer relationships.",
-        ],
-        text=True,
-        capture_output=True,
-        check=False,
+def test_cli_fast_mode_completes_definition_of_done(cli_runner) -> None:
+    result = cli_runner(
+        "fast",
+        "--company",
+        "CLI Example",
+        "--role",
+        "Account Manager",
+        "--job-text",
+        ACCOUNT_MANAGER_JOB,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)

@@ -1,0 +1,64 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from cv_engine.drafts import load_draft
+from cv_engine.util import canonical_json, sha256_text
+from cv_engine.workflow import Engine
+
+
+ACCOUNT_MANAGER_JOB = (
+    "Account Manager responsible for retention, portfolio growth, negotiation, "
+    "and customer relationships."
+)
+
+
+def working_claim(engine: Engine, application_id: str, fact_id: str):
+    manifest = engine.root / "artifacts/working" / application_id / "resume.claims.json"
+    draft = load_draft(manifest)
+    return next(
+        claim
+        for section in draft.sections
+        for claim in section.claims
+        if fact_id in claim.fact_ids
+    )
+
+
+def exact_fact_claim(draft, fact_ids: list[str]):
+    return next(
+        claim
+        for section in draft.sections
+        for claim in section.claims
+        if claim.fact_ids == fact_ids
+    )
+
+
+def claim_by_id(draft, claim_id: str):
+    return next(
+        claim
+        for section in draft.sections
+        for claim in section.claims
+        if claim.claim_id == claim_id
+    )
+
+
+def artifact_version_and_path(
+    engine: Engine,
+    application_id: str,
+    root: Path,
+    artifact_type: str,
+    lifecycle_status: str,
+):
+    version = engine.repo.latest_artifact_version(application_id, artifact_type, lifecycle_status)
+    return version, root / version["path"]
+
+
+def seal_report(report: dict) -> dict:
+    sealed = dict(report)
+    sealed.pop("report_hash", None)
+    sealed["report_hash"] = sha256_text(canonical_json(sealed))
+    return sealed
+
+
+def passing_migration_test_runner(root: Path) -> Path:
+    return root / "data/migration/migration-tests.json"
