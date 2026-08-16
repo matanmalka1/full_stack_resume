@@ -1,6 +1,9 @@
-# CV Generation Rules
+# Legacy Development CV Generation Rules
 
-Supplements `CLAUDE.md` (process, output paths, hard rules already covered there — not repeated here).
+This is the current Development-only output contract until the v1 migration replaces
+it. It does not override `docs/v1-upgrade-handoff.md`, which is binding for the v1
+upgrade. For ordinary legacy Development CV generation before migration, these
+mechanical rules remain required.
 
 This file defines the **output contract** for `outputs/<company>/cv-drafts/cv_<company>_<role>.md`.
 Every rule below is stated so it can be checked mechanically. If a rule cannot be

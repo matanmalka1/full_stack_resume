@@ -1,5 +1,12 @@
 # CV Tailor Project
 
+> **v1 upgrade status:** the repository is being prepared for a multi-track
+> Development, Sales, and Tech Sales architecture. The binding v1 product and
+> implementation specification is
+> [`docs/v1-upgrade-handoff.md`](docs/v1-upgrade-handoff.md). The commands and folder
+> layout documented below describe the current legacy Development-only workflow until
+> migration is completed.
+
 Tailored CV versions generated from a base CV using Claude Code or Codex.
 No application code: the project is a set of markdown instruction files plus two
 bash scripts.
@@ -7,8 +14,8 @@ bash scripts.
 ## Structure
 
 ```
-├── CLAUDE.md                          # Agent instructions (auto-loaded by Claude Code)
-├── agents.md                          # Mirror of CLAUDE.md for Codex
+├── AGENTS.md                          # Agent instructions; symlink to CLAUDE.md
+├── CLAUDE.md                          # Same repository instructions for Claude Code
 ├── README.md
 ├── CHECKLIST.md                       # Pre-send review checklist
 ├── build_html.py                      # Validate a draft and render it to HTML
@@ -24,6 +31,7 @@ bash scripts.
 │   ├── job_description_example.md     # Template for saving job descriptions
 │   └── resume_base.html               # HTML template for PDF export
 ├── docs/
+│   └── v1-upgrade-handoff.md          # Binding v1 product/implementation specification
 ├── jobs/
 │   └── status.csv                     # Application tracking
 └── outputs/

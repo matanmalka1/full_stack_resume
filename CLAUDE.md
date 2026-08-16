@@ -1,126 +1,104 @@
-# Claude Instructions — CV Tailor Project
+# Project Agent Instructions
 
-## Purpose
-Generate tailored CV versions from a base CV and a job description.
+These instructions govern how coding agents work in this repository.
 
-## Always read before starting
-- `base/cv_base.md` — source of truth, never modify
-- `config/cv_generation_rules.md` — the output contract: title rules, fixed skeleton, dash and bold rules. Binding. Where this file and the contract disagree, the contract wins.
-- `config/cv_example_backend.md` — reference output format
+## Authority
 
-## Workflow
+Before any repository task, read `docs/v1-upgrade-handoff.md` completely. For a legacy
+CV-tailoring task, also read the legacy inputs listed below before acting.
 
-1. If no job description provided — ask for it:
-   ```
-   Company:
-   Role:
-   Job description: ...
-   ```
+Authority order for v1:
 
-2. Check `jobs/status.csv` for an existing row with the same company + a similar role.
-   - If found: tell the user, show its status/date, and ask whether this is an update to that draft or a genuinely new role before continuing.
+1. `docs/v1-upgrade-handoff.md` — binding product and implementation specification.
+2. `AGENTS.md` / `CLAUDE.md` — repository working rules.
+3. `README.md` — human-facing setup and usage documentation.
+4. Legacy code, configuration, and documentation — current-state evidence only.
 
-3. Run gap analysis — return table: required vs. present vs. missing
-   - Check both the main CV content and the `Situational Skills` section of `base/cv_base.md`.
-   - If a job requirement matches a Situational Skills item, mark it as available (not a gap) and note in the tailoring notes that it was pulled from Situational Skills.
-   - Do not include Situational Skills items by default — only when the job explicitly requires that specific item.
+If the v1 handoff conflicts with the README, this file, the legacy Development-only
+workflow, or existing code, the handoff wins. Do not silently reinterpret a conflict.
 
-4. Offer tone choice and wait for response:
-   - **A — Technical depth**
-   - **B — Balanced**
-   - **C — AI/GenAI focused**
+For ordinary legacy CV generation before migration, continue to read
+`base/cv_base.md`, `config/cv_generation_rules.md`, and
+`config/cv_example_backend.md`. Do not treat that temporary compatibility workflow as
+the target v1 architecture.
 
-5. Generate tailored CV → save to `outputs/<company>/cv-drafts/cv_<company>_<role>.md`
-   - Clean CV only — no notes inside
-   - Include front-matter at top:
-     ```yaml
-     ---
-     created: YYYY-MM-DD
-     modified: YYYY-MM-DD
-     ---
-     ```
+## Product decisions and autonomy
 
-6. Save tailoring decisions → `outputs/<company>/cv-drafts/cv_<company>_<role>.notes.md`
-   - Include front-matter at top:
-     ```yaml
-     ---
-     created: YYYY-MM-DD
-     modified: YYYY-MM-DD
-     ---
-     ```
+- Internal implementation details may change when observable behavior, safety, and
+  product semantics remain unchanged.
+- Do not silently change workflow, validation behavior, fact semantics, application
+  statuses, migration behavior, artifact lifecycle, or other product decisions.
+- Proceed by default. Stop only for a blocker, unresolved specification conflict,
+  required semantic deviation, material data-loss risk, or migration-safety failure.
+- Explain the issue and consequences before requesting a user decision.
 
-7. Run `python3 build_html.py --check outputs/<company>/cv-drafts/cv_<company>_<role>.md`
-   - Validates the draft against the output contract in `config/cv_generation_rules.md`.
-   - Fix the draft and re-run until it passes. Never edit the generated `.html` to work around a failure: the `.md` is the source of truth.
+## Facts and AI boundaries
 
-8. Run `python3 build_html.py outputs/<company>/cv-drafts/cv_<company>_<role>.md`
-   - Renders `.md` → `.html` through `config/resume_base.html` and writes
-     `outputs/<company>/cv-html/cv_<company>_<role>.html`.
-   - Never hand-write or hand-edit the `.html`.
+- Never invent, strengthen, merge, or "improve" candidate facts.
+- One fact has one canonical location. Profiles may reference it; they may not create
+  conflicting copies.
+- New facts follow `pending -> confirmed -> canonical` unless explicitly confirmed by
+  the user in the same message.
+- Unsupported factual claims must block approval and `ready`, including in fast mode.
+- AI proposes classification, selection, and wording. Canonical facts and deterministic
+  validation remain authoritative.
+- Preserve canonical historical job titles, dates, metrics, uncertainty, and source
+  provenance.
 
-9. Automatically save job description → `outputs/<company>/job-description/<company>_<role>.md`
-   - Use the template format from `config/job_description_example.md`
-   - Include front-matter at top:
-     ```yaml
-     ---
-     created: YYYY-MM-DD
-     modified: YYYY-MM-DD
-     ---
-     ```
+## Historical artifacts and migration safety
 
-10. Automatically add row to `jobs/status.csv`:
-    - Fields: company, role, url, cv_file, status (draft), date_created (today), date_sent (leave empty), notes
-    - cv_file field: `outputs/<company>/cv-pdf/<role>/Matan Malka - Full Stack Developer.pdf`. The filename is fixed because that is what a recruiter sees; the `<role>` folder is what keeps two roles at the same company apart. `print_pdf.sh` prints this exact path on success: copy it, do not retype it.
-    - `date_sent` only gets filled in when the user confirms the application was actually sent (step 12) — never at draft time.
+- Historical and submitted CV, HTML, PDF, job snapshots, and application artifacts are
+  immutable. Never overwrite them.
+- Do not migrate live data until a complete snapshot has been created and verified,
+  restore instructions exist, migration tests pass, and every historical record and
+  artifact is accounted for.
+- Test migration against a copy or snapshot before live migration.
+- If any migration safety check fails, stop. Do not partially continue or guess.
+- Preserve historical data and output meaning, not the legacy architecture.
 
-11. Run `bash print_pdf.sh outputs/<company>/cv-html/cv_<company>_<role>.html` directly (local, reversible — no need to ask first). Report the resulting PDF path to the user.
+## Scope discipline
 
-11a. Run `python3 check_status.py`. It reconciles `jobs/status.csv` against disk: missing files, drafts with no row, duplicate unresolved rows. Fix anything it reports before continuing.
+- Implement only the v1 scope defined in the handoff.
+- Do not add the deferred Web UI, PostgreSQL, advanced analytics, broad multi-provider
+  support, or other out-of-v1 features.
+- Keep the CLI first-class: the complete v1 Definition of Done must work without a Web
+  UI.
+- Do not perform unrelated refactors or cleanup.
+- Do not edit generated HTML by hand; fix the source, template, renderer, or rules.
 
-12. Remind user to:
-    - Run through `CHECKLIST.md` before sending
-    - When sent: update `jobs/status.csv` — set `status` to `sent` and fill in `date_sent`
+## Dependencies
 
-## Output folder structure
-Each company gets its own subfolder under `outputs/`, split by output type:
-```
-outputs/
-  <company>/
-    job-description/
-      <company>_<role>.md          ← job description
-    cv-drafts/
-      cv_<company>_<role>.md
-      cv_<company>_<role>.notes.md
-    cv-html/
-      cv_<company>_<role>.html
-    cv-pdf/
-      <role>/
-        Matan Malka - Full Stack Developer.pdf   ← fixed filename from print_pdf.sh
-  archive/
-```
+- Pydantic, Jinja2, Playwright, and standard-library `sqlite3` are the approved v1
+  baseline.
+- Add a dependency only when it enforces contracts, reduces rendering risk, or provides
+  a concrete portability or maintainability benefit.
+- Do not introduce frameworks or infrastructure without a demonstrated v1 need.
 
-## PDF Flow — never break this order
-1. `.md` → `.html` (via `build_html.py`, which renders `config/resume_base.html`)
-2. `.html` → `.pdf` (via `print_pdf.sh`)
-3. Never run `print_pdf.sh` on a `.md` file
-4. Never edit the `.html` by hand. It is generated output: change the `.md` and re-run `build_html.py`
+## Testing and completion
 
-## Archive rule
-If an output file already exists — move it to `outputs/archive/` before writing the new version.
-- This applies even when the new draft gets a different filename (e.g. a second draft for the same company+role with a different slug). If `jobs/status.csv` already has an unresolved (`status` != `sent`) row for the same company + a similar role, do not create a second live draft — resolve step 2 first (ask the user whether to update the existing draft in place or archive it before creating a new one).
+- Test material changes in proportion to the affected layer.
+- Run unit and integration tests, plus relevant golden, rendering, ATS/PDF, migration,
+  and regression tests.
+- Add a targeted regression test for every material bug discovered during the work.
+- Do not claim completion with "implemented" alone.
+- Run the acceptance checklist in `docs/v1-upgrade-handoff.md` and report evidence:
+  what passed, what failed, and what remains.
+- A warning may be reported and accepted only where the specification permits it. Hard
+  failures block `ready` and completion.
 
-## Hard Rules
-- Never modify `base/cv_base.md`
-- Never overwrite output files without archiving first
-- Never invent experience, technologies, metrics, or dates
-- Never inflate seniority or change title beyond allowed variants
-- Never use buzzwords: passionate, ninja, rockstar, dynamic, results-driven
-- Only facts from `base/cv_base.md`, including its `Situational Skills` section when job-relevant
-- Never include Situational Skills items unless the job description explicitly requires that specific item
+## Change management
 
-## Tone
-- Professional, concise, direct
-- Backend-oriented when relevant
-- No exaggerated claims
-- ATS-optimized: job keywords embedded naturally
-- Formatting, dash placement, and bold: see `config/cv_generation_rules.md`. Do not restate those rules here.
+- Keep changes scoped to the active implementation stage.
+- Preserve unrelated user changes in a dirty worktree.
+- When implementation work is authorized, create small, intentional commits at stable
+  stage boundaries. Do not mix unrelated changes in one commit.
+- Never use destructive Git or filesystem operations to simplify migration or cleanup.
+
+## Implementation sequence
+
+Use the mandated sequence:
+
+`Review -> Architecture -> Plan -> Implement -> Test -> Migrate -> Verify`
+
+No approval pause is required between Review and Implementation when there is no stop
+condition and the architecture follows the binding specification.

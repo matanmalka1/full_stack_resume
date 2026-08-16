@@ -122,7 +122,8 @@ def main():
                     f"two unresolved drafts for the same company and a similar role: "
                     f"{a.get('company')} / {a.get('role')} and {b.get('role')}")
                 problems.append(
-                    "    resolve per the archive rule in CLAUDE.md before drafting again")
+                    "    resolve the duplicate before drafting again; preserve existing "
+                    "historical artifacts")
 
     # orphan PDFs, reported as notes rather than failures
     for pdf in sorted(OUTPUTS.glob("*/cv-pdf/*.pdf")):
