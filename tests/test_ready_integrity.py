@@ -82,10 +82,11 @@ def test_failed_post_render_validation_does_not_set_ready(v1_repo: Path, monkeyp
     assert engine.repo.get_application(app_id)["current_status"] == "preparing"
 
 
-def test_mark_ready_rejects_unlinked_pdf_version(v1_repo: Path) -> None:
-    """The repository layer re-derives proof; it cannot be fooled by a PDF version
-    lacking a passing post-render validation, even when called directly."""
-    engine, app_id = _prepared(v1_repo, "Mark Ready Bypass")
+def test_set_ready_primitive_rejects_unlinked_pdf_version(v1_repo: Path) -> None:
+    """Even the internal _set_ready primitive re-derives proof from DB state;
+    it cannot be fooled by a PDF version lacking a passing post-render
+    validation, even when called directly."""
+    engine, app_id = _prepared(v1_repo, "Set Ready Bypass")
     manifest = engine.repo.latest_artifact_version(app_id, "claim_manifest", "approved")
     directory = (v1_repo / manifest["path"]).parent
     fake_pdf = directory / "fake.pdf"
@@ -95,8 +96,35 @@ def test_mark_ready_rejects_unlinked_pdf_version(v1_repo: Path) -> None:
         sha256_file(fake_pdf), "rendered",
     )
     with pytest.raises(ValueError, match="post-render validation"):
-        engine.repo.mark_ready(app_id, fake_version_id, "bypass attempt")
+        engine.repo._set_ready(app_id, fake_version_id, "bypass attempt")
     assert engine.repo.get_application(app_id)["current_status"] == "preparing"
+
+
+def test_public_workflow_cannot_restore_ready_after_tamper_without_fresh_render(v1_repo: Path) -> None:
+    """A historical passing post-render validation must never be sufficient to
+    restore READY after filesystem or workflow drift. The only public path back
+    to READY is a full Engine.render() call, which always creates brand-new
+    artifact versions rather than reusing an old, possibly-stale id; neither
+    ready_report() nor submit() may resurrect the old ready state from history."""
+    engine, app_id = _ready(v1_repo, "No Stale Restore")
+    pdf_version = engine.repo.latest_artifact_version(app_id, "resume_pdf", "rendered")
+    engine.repo.transition_status(app_id, "preparing", "reverting for edits")
+    path = v1_repo / pdf_version["path"]
+    path.write_bytes(path.read_bytes() + b"tampered")
+
+    assert engine.repo.get_application(app_id)["current_status"] == "preparing"
+    with pytest.raises(WorkflowError, match="not ready"):
+        engine.ready_report(app_id)
+    with pytest.raises(WorkflowError, match="currently valid ready"):
+        engine.submit(app_id)
+    # The only supported route back to ready is a full fresh render, which
+    # writes a brand-new PDF artifact version rather than reusing the tampered
+    # historical one.
+    engine.approve(app_id)
+    _, report = engine.render(app_id)
+    assert report.passed
+    new_pdf_version = engine.repo.latest_artifact_version(app_id, "resume_pdf", "rendered")
+    assert new_pdf_version["id"] != pdf_version["id"]
 
 
 def test_registering_unvalidated_pdf_after_ready_does_not_pass_inspection(v1_repo: Path) -> None:
@@ -165,6 +193,26 @@ def test_tampered_approved_manifest_fails_ready_inspection(v1_repo: Path) -> Non
     report = engine.ready_report(app_id)
     assert not report.passed
     assert any(issue.code == "approved-manifest-tampered" for issue in report.issues)
+
+
+def test_tampered_html_fails_ready_inspection(v1_repo: Path) -> None:
+    engine, app_id = _ready(v1_repo, "Tampered HTML")
+    html_version = engine.repo.latest_artifact_version(app_id, "resume_html", "rendered")
+    path = v1_repo / html_version["path"]
+    path.write_text(path.read_text(encoding="utf-8") + "<!-- tampered -->", encoding="utf-8")
+    report = engine.ready_report(app_id)
+    assert not report.passed
+    assert any(issue.code == "html-tampered" for issue in report.issues)
+
+
+def test_tampered_visual_evidence_fails_ready_inspection(v1_repo: Path) -> None:
+    engine, app_id = _ready(v1_repo, "Tampered Visual")
+    visual_version = engine.repo.latest_artifact_version(app_id, "visual_evidence", "rendered")
+    path = v1_repo / visual_version["path"]
+    path.write_bytes(path.read_bytes() + b"tampered")
+    report = engine.ready_report(app_id)
+    assert not report.passed
+    assert any(issue.code == "visual-tampered" for issue in report.issues)
 
 
 def test_missing_html_fails_ready_inspection(v1_repo: Path) -> None:
@@ -281,8 +329,23 @@ def test_submitted_artifact_remains_immutable_after_later_version(v1_repo: Path)
     assert [row["artifact_version_id"] for row in after] == [submitted_pdf_id]
 
 
-def test_generic_status_transition_to_applied_requires_verification(v1_repo: Path) -> None:
-    engine, app_id = _ready(v1_repo, "Direct Applied")
-    with pytest.raises(ValueError, match="freshly verified"):
+def test_generic_status_transition_to_applied_is_always_blocked(v1_repo: Path) -> None:
+    """The generic transition rejects applied unconditionally -- even supplying
+    a real, currently-valid rendered PDF artifact version id must not work,
+    because the generic transition has no way to perform the fresh integrity
+    verification that Engine.submit() does. There is no parameter that can
+    talk it into treating a caller-supplied id as trustworthy."""
+    engine, app_id = _ready(v1_repo, "Direct Applied With PDF")
+    pdf_version = engine.repo.latest_artifact_version(app_id, "resume_pdf", "rendered")
+    with pytest.raises(ValueError, match="submission-owned"):
         engine.repo.transition_status(app_id, "applied", "direct bypass attempt")
+    assert engine.repo.get_application(app_id)["current_status"] == "ready"
+
+    # The dedicated internal primitive is the only thing that can persist a
+    # submission, and it is not reachable from transition_status at all.
+    with pytest.raises(TypeError):
+        engine.repo.transition_status(
+            app_id, "applied", "direct bypass attempt",
+            verified_pdf_artifact_version_id=pdf_version["id"],
+        )
     assert engine.repo.get_application(app_id)["current_status"] == "ready"

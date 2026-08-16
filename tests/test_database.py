@@ -14,7 +14,7 @@ def test_status_history_and_transition_contract(tmp_path: Path) -> None:
     app_id, _ = repo.create_application(company="Acme", target_role="Developer", original_job_text="Python developer role")
     repo.transition_status(app_id, ApplicationStatus.PREPARING, "analysis")
     assert repo.get_application(app_id)["current_status"] == "preparing"
-    with pytest.raises(ValueError, match="invalid status transition"):
+    with pytest.raises(ValueError, match="submission-owned"):
         repo.transition_status(app_id, ApplicationStatus.APPLIED)
     with connect(repo.path) as connection:
         history = connection.execute("SELECT from_status, to_status FROM status_history WHERE application_id=? ORDER BY id", (app_id,)).fetchall()

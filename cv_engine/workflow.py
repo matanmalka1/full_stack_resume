@@ -358,7 +358,7 @@ class Engine:
                     "render succeeded but fresh ready integrity verification failed: "
                     f"{[issue.code for issue in integrity.issues]}"
                 )
-            self.repo.mark_ready(application_id, artifact_ids[1], "all ready validation groups passed")
+            self.repo._set_ready(application_id, artifact_ids[1], "all ready validation groups passed")
         return pdf_path, report
 
     def submit(self, application_id: str, reason: str = "submitted to employer") -> dict[str, Any]:
@@ -372,12 +372,7 @@ class Engine:
                 f"{[issue.code for issue in integrity.issues]}"
             )
         pdf_artifact_version_id = integrity.evidence["pdf_artifact_version_id"]
-        self.repo.transition_status(
-            application_id,
-            ApplicationStatus.APPLIED,
-            reason,
-            verified_pdf_artifact_version_id=pdf_artifact_version_id,
-        )
+        self.repo._record_submission(application_id, pdf_artifact_version_id, reason)
         return {
             "application_id": application_id,
             "pdf_artifact_version_id": pdf_artifact_version_id,

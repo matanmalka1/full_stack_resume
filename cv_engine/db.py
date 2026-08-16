@@ -370,20 +370,22 @@ class Repository:
             raise KeyError(f"no analysis for application {application_id}")
         return row["id"], JobAnalysis.model_validate_json(row["structured_json"])
 
-    def transition_status(
-        self,
-        application_id: str,
-        target: ApplicationStatus | str,
-        reason: str = "",
-        *,
-        verified_pdf_artifact_version_id: str | None = None,
-    ) -> None:
+    def transition_status(self, application_id: str, target: ApplicationStatus | str, reason: str = "") -> None:
         target_status = ApplicationStatus(target)
         if target_status is ApplicationStatus.READY:
             raise ValueError(
                 "ready is an engine-owned state derived from a passing render/ready "
                 "pipeline; it cannot be set through the generic status transition. "
                 "Use the render pipeline (Engine.render)."
+            )
+        if target_status is ApplicationStatus.APPLIED:
+            raise ValueError(
+                "applied is submission-owned; it can only be reached through "
+                "Engine.submit(), which performs fresh ready integrity verification "
+                "and binds the submission to the exact validated PDF artifact version. "
+                "The generic status transition never accepts applied, even with a real "
+                "rendered PDF artifact version id, because it cannot perform that "
+                "verification itself."
             )
         now = utc_now()
         with self.transaction() as connection:
@@ -395,26 +397,6 @@ class Repository:
                 return
             if target_status not in ALLOWED_TRANSITIONS[current]:
                 raise ValueError(f"invalid status transition: {current.value} -> {target_status.value}")
-            if target_status is ApplicationStatus.APPLIED:
-                if not verified_pdf_artifact_version_id:
-                    raise ValueError(
-                        "applied requires a freshly verified exact PDF artifact version; "
-                        "use Engine.submit() rather than a raw status transition"
-                    )
-                pdf = connection.execute(
-                    "SELECT av.id FROM artifact_versions av JOIN artifacts a ON a.id=av.artifact_id "
-                    "WHERE av.id=? AND a.application_id=? AND a.artifact_type='resume_pdf' AND av.lifecycle_status='rendered'",
-                    (verified_pdf_artifact_version_id, application_id),
-                ).fetchone()
-                if pdf is None:
-                    raise ValueError(
-                        "verified PDF artifact version does not exist or is not a rendered "
-                        "resume PDF belonging to this application"
-                    )
-                connection.execute(
-                    "INSERT INTO submissions(id, application_id, artifact_version_id, submitted_at, metadata_json) VALUES(?, ?, ?, ?, ?)",
-                    (str(uuid.uuid4()), application_id, verified_pdf_artifact_version_id, now, canonical_json({"reason": reason})),
-                )
             connection.execute(
                 "UPDATE applications SET current_status=?, updated_at=? WHERE id=?",
                 (target_status.value, now, application_id),
@@ -424,13 +406,24 @@ class Repository:
                 (application_id, current.value, target_status.value, now, reason),
             )
 
-    def mark_ready(self, application_id: str, pdf_artifact_version_id: str, reason: str = "") -> None:
-        """The only path that may set READY.
+    def _set_ready(self, application_id: str, pdf_artifact_version_id: str, reason: str = "") -> None:
+        """Internal persistence primitive. NOT a verification API.
 
-        Self-sufficient at the DB layer: it re-derives proof from already-stored
-        records (a passing post-render validation tied to this exact PDF artifact
-        version) instead of trusting the caller, so no public Repository method
-        allows READY without a real passing validation already on record.
+        This is not part of the supported Repository contract and must only be
+        called by Engine.render(), immediately after Engine.render() has itself
+        run cv_engine.ready.verify_ready_integrity() fresh (with filesystem
+        access this DB-only method does not have) and confirmed it passed for
+        the PDF artifact version Engine.render() just created in the same call.
+
+        The DB-only checks below (a passing post-render validation referencing
+        this exact PDF artifact version) are necessary but NOT sufficient proof
+        of readiness on their own: a historical passing validation row does not
+        prove the referenced files still exist unmodified, or that no newer
+        approved version/job snapshot/analysis has since superseded them. That
+        freshness burden belongs entirely to the caller. Calling this method
+        directly with a stale-but-historically-valid id bypasses that guarantee
+        the same way raw SQL against an immutable table would; it is not a
+        reachable path from the CLI or any other public Engine method.
         """
         now = utc_now()
         with self.transaction() as connection:
@@ -466,6 +459,51 @@ class Repository:
                 "INSERT INTO status_history(application_id, from_status, to_status, changed_at, reason) VALUES(?, ?, ?, ?, ?)",
                 (application_id, current.value, ApplicationStatus.READY.value, now, reason),
             )
+
+    def _record_submission(self, application_id: str, pdf_artifact_version_id: str, reason: str = "") -> str:
+        """Internal persistence primitive. NOT a verification API.
+
+        Not part of the supported Repository contract; must only be called by
+        Engine.submit() immediately after Engine.submit() has run
+        cv_engine.ready.verify_ready_integrity() fresh and confirmed the exact
+        PDF artifact version it is about to bind. The DB-only check here (the
+        PDF artifact version belongs to this application and is a rendered
+        resume PDF) does not by itself prove that version is the CURRENT ready
+        one: an older PDF's lifecycle_status stays 'rendered' forever even
+        after a newer approved version supersedes it. That freshness and
+        currency burden belongs entirely to the caller.
+        """
+        now = utc_now()
+        submission_id = str(uuid.uuid4())
+        with self.transaction() as connection:
+            row = connection.execute("SELECT current_status FROM applications WHERE id=?", (application_id,)).fetchone()
+            if row is None:
+                raise KeyError(application_id)
+            current = ApplicationStatus(row["current_status"])
+            if current is not ApplicationStatus.READY:
+                raise ValueError(f"applied may only follow ready, not {current.value}")
+            pdf_row = connection.execute(
+                "SELECT av.id FROM artifact_versions av JOIN artifacts a ON a.id=av.artifact_id "
+                "WHERE av.id=? AND a.application_id=? AND a.artifact_type='resume_pdf' AND av.lifecycle_status='rendered'",
+                (pdf_artifact_version_id, application_id),
+            ).fetchone()
+            if pdf_row is None:
+                raise ValueError(
+                    "submission requires an exact rendered resume PDF artifact version belonging to this application"
+                )
+            connection.execute(
+                "INSERT INTO submissions(id, application_id, artifact_version_id, submitted_at, metadata_json) VALUES(?, ?, ?, ?, ?)",
+                (submission_id, application_id, pdf_artifact_version_id, now, canonical_json({"reason": reason})),
+            )
+            connection.execute(
+                "UPDATE applications SET current_status=?, updated_at=? WHERE id=?",
+                (ApplicationStatus.APPLIED.value, now, application_id),
+            )
+            connection.execute(
+                "INSERT INTO status_history(application_id, from_status, to_status, changed_at, reason) VALUES(?, ?, ?, ?, ?)",
+                (application_id, current.value, ApplicationStatus.APPLIED.value, now, reason),
+            )
+        return submission_id
 
     def record_event(self, application_id: str, event_type: str, payload: dict[str, Any]) -> str:
         event_id = str(uuid.uuid4())
