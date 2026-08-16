@@ -9,6 +9,7 @@ import subprocess
 import tarfile
 import tempfile
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,45 @@ EXPECTED_COLUMNS = ["company", "role", "url", "cv_file", "status", "date_created
 
 class MigrationSafetyError(RuntimeError):
     pass
+
+
+MigrationTestRunner = Callable[[Path], Path]
+
+
+def _content_hash(payload: dict[str, Any], *, hash_field: str, volatile_fields: tuple[str, ...] = ()) -> str:
+    material = dict(payload)
+    material.pop(hash_field, None)
+    for field in volatile_fields:
+        material.pop(field, None)
+    return sha256_text(canonical_json(material))
+
+
+def _inventory_hash(inventory: dict[str, Any]) -> str:
+    return _content_hash(
+        inventory,
+        hash_field="inventory_hash",
+        volatile_fields=("created_at",),
+    )
+
+
+def _report_hash(report: dict[str, Any]) -> str:
+    return _content_hash(report, hash_field="report_hash")
+
+
+def _seal_report(report: dict[str, Any]) -> dict[str, Any]:
+    sealed = dict(report)
+    sealed["report_hash"] = _report_hash(sealed)
+    return sealed
+
+
+def _load_json(path: Path, label: str) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise MigrationSafetyError(f"cannot read {label}: {exc}") from exc
+    if not isinstance(value, dict):
+        raise MigrationSafetyError(f"{label} must contain a JSON object")
+    return value
 
 
 def _snapshot_files(root: Path) -> list[Path]:
@@ -151,9 +191,7 @@ def build_inventory(root: Path) -> dict[str, Any]:
         "unaccounted_output_files": unaccounted,
         "problems": problems,
     }
-    hash_payload = dict(inventory)
-    hash_payload.pop("created_at", None)
-    inventory["inventory_hash"] = sha256_text(canonical_json(hash_payload))
+    inventory["inventory_hash"] = _inventory_hash(inventory)
     return inventory
 
 
@@ -243,6 +281,7 @@ def verify_snapshot(snapshot_dir: Path) -> dict[str, Any]:
         "verified_at": utc_now(),
         "snapshot_id": manifest["snapshot_id"],
         "manifest_hash": expected_hash,
+        "inventory_hash": manifest.get("inventory_hash"),
         "archive_sha256": sha256_file(archive_path),
         "file_count": manifest["file_count"],
         "restore_instructions": "RESTORE.md",
@@ -253,14 +292,14 @@ def verify_snapshot(snapshot_dir: Path) -> dict[str, Any]:
 def run_migration_tests(root: Path) -> Path:
     command = [str(root / ".venv" / "bin" / "python") if (root / ".venv/bin/python").is_file() else "python3", "-m", "pytest", "tests/test_migration.py", "-q"]
     completed = subprocess.run(command, cwd=root, text=True, capture_output=True, timeout=180)
-    report = {
+    report = _seal_report({
         "passed": completed.returncode == 0,
         "command": command,
         "returncode": completed.returncode,
         "stdout": completed.stdout,
         "stderr": completed.stderr,
         "created_at": utc_now(),
-    }
+    })
     target = root / "data/migration/migration-tests.json"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -370,10 +409,22 @@ def migrate_legacy_state(source_root: Path, target_root: Path, *, dry_run: bool)
     }
 
 
-def dry_run_migration(root: Path, snapshot_dir: Path) -> Path:
-    verification = verify_snapshot(snapshot_dir)
-    if not verification["passed"]:
-        raise MigrationSafetyError("cannot dry-run an unverified snapshot")
+DRY_RUN_EVIDENCE_FIELDS = (
+    "passed",
+    "dry_run",
+    "application_count",
+    "job_snapshot_count",
+    "artifact_version_count",
+    "expected_artifact_count",
+    "inventory_hash",
+    "database",
+    "problems",
+    "snapshot_id",
+    "manifest_hash",
+)
+
+
+def _execute_snapshot_dry_run(snapshot_dir: Path, verification: dict[str, Any]) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="cv-migration-dry-run-") as directory:
         restored = Path(directory) / "source"
         restored.mkdir()
@@ -392,9 +443,17 @@ def dry_run_migration(root: Path, snapshot_dir: Path) -> Path:
     report.update({
         "snapshot_id": verification["snapshot_id"],
         "manifest_hash": verification["manifest_hash"],
-        "created_at": utc_now(),
     })
-    report["report_hash"] = sha256_text(canonical_json(report))
+    return report
+
+
+def dry_run_migration(root: Path, snapshot_dir: Path) -> Path:
+    verification = verify_snapshot(snapshot_dir)
+    if not verification["passed"]:
+        raise MigrationSafetyError("cannot dry-run an unverified snapshot")
+    report = _execute_snapshot_dry_run(snapshot_dir, verification)
+    report["created_at"] = utc_now()
+    report = _seal_report(report)
     output = root / "data/migration/dry-run.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -403,43 +462,109 @@ def dry_run_migration(root: Path, snapshot_dir: Path) -> Path:
     return output
 
 
-def migration_gate(root: Path, snapshot_dir: Path) -> dict[str, Any]:
+def _report_integrity_problems(report: dict[str, Any], label: str) -> list[str]:
+    expected = report.get("report_hash")
+    if not isinstance(expected, str) or expected != _report_hash(report):
+        return [f"{label} report hash mismatch"]
+    return []
+
+
+def _dry_run_fingerprint(report: dict[str, Any]) -> dict[str, Any]:
+    return {field: report.get(field) for field in DRY_RUN_EVIDENCE_FIELDS}
+
+
+def migration_gate(
+    root: Path,
+    snapshot_dir: Path,
+    *,
+    migration_test_runner: MigrationTestRunner | None = None,
+) -> dict[str, Any]:
     inventory_path = root / "data/migration/inventory.json"
     tests_path = root / "data/migration/migration-tests.json"
     dry_run_path = root / "data/migration/dry-run.json"
     if not all(path.is_file() for path in (inventory_path, tests_path, dry_run_path)):
         raise MigrationSafetyError("inventory, migration tests, and dry-run reports are all required")
-    inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
-    tests = json.loads(tests_path.read_text(encoding="utf-8"))
-    dry_run = json.loads(dry_run_path.read_text(encoding="utf-8"))
+    inventory = _load_json(inventory_path, "inventory report")
+    tests = _load_json(tests_path, "migration-test report")
+    dry_run = _load_json(dry_run_path, "dry-run report")
     snapshot = verify_snapshot(snapshot_dir)
     problems = []
-    if inventory["problems"] or inventory["unaccounted_output_files"]:
+    if inventory.get("inventory_hash") != _inventory_hash(inventory):
+        problems.append("inventory report hash mismatch")
+    if inventory.get("problems") or inventory.get("unaccounted_output_files"):
         problems.append("inventory is incomplete")
-    if not tests["passed"]:
+    problems.extend(_report_integrity_problems(tests, "migration-test"))
+    if tests.get("passed") is not True or tests.get("returncode") != 0:
         problems.append("migration tests failed")
-    if not snapshot["passed"]:
-        problems.append("snapshot restore verification failed")
-    if not dry_run["passed"]:
+    problems.extend(_report_integrity_problems(dry_run, "dry-run"))
+    if dry_run.get("passed") is not True or dry_run.get("problems"):
         problems.append("dry-run migration failed")
-    if dry_run["snapshot_id"] != snapshot["snapshot_id"] or dry_run["manifest_hash"] != snapshot["manifest_hash"]:
+    if not snapshot.get("passed"):
+        problems.append("snapshot restore verification failed")
+    if (
+        dry_run.get("snapshot_id") != snapshot.get("snapshot_id")
+        or dry_run.get("manifest_hash") != snapshot.get("manifest_hash")
+    ):
         problems.append("dry-run was not performed against this snapshot")
-    if dry_run["inventory_hash"] != inventory["inventory_hash"]:
+    if dry_run.get("inventory_hash") != inventory.get("inventory_hash"):
         problems.append("inventory changed after dry-run")
+
+    try:
+        live_inventory = build_inventory(root)
+    except (OSError, MigrationSafetyError, KeyError, ValueError) as exc:
+        live_inventory = {}
+        problems.append(f"cannot rebuild live inventory: {exc}")
+    else:
+        if live_inventory.get("problems") or live_inventory.get("unaccounted_output_files"):
+            problems.append("live inventory is incomplete")
+        if live_inventory.get("inventory_hash") != inventory.get("inventory_hash"):
+            problems.append("live inventory does not match the recorded inventory")
+        if live_inventory.get("inventory_hash") != snapshot.get("inventory_hash"):
+            problems.append("live inventory does not match the verified snapshot")
+
+    fresh_tests: dict[str, Any] = {}
+    try:
+        runner = migration_test_runner or run_migration_tests
+        fresh_tests_path = runner(root)
+        fresh_tests = _load_json(fresh_tests_path, "fresh migration-test report")
+    except (OSError, subprocess.SubprocessError, MigrationSafetyError) as exc:
+        problems.append(f"fresh migration tests could not run: {exc}")
+    else:
+        problems.extend(_report_integrity_problems(fresh_tests, "fresh migration-test"))
+        if fresh_tests.get("passed") is not True or fresh_tests.get("returncode") != 0:
+            problems.append("fresh migration tests failed")
+
+    fresh_dry_run: dict[str, Any] = {}
+    if snapshot.get("passed"):
+        try:
+            fresh_dry_run = _execute_snapshot_dry_run(snapshot_dir, snapshot)
+        except (OSError, MigrationSafetyError, KeyError, ValueError, sqlite3.Error, tarfile.TarError) as exc:
+            problems.append(f"fresh snapshot dry-run failed: {exc}")
+        else:
+            if not fresh_dry_run.get("passed") or fresh_dry_run.get("problems"):
+                problems.append("fresh snapshot dry-run did not pass")
+            if _dry_run_fingerprint(fresh_dry_run) != _dry_run_fingerprint(dry_run):
+                problems.append("stored dry-run report does not match a fresh snapshot dry-run")
     return {
         "passed": not problems,
         "snapshot_id": snapshot.get("snapshot_id"),
         "manifest_hash": snapshot.get("manifest_hash"),
-        "inventory_hash": inventory["inventory_hash"],
+        "inventory_hash": live_inventory.get("inventory_hash"),
         "dry_run_report_hash": dry_run.get("report_hash"),
-        "legacy_row_count": inventory["legacy_row_count"],
-        "expected_artifact_count": dry_run["expected_artifact_count"],
+        "migration_test_report_hash": fresh_tests.get("report_hash"),
+        "legacy_row_count": live_inventory.get("legacy_row_count"),
+        "expected_artifact_count": fresh_dry_run.get("expected_artifact_count"),
         "problems": problems,
     }
 
 
-def apply_migration(root: Path, snapshot_dir: Path) -> Path:
-    gate = migration_gate(root, snapshot_dir)
+def apply_migration(
+    root: Path,
+    snapshot_dir: Path,
+    *,
+    migration_test_runner: MigrationTestRunner | None = None,
+) -> Path:
+    gate = migration_gate(root, snapshot_dir, migration_test_runner=migration_test_runner)
     if not gate["passed"]:
         raise MigrationSafetyError(f"migration gate failed: {gate['problems']}")
     final_db = root / "data/applications.sqlite3"
@@ -452,12 +577,17 @@ def apply_migration(root: Path, snapshot_dir: Path) -> Path:
     staging.mkdir(parents=True)
     moved: list[tuple[Path, Path]] = []
     try:
+        immediate_inventory = build_inventory(root)
+        if immediate_inventory["problems"] or immediate_inventory["inventory_hash"] != gate["inventory_hash"]:
+            raise MigrationSafetyError("live inventory changed after the migration gate")
         report = migrate_legacy_state(root, staging, dry_run=False)
         if not report["passed"]:
             raise MigrationSafetyError(f"staged live migration reconciliation failed: {report['problems']}")
+        if report["inventory_hash"] != gate["inventory_hash"]:
+            raise MigrationSafetyError("live inventory changed during staged migration")
         report["gate"] = gate
         report["created_at"] = utc_now()
-        report["report_hash"] = sha256_text(canonical_json(report))
+        report = _seal_report(report)
         staged_db = staging / "data/applications.sqlite3"
         repository = Repository(staged_db)
         with repository.transaction() as connection:
