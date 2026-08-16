@@ -153,6 +153,9 @@ to the live state without modifying it:
 ./.venv/bin/cv migrate verify-live --snapshot data/snapshots/<timestamp>
 ```
 
+The tracked result for the completed v1 migration is
+[`docs/v1-retrospective-migration-verification.json`](docs/v1-retrospective-migration-verification.json).
+
 Restore instructions are in
 [`docs/v1-migration-restore.md`](docs/v1-migration-restore.md). Never extract a snapshot
 over the live repository.
