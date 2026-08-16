@@ -2,7 +2,7 @@
   "profile_id": "sales.sales-management.v1", "version": "1.0.0", "track": "sales", "profile": "sales-management",
   "default_emphasis": "leadership", "allowed_emphases": ["leadership", "account-growth", "balanced-sales"],
   "normalized_role": "Sales Team Leader", "safe_headlines": ["Sales Team Leader", "B2B Sales | Leadership | Account Management"],
-  "required_tags": ["leadership"], "tag_weights": {"leadership": 100, "coaching": 90},
+  "required_tags": ["leadership"], "tag_weights": {"leadership": 100, "coaching": 90}, "allow_two_pages": true,
   "sections": [
     {"name_en": "Professional Summary", "name_he": "תקציר מקצועי", "fact_ids": ["sales.summary.leadership"]},
     {"name_en": "Work Experience", "name_he": "ניסיון מקצועי", "fact_ids": ["sales.role.leader.title", "sales.role.leader.dates", "sales.leadership.player_coach", "sales.metric.team_size", "sales.metric.performance", "sales.metric.portfolio_growth", "sales.leadership.pipeline", "sales.leadership.coaching", "sales.leadership.commercial_approval", "sales.role.field.title", "sales.role.field.dates"]},

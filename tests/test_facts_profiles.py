@@ -46,3 +46,5 @@ def test_all_required_profiles_reference_existing_facts(v1_repo: Path) -> None:
     assert len(profiles.profiles) == 10
     assert profiles.get("tech-sales").track.value == "tech-sales"
     assert profiles.get("sales-management").default_emphasis.value == "leadership"
+    assert profiles.get("sales-management").allow_two_pages is True
+    assert profiles.get("account-manager").allow_two_pages is False

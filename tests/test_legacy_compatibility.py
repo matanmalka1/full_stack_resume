@@ -17,4 +17,7 @@ def test_legacy_status_check_treats_base_artifact_as_non_application() -> None:
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "base CV artifact is intentionally not an application" in result.stdout
+    if (ROOT / "data/applications.sqlite3").is_file():
+        assert "v1 SQLite" in result.stdout
+    else:
+        assert "base CV artifact is intentionally not an application" in result.stdout

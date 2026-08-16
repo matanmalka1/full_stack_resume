@@ -2,7 +2,7 @@
   "profile_id": "sales.key-account-manager.v1", "version": "1.0.0", "track": "sales", "profile": "key-account-manager",
   "default_emphasis": "account-growth", "allowed_emphases": ["account-growth", "leadership", "balanced-sales"],
   "normalized_role": "Key Account Manager", "safe_headlines": ["Key Account Manager", "B2B Sales | Account Management | Business Development"],
-  "required_tags": ["account-management"], "tag_weights": {"strategic-accounts": 100, "account-growth": 90},
+  "required_tags": ["account-management"], "tag_weights": {"strategic-accounts": 100, "account-growth": 90}, "allow_two_pages": true,
   "sections": [
     {"name_en": "Professional Summary", "name_he": "תקציר מקצועי", "fact_ids": ["sales.summary.account"]},
     {"name_en": "Work Experience", "name_he": "ניסיון מקצועי", "fact_ids": ["sales.role.leader.title", "sales.role.leader.dates", "sales.metric.recurring_customers", "sales.metric.portfolio_growth", "sales.leadership.strategic_customers", "sales.cycle.account_management", "sales.role.field.title", "sales.role.field.dates", "sales.achievement.complex_deals"]},

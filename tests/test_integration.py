@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
 from pathlib import Path
 
 from cv_engine.db import connect
@@ -61,3 +64,29 @@ def test_render_revalidates_approved_markdown_before_browser(v1_repo: Path) -> N
         assert "approved Markdown" in str(exc)
     else:
         raise AssertionError("modified approved source reached rendering")
+
+
+def test_cli_fast_mode_completes_definition_of_done(v1_repo: Path) -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "cv_engine.cli",
+            "--repo",
+            str(v1_repo),
+            "fast",
+            "--company",
+            "CLI Example",
+            "--role",
+            "Account Manager",
+            "--job-text",
+            "Account Manager responsible for retention, portfolio growth, negotiation, and customer relationships.",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["ready"] is True
+    assert Path(payload["pdf"]).is_file()
