@@ -56,7 +56,7 @@ def test_extractive_derived_wording_remains_supported(v1_repo: Path, draft_facto
         claim.fact_ids,
         facts,
     )
-    markdown, _manifest = write_working_draft(v1_repo, updated)
+    markdown, _manifest = write_working_draft(v1_repo / "artifacts", updated)
 
     report = validate_draft(updated, markdown, facts, profile, analysis)
 
@@ -81,7 +81,7 @@ def test_negative_saas_boundary_cannot_be_inverted_into_derived_claim(v1_repo: P
     )
     edited = claim_by_id(updated, claim.claim_id)
     assert edited.claim_type == "pending"
-    markdown, _manifest = write_working_draft(v1_repo, updated)
+    markdown, _manifest = write_working_draft(v1_repo / "artifacts", updated)
     report = validate_draft(updated, markdown, facts, profile, _analysis)
     assert not report.passed
     assert any(issue.code == "pending-claim" for issue in report.issues)
@@ -106,7 +106,7 @@ def test_forged_derived_claim_manifest_blocks_approval(v1_repo: Path, draft_fact
             if item.claim_id == claim.claim_id:
                 section.claims[index] = forged
     draft.content_hash = sha256_text(serialize_markdown(draft))
-    markdown, _manifest = write_working_draft(v1_repo, draft)
+    markdown, _manifest = write_working_draft(v1_repo / "artifacts", draft)
 
     report = validate_draft(draft, markdown, facts, profile, analysis)
 
@@ -127,7 +127,7 @@ def test_known_composite_template_preserves_canonical_renderings(v1_repo: Path, 
         ["sales.metric.recurring_customers", "sales.metric.performance"],
         facts,
     )
-    markdown, _manifest = write_working_draft(v1_repo, updated)
+    markdown, _manifest = write_working_draft(v1_repo / "artifacts", updated)
 
     report = validate_draft(updated, markdown, facts, profile, analysis)
 
@@ -153,7 +153,7 @@ def test_forged_composite_wording_blocks_approval(v1_repo: Path, draft_factory) 
     composite.text = "Delivered 30% improvement in direct SaaS Sales."
     composite.text_hash = sha256_text(composite.text)
     updated.content_hash = sha256_text(serialize_markdown(updated))
-    markdown, _manifest = write_working_draft(v1_repo, updated)
+    markdown, _manifest = write_working_draft(v1_repo / "artifacts", updated)
 
     report = validate_draft(updated, markdown, facts, profile, analysis)
 
@@ -179,7 +179,7 @@ def test_profile_presentation_wording_is_recomputed_during_validation(
     summary.text = "Sold SaaS through strategic channel partnerships."
     summary.text_hash = sha256_text(summary.text)
     draft.content_hash = sha256_text(serialize_markdown(draft))
-    markdown, _manifest = write_working_draft(v1_repo, draft)
+    markdown, _manifest = write_working_draft(v1_repo / "artifacts", draft)
 
     report = validate_draft(draft, markdown, facts, profile, analysis)
 
@@ -211,7 +211,7 @@ def test_composite_rejects_title_and_date_inputs_for_a_bullet(v1_repo: Path, dra
         for fact_id in item.fact_ids
     })
     draft.content_hash = sha256_text(serialize_markdown(draft))
-    markdown, _manifest = write_working_draft(v1_repo, draft)
+    markdown, _manifest = write_working_draft(v1_repo / "artifacts", draft)
 
     report = validate_draft(draft, markdown, facts, profile, analysis)
 
@@ -245,7 +245,7 @@ def test_headline_claim_type_outside_the_headline_is_blocked(v1_repo: Path, draf
     # deterministic validator blocks the injection on its own.
     _inject_headline_typed_claim(draft)
     tampered = draft.model_copy(update={"content_hash": sha256_text(serialize_markdown(draft))})
-    markdown, _manifest = write_working_draft(v1_repo, tampered)
+    markdown, _manifest = write_working_draft(v1_repo / "artifacts", tampered)
 
     report = validate_draft(tampered, markdown, facts, profile, analysis)
 
@@ -266,7 +266,7 @@ def test_headline_style_outside_the_headline_is_blocked(v1_repo: Path, draft_fac
             if item.claim_id == claim.claim_id:
                 section.claims[index] = forged
     tampered = draft.model_copy(update={"content_hash": sha256_text(serialize_markdown(draft))})
-    markdown, _manifest = write_working_draft(v1_repo, tampered)
+    markdown, _manifest = write_working_draft(v1_repo / "artifacts", tampered)
 
     report = validate_draft(tampered, markdown, facts, profile, analysis)
 

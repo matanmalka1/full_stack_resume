@@ -34,6 +34,7 @@ from .presentations import PresentationStore
 from .providers import OpenAIResponsesProvider
 from .ready import verify_ready_integrity
 from .rendering import normalized_role_filename, render_html, render_pdf, validate_rendered
+from .runtime.workspace import Workspace, load_workspace
 from .selection import EmphasisPolicyStore
 from .util import sha256_file, utc_now
 from .validation import validate_draft
@@ -44,17 +45,35 @@ class WorkflowError(RuntimeError):
 
 
 class Engine:
-    def __init__(self, repo_root: Path, db_path: Path | None = None):
-        self.root = repo_root.resolve()
-        self.db_path = db_path or self.root / "data" / "applications.sqlite3"
+    """Compatibility façade over the v1 workflow, now bound to a Workspace.
+
+    Nothing here builds a path from a repository root any more: knowledge,
+    state, and artifacts are read from the Workspace's declared roots, and a
+    directory without a valid v2 marker cannot be opened at all.
+    """
+
+    def __init__(self, workspace: Workspace | Path, db_path: Path | None = None):
+        self.workspace = workspace if isinstance(workspace, Workspace) else load_workspace(Path(workspace))
+        self.root = self.workspace.root
+        self.knowledge_root = self.workspace.knowledge_root
+        self.artifacts_root = self.workspace.artifacts_root
+        self.db_path = db_path or self.workspace.database_path
         self.repo = Repository(self.db_path)
 
+    @property
+    def base_dir(self) -> Path:
+        return self.knowledge_root / "base"
+
     def knowledge(self) -> tuple[FactStore, ProfileStore, EmphasisPolicyStore]:
-        facts = FactStore.load(self.root / "base")
-        return facts, ProfileStore.load(self.root, facts), EmphasisPolicyStore.load(self.root)
+        facts = FactStore.load(self.base_dir)
+        return (
+            facts,
+            ProfileStore.load(self.knowledge_root, facts),
+            EmphasisPolicyStore.load(self.knowledge_root),
+        )
 
     def list_facts(self, status: str | None = None) -> list[dict[str, Any]]:
-        facts = FactStore.load(self.root / "base")
+        facts = FactStore.load(self.base_dir)
         recorded = self.repo.latest_fact_statuses()
         return [
             {**fact.model_dump(mode="json"), "recorded_status": recorded.get(fact.fact_id)}
@@ -62,7 +81,7 @@ class Engine:
         ]
 
     def show_fact(self, fact_id: str) -> dict[str, Any]:
-        facts = FactStore.load(self.root / "base")
+        facts = FactStore.load(self.base_dir)
         return {
             **facts.get(fact_id).model_dump(mode="json"),
             "events": self.repo.fact_events(fact_id),
@@ -87,7 +106,7 @@ class Engine:
         trail are the ones a later reader will actually find on disk rather than
         the pre-write ones held in memory.
         """
-        facts = FactStore.load(self.root / "base")
+        facts = FactStore.load(self.base_dir)
         event_id = self.repo.record_fact_event(
             fact_id=fact.fact_id,
             source_file=fact.source_file,
@@ -123,7 +142,7 @@ class Engine:
         Without `canonical`, the fact lands as `pending` and cannot reach a CV:
         every rendering path resolves facts with `canonical_only=True`.
         """
-        fact = persist_new_fact(self.root / "base", source, payload, canonical=canonical)
+        fact = persist_new_fact(self.base_dir, source, payload, canonical=canonical)
         return self._record_fact_event(
             fact,
             event_type="fact_created",
@@ -142,7 +161,7 @@ class Engine:
         reason: str = "",
     ) -> dict[str, Any]:
         before, after = persist_promotion(
-            self.root / "base",
+            self.base_dir,
             fact_id,
             target,
             explicitly_confirmed=explicitly_confirmed,
@@ -178,7 +197,7 @@ class Engine:
         claim's own text becomes the candidate fact rather than being retyped,
         so nothing is strengthened on the way in.
         """
-        target = self.root / "artifacts" / "working" / application_id
+        target = self.artifacts_root / "working" / application_id
         draft = load_draft(target / "resume.claims.json")
         claims = [draft.headline, *draft.contacts, *(claim for section in draft.sections for claim in section.claims)]
         try:
@@ -234,7 +253,7 @@ class Engine:
         updated = attach_fact_to_section(path, fact_id, section, pin=pin)
         # Reload so a Profile that no longer validates against the fact store
         # fails here rather than at the next draft.
-        reloaded = ProfileStore.load(self.root, FactStore.load(self.root / "base"))
+        reloaded = ProfileStore.load(self.knowledge_root, FactStore.load(self.base_dir))
         record = self._record_fact_event(
             fact,
             event_type="fact_attached_to_profile",
@@ -246,7 +265,7 @@ class Engine:
             "profile": updated.profile.value,
             "section": section,
             "pinned": pin,
-            "profile_path": path.relative_to(self.root).as_posix(),
+            "profile_path": self.workspace.relative(path),
             "profile_store_version": reloaded.version,
         }
 
@@ -258,7 +277,7 @@ class Engine:
         that contradicts the last recorded one. Each means a status was changed
         outside the lifecycle, which is exactly what the trail exists to catch.
         """
-        facts = FactStore.load(self.root / "base")
+        facts = FactStore.load(self.base_dir)
         recorded = self.repo.latest_fact_statuses()
         problems: list[str] = []
         for fact_id, status in recorded.items():
@@ -320,7 +339,7 @@ class Engine:
         if provider == "openai":
             adapter = OpenAIResponsesProvider(
                 model=model,
-                prompt_path=self.root / "ai" / "prompts" / "system-v1.md",
+                prompt_path=self.knowledge_root / "ai" / "prompts" / "system-v1.md",
             )
             # The provider sees the full deterministic picture as context, but it
             # answers on the narrower proposal contract; deterministic policy decides
@@ -439,7 +458,7 @@ class Engine:
             policies=policies,
         )
         presentation_rules = PresentationStore.for_facts(facts)
-        markdown, manifest = write_working_draft(self.root, draft)
+        markdown, manifest = write_working_draft(self.artifacts_root, draft)
         report = validate_draft(draft, markdown, facts, profile, analysis, policies=policies)
         self.repo.record_validation(application_id, "pre-render", report)
         self.repo.record_generation_run({
@@ -463,7 +482,7 @@ class Engine:
 
     def validate_working(self, application_id: str) -> ValidationReport:
         facts, profiles, policies = self.knowledge()
-        target = self.root / "artifacts" / "working" / application_id
+        target = self.artifacts_root / "working" / application_id
         draft = load_draft(target / "resume.claims.json")
         _, analysis = self._bound_analysis(application_id, draft, profiles, facts)
         markdown_path = target / "resume.md"
@@ -474,7 +493,7 @@ class Engine:
             except ValueError:
                 pass
             else:
-                markdown_path, _ = write_working_draft(self.root, draft)
+                markdown_path, _ = write_working_draft(self.artifacts_root, draft)
         report = validate_draft(draft, markdown_path, facts, profiles.get(draft.profile), analysis, policies=policies)
         self.repo.record_validation(application_id, "pre-render", report)
         return report
@@ -490,7 +509,7 @@ class Engine:
         template_version: str | None = None,
     ) -> tuple[Path, ValidationReport]:
         facts, profiles, policies = self.knowledge()
-        target = self.root / "artifacts" / "working" / application_id
+        target = self.artifacts_root / "working" / application_id
         draft = load_draft(target / "resume.claims.json")
         _, analysis = self._bound_analysis(application_id, draft, profiles, facts)
         updated = apply_claim_edit(
@@ -502,7 +521,7 @@ class Engine:
             template_id=template_id,
             template_version=template_version,
         )
-        markdown, _ = write_working_draft(self.root, updated)
+        markdown, _ = write_working_draft(self.artifacts_root, updated)
         report = validate_draft(updated, markdown, facts, profiles.get(updated.profile), analysis, policies=policies)
         self.repo.record_validation(application_id, "manual-claim-edit", report)
         return markdown, report
@@ -512,11 +531,11 @@ class Engine:
 
     def sync_working_claims(self, application_id: str) -> tuple[Path, ValidationReport]:
         facts, profiles, policies = self.knowledge()
-        target = self.root / "artifacts" / "working" / application_id
+        target = self.artifacts_root / "working" / application_id
         draft = load_draft(target / "resume.claims.json")
         _, analysis = self._bound_analysis(application_id, draft, profiles, facts)
         updated = synchronize_markdown_claims(draft, target / "resume.md", facts)
-        markdown, _ = write_working_draft(self.root, updated)
+        markdown, _ = write_working_draft(self.artifacts_root, updated)
         report = validate_draft(updated, markdown, facts, profiles.get(updated.profile), analysis, policies=policies)
         self.repo.record_validation(application_id, "manual-markdown-sync", report)
         return markdown, report
@@ -525,14 +544,14 @@ class Engine:
         application = self.repo.get_application(application_id)
         if application["current_status"] != ApplicationStatus.READY.value:
             raise WorkflowError("application is not ready")
-        return verify_ready_integrity(self.root, self.repo, application_id)
+        return verify_ready_integrity(self.workspace, self.repo, application_id)
 
     def approve(self, application_id: str) -> dict[str, Any]:
         report = self.validate_working(application_id)
         if not report.passed:
             raise WorkflowError("approval blocked by pre-render validation")
         facts, profiles, policies = self.knowledge()
-        working = self.root / "artifacts" / "working" / application_id
+        working = self.artifacts_root / "working" / application_id
         draft = load_draft(working / "resume.claims.json")
         # The decision record explains the draft being approved, so it is bound to
         # that draft's own analysis. A newer analysis does not get to describe an
@@ -543,7 +562,7 @@ class Engine:
             if row["artifact_type"] == "resume_markdown"
         ]
         version = len(existing) + 1
-        approved_dir = self.root / "artifacts" / application_id / f"v{version:03d}"
+        approved_dir = self.artifacts_root / application_id / f"v{version:03d}"
         if approved_dir.exists():
             raise WorkflowError(f"approved version directory already exists: {approved_dir}")
         approved_dir.mkdir(parents=True)
@@ -552,7 +571,7 @@ class Engine:
         shutil.copy2(working / "resume.md", markdown_path)
         shutil.copy2(working / "resume.claims.json", manifest_path)
         now = utc_now()
-        relative_markdown = markdown_path.relative_to(self.root).as_posix()
+        relative_markdown = self.workspace.relative(markdown_path)
         markdown_version_id = self.repo.register_artifact_version(
             application_id,
             "resume_markdown",
@@ -571,7 +590,7 @@ class Engine:
             application_id,
             "claim_manifest",
             "resume-claims",
-            manifest_path.relative_to(self.root).as_posix(),
+            self.workspace.relative(manifest_path),
             sha256_file(manifest_path),
             "approved",
             job_snapshot_id=draft.job_snapshot_id,
@@ -606,8 +625,8 @@ class Engine:
             "job_analysis_id": analysis_id,
             "artifact_paths": {
                 "markdown": relative_markdown,
-                "html": (approved_dir / "resume.html").relative_to(self.root).as_posix(),
-                "pdf": expected_pdf.relative_to(self.root).as_posix(),
+                "html": self.workspace.relative(approved_dir / "resume.html"),
+                "pdf": self.workspace.relative(expected_pdf),
             },
         }
         decision_id = self.repo.record_decision(
@@ -648,7 +667,7 @@ class Engine:
         html_path = directory / "resume.html"
         pdf_path = directory / normalized_role_filename(profile.normalized_role)
         screenshot_path = directory / "visual.png"
-        render_html(draft, self.root, html_path)
+        render_html(draft, self.knowledge_root, html_path)
         geometry = render_pdf(html_path, pdf_path, screenshot_path)
         report = validate_rendered(draft, profile, html_path, pdf_path, screenshot_path, geometry)
         lifecycle = "rendered" if report.passed else "rendered-invalid"
@@ -662,7 +681,7 @@ class Engine:
                 application_id,
                 artifact_type,
                 logical_name,
-                path.relative_to(self.root).as_posix(),
+                self.workspace.relative(path),
                 sha256_file(path),
                 lifecycle,
                 job_snapshot_id=draft.job_snapshot_id,
@@ -675,7 +694,7 @@ class Engine:
             ))
         self.repo.record_validation(application_id, "post-render", report, artifact_ids[1])
         if report.passed:
-            integrity = verify_ready_integrity(self.root, self.repo, application_id)
+            integrity = verify_ready_integrity(self.workspace, self.repo, application_id)
             if not integrity.passed:
                 raise WorkflowError(
                     "render succeeded but fresh ready integrity verification failed: "
@@ -688,7 +707,7 @@ class Engine:
         application = self.repo.get_application(application_id)
         if application["current_status"] != ApplicationStatus.READY.value:
             raise WorkflowError("applied requires a currently valid ready application")
-        integrity = verify_ready_integrity(self.root, self.repo, application_id)
+        integrity = verify_ready_integrity(self.workspace, self.repo, application_id)
         if not integrity.passed:
             raise WorkflowError(
                 "applied blocked by stale or tampered ready state: "

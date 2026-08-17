@@ -103,7 +103,7 @@ workflow.
   `docs/v2-test-and-acceptance-plan.md`; report what passed, what failed, and what
   remains.
 - A warning may be reported and accepted only where the specification permits it. Hard
-  failures block `ready` and completion.
+  failures block `ready_qualified`, `PreparationState=ready`, and completion.
 
 ## Change management
 

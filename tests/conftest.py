@@ -27,6 +27,7 @@ from cv_engine.models import (
     ValidationReport,
 )
 from cv_engine.profiles import ProfileStore
+from cv_engine.runtime.workspace import Workspace, create_workspace, load_workspace
 from cv_engine.selection import EmphasisPolicyStore
 from cv_engine.rendering import render_pdf, validate_rendered
 from cv_engine.workflow import Engine
@@ -125,12 +126,24 @@ class MigrationSetup:
 
 @pytest.fixture
 def v1_repo(tmp_path: Path) -> Path:
+    """A marked, isolated test Workspace holding a full knowledge copy.
+
+    The marker is part of the fixture because every normal command now opens
+    its Workspace fail-closed; an unmarked directory is a guard test, not a
+    starting point.
+    """
     root = tmp_path / "repo"
     root.mkdir()
     write_canonical_sources(root / "base")
     for name in ("profiles", "rendering", "ai", "config"):
         shutil.copytree(SOURCE_ROOT / name, root / name)
+    create_workspace(root, purpose="test", data_class="test")
     return root
+
+
+@pytest.fixture
+def workspace(v1_repo: Path) -> Workspace:
+    return load_workspace(v1_repo)
 
 
 @pytest.fixture
@@ -292,7 +305,7 @@ def draft_factory(
             facts=fact_store,
             policies=policy_store,
         )
-        markdown = write_working_draft(v1_repo, draft)[0] if write else None
+        markdown = write_working_draft(v1_repo / "artifacts", draft)[0] if write else None
         return DraftSetup(fact_store, profile, analysis, draft, markdown)
 
     return build
@@ -452,4 +465,7 @@ def completed_migration_repo(legacy_repo: Path) -> MigrationSetup:
             ),
         )
         connection.commit()
+    # The legacy in-place migration converts this root into the working root,
+    # so it is a Workspace from here on rather than a migration source.
+    create_workspace(legacy_repo, purpose="test", data_class="test", acknowledge_legacy_root=True)
     return MigrationSetup(legacy_repo, snapshot)

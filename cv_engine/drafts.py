@@ -287,8 +287,8 @@ def serialize_markdown(draft: DraftDocument) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def write_working_draft(root: Path, draft: DraftDocument) -> tuple[Path, Path]:
-    target = root / "artifacts" / "working" / draft.application_id
+def write_working_draft(artifacts_root: Path, draft: DraftDocument) -> tuple[Path, Path]:
+    target = artifacts_root / "working" / draft.application_id
     target.mkdir(parents=True, exist_ok=True)
     markdown_path = target / "resume.md"
     manifest_path = target / "resume.claims.json"

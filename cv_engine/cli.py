@@ -3,11 +3,15 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
 
 from .db import Repository, connect, initialize
+from .infrastructure.legacy_source import LegacySourceError, LegacyV1Source
+from .runtime.config import resolve_config
+from .runtime.workspace import WorkspaceError, create_workspace, load_workspace
 from .migration import (
     MigrationSafetyError,
     apply_migration,
@@ -90,9 +94,31 @@ def _add_fact_content(parser: argparse.ArgumentParser, *, from_claim: bool = Fal
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="cv", description="Multi-track fact-safe CV engine")
-    parser.add_argument("--repo", type=Path, default=_repo_root())
+    parser.add_argument("--workspace", type=Path, help="Workspace root; must carry a v2 marker")
+    parser.add_argument(
+        "--repo",
+        type=Path,
+        help="deprecated alias for --workspace",
+    )
     parser.add_argument("--db", type=Path)
     sub = parser.add_subparsers(dest="command", required=True)
+
+    workspace = sub.add_parser("workspace", help="create and inspect the local Workspace")
+    workspace_sub = workspace.add_subparsers(dest="workspace_command", required=True)
+    workspace_init = workspace_sub.add_parser("init", help="create an isolated Workspace and its marker")
+    workspace_init.add_argument("--purpose", choices=["development", "test", "live"], default="development")
+    workspace_init.add_argument("--data-class", choices=["copy", "test", "live"], default="copy")
+    workspace_init.add_argument(
+        "--knowledge-from",
+        type=Path,
+        help="copy base/profiles/rendering/config/ai from this directory into the new Workspace",
+    )
+    workspace_sub.add_parser("status", help="show Workspace identity, roots, and resolved configuration")
+    workspace_inventory = workspace_sub.add_parser(
+        "inventory-legacy",
+        help="read-only inventory of an unmarked legacy v1 source",
+    )
+    workspace_inventory.add_argument("--source", type=Path, required=True)
 
     sub.add_parser("init", help="initialize the v1 SQLite schema")
     ingest = sub.add_parser("ingest", help="create an application and immutable job snapshot")
@@ -302,12 +328,62 @@ def generic_reconcile(root: Path, repository: Repository) -> dict[str, Any]:
     return {"passed": not problems, "artifact_versions_checked": checked, "problems": problems}
 
 
+def _resolve_root(args: argparse.Namespace) -> tuple[Path, Any]:
+    """The selected root plus the resolved configuration behind it.
+
+    `--repo` stays accepted because v1 scripts pass it, but it is an alias with
+    a warning rather than a second concept: one Workspace selection, resolved
+    through CLI > environment > Workspace config > default.
+    """
+    if args.repo is not None:
+        print("WARNING: --repo is deprecated; use --workspace", file=sys.stderr)
+    selected = args.workspace or args.repo
+    config = resolve_config(cli={"workspace": selected, "database": args.db}, env=os.environ)
+    root = Path(config.get("workspace") or _repo_root()).resolve()
+    return root, resolve_config(
+        cli={"workspace": selected, "database": args.db},
+        env=os.environ,
+        workspace_root=root,
+    )
+
+
+def workspace_command(root: Path, config: Any, args: argparse.Namespace) -> int:
+    if args.workspace_command == "init":
+        created = create_workspace(
+            root,
+            purpose=args.purpose,
+            data_class=args.data_class,
+            knowledge_source=args.knowledge_from.resolve() if args.knowledge_from else None,
+        )
+        _print({**created.describe(), "installation_id": created.installation_id(), "created": True})
+        return 0
+    if args.workspace_command == "status":
+        opened = load_workspace(root)
+        _print({
+            **opened.describe(),
+            "installation_id": opened.installation_id(),
+            "database": str(opened.database_path),
+            "configuration": config.describe(),
+        })
+        return 0
+    source = LegacyV1Source(args.source.resolve())
+    inventory = source.inventory()
+    _print({**inventory.describe(), "read_only": True, "marker_written": False})
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    root = args.repo.resolve()
-    db_path = args.db.resolve() if args.db else root / "data/applications.sqlite3"
     try:
+        root, config = _resolve_root(args)
+    except (WorkspaceError, ValueError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+    db_override = config.get("database")
+    try:
+        if args.command == "workspace":
+            return workspace_command(root, config, args)
         if args.command == "migrate":
             if args.migration_command == "inventory":
                 path = write_inventory(root)
@@ -338,11 +414,15 @@ def main(argv: list[str] | None = None) -> int:
                 return 0 if report["passed"] else 1
             return 0
 
+        # Every remaining command is a normal v2 command, so it opens the
+        # Workspace fail-closed before it touches state.
+        workspace = load_workspace(root)
+        db_path = Path(db_override).resolve() if db_override else workspace.database_path
         if args.command == "init":
             initialize(db_path)
             _print({"database": str(db_path), "schema_initialized": True})
             return 0
-        engine = Engine(root, db_path)
+        engine = Engine(workspace, db_path)
         if args.command == "ingest":
             app_id, snapshot_id = engine.ingest(args.company, args.role, _job_text(args), args.url)
             _print({"application_id": app_id, "job_snapshot_id": snapshot_id})
@@ -436,7 +516,15 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "fact":
             return fact_command(engine, args)
         return 0
-    except (ValueError, KeyError, FileNotFoundError, WorkflowError, MigrationSafetyError) as exc:
+    except (
+        ValueError,
+        KeyError,
+        FileNotFoundError,
+        WorkflowError,
+        MigrationSafetyError,
+        WorkspaceError,
+        LegacySourceError,
+    ) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 

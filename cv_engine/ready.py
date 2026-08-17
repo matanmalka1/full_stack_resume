@@ -9,12 +9,15 @@ from .drafts import load_draft
 from .facts import FactStore
 from .models import ValidationIssue, ValidationReport
 from .profiles import ProfileStore
+from .runtime.workspace import Workspace
 from .selection import EmphasisPolicyStore
 from .util import sha256_file
 from .validation import validate_draft
 
 
-def verify_ready_integrity(root: Path, repo: Repository, application_id: str) -> ValidationReport:
+def verify_ready_integrity(
+    workspace: Workspace, repo: Repository, application_id: str
+) -> ValidationReport:
     """The single domain-level contract for what READY means.
 
     Re-derives, from disk and DB state right now, that the exact approved source
@@ -32,6 +35,7 @@ def verify_ready_integrity(root: Path, repo: Repository, application_id: str) ->
         "not_stale": True,
         "database_integrity": True,
     }
+    root = workspace.root
     issues: list[ValidationIssue] = []
     evidence: dict[str, Any] = {}
 
@@ -82,9 +86,9 @@ def verify_ready_integrity(root: Path, repo: Repository, application_id: str) ->
     chain = None
     if draft is not None:
         try:
-            facts = FactStore.load(root / "base")
-            profiles = ProfileStore.load(root, facts)
-            policies = EmphasisPolicyStore.load(root)
+            facts = FactStore.load(workspace.knowledge_root / "base")
+            profiles = ProfileStore.load(workspace.knowledge_root, facts)
+            policies = EmphasisPolicyStore.load(workspace.knowledge_root)
             profile = profiles.get(draft.profile)
         except Exception as exc:  # noqa: BLE001 - knowledge load failure blocks ready
             fail("approved_source", "knowledge-load-failed", str(exc))
