@@ -22,7 +22,7 @@ from cv_engine.runtime.workspace import (
     create_workspace,
     load_workspace,
 )
-from cv_engine.workflow import Engine
+from cv_engine.application.workflow import Engine
 
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent

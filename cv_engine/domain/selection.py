@@ -36,7 +36,7 @@ from .models import (
     SelectionManifest,
     SelectionOutcome,
 )
-from .util import canonical_json, sha256_text
+from ..util import canonical_json, sha256_text
 
 
 SELECTION_POLICY_VERSION = "1.0.0"

@@ -15,8 +15,8 @@ from typing import Any
 
 from .canonical_data import write_canonical_sources
 from .db import Repository, connect
-from .facts import FactStoreError, load_fact_source
-from .util import canonical_json, sha256_bytes, sha256_file, sha256_text, utc_now
+from ..domain.facts import FactStoreError, load_fact_source
+from ..util import canonical_json, sha256_bytes, sha256_file, sha256_text, utc_now
 
 
 MIGRATION_NAMESPACE = uuid.UUID("7650f234-c480-4a9e-9c21-9d5142899a63")

@@ -8,11 +8,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .db import Repository, connect, initialize
+from .infrastructure.db import Repository, connect, initialize
 from .infrastructure.legacy_source import LegacySourceError, LegacyV1Source
 from .runtime.config import resolve_config
 from .runtime.workspace import WorkspaceError, create_workspace, load_workspace
-from .migration import (
+from .infrastructure.migration import (
     MigrationSafetyError,
     apply_migration,
     create_snapshot,
@@ -23,10 +23,10 @@ from .migration import (
     verify_snapshot,
     write_inventory,
 )
-from .facts import FACT_SOURCE_NAMES
-from .models import ApplicationStatus, FactStatus
+from .domain.facts import FACT_SOURCE_NAMES
+from .domain.models import ApplicationStatus, FactStatus
 from .util import sha256_file
-from .workflow import Engine, WorkflowError
+from .application.workflow import Engine, WorkflowError
 
 
 def _repo_root() -> Path:

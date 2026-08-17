@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from cv_engine.db import connect
-from cv_engine.facts import FactStore, FactStoreError
-from cv_engine.models import FactStatus
-from cv_engine.workflow import Engine, WorkflowError
+from cv_engine.infrastructure.db import connect
+from cv_engine.domain.facts import FactStore, FactStoreError
+from cv_engine.domain.models import FactStatus
+from cv_engine.application.workflow import Engine, WorkflowError
 from helpers import ACCOUNT_MANAGER_JOB, working_claim as _working_claim
 
 

@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import pytest
 
-from cv_engine.analysis import classify_job, merge_classification, unresolved_approval_reasons
-from cv_engine.models import Emphasis, FitLevel, Gap, ProfileName, Track
-from cv_engine.profiles import ProfileStore
-from cv_engine.workflow import WorkflowError
+from cv_engine.domain.analysis import classify_job, merge_classification, unresolved_approval_reasons
+from cv_engine.domain.models import Emphasis, FitLevel, Gap, ProfileName, Track
+from cv_engine.domain.profiles import ProfileStore
+from cv_engine.application.workflow import WorkflowError
 from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB
 
 

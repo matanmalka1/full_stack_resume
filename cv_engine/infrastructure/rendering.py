@@ -9,15 +9,15 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoes
 from markupsafe import Markup
 from pypdf import PdfReader
 
-from .candidate import contact_href
-from .models import (
+from ..domain.candidate import contact_href
+from ..domain.models import (
     CandidateContext,
     DraftDocument,
     Profile,
     ValidationIssue,
     ValidationReport,
 )
-from .util import normalized_text, sha256_file
+from ..util import normalized_text, sha256_file
 
 
 MIXED_LTR = re.compile(

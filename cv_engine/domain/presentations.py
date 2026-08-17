@@ -9,7 +9,7 @@ from pydantic import Field, model_validator
 
 from .facts import FactStore
 from .models import Emphasis, Profile, ProfileName, StrictModel
-from .util import canonical_json, sha256_text
+from ..util import canonical_json, sha256_text
 
 
 class PresentationError(ValueError):

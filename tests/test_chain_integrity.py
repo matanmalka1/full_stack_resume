@@ -14,13 +14,13 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from cv_engine.chain import check_draft_chain, decision_record_analysis_id
-from cv_engine.db import connect
-from cv_engine.drafts import load_draft, serialize_markdown
-from cv_engine.models import DraftDocument
-from cv_engine.ready import verify_ready_integrity
+from cv_engine.application.chain import check_draft_chain, decision_record_analysis_id
+from cv_engine.infrastructure.db import connect
+from cv_engine.domain.drafts import load_draft, serialize_markdown
+from cv_engine.domain.models import DraftDocument
+from cv_engine.application.ready import verify_ready_integrity
 from cv_engine.runtime.workspace import Workspace
-from cv_engine.workflow import Engine, WorkflowError
+from cv_engine.application.workflow import Engine, WorkflowError
 from helpers import ACCOUNT_MANAGER_JOB
 
 

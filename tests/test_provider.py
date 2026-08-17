@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 import urllib.request
 
-from cv_engine.models import JobClassificationProposal
-from cv_engine.providers import OpenAIResponsesProvider
+from cv_engine.domain.models import JobClassificationProposal
+from cv_engine.infrastructure.providers import OpenAIResponsesProvider
 
 
 class _Response:

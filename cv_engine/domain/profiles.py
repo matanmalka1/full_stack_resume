@@ -5,7 +5,7 @@ from pathlib import Path
 
 from .facts import FactStore
 from .models import Profile, ProfileName, Track
-from .util import canonical_json, sha256_text
+from ..util import canonical_json, sha256_text
 
 
 class ProfileStoreError(ValueError):

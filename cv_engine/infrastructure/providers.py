@@ -9,8 +9,8 @@ from typing import Any, Protocol, TypeVar
 
 from pydantic import BaseModel
 
-from .models import ProviderContext, ProviderTaskResult
-from .util import canonical_json, sha256_text
+from ..domain.models import ProviderContext, ProviderTaskResult
+from ..util import canonical_json, sha256_text
 
 
 OutputT = TypeVar("OutputT", bound=BaseModel)

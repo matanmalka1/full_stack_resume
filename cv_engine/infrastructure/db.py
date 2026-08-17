@@ -7,8 +7,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
-from .models import ApplicationStatus, JobAnalysis, ValidationReport
-from .util import canonical_json, sha256_text, utc_now
+from ..domain.models import ApplicationStatus, JobAnalysis, ValidationReport
+from ..util import canonical_json, sha256_text, utc_now
 
 
 SCHEMA_VERSION = "2"

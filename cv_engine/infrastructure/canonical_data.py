@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .facts import render_fact_source
-from .models import FactSource
+from ..domain.facts import render_fact_source
+from ..domain.models import FactSource
 
 
 def _fact(

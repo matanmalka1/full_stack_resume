@@ -5,12 +5,12 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from . import __version__
-from .analysis import classify_job, merge_classification, unresolved_approval_reasons
-from .candidate import load_candidate_context
+from .. import __version__
+from ..domain.analysis import classify_job, merge_classification, unresolved_approval_reasons
+from ..domain.candidate import load_candidate_context
 from .chain import ChainError, check_draft_chain, decision_record_analysis_id
-from .db import Repository
-from .drafts import (
+from ..infrastructure.db import Repository
+from ..domain.drafts import (
     apply_claim_edit,
     build_draft,
     load_draft,
@@ -18,10 +18,10 @@ from .drafts import (
     synchronize_markdown_claims,
     write_working_draft,
 )
-from .facts import FactStore, FactStoreError
-from .facts import create_fact as persist_new_fact
-from .facts import promote_fact as persist_promotion
-from .models import (
+from ..domain.facts import FactStore, FactStoreError
+from ..domain.facts import create_fact as persist_new_fact
+from ..domain.facts import promote_fact as persist_promotion
+from ..domain.models import (
     ApplicationStatus,
     CandidateContext,
     DraftDocument,
@@ -31,15 +31,15 @@ from .models import (
     JobClassificationProposal,
     ValidationReport,
 )
-from .profiles import ProfileStore, attach_fact_to_section
-from .presentations import PresentationStore
-from .providers import OpenAIResponsesProvider
+from ..domain.profiles import ProfileStore, attach_fact_to_section
+from ..domain.presentations import PresentationStore
+from ..infrastructure.providers import OpenAIResponsesProvider
 from .ready import verify_ready_integrity
-from .rendering import normalized_role_filename, render_html, render_pdf, validate_rendered
-from .runtime.workspace import Workspace, load_workspace
-from .selection import EmphasisPolicyStore
-from .util import sha256_file, utc_now
-from .validation import validate_draft
+from ..infrastructure.rendering import normalized_role_filename, render_html, render_pdf, validate_rendered
+from ..runtime.workspace import Workspace, load_workspace
+from ..domain.selection import EmphasisPolicyStore
+from ..util import sha256_file, utc_now
+from ..domain.validation import validate_draft
 
 
 class WorkflowError(RuntimeError):

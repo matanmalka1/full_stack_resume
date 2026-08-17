@@ -4,8 +4,8 @@ import sqlite3
 
 import pytest
 
-from cv_engine.db import connect
-from cv_engine.models import ApplicationStatus
+from cv_engine.infrastructure.db import connect
+from cv_engine.domain.models import ApplicationStatus
 
 
 def test_status_history_and_transition_contract(application_repo) -> None:

@@ -7,15 +7,15 @@ from pathlib import Path
 
 import pytest
 
-from cv_engine.candidate import (
+from cv_engine.domain.candidate import (
     CANDIDATE_FILE,
     CandidateContextError,
     contact_href,
     load_candidate_context,
 )
-from cv_engine.drafts import load_draft
-from cv_engine.facts import FactStore
-from cv_engine.rendering import normalized_role_filename
+from cv_engine.domain.drafts import load_draft
+from cv_engine.domain.facts import FactStore
+from cv_engine.infrastructure.rendering import normalized_role_filename
 
 
 ENGINE_DIR = Path(__file__).resolve().parent.parent / "cv_engine"
@@ -23,16 +23,16 @@ ENGINE_DIR = Path(__file__).resolve().parent.parent / "cv_engine"
 # The migration baseline and the legacy artifact inventory legitimately quote
 # v1 evidence. Everything that decides what a rendered CV says must not.
 POLICY_MODULES = (
-    "drafts.py",
-    "rendering.py",
-    "validation.py",
-    "workflow.py",
-    "ready.py",
-    "selection.py",
-    "presentations.py",
-    "candidate.py",
-    "profiles.py",
-    "facts.py",
+    "domain/drafts.py",
+    "domain/validation.py",
+    "domain/selection.py",
+    "domain/presentations.py",
+    "domain/candidate.py",
+    "domain/profiles.py",
+    "domain/facts.py",
+    "application/workflow.py",
+    "application/ready.py",
+    "infrastructure/rendering.py",
 )
 CANDIDATE_LITERALS = ("Matan Malka", "מתן מלכה", "matanmalka1", "matan1391")
 

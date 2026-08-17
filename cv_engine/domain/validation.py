@@ -9,7 +9,7 @@ from .facts import FactStore, FactStoreError
 from .models import DraftDocument, JobAnalysis, Profile, ValidationIssue, ValidationReport
 from .presentations import PresentationError, PresentationStore
 from .selection import STRUCTURAL_STYLES, EmphasisPolicyStore
-from .util import sha256_text
+from ..util import sha256_text
 
 
 STALE_OR_UNSUPPORTED = {

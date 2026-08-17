@@ -19,7 +19,7 @@ from .models import (
 )
 from .presentations import PresentationStore, PresentedClaim
 from .selection import EmphasisPolicyStore, build_selection
-from .util import canonical_json, sha256_text
+from ..util import canonical_json, sha256_text
 
 
 CLAIM_NAMESPACE = uuid.UUID("e47cfc95-7f5c-4dd2-acd4-19be02c8f988")

@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from cv_engine import migration
-from cv_engine.db import connect
-from cv_engine.migration import (
+from cv_engine.infrastructure import migration
+from cv_engine.infrastructure.db import connect
+from cv_engine.infrastructure.migration import (
     MigrationSafetyError,
     apply_migration,
     build_inventory,
@@ -18,7 +18,7 @@ from cv_engine.migration import (
     verify_snapshot,
 )
 from cv_engine.util import canonical_json, sha256_text
-from cv_engine.workflow import Engine
+from cv_engine.application.workflow import Engine
 from helpers import passing_migration_test_runner as _passing_test_runner
 from helpers import seal_report as _seal_report
 

@@ -12,14 +12,14 @@ from typing import Any
 
 import pytest
 
-from cv_engine.analysis import classify_job
-from cv_engine.canonical_data import V2_IDENTITY_FACT, write_canonical_sources
-from cv_engine.db import Repository, connect
-from cv_engine.drafts import build_draft, write_working_draft
-from cv_engine.candidate import load_candidate_context
-from cv_engine.facts import FactStore, create_fact
-from cv_engine.migration import create_snapshot, dry_run_migration, migrate_legacy_state, verify_snapshot
-from cv_engine.models import (
+from cv_engine.domain.analysis import classify_job
+from cv_engine.infrastructure.canonical_data import V2_IDENTITY_FACT, write_canonical_sources
+from cv_engine.infrastructure.db import Repository, connect
+from cv_engine.domain.drafts import build_draft, write_working_draft
+from cv_engine.domain.candidate import load_candidate_context
+from cv_engine.domain.facts import FactStore, create_fact
+from cv_engine.infrastructure.migration import create_snapshot, dry_run_migration, migrate_legacy_state, verify_snapshot
+from cv_engine.domain.models import (
     Emphasis,
     JobAnalysis,
     JobClassificationProposal,
@@ -27,11 +27,11 @@ from cv_engine.models import (
     Track,
     ValidationReport,
 )
-from cv_engine.profiles import ProfileStore
+from cv_engine.domain.profiles import ProfileStore
 from cv_engine.runtime.workspace import Workspace, create_workspace, load_workspace
-from cv_engine.selection import EmphasisPolicyStore
-from cv_engine.rendering import render_pdf, validate_rendered
-from cv_engine.workflow import Engine
+from cv_engine.domain.selection import EmphasisPolicyStore
+from cv_engine.infrastructure.rendering import render_pdf, validate_rendered
+from cv_engine.application.workflow import Engine
 from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB, seal_report
 
 
@@ -273,8 +273,8 @@ def ready_application(approved_application, monkeypatch: pytest.MonkeyPatch):
             evidence={"renderer": "deterministic-integrity-double", "page_count": 1},
         )
 
-    monkeypatch.setattr("cv_engine.workflow.render_pdf", render_without_browser)
-    monkeypatch.setattr("cv_engine.workflow.validate_rendered", accept_deterministic_render)
+    monkeypatch.setattr("cv_engine.application.workflow.render_pdf", render_without_browser)
+    monkeypatch.setattr("cv_engine.application.workflow.validate_rendered", accept_deterministic_render)
 
     def build(
         company: str = "Ready Co",
@@ -374,7 +374,7 @@ def provider_analysis(engine: Engine, monkeypatch):
                 captured.update(payload)
                 return response, None
 
-        monkeypatch.setattr("cv_engine.workflow.OpenAIResponsesProvider", _StubProvider)
+        monkeypatch.setattr("cv_engine.application.workflow.OpenAIResponsesProvider", _StubProvider)
         application_id, _ = engine.ingest(company, role, job_text)
         _, analysis = engine.analyze(
             application_id, provider="openai", model="gpt-test", **analyze_kwargs

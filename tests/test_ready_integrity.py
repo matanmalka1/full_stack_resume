@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 
 import cv_engine.workflow as workflow_module
-from cv_engine.rendering import validate_rendered as real_validate_rendered
+from cv_engine.infrastructure.rendering import validate_rendered as real_validate_rendered
 from cv_engine.util import sha256_file, sha256_text
-from cv_engine.workflow import WorkflowError
+from cv_engine.application.workflow import WorkflowError
 from helpers import ACCOUNT_MANAGER_JOB, artifact_version_and_path
 
 
@@ -245,7 +245,7 @@ def test_applied_binds_to_current_version_after_two_ready_cycles(ready_applicati
 
 
 def test_submitted_artifact_remains_immutable_after_later_version(ready_application) -> None:
-    from cv_engine.db import connect
+    from cv_engine.infrastructure.db import connect
 
     engine, app_id = ready_application("Immutable Submission")
     result = engine.submit(app_id)

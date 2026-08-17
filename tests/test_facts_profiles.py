@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from cv_engine.facts import FactStore, FactStoreError
-from cv_engine.models import FactStatus
+from cv_engine.domain.facts import FactStore, FactStoreError
+from cv_engine.domain.models import FactStatus
 
 
 def test_canonical_fact_store_has_unique_stable_ids(fact_store) -> None:

@@ -1,4 +1,4 @@
-from cv_engine.analysis import classify_job
+from cv_engine.domain.analysis import classify_job
 from helpers import PAYME_TECH_SALES_JOB
 
 

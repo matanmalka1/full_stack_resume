@@ -6,16 +6,16 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from cv_engine.drafts import (
+from cv_engine.domain.drafts import (
     load_draft,
     register_composite_claim,
     register_linked_claim,
     serialize_markdown,
     write_working_draft,
 )
-from cv_engine.models import ClaimLine
+from cv_engine.domain.models import ClaimLine
 from cv_engine.util import sha256_text
-from cv_engine.validation import validate_draft
+from cv_engine.domain.validation import validate_draft
 from helpers import PAYME_TECH_SALES_JOB, claim_by_id, exact_fact_claim
 
 

@@ -12,11 +12,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .db import Repository
-from .facts import FactStore
-from .models import DraftDocument, JobAnalysis
-from .profiles import ProfileStore
-from .util import canonical_json, sha256_text
+from ..infrastructure.db import Repository
+from ..domain.facts import FactStore
+from ..domain.models import DraftDocument, JobAnalysis
+from ..domain.profiles import ProfileStore
+from ..util import canonical_json, sha256_text
 
 
 # What a re-analysis may change without invalidating a draft built from an

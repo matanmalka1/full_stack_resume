@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 from .models import Fact, FactSource, FactStatus
-from .util import canonical_json, sha256_text, utc_now
+from ..util import canonical_json, sha256_text, utc_now
 
 
 FACT_BLOCK = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)

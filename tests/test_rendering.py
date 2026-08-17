@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from cv_engine.rendering import (
+from cv_engine.infrastructure.rendering import (
     _claim_recoverable,
     _launch_failure_message,
     normalized_role_filename,

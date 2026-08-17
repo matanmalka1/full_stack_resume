@@ -4,15 +4,15 @@ from pathlib import Path
 from typing import Any
 
 from .chain import check_draft_chain, decision_record_analysis_id, material_analysis_key
-from .db import Repository
-from .drafts import load_draft
-from .facts import FactStore
-from .models import ValidationIssue, ValidationReport
-from .profiles import ProfileStore
-from .runtime.workspace import Workspace
-from .selection import EmphasisPolicyStore
-from .util import sha256_file
-from .validation import validate_draft
+from ..infrastructure.db import Repository
+from ..domain.drafts import load_draft
+from ..domain.facts import FactStore
+from ..domain.models import ValidationIssue, ValidationReport
+from ..domain.profiles import ProfileStore
+from ..runtime.workspace import Workspace
+from ..domain.selection import EmphasisPolicyStore
+from ..util import sha256_file
+from ..domain.validation import validate_draft
 
 
 def verify_ready_integrity(

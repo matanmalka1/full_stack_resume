@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from cv_engine.drafts import serialize_markdown
-from cv_engine.rendering import normalized_role_filename, render_html
+from cv_engine.domain.drafts import serialize_markdown
+from cv_engine.infrastructure.rendering import normalized_role_filename, render_html
 from cv_engine.util import sha256_text
 
 
