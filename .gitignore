@@ -11,3 +11,4 @@ data/migration/staging-*/
 data/snapshots/
 data/verification/
 tmp/
+.workspace/
