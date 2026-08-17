@@ -18,6 +18,7 @@ from cv_engine.migration import (
     verify_snapshot,
 )
 from cv_engine.util import canonical_json, sha256_text
+from cv_engine.workflow import Engine
 from helpers import passing_migration_test_runner as _passing_test_runner
 from helpers import seal_report as _seal_report
 
@@ -189,5 +190,59 @@ def test_retrospective_verification_detects_fact_and_artifact_drift(completed_mi
     report = retrospective_verify_migration(root, snapshot)
 
     assert not report["passed"]
-    assert "canonical fact source differs from current migration output: base/sales.md" in report["problems"]
+    assert any("base/sales.md" in problem for problem in report["problems"])
     assert any("historical artifact hash mismatch" in problem for problem in report["problems"])
+
+
+def test_retrospective_verification_detects_a_rewritten_migrated_fact(completed_migration_repo) -> None:
+    root, snapshot = completed_migration_repo
+    path = root / "base/sales.md"
+    text = path.read_text(encoding="utf-8")
+    path.write_text(
+        text.replace(
+            "Managed approximately 40-50 recurring customers in addition to occasional deals.",
+            "Managed approximately 400 recurring customers in addition to occasional deals.",
+        ),
+        encoding="utf-8",
+    )
+
+    report = retrospective_verify_migration(root, snapshot)
+
+    assert not report["passed"]
+    assert (
+        "migrated fact changed in base/sales.md: sales.metric.recurring_customers"
+        in report["problems"]
+    )
+
+
+def test_retrospective_verification_accepts_post_migration_lifecycle_facts(
+    completed_migration_repo,
+) -> None:
+    """A fact added through the lifecycle is not migration drift.
+
+    Migration safety requires that everything migration produced survives
+    unchanged, not that the canonical sources are frozen: the pending ->
+    confirmed -> canonical lifecycle writes to these files by design.
+    """
+    root, snapshot = completed_migration_repo
+    engine = Engine(root)
+    engine.add_fact(
+        "situational_skills.md",
+        {
+            "fact_id": "situational.post_migration_example",
+            "meaning": "Used SQLite for local application state in a personal project.",
+            "renderings": {"en": "Used SQLite for local application state in a personal project."},
+            "tags": ["development", "situational", "databases"],
+            "provenance": "post-migration lifecycle test",
+            "resume_style": "bullet",
+        },
+    )
+    engine.promote_fact("situational.post_migration_example", "confirmed", explicitly_confirmed=True)
+    engine.promote_fact("situational.post_migration_example", "canonical", explicitly_confirmed=True)
+
+    report = retrospective_verify_migration(root, snapshot)
+
+    assert report["passed"], report["problems"]
+    assert report["post_migration_facts"] == {
+        "situational_skills.md": ["situational.post_migration_example"]
+    }

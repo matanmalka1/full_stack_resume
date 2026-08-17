@@ -19,7 +19,8 @@ from .migration import (
     verify_snapshot,
     write_inventory,
 )
-from .models import ApplicationStatus
+from .facts import FACT_SOURCE_NAMES
+from .models import ApplicationStatus, FactStatus
 from .util import sha256_file
 from .workflow import Engine, WorkflowError
 
@@ -55,6 +56,36 @@ def _add_overrides(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--emphasis")
     parser.add_argument("--language", choices=["en", "he"])
     parser.add_argument("--accept-low-fit", action="store_true")
+
+
+def _add_fact_content(parser: argparse.ArgumentParser, *, from_claim: bool = False) -> None:
+    """Arguments that describe a fact's content on creation.
+
+    `--canonical` is the spec's explicit "add this to the source of truth"
+    confirmation and the only way to skip `pending`; everything else must walk
+    the lifecycle.
+    """
+    parser.add_argument("--source", required=True, choices=list(FACT_SOURCE_NAMES))
+    parser.add_argument("--fact-id", required=True)
+    parser.add_argument("--meaning", required=True, help="language-neutral meaning")
+    parser.add_argument("--en", required=not from_claim, help="English rendering")
+    parser.add_argument("--he", help="Hebrew rendering")
+    parser.add_argument("--tag", action="append", default=[], required=True)
+    if not from_claim:
+        parser.add_argument(
+            "--style",
+            required=True,
+            choices=["paragraph", "heading", "date", "bullet", "item", "contact"],
+        )
+    parser.add_argument("--provenance", required=not from_claim)
+    parser.add_argument("--dates", help="effective or event dates")
+    parser.add_argument("--replaces", help="fact_id this fact supersedes")
+    parser.add_argument(
+        "--canonical",
+        action="store_true",
+        help="explicit confirmation in this request; writes the fact as canonical",
+    )
+    parser.add_argument("--reason", default="")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -120,7 +151,41 @@ def build_parser() -> argparse.ArgumentParser:
     link.add_argument("--fact-id", action="append", required=True)
     export = sub.add_parser("export", help="export application data to CSV")
     export.add_argument("output", type=Path)
-    sub.add_parser("reconcile", help="reconcile SQLite references and artifact hashes")
+    sub.add_parser("reconcile", help="reconcile SQLite references, artifact hashes, and the fact lifecycle")
+
+    fact = sub.add_parser("fact", help="manage the pending -> confirmed -> canonical fact lifecycle")
+    fact_sub = fact.add_subparsers(dest="fact_command", required=True)
+    fact_list = fact_sub.add_parser("list", help="list stored facts and their lifecycle status")
+    fact_list.add_argument("--status", choices=[item.value for item in FactStatus])
+    fact_show = fact_sub.add_parser("show", help="inspect one fact and its lifecycle events")
+    fact_show.add_argument("fact_id")
+    fact_add = fact_sub.add_parser("add", help="create a new fact; pending unless explicitly confirmed")
+    _add_fact_content(fact_add)
+    fact_capture = fact_sub.add_parser(
+        "capture",
+        help="create a fact from an unsupported manual claim in the working draft",
+    )
+    fact_capture.add_argument("application_id")
+    fact_capture.add_argument("claim_id")
+    _add_fact_content(fact_capture, from_claim=True)
+    fact_confirm = fact_sub.add_parser("confirm", help="promote pending -> confirmed")
+    fact_confirm.add_argument("fact_id")
+    fact_confirm.add_argument("--confirm", action="store_true", help="required explicit confirmation")
+    fact_confirm.add_argument("--reason", default="")
+    fact_promote = fact_sub.add_parser("promote", help="promote confirmed -> canonical")
+    fact_promote.add_argument("fact_id")
+    fact_promote.add_argument("--confirm", action="store_true", help="required explicit confirmation")
+    fact_promote.add_argument("--reason", default="")
+    fact_attach = fact_sub.add_parser(
+        "attach",
+        help="offer a canonical fact to a Profile section so it can be selected",
+    )
+    fact_attach.add_argument("fact_id")
+    fact_attach.add_argument("--profile", required=True)
+    fact_attach.add_argument("--section", required=True)
+    fact_attach.add_argument("--pin", action="store_true")
+    fact_history = fact_sub.add_parser("history", help="read the immutable fact lifecycle trail")
+    fact_history.add_argument("fact_id", nargs="?")
 
     migrate = sub.add_parser("migrate", help="guarded one-time legacy migration")
     migrate_sub = migrate.add_subparsers(dest="migration_command", required=True)
@@ -153,6 +218,73 @@ def export_csv(repository: Repository, output: Path) -> Path:
         writer.writeheader()
         writer.writerows({field: row.get(field) for field in fields} for row in rows)
     return output
+
+
+def fact_command(engine: Engine, args: argparse.Namespace) -> int:
+    """Dispatch the fact lifecycle commands.
+
+    Promotion is refused without `--confirm`: the confirmation is what the
+    specification requires for a status change, so an unconfirmed request must
+    fail rather than be interpreted.
+    """
+    if args.fact_command == "list":
+        _print(engine.list_facts(args.status))
+    elif args.fact_command == "show":
+        _print(engine.show_fact(args.fact_id))
+    elif args.fact_command == "history":
+        _print(engine.fact_history(args.fact_id))
+    elif args.fact_command == "add":
+        renderings = {"en": args.en}
+        if args.he:
+            renderings["he"] = args.he
+        _print(engine.add_fact(
+            args.source,
+            {
+                "fact_id": args.fact_id,
+                "meaning": args.meaning,
+                "renderings": renderings,
+                "tags": args.tag,
+                "provenance": args.provenance,
+                "effective_dates": args.dates,
+                "replaces": args.replaces,
+                "resume_style": args.style,
+            },
+            canonical=args.canonical,
+            reason=args.reason,
+        ))
+    elif args.fact_command == "capture":
+        _print(engine.capture_claim_fact(
+            args.application_id,
+            args.claim_id,
+            source=args.source,
+            fact_id=args.fact_id,
+            meaning=args.meaning,
+            tags=args.tag,
+            english=args.en,
+            hebrew=args.he,
+            provenance=args.provenance,
+            effective_dates=args.dates,
+            replaces=args.replaces,
+            canonical=args.canonical,
+            reason=args.reason,
+        ))
+    elif args.fact_command in {"confirm", "promote"}:
+        target = FactStatus.CONFIRMED if args.fact_command == "confirm" else FactStatus.CANONICAL
+        if not args.confirm:
+            print(
+                f"ERROR: promotion to {target.value} requires explicit --confirm",
+                file=sys.stderr,
+            )
+            return 2
+        _print(engine.promote_fact(
+            args.fact_id,
+            target.value,
+            explicitly_confirmed=True,
+            reason=args.reason,
+        ))
+    elif args.fact_command == "attach":
+        _print(engine.attach_fact(args.fact_id, args.profile, args.section, pin=args.pin))
+    return 0
 
 
 def generic_reconcile(root: Path, repository: Repository) -> dict[str, Any]:
@@ -297,8 +429,12 @@ def main(argv: list[str] | None = None) -> int:
             _print({"csv": str(export_csv(engine.repo, args.output.resolve()))})
         elif args.command == "reconcile":
             report = generic_reconcile(root, engine.repo)
+            report["fact_lifecycle"] = engine.reconcile_facts()
+            report["passed"] = report["passed"] and report["fact_lifecycle"]["passed"]
             _print(report)
             return 0 if report["passed"] else 1
+        elif args.command == "fact":
+            return fact_command(engine, args)
         return 0
     except (ValueError, KeyError, FileNotFoundError, WorkflowError, MigrationSafetyError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

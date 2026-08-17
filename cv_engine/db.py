@@ -11,9 +11,10 @@ from .models import ApplicationStatus, JobAnalysis, ValidationReport
 from .util import canonical_json, sha256_text, utc_now
 
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
 
 IMMUTABLE_TABLES = (
+    "fact_events",
     "job_snapshots",
     "job_analyses",
     "status_history",
@@ -181,7 +182,25 @@ CREATE TABLE IF NOT EXISTS submissions (
     metadata_json TEXT NOT NULL DEFAULT '{}'
 );
 
+CREATE TABLE IF NOT EXISTS fact_events (
+    id TEXT PRIMARY KEY,
+    fact_id TEXT NOT NULL,
+    source_file TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    from_status TEXT,
+    to_status TEXT NOT NULL,
+    application_id TEXT REFERENCES applications(id),
+    claim_id TEXT,
+    reason TEXT NOT NULL DEFAULT '',
+    fact_json TEXT NOT NULL,
+    fact_hash TEXT NOT NULL,
+    facts_version TEXT NOT NULL,
+    lifecycle_version TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_snapshots_application ON job_snapshots(application_id);
+CREATE INDEX IF NOT EXISTS idx_fact_events_fact ON fact_events(fact_id);
 CREATE INDEX IF NOT EXISTS idx_analyses_application ON job_analyses(application_id);
 CREATE INDEX IF NOT EXISTS idx_status_application ON status_history(application_id);
 CREATE INDEX IF NOT EXISTS idx_artifacts_application ON artifacts(application_id);
@@ -513,6 +532,63 @@ class Repository:
                 (event_id, application_id, event_type, canonical_json(payload), utc_now()),
             )
         return event_id
+
+    def record_fact_event(
+        self,
+        *,
+        fact_id: str,
+        source_file: str,
+        event_type: str,
+        from_status: str | None,
+        to_status: str,
+        fact: dict[str, Any],
+        facts_version: str,
+        lifecycle_version: str,
+        reason: str = "",
+        application_id: str | None = None,
+        claim_id: str | None = None,
+    ) -> str:
+        """Append one immutable record of a fact lifecycle change.
+
+        The fact payload is stored as it was written, so the trail explains what
+        a promotion actually put into the canonical source, not only that one
+        happened.
+        """
+        event_id = str(uuid.uuid4())
+        payload = canonical_json(fact)
+        with self.transaction() as connection:
+            connection.execute(
+                "INSERT INTO fact_events(id, fact_id, source_file, event_type, from_status, "
+                "to_status, application_id, claim_id, reason, fact_json, fact_hash, "
+                "facts_version, lifecycle_version, created_at) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    event_id, fact_id, source_file, event_type, from_status, to_status,
+                    application_id, claim_id, reason, payload, sha256_text(payload),
+                    facts_version, lifecycle_version, utc_now(),
+                ),
+            )
+        return event_id
+
+    def fact_events(self, fact_id: str | None = None) -> list[dict[str, Any]]:
+        query = "SELECT * FROM fact_events"
+        parameters: tuple[Any, ...] = ()
+        if fact_id is not None:
+            query += " WHERE fact_id=?"
+            parameters = (fact_id,)
+        query += " ORDER BY created_at, rowid"
+        with connect(self.path) as connection:
+            return [dict(row) for row in connection.execute(query, parameters).fetchall()]
+
+    def latest_fact_statuses(self) -> dict[str, str]:
+        """The status each recorded fact reached last, by fact ID."""
+        with connect(self.path) as connection:
+            rows = connection.execute(
+                "SELECT fact_id, to_status FROM fact_events "
+                "WHERE event_type IN ('fact_created', 'fact_promoted') "
+                "ORDER BY created_at, rowid"
+            ).fetchall()
+        return {row["fact_id"]: row["to_status"] for row in rows}
 
     def set_next_action(self, application_id: str, action: str | None, action_date: str | None) -> None:
         with self.transaction() as connection:

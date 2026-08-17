@@ -5,6 +5,10 @@
 - [ ] Track, Profile, Emphasis, confidence, fit, and gaps were inspected.
 - [ ] Low fit or material ambiguity has an explicit recorded user override.
 - [ ] Every claim is linked to canonical facts; no pending or unlinked claim remains.
+- [ ] Any new information used in this CV went through `cv fact add`/`capture`,
+      `confirm`, `promote`, and `attach`; no fact was strengthened on the way in.
+- [ ] `cv fact list --status pending` and `--status confirmed` hold nothing this CV
+      depends on.
 - [ ] Historical titles, dates, metrics, uncertainty, and language levels are unchanged.
 - [ ] Direct SaaS/software Sales is not implied unless independently verified later.
 

@@ -9,7 +9,8 @@ required work remains. Historical artifacts were not overwritten.
 
 ## Test and rendering evidence
 
-- Complete suite: **35 passed**.
+- Complete suite: **35 passed** at the original v1 verification; **106 passed** with
+  `CV_REQUIRE_BROWSER=1` after the fact-lifecycle work (2026-08-17).
 - Test layers: unit, default and fast integration, four golden profiles, browser/PDF
   rendering, ATS extraction, RTL/LTR and mixed direction, links, migration, legacy
   compatibility, provider contracts, and targeted regressions.
@@ -37,6 +38,11 @@ required work remains. Historical artifacts were not overwritten.
 - Unsupported claims, stale Pcom wording, pending facts, changed claim hashes, changed
   approved source, unsafe headlines, low fit without override, and unresolved material
   classification ambiguity are hard failures.
+- The fact-store version covers the canonical facts and their source versions, so
+  staging or confirming a fact cannot invalidate another application's draft, while
+  promoting one to canonical does.
+- `cv reconcile` fails when a fact's on-disk status disagrees with the last recorded
+  lifecycle event, or when a non-canonical fact has no event at all.
 
 ## Migration evidence
 
@@ -79,6 +85,14 @@ required work remains. Historical artifacts were not overwritten.
   recorded overrides.
 - [x] High/medium/low fit and hard-gap behavior work as specified.
 - [x] Pending/confirmed/canonical lifecycle is enforced.
+  - Originally checked against `FactStore.promote` alone. The transition rules were
+    correct but unreachable as a product: nothing persisted a status change, no CLI
+    could request one, no workflow produced a pending fact, and all 85 facts shipped
+    canonical, so the lifecycle could never run outside a test. Closed by persistence
+    into the canonical `base/` sources, the `fact_events` audit table, the `cv fact`
+    commands, claim capture, and Profile attachment; `tests/test_fact_lifecycle.py`
+    covers the path from an unsupported manual edit to a selected canonical fact,
+    including across process boundaries.
 - [x] Unsupported claims block approval and fast mode.
 - [x] English and Hebrew CV generation work.
 - [x] Hebrew RTL and mixed-direction checks pass.

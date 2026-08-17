@@ -16,9 +16,18 @@ from .drafts import (
     synchronize_markdown_claims,
     write_working_draft,
 )
-from .facts import FactStore
-from .models import ApplicationStatus, JobAnalysis, JobClassificationProposal, ValidationReport
-from .profiles import ProfileStore
+from .facts import FactStore, FactStoreError
+from .facts import create_fact as persist_new_fact
+from .facts import promote_fact as persist_promotion
+from .models import (
+    ApplicationStatus,
+    Fact,
+    FactStatus,
+    JobAnalysis,
+    JobClassificationProposal,
+    ValidationReport,
+)
+from .profiles import ProfileStore, attach_fact_to_section
 from .providers import OpenAIResponsesProvider
 from .ready import verify_ready_integrity
 from .rendering import normalized_role_filename, render_html, render_pdf, validate_rendered
@@ -40,6 +49,239 @@ class Engine:
     def knowledge(self) -> tuple[FactStore, ProfileStore, EmphasisPolicyStore]:
         facts = FactStore.load(self.root / "base")
         return facts, ProfileStore.load(self.root, facts), EmphasisPolicyStore.load(self.root)
+
+    def list_facts(self, status: str | None = None) -> list[dict[str, Any]]:
+        facts = FactStore.load(self.root / "base")
+        recorded = self.repo.latest_fact_statuses()
+        return [
+            {**fact.model_dump(mode="json"), "recorded_status": recorded.get(fact.fact_id)}
+            for fact in facts.by_status(status)
+        ]
+
+    def show_fact(self, fact_id: str) -> dict[str, Any]:
+        facts = FactStore.load(self.root / "base")
+        return {
+            **facts.get(fact_id).model_dump(mode="json"),
+            "events": self.repo.fact_events(fact_id),
+        }
+
+    def fact_history(self, fact_id: str | None = None) -> list[dict[str, Any]]:
+        return self.repo.fact_events(fact_id)
+
+    def _record_fact_event(
+        self,
+        fact: Fact,
+        *,
+        event_type: str,
+        from_status: str | None,
+        reason: str,
+        application_id: str | None = None,
+        claim_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Persist the fact change's audit record against the reloaded store.
+
+        The store is reloaded from disk first, so the versions written into the
+        trail are the ones a later reader will actually find on disk rather than
+        the pre-write ones held in memory.
+        """
+        facts = FactStore.load(self.root / "base")
+        event_id = self.repo.record_fact_event(
+            fact_id=fact.fact_id,
+            source_file=fact.source_file,
+            event_type=event_type,
+            from_status=from_status,
+            to_status=fact.status.value,
+            fact=fact.model_dump(mode="json"),
+            facts_version=facts.version,
+            lifecycle_version=facts.lifecycle_version,
+            reason=reason,
+            application_id=application_id,
+            claim_id=claim_id,
+        )
+        return {
+            "fact": fact.model_dump(mode="json"),
+            "event_id": event_id,
+            "facts_version": facts.version,
+            "lifecycle_version": facts.lifecycle_version,
+        }
+
+    def add_fact(
+        self,
+        source: str,
+        payload: dict[str, Any],
+        *,
+        canonical: bool = False,
+        reason: str = "",
+        application_id: str | None = None,
+        claim_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a new fact in its canonical source file and record the event.
+
+        Without `canonical`, the fact lands as `pending` and cannot reach a CV:
+        every rendering path resolves facts with `canonical_only=True`.
+        """
+        fact = persist_new_fact(self.root / "base", source, payload, canonical=canonical)
+        return self._record_fact_event(
+            fact,
+            event_type="fact_created",
+            from_status=None,
+            reason=reason or ("explicitly confirmed on creation" if canonical else "new pending fact"),
+            application_id=application_id,
+            claim_id=claim_id,
+        )
+
+    def promote_fact(
+        self,
+        fact_id: str,
+        target: str,
+        *,
+        explicitly_confirmed: bool,
+        reason: str = "",
+    ) -> dict[str, Any]:
+        before, after = persist_promotion(
+            self.root / "base",
+            fact_id,
+            target,
+            explicitly_confirmed=explicitly_confirmed,
+        )
+        return self._record_fact_event(
+            after,
+            event_type="fact_promoted",
+            from_status=before.status.value,
+            reason=reason or f"explicit promotion to {after.status.value}",
+        )
+
+    def capture_claim_fact(
+        self,
+        application_id: str,
+        claim_id: str,
+        *,
+        source: str,
+        fact_id: str,
+        meaning: str,
+        tags: list[str],
+        english: str | None = None,
+        hebrew: str | None = None,
+        provenance: str | None = None,
+        effective_dates: str | None = None,
+        replaces: str | None = None,
+        canonical: bool = False,
+        reason: str = "",
+    ) -> dict[str, Any]:
+        """Turn an unsupported manual claim into a tracked fact.
+
+        This is the product entry point into the lifecycle: a manual edit whose
+        wording the fact store cannot support becomes a `pending` claim, and the
+        claim's own text becomes the candidate fact rather than being retyped,
+        so nothing is strengthened on the way in.
+        """
+        target = self.root / "artifacts" / "working" / application_id
+        draft = load_draft(target / "resume.claims.json")
+        claims = [draft.headline, *draft.contacts, *(claim for section in draft.sections for claim in section.claims)]
+        try:
+            claim = next(item for item in claims if item.claim_id == claim_id)
+        except StopIteration as exc:
+            raise WorkflowError(f"unknown claim in the working draft: {claim_id}") from exc
+        if claim.style == "headline" or claim.claim_type == "headline":
+            raise WorkflowError("the document headline is not a factual claim and cannot become a fact")
+        renderings: dict[str, str] = {}
+        if draft.language == "he":
+            renderings["he"] = hebrew or claim.text
+            if not english:
+                raise WorkflowError(
+                    "a fact captured from a Hebrew draft needs its English rendering (--en); "
+                    "facts are stored language-neutrally"
+                )
+            renderings["en"] = english
+        else:
+            renderings["en"] = english or claim.text
+            if hebrew:
+                renderings["he"] = hebrew
+        return self.add_fact(
+            source,
+            {
+                "fact_id": fact_id,
+                "meaning": meaning,
+                "renderings": renderings,
+                "tags": tags,
+                "provenance": provenance or (
+                    f"captured from application {application_id} claim {claim_id}; "
+                    "candidate wording, not yet verified"
+                ),
+                "effective_dates": effective_dates,
+                "replaces": replaces,
+                "resume_style": claim.style,
+            },
+            canonical=canonical,
+            reason=reason or f"captured from claim {claim_id}",
+            application_id=application_id,
+            claim_id=claim_id,
+        )
+
+    def attach_fact(self, fact_id: str, profile: str, section: str, *, pin: bool = False) -> dict[str, Any]:
+        """Offer a canonical fact to one Profile section's candidate pool."""
+        facts, profiles, _ = self.knowledge()
+        try:
+            fact = facts.get(fact_id, canonical_only=True)
+        except FactStoreError as exc:
+            raise WorkflowError(
+                f"only canonical facts may enter a Profile pool: {exc}"
+            ) from exc
+        path = profiles.path(profile)
+        updated = attach_fact_to_section(path, fact_id, section, pin=pin)
+        # Reload so a Profile that no longer validates against the fact store
+        # fails here rather than at the next draft.
+        reloaded = ProfileStore.load(self.root, FactStore.load(self.root / "base"))
+        record = self._record_fact_event(
+            fact,
+            event_type="fact_attached_to_profile",
+            from_status=fact.status.value,
+            reason=f"attached to {updated.profile.value} / {section}" + (" (pinned)" if pin else ""),
+        )
+        return {
+            **record,
+            "profile": updated.profile.value,
+            "section": section,
+            "pinned": pin,
+            "profile_path": path.relative_to(self.root).as_posix(),
+            "profile_store_version": reloaded.version,
+        }
+
+    def reconcile_facts(self) -> dict[str, Any]:
+        """Check the persisted lifecycle against its audit trail.
+
+        Three disagreements matter: a trail entry for a fact that no longer
+        exists, a live status that the trail never recorded, and a live status
+        that contradicts the last recorded one. Each means a status was changed
+        outside the lifecycle, which is exactly what the trail exists to catch.
+        """
+        facts = FactStore.load(self.root / "base")
+        recorded = self.repo.latest_fact_statuses()
+        problems: list[str] = []
+        for fact_id, status in recorded.items():
+            if fact_id not in facts.facts:
+                problems.append(f"fact event references a fact that no longer exists: {fact_id}")
+            elif facts.facts[fact_id].status.value != status:
+                problems.append(
+                    f"fact {fact_id} is {facts.facts[fact_id].status.value} on disk but the "
+                    f"lifecycle trail last recorded {status}"
+                )
+        untracked = [
+            fact.fact_id for fact in facts.by_status()
+            if fact.status is not FactStatus.CANONICAL and fact.fact_id not in recorded
+        ]
+        problems.extend(
+            f"non-canonical fact has no lifecycle event: {fact_id}" for fact_id in untracked
+        )
+        counts = {status.value: len(facts.by_status(status)) for status in FactStatus}
+        return {
+            "passed": not problems,
+            "fact_counts": counts,
+            "tracked_facts": len(recorded),
+            "facts_version": facts.version,
+            "lifecycle_version": facts.lifecycle_version,
+            "problems": problems,
+        }
 
     def ingest(self, company: str, role: str, job_text: str, url: str | None = None) -> tuple[str, str]:
         return self.repo.create_application(
