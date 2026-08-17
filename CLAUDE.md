@@ -97,7 +97,9 @@ workflow.
 - Test material changes in proportion to the affected layer.
 - Run unit and integration tests, plus relevant golden, rendering, ATS/PDF, API,
   frontend, migration, concurrency, recovery, and regression tests.
-- Add a targeted regression test for every material bug discovered during the work.
+- Add targeted regression coverage for every material bug discovered during the work
+  when existing meaningful coverage would not catch it. Prefer extending or
+  parameterizing the closest test over adding another test item.
 - Do not claim completion with "implemented" alone.
 - Preserve every applicable v1 acceptance invariant and run the relevant gates in
   `docs/v2-test-and-acceptance-plan.md`; report what passed, what failed, and what

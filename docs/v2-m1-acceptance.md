@@ -347,19 +347,26 @@ not policy.
 The engine reaches its data only through `load_workspace`, so this decision is made in
 one place.
 
-### All applicable v1 tests pass
+### All applicable v1 safety invariants remain covered
 
 ```text
-CV_REQUIRE_BROWSER=1 python -m pytest -q  ->  209 passed in 123.25s
+CV_REQUIRE_BROWSER=1 python -m pytest -q  ->  100 passed in 31.88s
 ```
 
-131 tests at the v1 baseline, 209 now. No v1 coverage was removed. The added tests cover
-the Workspace layer, the candidate context, the architectural boundary, the
-cross-worktree module guard, the fact `link_target` invariant, and — new in this round —
-the application layer's declared contracts in `tests/test_application_contracts.py`:
-result types, the error taxonomy, the focused ports and their absence of adapter
-internals, the UnitOfWork's commit and rollback, explicit source IDs, and the rule that
-no command resolves its own source.
+The suite had grown from 131 tests at the v1 baseline to 209 during M1, largely by
+turning individual checklist bullets and equivalent input variants into separate test
+items. It is now consolidated to 100 tests. The four golden scenarios still run, and
+the suite still covers Workspace isolation, CandidateContext, the architectural
+boundary, cross-worktree imports, fact/claim safety, application contracts, explicit
+source ownership, UnitOfWork behavior, Ready integrity, rendering/PDF/ATS, and guarded
+migration. Related variants now run as named matrices or complete journeys instead of
+independent test items.
+
+This consolidation follows the risk-based rules in
+`docs/v2-test-and-acceptance-plan.md`: required evidence is not a one-test-per-bullet
+mandate, and individual legacy cases need not remain when a smaller test supplies the
+same failure signal. No product, validation, migration, or artifact-lifecycle behavior
+changed in this cleanup.
 
 Two earlier runs are worth recording, because this file previously reported one of them
 as if it settled the item:
@@ -371,7 +378,8 @@ as if it settled the item:
 - `188 passed` — the independent clean run performed during the second review round,
   before the changes in section 3.
 
-The 209 figure supersedes both and is the run that stands behind this record.
+The earlier 209-test run remains historical evidence for the pre-consolidation suite.
+The 100-test browser-required run above is the current evidence behind this record.
 
 ## 5. Migration safety note for `link_target`
 

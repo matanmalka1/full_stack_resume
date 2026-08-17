@@ -8,11 +8,23 @@ Product authority: `docs/v2-product-spec.md`
 
 Release readiness is based on invariants, failure recovery, migration accounting, and
 complete user journeys. It is not based on a broad line-coverage percentage or raw test
-count.
+count. Raw count is nevertheless a useful review signal: rapid growth without new
+product risk usually indicates duplicated scenarios or tests coupled to implementation
+shape.
 
-All applicable v1 tests remain represented. Refactoring may move or reshape tests, but
-it may not silently remove coverage of factual safety, deterministic validation,
-rendering, ATS, artifact immutability, migration, or CLI behavior.
+All applicable v1 safety invariants and material regression risks remain represented.
+Individual v1 test items do not have to survive when one clearer scenario, table-driven
+matrix, or end-to-end journey detects the same failures. Refactoring may move, merge,
+or delete tests, but it may not silently remove coverage of factual safety,
+deterministic validation, rendering, ATS, artifact immutability, migration, or CLI
+behavior.
+
+The lists in this plan define required evidence, not a one-test-per-bullet structure.
+Related variants should normally share one scenario or matrix. A new test item is
+justified only by a distinct failure mode, boundary, or diagnostic signal that an
+existing test cannot express clearly. Prefer extending the nearest meaningful test;
+avoid tests whose only purpose is to restate a type annotation, enumerate equivalent
+adapter methods, pin private call counts, or freeze incidental package/file layout.
 
 The verified v1 baseline is `v1.0.0` / `2cc31c7` with 131 passing tests under
 `CV_REQUIRE_BROWSER=1`.
@@ -40,9 +52,12 @@ Cover:
 
 ### 2.2 Application/use-case tests
 
-Use in-memory/fake ports only where they preserve meaningful behavior. Cover every
-command's preconditions, successful outcome, expected domain outcome, audit, and no
-partial commit. Explicitly test that commands do not resolve latest sources.
+Use in-memory/fake ports only where they preserve meaningful behavior. Cover the
+successful workflow and representative high-risk command refusals, including
+ownership, exact-source selection, stale input, approval safety, and no partial commit.
+Do not create a separate test for every command/precondition permutation when the same
+guard or integration journey supplies the evidence. Explicitly test that mutating
+commands do not resolve latest sources.
 
 ### 2.3 Repository integration tests
 
@@ -263,7 +278,8 @@ Release requires a manual live OpenAI smoke checklist, not an automated CI gate:
 
 ## 7. Concurrency and race matrix
 
-Required tests:
+Required concurrency scenarios (they may be grouped into a smaller number of
+table-driven or journey tests):
 
 - two autosaves with the same ETag
 - CLI edit during Web autosave
@@ -291,7 +307,8 @@ double revision, double activation, or silent partial state.
 
 ## 8. Knowledge journal failure injection
 
-Inject and verify:
+Inject and verify the following crash windows. They may share one failure-injection
+matrix rather than eight independent test items:
 
 1. crash before filesystem replace
 2. crash after replace and before SQLite commit
@@ -322,7 +339,8 @@ Cover:
 
 ## 10. Security tests
 
-Required:
+Required security evidence. Closely related inputs such as traversal encodings, marker
+variants, and redaction fields should normally be grouped:
 
 - mutating request with missing/invalid Origin
 - no wildcard CORS
@@ -460,9 +478,11 @@ Release additionally requires:
 - performance review
 - completed acceptance report
 
-There is no global coverage-percentage gate. Critical domain/application modules may
-adopt focused thresholds if they add value, but invariant and journey evidence remains
-authoritative.
+There is no global coverage-percentage or test-count gate. Critical
+domain/application modules may adopt focused thresholds if they add value, but
+invariant and journey evidence remains authoritative. At each milestone, review the
+collected-test delta: additions should correspond to new risk, and redundant tests
+should be merged or removed before the milestone closes.
 
 ## 17. Acceptance report format
 

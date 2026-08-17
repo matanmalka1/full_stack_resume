@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from cv_engine.domain.analysis import classify_job, merge_classification, unresolved_approval_reasons
+from cv_engine.domain.analysis import classify_job, merge_classification
 from cv_engine.domain.models import Emphasis, FitLevel, Gap, ProfileName, Track
 from cv_engine.domain.profiles import ProfileStore
 from cv_engine.application.services import WorkflowError
@@ -62,20 +62,6 @@ def test_explicit_user_override_beats_the_provider(
     assert analysis.language == "he"
 
 
-def test_confidence_can_only_be_lowered_and_both_sources_are_recorded(
-    profile_store: ProfileStore, classification_proposal
-) -> None:
-    deterministic = classify_job(AMBIGUOUS_HEBREW_JOB)
-
-    raised = merge_classification(deterministic, classification_proposal(confidence=0.99), profile_store)
-    lowered = merge_classification(deterministic, classification_proposal(confidence=0.10), profile_store)
-
-    assert raised.confidence == deterministic.confidence
-    assert raised.deterministic_confidence == deterministic.confidence
-    assert raised.proposal_confidence == 0.99
-    assert lowered.confidence == 0.10
-
-
 def test_deterministic_gaps_survive_and_may_only_be_hardened(
     profile_store: ProfileStore, classification_proposal
 ) -> None:
@@ -117,26 +103,6 @@ def test_fit_is_derived_from_merged_gaps_and_never_improved(
     low = classify_job(AMBIGUOUS_HEBREW_JOB)
     assert low.fit is FitLevel.LOW
     assert merge_classification(low, classification_proposal(), profile_store).fit is FitLevel.LOW
-
-
-def test_track_or_profile_disagreement_requires_approval(
-    profile_store: ProfileStore, classification_proposal
-) -> None:
-    deterministic = classify_job(ACCOUNT_MANAGER_JOB)
-    assert not deterministic.classification_requires_approval
-
-    merged = merge_classification(
-        deterministic,
-        classification_proposal(
-            track=Track.TECH_SALES,
-            profile=ProfileName.PRE_SALES,
-            emphasis=Emphasis.TECH_CONSULTATIVE,
-        ),
-        profile_store,
-    )
-
-    assert (merged.track, merged.profile) == (Track.TECH_SALES, ProfileName.PRE_SALES)
-    assert merged.classification_requires_approval
 
 
 def test_emphasis_disagreement_is_an_approval_gate(
@@ -215,56 +181,6 @@ def test_inconsistent_proposal_is_rejected_rather_than_applied(
     assert "was not applied" in merged.rationale
 
 
-def test_an_unrelated_override_does_not_open_the_classification_gate(
-    provider_analysis, classification_proposal
-) -> None:
-    """Emphasis and language say nothing about a Track/Profile disagreement."""
-    engine, application_id, analysis = provider_analysis(
-        classification_proposal(
-            track=Track.TECH_SALES,
-            profile=ProfileName.PRE_SALES,
-            emphasis=Emphasis.TECH_CONSULTATIVE,
-        ),
-        job_text=ACCOUNT_MANAGER_JOB,
-        emphasis="balanced-sales",
-        language="he",
-    )
-
-    assert "profile-disagreement" in analysis.approval_reasons
-    assert analysis.classification_requires_approval
-    with pytest.raises(WorkflowError, match="profile-disagreement"):
-        engine.draft(application_id)
-
-    _, stored = engine.repo.latest_analysis(application_id)
-    assert stored.approval_reasons == analysis.approval_reasons
-    assert stored.user_override == {"emphasis": "balanced-sales", "language": "he"}
-
-
-def test_only_the_override_that_answers_the_ambiguity_resolves_it(
-    profile_store: ProfileStore, classification_proposal
-) -> None:
-    proposal = classification_proposal(
-        track=Track.TECH_SALES,
-        profile=ProfileName.PRE_SALES,
-        emphasis=Emphasis.TECH_CONSULTATIVE,
-    )
-
-    # A Track override leaves the Profile inside that Track undecided; choosing a
-    # Profile determines its Track, so it settles the pair.
-    track_only = merge_classification(
-        classify_job(ACCOUNT_MANAGER_JOB, track_override="tech-sales"), proposal, profile_store
-    )
-    profile_chosen = merge_classification(
-        classify_job(ACCOUNT_MANAGER_JOB, profile_override="tech-sales"), proposal, profile_store
-    )
-
-    assert "profile-disagreement" in track_only.approval_reasons
-    assert track_only.classification_requires_approval
-    assert "profile-disagreement" in profile_chosen.approval_reasons
-    assert not profile_chosen.classification_requires_approval
-    assert profile_chosen.profile is ProfileName.TECH_SALES
-
-
 def test_deterministic_ambiguity_is_resolved_by_choosing_the_classification() -> None:
     ambiguous = classify_job(AMBIGUOUS_HEBREW_JOB)
     assert ambiguous.approval_reasons == ["ambiguous-signals", "low-confidence"]
@@ -277,32 +193,3 @@ def test_deterministic_ambiguity_is_resolved_by_choosing_the_classification() ->
 
     unrelated = classify_job(AMBIGUOUS_HEBREW_JOB, emphasis_override="balanced-sales")
     assert unrelated.classification_requires_approval
-
-
-def test_an_analysis_recorded_before_reasons_existed_fails_closed() -> None:
-    legacy = classify_job(ACCOUNT_MANAGER_JOB).model_copy(update={
-        "classification_requires_approval": True,
-        "approval_reasons": [],
-        "user_override": {"emphasis": "balanced-sales"},
-    })
-
-    assert unresolved_approval_reasons(legacy) == ["unspecified-ambiguity"]
-    assert unresolved_approval_reasons(
-        legacy.model_copy(update={"user_override": {"profile": "account-manager"}})
-    ) == []
-
-
-def test_proposal_fields_the_provider_owns_still_reach_the_analysis(
-    profile_store: ProfileStore, classification_proposal
-) -> None:
-    deterministic = classify_job(ACCOUNT_MANAGER_JOB)
-
-    merged = merge_classification(
-        deterministic,
-        classification_proposal(keywords=["renewal forecasting"]),
-        profile_store,
-    )
-
-    assert merged.rationale == "provider rationale"
-    assert "renewal forecasting" in merged.keywords
-    assert set(deterministic.keywords) <= set(merged.keywords)

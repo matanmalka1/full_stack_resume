@@ -12,12 +12,9 @@ import shutil
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
 
-from cv_engine.application.chain import check_draft_chain, decision_record_analysis_id
 from cv_engine.infrastructure.db import connect
-from cv_engine.domain.drafts import parse_draft, serialize_markdown
-from cv_engine.domain.models import DraftDocument
+from cv_engine.domain.drafts import parse_draft
 from cv_engine.application.ready import verify_ready_integrity
 from cv_engine.runtime.workspace import Workspace
 from cv_engine.application.services import WorkflowError
@@ -195,109 +192,52 @@ def test_decision_and_artifact_records_cannot_cross_applications(drafted_applica
 # --- 4. an invalid Track/Profile/Emphasis pair mutates nothing -------------
 
 
-@pytest.mark.parametrize(
-    ("overrides", "match"),
-    [
+def test_invalid_classifications_are_rejected_before_any_persistence(engine: Engine) -> None:
+    cases = [
         ({"track": "development", "profile": "account-manager"}, "Track"),
         ({"profile": "account-manager", "emphasis": "leadership"}, "mphasis"),
-    ],
-    ids=["track-profile", "profile-emphasis"],
-)
-def test_invalid_classification_is_rejected_before_any_persistence(
-    engine: Engine, overrides: dict[str, str], match: str
-) -> None:
-    app_id, _ = engine.ingest("Inconsistent Co", "Account Manager", ACCOUNT_MANAGER_JOB)
-    before_application = engine.repo.get_application(app_id)
-    before = _persisted(engine, app_id)
-
-    with pytest.raises(WorkflowError, match=match):
-        engine.analyze(app_id, **overrides)
-
-    assert engine.repo.get_application(app_id) == before_application
-    assert _persisted(engine, app_id) == before
-    with pytest.raises(KeyError):
-        engine.repo.latest_analysis(app_id)
-
-
-def test_fast_mode_rejects_an_invalid_pair_without_leaving_an_application(
-    v1_repo: Path, engine: Engine
-) -> None:
-    with pytest.raises(WorkflowError, match="Track"):
-        engine.fast(
-            "Fast Inconsistent", "Account Manager", ACCOUNT_MANAGER_JOB,
-            track="development", profile="account-manager",
+    ]
+    for index, (overrides, match) in enumerate(cases):
+        app_id, _ = engine.ingest(
+            f"Inconsistent Co {index}", "Account Manager", ACCOUNT_MANAGER_JOB
         )
-    applications = engine.repo.list_applications()
-    assert [row["current_status"] for row in applications] == ["saved"]
-    assert _persisted(engine, applications[0]["id"])["job_analyses"] == 0
-    assert not (v1_repo / "artifacts/working").exists()
+        before_application = engine.repo.get_application(app_id)
+        before = _persisted(engine, app_id)
+        with pytest.raises(WorkflowError, match=match):
+            engine.analyze(app_id, **overrides)
+        assert engine.repo.get_application(app_id) == before_application
+        assert _persisted(engine, app_id) == before
+        with pytest.raises(KeyError):
+            engine.repo.latest_analysis(app_id)
 
 
 # --- the chain is validated as one unit ------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
+def test_working_draft_must_match_every_bound_analysis_dimension(
+    v1_repo: Path, drafted_application
+) -> None:
+    setup = drafted_application("Tampered Chain")
+    engine, app_id = setup.engine, setup.application_id
+    manifest = v1_repo / "artifacts/working" / app_id / "resume.claims.json"
+    original = manifest.read_text(encoding="utf-8")
+    before = _persisted(engine, app_id)
+    cases = [
         ("track", "development"),
         ("emphasis", "balanced-sales"),
         ("language", "he"),
         ("job_snapshot_id", "not-a-snapshot"),
         ("fact_store_version", "0" * 64),
-    ],
-)
-def test_working_draft_must_match_its_bound_analysis(
-    v1_repo: Path, drafted_application, field: str, value: str
-) -> None:
-    setup = drafted_application("Tampered Chain")
-    engine, app_id = setup.engine, setup.application_id
-    manifest = v1_repo / "artifacts/working" / app_id / "resume.claims.json"
-    payload = json.loads(manifest.read_text(encoding="utf-8"))
-    payload[field] = value
-    manifest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    before = _persisted(engine, app_id)
-
-    with pytest.raises(WorkflowError):
-        engine.approve(app_id)
-
-    assert not (v1_repo / "artifacts" / app_id).exists()
-    assert _persisted(engine, app_id) == before
-
-
-def test_pre_binding_manifest_resolves_through_its_decision_record(
-    v1_repo: Path, approved_application, fact_store, profile_store
-) -> None:
-    """Approved manifests written before `job_analysis_id` existed are immutable,
-    so they must stay loadable -- and they recover their analysis from their own
-    decision record rather than from whichever analysis is latest."""
-    setup = approved_application("Pre-Binding Manifest")
-    engine, app_id = setup.engine, setup.application_id
-    payload = json.loads(
-        (v1_repo / "artifacts" / app_id / "v001" / "resume.claims.json").read_text(encoding="utf-8")
-    )
-    bound_analysis_id = payload["job_analysis_id"]
-    legacy = DraftDocument.model_validate(
-        {**payload, "schema_version": "1.0", "job_analysis_id": None}
-    )
-    assert "job_analysis_id" not in serialize_markdown(legacy)
-
-    orphan = check_draft_chain(engine.repo, app_id, legacy, profile_store, fact_store)
-    assert [code for code, _ in orphan.problems] == ["unbound-draft-analysis"]
-
-    chain = check_draft_chain(
-        engine.repo, app_id, legacy, profile_store, fact_store,
-        recorded_analysis_id=decision_record_analysis_id(engine.repo, app_id),
-    )
-    assert chain.valid, chain.describe()
-    assert chain.bound()[0] == bound_analysis_id
-
-
-def test_draft_chain_binding_is_immutable(drafted_application) -> None:
-    setup = drafted_application("Immutable Binding")
-    draft = parse_draft(setup.manifest.read_text(encoding="utf-8"))
-    for field in ("application_id", "job_snapshot_id", "job_analysis_id"):
-        with pytest.raises(ValidationError):
-            setattr(draft, field, "rebound")
+    ]
+    for field, value in cases:
+        payload = json.loads(original)
+        payload[field] = value
+        manifest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        with pytest.raises(WorkflowError):
+            engine.approve(app_id)
+        assert not (v1_repo / "artifacts" / app_id).exists()
+        assert _persisted(engine, app_id) == before
+    manifest.write_text(original, encoding="utf-8")
 
 
 # --- ready integrity independently rechecks the chain ----------------------

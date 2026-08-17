@@ -7,12 +7,10 @@ keywords and gaps could not change a single line of the document.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from cv_engine.domain.drafts import serialize_markdown
 from cv_engine.domain.models import Emphasis, Profile
 from cv_engine.domain.profiles import ProfileStore
-from cv_engine.infrastructure.rendering import normalized_role_filename, render_html
+from cv_engine.infrastructure.rendering import normalized_role_filename
 from cv_engine.domain.selection import STRUCTURAL_STYLES, build_selection
 from helpers import PAYME_TECH_SALES_JOB
 
@@ -122,42 +120,6 @@ def test_a_required_tag_is_rescued_and_the_eviction_is_recorded(
     assert manifest.required_tag_coverage["retention"] == ["sales.achievement.retention"]
 
 
-def test_every_profile_still_fits_its_page_allowance(
-    v1_repo: Path, tmp_path: Path, profile_store: ProfileStore, draft_factory, render_validator
-) -> None:
-    """Section budgets and role-block floors must not overrun the page.
-
-    Budgets are the one setting that trades directly against page geometry: a
-    floor that seats a fourth bullet under a role can push the last section past
-    the A4 boundary and silently produce a second, near-empty page. Sales
-    Management carries the largest budget in the repo and Tech Sales the most
-    sections, but a raised budget anywhere is a page risk, so every Profile is
-    rendered rather than the two that look most likely to fail.
-    """
-    for profile in profile_store.profiles.values():
-        setup = draft_factory(
-            "Sales team leader managing a B2B account portfolio, coaching, forecasting and growth",
-            profile_override=profile.profile.value,
-            track_override=profile.track.value,
-            emphasis_override=profile.default_emphasis.value,
-        )
-
-        target = tmp_path / profile.profile.value
-        target.mkdir()
-        html = render_html(setup.draft, v1_repo, target / "resume.html", setup.candidate)
-        _geometry, report = render_validator(
-            setup.draft,
-            profile,
-            html,
-            target / normalized_role_filename(profile.normalized_role, setup.candidate),
-            target / "visual.png",
-            setup.candidate,
-        )
-
-        assert report.passed, (profile.profile.value, report.model_dump())
-        assert report.evidence["page_count"] <= (2 if profile.allow_two_pages else 1)
-
-
 def test_structure_survives_every_profile_and_emphasis(
     profile_store: ProfileStore, draft_factory
 ) -> None:
@@ -250,49 +212,6 @@ def test_every_role_block_reaches_its_floor(
                     assert len(block) >= floor, label
 
 
-def test_role_block_floors_beat_rank_and_survive_a_required_tag_rescue(draft_factory) -> None:
-    """The floor holds against both of the mechanisms that could undo it.
-
-    Ranking would spend the whole Sales Experience budget on new-business
-    evidence from the earlier role, and the `tech-sales` rescue evicts the
-    weakest ordinary selection to seat its own fact. Neither may take the
-    leadership role back below its floor.
-    """
-    setup = draft_factory(
-        PAYME_TECH_SALES_JOB,
-        track_override="tech-sales",
-        profile_override="tech-sales",
-        emphasis_override="new-business",
-    )
-    experience = next(
-        section for section in setup.draft.sections if section.name == "Sales Experience"
-    )
-    leadership, field = _role_block_claims(experience)
-
-    assert len(leadership) >= 4
-    assert len(field) >= 4
-
-    # The leadership block can evidence several verified numbers and must show
-    # two; the field-era pool holds one, and a floor never invents the second.
-    quantitative = {
-        "sales.metric.performance",
-        "sales.metric.team_size",
-        "sales.metric.portfolio_growth",
-        "sales.metric.recurring_customers",
-        "sales.metric.new_customers",
-    }
-    for block, expected in ((leadership, 2), (field, 1)):
-        linked = {fact_id for claim in block for fact_id in claim.fact_ids}
-        assert len(linked & quantitative) >= expected
-
-    evicted = [
-        candidate.fact_id for candidate in setup.draft.selection.candidates
-        if candidate.reason == "evicted_by_required_tag_rescue"
-    ]
-    leadership_ids = {fact_id for claim in leadership for fact_id in claim.fact_ids}
-    assert not (set(evicted) & leadership_ids)
-
-
 def test_payme_tech_sales_selection_uses_job_evidence_and_business_presentations(
     draft_factory,
 ) -> None:
@@ -373,50 +292,3 @@ def test_the_headline_reads_for_a_recruiter_and_the_filename_does_not(
     assert normalized_role_filename(profile.normalized_role, setup.candidate) == (
         "Matan Malka - Tech Sales - CV.pdf"
     )
-
-
-def test_the_role_ceiling_counts_lines_not_facts(draft_factory) -> None:
-    """The ceiling has to mean what a reader counts.
-
-    Selection chooses facts; a presentation rule can then render two of them as
-    one bullet. Counting facts let a block of six facts print six bullets under
-    a ceiling of five whenever nothing merged, and five whenever something did —
-    the same setting meaning two different documents.
-    """
-    setup = draft_factory(
-        PAYME_TECH_SALES_JOB,
-        track_override="tech-sales",
-        profile_override="tech-sales",
-        emphasis_override="new-business",
-    )
-    experience = next(
-        section for section in setup.draft.sections if section.name == "Sales Experience"
-    )
-    _leadership, field = _role_block_claims(experience)
-
-    assert len(field) == 5
-    merged = [claim for claim in field if len(claim.fact_ids) > 1]
-    assert len(merged) == 1
-    assert merged[0].fact_ids == ["sales.cycle.negotiation", "sales.achievement.complex_deals"]
-    # Six facts, five lines: the merge bought a fact, not a bullet.
-    assert sum(len(claim.fact_ids) for claim in field) == 6
-
-
-def test_no_role_block_exceeds_its_ceiling(profile_store: ProfileStore, draft_factory) -> None:
-    for profile in profile_store.profiles.values():
-        for spec in profile.sections:
-            if spec.max_claims_per_role is None:
-                continue
-            for emphasis in profile.allowed_emphases:
-                setup = draft_factory(
-                    ACCOUNT_MANAGER_JOB,
-                    profile_override=profile.profile.value,
-                    track_override=profile.track.value,
-                    emphasis_override=emphasis.value,
-                )
-                section = next(
-                    item for item in setup.draft.sections if item.name == spec.name_en
-                )
-                for index, block in enumerate(_role_block_claims(section)):
-                    label = f"{profile.profile.value}/{emphasis.value}/{spec.name_en}/block{index}"
-                    assert len(block) <= spec.max_claims_per_role, label

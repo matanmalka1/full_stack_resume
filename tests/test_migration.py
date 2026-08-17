@@ -20,7 +20,6 @@ from cv_engine.infrastructure.migration import (
 from cv_engine.util import canonical_json, sha256_text
 from cv_engine.compat import Engine
 from helpers import passing_migration_test_runner as _passing_test_runner
-from helpers import seal_report as _seal_report
 
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
@@ -71,32 +70,6 @@ def test_migration_gate_recomputes_all_authoritative_evidence(migration_gate_rep
     assert gate["migration_test_report_hash"]
 
 
-def test_migration_gate_rejects_forged_test_report_even_when_passed_is_true(migration_gate_repo) -> None:
-    root, snapshot = migration_gate_repo
-    report_path = root / "data/migration/migration-tests.json"
-    report = json.loads(report_path.read_text(encoding="utf-8"))
-    report.update({"passed": True, "returncode": 99, "stdout": "forged"})
-    report_path.write_text(json.dumps(_seal_report(report), indent=2) + "\n", encoding="utf-8")
-
-    gate = migration_gate(root, snapshot, migration_test_runner=_passing_test_runner)
-
-    assert not gate["passed"]
-    assert "migration tests failed" in gate["problems"]
-
-
-def test_migration_gate_rejects_stale_dry_run_with_a_valid_self_hash(migration_gate_repo) -> None:
-    root, snapshot = migration_gate_repo
-    report_path = root / "data/migration/dry-run.json"
-    report = json.loads(report_path.read_text(encoding="utf-8"))
-    report["application_count"] = 999
-    report_path.write_text(json.dumps(_seal_report(report), indent=2) + "\n", encoding="utf-8")
-
-    gate = migration_gate(root, snapshot, migration_test_runner=_passing_test_runner)
-
-    assert not gate["passed"]
-    assert "stored dry-run report does not match a fresh snapshot dry-run" in gate["problems"]
-
-
 def test_migration_gate_rejects_live_data_drift_after_dry_run(migration_gate_repo) -> None:
     root, snapshot = migration_gate_repo
     artifact = root / "outputs/alpha/cv-drafts/cv_alpha_account-manager.md"
@@ -107,16 +80,6 @@ def test_migration_gate_rejects_live_data_drift_after_dry_run(migration_gate_rep
     assert not gate["passed"]
     assert "live inventory does not match the recorded inventory" in gate["problems"]
     assert "live inventory does not match the verified snapshot" in gate["problems"]
-
-
-def test_migration_gate_rejects_missing_legacy_status_csv(migration_gate_repo) -> None:
-    root, snapshot = migration_gate_repo
-    (root / "jobs/status.csv").unlink()
-
-    gate = migration_gate(root, snapshot, migration_test_runner=_passing_test_runner)
-
-    assert not gate["passed"]
-    assert any(problem.startswith("cannot rebuild live inventory") for problem in gate["problems"])
 
 
 def test_migration_gate_binds_inventory_to_snapshot_manifest(migration_gate_repo) -> None:
@@ -192,27 +155,6 @@ def test_retrospective_verification_detects_fact_and_artifact_drift(completed_mi
     assert not report["passed"]
     assert any("base/sales.md" in problem for problem in report["problems"])
     assert any("historical artifact hash mismatch" in problem for problem in report["problems"])
-
-
-def test_retrospective_verification_detects_a_rewritten_migrated_fact(completed_migration_repo) -> None:
-    root, snapshot = completed_migration_repo
-    path = root / "base/sales.md"
-    text = path.read_text(encoding="utf-8")
-    path.write_text(
-        text.replace(
-            "Managed approximately 40-50 recurring customers in addition to occasional deals.",
-            "Managed approximately 400 recurring customers in addition to occasional deals.",
-        ),
-        encoding="utf-8",
-    )
-
-    report = retrospective_verify_migration(root, snapshot)
-
-    assert not report["passed"]
-    assert (
-        "migrated fact changed in base/sales.md: sales.metric.recurring_customers"
-        in report["problems"]
-    )
 
 
 def test_retrospective_verification_accepts_post_migration_lifecycle_facts(

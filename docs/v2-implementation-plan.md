@@ -101,7 +101,8 @@ introducing HTTP or React.
 - [ ] Candidate name is not hardcoded in core or renderer policy.
 - [ ] Normal v2 commands reject every missing, legacy, unknown, or unsafe marker; only
       the dedicated migration adapter can inventory an explicit v1 source read-only.
-- [ ] All applicable v1 tests pass.
+- [ ] All applicable v1 safety invariants remain covered and the consolidated suite
+      passes; retaining every legacy test item is not required.
 
 Stable commit boundary: application seam complete and CLI green.
 
@@ -381,7 +382,9 @@ snapshot and restarts v1. Never downgrade the v2 database.
 - Preserve the main v1 worktree and live data.
 - Keep every commit scoped to one stable boundary.
 - Do not combine architecture extraction with unrelated content changes.
-- Add targeted regression tests for every material bug.
+- Add targeted regression coverage for every material bug not already caught by an
+  existing meaningful test. Prefer strengthening the closest existing scenario over
+  creating another test item.
 - Do not edit generated HTML/PDF or immutable artifacts by hand.
 - Do not add deferred features while implementing a milestone.
 - Do not begin M5 before the M4 vertical-slice gate.

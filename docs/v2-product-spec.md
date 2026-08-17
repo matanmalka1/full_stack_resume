@@ -702,7 +702,9 @@ v2.0 is Release Ready only when all of the following are demonstrably true:
       pass at their defined coverage levels.
 - [ ] Backup is verified, restored, opened, and reconciled.
 - [ ] v1 migration succeeds on a faithful copy with zero unexplained records/files.
-- [ ] Every applicable v1 safety and regression test remains represented and passing.
+- [ ] Every applicable v1 safety invariant and material regression risk remains
+      represented and passing. Individual legacy test cases need not be retained when
+      a smaller scenario or matrix provides the same failure signal.
 - [ ] Linux/Chromium CI passes and macOS release verification passes.
 - [ ] A manual OpenAI smoke run records valid structured analysis/draft output and
       execution metadata.

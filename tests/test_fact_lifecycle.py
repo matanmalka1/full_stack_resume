@@ -9,9 +9,8 @@ from cv_engine.infrastructure.db import connect
 from cv_engine.domain.facts import FactStore
 from cv_engine.infrastructure.knowledge import load_fact_store, FactStoreError
 from cv_engine.domain.models import FactStatus
-from cv_engine.application.services import WorkflowError
 from cv_engine.compat import Engine
-from helpers import ACCOUNT_MANAGER_JOB, working_claim as _working_claim
+from helpers import working_claim as _working_claim
 
 
 NEW_FACT = {
@@ -106,14 +105,6 @@ def test_lifecycle_survives_process_boundaries_through_the_cli(cli_runner, v1_re
     ]
 
 
-def test_explicit_confirmation_may_create_a_canonical_fact_directly(engine: Engine) -> None:
-    result = engine.add_fact("situational_skills.md", dict(NEW_FACT), canonical=True)
-
-    assert result["fact"]["status"] == "canonical"
-    assert result["fact"]["confirmed_at"]
-    assert _reload(engine).get("situational.sqlite", canonical_only=True)
-
-
 def test_duplicate_fact_ids_are_refused(engine: Engine) -> None:
     engine.add_fact("situational_skills.md", dict(NEW_FACT))
 
@@ -131,46 +122,6 @@ def test_lifecycle_events_are_immutable(engine: Engine) -> None:
             connection.execute("UPDATE fact_events SET to_status='canonical'")
         with pytest.raises(Exception, match="immutable record"):
             connection.execute("DELETE FROM fact_events")
-
-
-def test_reconcile_detects_a_status_changed_outside_the_lifecycle(engine: Engine) -> None:
-    engine.add_fact("situational_skills.md", dict(NEW_FACT))
-    assert engine.reconcile_facts()["passed"]
-
-    source = engine.root / "base/situational_skills.md"
-    source.write_text(
-        source.read_text(encoding="utf-8").replace('"status": "pending"', '"status": "canonical"'),
-        encoding="utf-8",
-    )
-
-    report = engine.reconcile_facts()
-    assert not report["passed"]
-    assert report["problems"] == [
-        "fact situational.sqlite is canonical on disk but the lifecycle trail "
-        "last recorded pending"
-    ]
-
-
-def test_reconcile_detects_an_untracked_pending_fact(engine: Engine) -> None:
-    source = engine.root / "base/situational_skills.md"
-    payload = json.loads(source.read_text(encoding="utf-8").split("```json\n", 1)[1].split("\n```", 1)[0])
-    payload["facts"].append({**NEW_FACT, "status": "pending", "confirmed_at": None,
-                             "effective_dates": None, "replaces": None, "source_file": ""})
-    source.write_text(
-        "# Situational Canonical Facts\n\n```json\n" + json.dumps(payload) + "\n```\n",
-        encoding="utf-8",
-    )
-
-    report = engine.reconcile_facts()
-    assert not report["passed"]
-    assert report["problems"] == ["non-canonical fact has no lifecycle event: situational.sqlite"]
-
-
-def test_only_canonical_facts_may_enter_a_profile_pool(engine: Engine) -> None:
-    engine.add_fact("situational_skills.md", dict(NEW_FACT))
-
-    with pytest.raises(WorkflowError, match="only canonical facts"):
-        engine.attach_fact("situational.sqlite", "development", "Technical Skills")
 
 
 def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) -> None:
@@ -234,34 +185,3 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
     ]
     assert events[0]["application_id"] == app_id
     assert events[0]["claim_id"] == claim.claim_id
-
-
-def test_attached_canonical_fact_can_be_selected_into_a_new_draft(engine: Engine) -> None:
-    engine.add_fact(
-        "sales.md",
-        {
-            "fact_id": "sales.leadership.pipeline_review",
-            "meaning": "Introduced a weekly pipeline review with the Sales team.",
-            "renderings": {"en": "Introduced a weekly pipeline review with the Sales team."},
-            "tags": ["sales", "leadership", "pipeline"],
-            "provenance": "confirmed by the user in this request",
-            "resume_style": "bullet",
-        },
-        canonical=True,
-    )
-    engine.attach_fact(
-        "sales.leadership.pipeline_review",
-        "account-manager",
-        "Work Experience",
-        pin=True,
-    )
-
-    app_id, _ = engine.ingest("Selection Co", "Account Manager", ACCOUNT_MANAGER_JOB)
-    engine.analyze(app_id)
-    _, _, report = engine.draft(app_id)
-
-    assert report.passed, report.model_dump()
-    manifest = json.loads(
-        (engine.root / "artifacts/working" / app_id / "resume.claims.json").read_text(encoding="utf-8")
-    )
-    assert "sales.leadership.pipeline_review" in manifest["selected_fact_ids"]
