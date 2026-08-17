@@ -1,6 +1,6 @@
 {
   "profile_id": "development.v1",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "track": "development",
   "profile": "development",
   "default_emphasis": "development-balanced",
@@ -63,12 +63,16 @@
       "name_en": "Projects",
       "name_he": "פרויקטים",
       "fact_ids": [
+        "development.project.mm_backend_core.title",
+        "development.project.mm_backend_core.links",
         "development.project.mm_backend_core"
       ],
       "pinned_fact_ids": [
+        "development.project.mm_backend_core.title",
+        "development.project.mm_backend_core.links",
         "development.project.mm_backend_core"
       ],
-      "max_claims": 1
+      "max_claims": 3
     },
     {
       "name_en": "Education",

@@ -65,10 +65,10 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
     },
     {
       "fact_id": "development.phdigital.fullstack",
-      "meaning": "Built and maintained production applications with React, TypeScript, and Python/FastAPI from PostgreSQL data models and APIs through frontend implementation.",
+      "meaning": "Built and maintained full-stack applications with React, TypeScript, and Python/FastAPI from PostgreSQL data models and APIs through frontend implementation.",
       "renderings": {
-        "en": "Built and maintained production applications with React, TypeScript, and Python/FastAPI, owning features from PostgreSQL data modeling and APIs through frontend implementation.",
-        "he": "פיתוח ותחזוקה של מערכות production ב-React, ב-TypeScript וב-Python/FastAPI, כולל אחריות על פיצ'רים ממודלי נתונים ב-PostgreSQL ו-APIs ועד המימוש בצד הלקוח."
+        "en": "Built and maintained full-stack applications with React, TypeScript, and Python/FastAPI, owning features from PostgreSQL data modeling and APIs through frontend implementation.",
+        "he": "פיתוח ותחזוקה של אפליקציות full-stack ב-React, ב-TypeScript וב-Python/FastAPI, כולל אחריות על פיצ'רים ממודלי נתונים ב-PostgreSQL ו-APIs ועד המימוש בצד הלקוח."
       },
       "tags": [
         "development",
@@ -402,6 +402,48 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "replaces": null,
       "source_file": "",
       "resume_style": "paragraph"
+    },
+    {
+      "fact_id": "development.project.mm_backend_core.title",
+      "meaning": "Project name and shape: mm-backend-core is a Node.js/Express CLI.",
+      "renderings": {
+        "en": "mm-backend-core — Node.js / Express CLI",
+        "he": "mm-backend-core — CLI ב-Node.js / Express"
+      },
+      "tags": [
+        "development",
+        "project",
+        "project-title",
+        "backend",
+        "nodejs"
+      ],
+      "status": "canonical",
+      "provenance": "Project name as published; verified against https://github.com/matanmalka1/mm-backend-core and npm mm-backend-core@2.0.2.",
+      "confirmed_at": null,
+      "effective_dates": null,
+      "replaces": null,
+      "source_file": "",
+      "resume_style": "heading"
+    },
+    {
+      "fact_id": "development.project.mm_backend_core.links",
+      "meaning": "mm-backend-core is publicly published on npm and public on GitHub; both are verifiable by a reader.",
+      "renderings": {
+        "en": "npmjs.com/package/mm-backend-core | github.com/matanmalka1/mm-backend-core",
+        "he": "npmjs.com/package/mm-backend-core | github.com/matanmalka1/mm-backend-core"
+      },
+      "tags": [
+        "development",
+        "project",
+        "open-source"
+      ],
+      "status": "canonical",
+      "provenance": "Both URLs resolved 2026-08-17: npm registry returned mm-backend-core@2.0.2 (MIT, node>=18); GitHub API returned a public JavaScript repository.",
+      "confirmed_at": null,
+      "effective_dates": null,
+      "replaces": null,
+      "source_file": "",
+      "resume_style": "date"
     },
     {
       "fact_id": "development.project.mm_backend_core",

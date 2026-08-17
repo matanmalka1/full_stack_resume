@@ -286,3 +286,31 @@ def test_tampered_manifest_with_headline_typed_claim_does_not_load(v1_repo: Path
 
     with pytest.raises(ValidationError, match="only the document headline"):
         load_draft(manifest)
+
+
+def test_project_name_may_be_a_heading_but_an_ordinary_fact_may_not(draft_factory, tmp_path: Path) -> None:
+    """A project name is a name: it has to survive verbatim as a heading so a
+    reader can look it up, without borrowing the tag that guarantees historical
+    job titles are never rewritten. Everything else stays barred from headings.
+    """
+    facts, profile, analysis, draft, markdown = draft_factory(
+        "Full-Stack Developer TypeScript React Node.js PostgreSQL", write=True
+    )
+    projects = next(section for section in draft.sections if section.name == "Projects")
+    heading = next(claim for claim in projects.claims if claim.style == "heading")
+    assert "project-title" in facts.get(heading.fact_ids[0]).tags
+    assert "historical-title" not in facts.get(heading.fact_ids[0]).tags
+    assert validate_draft(draft, markdown, facts, profile, analysis).passed
+
+    bullet = next(claim for claim in projects.claims if claim.style == "bullet")
+    promoted = draft.model_copy(deep=True)
+    section = next(s for s in promoted.sections if s.name == "Projects")
+    section.claims = [
+        claim.model_copy(update={"style": "heading"}) if claim.claim_id == bullet.claim_id else claim
+        for claim in section.claims
+    ]
+    promoted_markdown = tmp_path / "resume.md"
+    promoted_markdown.write_text(serialize_markdown(promoted), encoding="utf-8")
+    report = validate_draft(promoted, promoted_markdown, facts, profile, analysis)
+    assert not report.passed
+    assert any(issue.code == "historical-title-placement" for issue in report.issues)

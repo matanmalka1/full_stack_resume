@@ -311,13 +311,29 @@ def validate_draft(
         fact_id for fact_id in draft.selected_fact_ids
         if fact_id in facts.facts and "historical-title" in facts.get(fact_id).tags
     }
+    # A project name is a name too, and it has to survive verbatim for a reader
+    # to look it up. It is not employment, so it carries its own tag rather than
+    # borrowing the one that guarantees job titles are never rewritten.
+    project_title_ids = {
+        fact_id for fact_id in draft.selected_fact_ids
+        if fact_id in facts.facts and "project-title" in facts.get(fact_id).tags
+    }
     heading_ids = {
         fact_id for section in draft.sections for claim in section.claims
         if claim.style == "heading" for fact_id in claim.fact_ids
     }
-    if historical_title_ids != heading_ids:
+    demoted = historical_title_ids - heading_ids
+    promoted = heading_ids - (historical_title_ids | project_title_ids)
+    if demoted or promoted:
         groups["structure"] = False
-        issues.append(ValidationIssue(group="structure", code="historical-title-placement", message="Historical titles must remain exact headings."))
+        issues.append(ValidationIssue(
+            group="structure",
+            code="historical-title-placement",
+            message=(
+                "Historical titles must remain exact headings, and only a title or a "
+                f"project name may be one: demoted={sorted(demoted)}, promoted={sorted(promoted)}"
+            ),
+        ))
     if draft.headline.text not in profile.safe_headlines:
         groups["filename"] = False
         issues.append(ValidationIssue(group="filename", code="unsafe-headline", message=draft.headline.text))
