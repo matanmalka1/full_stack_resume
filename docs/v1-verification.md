@@ -2,6 +2,8 @@
 
 Verified: 2026-08-16
 
+Refreshed for the v2 baseline: 2026-08-17
+
 ## Outcome
 
 The v1 upgrade passes the binding Definition of Done. No acceptance item failed and no
@@ -9,14 +11,17 @@ required work remains. Historical artifacts were not overwritten.
 
 ## Test and rendering evidence
 
-- Complete suite: **35 passed** at the original v1 verification; **106 passed** with
-  `CV_REQUIRE_BROWSER=1` after the fact-lifecycle work (2026-08-17).
+- Complete suite: **35 passed** at the original v1 verification; **131 passed** with
+  `CV_REQUIRE_BROWSER=1` at the final v2 baseline refresh (2026-08-17).
 - Test layers: unit, default and fast integration, four golden profiles, browser/PDF
   rendering, ATS extraction, RTL/LTR and mixed direction, links, migration, legacy
   compatibility, provider contracts, and targeted regressions.
 - The actual CLI fast-mode test completes ingest, analysis, drafting, validation,
   approval, HTML/PDF rendering, all ready checks, SQLite tracking, and `ready` without a
   Web UI.
+- Drafts are bound to one exact Application -> JobSnapshot -> JobAnalysis chain.
+  Cross-application records, stale material analyses, changed approved sources, and
+  mismatched artifact/decision ownership fail before approval or `ready`.
 - Golden PDFs were generated for Development, English Sales, Hebrew Sales, and Tech
   Sales. All were one page, passed DOM overflow and PDF extraction checks, and their
   screenshots were visually inspected with no clipping, overlap, hierarchy, spacing,
@@ -24,13 +29,13 @@ required work remains. Historical artifacts were not overwritten.
 
 ## Knowledge and product evidence
 
-- Four modular sources contain 85 unique stable fact IDs.
+- Four modular sources contain 86 unique stable fact IDs.
 - Fact-store SHA-256 version:
-  `b4f4bbd080910fffaa2e92ef18d85586e3332e62ba2db39a847ffca7b4fc4134`.
+  `060a9a7f830c50dd351a7e46a09e4f64707ecbacd4089d05a106e4b4b90b9ba0`.
 - Ten Profiles cover Development, all required Sales Profiles, Tech Sales, and
   Pre-Sales/Solutions Consultant.
 - Profile-store SHA-256 version:
-  `b013c38c8a6b76c5601b974b602e48ec9dc87c7bec8dccc45f353dcad5cc86fb`.
+  `2147421c57e72a62af40979d708387c54cefeda851b01997887cdc87314f62c1`.
 - Canonical Pcom team size is approximately 2-3 representatives.
 - Canonical performance wording is approximately 30% over the management period, not
   annual or YoY.
@@ -43,6 +48,9 @@ required work remains. Historical artifacts were not overwritten.
   promoting one to canonical does.
 - `cv reconcile` fails when a fact's on-disk status disagrees with the last recorded
   lifecycle event, or when a non-canonical fact has no event at all.
+- The baseline reconciliation passed against all 127 registered artifact versions,
+  with no missing paths, hash mismatches, foreign-key problems, or fact-lifecycle
+  disagreements.
 
 ## Migration evidence
 
