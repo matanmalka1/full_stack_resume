@@ -11,7 +11,7 @@
   },
   "snapshot": {
     "markdown_sha256": "2ee8697bbed6eb15f6ede1620fe5c9b0655686155e3a4165b3967a3b48c2fb22",
-    "html_sha256": "8b1c7e92dc99856c1f23e2c21de5d1c1237d7e4f63c5492054c362a921fac4d4",
+    "html_sha256": "eabac6a7c2758250f0ec969897a0075d05b782bd104cbc72158f8bf9e0c1e86f",
     "selected_fact_ids": [
       "common.contact.email",
       "common.contact.linkedin",

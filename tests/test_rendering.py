@@ -7,7 +7,9 @@ from cv_engine.rendering import (
     _claim_html,
     _claim_recoverable,
     _emphasis_config,
+    _layout_class,
     _launch_failure_message,
+    _material_bottom_whitespace,
     normalized_role_filename,
     render_html,
 )
@@ -41,6 +43,12 @@ def test_rtl_ats_comparison_accepts_bidi_token_reordering() -> None:
     extracted = "בביצועי הצוות ובהכנסות 30% שיפור של כ B2B לאורך התקופה"
     assert _claim_recoverable(source, extracted.casefold(), rtl=True)
     assert not _claim_recoverable(source, "שיפור חלקי בלבד", rtl=True)
+
+
+def test_material_bottom_whitespace_is_a_one_page_visual_defect() -> None:
+    assert _material_bottom_whitespace(1, {"bottomWhitespaceRatio": 0.24}) == 0.24
+    assert _material_bottom_whitespace(1, {"bottomWhitespaceRatio": 0.16}) is None
+    assert _material_bottom_whitespace(2, {"bottomWhitespaceRatio": 0.40}) is None
 
 
 class _Claim:
@@ -115,3 +123,29 @@ def test_keyword_emphasis_leaves_facts_and_content_hash_untouched(
     assert "<strong>" not in markdown
     assert serialize_markdown(draft) == markdown
     assert sha256_text(markdown) == draft.content_hash
+
+
+def test_tech_sales_uses_sales_keyword_emphasis(v1_repo: Path) -> None:
+    config = _emphasis_config(v1_repo, "tech-sales")
+    claim = _Claim("Led needs discovery, negotiation, and closing.")
+    rendered = str(_claim_html(claim, False, "Sales Experience", config))
+    assert rendered == (
+        "Led <strong>needs discovery, negotiation</strong>, and <strong>closing</strong>."
+    )
+
+
+def test_short_tech_sales_draft_uses_spacious_layout(draft_factory) -> None:
+    setup = draft_factory(
+        "Technical Sales role for software customers, discovery, closing, and CRM",
+        profile_override="tech-sales",
+    )
+    short = setup.draft.model_copy(deep=True)
+    for section in short.sections:
+        section.claims = section.claims[:2]
+    assert _layout_class(short) == "spacious"
+
+    dense = setup.draft.model_copy(deep=True)
+    for section in dense.sections:
+        for claim in section.claims:
+            claim.text += " Detailed verified context." * 12
+    assert _layout_class(dense) == "compact"

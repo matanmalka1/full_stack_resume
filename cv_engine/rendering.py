@@ -50,7 +50,11 @@ def _emphasis_config(repo: Path, track: str) -> dict[str, Any]:
     Emphasis is a rendering decision, so it lives here rather than in a fact.
     A track that configures nothing simply gets no emphasis.
     """
-    path = repo / "rendering" / "rules" / f"{track}.yaml"
+    # Tech Sales has its own factual Track, but deliberately shares the Sales
+    # rendering schema. Looking for ``tech-sales.yaml`` silently disabled Sales
+    # emphasis for the CVs that need commercial and technical terms to scan.
+    rules_track = "sales" if track == "tech-sales" else track
+    path = repo / "rendering" / "rules" / f"{rules_track}.yaml"
     if not path.is_file():
         return {}
     rules = json.loads(path.read_text(encoding="utf-8"))
@@ -69,6 +73,23 @@ def _emphasis_config(repo: Path, track: str) -> dict[str, Any]:
         "styles": frozenset(config.get("styles", ("bullet",))),
         "max_groups": int(config.get("max_groups_per_line", 2)),
     }
+
+
+def _layout_class(draft: DraftDocument) -> str:
+    """Use a short Sales CV's page without risking dense documents.
+
+    This changes presentation only. It never adds, removes, or rewrites a claim,
+    and its thresholds are deterministic from the approved document.
+    """
+    if draft.track.value not in {"sales", "tech-sales"}:
+        return ""
+    claims = [claim for section in draft.sections for claim in section.claims]
+    character_count = sum(len(claim.text) for claim in claims)
+    if len(claims) <= 25 and character_count <= 2_000:
+        return "spacious"
+    if len(claims) > 32 or character_count > 2_700:
+        return "compact"
+    return ""
 
 
 def _emphasis_spans(value: str, config: dict[str, Any]) -> list[tuple[int, int]]:
@@ -158,6 +179,7 @@ def render_html(draft: DraftDocument, repo: Path, output_path: Path) -> Path:
         name=draft.name,
         headline=_bidi(draft.headline.text, rtl),
         headline_text=draft.headline.text,
+        layout_class=_layout_class(draft),
         contacts=[_contact_html(claim, rtl) for claim in draft.contacts],
         sections=sections,
     )
@@ -235,8 +257,16 @@ def render_pdf(html_path: Path, pdf_path: Path, screenshot_path: Path) -> dict[s
           const offenders = [...document.querySelectorAll('.claim, h1, h2, .contacts')]
             .filter(el => { const r = el.getBoundingClientRect(); return r.left < rect.left - 1 || r.right > rect.right + 1 || r.bottom > rect.bottom + 1; })
             .map(el => el.textContent.trim().slice(0, 100));
+          const content = [...page.querySelectorAll('header, section')];
+          const contentBottom = content.length
+            ? Math.max(...content.map(el => el.getBoundingClientRect().bottom - rect.top))
+            : 0;
           return {scrollWidth: page.scrollWidth, clientWidth: page.clientWidth,
                   scrollHeight: page.scrollHeight, clientHeight: page.clientHeight,
+                  contentBottom,
+                  bottomWhitespaceRatio: page.clientHeight
+                    ? Math.max(0, page.clientHeight - contentBottom) / page.clientHeight
+                    : 0,
                   offenders, dir: document.documentElement.dir,
                   links: [...document.querySelectorAll('a')].map(a => a.href)};
         }""")
@@ -305,6 +335,16 @@ def validate_rendered(
     if geometry.get("scrollWidth", 0) > geometry.get("clientWidth", 0) + 1 or geometry.get("offenders"):
         groups["visual"] = False
         issues.append(ValidationIssue(group="visual", code="overflow", message=str(geometry.get("offenders", []))))
+    underfill = _material_bottom_whitespace(page_count, geometry)
+    if underfill is not None:
+        groups["visual"] = False
+        issues.append(
+            ValidationIssue(
+                group="visual",
+                code="material-bottom-whitespace",
+                message=f"{underfill:.1%} of the page remains empty below the final section",
+            )
+        )
     if not screenshot_path.is_file() or screenshot_path.stat().st_size == 0:
         groups["visual"] = False
         issues.append(ValidationIssue(group="visual", code="screenshot-missing", message=str(screenshot_path)))
@@ -350,3 +390,11 @@ def _claim_recoverable(text: str, normalized_pdf: str, rtl: bool) -> bool:
         return False
     recovered = sum(token in normalized_pdf for token in tokens)
     return recovered / len(tokens) >= 0.9
+
+
+def _material_bottom_whitespace(page_count: int, geometry: dict[str, Any]) -> float | None:
+    """Return the underfill ratio only when it is a material one-page defect."""
+    underfill = geometry.get("bottomWhitespaceRatio")
+    if page_count != 1 or not isinstance(underfill, (int, float)) or underfill <= 0.22:
+        return None
+    return float(underfill)
