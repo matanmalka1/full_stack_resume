@@ -1,0 +1,386 @@
+# v2.0 Implementation Plan
+
+Status: **Draft for review**
+
+Product authority: `docs/v2-product-spec.md`
+
+Architecture: `docs/v2-architecture.md`
+
+State/use-cases: `docs/v2-state-and-use-cases.md`
+
+## 1. Delivery rules
+
+The implementation sequence is:
+
+`Review -> Architecture -> Plan -> Implement -> Test -> Migrate -> Verify`
+
+Work occurs on long-lived branch `v2-main` in the isolated worktree
+`../resume_python-v2`. A single developer working sequentially uses small milestone
+commits rather than additional feature branches. A separate feature branch is justified
+only for genuinely parallel work.
+
+No v2 development process opens the live v1 Workspace. All development, migration
+tests, Alpha, and Beta use explicit test/copy Workspace markers.
+
+The current repository authority files describe v1 and prohibit the Web UI as out of
+v1. After this document set is approved and before M1 implementation, update repository
+authority so v2 scope is expressly permitted and the v2 product specification becomes
+the top authority for v2. This is a required gate, not an implicit reinterpretation.
+
+## 2. M0 — v1 baseline and isolation
+
+Status: **Completed on 2026-08-17**
+
+Evidence:
+
+- Baseline commit: `2cc31c7`
+- Annotated tag: `v1.0.0`
+- Full suite: `131 passed` with `CV_REQUIRE_BROWSER=1`
+- `pip check`: passed
+- `cv reconcile`: passed against 127 registered artifact versions
+- Fact store: 86 canonical facts, no lifecycle disagreement
+- Main worktree: clean at baseline
+- v2 branch: `v2-main`
+- v2 worktree: `/Users/matanmalka/Projects/resume_python-v2`
+
+Remaining M0 gate before M1:
+
+- [ ] Approve the six v2 planning documents.
+- [ ] Update repository authority/agent instructions for v2.
+- [ ] Create and validate a v2 development Workspace marker/config.
+- [ ] Create an isolated v2 data copy without pointing to v1 live paths.
+
+## 3. M1 — Application foundation
+
+Objective: prove that v1 behavior can run through clean application boundaries before
+introducing HTTP or React.
+
+### 3.1 Workspace and configuration
+
+- Add explicit Workspace path/config models and marker validation.
+- Add separate Workspace ID and installation ID.
+- Implement config precedence: CLI > environment > Workspace config > defaults.
+- Add live/copy/test/development guard policy.
+- Add CandidateContext loader referencing canonical identity/contact facts.
+- Remove candidate literals from filename and rendering policy.
+- Add version/hash surfaces for CandidateContext and Knowledge dependencies.
+
+### 3.2 Package boundaries
+
+- Introduce domain, application, infrastructure, CLI, API, and runtime boundaries
+  incrementally without micro-packaging.
+- Move or wrap v1 domain models/validators with no semantic regression.
+- Define application command/query DTOs and stable error types.
+- Define focused repository ports and UnitOfWork.
+- Create the manual composition root.
+
+### 3.3 Services and CLI
+
+- Implement Application, Analysis, Draft, Rendering, and Tracking service seams.
+- Move orchestration out of `Engine` into application use-cases.
+- Make `Engine` a compatibility façade with no independent business logic.
+- Migrate central CLI commands to the services.
+- Add compatibility resolvers/warnings only where legacy CLI signatures omit an
+  explicit v2 source ID.
+- Audit whether the v1 CSV export has a real consumer. Retain a versioned v2 CLI export;
+  add `--legacy-format` only when that consumer is demonstrated.
+
+### 3.4 M1 acceptance
+
+- [ ] Domain/application code imports no FastAPI, SQLite, path layout, or provider HTTP.
+- [ ] CLI completes the deterministic v1 Definition of Done through services.
+- [ ] Selected facts, claims, validation outcomes, Ready eligibility, and decision
+      behavior retain semantic parity with v1.
+- [ ] Candidate name is not hardcoded in core or renderer policy.
+- [ ] Workspace guards reject a marked v1 live Workspace in v2 development.
+- [ ] All applicable v1 tests pass.
+
+Stable commit boundary: application seam complete and CLI green.
+
+## 4. M2 — Persistence, operations, projections, and recovery
+
+Objective: create the durable v2 foundations required by the API rather than building
+them inside endpoints later.
+
+### 4.1 Schema and repositories
+
+- Design the explicit v2 SQLite schema and numbered SQL migrations.
+- Configure foreign keys, WAL, busy timeout, short transactions, and narrow immutable
+  constraints/triggers.
+- Implement repositories by transactional ownership and UnitOfWork.
+- Implement filesystem stores for snapshots, revisions, outputs, provider responses,
+  temp files, and manifests.
+- Implement UUIDv4 IDs, UTC timestamps, SHA-256 hashes, and serialization versions.
+
+### 4.2 Domain records
+
+- Add immutable JobSnapshot filesystem payloads and metadata.
+- Add immutable JobAnalysis and SelectionPlan versions.
+- Add the one mutable WorkingDraft with edit version/content hash.
+- Add immutable ValidationRun and ApprovedRevision records.
+- Add artifact metadata and readiness qualification without a ReadyRevision entity.
+- Add immutable submissions, recruitment events/corrections, current status projection,
+  terminal outcome, and next action.
+- Add audit records and human-readable provenance data.
+
+### 4.3 State and permissions
+
+- Implement PreparationState and WorkingDraftState projection.
+- Implement Ready compatibility by JobSnapshot + JobAnalysis.
+- Implement review/warning/blocker/stale reason models.
+- Implement all available/blocked actions and nullable recommended action.
+- Produce one consistent Application read projection in a single read transaction.
+
+### 4.4 Operations
+
+- Implement Operation schema, atomic claiming, resource leases, heartbeat, phases,
+  cancellation, retry, idempotency, safe failure metadata, and inactive outputs.
+- Implement the internal low-concurrency worker.
+- Implement startup interruption of expired queued/running work.
+- Implement optimistic pre-execution and pre-activation checks with `SOURCE_CHANGED`.
+- Implement one classified automatic transient retry.
+
+### 4.5 Knowledge consistency
+
+- Implement KnowledgeRepository validation and atomic writes.
+- Implement the narrow PREPARED/COMMITTED mutation journal.
+- Store enough hashes, paths, mutation identity, and strategy for deterministic recovery.
+- Implement focused quarantine and reconciliation.
+- Implement contextual pending fact, confirmation/promotion, attachment, and
+  SelectionPlan flows.
+
+### 4.6 Backup/migration scaffolding
+
+- Add Workspace backup, manifest, hash verification, restore, and open/reconcile paths.
+- Add v1 inventory and mapping contracts early.
+- Build migration against fixtures/copies; do not run a live migration.
+
+### 4.7 M2 acceptance
+
+- [ ] Repositories/UoW pass real SQLite integration tests.
+- [ ] All immutable entities reject update/delete bypasses as required.
+- [ ] Projection/action policy is internally consistent under concurrency fixtures.
+- [ ] ETag, idempotency, leases, cancellation, retry, and SOURCE_CHANGED pass.
+- [ ] Journal crash windows recover or quarantine explicitly.
+- [ ] Backup restores to an independently openable/reconcilable Workspace.
+- [ ] No M2 code points to live v1 paths.
+
+Stable commit boundaries may separate schema/repositories, state policy, Operations, and
+Knowledge journal when each boundary is green and intentionally scoped.
+
+## 5. M3 — Application API vertical slice
+
+Objective: prove the complete workflow through the Application API before building a
+large frontend.
+
+### 5.1 FastAPI foundation
+
+- Add FastAPI and explicit `/api/v1` routers.
+- Add separate Pydantic HTTP request/response schemas.
+- Add composition dependencies that receive already-built services.
+- Add Problem Details mapping and stable application error codes.
+- Add OpenAPI generation/validation and generated TypeScript types.
+- Add body-size limits, path containment, strict Origin/CORS policy, and artifact
+  streaming by ID only.
+
+### 5.2 Vertical-slice commands and queries
+
+- Create Application and immutable JobSnapshot with duplicate warnings.
+- Analyze in deterministic and AI modes through Operation.
+- Apply review decisions and create immutable SelectionPlan.
+- Generate/replace WorkingDraft.
+- Read/update WorkingDraft with ETag.
+- Apply deterministic fact selection changes.
+- Run section/claim regeneration Operations.
+- Validate exact WorkingDraft.
+- Explicitly approve exact validated content.
+- Render ApprovedRevision and qualify Ready.
+- Query Operation progress and complete state/action projection.
+- Download the exact Ready PDF.
+
+### 5.3 AI tasks
+
+- Version and implement `propose_job_analysis`.
+- Version and implement `propose_selection_plan`.
+- Version and implement `draft_resume`.
+- Version and implement `regenerate_section`.
+- Version and implement `regenerate_claim`.
+- Preserve parsed and sanitized raw outputs with complete provenance.
+- Add no silent fallback and deterministic continuation as a separate command.
+
+### 5.4 M3 acceptance
+
+- [ ] Real FastAPI + worker + SQLite + filesystem test completes the API sequence
+      Create -> Analyze -> Review if needed -> Draft -> Edit -> Validate -> Approve ->
+      Render -> Ready.
+- [ ] NeedsReview and validation failure are successful outcomes.
+- [ ] Routers contain no business logic.
+- [ ] Commands use explicit source IDs; latest appears only in read/query helpers.
+- [ ] OpenAPI and generated TypeScript types have no drift.
+- [ ] Security, race, and failure-path tests pass.
+
+Stable commit boundary: API vertical slice and failures green, no Dashboard endpoints
+required beyond foundational projections.
+
+## 6. M4 — React vertical slice
+
+Objective: complete the same proven path through a Hebrew local Web UI.
+
+### 6.1 Design pass
+
+- Create low-fidelity wireframes before component implementation.
+- Define typography, spacing, restrained color, focus, warning/blocker, and status
+  hierarchy.
+- Define RTL shell and explicit LTR technical/content islands.
+- Validate the editor/preview layout at desktop widths and basic responsive fallback.
+
+### 6.2 Frontend foundation
+
+- Add React/TypeScript/Vite/Tailwind project.
+- Add routing, TanStack Query, React Hook Form, generated types, and handwritten client.
+- Add production build served by FastAPI and Vite proxy development flow.
+- Add operation polling and safe global error handling.
+- Add accessible Dialog/Popover primitives only as needed.
+
+### 6.3 Screens
+
+- New Application with duplicate precheck, `.txt` local read, and optional URL.
+- Operation Progress.
+- Analysis Review only when required, with one Apply Decisions commit.
+- Draft Editor with claims/facts/warnings, deterministic changes, regeneration,
+  free-text pending state, autosave, and explicit save-conflict dialog.
+- Isolated server-rendered HTML Preview.
+- Validation Results with blockers and warnings.
+- Approval summary/confirmation for the exact validated version.
+- Render progress/failure/retry.
+- Ready screen with preview, PDF download, validation/provenance, and New Draft.
+- Minimal Settings for auto-generation, AI enabled/default execution mode, provider
+  configured state, open-browser preference, and basic UI preferences.
+
+### 6.4 M4 gate
+
+Dashboard work is prohibited until:
+
+- [ ] A real Web E2E completes the full sequence through Ready.
+- [ ] The same test covers review-required and no-review paths.
+- [ ] Central failures include unsupported edit, validation block, stale validation,
+      ETag conflict, provider failure, SOURCE_CHANGED, render failure/retry, and old
+      Ready with newer draft.
+- [ ] Chrome/Chromium E2E and central WebKit smoke pass.
+- [ ] axe passes on New Application, Analysis Review, Draft Editor, Validation, and
+      Ready.
+- [ ] The UI explains current state and blockers without technical knowledge.
+
+Stable commit boundary: first Web vertical slice complete and gate passed.
+
+## 7. M5 — Tracking
+
+Objective: add recruitment management only after the preparation workflow is stable.
+
+- Implement Dashboard table, search, filters, sorting, badges, active Operation, next
+  action/date, warnings, and migrated/historical markers.
+- Implement Application Detail header, current preparation, unified timeline,
+  revisions/artifacts, submissions, and navigation to editor.
+- Implement allowed forward RecruitmentStatus transitions.
+- Implement explicit correction events and transactionally consistent status/outcome.
+- Implement internal submission with explicit Ready revision/PDF IDs.
+- Implement external submission without fake revision/artifact.
+- Implement multiple append-only submissions.
+- Implement next action, date, event history, and computed overdue warning.
+- Implement human-readable provenance/decision Markdown export.
+- Do not add charts, notifications, Web CSV export, or delete.
+
+M5 acceptance:
+
+- [ ] Tracking never changes preparation state.
+- [ ] Drafting after submission never moves recruitment backward.
+- [ ] Submission and status/audit commit atomically.
+- [ ] Corrections preserve the original event.
+- [ ] Closing preserves terminal outcome.
+- [ ] Dashboard and Application Detail pass axe and E2E coverage.
+
+Stable commit boundary: v2.0 product scope complete before runtime/release hardening.
+
+## 8. M6 — Runtime, packaging, migration, and release
+
+Objective: make the product locally operable and prove Release Ready without using live
+data as a test environment.
+
+### 8.1 Runtime supervisor
+
+- Implement `cv web` and `--no-open`.
+- Validate Workspace, schema, compatibility, and marker guards.
+- Implement default port 8765, same-instance health/identity detection, and controlled
+  fallback port.
+- Start composition, FastAPI, worker, and default browser.
+- Implement graceful shutdown and durable interruption behavior.
+- Bundle React build so Node is not a runtime requirement.
+- Use managed Chromium for PDF rendering and diagnostic-only local Chrome fallback.
+- Add Open Logs Folder.
+
+### 8.2 Release hardening
+
+- Run complete Linux/Chromium CI.
+- Run macOS runtime, Chrome, WebKit, and rendering verification.
+- Run manual OpenAI analysis/draft smoke and record execution metadata.
+- Verify performance regression budgets and investigate material regressions.
+- Verify backup, manifest, restore, open, and reconciliation.
+- Run v1 migration on a fresh faithful copy and produce a zero-unexplained report.
+- Run the complete v2 Definition of Done and publish the acceptance report.
+
+### 8.3 Release states
+
+Engineering Complete means all M0-M6 code/document/test work is done.
+
+Release Ready additionally means the acceptance report, copy migration, backup/restore,
+macOS verification, and manual provider smoke have passed.
+
+Live cutover is a later user-approved deployment/migration event. The software may be
+v2.0 Release Ready before that event.
+
+## 9. Live cutover event
+
+Cutover is not ordinary implementation and is not implied by reaching Release Ready.
+It requires explicit user authorization at that time.
+
+Sequence:
+
+```text
+freeze v1 writes
+-> create complete backup
+-> verify backup and restore
+-> compatibility check
+-> migrate
+-> reconcile
+-> full acceptance against migrated Workspace
+-> activate v2
+```
+
+If any gate fails, do not partially continue. Rollback restores/uses the frozen v1
+snapshot and restarts v1. Never downgrade the v2 database.
+
+## 10. Commit and change discipline
+
+- Preserve the main v1 worktree and live data.
+- Keep every commit scoped to one stable boundary.
+- Do not combine architecture extraction with unrelated content changes.
+- Add targeted regression tests for every material bug.
+- Do not edit generated HTML/PDF or immutable artifacts by hand.
+- Do not add deferred features while implementing a milestone.
+- Do not begin M5 before the M4 vertical-slice gate.
+- Do not perform live migration before Release Ready and explicit cutover authorization.
+
+## 11. Stop conditions
+
+Stop and request a decision for:
+
+- a semantic change to an approved invariant
+- scope expansion
+- migration or data-loss risk
+- a possible unsupported-claim approval path
+- unresolved specification contradiction
+- required dual-write
+- required auth/cloud/deployment-model change
+
+Do not stop for naming, folder structure, or another implementation detail that can
+change without altering contracts or invariants.
