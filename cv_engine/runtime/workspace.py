@@ -6,7 +6,7 @@ import uuid
 from pathlib import Path
 from typing import Literal
 
-from ..models import StrictModel
+from ..domain.models import StrictModel
 from ..util import utc_now
 
 
@@ -167,24 +167,19 @@ def create_workspace(
     data_class: DataClass = "copy",
     roots: dict[str, str] | None = None,
     knowledge_source: Path | None = None,
-    acknowledge_legacy_root: bool = False,
 ) -> Workspace:
     """Create an isolated Workspace and its marker.
 
     A directory that carries v1 tracking data is refused outright. The migration
     source is read through `LegacyV1Source` and copied into a separate target,
     so no v2 command ever writes a marker — or anything else — into v1 data.
-
-    `acknowledge_legacy_root` exists only for a root the legacy in-place v1
-    migration already converted and which is therefore no longer a migration
-    source. It is not reachable from the CLI and the v2 migration path never
-    uses it.
+    There is no override: the copy-based migration never needs one.
     """
     root = Path(root).resolve()
     _check_combination(purpose, data_class)
     if (root / MARKER_NAME).exists():
         raise WorkspaceError(f"a Workspace marker already exists at {root}")
-    if looks_legacy(root) and not acknowledge_legacy_root:
+    if looks_legacy(root):
         raise WorkspaceError(
             f"refusing to mark a legacy v1 root as a v2 Workspace: {root}. "
             "Create the Workspace elsewhere and migrate through the read-only source adapter."

@@ -3,16 +3,21 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..domain.facts import FactStore
-from ..domain.models import CandidateContext, ValidationReport
-from ..domain.profiles import ProfileStore
-from ..domain.selection import EmphasisPolicyStore
-from ..runtime.workspace import Workspace, load_workspace
-from .services import WorkflowError
+from .application.services import WorkflowError
+from .domain.facts import FactStore
+from .domain.models import CandidateContext, ValidationReport
+from .domain.profiles import ProfileStore
+from .domain.selection import EmphasisPolicyStore
+from .runtime.composition import build_services
+from .runtime.workspace import Workspace, load_workspace
 
 
 class Engine:
     """Temporary compatibility façade over the application services.
+
+    It lives outside the layered packages on purpose: it is the v1 surface the
+    old CLI and test suite still address, not a v2 boundary, and it is deleted
+    once those callers use the services directly.
 
     It exists so the v1 CLI and the v1 test suite keep working while the
     services take ownership of the workflow. It holds no business logic of its
@@ -27,10 +32,6 @@ class Engine:
         *,
         services: Any = None,
     ):
-        # Imported here because the composition root necessarily knows about
-        # infrastructure, and nothing else in the application layer may.
-        from ..runtime.composition import build_services
-
         self.workspace = (
             workspace if isinstance(workspace, Workspace) else load_workspace(Path(workspace))
         )

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from cv_engine.domain.drafts import load_draft
 from cv_engine.util import canonical_json, sha256_text
-from cv_engine.application.workflow import Engine
+from cv_engine.compat import Engine
 
 
 ACCOUNT_MANAGER_JOB = (

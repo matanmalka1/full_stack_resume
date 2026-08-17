@@ -80,11 +80,35 @@ class Fact(StrictModel):
     replaces: str | None = None
     source_file: str = ""
     resume_style: Literal["paragraph", "heading", "date", "bullet", "item", "contact"]
+    # The absolute address a rendering stands for, where the rendering is
+    # display text rather than the address itself: "linkedin.com/in/..." is
+    # what a CV shows, "https://www.linkedin.com/in/..." is what the link must
+    # point at. Declaring it here keeps the address in the fact's one canonical
+    # location instead of a second copy beside it.
+    link_target: str | None = None
 
     @model_validator(mode="after")
     def require_english_rendering(self) -> "Fact":
         if not self.renderings.get("en"):
             raise ValueError("every fact requires an English rendering")
+        return self
+
+    @model_validator(mode="after")
+    def link_target_carries_the_rendering(self) -> "Fact":
+        """A declared address must still be the one the fact displays.
+
+        Without this the two halves of the same fact can drift apart and the
+        CV shows one profile while linking to another.
+        """
+        if self.link_target is None:
+            return self
+        if not self.link_target.startswith("https://"):
+            raise ValueError(f"link target is not https: {self.link_target}")
+        if self.renderings["en"] not in self.link_target:
+            raise ValueError(
+                f"link target {self.link_target} does not carry the fact's "
+                f"English rendering {self.renderings['en']!r}"
+            )
         return self
 
 
@@ -214,9 +238,9 @@ class CandidateContext(StrictModel):
     link, and how the recruiter-facing filename is built, so no renderer,
     validator, or filename policy contains a candidate literal.
 
-    `names` and `resolved_filename_name` are resolved from the canonical facts
-    at load time. They are a projection of those facts, never a second place to
-    edit them.
+    `names`, `link_targets`, and `resolved_filename_name` are resolved from the
+    canonical facts at load time. They are a projection of those facts, never a
+    second place to edit them.
     """
 
     context_version: str
@@ -229,8 +253,10 @@ class CandidateContext(StrictModel):
     track_contact_fact_ids: dict[str, list[str]] = {}
     link_schemes: dict[str, ContactScheme] = {}
     # `mailto`/`tel` addresses are the fact's own rendering. A profile URL is
-    # not: its canonical rendering is display text ("linkedin.com/in/..."),
-    # so the absolute target is declared here instead of being guessed from it.
+    # not: its canonical rendering is display text ("linkedin.com/in/..."), so
+    # the absolute target lives on the fact as `link_target` and is resolved
+    # into this projection at load time. The context decides which scheme wraps
+    # a contact; it never carries a second copy of the address.
     link_targets: dict[str, str] = {}
     names: dict[str, str] = {}
     resolved_filename_name: str = ""

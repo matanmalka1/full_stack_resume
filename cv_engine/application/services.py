@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +11,6 @@ from ..domain.drafts import (
     load_draft,
     serialize_markdown,
     synchronize_markdown_claims,
-    write_working_draft,
 )
 from ..domain.facts import FactStore, FactStoreError
 from ..domain.facts import create_fact as persist_new_fact
@@ -30,10 +28,15 @@ from ..domain.models import (
 from ..domain.profiles import ProfileStore, attach_fact_to_section
 from ..domain.selection import EmphasisPolicyStore
 from ..domain.validation import validate_draft
-from ..runtime.workspace import Workspace
 from ..util import sha256_file, utc_now
 from .chain import ChainError, check_draft_chain, decision_record_analysis_id
-from .ports import ApplicationRepository, ClassificationProvider, KnowledgeStore, Renderer
+from .ports import (
+    ApplicationRepository,
+    ArtifactStore,
+    ClassificationProvider,
+    KnowledgeStore,
+    Renderer,
+)
 from .ready import verify_ready_integrity
 
 
@@ -54,14 +57,12 @@ class ServiceBase:
         *,
         repository: ApplicationRepository,
         knowledge: KnowledgeStore,
-        workspace: Workspace,
+        artifacts: ArtifactStore,
         renderer: Renderer | None = None,
         provider: ClassificationProvider | None = None,
     ):
         self.repo = repository
-        self.workspace = workspace
-        self.knowledge_root = workspace.knowledge_root
-        self.artifacts_root = workspace.artifacts_root
+        self.artifacts = artifacts
         self._knowledge = knowledge
         self._renderer = renderer
         self._provider = provider
@@ -247,8 +248,7 @@ class KnowledgeService(ServiceBase):
         claim's own text becomes the candidate fact rather than being retyped,
         so nothing is strengthened on the way in.
         """
-        target = self.artifacts_root / "working" / application_id
-        draft = load_draft(target / "resume.claims.json")
+        draft = self.artifacts.load_working_draft(application_id)
         claims = [draft.headline, *draft.contacts, *(claim for section in draft.sections for claim in section.claims)]
         try:
             claim = next(item for item in claims if item.claim_id == claim_id)
@@ -303,7 +303,7 @@ class KnowledgeService(ServiceBase):
         updated = attach_fact_to_section(path, fact_id, section, pin=pin)
         # Reload so a Profile that no longer validates against the fact store
         # fails here rather than at the next draft.
-        reloaded = ProfileStore.load(self.knowledge_root, FactStore.load(self.base_dir))
+        reloaded = self.load_knowledge().profiles
         record = self._record_fact_event(
             fact,
             event_type="fact_attached_to_profile",
@@ -315,7 +315,7 @@ class KnowledgeService(ServiceBase):
             "profile": updated.profile.value,
             "section": section,
             "pinned": pin,
-            "profile_path": self.workspace.relative(path),
+            "profile_path": self.artifacts.relative(path),
             "profile_store_version": reloaded.version,
         }
 
@@ -490,7 +490,8 @@ class DraftService(ServiceBase):
             candidate=self.candidate(facts),
         )
         presentation_rules = self.load_knowledge().presentations
-        markdown, manifest = write_working_draft(self.artifacts_root, draft)
+        paths = self.artifacts.write_working_draft(draft)
+        markdown, manifest = paths.markdown, paths.manifest
         report = validate_draft(draft, markdown, facts, profile, analysis, policies=policies)
         self.repo.record_validation(application_id, "pre-render", report)
         self.repo.record_generation_run({
@@ -514,10 +515,9 @@ class DraftService(ServiceBase):
 
     def validate_working(self, application_id: str) -> ValidationReport:
         facts, profiles, policies = self.knowledge()
-        target = self.artifacts_root / "working" / application_id
-        draft = load_draft(target / "resume.claims.json")
+        draft = self.artifacts.load_working_draft(application_id)
         _, analysis = self._bound_analysis(application_id, draft, profiles, facts)
-        markdown_path = target / "resume.md"
+        markdown_path = self.artifacts.working_paths(application_id).markdown
         actual = markdown_path.read_text(encoding="utf-8") if markdown_path.is_file() else ""
         if actual != serialize_markdown(draft):
             try:
@@ -525,7 +525,7 @@ class DraftService(ServiceBase):
             except ValueError:
                 pass
             else:
-                markdown_path, _ = write_working_draft(self.artifacts_root, draft)
+                markdown_path = self.artifacts.write_working_draft(draft).markdown
         report = validate_draft(draft, markdown_path, facts, profiles.get(draft.profile), analysis, policies=policies)
         self.repo.record_validation(application_id, "pre-render", report)
         return report
@@ -541,8 +541,7 @@ class DraftService(ServiceBase):
         template_version: str | None = None,
     ) -> tuple[Path, ValidationReport]:
         facts, profiles, policies = self.knowledge()
-        target = self.artifacts_root / "working" / application_id
-        draft = load_draft(target / "resume.claims.json")
+        draft = self.artifacts.load_working_draft(application_id)
         _, analysis = self._bound_analysis(application_id, draft, profiles, facts)
         updated = apply_claim_edit(
             draft,
@@ -553,7 +552,7 @@ class DraftService(ServiceBase):
             template_id=template_id,
             template_version=template_version,
         )
-        markdown, _ = write_working_draft(self.artifacts_root, updated)
+        markdown = self.artifacts.write_working_draft(updated).markdown
         report = validate_draft(updated, markdown, facts, profiles.get(updated.profile), analysis, policies=policies)
         self.repo.record_validation(application_id, "manual-claim-edit", report)
         return markdown, report
@@ -563,11 +562,12 @@ class DraftService(ServiceBase):
 
     def sync_working_claims(self, application_id: str) -> tuple[Path, ValidationReport]:
         facts, profiles, policies = self.knowledge()
-        target = self.artifacts_root / "working" / application_id
-        draft = load_draft(target / "resume.claims.json")
+        draft = self.artifacts.load_working_draft(application_id)
         _, analysis = self._bound_analysis(application_id, draft, profiles, facts)
-        updated = synchronize_markdown_claims(draft, target / "resume.md", facts)
-        markdown, _ = write_working_draft(self.artifacts_root, updated)
+        updated = synchronize_markdown_claims(
+            draft, self.artifacts.working_paths(application_id).markdown, facts
+        )
+        markdown = self.artifacts.write_working_draft(updated).markdown
         report = validate_draft(updated, markdown, facts, profiles.get(updated.profile), analysis, policies=policies)
         self.repo.record_validation(application_id, "manual-markdown-sync", report)
         return markdown, report
@@ -577,8 +577,7 @@ class DraftService(ServiceBase):
         if not report.passed:
             raise WorkflowError("approval blocked by pre-render validation")
         facts, profiles, policies = self.knowledge()
-        working = self.artifacts_root / "working" / application_id
-        draft = load_draft(working / "resume.claims.json")
+        draft = self.artifacts.load_working_draft(application_id)
         # The decision record explains the draft being approved, so it is bound to
         # that draft's own analysis. A newer analysis does not get to describe an
         # older document.
@@ -588,16 +587,14 @@ class DraftService(ServiceBase):
             if row["artifact_type"] == "resume_markdown"
         ]
         version = len(existing) + 1
-        approved_dir = self.artifacts_root / application_id / f"v{version:03d}"
-        if approved_dir.exists():
-            raise WorkflowError(f"approved version directory already exists: {approved_dir}")
-        approved_dir.mkdir(parents=True)
-        markdown_path = approved_dir / "resume.md"
-        manifest_path = approved_dir / "resume.claims.json"
-        shutil.copy2(working / "resume.md", markdown_path)
-        shutil.copy2(working / "resume.claims.json", manifest_path)
+        try:
+            published = self.artifacts.publish_working_draft(application_id, version)
+        except FileExistsError as exc:
+            raise WorkflowError(str(exc)) from exc
+        markdown_path, manifest_path = published.markdown, published.manifest
+        approved_dir = markdown_path.parent
         now = utc_now()
-        relative_markdown = self.workspace.relative(markdown_path)
+        relative_markdown = self.artifacts.relative(markdown_path)
         markdown_version_id = self.repo.register_artifact_version(
             application_id,
             "resume_markdown",
@@ -616,7 +613,7 @@ class DraftService(ServiceBase):
             application_id,
             "claim_manifest",
             "resume-claims",
-            self.workspace.relative(manifest_path),
+            self.artifacts.relative(manifest_path),
             sha256_file(manifest_path),
             "approved",
             job_snapshot_id=draft.job_snapshot_id,
@@ -653,8 +650,8 @@ class DraftService(ServiceBase):
             "job_analysis_id": analysis_id,
             "artifact_paths": {
                 "markdown": relative_markdown,
-                "html": self.workspace.relative(approved_dir / "resume.html"),
-                "pdf": self.workspace.relative(expected_pdf),
+                "html": self.artifacts.relative(approved_dir / "resume.html"),
+                "pdf": self.artifacts.relative(expected_pdf),
             },
         }
         decision_id = self.repo.record_decision(
@@ -681,7 +678,7 @@ class RenderingService(ServiceBase):
     def render(self, application_id: str) -> tuple[Path, ValidationReport]:
         facts, profiles, policies = self.knowledge()
         manifest_record = self.repo.latest_artifact_version(application_id, "claim_manifest", "approved")
-        manifest_path = self.workspace.root / manifest_record["path"]
+        manifest_path = self.artifacts.resolve(manifest_record["path"])
         draft = load_draft(manifest_path)
         profile = profiles.get(draft.profile)
         directory = manifest_path.parent
@@ -716,7 +713,7 @@ class RenderingService(ServiceBase):
                 application_id,
                 artifact_type,
                 logical_name,
-                self.workspace.relative(path),
+                self.artifacts.relative(path),
                 sha256_file(path),
                 lifecycle,
                 job_snapshot_id=draft.job_snapshot_id,
@@ -729,20 +726,20 @@ class RenderingService(ServiceBase):
             ))
         self.repo.record_validation(application_id, "post-render", report, artifact_ids[1])
         if report.passed:
-            integrity = verify_ready_integrity(self.workspace, self.repo, application_id)
+            integrity = verify_ready_integrity(self.artifacts, self._knowledge, self.repo, application_id)
             if not integrity.passed:
                 raise WorkflowError(
                     "render succeeded but fresh ready integrity verification failed: "
                     f"{[issue.code for issue in integrity.issues]}"
                 )
-            self.repo._set_ready(application_id, artifact_ids[1], "all ready validation groups passed")
+            self.repo.set_ready(application_id, artifact_ids[1], "all ready validation groups passed")
         return pdf_path, report
 
     def ready_report(self, application_id: str) -> ValidationReport:
         application = self.repo.get_application(application_id)
         if application["current_status"] != ApplicationStatus.READY.value:
             raise WorkflowError("application is not ready")
-        return verify_ready_integrity(self.workspace, self.repo, application_id)
+        return verify_ready_integrity(self.artifacts, self._knowledge, self.repo, application_id)
 
 
 class TrackingService(ServiceBase):
@@ -752,14 +749,14 @@ class TrackingService(ServiceBase):
         application = self.repo.get_application(application_id)
         if application["current_status"] != ApplicationStatus.READY.value:
             raise WorkflowError("applied requires a currently valid ready application")
-        integrity = verify_ready_integrity(self.workspace, self.repo, application_id)
+        integrity = verify_ready_integrity(self.artifacts, self._knowledge, self.repo, application_id)
         if not integrity.passed:
             raise WorkflowError(
                 "applied blocked by stale or tampered ready state: "
                 f"{[issue.code for issue in integrity.issues]}"
             )
         pdf_artifact_version_id = integrity.evidence["pdf_artifact_version_id"]
-        self.repo._record_submission(application_id, pdf_artifact_version_id, reason)
+        self.repo.record_submission(application_id, pdf_artifact_version_id, reason)
         return {
             "application_id": application_id,
             "pdf_artifact_version_id": pdf_artifact_version_id,

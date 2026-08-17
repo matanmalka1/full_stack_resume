@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from cv_engine.infrastructure.db import connect
-from cv_engine.application.workflow import Engine
+from cv_engine.compat import Engine
 from helpers import ACCOUNT_MANAGER_JOB, working_claim as _working_claim
 
 
@@ -118,7 +118,7 @@ def test_cli_exposes_style_safe_composite_edit(drafted_application, cli_runner) 
 
 
 def test_render_revalidates_approved_markdown_before_browser(approved_application) -> None:
-    from cv_engine.application.workflow import WorkflowError
+    from cv_engine.application.services import WorkflowError
 
     setup = approved_application("Acme", "Developer", "Python backend developer API React")
     engine, app_id = setup

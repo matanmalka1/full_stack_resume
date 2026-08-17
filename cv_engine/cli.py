@@ -26,7 +26,8 @@ from .infrastructure.migration import (
 from .domain.facts import FACT_SOURCE_NAMES
 from .domain.models import ApplicationStatus, FactStatus
 from .util import sha256_file, utc_now
-from .application.workflow import Engine, WorkflowError
+from .application.services import WorkflowError
+from .compat import Engine
 from .runtime.composition import build_services
 
 

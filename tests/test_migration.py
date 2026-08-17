@@ -18,7 +18,7 @@ from cv_engine.infrastructure.migration import (
     verify_snapshot,
 )
 from cv_engine.util import canonical_json, sha256_text
-from cv_engine.application.workflow import Engine
+from cv_engine.compat import Engine
 from helpers import passing_migration_test_runner as _passing_test_runner
 from helpers import seal_report as _seal_report
 

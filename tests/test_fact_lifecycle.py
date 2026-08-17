@@ -8,7 +8,8 @@ import pytest
 from cv_engine.infrastructure.db import connect
 from cv_engine.domain.facts import FactStore, FactStoreError
 from cv_engine.domain.models import FactStatus
-from cv_engine.application.workflow import Engine, WorkflowError
+from cv_engine.application.services import WorkflowError
+from cv_engine.compat import Engine
 from helpers import ACCOUNT_MANAGER_JOB, working_claim as _working_claim
 
 

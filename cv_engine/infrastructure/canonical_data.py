@@ -17,6 +17,7 @@ def _fact(
     style: str = "bullet",
     dates: str | None = None,
     replaces: str | None = None,
+    link_target: str | None = None,
 ) -> dict:
     renderings = {"en": en}
     if he:
@@ -32,6 +33,7 @@ def _fact(
         "effective_dates": dates,
         "replaces": replaces,
         "resume_style": style,
+        "link_target": link_target,
     }
 
 
@@ -44,7 +46,9 @@ LEGACY = "base/cv_base.md; migrated without strengthening"
 # would silently invalidate that evidence. This fact is created through the
 # normal lifecycle instead, exactly as any later canonical fact would be.
 V2_IDENTITY_FACT = {
-    "fact_id": "common.identity.name",
+    # New v2 facts take UUIDv4 technical identity; only migrated facts keep a
+    # semantic ID, and there is no v1 identity fact to preserve.
+    "fact_id": "0f3a6c4e-6b5f-4a2b-9c1d-7e8f5a0b2c31",
     "meaning": "The candidate's professional name is Matan Malka; the Hebrew rendering is מתן מלכה.",
     "renderings": {"en": "Matan Malka", "he": "מתן מלכה"},
     "tags": ["identity", "contact"],
@@ -63,8 +67,10 @@ COMMON_FACTS = [
     _fact("common.contact.location", "Professional location is Tel Aviv.", "Tel Aviv", he="תל אביב", tags=["contact"], provenance=LEGACY, style="contact"),
     _fact("common.contact.phone", "Professional phone is +972-50-668-8386.", "+972-50-668-8386", he="+972-50-668-8386", tags=["contact", "phone"], provenance=LEGACY, style="contact"),
     _fact("common.contact.email", "Professional email is matan1391@gmail.com.", "matan1391@gmail.com", he="matan1391@gmail.com", tags=["contact", "email"], provenance=LEGACY, style="contact"),
-    _fact("common.contact.linkedin", "Professional LinkedIn URL is https://www.linkedin.com/in/matanmalka1.", "linkedin.com/in/matanmalka1", he="linkedin.com/in/matanmalka1", tags=["contact", "linkedin"], provenance=LEGACY, style="contact"),
-    _fact("common.contact.github", "Professional GitHub URL is https://github.com/matanmalka1.", "github.com/matanmalka1", he="github.com/matanmalka1", tags=["contact", "github", "development"], provenance=LEGACY, style="contact"),
+    # `link_target` restates, machine-readably, the address this fact's own
+    # meaning already gives in prose. Nothing is added to the migrated fact.
+    _fact("common.contact.linkedin", "Professional LinkedIn URL is https://www.linkedin.com/in/matanmalka1.", "linkedin.com/in/matanmalka1", he="linkedin.com/in/matanmalka1", tags=["contact", "linkedin"], provenance=LEGACY, style="contact", link_target="https://www.linkedin.com/in/matanmalka1"),
+    _fact("common.contact.github", "Professional GitHub URL is https://github.com/matanmalka1.", "github.com/matanmalka1", he="github.com/matanmalka1", tags=["contact", "github", "development"], provenance=LEGACY, style="contact", link_target="https://github.com/matanmalka1"),
     _fact("common.language.hebrew", "Hebrew proficiency is Native.", "Hebrew: Native", he="עברית: שפת אם", tags=["language"], provenance=HANDOFF, style="item"),
     _fact("common.language.english", "English proficiency is Fluent.", "English: Fluent", he="אנגלית: שוטפת", tags=["language"], provenance=HANDOFF, style="item"),
     _fact("common.language.arabic", "Arabic proficiency is Conversational.", "Arabic: Conversational", he="ערבית: ברמת שיחה", tags=["language"], provenance=HANDOFF, style="item"),

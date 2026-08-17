@@ -20,7 +20,8 @@ from cv_engine.domain.drafts import load_draft, serialize_markdown
 from cv_engine.domain.models import DraftDocument
 from cv_engine.application.ready import verify_ready_integrity
 from cv_engine.runtime.workspace import Workspace
-from cv_engine.application.workflow import Engine, WorkflowError
+from cv_engine.application.services import WorkflowError
+from cv_engine.compat import Engine
 from helpers import ACCOUNT_MANAGER_JOB
 
 
@@ -306,11 +307,11 @@ def test_ready_integrity_rechecks_the_chain_after_a_material_reanalysis(
     workspace: Workspace, ready_application
 ) -> None:
     engine, app_id = ready_application("Chain Recheck")
-    assert verify_ready_integrity(workspace, engine.repo, app_id).passed
+    assert verify_ready_integrity(engine.services.artifacts, engine.services.knowledge, engine.repo, app_id).passed
 
     engine.analyze(app_id, emphasis="balanced-sales")
 
-    report = verify_ready_integrity(workspace, engine.repo, app_id)
+    report = verify_ready_integrity(engine.services.artifacts, engine.services.knowledge, engine.repo, app_id)
     assert not report.passed
     assert any(issue.code == "new-analysis-since-approval" for issue in report.issues)
 
@@ -321,5 +322,5 @@ def test_ready_integrity_holds_through_an_immaterial_reanalysis(
     """A re-run that changes nothing material is not a reason to fail integrity."""
     engine, app_id = ready_application("Immaterial Rerun")
     engine.analyze(app_id)
-    report = verify_ready_integrity(workspace, engine.repo, app_id)
+    report = verify_ready_integrity(engine.services.artifacts, engine.services.knowledge, engine.repo, app_id)
     assert report.passed, report.model_dump()

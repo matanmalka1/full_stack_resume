@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -11,6 +12,38 @@ from ..domain.models import (
     Profile,
     ValidationReport,
 )
+
+
+@dataclass(frozen=True)
+class DraftPaths:
+    """Where one draft's two payloads ended up."""
+
+    markdown: Path
+    manifest: Path
+
+
+class ArtifactStore(Protocol):
+    """Where immutable and working payloads live.
+
+    The application layer asks for "this application's working draft" or "this
+    approved version"; it never composes a directory name. That is what keeps
+    the storage layout an infrastructure decision instead of a rule spread
+    across services.
+    """
+
+    def working_paths(self, application_id: str) -> DraftPaths: ...
+
+    def write_working_draft(self, draft: Any) -> DraftPaths: ...
+
+    def load_working_draft(self, application_id: str) -> Any: ...
+
+    def approved_version_dir(self, application_id: str, version: int) -> Path: ...
+
+    def publish_working_draft(self, application_id: str, version: int) -> DraftPaths: ...
+
+    def resolve(self, stored_path: str) -> Path: ...
+
+    def relative(self, path: Path) -> str: ...
 
 
 class KnowledgeStore(Protocol):
@@ -125,3 +158,9 @@ class ApplicationRepository(Protocol):
     ) -> ValidationReport: ...
 
     def integrity_check(self) -> list[str]: ...
+
+    def set_ready(self, application_id: str, pdf_artifact_version_id: str, reason: str = ...) -> None: ...
+
+    def record_submission(
+        self, application_id: str, pdf_artifact_version_id: str, reason: str = ...
+    ) -> str: ...

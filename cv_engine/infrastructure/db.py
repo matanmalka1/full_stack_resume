@@ -478,6 +478,20 @@ class Repository:
                 (application_id, current.value, target_status.value, now, reason),
             )
 
+    def set_ready(self, application_id: str, pdf_artifact_version_id: str, reason: str = "") -> None:
+        """Declared use-case operation: mark an application ready.
+
+        The proof itself stays in the primitive below, which re-derives it from
+        database state rather than trusting the caller.
+        """
+        self._set_ready(application_id, pdf_artifact_version_id, reason)
+
+    def record_submission(
+        self, application_id: str, pdf_artifact_version_id: str, reason: str = ""
+    ) -> str:
+        """Declared use-case operation: record a submission of an exact PDF."""
+        return self._record_submission(application_id, pdf_artifact_version_id, reason)
+
     def _set_ready(self, application_id: str, pdf_artifact_version_id: str, reason: str = "") -> None:
         """Internal persistence primitive. NOT a verification API.
 

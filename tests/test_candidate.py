@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from pathlib import Path
 
 import pytest
@@ -14,7 +15,7 @@ from cv_engine.domain.candidate import (
     load_candidate_context,
 )
 from cv_engine.domain.drafts import load_draft
-from cv_engine.domain.facts import FactStore
+from cv_engine.domain.facts import FactStore, FactStoreError
 from cv_engine.infrastructure.rendering import normalized_role_filename
 
 
@@ -30,7 +31,7 @@ POLICY_MODULES = (
     "domain/candidate.py",
     "domain/profiles.py",
     "domain/facts.py",
-    "application/workflow.py",
+    "application/services.py",
     "application/ready.py",
     "infrastructure/rendering.py",
 )
@@ -53,7 +54,8 @@ def _write(root: Path, payload: dict) -> None:
 
 
 def test_context_resolves_its_names_from_the_canonical_identity_fact(candidate_context) -> None:
-    assert candidate_context.name_fact_id == "common.identity.name"
+    # New v2 facts carry UUIDv4 technical identity; the context references it.
+    uuid.UUID(candidate_context.name_fact_id)
     assert candidate_context.display_name("en") == "Matan Malka"
     assert candidate_context.display_name("he") == "מתן מלכה"
     assert candidate_context.resolved_filename_name == "Matan Malka"
@@ -134,25 +136,55 @@ def test_a_workspace_without_a_candidate_context_is_refused(v1_repo: Path, fact_
 
 def test_an_unknown_or_non_canonical_fact_is_refused(v1_repo: Path, fact_store: FactStore) -> None:
     payload = _payload(v1_repo)
-    payload["name_fact_id"] = "common.identity.absent"
+    payload["name_fact_id"] = "00000000-0000-4000-8000-000000000000"
     _write(v1_repo, payload)
     with pytest.raises(CandidateContextError, match="unusable fact"):
         load_candidate_context(v1_repo, fact_store)
 
 
-def test_an_https_contact_without_a_target_is_refused(v1_repo: Path, fact_store: FactStore) -> None:
-    payload = _payload(v1_repo)
-    del payload["link_targets"]["common.contact.linkedin"]
-    _write(v1_repo, payload)
-    with pytest.raises(CandidateContextError, match="https link with no target"):
-        load_candidate_context(v1_repo, fact_store)
+def _rewrite_linkedin_target(root: Path, target: str | None) -> None:
+    """Put `target` on the canonical LinkedIn fact, or remove it entirely."""
+    common = root / "base/common.md"
+    replacement = (
+        f'"link_target": "{target}"' if target is not None
+        else '"link_target": null'
+    )
+    common.write_text(
+        common.read_text(encoding="utf-8").replace(
+            '"link_target": "https://www.linkedin.com/in/matanmalka1"', replacement
+        ),
+        encoding="utf-8",
+    )
 
 
-def test_a_non_https_link_target_is_refused(v1_repo: Path, fact_store: FactStore) -> None:
+def test_an_https_contact_whose_fact_carries_no_target_is_refused(v1_repo: Path) -> None:
+    _rewrite_linkedin_target(v1_repo, None)
+    with pytest.raises(CandidateContextError, match="carries no link target"):
+        load_candidate_context(v1_repo, FactStore.load(v1_repo / "base"))
+
+
+def test_a_non_https_link_target_is_refused(v1_repo: Path) -> None:
+    """The address is the fact's own invariant, so the fact source fails to load."""
+    _rewrite_linkedin_target(v1_repo, "http://www.linkedin.com/in/matanmalka1")
+    with pytest.raises(FactStoreError, match="link target is not https"):
+        FactStore.load(v1_repo / "base")
+
+
+def test_a_link_target_that_drifts_from_its_rendering_is_refused(v1_repo: Path) -> None:
+    """A fact may not display one profile and link to another."""
+    _rewrite_linkedin_target(v1_repo, "https://www.linkedin.com/in/someone-else")
+    with pytest.raises(FactStoreError, match="does not carry the fact's English rendering"):
+        FactStore.load(v1_repo / "base")
+
+
+def test_the_candidate_context_may_not_declare_a_resolved_field(
+    v1_repo: Path, fact_store: FactStore
+) -> None:
+    """Re-declaring a link target here would be the duplication all over again."""
     payload = _payload(v1_repo)
-    payload["link_targets"]["common.contact.linkedin"] = "http://linkedin.com/in/x"
+    payload["link_targets"] = {"common.contact.linkedin": "https://www.linkedin.com/in/matanmalka1"}
     _write(v1_repo, payload)
-    with pytest.raises(CandidateContextError, match="non-https link target"):
+    with pytest.raises(CandidateContextError, match="resolved from canonical facts"):
         load_candidate_context(v1_repo, fact_store)
 
 

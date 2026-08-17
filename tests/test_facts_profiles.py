@@ -5,15 +5,21 @@ from pathlib import Path
 
 import pytest
 
+import uuid
+
 from cv_engine.domain.facts import FactStore, FactStoreError
 from cv_engine.domain.models import FactStatus
+from cv_engine.infrastructure.canonical_data import V2_IDENTITY_FACT
 
 
 def test_canonical_fact_store_has_unique_stable_ids(fact_store) -> None:
     facts = fact_store
     # 86 migrated v1 facts plus the v2 candidate identity fact.
     assert len(facts.facts) == 87
-    identity = facts.get("common.identity.name", canonical_only=True)
+    # Migrated facts keep their v1 semantic IDs; a fact created for v2 takes
+    # UUIDv4 technical identity.
+    uuid.UUID(V2_IDENTITY_FACT["fact_id"])
+    identity = facts.get(V2_IDENTITY_FACT["fact_id"], canonical_only=True)
     assert identity.renderings == {"en": "Matan Malka", "he": "מתן מלכה"}
     assert facts.get("sales.metric.team_size").renderings["en"] == "Managed a team of 2-3 sales representatives."
     assert "YoY" not in facts.get("sales.metric.performance").renderings["en"]

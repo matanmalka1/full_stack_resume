@@ -7,7 +7,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
   "source_version": "1.0.1",
   "facts": [
     {
-      "fact_id": "common.identity.name",
+      "fact_id": "0f3a6c4e-6b5f-4a2b-9c1d-7e8f5a0b2c31",
       "meaning": "The candidate's professional name is Matan Malka; the Hebrew rendering is מתן מלכה.",
       "renderings": {
         "en": "Matan Malka",
@@ -98,7 +98,8 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "contact"
+      "resume_style": "contact",
+      "link_target": "https://www.linkedin.com/in/matanmalka1"
     },
     {
       "fact_id": "common.contact.github",
@@ -118,7 +119,8 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "contact"
+      "resume_style": "contact",
+      "link_target": "https://github.com/matanmalka1"
     },
     {
       "fact_id": "common.language.hebrew",

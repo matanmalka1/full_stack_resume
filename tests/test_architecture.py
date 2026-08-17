@@ -22,9 +22,7 @@ FORBIDDEN_EXTERNAL = {
 }
 ALLOWED_INTERNAL = {
     "domain": {"domain", "util"},
-    # The application layer may name the runtime's Workspace value object and
-    # the composition root it defers to, but no infrastructure adapter.
-    "application": {"domain", "application", "util", "runtime"},
+    "application": {"domain", "application", "util"},
 }
 
 
@@ -73,20 +71,31 @@ def test_layer_depends_only_inward(layer: str) -> None:
     assert not offenders, offenders
 
 
-def test_the_composition_root_is_the_only_application_link_to_infrastructure() -> None:
-    """The façade may defer to composition, but only inside a function body.
+def test_no_application_module_reaches_the_composition_root() -> None:
+    """Composition belongs to the runtime, not to the layer it wires up.
 
-    A module-level import would make the application layer depend on every
-    adapter at import time, which is exactly what the boundary is for.
+    The v1 compatibility façade lives outside the layered packages precisely so
+    it can build services without dragging that dependency into application
+    code.
     """
-    workflow = ENGINE / "application" / "workflow.py"
-    tree = ast.parse(workflow.read_text(encoding="utf-8"))
-    module_level = {
-        node.module or ""
-        for node in tree.body
-        if isinstance(node, ast.ImportFrom)
-    }
-    assert not any("composition" in name or "infrastructure" in name for name in module_level)
+    offenders = [
+        f"{path.name}:{line}"
+        for path in _modules("application")
+        for name, line in _imports(path)
+        if name in {"runtime", "infrastructure"}
+    ]
+    assert not offenders, offenders
+
+
+def test_application_composes_no_storage_paths() -> None:
+    """Layout is asked for through the artifact store, never assembled here."""
+    offenders = [
+        f"{path.name}:{number}: {line.strip()}"
+        for path in _modules("application")
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1)
+        if "artifacts_root" in line or '"working"' in line or "mkdir(" in line
+    ]
+    assert not offenders, offenders
 
 
 def test_domain_modules_never_import_the_workspace() -> None:

@@ -4,19 +4,21 @@ from pathlib import Path
 from typing import Any
 
 from .chain import check_draft_chain, decision_record_analysis_id, material_analysis_key
-from .ports import ApplicationRepository
+from .ports import ApplicationRepository, ArtifactStore, KnowledgeStore
 from ..domain.drafts import load_draft
 from ..domain.facts import FactStore
 from ..domain.models import ValidationIssue, ValidationReport
 from ..domain.profiles import ProfileStore
-from ..runtime.workspace import Workspace
 from ..domain.selection import EmphasisPolicyStore
 from ..util import sha256_file
 from ..domain.validation import validate_draft
 
 
 def verify_ready_integrity(
-    workspace: Workspace, repo: ApplicationRepository, application_id: str
+    artifacts: ArtifactStore,
+    knowledge: KnowledgeStore,
+    repo: ApplicationRepository,
+    application_id: str,
 ) -> ValidationReport:
     """The single domain-level contract for what READY means.
 
@@ -35,7 +37,6 @@ def verify_ready_integrity(
         "not_stale": True,
         "database_integrity": True,
     }
-    root = workspace.root
     issues: list[ValidationIssue] = []
     evidence: dict[str, Any] = {}
 
@@ -57,8 +58,8 @@ def verify_ready_integrity(
     if markdown_version is None or manifest_version is None:
         return ValidationReport(passed=False, groups=groups, issues=issues, evidence=evidence)
 
-    markdown_path = root / markdown_version["path"]
-    manifest_path = root / manifest_version["path"]
+    markdown_path = artifacts.resolve(markdown_version["path"])
+    manifest_path = artifacts.resolve(manifest_version["path"])
     markdown_dir = markdown_path.parent
     if manifest_path.parent != markdown_dir:
         fail(
@@ -86,9 +87,8 @@ def verify_ready_integrity(
     chain = None
     if draft is not None:
         try:
-            facts = FactStore.load(workspace.knowledge_root / "base")
-            profiles = ProfileStore.load(workspace.knowledge_root, facts)
-            policies = EmphasisPolicyStore.load(workspace.knowledge_root)
+            loaded = knowledge.load()
+            facts, profiles, policies = loaded.facts, loaded.profiles, loaded.policies
             profile = profiles.get(draft.profile)
         except Exception as exc:  # noqa: BLE001 - knowledge load failure blocks ready
             fail("approved_source", "knowledge-load-failed", str(exc))
@@ -131,14 +131,14 @@ def verify_ready_integrity(
         pdf_version = None
 
     if pdf_version is not None:
-        pdf_dir = (root / pdf_version["path"]).parent
+        pdf_dir = artifacts.resolve(pdf_version["path"]).parent
         if pdf_dir != markdown_dir:
             fail(
                 "not_stale",
                 "superseded-by-newer-version",
                 "the latest approved version is not the version behind the last successful render",
             )
-        pdf_path = root / pdf_version["path"]
+        pdf_path = artifacts.resolve(pdf_version["path"])
         if not pdf_path.is_file():
             fail("rendered_artifacts", "pdf-missing", str(pdf_path))
         elif sha256_file(pdf_path) != pdf_version["content_hash"]:
@@ -150,7 +150,7 @@ def verify_ready_integrity(
             except KeyError:
                 fail("rendered_artifacts", f"no-{label}", f"no successfully rendered {label} artifact exists")
                 continue
-            path = root / version["path"]
+            path = artifacts.resolve(version["path"])
             if path.parent != pdf_dir:
                 fail(
                     "rendered_artifacts",

@@ -3,7 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..application.ports import ApplicationRepository, ClassificationProvider, KnowledgeStore, Renderer
+from ..application.ports import (
+    ApplicationRepository,
+    ArtifactStore,
+    ClassificationProvider,
+    KnowledgeStore,
+    Renderer,
+)
 from ..application.services import (
     AnalysisService,
     ApplicationService,
@@ -12,6 +18,7 @@ from ..application.services import (
     RenderingService,
     TrackingService,
 )
+from ..infrastructure.artifacts import FilesystemArtifactStore
 from ..infrastructure.db import Repository
 from ..infrastructure.knowledge import FileKnowledge
 from ..infrastructure.providers import OpenAIClassificationProvider
@@ -26,6 +33,7 @@ class Services:
     workspace: Workspace
     repository: ApplicationRepository
     knowledge: KnowledgeStore
+    artifacts: ArtifactStore
     applications: ApplicationService
     analysis: AnalysisService
     drafts: DraftService
@@ -40,6 +48,7 @@ def build_services(
     database_path: Path | None = None,
     repository: ApplicationRepository | None = None,
     knowledge: KnowledgeStore | None = None,
+    artifacts: ArtifactStore | None = None,
     renderer: Renderer | None = None,
     provider: ClassificationProvider | None = None,
 ) -> Services:
@@ -51,6 +60,7 @@ def build_services(
     """
     resolved_repository = repository or Repository(database_path or workspace.database_path)
     resolved_knowledge = knowledge or FileKnowledge(workspace.knowledge_root)
+    resolved_artifacts = artifacts or FilesystemArtifactStore(workspace)
     resolved_renderer = renderer or PlaywrightRenderer(workspace.knowledge_root)
     resolved_provider = provider or OpenAIClassificationProvider(
         workspace.knowledge_root / "ai" / "prompts" / "system-v1.md"
@@ -58,7 +68,7 @@ def build_services(
     shared = {
         "repository": resolved_repository,
         "knowledge": resolved_knowledge,
-        "workspace": workspace,
+        "artifacts": resolved_artifacts,
         "renderer": resolved_renderer,
         "provider": resolved_provider,
     }
@@ -66,6 +76,7 @@ def build_services(
         workspace=workspace,
         repository=resolved_repository,
         knowledge=resolved_knowledge,
+        artifacts=resolved_artifacts,
         applications=ApplicationService(**shared),
         analysis=AnalysisService(**shared),
         drafts=DraftService(**shared),

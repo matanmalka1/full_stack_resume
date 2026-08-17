@@ -1,6 +1,6 @@
 {
   "context_version": "1.0.0",
-  "name_fact_id": "common.identity.name",
+  "name_fact_id": "0f3a6c4e-6b5f-4a2b-9c1d-7e8f5a0b2c31",
   "filename_language": "en",
   "locale": "he-IL",
   "timezone": "Asia/Jerusalem",
@@ -21,9 +21,5 @@
     "common.contact.email": "mailto",
     "common.contact.linkedin": "https",
     "common.contact.github": "https"
-  },
-  "link_targets": {
-    "common.contact.linkedin": "https://www.linkedin.com/in/matanmalka1",
-    "common.contact.github": "https://github.com/matanmalka1"
   }
 }

@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import uuid
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -29,22 +30,41 @@ from cv_engine.domain.models import (
     ValidationReport,
 )
 from cv_engine.domain.profiles import ProfileStore
-from cv_engine.runtime.workspace import Workspace, create_workspace, load_workspace
+from cv_engine.runtime.workspace import (
+    MARKER_NAME,
+    WORKSPACE_VERSION,
+    Workspace,
+    WorkspaceMarker,
+    create_workspace,
+    load_workspace,
+)
 from cv_engine.domain.selection import EmphasisPolicyStore
 from cv_engine.infrastructure.rendering import render_pdf, validate_rendered
-from cv_engine.application.workflow import Engine
+from cv_engine.compat import Engine
 from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB, seal_report
 
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
 
-# The v1 worktree ships an installed copy of this package. If it ever shadows
-# the worktree under test, patches land on the wrong module and tests pass
-# without exercising anything here.
+# The v1 worktree ships an editable install of this package, whose finder
+# resolves any cv_engine submodule missing here to the v1 tree. Checking the
+# top-level package is not enough: a single stale relative import is invisible
+# that way, and every later result is then partly v1 code.
+def _foreign_modules() -> dict[str, str]:
+    return {
+        name: module.__file__
+        for name, module in sorted(sys.modules.items())
+        if name.startswith("cv_engine")
+        and getattr(module, "__file__", None)
+        and SOURCE_ROOT not in Path(module.__file__).resolve().parents
+    }
+
+
 _IMPORTED_FROM = Path(cv_engine.__file__).resolve().parent.parent
 assert _IMPORTED_FROM == SOURCE_ROOT, (
     f"tests import cv_engine from {_IMPORTED_FROM}, not the worktree under test ({SOURCE_ROOT})"
 )
+assert not _foreign_modules(), f"cv_engine modules loaded from another worktree: {_foreign_modules()}"
 
 # Only acceptance tests that validate real layout/PDF behavior use this fixture.
 # Integrity tests create the same artifact/version graph with a deterministic
@@ -58,6 +78,19 @@ def pytest_collection_modifyitems(items) -> None:
     for item in items:
         if BROWSER_FIXTURES & set(item.fixturenames):
             item.add_marker("browser")
+
+
+def pytest_sessionfinish(session, exitstatus) -> None:
+    """Fail the run if any cv_engine module came from another worktree.
+
+    Checked at the end as well as at import, because modules load lazily: a
+    stale relative import inside a rarely exercised path would otherwise only
+    show up as a mysteriously passing test.
+    """
+    foreign = _foreign_modules()
+    if foreign:
+        session.exitstatus = 1
+        raise pytest.UsageError(f"cv_engine modules loaded from another worktree: {foreign}")
 
 
 def pytest_collection_finish(session) -> None:
@@ -451,6 +484,20 @@ def _write_passing_migration_test_report(root: Path) -> Path:
     return target
 
 
+def _mark_migrated_root(root: Path) -> None:
+    marker = WorkspaceMarker(
+        workspace_id=str(uuid.uuid4()),
+        workspace_version=WORKSPACE_VERSION,
+        purpose="test",
+        data_class="test",
+        created_at="2026-01-01T00:00:00+00:00",
+    )
+    (root / MARKER_NAME).write_text(
+        json.dumps(marker.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
 @pytest.fixture
 def legacy_repo(tmp_path: Path) -> Path:
     root = tmp_path / "legacy"
@@ -489,6 +536,8 @@ def completed_migration_repo(legacy_repo: Path) -> MigrationSetup:
         )
         connection.commit()
     # The legacy in-place migration converts this root into the working root,
-    # so it is a Workspace from here on rather than a migration source.
-    create_workspace(legacy_repo, purpose="test", data_class="test", acknowledge_legacy_root=True)
+    # so it is a Workspace from here on rather than a migration source. The
+    # marker is written here, by the test, because production code has no
+    # override that would mark a legacy root.
+    _mark_migrated_root(legacy_repo)
     return MigrationSetup(legacy_repo, snapshot)
