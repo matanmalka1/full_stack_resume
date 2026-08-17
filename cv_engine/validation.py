@@ -38,7 +38,17 @@ def validate_draft(
     claims = [draft.headline, *draft.contacts]
     claims.extend(claim for section in draft.sections for claim in section.claims)
     seen_ids: set[str] = set()
-    for claim in claims:
+    for index, claim in enumerate(claims):
+        # Only the document headline itself may carry the headline claim type or style;
+        # everywhere else they would be an unaudited exemption from fact linkage.
+        is_headline = index == 0
+        if not is_headline and (claim.claim_type == "headline" or claim.style == "headline"):
+            groups["structure"] = False
+            issues.append(ValidationIssue(
+                group="structure",
+                code="misplaced-headline-claim",
+                message=f"claim {claim.claim_id} uses the headline claim type or style outside the document headline",
+            ))
         if claim.claim_id in seen_ids:
             groups["content"] = False
             issues.append(ValidationIssue(group="content", code="duplicate-claim-id", message=claim.claim_id))
@@ -46,7 +56,7 @@ def validate_draft(
         if sha256_text(claim.text) != claim.text_hash:
             groups["content"] = False
             issues.append(ValidationIssue(group="content", code="claim-hash-mismatch", message=claim.claim_id))
-        if claim.claim_type != "headline" and not claim.fact_ids:
+        if not claim.fact_ids and not (is_headline and claim.claim_type == "headline"):
             groups["content"] = False
             issues.append(ValidationIssue(group="content", code="unlinked-claim", message=claim.text))
         if claim.claim_type == "derived":

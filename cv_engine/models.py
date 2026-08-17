@@ -199,6 +199,13 @@ class DraftDocument(StrictModel):
     fact_store_version: str
     content_hash: str = ""
 
+    @model_validator(mode="after")
+    def validate_headline_placement(self) -> "DraftDocument":
+        body = [*self.contacts, *(claim for section in self.sections for claim in section.claims)]
+        if any(claim.claim_type == "headline" or claim.style == "headline" for claim in body):
+            raise ValueError("only the document headline may use the headline claim type or style")
+        return self
+
 
 class ValidationIssue(StrictModel):
     group: str

@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
 from cv_engine.drafts import (
+    load_draft,
     register_composite_claim,
     register_linked_claim,
     serialize_markdown,
     write_working_draft,
 )
+from cv_engine.models import ClaimLine
 from cv_engine.util import sha256_text
 from cv_engine.validation import validate_draft
 from helpers import claim_by_id, exact_fact_claim
@@ -185,3 +191,72 @@ def test_composite_rejects_title_and_date_inputs_for_a_bullet(v1_repo: Path, dra
 
     assert not report.passed
     assert any(issue.code == "invalid-composite-claim" for issue in report.issues)
+
+
+FABRICATED_HEADLINE_CLAIM = 'Closed a NIS 4.2M SaaS enterprise deal.'
+
+
+def _inject_headline_typed_claim(draft, text: str = FABRICATED_HEADLINE_CLAIM) -> ClaimLine:
+    """Append an unlinked claim that abuses the headline exemption (bypass repro)."""
+    injected = ClaimLine(
+        claim_id="injected-fabrication",
+        style="bullet",
+        text=text,
+        fact_ids=[],
+        claim_type="headline",
+        text_hash=sha256_text(text),
+    )
+    draft.sections[-1].claims.append(injected)
+    return injected
+
+
+def test_headline_claim_type_outside_the_headline_is_blocked(v1_repo: Path, draft_factory) -> None:
+    facts, profile, analysis, draft, _markdown = draft_factory(
+        "Account Manager retention portfolio customer relationships",
+        write=True,
+    )
+    # list mutation deliberately bypasses the model-level guard, so this asserts the
+    # deterministic validator blocks the injection on its own.
+    _inject_headline_typed_claim(draft)
+    tampered = draft.model_copy(update={"content_hash": sha256_text(serialize_markdown(draft))})
+    markdown, _manifest = write_working_draft(v1_repo, tampered)
+
+    report = validate_draft(tampered, markdown, facts, profile, analysis)
+
+    assert not report.passed
+    assert any(issue.code == "misplaced-headline-claim" for issue in report.issues)
+    assert any(issue.code == "unlinked-claim" for issue in report.issues)
+
+
+def test_headline_style_outside_the_headline_is_blocked(v1_repo: Path, draft_factory) -> None:
+    facts, profile, analysis, draft, _markdown = draft_factory(
+        "Account Manager retention portfolio customer relationships",
+        write=True,
+    )
+    claim = exact_fact_claim(draft, ["sales.metric.performance"])
+    forged = claim.model_copy(update={"style": "headline"})
+    for section in draft.sections:
+        for index, item in enumerate(section.claims):
+            if item.claim_id == claim.claim_id:
+                section.claims[index] = forged
+    tampered = draft.model_copy(update={"content_hash": sha256_text(serialize_markdown(draft))})
+    markdown, _manifest = write_working_draft(v1_repo, tampered)
+
+    report = validate_draft(tampered, markdown, facts, profile, analysis)
+
+    assert not report.passed
+    assert any(issue.code == "misplaced-headline-claim" for issue in report.issues)
+
+
+def test_tampered_manifest_with_headline_typed_claim_does_not_load(v1_repo: Path, draft_factory) -> None:
+    _facts, _profile, _analysis, draft, _markdown = draft_factory(
+        "Account Manager retention portfolio customer relationships",
+        write=True,
+    )
+    _inject_headline_typed_claim(draft)
+    payload = json.dumps(draft.model_dump(mode="json"), ensure_ascii=False)
+    manifest = v1_repo / "tampered.claims.json"
+    manifest.write_text(payload, encoding="utf-8")
+
+    with pytest.raises(ValidationError, match="only the document headline"):
+        load_draft(manifest)

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
 import cv_engine.workflow as workflow_module
 from cv_engine.rendering import validate_rendered as real_validate_rendered
-from cv_engine.util import sha256_file
+from cv_engine.util import sha256_file, sha256_text
 from cv_engine.workflow import WorkflowError
 from helpers import ACCOUNT_MANAGER_JOB, artifact_version_and_path
 
@@ -323,3 +324,32 @@ def test_generic_status_transition_to_applied_is_always_blocked(ready_applicatio
             verified_pdf_artifact_version_id=pdf_version["id"],
         )
     assert engine.repo.get_application(app_id)["current_status"] == "ready"
+
+
+def test_fabricated_headline_typed_claim_cannot_reach_ready(v1_repo: Path, drafted_application) -> None:
+    """A fabricated bullet marked claim_type='headline' with no fact_ids must never be approved."""
+    setup = drafted_application("Headline Bypass")
+    engine, app_id = setup.engine, setup.application_id
+    working = v1_repo / "artifacts/working" / app_id
+    payload = json.loads((working / "resume.claims.json").read_text(encoding="utf-8"))
+    text = 'Closed a NIS 4.2M SaaS enterprise deal.'
+    payload["sections"][-1]["claims"].append({
+        "claim_id": "injected-fabrication",
+        "style": "bullet",
+        "text": text,
+        "fact_ids": [],
+        "claim_type": "headline",
+        "text_hash": sha256_text(text),
+        "template_id": None,
+        "template_version": None,
+        "derivation_id": None,
+        "derivation_version": None,
+        "pending_reason": None,
+    })
+    (working / "resume.claims.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="only the document headline"):
+        engine.approve(app_id)
+    assert engine.repo.get_application(app_id)["current_status"] == "preparing"
+    approved = v1_repo / "artifacts" / app_id
+    assert not approved.exists()
