@@ -4,8 +4,7 @@ These instructions govern how coding agents work in this repository.
 
 ## Authority
 
-Before any repository task, read `docs/v1-upgrade-handoff.md` completely. For a legacy
-CV-tailoring task, also read the legacy inputs listed below before acting.
+Before any repository task, read `docs/v1-upgrade-handoff.md` completely.
 
 Authority order for v1:
 
@@ -17,10 +16,8 @@ Authority order for v1:
 If the v1 handoff conflicts with the README, this file, the legacy Development-only
 workflow, or existing code, the handoff wins. Do not silently reinterpret a conflict.
 
-For ordinary legacy CV generation before migration, continue to read
-`base/cv_base.md`, `config/cv_generation_rules.md`, and
-`config/cv_example_backend.md`. Do not treat that temporary compatibility workflow as
-the target v1 architecture.
+The pre-v1 generation workflow has been retired. Historical sources and artifacts are
+evidence only and must not be used as an active tailoring workflow.
 
 ## Product decisions and autonomy
 

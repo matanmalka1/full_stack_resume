@@ -196,8 +196,9 @@ acceptance requirements, so the full suite must still run in a normal terminal o
 CI before `ready` or completion. Set `CV_REQUIRE_BROWSER=1` there: the run then fails
 immediately if the browser tests were deselected.
 
-## Legacy compatibility
+## Historical artifacts
 
-`build_html.py`, `print_pdf.sh`, and the legacy assets remain available for historical
-Development artifacts. New v1 work uses `cv`. Generated historical HTML/PDF files must
-not be hand-edited or overwritten.
+The pre-v1 generation scripts have been retired. Legacy files under `outputs/`,
+`jobs/status.csv`, and `base/cv_base.md` remain immutable historical evidence and must
+not be hand-edited, overwritten, or used as the active tailoring workflow. New work
+uses `cv` exclusively.
