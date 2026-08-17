@@ -15,6 +15,7 @@ from typing import Any
 
 from .canonical_data import write_canonical_sources
 from .db import Repository, connect
+from .facts import FactStoreError, load_fact_source
 from .util import canonical_json, sha256_bytes, sha256_file, sha256_text, utc_now
 
 
@@ -669,6 +670,30 @@ def _semantic_migration_state(database: Path) -> dict[str, list[dict[str, Any]]]
     }
 
 
+def _fact_source_baseline(name: str, live_path: Path, expected_path: Path) -> tuple[list[str], list[str]]:
+    """Compare one live fact source against the migration's expected output.
+
+    This is a fact-level comparison rather than a file hash because the fact
+    lifecycle legitimately rewrites these files after migration: creating a
+    pending fact or promoting one to canonical changes the bytes without
+    touching anything migration produced. What migration safety requires is
+    that every migrated fact still exists, unchanged, in the same canonical
+    source file. Facts added afterwards are reported, never a failure.
+    """
+    try:
+        live = {fact.fact_id: fact.model_dump(mode="json") for fact in load_fact_source(live_path).facts}
+    except FactStoreError as exc:
+        return [f"canonical fact source is unreadable: base/{name} ({exc})"], []
+    baseline = {fact.fact_id: fact.model_dump(mode="json") for fact in load_fact_source(expected_path).facts}
+    problems = []
+    for fact_id, payload in baseline.items():
+        if fact_id not in live:
+            problems.append(f"migrated fact is missing from base/{name}: {fact_id}")
+        elif live[fact_id] != payload:
+            problems.append(f"migrated fact changed in base/{name}: {fact_id}")
+    return problems, sorted(set(live) - set(baseline))
+
+
 def retrospective_verify_migration(root: Path, snapshot_dir: Path) -> dict[str, Any]:
     snapshot = verify_snapshot(snapshot_dir)
     problems: list[str] = []
@@ -716,14 +741,14 @@ def retrospective_verify_migration(root: Path, snapshot_dir: Path) -> dict[str, 
                 )
 
         fact_hashes: dict[str, str] = {}
+        post_migration_facts: dict[str, list[str]] = {}
         for name in FACT_SOURCE_NAMES:
             live_path = root / "base" / name
-            expected_path = expected / "base" / name
-            live_hash = sha256_file(live_path)
-            expected_hash = sha256_file(expected_path)
-            fact_hashes[name] = live_hash
-            if live_hash != expected_hash:
-                problems.append(f"canonical fact source differs from current migration output: base/{name}")
+            fact_hashes[name] = sha256_file(live_path)
+            differences, added = _fact_source_baseline(name, live_path, expected / "base" / name)
+            problems.extend(differences)
+            if added:
+                post_migration_facts[name] = added
 
         expected_artifacts = expected_state["artifact_versions"]
         artifact_hashes_checked = 0
@@ -769,6 +794,7 @@ def retrospective_verify_migration(root: Path, snapshot_dir: Path) -> dict[str, 
         "semantic_counts": semantic_counts,
         "semantic_hashes": semantic_hashes,
         "canonical_fact_hashes": fact_hashes,
+        "post_migration_facts": post_migration_facts,
         "artifact_hashes_checked": artifact_hashes_checked,
         "live_database": live_database.relative_to(root).as_posix(),
         "problems": problems,

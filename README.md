@@ -107,6 +107,50 @@ carries the score, outcome and omission reason for every candidate considered. B
 Emphasis now changes the document, a disagreement about it between the deterministic
 classifier and an AI proposal requires an explicit `--emphasis` decision.
 
+## Fact lifecycle
+
+New information is never written straight into a CV. It enters the store as a `pending`
+fact, is confirmed, is promoted to `canonical`, and only then may a Profile section offer
+it to the selection policy. Every step writes to the canonical source file under `base/`
+and appends an immutable event to `fact_events` in SQLite, so the status survives the
+process and the trail explains who promoted what.
+
+```bash
+./.venv/bin/cv fact list --status pending
+./.venv/bin/cv fact add \
+  --source situational_skills.md \
+  --fact-id situational.sqlite \
+  --meaning 'Used SQLite for local application state in a personal project.' \
+  --en 'Used SQLite for local application state in a personal project.' \
+  --tag development --tag situational \
+  --style bullet \
+  --provenance 'candidate wording from the user; not yet verified'
+./.venv/bin/cv fact confirm situational.sqlite --confirm
+./.venv/bin/cv fact promote situational.sqlite --confirm
+./.venv/bin/cv fact attach situational.sqlite --profile development --section 'Technical Skills'
+./.venv/bin/cv fact show situational.sqlite
+./.venv/bin/cv fact history
+```
+
+A manual draft edit the fact store cannot support becomes a `pending` claim that blocks
+approval. Capture its wording as a candidate fact instead of retyping it:
+
+```bash
+./.venv/bin/cv fact capture <application-id> <claim-id> \
+  --source sales.md \
+  --fact-id sales.leadership.pipeline_review \
+  --meaning 'Introduced a weekly pipeline review with the Sales team.' \
+  --tag sales --tag leadership
+```
+
+`--confirm` is required for every promotion, and `pending -> canonical` in one step is
+refused. Only `cv fact add`/`capture --canonical` — the specification's explicit "add this
+to the source of truth" — may write a fact as canonical immediately. Until a fact is
+canonical it cannot be rendered, linked to a claim, or attached to a Profile, and adding
+or confirming one never invalidates drafts already built from the canonical facts.
+Promoting one to canonical does change the canonical surface, so rebuild the working
+draft with `cv draft <application-id>` afterwards.
+
 ## Tracking and inspection
 
 ```bash
@@ -154,12 +198,16 @@ agree.
 
 For a migration that was completed before the hardened gate existed, reproduce the
 current migration against the pre-migration snapshot in a temporary directory and
-compare its database semantics, canonical fact hashes, and historical artifact hashes
-to the live state without modifying it:
+compare its database semantics, migrated facts, and historical artifact hashes to the
+live state without modifying it:
 
 ```bash
 ./.venv/bin/cv migrate verify-live --snapshot data/snapshots/<timestamp>
 ```
+
+Every fact the migration produced must still exist unchanged in the same canonical
+source file; facts added afterwards through the fact lifecycle are reported under
+`post_migration_facts` and are not drift.
 
 The tracked result for the completed v1 migration is
 [`docs/v1-retrospective-migration-verification.json`](docs/v1-retrospective-migration-verification.json).

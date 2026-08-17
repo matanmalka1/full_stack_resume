@@ -51,6 +51,19 @@ pending facts are hard failures before approval and in fast mode.
 
 This deliberately favors false negatives over allowing an unsupported candidate claim.
 
+## Fact lifecycle
+
+A pending claim is the entry point into the fact lifecycle rather than a dead end. `cv
+fact capture` turns the claim's own wording into a `pending` fact in the canonical source
+file that will own it, so a fact's identity and location never move as it is confirmed
+and promoted. Status changes are written back to `base/*.md` and appended to the
+immutable `fact_events` table, and `cv reconcile` fails if the two disagree.
+
+A canonical fact is still not usable until a Profile section offers it, so `cv fact
+attach` widens one section's candidate pool as the last lifecycle step. The fact-store
+version covers canonical facts only: staging and confirming are invisible to drafts,
+while promotion to canonical intentionally requires a rebuild.
+
 ## Persistence and immutability
 
 SQLite uses foreign keys, transactions, uniqueness constraints, and immutability
@@ -61,7 +74,8 @@ triggers. It contains the required concepts:
 - application events and next actions;
 - artifacts and meaningful artifact versions;
 - decision records and generation runs;
-- recorded validation runs and migration runs.
+- recorded validation runs and migration runs;
+- immutable fact lifecycle events.
 
 Approved, rendered, submitted, and migrated-historical artifact versions are append-only.
 Submitted paths and hashes cannot be replaced. Working drafts live in a dedicated
