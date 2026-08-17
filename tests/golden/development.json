@@ -6,7 +6,7 @@
   "language": "en",
   "snapshot": {
     "markdown_sha256": "c8302496570038dbc9f26d3a578b4a8d2b6edd9b4b7987d8c7a0b9632784f169",
-    "html_sha256": "dc2d6607dd23d2ab6a721cbb916e7807c1644ed37d76f3068d2e53cd0fc5da04",
+    "html_sha256": "efe20089ace9fdb835358797cf072f8521fbee44930115957fef46c07fed67d9",
     "selected_fact_ids": [
       "common.contact.email",
       "common.contact.github",

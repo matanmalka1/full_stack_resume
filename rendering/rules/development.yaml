@@ -19,22 +19,28 @@
   "direction": "ltr",
   "keyword_emphasis": {
     "terms": [
+      "workflow automation",
+      "background jobs",
+      "GitHub Actions CI/CD",
+      "Node.js/Express",
+      "Python/FastAPI",
+      "JWT/RBAC",
+      "Tailwind CSS",
+      "AWS EC2",
+      "REST API",
+      "GitHub Actions",
       "TypeScript",
       "React",
       "Next.js",
       "Node.js",
       "Express",
-      "Tailwind CSS",
       "Python",
       "FastAPI",
       "PostgreSQL",
       "MongoDB",
       "MySQL",
       "Docker",
-      "AWS EC2",
-      "GitHub Actions",
-      "CI/CD",
-      "REST API"
+      "CI/CD"
     ],
     "sections": [
       "Work Experience",

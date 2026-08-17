@@ -55,29 +55,29 @@ def _dev_emphasis(v1_repo: Path) -> dict:
 
 def test_keyword_emphasis_marks_the_stack_and_keeps_the_original_casing(v1_repo: Path) -> None:
     config = _dev_emphasis(v1_repo)
-    claim = _Claim("Rebuilt the typescript, REACT layer on postgresql.")
+    claim = _Claim("Rebuilt the typescript, REACT layer on mongodb.")
     rendered = str(_claim_html(claim, False, "Work Experience", config))
     # Terms separated only by punctuation read as one thing, so they merge.
     # Matching is case-insensitive; the page still shows what the fact says.
     assert "<strong>typescript, REACT</strong>" in rendered
     assert "TypeScript" not in rendered
     # A wider gap is a separate group rather than a merge across prose.
-    spaced = _Claim("Rebuilt the React and Python layers.")
-    assert "<strong>React</strong> and <strong>Python</strong>" in str(
+    spaced = _Claim("Rebuilt the React and PostgreSQL layers.")
+    assert "<strong>React</strong> and <strong>PostgreSQL</strong>" in str(
         _claim_html(spaced, False, "Work Experience", config)
     )
 
 
 def test_keyword_emphasis_is_capped_per_line(v1_repo: Path) -> None:
     config = _dev_emphasis(v1_repo)
-    claim = _Claim("Used React then Python then Docker then MongoDB separately here.")
+    claim = _Claim("Used React then PostgreSQL then MongoDB then TypeScript separately.")
     rendered = str(_claim_html(claim, False, "Work Experience", config))
     assert rendered.count("<strong>") == config["max_groups"] == 2
 
 
 def test_keyword_emphasis_skips_summary_and_skills(v1_repo: Path) -> None:
     config = _dev_emphasis(v1_repo)
-    paragraph = _Claim("Full-Stack Developer working across React and Python.", style="paragraph")
+    paragraph = _Claim("Full-Stack Developer working across React and PostgreSQL.", style="paragraph")
     item = _Claim("Frontend: React, Next.js, TypeScript", style="item")
     assert "<strong>" not in str(_claim_html(paragraph, False, "Professional Summary", config))
     assert "<strong>" not in str(_claim_html(item, False, "Core Skills", config))
@@ -88,7 +88,7 @@ def test_keyword_emphasis_skips_summary_and_skills(v1_repo: Path) -> None:
 
 def test_keyword_emphasis_escapes_before_it_emphasizes(v1_repo: Path) -> None:
     config = _dev_emphasis(v1_repo)
-    claim = _Claim('Shipped <script>alert("x")</script> beside React & Python.')
+    claim = _Claim('Shipped <script>alert("x")</script> beside React & PostgreSQL.')
     rendered = str(_claim_html(claim, False, "Work Experience", config))
     assert "<script>" not in rendered
     assert "&lt;script&gt;" in rendered
