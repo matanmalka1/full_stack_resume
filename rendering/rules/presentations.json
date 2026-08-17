@@ -49,7 +49,7 @@
       "fact_ids": ["sales.summary.tenure", "sales.summary.tech", "sales.summary.new_business"],
       "style": "paragraph",
       "renderings": {
-        "en": "B2B Sales professional with nearly 6 years across full-cycle Sales and team leadership, combined with hands-on Full-Stack Development experience. Covers prospecting, needs discovery, negotiation, closing, and post-Sales follow-through, with practical understanding of software products and workflows.",
+        "en": "B2B sales professional with nearly 6 years of experience across full-cycle sales and team leadership, combined with hands-on Full-Stack development experience. Experienced in prospecting, needs discovery, negotiation, closing, and post-sale follow-through, with a practical understanding of software products and workflows.",
         "he": "איש מכירות B2B עם כמעט 6 שנות ניסיון במחזור מכירה מלא ובניהול צוות, לצד ניסיון מעשי ב-Full-Stack Development. כולל איתור לקוחות, אפיון צרכים, משא ומתן, סגירה וליווי לאחר המכירה, עם הבנה מעשית של מוצרי תוכנה ותהליכי עבודה."
       }
     },
@@ -62,8 +62,21 @@
       "fact_ids": ["sales.summary.tenure", "sales.summary.tech", "sales.summary.new_business"],
       "style": "paragraph",
       "renderings": {
-        "en": "B2B Sales professional with nearly 6 years across full-cycle Sales and team leadership, combined with hands-on Full-Stack Development experience. Covers needs discovery, negotiation, and closing across the full Sales cycle, with practical understanding of software products and workflows.",
+        "en": "B2B sales professional with nearly 6 years of experience across full-cycle sales and team leadership, combined with hands-on Full-Stack development experience. Experienced in needs discovery, negotiation, and closing across the full sales cycle, with a practical understanding of software products and workflows.",
         "he": "איש מכירות B2B עם כמעט 6 שנות ניסיון במחזור מכירה מלא ובניהול צוות, לצד ניסיון מעשי ב-Full-Stack Development. כולל אפיון צרכים, משא ומתן וסגירה לאורך מחזור המכירה, עם הבנה מעשית של מוצרי תוכנה ותהליכי עבודה."
+      }
+    },
+    {
+      "rule_id": "tech-sales.summary.account-growth-tenure",
+      "version": "1.0.0",
+      "profile": "tech-sales",
+      "section": "Professional Summary",
+      "emphases": ["account-growth"],
+      "fact_ids": ["sales.summary.tenure", "sales.summary.tech", "sales.summary.account"],
+      "style": "paragraph",
+      "renderings": {
+        "en": "B2B sales professional with nearly 6 years of experience across full-cycle sales and team leadership, combined with hands-on Full-Stack development experience. Experienced in managing recurring customers, growing existing accounts, and retaining business, with a practical understanding of software products and workflows.",
+        "he": "איש מכירות B2B עם כמעט 6 שנות ניסיון במחזור מכירה מלא ובניהול צוות, לצד ניסיון מעשי ב-Full-Stack Development. בעל ניסיון בניהול לקוחות חוזרים, הרחבת פעילות ושימור לקוחות, עם הבנה מעשית של מוצרי תוכנה ותהליכי עבודה."
       }
     },
     {
@@ -75,7 +88,7 @@
       "fact_ids": ["sales.metric.performance"],
       "style": "bullet",
       "renderings": {
-        "en": "Increased team Sales revenue by approximately 30% during the management period.",
+        "en": "Increased team sales revenue by approximately 30% during the management period.",
         "he": "הגדלת הכנסות המכירות של הצוות בכ-30% לאורך תקופת הניהול."
       }
     },

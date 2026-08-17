@@ -5,8 +5,8 @@
   "emphasis": "development-backend",
   "language": "en",
   "snapshot": {
-    "markdown_sha256": "f0e0cd89f10b38f8f3faf1ea1727f7ce5a3ca750afa27f40ac538db5b81896e2",
-    "html_sha256": "fd6ff63db8d419206085be6f22201d1b505f18684574bbe2b470c9e2dfaec91d",
+    "markdown_sha256": "6a1b9ddc05adc729c339c41c2ecd365c9c9c6019e11bbd58e1f3af335fb26ed1",
+    "html_sha256": "c3078d8aed49709ea7b31985812eb88ab1ed376e5ef6381fbe56ab2e8581604d",
     "selected_fact_ids": [
       "common.contact.email",
       "common.contact.github",

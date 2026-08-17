@@ -57,7 +57,7 @@ def test_snapshot_restore_and_migration_preserve_rows_and_artifacts(tmp_path: Pa
     assert len(paths) == 13
     assert (target / "base/sales.md").is_file()
     sales = (target / "base/sales.md").read_text(encoding="utf-8")
-    assert "approximately 2-3 Sales representatives" in sales
+    assert "a team of 2-3 sales representatives" in sales
     assert "30% YoY" not in sales
 
 

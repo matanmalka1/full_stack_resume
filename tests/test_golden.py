@@ -37,7 +37,7 @@ def test_golden_profile_snapshot_and_ready_pdf(
     assert analysis.language == case["language"]
     markdown = serialize_markdown(draft)
     assert "30% YoY" not in markdown
-    assert "3-4 Sales representatives" not in markdown
+    assert "3-4 sales representatives" not in markdown.casefold()
     assert all(facts.get(fact_id).status.value == "canonical" for fact_id in draft.selected_fact_ids)
     if case["language"] == "he":
         assert "תקציר מקצועי" in markdown

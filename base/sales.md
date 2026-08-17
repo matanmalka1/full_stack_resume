@@ -129,7 +129,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "fact_id": "sales.summary.field",
       "meaning": "Verified nationwide B2B field-Sales experience includes new-customer acquisition, account management, quotations, tenders, negotiation, and closing.",
       "renderings": {
-        "en": "Nationwide B2B field-Sales professional experienced in new-customer acquisition, account management, quotations, tenders, negotiation, and closing.",
+        "en": "Nationwide B2B field sales professional experienced in new-customer acquisition, account management, quotations, tenders, negotiation, and closing.",
         "he": "איש מכירות שטח B2B בפריסה ארצית, בעל ניסיון בגיוס לקוחות, ניהול תיקי לקוחות, הצעות מחיר, מכרזים, משא ומתן וסגירת עסקאות."
       },
       "tags": [
@@ -169,7 +169,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "fact_id": "sales.summary.new_business",
       "meaning": "Verified full-cycle B2B Sales includes prospecting, discovery, quotations, negotiation, closing, and post-Sales follow-through.",
       "renderings": {
-        "en": "Full-cycle B2B Sales professional covering prospecting, discovery, quotations, negotiation, closing, and post-Sales follow-through.",
+        "en": "Full-cycle B2B sales professional covering prospecting, discovery, quotations, negotiation, closing, and post-sale follow-through.",
         "he": "איש מכירות B2B במחזור מכירה מלא, משלב איתור לקוחות, אפיון צרכים, הצעות מחיר, משא ומתן, סגירה וליווי לאחר המכירה."
       },
       "tags": [
@@ -190,7 +190,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "fact_id": "sales.summary.leadership",
       "meaning": "Verified player-coach Sales leadership combines team management and active direct Sales in an approximately 50/50 mix.",
       "renderings": {
-        "en": "Player-coach B2B Sales leader combining team leadership, coaching, pipeline management, and active account ownership in an approximately 50/50 management and direct-Sales role.",
+        "en": "Player-coach B2B sales leader combining team leadership, coaching, pipeline management, and active account ownership in an approximately 50/50 management and direct-sales role.",
         "he": "מנהל מכירות B2B במודל player-coach, המשלב ניהול צוות, אימון, ניהול pipeline ואחריות ישירה על לקוחות בחלוקה משוערת של 50/50 בין ניהול למכירות."
       },
       "tags": [
@@ -210,7 +210,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "fact_id": "sales.summary.tech",
       "meaning": "Verified Tech Sales positioning combines B2B mobile-device Sales experience with separate hands-on professional software-development experience, without claiming prior SaaS Sales.",
       "renderings": {
-        "en": "Commercial and technical professional combining full-cycle B2B Sales and account leadership with hands-on professional Full-Stack Development experience.",
+        "en": "Commercial and technical professional combining full-cycle B2B sales and account leadership with hands-on professional Full-Stack development experience.",
         "he": "איש מקצוע מסחרי וטכנולוגי המשלב מכירות B2B וניהול לקוחות לאורך מחזור המכירה המלא עם ניסיון מקצועי מעשי ב-Full-Stack Development."
       },
       "tags": [
@@ -231,7 +231,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "fact_id": "sales.summary.tenure",
       "meaning": "Total B2B Sales experience runs from March 2019 to January 2025 - nearly six years across field Sales and Sales leadership; the span follows from the canonical role dates.",
       "renderings": {
-        "en": "Nearly 6 years of B2B Sales experience across full-cycle Sales and team leadership.",
+        "en": "Nearly 6 years of B2B sales experience across full-cycle sales and team leadership.",
         "he": "כמעט 6 שנות ניסיון במכירות B2B, לאורך מחזור מכירה מלא וניהול צוות."
       },
       "tags": [
@@ -432,7 +432,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "fact_id": "sales.metric.team_size",
       "meaning": "Managed a team of approximately 2-3 Sales representatives.",
       "renderings": {
-        "en": "Managed a team of approximately 2-3 Sales representatives.",
+        "en": "Managed a team of 2-3 sales representatives.",
         "he": "ניהול צוות של כ-2-3 נציגי מכירות."
       },
       "tags": [
@@ -452,7 +452,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "fact_id": "sales.metric.performance",
       "meaning": "Delivered approximately 30% improvement in team performance and Sales revenue over the full management period, not annually.",
       "renderings": {
-        "en": "Delivered approximately 30% improvement in team performance and Sales revenue over the management period.",
+        "en": "Delivered approximately 30% improvement in team performance and sales revenue over the management period.",
         "he": "שיפור של כ-30% בביצועי הצוות ובהכנסות ממכירות לאורך תקופת הניהול."
       },
       "tags": [
@@ -492,7 +492,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "fact_id": "sales.leadership.player_coach",
       "meaning": "The Team Leader role was approximately 50% team management and 50% direct Sales/account management.",
       "renderings": {
-        "en": "Operated as a player-coach, splitting the role approximately 50% team management and 50% direct Sales and account management.",
+        "en": "Operated as a player-coach, splitting the role approximately 50% team management and 50% direct sales and account management.",
         "he": "עבודה במודל player-coach בחלוקה משוערת של 50% ניהול צוות ו-50% מכירות ישירות וניהול לקוחות."
       },
       "tags": [
@@ -613,7 +613,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "fact_id": "sales.tool.excel",
       "meaning": "Used Excel for Sales reports, KPI tracking, forecasts, performance tracking, and data analysis.",
       "renderings": {
-        "en": "Excel: Sales reporting, KPI tracking, forecasts, performance monitoring, and data analysis.",
+        "en": "Excel: sales reporting, KPI tracking, forecasts, performance monitoring, and data analysis.",
         "he": "Excel: דוחות מכירה, מעקב KPIs, תחזיות, ביצועים וניתוח נתונים."
       },
       "tags": [
@@ -673,7 +673,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "fact_id": "sales.activity.work_mode",
       "meaning": "Approximate work-mode mix: 60% phone/email/WhatsApp/digital and 40% meetings/field Sales.",
       "renderings": {
-        "en": "Worked approximately 60% through phone, email, WhatsApp, and digital channels and 40% through meetings and field Sales.",
+        "en": "Worked approximately 60% through phone, email, WhatsApp, and digital channels and 40% through meetings and field sales.",
         "he": "עבודה של כ-60% בטלפון, בדוא\"ל, ב-WhatsApp ובערוצים דיגיטליים וכ-40% בפגישות ובמכירות שטח."
       },
       "tags": [
@@ -833,7 +833,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "fact_id": "sales.achievement.performance",
       "meaning": "Coached Sales representatives and improved their performance without an additional unverified metric.",
       "renderings": {
-        "en": "Coached Sales representatives and improved their performance.",
+        "en": "Coached sales representatives and improved their performance.",
         "he": "אימון נציגי מכירות ושיפור ביצועיהם."
       },
       "tags": [
@@ -854,7 +854,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "fact_id": "sales.tech_sales.boundary",
       "meaning": "Verified combination is mobile-device B2B Sales plus separate professional software Development; direct SaaS/software Sales is not verified.",
       "renderings": {
-        "en": "B2B mobile-device Sales and separate professional software-development experience; no claim of prior direct SaaS Sales.",
+        "en": "B2B mobile-device sales and separate professional software-development experience; no claim of prior direct SaaS sales.",
         "he": "מכירות B2B של מכשירים סלולריים לצד ניסיון מקצועי נפרד בפיתוח תוכנה, ללא טענה לניסיון ישיר קודם במכירות SaaS."
       },
       "tags": [
@@ -875,7 +875,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "fact_id": "sales.career_narrative",
       "meaning": "Career narrative is expansion: substantial B2B Sales career followed by technical depth at PH.Digital, then a deliberate return to Sales strengths.",
       "renderings": {
-        "en": "Built a substantial B2B Sales career and later added hands-on technical depth at PH.Digital, strengthening the ability to understand products, systems, and technology customers.",
+        "en": "Built a substantial B2B sales career and later added hands-on technical depth at PH.Digital, strengthening the ability to understand products, systems, and technology customers.",
         "he": "בניית קריירת מכירות B2B משמעותית ולאחריה העמקה טכנולוגית מעשית ב-PH.Digital, שחיזקה את היכולת להבין מוצרים, מערכות ולקוחות טכנולוגיים."
       },
       "tags": [

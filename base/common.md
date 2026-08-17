@@ -232,7 +232,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "fact_id": "common.logistics.nationwide_sales",
       "meaning": "Verified nationwide field-Sales experience: yes.",
       "renderings": {
-        "en": "Nationwide field-Sales experience",
+        "en": "Nationwide field sales experience",
         "he": "ניסיון במכירות שטח בפריסה ארצית"
       },
       "tags": [
