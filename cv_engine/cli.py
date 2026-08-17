@@ -11,7 +11,7 @@ from typing import Any
 from .infrastructure.db import Repository, connect, initialize
 from .infrastructure.legacy_source import LegacySourceError, LegacyV1Source
 from .runtime.config import resolve_config
-from .runtime.workspace import WorkspaceError, create_workspace, load_workspace
+from .runtime.workspace import Workspace, WorkspaceError, create_workspace, load_workspace
 from .infrastructure.migration import (
     MigrationSafetyError,
     apply_migration,
@@ -25,8 +25,9 @@ from .infrastructure.migration import (
 )
 from .domain.facts import FACT_SOURCE_NAMES
 from .domain.models import ApplicationStatus, FactStatus
-from .util import sha256_file
+from .util import sha256_file, utc_now
 from .application.workflow import Engine, WorkflowError
+from .runtime.composition import build_services
 
 
 def _repo_root() -> Path:
@@ -230,7 +231,17 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+EXPORT_SCHEMA_VERSION = "2.0"
+
+
 def export_csv(repository: Repository, output: Path) -> Path:
+    """Export applications with an explicit, versioned schema.
+
+    The v1 export had no version marker, so a consumer could not tell which
+    columns to expect. No such consumer was found in this repository, so the
+    v2 export keeps the same columns and records the schema beside them rather
+    than inventing a compatibility mode nothing asked for.
+    """
     rows = repository.list_applications()
     fields = [
         "id", "company", "target_role", "normalized_role", "source_url", "language",
@@ -243,10 +254,24 @@ def export_csv(repository: Repository, output: Path) -> Path:
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
         writer.writerows({field: row.get(field) for field in fields} for row in rows)
+    output.with_suffix(output.suffix + ".meta.json").write_text(
+        json.dumps(
+            {
+                "export_schema_version": EXPORT_SCHEMA_VERSION,
+                "columns": fields,
+                "row_count": len(rows),
+                "generated_at": utc_now(),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     return output
 
 
-def fact_command(engine: Engine, args: argparse.Namespace) -> int:
+def fact_command(knowledge: Any, args: argparse.Namespace) -> int:
     """Dispatch the fact lifecycle commands.
 
     Promotion is refused without `--confirm`: the confirmation is what the
@@ -254,16 +279,16 @@ def fact_command(engine: Engine, args: argparse.Namespace) -> int:
     fail rather than be interpreted.
     """
     if args.fact_command == "list":
-        _print(engine.list_facts(args.status))
+        _print(knowledge.list_facts(args.status))
     elif args.fact_command == "show":
-        _print(engine.show_fact(args.fact_id))
+        _print(knowledge.show_fact(args.fact_id))
     elif args.fact_command == "history":
-        _print(engine.fact_history(args.fact_id))
+        _print(knowledge.fact_history(args.fact_id))
     elif args.fact_command == "add":
         renderings = {"en": args.en}
         if args.he:
             renderings["he"] = args.he
-        _print(engine.add_fact(
+        _print(knowledge.add_fact(
             args.source,
             {
                 "fact_id": args.fact_id,
@@ -279,7 +304,7 @@ def fact_command(engine: Engine, args: argparse.Namespace) -> int:
             reason=args.reason,
         ))
     elif args.fact_command == "capture":
-        _print(engine.capture_claim_fact(
+        _print(knowledge.capture_claim_fact(
             args.application_id,
             args.claim_id,
             source=args.source,
@@ -302,25 +327,25 @@ def fact_command(engine: Engine, args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 2
-        _print(engine.promote_fact(
+        _print(knowledge.promote_fact(
             args.fact_id,
             target.value,
             explicitly_confirmed=True,
             reason=args.reason,
         ))
     elif args.fact_command == "attach":
-        _print(engine.attach_fact(args.fact_id, args.profile, args.section, pin=args.pin))
+        _print(knowledge.attach_fact(args.fact_id, args.profile, args.section, pin=args.pin))
     return 0
 
 
-def generic_reconcile(root: Path, repository: Repository) -> dict[str, Any]:
+def generic_reconcile(workspace: Workspace, repository: Repository) -> dict[str, Any]:
     problems = repository.integrity_check()
     checked = 0
     with connect(repository.path) as connection:
         rows = connection.execute("SELECT path, content_hash FROM artifact_versions").fetchall()
     for row in rows:
         checked += 1
-        path = root / row["path"]
+        path = workspace.root / row["path"]
         if not path.is_file():
             problems.append(f"missing artifact: {row['path']}")
         elif sha256_file(path) != row["content_hash"]:
@@ -422,12 +447,14 @@ def main(argv: list[str] | None = None) -> int:
             initialize(db_path)
             _print({"database": str(db_path), "schema_initialized": True})
             return 0
-        engine = Engine(workspace, db_path)
+        services = build_services(workspace, database_path=db_path)
+        repository = services.repository
+        engine = Engine(workspace, services=services)
         if args.command == "ingest":
-            app_id, snapshot_id = engine.ingest(args.company, args.role, _job_text(args), args.url)
+            app_id, snapshot_id = services.applications.ingest(args.company, args.role, _job_text(args), args.url)
             _print({"application_id": app_id, "job_snapshot_id": snapshot_id})
         elif args.command == "analyze":
-            analysis_id, analysis = engine.analyze(
+            analysis_id, analysis = services.analysis.analyze(
                 args.application_id,
                 track=args.track,
                 profile=args.profile,
@@ -439,20 +466,20 @@ def main(argv: list[str] | None = None) -> int:
             )
             _print({"analysis_id": analysis_id, "analysis": analysis.model_dump(mode="json")})
         elif args.command == "draft":
-            markdown, manifest, report = engine.draft(args.application_id)
+            markdown, manifest, report = services.drafts.draft(args.application_id)
             _print({"markdown": str(markdown), "claim_manifest": str(manifest), "validation": report.model_dump(mode="json"), "review_required": True})
         elif args.command == "validate":
-            report = engine.validate_working(args.application_id)
+            report = services.drafts.validate_working(args.application_id)
             _print(report.model_dump(mode="json"))
             return 0 if report.passed else 1
         elif args.command == "approve":
-            _print(engine.approve(args.application_id))
+            _print(services.drafts.approve(args.application_id))
         elif args.command == "render":
-            pdf, report = engine.render(args.application_id)
+            pdf, report = services.rendering.render(args.application_id)
             _print({"pdf": str(pdf), "ready_validation": report.model_dump(mode="json")})
             return 0 if report.passed else 1
         elif args.command == "ready":
-            report = engine.ready_report(args.application_id)
+            report = services.rendering.ready_report(args.application_id)
             _print(report.model_dump(mode="json"))
             return 0 if report.passed else 1
         elif args.command == "fast":
@@ -462,32 +489,32 @@ def main(argv: list[str] | None = None) -> int:
                 language=args.language, accept_low_fit=args.accept_low_fit,
             ))
         elif args.command == "list":
-            _print(engine.repo.list_applications())
+            _print(repository.list_applications())
         elif args.command == "show":
-            app = engine.repo.get_application(args.application_id)
-            app["latest_snapshot"] = engine.repo.latest_snapshot(args.application_id)
+            app = repository.get_application(args.application_id)
+            app["latest_snapshot"] = repository.latest_snapshot(args.application_id)
             try:
-                app["latest_analysis"] = engine.repo.latest_analysis(args.application_id)[1].model_dump(mode="json")
+                app["latest_analysis"] = repository.latest_analysis(args.application_id)[1].model_dump(mode="json")
             except KeyError:
                 app["latest_analysis"] = None
             _print(app)
         elif args.command == "versions":
-            _print(engine.repo.artifact_versions(args.application_id))
+            _print(repository.artifact_versions(args.application_id))
         elif args.command == "decision":
-            record = engine.repo.latest_decision(args.application_id)
+            record = repository.latest_decision(args.application_id)
             record["structured"] = json.loads(record.pop("structured_json"))
             _print(record)
         elif args.command == "status":
             if args.status == ApplicationStatus.APPLIED.value:
-                _print(engine.submit(args.application_id, args.reason))
+                _print(services.tracking.submit(args.application_id, args.reason))
             else:
-                engine.repo.transition_status(args.application_id, args.status, args.reason)
-                _print(engine.repo.get_application(args.application_id))
+                repository.transition_status(args.application_id, args.status, args.reason)
+                _print(repository.get_application(args.application_id))
         elif args.command == "action":
-            engine.repo.set_next_action(args.application_id, args.next_action, args.date)
-            _print(engine.repo.get_application(args.application_id))
+            repository.set_next_action(args.application_id, args.next_action, args.date)
+            _print(repository.get_application(args.application_id))
         elif args.command == "edit-claim":
-            markdown, report = engine.edit_claim(
+            markdown, report = services.drafts.edit_claim(
                 args.application_id,
                 args.claim_id,
                 args.fact_id,
@@ -498,23 +525,28 @@ def main(argv: list[str] | None = None) -> int:
             _print({"markdown": str(markdown), "validation": report.model_dump(mode="json")})
             return 0 if report.passed else 1
         elif args.command == "sync-draft":
-            markdown, report = engine.sync_working_claims(args.application_id)
+            markdown, report = services.drafts.sync_working_claims(args.application_id)
             _print({"markdown": str(markdown), "validation": report.model_dump(mode="json")})
             return 0 if report.passed else 1
         elif args.command == "link-claim":
-            markdown, report = engine.link_claim(args.application_id, args.claim_id, args.text, args.fact_id)
+            markdown, report = services.drafts.link_claim(args.application_id, args.claim_id, args.text, args.fact_id)
             _print({"markdown": str(markdown), "validation": report.model_dump(mode="json")})
             return 0 if report.passed else 1
         elif args.command == "export":
-            _print({"csv": str(export_csv(engine.repo, args.output.resolve()))})
+            exported = export_csv(repository, args.output.resolve())
+            _print({
+                "csv": str(exported),
+                "metadata": str(exported.with_suffix(exported.suffix + ".meta.json")),
+                "export_schema_version": EXPORT_SCHEMA_VERSION,
+            })
         elif args.command == "reconcile":
-            report = generic_reconcile(root, engine.repo)
-            report["fact_lifecycle"] = engine.reconcile_facts()
+            report = generic_reconcile(workspace, repository)
+            report["fact_lifecycle"] = services.knowledge_lifecycle.reconcile_facts()
             report["passed"] = report["passed"] and report["fact_lifecycle"]["passed"]
             _print(report)
             return 0 if report["passed"] else 1
         elif args.command == "fact":
-            return fact_command(engine, args)
+            return fact_command(services.knowledge_lifecycle, args)
         return 0
     except (
         ValueError,

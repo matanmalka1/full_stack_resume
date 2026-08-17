@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-import cv_engine.workflow as workflow_module
+import cv_engine.infrastructure.rendering as rendering_module
 from cv_engine.infrastructure.rendering import validate_rendered as real_validate_rendered
 from cv_engine.util import sha256_file, sha256_text
 from cv_engine.application.workflow import WorkflowError
@@ -41,7 +41,7 @@ def test_failed_post_render_validation_does_not_set_ready(approved_application, 
             "groups": {**report.groups, "ats": False},
         })
 
-    monkeypatch.setattr(workflow_module, "validate_rendered", failing_validate_rendered)
+    monkeypatch.setattr(rendering_module, "validate_rendered", failing_validate_rendered)
     pdf, report = engine.render(app_id)
     assert not report.passed
     assert engine.repo.get_application(app_id)["current_status"] == "preparing"

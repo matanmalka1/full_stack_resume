@@ -40,14 +40,24 @@ def test_default_flow_stops_for_review_then_reaches_ready(engine: Engine) -> Non
     assert submission["artifact_version_id"] == submission_result["pdf_artifact_version_id"]
 
 
-def test_csv_export(engine: Engine, tmp_path: Path) -> None:
-    from cv_engine.cli import export_csv
+def test_csv_export_declares_its_schema_version(engine: Engine, tmp_path: Path) -> None:
+    import json as _json
+
+    from cv_engine.cli import EXPORT_SCHEMA_VERSION, export_csv
 
     app_id, _ = engine.ingest("Acme", "Developer", "Python developer role")
     output = export_csv(engine.repo, tmp_path / "applications.csv")
     text = output.read_text(encoding="utf-8")
     assert "current_status" in text
     assert app_id in text
+
+    metadata = _json.loads(
+        output.with_suffix(output.suffix + ".meta.json").read_text(encoding="utf-8")
+    )
+    assert metadata["export_schema_version"] == EXPORT_SCHEMA_VERSION
+    assert metadata["row_count"] == 1
+    assert metadata["columns"][0] == "id"
+    assert "current_status" in metadata["columns"]
 
 
 def test_validate_extracts_safe_manual_markdown_wording(drafted_application) -> None:

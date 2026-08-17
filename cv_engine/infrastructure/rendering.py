@@ -285,3 +285,42 @@ def _claim_recoverable(text: str, normalized_pdf: str, rtl: bool) -> bool:
         return False
     recovered = sum(token in normalized_pdf for token in tokens)
     return recovered / len(tokens) >= 0.9
+
+
+class PlaywrightRenderer:
+    """The real renderer: Jinja templates, managed Chromium, and pypdf checks.
+
+    Wraps the module functions so the application layer depends on a port it
+    can substitute, while the rendering rules themselves stay exactly where
+    they were.
+    """
+
+    def __init__(self, knowledge_root: Path):
+        self.knowledge_root = Path(knowledge_root)
+
+    def render_html(
+        self, draft: DraftDocument, output_path: Path, candidate: CandidateContext
+    ) -> Path:
+        return render_html(draft, self.knowledge_root, output_path, candidate)
+
+    def render_pdf(
+        self, html_path: Path, pdf_path: Path, screenshot_path: Path
+    ) -> dict[str, Any]:
+        return render_pdf(html_path, pdf_path, screenshot_path)
+
+    def validate_rendered(
+        self,
+        draft: DraftDocument,
+        profile: Profile,
+        html_path: Path,
+        pdf_path: Path,
+        screenshot_path: Path,
+        geometry: dict[str, Any],
+        candidate: CandidateContext,
+    ) -> ValidationReport:
+        return validate_rendered(
+            draft, profile, html_path, pdf_path, screenshot_path, geometry, candidate
+        )
+
+    def filename_for(self, normalized_role: str, candidate: CandidateContext) -> str:
+        return normalized_role_filename(normalized_role, candidate)

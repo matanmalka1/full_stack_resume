@@ -12,11 +12,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..infrastructure.db import Repository
 from ..domain.facts import FactStore
 from ..domain.models import DraftDocument, JobAnalysis
 from ..domain.profiles import ProfileStore
 from ..util import canonical_json, sha256_text
+from .ports import ApplicationRepository
 
 
 # What a re-analysis may change without invalidating a draft built from an
@@ -68,7 +68,7 @@ class DraftChain:
         return "; ".join(f"{code}: {message}" for code, message in self.problems)
 
 
-def decision_record_analysis_id(repo: Repository, application_id: str) -> str | None:
+def decision_record_analysis_id(repo: ApplicationRepository, application_id: str) -> str | None:
     """The analysis the latest approved version recorded in its decision record.
 
     Only meaningful for pre-binding "1.0" manifests, whose own file does not name
@@ -83,7 +83,7 @@ def decision_record_analysis_id(repo: Repository, application_id: str) -> str | 
 
 
 def check_draft_chain(
-    repo: Repository,
+    repo: ApplicationRepository,
     application_id: str,
     draft: DraftDocument,
     profiles: ProfileStore,
@@ -189,7 +189,7 @@ def check_draft_chain(
 
 
 def _staleness(
-    repo: Repository,
+    repo: ApplicationRepository,
     application_id: str,
     record: dict,
     analysis: JobAnalysis,

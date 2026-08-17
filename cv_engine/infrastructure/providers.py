@@ -9,7 +9,7 @@ from typing import Any, Protocol, TypeVar
 
 from pydantic import BaseModel
 
-from ..domain.models import ProviderContext, ProviderTaskResult
+from ..domain.models import JobClassificationProposal, ProviderContext, ProviderTaskResult
 from ..util import canonical_json, sha256_text
 
 
@@ -140,3 +140,17 @@ class OpenAIResponsesProvider:
             raw_output_hash=sha256_text(raw),
         )
         return parsed, provenance
+
+
+class OpenAIClassificationProvider:
+    """The one v1 AI task, behind the application's provider port."""
+
+    def __init__(self, prompt_path: Path):
+        self.prompt_path = Path(prompt_path)
+
+    def classify_job(
+        self, payload: dict[str, Any], *, model: str
+    ) -> JobClassificationProposal:
+        adapter = OpenAIResponsesProvider(model=model, prompt_path=self.prompt_path)
+        proposal, _raw = adapter.run("classify_job", payload, JobClassificationProposal)
+        return proposal

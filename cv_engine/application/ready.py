@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from .chain import check_draft_chain, decision_record_analysis_id, material_analysis_key
-from ..infrastructure.db import Repository
+from .ports import ApplicationRepository
 from ..domain.drafts import load_draft
 from ..domain.facts import FactStore
 from ..domain.models import ValidationIssue, ValidationReport
@@ -16,7 +16,7 @@ from ..domain.validation import validate_draft
 
 
 def verify_ready_integrity(
-    workspace: Workspace, repo: Repository, application_id: str
+    workspace: Workspace, repo: ApplicationRepository, application_id: str
 ) -> ValidationReport:
     """The single domain-level contract for what READY means.
 

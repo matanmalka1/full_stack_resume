@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 
+import cv_engine
 from cv_engine.domain.analysis import classify_job
 from cv_engine.infrastructure.canonical_data import V2_IDENTITY_FACT, write_canonical_sources
 from cv_engine.infrastructure.db import Repository, connect
@@ -36,6 +37,14 @@ from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB, seal_report
 
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
+
+# The v1 worktree ships an installed copy of this package. If it ever shadows
+# the worktree under test, patches land on the wrong module and tests pass
+# without exercising anything here.
+_IMPORTED_FROM = Path(cv_engine.__file__).resolve().parent.parent
+assert _IMPORTED_FROM == SOURCE_ROOT, (
+    f"tests import cv_engine from {_IMPORTED_FROM}, not the worktree under test ({SOURCE_ROOT})"
+)
 
 # Only acceptance tests that validate real layout/PDF behavior use this fixture.
 # Integrity tests create the same artifact/version graph with a deterministic
@@ -273,8 +282,8 @@ def ready_application(approved_application, monkeypatch: pytest.MonkeyPatch):
             evidence={"renderer": "deterministic-integrity-double", "page_count": 1},
         )
 
-    monkeypatch.setattr("cv_engine.application.workflow.render_pdf", render_without_browser)
-    monkeypatch.setattr("cv_engine.application.workflow.validate_rendered", accept_deterministic_render)
+    monkeypatch.setattr("cv_engine.infrastructure.rendering.render_pdf", render_without_browser)
+    monkeypatch.setattr("cv_engine.infrastructure.rendering.validate_rendered", accept_deterministic_render)
 
     def build(
         company: str = "Ready Co",
@@ -374,7 +383,7 @@ def provider_analysis(engine: Engine, monkeypatch):
                 captured.update(payload)
                 return response, None
 
-        monkeypatch.setattr("cv_engine.application.workflow.OpenAIResponsesProvider", _StubProvider)
+        monkeypatch.setattr("cv_engine.infrastructure.providers.OpenAIResponsesProvider", _StubProvider)
         application_id, _ = engine.ingest(company, role, job_text)
         _, analysis = engine.analyze(
             application_id, provider="openai", model="gpt-test", **analyze_kwargs
