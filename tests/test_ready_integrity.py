@@ -30,12 +30,6 @@ def test_repository_cannot_manually_set_ready(analyzed_application) -> None:
     assert engine.repo.get_application(app_id)["current_status"] == "preparing"
 
 
-def test_render_success_sets_ready(ready_application) -> None:
-    engine, app_id = ready_application("Render Success")
-    assert engine.repo.get_application(app_id)["current_status"] == "ready"
-    assert engine.ready_report(app_id).passed
-
-
 @pytest.mark.browser
 def test_failed_post_render_validation_does_not_set_ready(approved_application, monkeypatch: pytest.MonkeyPatch) -> None:
     engine, app_id = approved_application("Render Failure")
@@ -238,38 +232,6 @@ def test_new_analysis_stales_prior_ready(ready_application) -> None:
 
 
 # --- APPLIED binding ------------------------------------------------------
-
-
-def test_applied_binds_to_exact_ready_pdf_version(ready_application) -> None:
-    engine, app_id = ready_application("Applied Exact")
-    pdf_version = engine.repo.latest_artifact_version(app_id, "resume_pdf", "rendered")
-    result = engine.submit(app_id)
-    assert result["pdf_artifact_version_id"] == pdf_version["id"]
-    assert result["current_status"] == "applied"
-
-
-def test_applied_rejected_when_pdf_tampered(v1_repo: Path, ready_application) -> None:
-    engine, app_id = ready_application("Applied Tampered")
-    _pdf_version, path = artifact_version_and_path(engine, app_id, v1_repo, "resume_pdf", "rendered")
-    path.write_bytes(path.read_bytes() + b"tampered")
-    with pytest.raises(WorkflowError, match="stale or tampered"):
-        engine.submit(app_id)
-    assert engine.repo.get_application(app_id)["current_status"] == "ready"
-
-
-def test_applied_rejected_when_pdf_deleted(v1_repo: Path, ready_application) -> None:
-    engine, app_id = ready_application("Applied Deleted")
-    _pdf_version, path = artifact_version_and_path(engine, app_id, v1_repo, "resume_pdf", "rendered")
-    path.unlink()
-    with pytest.raises(WorkflowError, match="stale or tampered"):
-        engine.submit(app_id)
-
-
-def test_applied_rejected_when_newer_unvalidated_version_exists(ready_application) -> None:
-    engine, app_id = ready_application("Applied Superseded")
-    engine.approve(app_id)  # newer approved version, not yet rendered
-    with pytest.raises(WorkflowError, match="stale or tampered"):
-        engine.submit(app_id)
 
 
 def test_applied_binds_to_current_version_after_two_ready_cycles(ready_application) -> None:

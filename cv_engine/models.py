@@ -163,6 +163,7 @@ class JobAnalysis(StrictModel):
     keywords: list[str]
     language: Literal["en", "he"]
     classification_requires_approval: bool = False
+    approval_reasons: list[str] = []
     user_override: dict[str, str] = {}
 
 

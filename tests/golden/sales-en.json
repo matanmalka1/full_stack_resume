@@ -3,5 +3,43 @@
   "track": "sales",
   "profile": "account-manager",
   "emphasis": "account-growth",
-  "language": "en"
+  "language": "en",
+  "snapshot": {
+    "markdown_sha256": "fdc8f5bb767b50c780b59f3e26fb35d0503b6faacf572042fac7df489d3692d6",
+    "html_sha256": "fbfba553d5eec82e0f50c6cd0ab4965f74e458cf2efca6a6da10e4b17cfabdf7",
+    "selected_fact_ids": [
+      "common.contact.email",
+      "common.contact.linkedin",
+      "common.contact.location",
+      "common.contact.phone",
+      "common.language.arabic",
+      "common.language.english",
+      "common.language.french",
+      "common.language.hebrew",
+      "sales.achievement.account_expansion",
+      "sales.achievement.reactivation",
+      "sales.achievement.retention",
+      "sales.cycle.account_management",
+      "sales.cycle.discovery",
+      "sales.cycle.negotiation",
+      "sales.metric.performance",
+      "sales.metric.portfolio_growth",
+      "sales.metric.recurring_customers",
+      "sales.role.field.dates",
+      "sales.role.field.title",
+      "sales.role.leader.dates",
+      "sales.role.leader.title",
+      "sales.summary.account",
+      "sales.tool.communication",
+      "sales.tool.excel",
+      "sales.tool.priority"
+    ],
+    "sections": [
+      "Professional Summary",
+      "Work Experience",
+      "Core Skills",
+      "Tools",
+      "Languages"
+    ]
+  }
 }

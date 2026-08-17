@@ -8,5 +8,43 @@
     "track": "sales",
     "profile": "account-manager",
     "emphasis": "account-growth"
+  },
+  "snapshot": {
+    "markdown_sha256": "c24c3b11392a5feebe996275d42a33bfdd149c8d728f0ed86067b48ae65c0f51",
+    "html_sha256": "ef00933500fd783b8c523c5485c239d8e9d84d7a09192ddb78fae3888064ad54",
+    "selected_fact_ids": [
+      "common.contact.email",
+      "common.contact.linkedin",
+      "common.contact.location",
+      "common.contact.phone",
+      "common.language.arabic",
+      "common.language.english",
+      "common.language.french",
+      "common.language.hebrew",
+      "sales.achievement.account_expansion",
+      "sales.achievement.reactivation",
+      "sales.achievement.retention",
+      "sales.cycle.account_management",
+      "sales.cycle.discovery",
+      "sales.cycle.negotiation",
+      "sales.metric.performance",
+      "sales.metric.portfolio_growth",
+      "sales.metric.recurring_customers",
+      "sales.role.field.dates",
+      "sales.role.field.title",
+      "sales.role.leader.dates",
+      "sales.role.leader.title",
+      "sales.summary.account",
+      "sales.tool.communication",
+      "sales.tool.excel",
+      "sales.tool.priority"
+    ],
+    "sections": [
+      "תקציר מקצועי",
+      "ניסיון מקצועי",
+      "מיומנויות ליבה",
+      "כלים",
+      "שפות"
+    ]
   }
 }

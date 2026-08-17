@@ -3,5 +3,44 @@
   "track": "tech-sales",
   "profile": "tech-sales",
   "emphasis": "tech-consultative-sales",
-  "language": "en"
+  "language": "en",
+  "snapshot": {
+    "markdown_sha256": "b69d91ad9ce64cbaa412a4958bd697cdae2d48cec5175c74add01006085a80c6",
+    "html_sha256": "ee800724bb2ffaa5e9af5c5d13c416ca0fda5ad9892d4da8f9394c4ea9a080ce",
+    "selected_fact_ids": [
+      "common.contact.email",
+      "common.contact.linkedin",
+      "common.contact.location",
+      "common.contact.phone",
+      "common.language.arabic",
+      "common.language.english",
+      "common.language.french",
+      "common.language.hebrew",
+      "development.phdigital.crm",
+      "development.phdigital.dates",
+      "development.phdigital.fullstack",
+      "development.phdigital.role",
+      "development.skills.backend",
+      "development.skills.frontend",
+      "sales.cycle.account_management",
+      "sales.cycle.discovery",
+      "sales.cycle.negotiation",
+      "sales.metric.performance",
+      "sales.metric.team_size",
+      "sales.role.field.dates",
+      "sales.role.field.title",
+      "sales.role.leader.dates",
+      "sales.role.leader.title",
+      "sales.summary.tech",
+      "sales.tool.excel",
+      "sales.tool.priority"
+    ],
+    "sections": [
+      "Professional Summary",
+      "Sales Experience",
+      "Technology Background",
+      "Tools",
+      "Languages"
+    ]
+  }
 }

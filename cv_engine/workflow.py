@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
-from .analysis import classify_job, merge_classification
+from .analysis import classify_job, merge_classification, unresolved_approval_reasons
 from .db import Repository
 from .drafts import (
     apply_claim_edit,
@@ -123,11 +123,12 @@ class Engine:
         _, analysis = self.repo.latest_analysis(application_id)
         if analysis.fit.value == "low" and analysis.user_override.get("fit") != "accepted-low-fit":
             raise WorkflowError("low fit blocks CV generation until --accept-low-fit is recorded")
-        classification_overridden = any(
-            key in analysis.user_override for key in ("track", "profile", "emphasis")
-        )
-        if analysis.classification_requires_approval and not classification_overridden:
-            raise WorkflowError("ambiguous classification requires an explicit Track/Profile override")
+        unresolved = unresolved_approval_reasons(analysis)
+        if unresolved:
+            raise WorkflowError(
+                "ambiguous classification requires an explicit Track/Profile override: "
+                f"{unresolved}"
+            )
         snapshot = self.repo.latest_snapshot(application_id)
         profile = profiles.get(analysis.profile)
         draft = build_draft(

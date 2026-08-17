@@ -18,7 +18,14 @@ from cv_engine.db import Repository, connect
 from cv_engine.drafts import build_draft, write_working_draft
 from cv_engine.facts import FactStore
 from cv_engine.migration import create_snapshot, dry_run_migration, migrate_legacy_state, verify_snapshot
-from cv_engine.models import Emphasis, JobAnalysis, JobClassificationProposal, ProfileName, Track
+from cv_engine.models import (
+    Emphasis,
+    JobAnalysis,
+    JobClassificationProposal,
+    ProfileName,
+    Track,
+    ValidationReport,
+)
 from cv_engine.profiles import ProfileStore
 from cv_engine.rendering import render_pdf, validate_rendered
 from cv_engine.workflow import Engine
@@ -27,10 +34,11 @@ from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB, seal_report
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
 
-# Fixtures that always drive a real browser render. Tests using them are marked
-# `browser` automatically; tests that reach rendering by other routes carry an
-# explicit @pytest.mark.browser.
-BROWSER_FIXTURES = frozenset({"ready_application", "render_validator"})
+# Only acceptance tests that validate real layout/PDF behavior use this fixture.
+# Integrity tests create the same artifact/version graph with a deterministic
+# renderer double, so Chromium is not paid for when the behavior under test is
+# hashes, linkage, lifecycle, or SQLite state.
+BROWSER_FIXTURES = frozenset({"render_validator"})
 
 
 @pytest.hookimpl(tryfirst=True)
@@ -200,7 +208,43 @@ def approved_application(drafted_application):
 
 
 @pytest.fixture
-def ready_application(approved_application):
+def ready_application(approved_application, monkeypatch: pytest.MonkeyPatch):
+    def render_without_browser(html_path: Path, pdf_path: Path, screenshot_path: Path) -> dict[str, Any]:
+        pdf_path.write_bytes(b"%PDF-1.4\n% deterministic integrity-test artifact\n")
+        screenshot_path.write_bytes(b"deterministic integrity-test visual evidence\n")
+        html = html_path.read_text(encoding="utf-8")
+        direction = "rtl" if '<html lang="he" dir="rtl">' in html else "ltr"
+        return {
+            "scrollWidth": 100,
+            "clientWidth": 100,
+            "scrollHeight": 100,
+            "clientHeight": 100,
+            "offenders": [],
+            "dir": direction,
+            "links": [],
+        }
+
+    def accept_deterministic_render(*_args, **_kwargs) -> ValidationReport:
+        groups = {
+            "render": True,
+            "page_count": True,
+            "pdf": True,
+            "ats": True,
+            "links": True,
+            "visual": True,
+            "direction": True,
+            "filename": True,
+        }
+        return ValidationReport(
+            passed=True,
+            groups=groups,
+            issues=[],
+            evidence={"renderer": "deterministic-integrity-double", "page_count": 1},
+        )
+
+    monkeypatch.setattr("cv_engine.workflow.render_pdf", render_without_browser)
+    monkeypatch.setattr("cv_engine.workflow.validate_rendered", accept_deterministic_render)
+
     def build(
         company: str = "Ready Co",
         role: str = "Account Manager",

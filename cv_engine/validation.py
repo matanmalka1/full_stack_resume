@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from .analysis import unresolved_approval_reasons
 from .drafts import render_composite_claim, serialize_markdown, validate_derived_wording
 from .facts import FactStore, FactStoreError
 from .models import DraftDocument, JobAnalysis, Profile, ValidationIssue, ValidationReport
@@ -161,12 +162,13 @@ def validate_draft(
     if analysis.fit.value == "low" and analysis.user_override.get("fit") != "accepted-low-fit":
         groups["profile"] = False
         issues.append(ValidationIssue(group="profile", code="low-fit", message="Low fit requires an explicit recorded override."))
-    classification_overridden = any(
-        key in analysis.user_override for key in ("track", "profile", "emphasis")
-    )
-    if analysis.classification_requires_approval and not classification_overridden:
+    unresolved = unresolved_approval_reasons(analysis)
+    if unresolved:
         groups["profile"] = False
-        issues.append(ValidationIssue(group="profile", code="classification-approval-required", message="Material classification ambiguity is unresolved."))
+        issues.append(ValidationIssue(
+            group="profile", code="classification-approval-required",
+            message=f"Material classification ambiguity is unresolved: {', '.join(unresolved)}",
+        ))
 
     expected_sections = [
         spec.name_he if draft.language == "he" else spec.name_en

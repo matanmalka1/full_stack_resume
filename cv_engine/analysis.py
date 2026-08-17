@@ -17,6 +17,21 @@ CONFIDENCE_APPROVAL_THRESHOLD = 0.72
 
 FIT_SEVERITY = {FitLevel.HIGH: 0, FitLevel.MEDIUM: 1, FitLevel.LOW: 2}
 
+# Which explicit user overrides settle each reason an approval was demanded for.
+# A Profile determines its own Track, so choosing a Profile settles the pair;
+# choosing only a Track leaves the Profile inside it undecided. Emphasis and
+# language never settle a classification question — that asymmetry is the point:
+# an unrelated override must not open the gate.
+APPROVAL_RESOLVING_OVERRIDES: dict[str, frozenset[str]] = {
+    "ambiguous-signals": frozenset({"track", "profile"}),
+    "low-confidence": frozenset({"track", "profile"}),
+    "track-disagreement": frozenset({"track", "profile"}),
+    "profile-disagreement": frozenset({"profile"}),
+    "inconsistent-proposal": frozenset({"track", "profile"}),
+    # Analyses written before reasons were recorded: fail closed on the pair.
+    "unspecified-ambiguity": frozenset({"track", "profile"}),
+}
+
 PROFILE_TERMS: dict[ProfileName, tuple[str, ...]] = {
     ProfileName.DEVELOPMENT: ("developer", "software", "backend", "frontend", "full stack", "python", "react", "api"),
     ProfileName.FIELD_SALES: ("field sales", "territory", "on-site", "travel", "route sales"),
@@ -39,6 +54,26 @@ def detect_language(text: str) -> str:
     if not letters:
         return "en"
     return "he" if sum(bool(HEBREW.match(char)) for char in letters) / len(letters) >= 0.25 else "en"
+
+
+def unresolved_reasons(reasons: Sequence[str], overrides: dict[str, str]) -> list[str]:
+    return [
+        reason for reason in reasons
+        if not (APPROVAL_RESOLVING_OVERRIDES.get(reason, frozenset()) & overrides.keys())
+    ]
+
+
+def unresolved_approval_reasons(analysis: JobAnalysis) -> list[str]:
+    """Reasons the classification still needs a decision from the user.
+
+    A recorded reason clears only when the user overrode a field that actually
+    answers it, so an Emphasis or language override can no longer open a gate
+    that a Track/Profile ambiguity closed.
+    """
+    reasons = analysis.approval_reasons
+    if not reasons and analysis.classification_requires_approval:
+        reasons = ["unspecified-ambiguity"]
+    return unresolved_reasons(reasons, analysis.user_override)
 
 
 def derive_fit(gaps: Sequence[Gap]) -> FitLevel:
@@ -97,15 +132,25 @@ def merge_classification(
     else:
         emphasis = profiles.get(profile).default_emphasis
 
+    confidence = min(deterministic.confidence, proposal.confidence)
+
     # Section 9.4 routes a materially ambiguous classification to the user. Two
     # classifiers that disagree on Track/Profile are exactly that: neither is
     # authoritative, so neither may be applied silently. Emphasis is a refinement
     # inside one Profile and does not currently change selected content, so a
     # disagreement there is not an approval gate. An internally inconsistent
-    # proposal is treated as disagreement rather than trusted or raised.
-    disagreement = (track, profile) != (deterministic.track, deterministic.profile) or not consistent
-
-    confidence = min(deterministic.confidence, proposal.confidence)
+    # proposal is recorded as its own reason rather than trusted or raised.
+    reasons = list(deterministic.approval_reasons)
+    if not consistent:
+        reasons.append("inconsistent-proposal")
+    else:
+        if proposal.track is not deterministic.track:
+            reasons.append("track-disagreement")
+        if proposal.profile is not deterministic.profile:
+            reasons.append("profile-disagreement")
+    if confidence < CONFIDENCE_APPROVAL_THRESHOLD:
+        reasons.append("low-confidence")
+    reasons = list(dict.fromkeys(reasons))
     gaps = merge_gaps(deterministic.gaps, proposal.gaps)
     fit = max(derive_fit(gaps), deterministic.fit, key=lambda level: FIT_SEVERITY[level])
 
@@ -130,11 +175,8 @@ def merge_classification(
         preferred_requirements=[gap.requirement for gap in gaps if gap.severity == "warning"],
         keywords=sorted(set(deterministic.keywords) | set(proposal.keywords)),
         language=deterministic.language,
-        classification_requires_approval=(
-            deterministic.classification_requires_approval
-            or disagreement
-            or confidence < CONFIDENCE_APPROVAL_THRESHOLD
-        ),
+        classification_requires_approval=bool(unresolved_reasons(reasons, overrides)),
+        approval_reasons=reasons,
         user_override=overrides,
     )
 
@@ -234,6 +276,10 @@ def classify_job(
         }.items() if value
     }
     keywords = sorted({term for terms in PROFILE_TERMS.values() for term in terms if term in lowered})
+    reasons = [
+        *(["ambiguous-signals"] if ambiguous else []),
+        *(["low-confidence"] if confidence < CONFIDENCE_APPROVAL_THRESHOLD else []),
+    ]
     return JobAnalysis(
         track=track,
         profile=profile,
@@ -246,6 +292,7 @@ def classify_job(
         preferred_requirements=[gap.requirement for gap in gaps if gap.severity == "warning"],
         keywords=keywords,
         language=language_override or detect_language(text),
-        classification_requires_approval=ambiguous or confidence < CONFIDENCE_APPROVAL_THRESHOLD,
+        classification_requires_approval=bool(unresolved_reasons(reasons, overrides)),
+        approval_reasons=reasons,
         user_override=overrides,
     )

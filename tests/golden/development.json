@@ -3,5 +3,44 @@
   "track": "development",
   "profile": "development",
   "emphasis": "development-backend",
-  "language": "en"
+  "language": "en",
+  "snapshot": {
+    "markdown_sha256": "71806d71a7ce8d11a5e3ff098d3cf781540f7369bdb80355e4e06edf423fdbe3",
+    "html_sha256": "dbc1171b2bf1d109b0f1c64ac0deab6966f73af047fb15cfe7641e279e44fbf5",
+    "selected_fact_ids": [
+      "common.contact.email",
+      "common.contact.github",
+      "common.contact.linkedin",
+      "common.contact.location",
+      "common.contact.phone",
+      "common.education.fullstack",
+      "common.language.arabic",
+      "common.language.english",
+      "common.language.french",
+      "common.language.hebrew",
+      "development.phdigital.cicd",
+      "development.phdigital.crm",
+      "development.phdigital.dates",
+      "development.phdigital.fullstack",
+      "development.phdigital.integrations",
+      "development.phdigital.role",
+      "development.skills.ai",
+      "development.skills.backend",
+      "development.skills.databases",
+      "development.skills.devops",
+      "development.skills.frontend",
+      "development.summary",
+      "sales.metric.performance",
+      "sales.metric.team_size",
+      "sales.role.leader.dates",
+      "sales.role.leader.title"
+    ],
+    "sections": [
+      "Professional Summary",
+      "Work Experience",
+      "Education",
+      "Core Skills",
+      "Languages"
+    ]
+  }
 }
