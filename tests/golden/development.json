@@ -5,8 +5,8 @@
   "emphasis": "development-backend",
   "language": "en",
   "snapshot": {
-    "markdown_sha256": "8f3acef399d10602157e81b7759ba03e76c0f864e6e31939dea197d5a595e3ff",
-    "html_sha256": "c3078d8aed49709ea7b31985812eb88ab1ed376e5ef6381fbe56ab2e8581604d",
+    "markdown_sha256": "764e8b9d17b10cac072a1208ea8b1ae375b1950ffce546ee0c53791f1891d433",
+    "html_sha256": "f2204bf32dccdfc97fed5200679bc6f967b10527b9aca7c6ef899996cc01cac6",
     "selected_fact_ids": [
       "common.contact.email",
       "common.contact.github",
@@ -25,6 +25,7 @@
       "development.phdigital.fullstack",
       "development.phdigital.integrations",
       "development.phdigital.role",
+      "development.skills.ai",
       "development.skills.backend",
       "development.skills.databases",
       "development.skills.devops",
