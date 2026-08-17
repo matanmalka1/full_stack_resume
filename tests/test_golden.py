@@ -65,6 +65,8 @@ def test_golden_profile_snapshot_and_ready_pdf(
     if case["language"] == "he":
         assert '<html lang="he" dir="rtl">' in html_text
         assert '<bdi dir="ltr">B2B</bdi>' in html_text
+        assert '<h3 class="claim" dir="auto">' in html_text
+        assert '<div class="date claim" dir="auto">' in html_text
 
     pdf = target / normalized_role_filename(profile.normalized_role)
     screenshot = target / "visual.png"

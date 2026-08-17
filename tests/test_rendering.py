@@ -4,6 +4,7 @@ from pathlib import Path
 
 from cv_engine.drafts import serialize_markdown
 from cv_engine.rendering import (
+    _bidi,
     _claim_html,
     _claim_recoverable,
     _emphasis_config,
@@ -43,6 +44,17 @@ def test_rtl_ats_comparison_accepts_bidi_token_reordering() -> None:
     extracted = "בביצועי הצוות ובהכנסות 30% שיפור של כ B2B לאורך התקופה"
     assert _claim_recoverable(source, extracted.casefold(), rtl=True)
     assert not _claim_recoverable(source, "שיפור חלקי בלבד", rtl=True)
+
+
+def test_rtl_bidi_keeps_multiword_english_phrases_and_date_separator_intact() -> None:
+    education = str(_bidi("לימודי Full-Stack Development, ג'ון ברייס", rtl=True))
+    assert '<bdi dir="ltr">Full-Stack Development</bdi>' in education
+
+    date = str(_bidi("אוגוסט 2020 - ינואר 2025", rtl=True))
+    assert date == (
+        'אוגוסט <bdi dir="ltr">2020</bdi> - '
+        'ינואר <bdi dir="ltr">2025</bdi>'
+    )
 
 
 def test_material_bottom_whitespace_is_a_one_page_visual_defect() -> None:

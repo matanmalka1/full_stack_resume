@@ -15,7 +15,8 @@ from .util import normalized_text, sha256_file
 
 
 MIXED_LTR = re.compile(
-    r"(?:https?://\S+|[\w.+-]+@[\w.-]+|\+?\d[\d() .-]{5,}|\b(?:B2B|CRM|ERP|KPIs?|SaaS|Full-Stack|"
+    r"(?:https?://\S+|[\w.+-]+@[\w.-]+|\+\d(?:[\d() .-]*\d)?|\b(?:B2B|CRM|ERP|KPIs?|SaaS|"
+    r"Full-Stack(?: Development| Developer)?|"
     r"Priority ERP|Excel|WhatsApp|Teams|Python|FastAPI|React|PostgreSQL|API|APIs|PDF|CI/CD|OpenAPI|"
     r"GitHub Actions|Node\.js|TypeScript|JavaScript|Flask|Express|SQL|AWS EC2|LLM)\b|\d+(?:[.-]\d+)*%?)"
 )
