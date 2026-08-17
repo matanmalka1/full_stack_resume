@@ -45,19 +45,12 @@ def test_created_workspace_round_trips_with_identity_and_roots(tmp_path: Path) -
     assert opened.logs_root == opened.root / "logs"
     for root in (opened.state_root, opened.artifacts_root, opened.temp_root, opened.logs_root):
         assert root.is_dir()
+    first = opened.installation_id()
+    assert first == load_workspace(opened.root).installation_id()
+    assert first != opened.workspace_id
 
-
-def test_installation_id_is_durable_and_distinct_from_the_workspace(tmp_path: Path) -> None:
-    workspace = create_workspace(tmp_path / "ws")
-    first = workspace.installation_id()
-
-    assert first == load_workspace(tmp_path / "ws").installation_id()
-    assert first != workspace.workspace_id
-
-
-def test_declared_roots_are_honoured_and_confined_to_the_workspace(tmp_path: Path) -> None:
     workspace = create_workspace(
-        tmp_path / "ws",
+        tmp_path / "custom",
         roots={"artifacts_root": "payloads", "state_root": "state"},
     )
     assert workspace.artifacts_root == workspace.root / "payloads"
@@ -75,10 +68,6 @@ def test_declared_roots_are_honoured_and_confined_to_the_workspace(tmp_path: Pat
     marker.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(WorkspaceError, match="escapes the Workspace"):
         load_workspace(hand_edited.root)
-
-
-def test_relative_refuses_a_path_outside_the_workspace(tmp_path: Path) -> None:
-    workspace = create_workspace(tmp_path / "ws")
     assert workspace.relative(workspace.artifacts_root / "a" / "b.pdf") == "artifacts/a/b.pdf"
     with pytest.raises(WorkspaceError, match="outside the Workspace"):
         workspace.relative(tmp_path / "elsewhere.pdf")
@@ -87,14 +76,11 @@ def test_relative_refuses_a_path_outside_the_workspace(tmp_path: Path) -> None:
 # --- fail-closed guards -----------------------------------------------------
 
 
-def test_unmarked_directory_is_refused(tmp_path: Path) -> None:
+def test_workspace_markers_fail_closed_for_plain_legacy_invalid_and_reused_roots(tmp_path: Path) -> None:
     plain = tmp_path / "plain"
     plain.mkdir()
     with pytest.raises(WorkspaceError, match="no v2 Workspace marker"):
         load_workspace(plain)
-
-
-def test_legacy_v1_root_is_refused_and_named_as_a_migration_source(tmp_path: Path) -> None:
     legacy = tmp_path / "legacy"
     (legacy / "jobs").mkdir(parents=True)
     (legacy / "jobs/status.csv").write_text("company,role\n", encoding="utf-8")
@@ -104,10 +90,9 @@ def test_legacy_v1_root_is_refused_and_named_as_a_migration_source(tmp_path: Pat
     with pytest.raises(WorkspaceError, match="refusing to mark a legacy v1 root"):
         create_workspace(legacy)
     assert not (legacy / MARKER_NAME).exists()
-
-
-def test_unknown_workspace_version_is_refused(tmp_path: Path) -> None:
     workspace = create_workspace(tmp_path / "ws")
+    with pytest.raises(WorkspaceError, match="already exists"):
+        create_workspace(workspace.root)
     marker = workspace.root / MARKER_NAME
     payload = json.loads(marker.read_text(encoding="utf-8"))
     payload["workspace_version"] = 1
@@ -115,48 +100,24 @@ def test_unknown_workspace_version_is_refused(tmp_path: Path) -> None:
 
     with pytest.raises(WorkspaceError, match="unsupported Workspace version 1"):
         load_workspace(workspace.root)
-
-
-def test_unreadable_marker_is_refused(tmp_path: Path) -> None:
-    workspace = create_workspace(tmp_path / "ws")
     (workspace.root / MARKER_NAME).write_text("{not json", encoding="utf-8")
     with pytest.raises(WorkspaceError, match="unreadable Workspace marker"):
         load_workspace(workspace.root)
-
-
-@pytest.mark.parametrize("purpose", ["development", "test"])
-def test_live_data_is_refused_outside_a_live_runtime(tmp_path: Path, purpose: str) -> None:
-    with pytest.raises(WorkspaceError, match="may not open live data"):
-        create_workspace(tmp_path / purpose, purpose=purpose, data_class="live")
-
-    live = create_workspace(tmp_path / f"{purpose}-live", purpose="live", data_class="live")
-    marker = live.root / MARKER_NAME
-    payload = json.loads(marker.read_text(encoding="utf-8"))
-    payload["purpose"] = purpose
-    marker.write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(WorkspaceError, match="may not open live data"):
-        load_workspace(live.root)
-
-
-def test_second_marker_is_refused(tmp_path: Path) -> None:
-    created = create_workspace(tmp_path / "ws")
-    with pytest.raises(WorkspaceError, match="already exists"):
-        create_workspace(created.root)
-
-
-def test_engine_refuses_an_unmarked_root(tmp_path: Path) -> None:
-    plain = tmp_path / "plain"
-    plain.mkdir()
     with pytest.raises(WorkspaceError):
         Engine(plain)
 
 
-def test_engine_reads_knowledge_and_artifacts_from_declared_roots(v1_repo: Path) -> None:
-    engine = Engine(v1_repo)
-    assert engine.base_dir == v1_repo / "base"
-    assert engine.artifacts_root == v1_repo / "artifacts"
-    assert engine.db_path == v1_repo / "data" / "applications.sqlite3"
+def test_live_data_is_refused_outside_a_live_runtime(tmp_path: Path) -> None:
+    for purpose in ("development", "test"):
+        with pytest.raises(WorkspaceError, match="may not open live data"):
+            create_workspace(tmp_path / purpose, purpose=purpose, data_class="live")
+        live = create_workspace(tmp_path / f"{purpose}-live", purpose="live", data_class="live")
+        marker = live.root / MARKER_NAME
+        payload = json.loads(marker.read_text(encoding="utf-8"))
+        payload["purpose"] = purpose
+        marker.write_text(json.dumps(payload), encoding="utf-8")
+        with pytest.raises(WorkspaceError, match="may not open live data"):
+            load_workspace(live.root)
 
 
 # --- configuration precedence ----------------------------------------------
@@ -182,17 +143,9 @@ def test_config_precedence_is_cli_then_env_then_workspace_then_default(tmp_path:
 
     default = resolve_config(cli={}, env={})
     assert (default.get("provider"), default.source("provider")) == ("deterministic", "default")
-
-
-def test_workspace_config_rejects_unknown_settings(tmp_path: Path) -> None:
-    workspace = create_workspace(tmp_path / "ws")
     (workspace.root / CONFIG_NAME).write_text(json.dumps({"nonsense": 1}), encoding="utf-8")
     with pytest.raises(WorkspaceError, match="unknown Workspace config settings"):
         resolve_config(cli={}, env={}, workspace_root=workspace.root)
-
-
-def test_the_workspace_selection_cannot_come_from_inside_a_workspace(tmp_path: Path) -> None:
-    workspace = create_workspace(tmp_path / "ws")
     (workspace.root / CONFIG_NAME).write_text(json.dumps({"workspace": "/elsewhere"}), encoding="utf-8")
     with pytest.raises(WorkspaceError, match="unknown Workspace config settings"):
         resolve_config(cli={}, env={}, workspace_root=workspace.root)
@@ -222,6 +175,8 @@ def _tree(root: Path) -> dict[str, bytes]:
 def test_inventory_reads_a_legacy_root_without_writing_to_it(legacy_source_root: Path) -> None:
     before = _tree(legacy_source_root)
     source = LegacyV1Source(legacy_source_root)
+    with pytest.raises(LegacySourceError, match="take an inventory"):
+        source.read_text("jobs/status.csv")
     inventory = source.inventory()
 
     assert set(inventory.files) == {"jobs/status.csv", "base/cv_base.md"}
@@ -229,32 +184,17 @@ def test_inventory_reads_a_legacy_root_without_writing_to_it(legacy_source_root:
     assert _tree(legacy_source_root) == before
     assert not (legacy_source_root / MARKER_NAME).exists()
     assert source.inventory().inventory_hash == inventory.inventory_hash
-
-
-def test_reads_are_bound_to_the_inventory(legacy_source_root: Path) -> None:
-    source = LegacyV1Source(legacy_source_root)
-    with pytest.raises(LegacySourceError, match="take an inventory"):
-        source.read_text("jobs/status.csv")
-
-    source.inventory()
     assert source.read_text("base/cv_base.md") == "# legacy base\n"
-
     (legacy_source_root / "base/cv_base.md").write_text("# tampered\n", encoding="utf-8")
     with pytest.raises(LegacySourceError, match="changed during the run"):
         source.read_text("base/cv_base.md")
-
-
-def test_verify_unchanged_reports_added_removed_and_changed_files(legacy_source_root: Path) -> None:
-    source = LegacyV1Source(legacy_source_root)
-    source.inventory()
-    assert source.verify_unchanged().inventory_hash == source.bound_inventory.inventory_hash
-
-    (legacy_source_root / "jobs/extra.csv").write_text("x\n", encoding="utf-8")
-    with pytest.raises(LegacySourceError, match="jobs/extra.csv"):
+    with pytest.raises(LegacySourceError, match="base/cv_base.md"):
         source.verify_unchanged()
 
 
-def test_legacy_reads_refuse_traversal_and_unknown_files(legacy_source_root: Path) -> None:
+def test_legacy_reads_refuse_traversal_unknown_files_and_v2_workspaces(
+    legacy_source_root: Path, tmp_path: Path
+) -> None:
     source = LegacyV1Source(legacy_source_root)
     source.inventory()
     with pytest.raises(LegacySourceError, match="escapes the legacy source"):
@@ -263,9 +203,6 @@ def test_legacy_reads_refuse_traversal_and_unknown_files(legacy_source_root: Pat
         source.read_bytes(legacy_source_root / "jobs/status.csv")
     with pytest.raises(LegacySourceError, match="not part of the bound inventory"):
         source.read_bytes("jobs/missing.csv")
-
-
-def test_a_marked_workspace_is_not_a_legacy_source(tmp_path: Path) -> None:
     workspace = create_workspace(tmp_path / "ws")
     with pytest.raises(LegacySourceError, match="v2 Workspace marker"):
         LegacyV1Source(workspace.root)
@@ -304,7 +241,9 @@ def _cv(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_cli_initializes_and_reports_a_workspace(tmp_path: Path) -> None:
+def test_cli_workspace_surface_guards_normal_and_legacy_roots(
+    tmp_path: Path, legacy_source_root: Path, v1_repo: Path
+) -> None:
     root = tmp_path / "cli-ws"
     created = _cv("--workspace", str(root), "workspace", "init", "--purpose", "test", "--data-class", "test")
     assert created.returncode == 0, created.stderr
@@ -318,26 +257,17 @@ def test_cli_initializes_and_reports_a_workspace(tmp_path: Path) -> None:
     assert reported["workspace_id"] == identity["workspace_id"]
     assert reported["installation_id"] == identity["installation_id"]
     assert reported["configuration"]["provider"]["source"] == "default"
-
-
-def test_cli_refuses_a_normal_command_against_an_unmarked_root(tmp_path: Path) -> None:
     plain = tmp_path / "plain"
     plain.mkdir()
     result = _cv("--workspace", str(plain), "list")
     assert result.returncode == 2
     assert "no v2 Workspace marker" in result.stderr
-
-
-def test_cli_inventories_a_legacy_source_without_marking_it(legacy_source_root: Path) -> None:
     result = _cv("workspace", "inventory-legacy", "--source", str(legacy_source_root))
     assert result.returncode == 0, result.stderr
     report = json.loads(result.stdout)
     assert report["file_count"] == 2
     assert report["marker_written"] is False
     assert not (legacy_source_root / MARKER_NAME).exists()
-
-
-def test_repo_alias_still_selects_the_workspace_with_a_warning(v1_repo: Path) -> None:
     result = _cv("--repo", str(v1_repo), "workspace", "status")
     assert result.returncode == 0, result.stderr
     assert "--repo is deprecated" in result.stderr

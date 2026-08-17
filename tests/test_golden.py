@@ -3,8 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from cv_engine.domain.drafts import serialize_markdown
 from cv_engine.infrastructure.rendering import normalized_role_filename, render_html
 from cv_engine.util import sha256_text
@@ -26,66 +24,67 @@ def _front_matter_and_body(markdown: str) -> tuple[str, str]:
     return front, body
 
 
-@pytest.mark.parametrize("fixture", sorted(GOLDEN_DIR.glob("*.json")), ids=lambda path: path.stem)
-def test_golden_profile_snapshot_and_ready_pdf(
+def test_representative_profiles_match_their_golden_ready_outputs(
     v1_repo: Path,
     tmp_path: Path,
-    fixture: Path,
     draft_factory,
     render_validator,
 ) -> None:
-    case = json.loads(fixture.read_text(encoding="utf-8"))
-    overrides = case.get("overrides", {})
-    setup = draft_factory(
-        case["job"],
-        track_override=overrides.get("track"),
-        profile_override=overrides.get("profile"),
-        emphasis_override=overrides.get("emphasis"),
-        application_id="00000000-0000-0000-0000-000000000001",
-        job_snapshot_id="00000000-0000-0000-0000-000000000002",
-    )
-    facts, profile, analysis, draft = setup.facts, setup.profile, setup.analysis, setup.draft
-    candidate = setup.candidate
-    assert analysis.track.value == case["track"]
-    assert analysis.profile.value == case["profile"]
-    assert analysis.emphasis.value == case["emphasis"]
-    assert analysis.language == case["language"]
-    markdown = serialize_markdown(draft)
-    assert "30% YoY" not in markdown
-    assert "3-4 sales representatives" not in markdown.casefold()
-    assert all(facts.get(fact_id).status.value == "canonical" for fact_id in draft.selected_fact_ids)
-    if case["language"] == "he":
-        assert "תקציר מקצועי" in markdown
-        assert "עברית: שפת אם" in markdown
-    if case["track"] == "tech-sales":
-        assert "Full-Stack Developer | PH.Digital" in markdown
-        assert "direct SaaS Sales" not in markdown
+    for fixture in sorted(GOLDEN_DIR.glob("*.json")):
+        case = json.loads(fixture.read_text(encoding="utf-8"))
+        overrides = case.get("overrides", {})
+        setup = draft_factory(
+            case["job"],
+            track_override=overrides.get("track"),
+            profile_override=overrides.get("profile"),
+            emphasis_override=overrides.get("emphasis"),
+            application_id="00000000-0000-0000-0000-000000000001",
+            job_snapshot_id="00000000-0000-0000-0000-000000000002",
+        )
+        facts, profile, analysis, draft = setup.facts, setup.profile, setup.analysis, setup.draft
+        candidate = setup.candidate
+        assert analysis.track.value == case["track"], fixture.stem
+        assert analysis.profile.value == case["profile"], fixture.stem
+        assert analysis.emphasis.value == case["emphasis"], fixture.stem
+        assert analysis.language == case["language"], fixture.stem
+        markdown = serialize_markdown(draft)
+        assert "30% YoY" not in markdown, fixture.stem
+        assert "3-4 sales representatives" not in markdown.casefold(), fixture.stem
+        assert all(
+            facts.get(fact_id).status.value == "canonical"
+            for fact_id in draft.selected_fact_ids
+        ), fixture.stem
+        if case["language"] == "he":
+            assert "תקציר מקצועי" in markdown
+            assert "עברית: שפת אם" in markdown
+        if case["track"] == "tech-sales":
+            assert "Full-Stack Developer | PH.Digital" in markdown
+            assert "direct SaaS Sales" not in markdown
 
-    target = tmp_path / fixture.stem
-    target.mkdir()
-    html = render_html(draft, v1_repo, target / "resume.html", candidate)
-    html_text = html.read_text(encoding="utf-8")
-    front_matter, markdown_body = _front_matter_and_body(markdown)
-    assert f'fact_store_version: "{facts.version}"' in front_matter
-    assert draft.fact_store_version == facts.version
-    snapshot = {
-        "markdown_body_sha256": sha256_text(markdown_body),
-        "html_sha256": sha256_text(html_text),
-        "selected_fact_ids": draft.selected_fact_ids,
-        "sections": [section.name for section in draft.sections],
-    }
-    assert snapshot == case["snapshot"]
+        target = tmp_path / fixture.stem
+        target.mkdir()
+        html = render_html(draft, v1_repo, target / "resume.html", candidate)
+        html_text = html.read_text(encoding="utf-8")
+        front_matter, markdown_body = _front_matter_and_body(markdown)
+        assert f'fact_store_version: "{facts.version}"' in front_matter
+        assert draft.fact_store_version == facts.version
+        snapshot = {
+            "markdown_body_sha256": sha256_text(markdown_body),
+            "html_sha256": sha256_text(html_text),
+            "selected_fact_ids": draft.selected_fact_ids,
+            "sections": [section.name for section in draft.sections],
+        }
+        assert snapshot == case["snapshot"], fixture.stem
+        assert "<ul>" not in html_text
+        assert html_text.count('class="bullet claim"') == sum(
+            claim.style == "bullet" for section in draft.sections for claim in section.claims
+        )
+        if case["language"] == "he":
+            assert '<html lang="he" dir="rtl">' in html_text
+            assert '<bdi dir="ltr">B2B</bdi>' in html_text
 
-    assert "<ul>" not in html_text
-    assert html_text.count('class="bullet claim"') == sum(
-        claim.style == "bullet" for section in draft.sections for claim in section.claims
-    )
-    if case["language"] == "he":
-        assert '<html lang="he" dir="rtl">' in html_text
-        assert '<bdi dir="ltr">B2B</bdi>' in html_text
-
-    pdf = target / normalized_role_filename(profile.normalized_role, candidate)
-    screenshot = target / "visual.png"
-    geometry, report = render_validator(draft, profile, html, pdf, screenshot, candidate)
-    assert report.passed, report.model_dump()
-    assert report.evidence["page_count"] in {1, 2}
+        pdf = target / normalized_role_filename(profile.normalized_role, candidate)
+        screenshot = target / "visual.png"
+        _geometry, report = render_validator(draft, profile, html, pdf, screenshot, candidate)
+        assert report.passed, f"{fixture.stem}: {report.model_dump()}"
+        assert report.evidence["page_count"] in {1, 2}

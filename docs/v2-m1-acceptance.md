@@ -1,6 +1,6 @@
 # M1 Acceptance — Application Foundation
 
-Status: **Conditionally met — one clean full-suite run outstanding** (2026-08-17)
+Status: **Checklist met — awaiting re-review** (2026-08-17)
 
 Milestone: `docs/v2-implementation-plan.md` section 3 (M1 — Application foundation)
 
@@ -13,6 +13,12 @@ review then showed was not isolated from the v1 worktree, so its test evidence c
 not support the claim it made. Keeping two contradictory records would leave the
 milestone's status a matter of which file a reader opened first.
 
+Two review rounds have run against this milestone. The first found eight items, closed
+in section 2. The second found four more (section 3) and did not accept M1: three were
+architectural gaps this record had either not detected or had re-scoped without
+approval. Those are now closed, and this file records both what was wrong and what the
+earlier version of it got wrong.
+
 ## 1. Commits in this milestone
 
 | Commit | Scope |
@@ -22,12 +28,15 @@ milestone's status a matter of which file a reader opened first.
 | `4e522ed` | Isolated development Workspace kept out of version control |
 | `0f899fd` | domain / application / infrastructure separation |
 | `2666ed6` | Application services behind ports, composition root, CLI on services, versioned export, architecture tests |
-| this change | Review findings closed: cross-worktree import, artifact-location port, declared repository operations, fact ID and link source-of-truth |
+| `3bba708` | First review round closed: cross-worktree import, artifact-location port, declared repository operations, fact ID and link source-of-truth |
+| `fd540f1` | The two contradictory acceptance records merged into this one |
+| `c7150ff` | File access moved out of the domain and application layers |
+| `0b720f2` | Command/query DTOs, error taxonomy, focused repository ports, UnitOfWork |
+| `85aa841` | Explicit source IDs in commands; `latest` resolution in the compatibility layer |
 
-## 2. Review findings and their resolution
+## 2. First review round, and its resolution
 
-The review raised eight findings. Seven are closed here; one is re-scoped with a stated
-reason rather than silently dropped.
+Eight findings. Seven were closed at the time; one was re-scoped, wrongly — see 3.3.
 
 ### 2.1 A v2 module was loading v1 code — closed
 
@@ -61,15 +70,18 @@ enforcing the rule.
 `ArtifactStore` (`application/ports.py`) is now the port the application asks for a
 location through, and `FilesystemArtifactStore` (`infrastructure/artifacts.py`) is the
 one module that decides directory names. The architecture test dropped the whitelist and
-gained `test_application_composes_no_storage_paths`, which fails on `artifacts_root`,
-`"working"`, or `mkdir(` appearing anywhere in the application layer.
+gained a check for `artifacts_root`, `"working"`, and `mkdir(` in the application layer.
+
+That check was too narrow and this fix was incomplete: the layout it removed from the
+application layer was already present in the domain, and looking for three strings in
+one layer could not see it. Both were corrected in the second round — see 3.1.
 
 ### 2.3 Parity was unverified — closed
 
 The finding was valid but overstated: the golden and parity path imports
 `cv_engine.domain.models` throughout, and the fallback reached only `WorkspaceMarker`'s
 base class. The parity conclusion stood on its merits. It has been re-established on a
-clean run regardless — see section 3.
+clean run regardless — see section 4.
 
 ### 2.4 A new v2 fact carried a semantic ID — closed
 
@@ -105,15 +117,14 @@ The address is instead a machine-readable field on the fact itself:
 `link_target` restates, machine-readably, what the migrated fact's `meaning` already
 said. No fact was strengthened. It was added to the generated sources in
 `canonical_data.py` as well as to the live `base/common.md`, so a re-run migration
-produces the same records — see section 4.
+produces the same records — see section 5.
 
-### 2.6 `latest` resolution inside commands — valid, re-scoped to M3
+### 2.6 `latest` resolution inside commands — re-scoped to M3, wrongly; now closed
 
-`AnalysisService.analyze` resolves `latest_snapshot` and `DraftService.draft` resolves
-`latest_analysis`. The contract "commands use explicit source IDs; `latest` appears only
-in read/query helpers" is an **M3** acceptance item (plan §5.4), not an M1 one
-(plan §3.4). M1 required preserving v1 semantics, which is what these commands do. This
-is recorded as the M3 gate rather than an M1 blocker; it is not closed here.
+This record previously argued that "commands use explicit source IDs" is an M3
+acceptance item (plan §5.4) and not an M1 one, and left it open on that basis. That was
+wrong, and it was wrong in this file's favour. See 3.3 for the contradicting text and
+the fix.
 
 ### 2.7 Services called private repository methods — closed
 
@@ -130,58 +141,155 @@ Its only caller was a test fixture. The parameter is gone from `create_workspace
 legacy in-place migration already converted. Production code has no override that can
 mark a legacy root.
 
-## 3. Checklist evidence
+## 3. Second review round, and its resolution
+
+Four findings. M1 was not accepted on them. All four were valid; two were misjudgements
+recorded in the previous version of this file rather than defects the review introduced.
+
+### 3.1 The filesystem boundary was still not clean — closed
+
+The domain composed and opened its own storage: `base/candidate.json`
+(`domain/candidate.py`), `profiles/**/*.yaml` including writes (`domain/profiles.py`),
+`config/emphasis.json` (`domain/selection.py`), `rendering/rules/presentations.json`
+(`domain/presentations.py`), and `working/<application_id>` with a direct write
+(`domain/drafts.py`). `application/services.py` loaded and wrote knowledge through paths
+and those domain functions.
+
+This is the same finding as 2.2, and 2.2's fix was incomplete: introducing `ArtifactStore`
+moved layout out of the application layer, and it landed one level down in the domain,
+where the same storage knowledge was just as wrong. The check added with it looked for
+three known strings in one layer, so it could not see that.
+
+The stores now take parsed documents — `FactStore.from_sources`,
+`ProfileStore.from_documents`, `EmphasisPolicyStore.from_payload`,
+`PresentationStore.from_payload`, `build_candidate_context` — and `seal_draft` returns
+the payloads a stored draft consists of with its content hash bound to the Markdown.
+`validate_draft` and `synchronize_markdown_claims` take the document's text.
+`infrastructure/knowledge.py` and `FilesystemArtifactStore` are the only modules that
+know where anything lives, both reached through ports.
+
+`tests/test_architecture.py` is rewritten around the rule instead of around known
+strings, and states the whole boundary as one contract,
+`test_domain_and_application_dependencies_point_inward`: over both layers it reports
+forbidden external imports, outward internal imports, any filesystem call, any path
+composed from a string literal, and any mention of a storage root. The layout check
+matches on the syntax tree — a name divided by a string literal — so `rsplit("/")` and
+`https://` are not mistaken for path composition.
+
+### 3.2 The application layer's contracts were not defined — closed
+
+Plan §3.2 assigns "Define application command/query DTOs and stable error types" and
+"Define focused repository ports and UnitOfWork" to M1. The previous version of this
+file listed UnitOfWork as deferred to M2 under "Deviations", which is a scope change
+nobody approved, and did not mention DTOs or error types at all. `ApplicationRepository`
+was one broad port that also exposed `path: Path`.
+
+Now: `application/commands.py` carries the command inputs and results, and services
+return them instead of tuples and bare dicts; `application/errors.py` defines
+`ApplicationError` with `UnknownRecord`, `StateConflict`, `ValidationBlocked` (carrying
+its report), `LineageBroken`, `KnowledgeRejected`, and `DependencyUnavailable`;
+`ApplicationRepository` is composed from `ApplicationStore`, `JobStore`,
+`ArtifactRegistry`, and `FactAudit`, and exposes no path, connection, or private method;
+`UnitOfWork` is declared and implemented over the adapter's existing transaction.
+
+`WorkflowError` stays bound to `ApplicationError`, so the v1 CLI and test suite catch
+exactly what they caught before. `tests/test_application_contracts.py` holds all of it.
+
+**Stated deliberately:** no command's transaction grouping changed. `approve` still
+writes its two artifact versions and its decision record through three separate
+transactions, as v1 did. Regrouping them behind the new boundary would change durability
+semantics, and M1 requires v1 parity, so the boundary is defined, wired, and tested
+without any write being moved behind it. That is a smaller step than the plan's wording
+could be read to require, and it is recorded here rather than presented as complete.
+
+### 3.3 Commands still resolved `latest` — closed, and 2.6 was wrong
+
+`AnalysisService.analyze` selected `latest_snapshot` and `DraftService.draft` selected
+`latest_analysis`. This record had re-scoped that to M3 by citing plan §5.4 alone. Two
+texts contradict that reading and neither was addressed:
+
+- Architecture §8: "Commands always receive explicit source IDs. `latest` belongs to
+  query/UI convenience, not command semantics."
+- Plan §3.3, an M1 bullet: "Add compatibility resolvers/warnings only where legacy CLI
+  signatures omit an explicit v2 source ID."
+
+`analyze` now takes `job_snapshot_id` and `draft` takes `job_analysis_id`, and each
+refuses a source belonging to another application. `resolve_job_snapshot_id` and
+`resolve_job_analysis_id` live in `compat.py`, which is where a v1 signature that
+carries no source ID is served. The CLI gained `--job-snapshot` and `--job-analysis`, so
+the v2 contract is reachable without the legacy path.
+
+`draft` still reads the newest snapshot, but as a staleness check on the analysis the
+caller named rather than to choose a source.
+`test_no_command_resolves_its_own_source` pins that: `latest_analysis` may not appear in
+the service at all, and `latest_snapshot` exactly once.
+
+### 3.4 This record was out of date — closed
+
+It reported 187/188 and a conditional status after a clean 188/188 run existed, and did
+not carry 3.1–3.3 as blockers. Section 4 now reports the current run, and the three gaps
+are recorded above as what they were: blockers, two of them created by this file's own
+earlier judgements.
+
+## 4. Checklist evidence
 
 ### Domain/application code imports no FastAPI, SQLite, path layout, or provider HTTP
 
-`tests/test_architecture.py` enforces this on the import graph rather than by review:
+`tests/test_architecture.py::test_domain_and_application_dependencies_point_inward`
+enforces this on the source itself rather than by review. Over both layers it reports:
 
-- `test_layer_imports_no_infrastructure_technology[domain|application]` — no `sqlite3`,
-  `fastapi`, `playwright`, `urllib`, `uvicorn`, `httpx`, or `requests` import in either
-  layer.
-- `test_layer_depends_only_inward[domain|application]` — domain imports only domain and
-  shared primitives; application imports only domain, application, and `util`. It may no
-  longer name the runtime at all.
-- `test_no_application_module_reaches_the_composition_root` — the v1 compatibility façade
-  lives outside the layered packages (`cv_engine/compat.py`) precisely so it can build
-  services without dragging `runtime` or `infrastructure` into application code.
-- `test_application_composes_no_storage_paths` — layout is asked for through
-  `ArtifactStore`, never assembled in the application layer.
-- `test_domain_modules_never_import_the_workspace` — domain receives paths, it does not
-  resolve them.
+- no `sqlite3`, `fastapi`, `playwright`, `urllib`, `uvicorn`, `httpx`, or `requests`
+  import;
+- no outward internal import — domain may name only domain and shared primitives, and
+  application only domain, application, and `util`, so neither can reach the runtime,
+  the composition root, or an infrastructure adapter. The v1 compatibility façade lives
+  outside the layered packages (`cv_engine/compat.py`) precisely so it can build
+  services without dragging that dependency into application code;
+- no filesystem call — no read, write, open, listing, or directory creation;
+- no path composed from a string literal, and no mention of `artifacts_root`,
+  `knowledge_root`, or `base_dir`.
 
-`cv_engine/application/ports.py` defines `ApplicationRepository`, `ArtifactStore`,
-`KnowledgeStore`, `Renderer`, and `ClassificationProvider`.
+It is one test rather than five so the whole boundary is stated once and a violation is
+reported with every other violation beside it.
+
+`cv_engine/application/ports.py` defines `ApplicationRepository` — composed from
+`ApplicationStore`, `JobStore`, `ArtifactRegistry`, and `FactAudit` — plus `UnitOfWork`,
+`ArtifactStore`, `KnowledgeStore`, `Renderer`, and `ClassificationProvider`.
 `cv_engine/runtime/composition.py` is the only module that binds them to `Repository`,
 `FilesystemArtifactStore`, `FileKnowledge`, `PlaywrightRenderer`, and
 `OpenAIClassificationProvider`.
 
 ### The CLI completes the deterministic v1 Definition of Done through the services
 
-Re-run after the import fix, in a fresh isolated Workspace `.workspace/dev-rerun`
-(`purpose=development`, `data_class=copy`, `workspace_id`
-`36099957-a88a-400c-ad08-2a284333ef2e`), application
-`a953e77f-be16-4875-8ad8-e7008f317a8f`. The earlier `.workspace/dev` run was left in
-place rather than overwritten; a new Workspace was created because the knowledge copy in
-the old one predates the fact ID and `link_target` changes.
+Re-run after the second round's changes, in a fresh isolated Workspace
+`.workspace/dev-m1` (`purpose=development`, `data_class=copy`), application
+`e68a8753-9d16-4f14-8fc6-120a7c490de9`. Earlier journeys were left in place rather than
+overwritten; each round used a new Workspace because the knowledge copy in the previous
+one predates that round's changes.
+
+This run uses the **explicit source IDs** from 3.3 rather than the legacy path, so the
+v2 command contract is what the evidence exercises:
 
 ```text
 cv workspace init --purpose development --data-class copy --knowledge-from .
 cv init
-cv ingest    -> application a953e77f, job snapshot 451c210b
-cv analyze   -> sales / account-manager / account-growth, confidence 0.94, fit high
-cv draft     -> working draft, pre-render validation passed, 29 claims / 28 facts
-cv validate  -> passed
-cv approve   -> v001 + decision record 2d6fca6e-763e-47ca-99f3-7949db8ac4a1
-cv render    -> ready_validation.passed = true
-cv ready     -> passed
-cv reconcile -> passed, 5 artifact versions, fact lifecycle passed, 87 canonical facts
+cv ingest                        -> application e68a8753, job snapshot 98225363
+cv analyze --job-snapshot 98225363 -> analysis 42d4e23f, sales / account-manager /
+                                      account-growth, confidence 0.94, fit high
+cv draft   --job-analysis 42d4e23f -> working draft, pre-render validation passed,
+                                      29 claims / 28 facts
+cv validate                      -> passed
+cv approve                       -> v001 + decision record e51a5d52
+cv render                        -> ready_validation.passed = true
+cv ready                         -> passed
+cv reconcile                     -> passed, 5 artifact versions, fact lifecycle passed,
+                                    87 canonical facts
 ```
 
 `cv render` reported all eight groups green (`render`, `page_count`, `pdf`, `ats`,
 `links`, `visual`, `direction`, `filename`), one page, ATS claim coverage 1.0, and
 produced `Matan Malka - Account Manager - CV.pdf`
-(`be52322d6cf88b67960563bbf46682ce794b0e1e1f2a3dd90a0a491215d8c2f8`). The rendered link
+(`38025eae7ee0e824442bdceef6227f58f9373fb67fb86c2ec138f36535a39cb5`). The rendered link
 set was `tel:+972506688386`, `mailto:matan1391@gmail.com`,
 `https://www.linkedin.com/in/matanmalka1` — the `www.` host preserved, which is the
 concrete reason 2.5 did not derive targets from renderings.
@@ -241,33 +349,31 @@ one place.
 
 ### All applicable v1 tests pass
 
-This is the one item still short of clean evidence, and the reason for the status at the
-top of this file.
-
 ```text
-CV_REQUIRE_BROWSER=1 python -m pytest -q  ->  187 passed, 1 failed in 145.48s
+CV_REQUIRE_BROWSER=1 python -m pytest -q  ->  209 passed in 123.25s
 ```
 
-The failure was
-`tests/test_facts_profiles.py::test_canonical_fact_store_has_unique_stable_ids`, which
-still looked up the identity fact by its old semantic ID after 2.4 renamed it — a stale
-test reference, not a defect in the code under test. It was corrected to resolve the ID
-from `V2_IDENTITY_FACT` and assert it parses as a UUID, and that file was re-run:
+131 tests at the v1 baseline, 209 now. No v1 coverage was removed. The added tests cover
+the Workspace layer, the candidate context, the architectural boundary, the
+cross-worktree module guard, the fact `link_target` invariant, and — new in this round —
+the application layer's declared contracts in `tests/test_application_contracts.py`:
+result types, the error taxonomy, the focused ports and their absence of adapter
+internals, the UnitOfWork's commit and rollback, explicit source IDs, and the rule that
+no command resolves its own source.
 
-```text
-python -m pytest tests/test_facts_profiles.py -q  ->  4 passed
-```
+Two earlier runs are worth recording, because this file previously reported one of them
+as if it settled the item:
 
-188 tests total; 131 at the v1 baseline. No v1 coverage was removed. The added tests
-cover the Workspace layer, the candidate context, the architectural boundaries, the
-cross-worktree module guard, and the fact `link_target` invariant.
+- `187 passed, 1 failed` — the first isolated run. The failure was a stale test
+  reference to the renamed identity fact, not a defect in the code under test. This file
+  then reported it as "187/188 confirmed plus one file confirmed separately", which is
+  not a clean run and was correctly refused as evidence.
+- `188 passed` — the independent clean run performed during the second review round,
+  before the changes in section 3.
 
-**Outstanding:** one `CV_REQUIRE_BROWSER=1` run of the complete suite with the corrected
-test in place, expected `188 passed`. Until that run exists, this item stands as 187/188
-confirmed in one run plus one file confirmed separately. That is not the same thing as a
-clean complete run and is not recorded as one.
+The 209 figure supersedes both and is the run that stands behind this record.
 
-## 4. Migration safety note for `link_target`
+## 5. Migration safety note for `link_target`
 
 `link_target` was added to the `common.contact.linkedin` and `common.contact.github`
 records in both `infrastructure/canonical_data.py` and the live `base/common.md`, so
@@ -289,19 +395,39 @@ Consequences to be aware of:
   re-run of `migrate verify-live` on the machine holding the snapshot is the confirming
   evidence and has not been produced.
 
-## 5. Deviations and open items
+## 6. Deviations and open items
 
-- **M3 gate, not an M1 blocker:** `latest` resolution inside `analyze` and `draft`
-  (2.6). The M3 acceptance item stands; M1 preserved v1 semantics deliberately.
+- **The UnitOfWork boundary is declared, not yet load-bearing.** It is defined,
+  implemented, wired into the composition root, and tested, which is what plan §3.2
+  asks for. No command's writes were regrouped behind it, because that would change
+  durability semantics and M1 requires v1 parity. `approve` still writes its two
+  artifact versions and its decision record in three transactions, as v1 did. This is
+  stated as a limit of the step, not as a deferral of the item.
+- `migrate verify-live` has not been re-run — see section 5. That is the one piece of
+  confirming evidence this record cannot produce from this worktree.
 - `cv fast` is retained as the CLI compatibility flow and is documented in code as an
   explicit user approval instruction; it chains the same use-cases and cannot bypass
   validation or a blocker. It is the only remaining caller of the `Engine` façade.
 - `Engine` still exists as a delegating façade for the v1 test suite, now at
-  `cv_engine/compat.py`, outside the layered packages. It holds no business logic and is
-  removed once its callers address the services directly.
-- The `UnitOfWork` boundary named in the plan is deferred to M2, where the v2 schema and
-  multi-table commands that need it are introduced. M1 preserved v1's transaction
-  behaviour unchanged.
-- No v2 command opened v1 live data at any point. Development used `.workspace/dev` and
-  `.workspace/dev-rerun` (`purpose=development`, `data_class=copy`), each with its own
-  knowledge copy.
+  `cv_engine/compat.py`, outside the layered packages. It holds no business logic; it
+  unwraps the new result types into the v1 shapes and resolves `latest` for the v1
+  signatures that carry no source ID. It is removed once its callers address the
+  services directly.
+- No v2 command opened v1 live data at any point. Development used `.workspace/dev`,
+  `.workspace/dev-rerun`, and `.workspace/dev-m1` (`purpose=development`,
+  `data_class=copy`), each with its own knowledge copy.
+
+## 7. What this record got wrong
+
+Kept deliberately, because a status file that only ever records the code's mistakes is
+not a reliable status file.
+
+- It declared M1 `Passed` on a suite result that was not isolated from the v1 worktree.
+- It re-scoped the explicit-source-ID requirement to M3 by citing the M3 checklist and
+  not the two texts that place it in M1 (3.3).
+- It listed the UnitOfWork as deferred to M2 under "Deviations", which was an
+  unapproved scope change, and did not mention command/query DTOs or error types at all
+  (3.2).
+- It reported the filesystem boundary as closed when the fix had moved path composition
+  from the application layer into the domain, and it added a test narrow enough not to
+  notice (3.1).
