@@ -277,6 +277,7 @@ def draft_factory(
         *,
         application_id: str = "app-golden",
         job_snapshot_id: str = "snapshot-golden",
+        job_analysis_id: str = "analysis-golden",
         write: bool = False,
         **overrides,
     ) -> DraftSetup:
@@ -285,6 +286,7 @@ def draft_factory(
         draft = build_draft(
             application_id=application_id,
             job_snapshot_id=job_snapshot_id,
+            job_analysis_id=job_analysis_id,
             analysis=analysis,
             profile=profile,
             facts=fact_store,

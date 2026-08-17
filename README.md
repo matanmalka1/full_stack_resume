@@ -58,6 +58,14 @@ Use the returned application ID:
 ./.venv/bin/cv validate <application-id>
 ```
 
+A draft records the exact job snapshot and job analysis it was built from, and every
+later step — validation, approval, rendering, and the `ready` recheck — uses that exact
+analysis rather than whichever one is newest. Two consequences follow. A new job
+snapshot must be analyzed before anything is drafted against it, and a later analysis
+that materially changes Track, Profile, Emphasis, language, Fit, gaps, or keywords
+invalidates the working draft, so re-run `draft` before approving. A re-run that
+reproduces the same classification changes nothing and leaves the draft valid.
+
 `draft` stops for review. It never renders by default. Manual edits are classified as
 exact canonical wording, a versioned deterministic composite, conservatively
 extractive derived wording, or a pending claim that blocks approval. Edit one claim

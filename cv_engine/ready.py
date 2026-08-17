@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .chain import check_draft_chain, decision_record_analysis_id, material_analysis_key
 from .db import Repository
 from .drafts import load_draft
 from .facts import FactStore
@@ -25,6 +26,7 @@ def verify_ready_integrity(root: Path, repo: Repository, application_id: str) ->
     """
     groups = {
         "approved_source": True,
+        "chain": True,
         "rendered_artifacts": True,
         "validation_linkage": True,
         "not_stale": True,
@@ -77,28 +79,46 @@ def verify_ready_integrity(root: Path, repo: Repository, application_id: str) ->
         except Exception as exc:  # noqa: BLE001 - any load failure is a hard integrity failure
             fail("approved_source", "manifest-unreadable", str(exc))
 
+    chain = None
     if draft is not None:
         try:
             facts = FactStore.load(root / "base")
             profiles = ProfileStore.load(root, facts)
             policies = EmphasisPolicyStore.load(root)
             profile = profiles.get(draft.profile)
-            _, analysis = repo.latest_analysis(application_id)
-        except KeyError:
-            fail("approved_source", "no-analysis", "no job analysis exists for this application")
         except Exception as exc:  # noqa: BLE001 - knowledge load failure blocks ready
             fail("approved_source", "knowledge-load-failed", str(exc))
         else:
-            source_report = validate_draft(
-                draft, markdown_path, facts, profile, analysis, policies=policies
+            # The whole chain is re-derived here rather than trusted from the
+            # approval that once passed it: ownership, the exact snapshot and
+            # analysis, the classification triple, the language, and the fact-store
+            # version are all checked against the database as it stands now.
+            chain = check_draft_chain(
+                repo,
+                application_id,
+                draft,
+                profiles,
+                facts,
+                recorded_analysis_id=decision_record_analysis_id(repo, application_id),
             )
-            evidence["source_validation"] = source_report.model_dump(mode="json")
-            if not source_report.passed:
-                fail(
-                    "approved_source",
-                    "claim-validation-failed",
-                    "; ".join(issue.code for issue in source_report.issues) or "content validation failed",
+            evidence["chain"] = {
+                "job_snapshot_id": chain.job_snapshot_id,
+                "job_analysis_id": chain.job_analysis_id,
+            }
+            for code, message in chain.problems:
+                fail("chain", code, message)
+            if chain.valid:
+                _, analysis = chain.bound()
+                source_report = validate_draft(
+                    draft, markdown_path, facts, profile, analysis, policies=policies
                 )
+                evidence["source_validation"] = source_report.model_dump(mode="json")
+                if not source_report.passed:
+                    fail(
+                        "approved_source",
+                        "claim-validation-failed",
+                        "; ".join(issue.code for issue in source_report.issues) or "content validation failed",
+                    )
 
     try:
         pdf_version = repo.latest_artifact_version(application_id, "resume_pdf", "rendered")
@@ -158,15 +178,43 @@ def verify_ready_integrity(root: Path, repo: Repository, application_id: str) ->
         decision = None
 
     if decision is not None:
+        # The decision record must describe the same chain position the manifest
+        # claims, or one of the two is describing a different document.
+        if draft is not None:
+            if decision["job_snapshot_id"] != draft.job_snapshot_id:
+                fail(
+                    "chain",
+                    "decision-snapshot-mismatch",
+                    "the decision record and the approved manifest name different job snapshots",
+                )
+            if chain is not None and chain.job_analysis_id is not None and (
+                decision["job_analysis_id"] != chain.job_analysis_id
+            ):
+                fail(
+                    "chain",
+                    "decision-analysis-mismatch",
+                    "the decision record is bound to a different job analysis than the approved draft",
+                )
         latest_snapshot = repo.latest_snapshot(application_id)
         if decision["job_snapshot_id"] != latest_snapshot["id"]:
             fail("not_stale", "new-job-snapshot-since-approval", "a newer job snapshot exists since this version was approved")
         try:
-            latest_analysis_id, _ = repo.latest_analysis(application_id)
+            latest_analysis_id, latest_analysis = repo.latest_analysis(application_id)
+            approved_analysis = repo.get_analysis(decision["job_analysis_id"])["analysis"]
         except KeyError:
-            latest_analysis_id = None
-        if decision["job_analysis_id"] != latest_analysis_id:
-            fail("not_stale", "new-analysis-since-approval", "a newer job analysis exists since this version was approved")
+            fail("not_stale", "new-analysis-since-approval", "the approved version's job analysis is unavailable")
+        else:
+            # A re-run that reproduces the same classification, gaps, keywords, and
+            # routing does not invalidate a rendered version; a materially different
+            # one does.
+            if decision["job_analysis_id"] != latest_analysis_id and (
+                material_analysis_key(latest_analysis) != material_analysis_key(approved_analysis)
+            ):
+                fail(
+                    "not_stale",
+                    "new-analysis-since-approval",
+                    "a materially different job analysis exists since this version was approved",
+                )
 
     problems = repo.integrity_check()
     if problems:

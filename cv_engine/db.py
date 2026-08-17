@@ -253,6 +253,24 @@ def initialize(path: Path) -> None:
             )
 
 
+def _require_owned_snapshot(
+    connection: sqlite3.Connection,
+    application_id: str | None,
+    snapshot_id: str,
+    subject: str,
+) -> None:
+    """Refuse to link a record to a job snapshot another application owns."""
+    row = connection.execute(
+        "SELECT application_id FROM job_snapshots WHERE id=?", (snapshot_id,)
+    ).fetchone()
+    if row is None:
+        raise ValueError(f"a {subject} cannot reference an unknown job snapshot: {snapshot_id}")
+    if row["application_id"] != application_id:
+        raise ValueError(
+            f"a {subject} cannot reference a job snapshot belonging to another application"
+        )
+
+
 class Repository:
     def __init__(self, path: Path):
         self.path = path
@@ -384,6 +402,35 @@ class Repository:
                 "new analysis invalidated the prior ready version",
             )
         return analysis_id
+
+    def get_snapshot(self, snapshot_id: str) -> dict[str, Any]:
+        with connect(self.path) as connection:
+            row = connection.execute("SELECT * FROM job_snapshots WHERE id=?", (snapshot_id,)).fetchone()
+        if row is None:
+            raise KeyError(f"no job snapshot {snapshot_id}")
+        return dict(row)
+
+    @staticmethod
+    def _analysis_record(row: sqlite3.Row) -> dict[str, Any]:
+        record = dict(row)
+        record["analysis"] = JobAnalysis.model_validate_json(record.pop("structured_json"))
+        return record
+
+    def get_analysis(self, analysis_id: str) -> dict[str, Any]:
+        """One exact analysis with the links that place it in the chain."""
+        with connect(self.path) as connection:
+            row = connection.execute("SELECT * FROM job_analyses WHERE id=?", (analysis_id,)).fetchone()
+        if row is None:
+            raise KeyError(f"no job analysis {analysis_id}")
+        return self._analysis_record(row)
+
+    def analyses(self, application_id: str) -> list[dict[str, Any]]:
+        with connect(self.path) as connection:
+            rows = connection.execute(
+                "SELECT * FROM job_analyses WHERE application_id=? ORDER BY version_number",
+                (application_id,),
+            ).fetchall()
+        return [self._analysis_record(row) for row in rows]
 
     def latest_analysis(self, application_id: str) -> tuple[str, JobAnalysis]:
         with connect(self.path) as connection:
@@ -636,6 +683,8 @@ class Repository:
         version_id = str(uuid.uuid4())
         now = utc_now()
         with self.transaction() as connection:
+            if job_snapshot_id is not None:
+                _require_owned_snapshot(connection, application_id, job_snapshot_id, "artifact version")
             artifact = connection.execute(
                 "SELECT id FROM artifacts WHERE application_id IS ? AND artifact_type=? AND logical_name=?",
                 (application_id, artifact_type, logical_name),
@@ -702,6 +751,36 @@ class Repository:
     ) -> str:
         decision_id = str(uuid.uuid4())
         with self.transaction() as connection:
+            # A decision record is the permanent explanation of one application's
+            # approved version. Every record it points at must therefore belong to
+            # that same application, and the analysis must be the one made from the
+            # snapshot being recorded -- checked here, inside the transaction, so a
+            # rejected decision inserts nothing.
+            owned_version = connection.execute(
+                "SELECT 1 FROM artifact_versions av JOIN artifacts a ON a.id=av.artifact_id "
+                "WHERE av.id=? AND a.application_id=?",
+                (artifact_version_id, application_id),
+            ).fetchone()
+            if owned_version is None:
+                raise ValueError(
+                    "a decision record cannot reference an artifact version belonging to "
+                    "another application"
+                )
+            _require_owned_snapshot(connection, application_id, job_snapshot_id, "decision record")
+            analysis = connection.execute(
+                "SELECT application_id, job_snapshot_id FROM job_analyses WHERE id=?",
+                (job_analysis_id,),
+            ).fetchone()
+            if analysis is None or analysis["application_id"] != application_id:
+                raise ValueError(
+                    "a decision record cannot reference a job analysis belonging to "
+                    "another application"
+                )
+            if analysis["job_snapshot_id"] != job_snapshot_id:
+                raise ValueError(
+                    "a decision record's job analysis must be the analysis of the job "
+                    "snapshot it records"
+                )
             connection.execute(
                 "INSERT INTO decision_records(id, application_id, artifact_version_id, job_snapshot_id, job_analysis_id, structured_json, summary, created_at) "
                 "VALUES(?, ?, ?, ?, ?, ?, ?, ?)",

@@ -335,9 +335,25 @@ class SelectionManifest(StrictModel):
 
 
 class DraftDocument(StrictModel):
-    schema_version: str = "1.0"
-    application_id: str
-    job_snapshot_id: str
+    """A draft and the exact chain position it was built from.
+
+    `application_id`, `job_snapshot_id`, and `job_analysis_id` are the binding.
+    They are frozen because a draft that can be re-pointed at another owner,
+    another job text, or another classification is not evidence of anything: the
+    approval, the decision record, and every rendered artifact all inherit their
+    provenance from these three fields.
+
+    `job_analysis_id` is absent only on `schema_version` "1.0" manifests, which
+    were written before the binding existed. Those are still readable — approved
+    versions are immutable and must stay loadable — but their analysis is
+    recovered from their own immutable decision record, never from whichever
+    analysis happens to be latest.
+    """
+
+    schema_version: str = "1.1"
+    application_id: str = Field(frozen=True)
+    job_snapshot_id: str = Field(frozen=True)
+    job_analysis_id: str | None = Field(default=None, frozen=True)
     language: Literal["en", "he"]
     track: Track
     profile: ProfileName
@@ -351,6 +367,14 @@ class DraftDocument(StrictModel):
     selection: SelectionManifest | None = None
     fact_store_version: str
     content_hash: str = ""
+
+    @model_validator(mode="after")
+    def validate_analysis_binding(self) -> "DraftDocument":
+        if self.schema_version != "1.0" and not self.job_analysis_id:
+            raise ValueError(
+                "a draft must name the exact job analysis it was built from"
+            )
+        return self
 
     @model_validator(mode="after")
     def validate_headline_placement(self) -> "DraftDocument":

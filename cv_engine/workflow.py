@@ -7,6 +7,7 @@ from typing import Any
 
 from . import __version__
 from .analysis import classify_job, merge_classification, unresolved_approval_reasons
+from .chain import ChainError, check_draft_chain, decision_record_analysis_id
 from .db import Repository
 from .drafts import (
     apply_claim_edit,
@@ -21,6 +22,7 @@ from .facts import create_fact as persist_new_fact
 from .facts import promote_fact as persist_promotion
 from .models import (
     ApplicationStatus,
+    DraftDocument,
     Fact,
     FactStatus,
     JobAnalysis,
@@ -349,6 +351,24 @@ class Engine:
             # would skip the model validators that guard this state.
             overrides = {**result.user_override, "fit": "accepted-low-fit"}
             result = JobAnalysis.model_validate({**result.model_dump(mode="json"), "user_override": overrides})
+
+        # Checked before anything is written. An analysis whose Track, Profile,
+        # and Emphasis disagree can never produce a draft, so persisting it would
+        # only leave the application classified by a combination the engine
+        # refuses to act on.
+        selected_profile = profiles.get(result.profile)
+        if result.track is not selected_profile.track:
+            raise WorkflowError(
+                f"classified Track {result.track.value} and Profile {result.profile.value} "
+                f"are inconsistent: {result.profile.value} belongs to Track "
+                f"{selected_profile.track.value}"
+            )
+        if result.emphasis not in selected_profile.allowed_emphases:
+            raise WorkflowError(
+                f"Emphasis {result.emphasis.value} is not allowed for Profile "
+                f"{result.profile.value}"
+            )
+
         analysis_id = self.repo.save_analysis(
             application_id,
             snapshot["id"],
@@ -356,15 +376,40 @@ class Engine:
             provider=used_provider,
             model=used_model,
         )
-        selected_profile = profiles.get(result.profile)
-        if result.track is not selected_profile.track:
-            raise WorkflowError("classified Track and Profile are inconsistent")
         self.repo.set_normalized_role(application_id, selected_profile.normalized_role)
         return analysis_id, result
 
+    def _bound_analysis(
+        self,
+        application_id: str,
+        draft: DraftDocument,
+        profiles: ProfileStore,
+        facts: FactStore,
+        *,
+        recorded_analysis_id: str | None = None,
+    ) -> tuple[str, JobAnalysis]:
+        """The analysis this exact draft was built from, or a refusal.
+
+        Called before any write on every path that consumes a draft, so a draft
+        whose chain no longer holds is rejected while the working area, the
+        artifact directory, and SQLite are all still untouched.
+        """
+        chain = check_draft_chain(
+            self.repo,
+            application_id,
+            draft,
+            profiles,
+            facts,
+            recorded_analysis_id=recorded_analysis_id,
+        )
+        try:
+            return chain.bound()
+        except ChainError as exc:
+            raise WorkflowError(f"draft chain rejected: {exc}") from exc
+
     def draft(self, application_id: str) -> tuple[Path, Path, ValidationReport]:
         facts, profiles, policies = self.knowledge()
-        _, analysis = self.repo.latest_analysis(application_id)
+        analysis_id, analysis = self.repo.latest_analysis(application_id)
         if analysis.fit.value == "low" and analysis.user_override.get("fit") != "accepted-low-fit":
             raise WorkflowError("low fit blocks CV generation until --accept-low-fit is recorded")
         unresolved = unresolved_approval_reasons(analysis)
@@ -373,11 +418,21 @@ class Engine:
                 "ambiguous classification requires an explicit Track/Profile override: "
                 f"{unresolved}"
             )
-        snapshot = self.repo.latest_snapshot(application_id)
+        # The draft is built from the analysis's own snapshot, never from whichever
+        # snapshot is newest: a job snapshot added after the analysis describes a
+        # job nothing has analyzed yet.
+        record = self.repo.get_analysis(analysis_id)
+        latest_snapshot = self.repo.latest_snapshot(application_id)
+        if record["job_snapshot_id"] != latest_snapshot["id"]:
+            raise WorkflowError(
+                f"job snapshot {latest_snapshot['id']} is newer than the analysis in hand; "
+                "analyze the new snapshot before drafting against it"
+            )
         profile = profiles.get(analysis.profile)
         draft = build_draft(
             application_id=application_id,
-            job_snapshot_id=snapshot["id"],
+            job_snapshot_id=record["job_snapshot_id"],
+            job_analysis_id=analysis_id,
             analysis=analysis,
             profile=profile,
             facts=facts,
@@ -408,9 +463,9 @@ class Engine:
 
     def validate_working(self, application_id: str) -> ValidationReport:
         facts, profiles, policies = self.knowledge()
-        _, analysis = self.repo.latest_analysis(application_id)
         target = self.root / "artifacts" / "working" / application_id
         draft = load_draft(target / "resume.claims.json")
+        _, analysis = self._bound_analysis(application_id, draft, profiles, facts)
         markdown_path = target / "resume.md"
         actual = markdown_path.read_text(encoding="utf-8") if markdown_path.is_file() else ""
         if actual != serialize_markdown(draft):
@@ -435,9 +490,9 @@ class Engine:
         template_version: str | None = None,
     ) -> tuple[Path, ValidationReport]:
         facts, profiles, policies = self.knowledge()
-        _, analysis = self.repo.latest_analysis(application_id)
         target = self.root / "artifacts" / "working" / application_id
         draft = load_draft(target / "resume.claims.json")
+        _, analysis = self._bound_analysis(application_id, draft, profiles, facts)
         updated = apply_claim_edit(
             draft,
             claim_id,
@@ -457,9 +512,9 @@ class Engine:
 
     def sync_working_claims(self, application_id: str) -> tuple[Path, ValidationReport]:
         facts, profiles, policies = self.knowledge()
-        _, analysis = self.repo.latest_analysis(application_id)
         target = self.root / "artifacts" / "working" / application_id
         draft = load_draft(target / "resume.claims.json")
+        _, analysis = self._bound_analysis(application_id, draft, profiles, facts)
         updated = synchronize_markdown_claims(draft, target / "resume.md", facts)
         markdown, _ = write_working_draft(self.root, updated)
         report = validate_draft(updated, markdown, facts, profiles.get(updated.profile), analysis, policies=policies)
@@ -477,9 +532,12 @@ class Engine:
         if not report.passed:
             raise WorkflowError("approval blocked by pre-render validation")
         facts, profiles, policies = self.knowledge()
-        analysis_id, analysis = self.repo.latest_analysis(application_id)
         working = self.root / "artifacts" / "working" / application_id
         draft = load_draft(working / "resume.claims.json")
+        # The decision record explains the draft being approved, so it is bound to
+        # that draft's own analysis. A newer analysis does not get to describe an
+        # older document.
+        analysis_id, analysis = self._bound_analysis(application_id, draft, profiles, facts)
         existing = [
             row for row in self.repo.artifact_versions(application_id)
             if row["artifact_type"] == "resume_markdown"
@@ -576,7 +634,13 @@ class Engine:
         draft = load_draft(manifest_path)
         profile = profiles.get(draft.profile)
         directory = manifest_path.parent
-        _, analysis = self.repo.latest_analysis(application_id)
+        _, analysis = self._bound_analysis(
+            application_id,
+            draft,
+            profiles,
+            facts,
+            recorded_analysis_id=decision_record_analysis_id(self.repo, application_id),
+        )
         source_report = validate_draft(draft, directory / "resume.md", facts, profile, analysis, policies=policies)
         self.repo.record_validation(application_id, "approved-source-pre-render", source_report)
         if not source_report.passed:

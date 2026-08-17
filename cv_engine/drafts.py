@@ -117,6 +117,7 @@ def build_draft(
     *,
     application_id: str,
     job_snapshot_id: str,
+    job_analysis_id: str,
     analysis: JobAnalysis,
     profile: Profile,
     facts: FactStore,
@@ -223,6 +224,7 @@ def build_draft(
     draft = DraftDocument(
         application_id=application_id,
         job_snapshot_id=job_snapshot_id,
+        job_analysis_id=job_analysis_id,
         language=language,
         track=analysis.track,
         profile=analysis.profile,
@@ -261,6 +263,9 @@ def serialize_markdown(draft: DraftDocument) -> str:
         "schema_version": draft.schema_version,
         "application_id": draft.application_id,
         "job_snapshot_id": draft.job_snapshot_id,
+        # Omitted for pre-binding "1.0" manifests so their immutable approved
+        # Markdown still serializes byte-for-byte as it was approved.
+        **({"job_analysis_id": draft.job_analysis_id} if draft.job_analysis_id else {}),
         "language": draft.language,
         "track": draft.track.value,
         "profile": draft.profile.value,
