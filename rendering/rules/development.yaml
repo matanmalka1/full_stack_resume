@@ -16,5 +16,35 @@
     "linkedin",
     "github"
   ],
-  "direction": "ltr"
+  "direction": "ltr",
+  "keyword_emphasis": {
+    "terms": [
+      "TypeScript",
+      "React",
+      "Next.js",
+      "Node.js",
+      "Express",
+      "Tailwind CSS",
+      "Python",
+      "FastAPI",
+      "PostgreSQL",
+      "MongoDB",
+      "MySQL",
+      "Docker",
+      "AWS EC2",
+      "GitHub Actions",
+      "CI/CD",
+      "REST API"
+    ],
+    "sections": [
+      "Work Experience",
+      "Projects",
+      "ניסיון מקצועי",
+      "פרויקטים"
+    ],
+    "styles": [
+      "bullet"
+    ],
+    "max_groups_per_line": 2
+  }
 }
