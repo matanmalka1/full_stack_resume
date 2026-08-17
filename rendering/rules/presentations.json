@@ -227,7 +227,7 @@
     },
     {
       "rule_id": "development.summary.frontend-forward",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "profile": "development",
       "section": "Professional Summary",
       "emphases": [
@@ -240,8 +240,8 @@
       ],
       "style": "paragraph",
       "renderings": {
-        "en": "Full-Stack Developer experienced in React, Next.js, and TypeScript, with strong backend experience building production APIs, workflow systems, and PostgreSQL-based applications with Python/FastAPI. Takes features from architecture and data modeling through frontend implementation, testing, and CI/CD.",
-        "he": "מפתח Full-Stack עם ניסיון ב-React, ב-Next.js וב-TypeScript, לצד ניסיון backend חזק בבניית APIs ב-production, מערכות workflow ואפליקציות מבוססות PostgreSQL עם Python/FastAPI. מוביל פיצ׳רים מארכיטקטורה ומידול נתונים ועד למימוש frontend, בדיקות ו-CI/CD."
+        "en": "Full-Stack Developer working across React, Next.js, and TypeScript on the frontend and Python/FastAPI with PostgreSQL on the backend. Builds APIs, workflow-driven systems, integrations, and CI/CD, with end-to-end ownership from data modeling through frontend delivery.",
+        "he": "מפתח Full-Stack העובד ב-React, ב-Next.js וב-TypeScript בצד הלקוח וב-Python/FastAPI עם PostgreSQL בצד השרת. בונה APIs, מערכות מבוססות workflow, אינטגרציות ו-CI/CD, עם אחריות מקצה לקצה ממידול נתונים ועד מסירת ה-frontend."
       }
     },
     {
@@ -262,6 +262,21 @@
       "renderings": {
         "en": "Full-Stack Developer with strong backend experience building production APIs, workflow systems, and PostgreSQL-based applications with Python/FastAPI, alongside hands-on React, Next.js, and TypeScript. Takes features from architecture and data modeling through frontend implementation, testing, and CI/CD.",
         "he": "מפתח Full-Stack עם ניסיון backend חזק בבניית APIs ב-production, מערכות workflow ואפליקציות מבוססות PostgreSQL עם Python/FastAPI, לצד ניסיון מעשי ב-React, ב-Next.js וב-TypeScript. מוביל פיצ׳רים מארכיטקטורה ומידול נתונים ועד למימוש frontend, בדיקות ו-CI/CD."
+      }
+    },
+    {
+      "rule_id": "development.leader.revenue",
+      "version": "1.0.0",
+      "profile": "development",
+      "section": "Work Experience",
+      "emphases": [],
+      "fact_ids": [
+        "sales.metric.performance"
+      ],
+      "style": "bullet",
+      "renderings": {
+        "en": "Increased team sales revenue by approximately 30% during the management period.",
+        "he": "הגדלת הכנסות המכירות של הצוות בכ-30% לאורך תקופת הניהול."
       }
     }
   ]

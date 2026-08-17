@@ -1,6 +1,6 @@
 {
   "profile_id": "development.v1",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "track": "development",
   "profile": "development",
   "default_emphasis": "development-balanced",
@@ -40,11 +40,11 @@
       "fact_ids": [
         "development.phdigital.role",
         "development.phdigital.dates",
-        "development.phdigital.fullstack",
-        "development.phdigital.nextjs",
         "development.phdigital.crm",
-        "development.phdigital.cicd",
+        "development.phdigital.fullstack",
         "development.phdigital.integrations",
+        "development.phdigital.cicd",
+        "development.phdigital.nextjs",
         "development.phdigital.agile",
         "sales.role.leader.title",
         "sales.role.leader.dates",
