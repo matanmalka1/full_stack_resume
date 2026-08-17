@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from pydantic import BaseModel
+
 from .infrastructure.db import Repository, connect, initialize
 from .infrastructure.legacy_source import LegacySourceError, LegacyV1Source
 from .runtime.config import resolve_config
@@ -27,6 +29,14 @@ from .domain.facts import FACT_SOURCE_NAMES
 from .domain.models import ApplicationStatus, FactStatus
 from .util import sha256_file, utc_now
 from .application.services import WorkflowError
+from .application.commands import (
+    AnalyzeCommand,
+    DraftCommand,
+    IngestCommand,
+    NextActionCommand,
+    RecruitmentStatusCommand,
+)
+from .application.queries import ApplicationListView
 from .compat import Engine, resolve_job_analysis_id, resolve_job_snapshot_id
 from .runtime.composition import build_services
 
@@ -36,6 +46,8 @@ def _repo_root() -> Path:
 
 
 def _print(value: Any) -> None:
+    if isinstance(value, BaseModel):
+        value = value.model_dump(mode="json")
     print(json.dumps(value, ensure_ascii=False, indent=2, default=str))
 
 
@@ -241,7 +253,7 @@ def build_parser() -> argparse.ArgumentParser:
 EXPORT_SCHEMA_VERSION = "2.0"
 
 
-def export_csv(repository: Repository, output: Path) -> Path:
+def export_csv(applications: ApplicationListView | Repository, output: Path) -> Path:
     """Export applications with an explicit, versioned schema.
 
     The v1 export had no version marker, so a consumer could not tell which
@@ -249,7 +261,11 @@ def export_csv(repository: Repository, output: Path) -> Path:
     v2 export keeps the same columns and records the schema beside them rather
     than inventing a compatibility mode nothing asked for.
     """
-    rows = repository.list_applications()
+    rows = (
+        [item.model_dump(mode="json") for item in applications.items]
+        if isinstance(applications, ApplicationListView)
+        else applications.list_applications()
+    )
     fields = [
         "id", "company", "target_role", "normalized_role", "source_url", "language",
         "track", "profile", "emphasis", "classification_confidence", "fit_level",
@@ -286,11 +302,22 @@ def fact_command(knowledge: Any, args: argparse.Namespace) -> int:
     fail rather than be interpreted.
     """
     if args.fact_command == "list":
-        _print(knowledge.list_facts(args.status))
+        result = knowledge.list_facts(args.status)
+        _print([
+            {**item.fact.model_dump(mode="json"), "recorded_status": item.recorded_status}
+            for item in result.items
+        ])
     elif args.fact_command == "show":
-        _print(knowledge.show_fact(args.fact_id))
+        result = knowledge.show_fact(args.fact_id)
+        _print({
+            **result.fact.model_dump(mode="json"),
+            "events": [event.model_dump(mode="json") for event in result.events],
+        })
     elif args.fact_command == "history":
-        _print(knowledge.fact_history(args.fact_id))
+        _print([
+            event.model_dump(mode="json")
+            for event in knowledge.fact_history(args.fact_id).events
+        ])
     elif args.fact_command == "add":
         renderings = {"en": args.en}
         if args.he:
@@ -456,35 +483,47 @@ def main(argv: list[str] | None = None) -> int:
         repository = services.repository
         engine = Engine(workspace, services=services)
         if args.command == "ingest":
-            ingested = services.applications.ingest(args.company, args.role, _job_text(args), args.url)
+            ingested = services.applications.ingest(IngestCommand(
+                company=args.company,
+                target_role=args.role,
+                job_text=_job_text(args),
+                source_url=args.url,
+            ))
             _print({
                 "application_id": ingested.application_id,
                 "job_snapshot_id": ingested.job_snapshot_id,
             })
         elif args.command == "analyze":
-            analysed = services.analysis.analyze(
-                args.application_id,
-                args.job_snapshot or resolve_job_snapshot_id(repository, args.application_id),
-                track=args.track,
-                profile=args.profile,
-                emphasis=args.emphasis,
-                language=args.language,
+            analysed = services.analysis.analyze(AnalyzeCommand(
+                application_id=args.application_id,
+                job_snapshot_id=(
+                    args.job_snapshot
+                    or resolve_job_snapshot_id(repository, args.application_id)
+                ),
+                track_override=args.track,
+                profile_override=args.profile,
+                emphasis_override=args.emphasis,
+                language_override=args.language,
                 accept_low_fit=args.accept_low_fit,
                 provider=args.provider,
                 model=args.model,
-            )
+            ))
             _print({
                 "analysis_id": analysed.analysis_id,
                 "analysis": analysed.analysis.model_dump(mode="json"),
             })
         elif args.command == "draft":
-            drafted = services.drafts.draft(
-                args.application_id,
-                args.job_analysis or resolve_job_analysis_id(repository, args.application_id),
-            )
+            drafted = services.drafts.draft(DraftCommand(
+                application_id=args.application_id,
+                job_analysis_id=(
+                    args.job_analysis
+                    or resolve_job_analysis_id(repository, args.application_id)
+                ),
+            ))
+            paths = services.artifacts.working_paths(args.application_id)
             _print({
-                "markdown": str(drafted.markdown),
-                "claim_manifest": str(drafted.manifest),
+                "markdown": str(paths.markdown),
+                "claim_manifest": str(paths.manifest),
                 "validation": drafted.validation.model_dump(mode="json"),
                 "review_required": True,
             })
@@ -496,13 +535,16 @@ def main(argv: list[str] | None = None) -> int:
             approved = services.drafts.approve(args.application_id)
             _print({
                 "version": approved.version,
-                "directory": approved.directory,
+                "directory": str(services.artifacts.approved_version_dir(
+                    args.application_id, approved.version
+                )),
                 "decision_record_id": approved.decision_record_id,
             })
         elif args.command == "render":
             rendered = services.rendering.render(args.application_id)
+            pdf_record = repository.latest_artifact_version(args.application_id, "resume_pdf")
             _print({
-                "pdf": str(rendered.pdf),
+                "pdf": str(services.artifacts.resolve(pdf_record["path"])),
                 "ready_validation": rendered.validation.model_dump(mode="json"),
             })
             return 0 if rendered.validation.passed else 1
@@ -517,35 +559,35 @@ def main(argv: list[str] | None = None) -> int:
                 language=args.language, accept_low_fit=args.accept_low_fit,
             ))
         elif args.command == "list":
-            _print(repository.list_applications())
+            _print(services.queries.list_applications())
         elif args.command == "show":
-            app = repository.get_application(args.application_id)
-            app["latest_snapshot"] = repository.latest_snapshot(args.application_id)
-            try:
-                app["latest_analysis"] = repository.latest_analysis(args.application_id)[1].model_dump(mode="json")
-            except KeyError:
-                app["latest_analysis"] = None
-            _print(app)
+            _print(services.queries.application_detail(args.application_id))
         elif args.command == "versions":
-            _print(repository.artifact_versions(args.application_id))
+            _print(services.queries.artifact_versions(args.application_id))
         elif args.command == "decision":
-            record = repository.latest_decision(args.application_id)
-            record["structured"] = json.loads(record.pop("structured_json"))
-            _print(record)
+            _print(services.queries.latest_decision(args.application_id))
         elif args.command == "status":
             if args.status == ApplicationStatus.APPLIED.value:
                 submitted = services.tracking.submit(args.application_id, args.reason)
                 _print({
                     "application_id": submitted.application_id,
                     "pdf_artifact_version_id": submitted.pdf_artifact_version_id,
-                    **submitted.application,
+                    "current_status": submitted.current_status,
+                    "next_action": submitted.next_action,
+                    "next_action_date": submitted.next_action_date,
                 })
             else:
-                repository.transition_status(args.application_id, args.status, args.reason)
-                _print(repository.get_application(args.application_id))
+                _print(services.tracking.transition_status(RecruitmentStatusCommand(
+                    application_id=args.application_id,
+                    target_status=args.status,
+                    reason=args.reason,
+                )))
         elif args.command == "action":
-            repository.set_next_action(args.application_id, args.next_action, args.date)
-            _print(repository.get_application(args.application_id))
+            _print(services.tracking.set_next_action(NextActionCommand(
+                application_id=args.application_id,
+                next_action=args.next_action,
+                next_action_date=args.date,
+            )))
         elif args.command == "edit-claim":
             edited = services.drafts.edit_claim(
                 args.application_id,
@@ -556,26 +598,26 @@ def main(argv: list[str] | None = None) -> int:
                 template_version=args.template_version,
             )
             _print({
-                "markdown": str(edited.markdown),
+                "markdown": str(services.artifacts.working_paths(args.application_id).markdown),
                 "validation": edited.validation.model_dump(mode="json"),
             })
             return 0 if edited.validation.passed else 1
         elif args.command == "sync-draft":
             edited = services.drafts.sync_working_claims(args.application_id)
             _print({
-                "markdown": str(edited.markdown),
+                "markdown": str(services.artifacts.working_paths(args.application_id).markdown),
                 "validation": edited.validation.model_dump(mode="json"),
             })
             return 0 if edited.validation.passed else 1
         elif args.command == "link-claim":
             edited = services.drafts.link_claim(args.application_id, args.claim_id, args.text, args.fact_id)
             _print({
-                "markdown": str(edited.markdown),
+                "markdown": str(services.artifacts.working_paths(args.application_id).markdown),
                 "validation": edited.validation.model_dump(mode="json"),
             })
             return 0 if edited.validation.passed else 1
         elif args.command == "export":
-            exported = export_csv(repository, args.output.resolve())
+            exported = export_csv(services.queries.list_applications(), args.output.resolve())
             _print({
                 "csv": str(exported),
                 "metadata": str(exported.with_suffix(exported.suffix + ".meta.json")),
@@ -583,8 +625,9 @@ def main(argv: list[str] | None = None) -> int:
             })
         elif args.command == "reconcile":
             report = generic_reconcile(workspace, repository)
-            report["fact_lifecycle"] = services.knowledge_lifecycle.reconcile_facts()
-            report["passed"] = report["passed"] and report["fact_lifecycle"]["passed"]
+            fact_lifecycle = services.knowledge_lifecycle.reconcile_facts()
+            report["fact_lifecycle"] = fact_lifecycle.model_dump(mode="json")
+            report["passed"] = report["passed"] and fact_lifecycle.passed
             _print(report)
             return 0 if report["passed"] else 1
         elif args.command == "fact":

@@ -1,32 +1,31 @@
-"""What an application command is asked for, and what it answers with.
+"""Typed command inputs and application-boundary outcomes.
 
-The services used to return bare tuples, dicts, and paths, which meant every
-caller re-derived the meaning of a position or a key. These types carry that
-meaning once. They are deliberately thin: a command result names the records a
-use-case produced, and nothing about how they are stored or displayed.
+These models are deliberately storage-neutral. A client receives identities,
+validated domain documents, and workflow state; local paths are resolved only
+by CLI compatibility code or an infrastructure adapter.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
-from ..domain.models import JobAnalysis, ValidationReport
+from pydantic import BaseModel, ConfigDict
+
+from ..domain.models import Fact, JobAnalysis, ValidationReport
 
 
-@dataclass(frozen=True)
-class IngestCommand:
+class BoundaryDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class IngestCommand(BoundaryDTO):
     company: str
     target_role: str
     job_text: str
     source_url: str | None = None
 
 
-@dataclass(frozen=True)
-class AnalyzeCommand:
-    """`job_snapshot_id` is explicit: a command analyses one exact snapshot."""
-
+class AnalyzeCommand(BoundaryDTO):
     application_id: str
     job_snapshot_id: str
     track_override: str | None = None
@@ -34,58 +33,145 @@ class AnalyzeCommand:
     emphasis_override: str | None = None
     language_override: str | None = None
     accept_low_fit: bool = False
-    use_ai: bool = False
-    model: str | None = None
+    provider: str = "deterministic"
+    model: str = "rules-v1"
 
 
-@dataclass(frozen=True)
-class DraftCommand:
-    """`job_analysis_id` is explicit: a draft is built from one exact analysis."""
-
+class DraftCommand(BoundaryDTO):
     application_id: str
     job_analysis_id: str
 
 
-@dataclass(frozen=True)
-class IngestedApplication:
+class RecruitmentStatusCommand(BoundaryDTO):
+    application_id: str
+    target_status: str
+    reason: str = ""
+
+
+class NextActionCommand(BoundaryDTO):
+    application_id: str
+    next_action: str | None = None
+    next_action_date: str | None = None
+
+
+class IngestedApplication(BoundaryDTO):
     application_id: str
     job_snapshot_id: str
 
 
-@dataclass(frozen=True)
-class AnalysisResult:
+class AnalysisResult(BoundaryDTO):
+    application_id: str
+    job_snapshot_id: str
     analysis_id: str
     analysis: JobAnalysis
 
 
-@dataclass(frozen=True)
-class DraftResult:
-    markdown: Path
-    manifest: Path
+class DraftResult(BoundaryDTO):
+    application_id: str
+    job_analysis_id: str
     validation: ValidationReport
 
 
-@dataclass(frozen=True)
-class EditResult:
-    markdown: Path
+class EditResult(BoundaryDTO):
+    application_id: str
     validation: ValidationReport
 
 
-@dataclass(frozen=True)
-class ApprovalResult:
+class ApprovalResult(BoundaryDTO):
+    application_id: str
     version: int
-    directory: Path
+    markdown_artifact_version_id: str
+    manifest_artifact_version_id: str
     decision_record_id: str
 
 
-@dataclass(frozen=True)
-class RenderResult:
-    pdf: Path
+class RenderResult(BoundaryDTO):
+    application_id: str
+    pdf_artifact_version_id: str
     validation: ValidationReport
 
 
-@dataclass(frozen=True)
-class SubmissionResult:
+class ApplicationMutationResult(BoundaryDTO):
     application_id: str
+    current_status: str
+    next_action: str | None = None
+    next_action_date: str | None = None
+
+
+class SubmissionResult(ApplicationMutationResult):
     pdf_artifact_version_id: str
-    application: dict[str, Any]
+
+
+class KnowledgeVersionsResult(BoundaryDTO):
+    facts: str
+    facts_lifecycle: str
+    profiles: str
+    emphasis_policies: str
+    presentations: str
+    candidate_context: str
+
+
+class FactEventView(BoundaryDTO):
+    id: str
+    fact_id: str
+    source_file: str
+    event_type: str
+    from_status: str | None
+    to_status: str
+    application_id: str | None
+    claim_id: str | None
+    reason: str
+    fact_hash: str
+    facts_version: str
+    lifecycle_version: str
+    created_at: str
+
+
+class FactListItem(BoundaryDTO):
+    fact: Fact
+    recorded_status: str | None = None
+
+
+class FactListResult(BoundaryDTO):
+    items: list[FactListItem]
+
+
+class FactDetailResult(BoundaryDTO):
+    fact: Fact
+    events: list[FactEventView]
+
+
+class FactHistoryResult(BoundaryDTO):
+    events: list[FactEventView]
+
+
+class FactMutationResult(BoundaryDTO):
+    fact: Fact
+    event_id: str
+    facts_version: str
+    lifecycle_version: str
+
+
+class FactAttachmentResult(FactMutationResult):
+    profile: str
+    section: str
+    pinned: bool
+    profile_source: str
+    profile_store_version: str
+
+
+class FactReconciliationResult(BoundaryDTO):
+    passed: bool
+    fact_counts: dict[str, int]
+    tracked_facts: int
+    facts_version: str
+    lifecycle_version: str
+    problems: list[str]
+
+
+def fact_event_view(record: dict[str, Any]) -> FactEventView:
+    """Strip persistence-only payload columns from one audit row."""
+    return FactEventView.model_validate({
+        key: record.get(key)
+        for key in FactEventView.model_fields
+    })

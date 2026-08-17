@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from .chain import check_draft_chain, decision_record_analysis_id, material_analysis_key
-from .ports import ApplicationRepository, ArtifactStore, KnowledgeStore
+from .ports import ArtifactStore, KnowledgeStore, ReadinessRepository
 from ..domain.models import ValidationIssue, ValidationReport
 from ..util import sha256_file
 from ..domain.validation import validate_draft
@@ -13,7 +13,7 @@ from ..domain.validation import validate_draft
 def verify_ready_integrity(
     artifacts: ArtifactStore,
     knowledge: KnowledgeStore,
-    repo: ApplicationRepository,
+    repo: ReadinessRepository,
     application_id: str,
 ) -> ValidationReport:
     """The single domain-level contract for what READY means.

@@ -143,8 +143,10 @@ class UnitOfWork(Protocol):
     """One atomic boundary around a command's writes.
 
     Declared here because whether a command's records land together is an
-    application decision, not a storage detail. v1's per-statement transaction
-    behaviour is unchanged: the adapter's existing boundary is what this names.
+    application decision, not a storage detail. A successful scope still rolls
+    back unless the use-case explicitly calls ``commit()``. M1 defines this
+    contract while preserving v1 command grouping; M2 makes it load-bearing for
+    the multi-record v2 commands.
     """
 
     def __enter__(self) -> "UnitOfWork": ...
@@ -179,6 +181,10 @@ class ApplicationStore(Protocol):
 
     def record_submission(
         self, application_id: str, pdf_artifact_version_id: str, reason: str = ...
+    ) -> str: ...
+
+    def record_event(
+        self, application_id: str, event_type: str, payload: dict[str, Any]
     ) -> str: ...
 
 
@@ -234,24 +240,40 @@ class FactAudit(Protocol):
     def latest_fact_statuses(self) -> dict[str, str]: ...
 
 
+class PreparationRepository(ApplicationStore, JobStore, Protocol):
+    """Application identity plus immutable snapshot/analysis preparation."""
+
+
+class DraftRepository(ApplicationStore, JobStore, ArtifactRegistry, Protocol):
+    """The records needed to validate, approve, render, and qualify a draft."""
+
+
+class KnowledgeAuditRepository(FactAudit, Protocol):
+    """The SQLite audit side of the file-backed Knowledge lifecycle."""
+
+
+class QueryRepository(ApplicationStore, JobStore, ArtifactRegistry, Protocol):
+    """Read sources used to build storage-neutral query projections."""
+
+
+class ReadinessRepository(DraftRepository, Protocol):
+    """Draft lineage plus the database integrity proof required for Ready."""
+
+    def integrity_check(self) -> list[str]: ...
+
+
+class TrackingRepository(ReadinessRepository, Protocol):
+    """Recruitment mutations plus the full Ready proof required by submission."""
+
+
 class ApplicationRepository(
-    ApplicationStore, JobStore, ArtifactRegistry, FactAudit, Protocol
+    TrackingRepository,
+    KnowledgeAuditRepository,
+    Protocol,
 ):
-    """Everything a service may ask persistence for, as one composed port.
-
-    The focused protocols above are the real contracts — a service depends on
-    the narrow one it uses. This composition exists because one SQLite adapter
-    satisfies all of them, and the composition root binds it once.
-
-    It deliberately exposes no connection, path, or private adapter method: the
-    application layer must not be able to reach around the port.
-    """
+    """Composition-root view of the adapter; services use focused ports above."""
 
     def unit_of_work(self) -> UnitOfWork: ...
-
-    def record_event(
-        self, application_id: str, event_type: str, payload: dict[str, Any]
-    ) -> str: ...
 
     def integrity_check(self) -> list[str]: ...
 

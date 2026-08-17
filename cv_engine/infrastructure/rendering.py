@@ -9,6 +9,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoes
 from markupsafe import Markup
 from pypdf import PdfReader
 
+from ..application.errors import InfrastructureFailure
 from ..domain.candidate import contact_href
 from ..domain.models import (
     CandidateContext,
@@ -98,7 +99,7 @@ def render_html(
     return output_path
 
 
-class BrowserUnavailableError(RuntimeError):
+class BrowserUnavailableError(InfrastructureFailure):
     """The rendering browser could not be started in this environment."""
 
 

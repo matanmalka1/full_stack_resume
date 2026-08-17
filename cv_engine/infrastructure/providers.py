@@ -9,6 +9,7 @@ from typing import Any, Protocol, TypeVar
 
 from pydantic import BaseModel
 
+from ..application.errors import InfrastructureFailure
 from ..domain.models import JobClassificationProposal, ProviderContext, ProviderTaskResult
 from ..util import canonical_json, sha256_text
 
@@ -16,7 +17,7 @@ from ..util import canonical_json, sha256_text
 OutputT = TypeVar("OutputT", bound=BaseModel)
 
 
-class ProviderError(RuntimeError):
+class ProviderError(InfrastructureFailure):
     pass
 
 

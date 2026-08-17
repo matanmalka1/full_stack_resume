@@ -14,6 +14,7 @@ from ..application.ports import (
 )
 from ..application.services import (
     AnalysisService,
+    ApplicationQueryService,
     ApplicationService,
     DraftService,
     KnowledgeService,
@@ -38,6 +39,7 @@ class Services:
     artifacts: ArtifactStore
     unit_of_work: Callable[[], UnitOfWork]
     applications: ApplicationService
+    queries: ApplicationQueryService
     analysis: AnalysisService
     drafts: DraftService
     rendering: RenderingService
@@ -82,6 +84,7 @@ def build_services(
         artifacts=resolved_artifacts,
         unit_of_work=resolved_repository.unit_of_work,
         applications=ApplicationService(**shared),
+        queries=ApplicationQueryService(**shared),
         analysis=AnalysisService(**shared),
         drafts=DraftService(**shared),
         rendering=RenderingService(**shared),

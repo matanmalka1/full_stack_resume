@@ -12,14 +12,20 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+from pydantic import BaseModel
 
 from cv_engine.application import errors
 from cv_engine.application.commands import (
+    AnalyzeCommand,
     AnalysisResult,
     ApprovalResult,
+    DraftCommand,
     DraftResult,
+    IngestCommand,
     IngestedApplication,
+    RenderResult,
 )
+from cv_engine.application.queries import ArtifactVersionView
 from cv_engine.application.ports import (
     ApplicationRepository,
     ApplicationStore,
@@ -28,7 +34,7 @@ from cv_engine.application.ports import (
     JobStore,
     UnitOfWork,
 )
-from cv_engine.application.services import AnalysisService, DraftService, RenderingService
+from cv_engine.application.services import RenderingService
 from cv_engine.compat import resolve_job_analysis_id, resolve_job_snapshot_id
 from cv_engine.infrastructure.db import Repository
 from helpers import ACCOUNT_MANAGER_JOB
@@ -40,25 +46,57 @@ from helpers import ACCOUNT_MANAGER_JOB
 def test_commands_answer_with_named_results(engine) -> None:
     services = engine.services
 
-    ingested = services.applications.ingest(
-        "Named Co", "Account Manager", ACCOUNT_MANAGER_JOB
-    )
+    ingested = services.applications.ingest(IngestCommand(
+        company="Named Co",
+        target_role="Account Manager",
+        job_text=ACCOUNT_MANAGER_JOB,
+    ))
     assert isinstance(ingested, IngestedApplication)
+    assert isinstance(ingested, BaseModel)
 
-    analysed = services.analysis.analyze(
-        ingested.application_id, ingested.job_snapshot_id
-    )
+    analysed = services.analysis.analyze(AnalyzeCommand(
+        application_id=ingested.application_id,
+        job_snapshot_id=ingested.job_snapshot_id,
+    ))
     assert isinstance(analysed, AnalysisResult)
     assert analysed.analysis.track.value
 
-    drafted = services.drafts.draft(ingested.application_id, analysed.analysis_id)
+    drafted = services.drafts.draft(DraftCommand(
+        application_id=ingested.application_id,
+        job_analysis_id=analysed.analysis_id,
+    ))
     assert isinstance(drafted, DraftResult)
-    assert drafted.markdown.is_file() and drafted.manifest.is_file()
     assert drafted.validation.passed, drafted.validation.model_dump()
 
     approved = services.drafts.approve(ingested.application_id)
     assert isinstance(approved, ApprovalResult)
     assert approved.version == 1
+
+
+def test_application_dtos_do_not_expose_filesystem_locations(engine) -> None:
+    for model in (DraftResult, ApprovalResult, RenderResult, ArtifactVersionView):
+        assert "path" not in model.model_fields
+        assert all("Path" not in str(field.annotation) for field in model.model_fields.values())
+
+    ingested = engine.services.applications.ingest(IngestCommand(
+        company="Projection Co",
+        target_role="Account Manager",
+        job_text=ACCOUNT_MANAGER_JOB,
+    ))
+    analysed = engine.services.analysis.analyze(AnalyzeCommand(
+        application_id=ingested.application_id,
+        job_snapshot_id=ingested.job_snapshot_id,
+    ))
+    engine.services.drafts.draft(DraftCommand(
+        application_id=ingested.application_id,
+        job_analysis_id=analysed.analysis_id,
+    ))
+    engine.services.drafts.approve(ingested.application_id)
+
+    projection = engine.services.queries.artifact_versions(ingested.application_id)
+    serialized = projection.model_dump(mode="json")
+    assert serialized["items"]
+    assert all("path" not in item and "metadata_json" not in item for item in serialized["items"])
 
 
 # --- refusals are typed -----------------------------------------------------
@@ -73,6 +111,8 @@ def test_refusals_share_one_taxonomy_and_report_missing_dependencies(engine) -> 
         "LineageBroken",
         "KnowledgeRejected",
         "DependencyUnavailable",
+        "InfrastructureFailure",
+        "PreconditionFailed",
     ):
         assert issubclass(getattr(errors, name), errors.ApplicationError)
     assert errors.WorkflowError is errors.ApplicationError
@@ -84,6 +124,27 @@ def test_refusals_share_one_taxonomy_and_report_missing_dependencies(engine) -> 
     )
     with pytest.raises(errors.DependencyUnavailable, match="renderer"):
         rendering.renderer
+
+
+def test_expected_boundary_refusals_do_not_leak_adapter_or_domain_errors(engine) -> None:
+    with pytest.raises(errors.PreconditionFailed, match="required"):
+        engine.services.applications.ingest(IngestCommand(
+            company="",
+            target_role="Account Manager",
+            job_text=ACCOUNT_MANAGER_JOB,
+        ))
+
+    with pytest.raises(errors.UnknownRecord, match="job snapshot"):
+        engine.services.analysis.analyze(AnalyzeCommand(
+            application_id="missing-application",
+            job_snapshot_id="missing-snapshot",
+        ))
+
+    with pytest.raises(errors.UnknownRecord, match="job analysis"):
+        engine.services.drafts.draft(DraftCommand(
+            application_id="missing-application",
+            job_analysis_id="missing-analysis",
+        ))
 
 
 def test_a_blocked_validation_carries_its_report(drafted_application) -> None:
@@ -125,6 +186,7 @@ def test_unit_of_work_commits_success_and_rolls_back_failure(tmp_path: Path) -> 
             "current_status, created_at, updated_at) "
             "VALUES ('a', 'Co', 'Role', 'Role', 'en', 'draft', '2026-01-01', '2026-01-01')"
         )
+        unit.commit()
 
     assert repository.get_application("a")["company"] == "Co"
     with pytest.raises(RuntimeError):
@@ -139,28 +201,55 @@ def test_unit_of_work_commits_success_and_rolls_back_failure(tmp_path: Path) -> 
     with pytest.raises((KeyError, sqlite3.Error)):
         repository.get_application("b")
 
+    with repository.unit_of_work() as unit:
+        unit.connection.execute(
+            "INSERT INTO applications (id, company, target_role, normalized_role, language, "
+            "current_status, created_at, updated_at) "
+            "VALUES ('c', 'Co', 'Role', 'Role', 'en', 'draft', '2026-01-01', '2026-01-01')"
+        )
+    with pytest.raises((KeyError, sqlite3.Error)):
+        repository.get_application("c")
+
 
 # --- commands take explicit sources; `latest` lives outside them --------------
 
 
 def test_commands_require_owned_explicit_sources_and_compat_resolves_latest(engine) -> None:
-    assert "job_snapshot_id" in inspect.signature(AnalysisService.analyze).parameters
-    assert "job_analysis_id" in inspect.signature(DraftService.draft).parameters
-    mine = engine.services.applications.ingest("Mine Co", "Account Manager", ACCOUNT_MANAGER_JOB)
-    theirs = engine.services.applications.ingest("Theirs Co", "Account Manager", ACCOUNT_MANAGER_JOB)
+    mine = engine.services.applications.ingest(IngestCommand(
+        company="Mine Co", target_role="Account Manager", job_text=ACCOUNT_MANAGER_JOB
+    ))
+    theirs = engine.services.applications.ingest(IngestCommand(
+        company="Theirs Co", target_role="Account Manager", job_text=ACCOUNT_MANAGER_JOB
+    ))
 
     with pytest.raises(errors.LineageBroken, match="does not belong"):
-        engine.services.analysis.analyze(mine.application_id, theirs.job_snapshot_id)
+        engine.services.analysis.analyze(AnalyzeCommand(
+            application_id=mine.application_id,
+            job_snapshot_id=theirs.job_snapshot_id,
+        ))
 
-    analysed = engine.services.analysis.analyze(theirs.application_id, theirs.job_snapshot_id)
+    analysed = engine.services.analysis.analyze(AnalyzeCommand(
+        application_id=theirs.application_id,
+        job_snapshot_id=theirs.job_snapshot_id,
+    ))
     with pytest.raises(errors.LineageBroken, match="does not belong"):
-        engine.services.drafts.draft(mine.application_id, analysed.analysis_id)
-    ingested = engine.services.applications.ingest("Legacy Co", "Account Manager", ACCOUNT_MANAGER_JOB)
+        engine.services.drafts.draft(DraftCommand(
+            application_id=mine.application_id,
+            job_analysis_id=analysed.analysis_id,
+        ))
+    ingested = engine.services.applications.ingest(IngestCommand(
+        company="Legacy Co", target_role="Account Manager", job_text=ACCOUNT_MANAGER_JOB
+    ))
 
     assert resolve_job_snapshot_id(engine.repo, ingested.application_id) == ingested.job_snapshot_id
 
-    analysed = engine.services.analysis.analyze(ingested.application_id, ingested.job_snapshot_id)
+    analysed = engine.services.analysis.analyze(AnalyzeCommand(
+        application_id=ingested.application_id,
+        job_snapshot_id=ingested.job_snapshot_id,
+    ))
     assert resolve_job_analysis_id(engine.repo, ingested.application_id) == analysed.analysis_id
-    source = (Path(inspect.getfile(DraftService))).read_text(encoding="utf-8")
+    from cv_engine.application.services import DraftService
+
+    source = inspect.getsource(DraftService.draft)
     assert "latest_analysis" not in source
     assert source.count("latest_snapshot(") == 1

@@ -274,36 +274,48 @@ def _require_owned_snapshot(
 class SqliteUnitOfWork:
     """One SQLite transaction, exposed as the application's write boundary.
 
-    Entering it opens the same `BEGIN IMMEDIATE` transaction the repository's
-    own methods use, so a command that declares a boundary and one that relies
-    on the adapter's default get identical durability.
+    Entering it opens ``BEGIN IMMEDIATE``. Exiting without an explicit
+    ``commit()`` rolls back even when no exception was raised, so forgetting the
+    commit cannot publish partial state accidentally.
     """
 
     def __init__(self, repository: "Repository"):
         self._repository = repository
-        self._transaction = None
         self.connection: sqlite3.Connection | None = None
+        self._commit_requested = False
 
     def __enter__(self) -> "SqliteUnitOfWork":
-        self._transaction = self._repository.transaction()
-        self.connection = self._transaction.__enter__()
+        if self.connection is not None:
+            raise RuntimeError("UnitOfWork is already active")
+        self.connection = connect(self._repository.path)
+        self.connection.execute("BEGIN IMMEDIATE")
+        self._commit_requested = False
         return self
 
     def __exit__(self, *exc: Any) -> bool | None:
-        assert self._transaction is not None
+        if self.connection is None:
+            return None
         try:
-            return self._transaction.__exit__(*exc)
+            if exc[0] is None and self._commit_requested:
+                self.connection.commit()
+            else:
+                self.connection.rollback()
         finally:
-            self._transaction = None
+            self.connection.close()
             self.connection = None
+            self._commit_requested = False
+        return None
 
     def commit(self) -> None:
-        if self.connection is not None:
-            self.connection.commit()
+        if self.connection is None:
+            raise RuntimeError("UnitOfWork is not active")
+        self._commit_requested = True
 
     def rollback(self) -> None:
-        if self.connection is not None:
-            self.connection.rollback()
+        if self.connection is None:
+            raise RuntimeError("UnitOfWork is not active")
+        self.connection.rollback()
+        self._commit_requested = False
 
 
 class Repository:
@@ -325,11 +337,7 @@ class Repository:
             connection.close()
 
     def unit_of_work(self) -> "SqliteUnitOfWork":
-        """The application layer's atomic boundary, over this same transaction.
-
-        v1 wrote each command through one such boundary already; naming it here
-        is what lets a use-case declare the boundary instead of inheriting it.
-        """
+        """Return an explicit-commit transaction for a multi-record use-case."""
         return SqliteUnitOfWork(self)
 
     def artifact_inventory(self) -> list[dict[str, Any]]:
