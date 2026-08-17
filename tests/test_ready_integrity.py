@@ -36,6 +36,7 @@ def test_render_success_sets_ready(ready_application) -> None:
     assert engine.ready_report(app_id).passed
 
 
+@pytest.mark.browser
 def test_failed_post_render_validation_does_not_set_ready(approved_application, monkeypatch: pytest.MonkeyPatch) -> None:
     engine, app_id = approved_application("Render Failure")
 

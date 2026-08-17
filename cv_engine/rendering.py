@@ -97,6 +97,39 @@ def render_html(draft: DraftDocument, repo: Path, output_path: Path) -> Path:
     return output_path
 
 
+class BrowserUnavailableError(RuntimeError):
+    """The rendering browser could not be started in this environment."""
+
+
+SANDBOX_SIGNATURES = (
+    "bootstrap_check_in",
+    "Permission denied (1100)",
+    "kr == KERN_SUCCESS",
+    "TransformProcessType",
+    "RegisterApplication",
+)
+
+
+def _launch_failure_message(detail: str) -> str:
+    lines = [f"Rendering browser failed to start: {detail.strip()}"]
+    if any(signature in detail for signature in SANDBOX_SIGNATURES):
+        lines.append(
+            "The OS sandbox blocked the browser's Mach port registration. Chrome's "
+            "--no-sandbox flag does not bypass this; it only disables Chrome's own sandbox."
+        )
+    else:
+        lines.append(
+            "Likely causes: browsers are not installed "
+            "(./.venv/bin/python -m playwright install chromium), or an OS sandbox is "
+            "blocking browser startup."
+        )
+    lines.append(
+        "Run rendering outside the sandboxed session, or select the non-browser test "
+        'subset with: pytest -m "not browser".'
+    )
+    return "\n".join(lines)
+
+
 def _chrome_path() -> str | None:
     candidates = [
         Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
@@ -119,7 +152,10 @@ def render_pdf(html_path: Path, pdf_path: Path, screenshot_path: Path) -> dict[s
         chrome = _chrome_path()
         if chrome:
             launch_options["executable_path"] = chrome
-        browser = playwright.chromium.launch(**launch_options)
+        try:
+            browser = playwright.chromium.launch(**launch_options)
+        except Exception as exc:
+            raise BrowserUnavailableError(_launch_failure_message(str(exc))) from exc
         page = browser.new_page(viewport={"width": 1123, "height": 1588}, device_scale_factor=1)
         page.goto(html_path.resolve().as_uri(), wait_until="networkidle")
         geometry = page.evaluate("""() => {

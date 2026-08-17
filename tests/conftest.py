@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -24,6 +25,36 @@ from helpers import ACCOUNT_MANAGER_JOB, seal_report
 
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
+
+# Fixtures that always drive a real browser render. Tests using them are marked
+# `browser` automatically; tests that reach rendering by other routes carry an
+# explicit @pytest.mark.browser.
+BROWSER_FIXTURES = frozenset({"ready_application", "render_validator"})
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(items) -> None:
+    for item in items:
+        if BROWSER_FIXTURES & set(item.fixturenames):
+            item.add_marker("browser")
+
+
+def pytest_collection_finish(session) -> None:
+    """Guard against a reduced run being mistaken for a complete one.
+
+    Rendering, PDF, and ATS checks are acceptance requirements, so an
+    environment that claims completeness (CV_REQUIRE_BROWSER=1) must not
+    silently drop them.
+    """
+    if not os.environ.get("CV_REQUIRE_BROWSER"):
+        return
+    if any(item.get_closest_marker("browser") for item in session.items):
+        return
+    raise pytest.UsageError(
+        "CV_REQUIRE_BROWSER=1 but no browser tests were collected. "
+        "Rendering/PDF/ATS coverage is required for a complete run; "
+        'drop the "not browser" selection or unset CV_REQUIRE_BROWSER.'
+    )
 
 
 @dataclass(frozen=True)

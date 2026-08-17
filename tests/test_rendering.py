@@ -2,7 +2,29 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cv_engine.rendering import _claim_recoverable, normalized_role_filename, render_html
+from cv_engine.rendering import (
+    _claim_recoverable,
+    _launch_failure_message,
+    normalized_role_filename,
+    render_html,
+)
+
+
+def test_sandbox_blocked_browser_reports_cause_and_subset_command() -> None:
+    message = _launch_failure_message(
+        "TargetClosedError: BrowserType.launch\n"
+        "bootstrap_check_in org.chromium.Chromium.rohitfork.1 failed: Permission denied (1100)"
+    )
+    assert "Mach port" in message
+    assert "--no-sandbox" in message
+    assert 'pytest -m "not browser"' in message
+
+
+def test_missing_browser_install_is_not_reported_as_a_sandbox_block() -> None:
+    message = _launch_failure_message("Executable doesn't exist at /path/headless_shell")
+    assert "Mach port" not in message
+    assert "playwright install chromium" in message
+    assert 'pytest -m "not browser"' in message
 
 
 def test_filename_normalization_does_not_add_seniority() -> None:

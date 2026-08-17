@@ -3,11 +3,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from cv_engine.db import connect
 from cv_engine.workflow import Engine
 from helpers import ACCOUNT_MANAGER_JOB, working_claim as _working_claim
 
 
+@pytest.mark.browser
 def test_default_flow_stops_for_review_then_reaches_ready(engine: Engine) -> None:
     app_id, snapshot_id = engine.ingest(
         "Acme",
@@ -120,6 +123,7 @@ def test_render_revalidates_approved_markdown_before_browser(approved_applicatio
         raise AssertionError("modified approved source reached rendering")
 
 
+@pytest.mark.browser
 def test_cli_fast_mode_completes_definition_of_done(cli_runner) -> None:
     result = cli_runner(
         "fast",

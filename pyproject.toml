@@ -25,4 +25,7 @@ include = ["cv_engine*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+addopts = "-ra --strict-markers"
+markers = [
+  "browser: needs a real headless Chromium/Chrome process (blocked by OS sandboxes)",
+]
