@@ -1,6 +1,6 @@
 {
   "profile_id": "sales.sales-management.v1",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "track": "sales",
   "profile": "sales-management",
   "default_emphasis": "leadership",
@@ -50,13 +50,16 @@
         "sales.role.field.title",
         "sales.role.field.dates",
         "sales.cycle.negotiation",
-        "sales.cycle.prospecting"
+        "sales.cycle.prospecting",
+        "sales.metric.new_customers"
       ],
       "pinned_fact_ids": [
         "sales.leadership.player_coach",
         "sales.cycle.negotiation"
       ],
-      "max_claims": 12
+      "max_claims": 13,
+      "min_claims_per_role": 3,
+      "min_quantitative_per_role": 1
     },
     {
       "name_en": "Selected Achievements",
@@ -77,6 +80,14 @@
         "sales.tool.excel"
       ],
       "max_claims": 2
+    },
+    {
+      "name_en": "Education",
+      "name_he": "השכלה",
+      "fact_ids": [
+        "common.education.fullstack"
+      ],
+      "max_claims": 1
     },
     {
       "name_en": "Languages",

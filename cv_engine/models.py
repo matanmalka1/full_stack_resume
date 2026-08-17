@@ -101,6 +101,15 @@ class ResumeSectionSpec(StrictModel):
     the non-structural facts that must survive regardless of score — the ones
     that keep a role block from rendering as a heading with no evidence.
     Structural facts (headings, dates, contacts) are pinned implicitly.
+
+    A section budget alone says nothing about how the budget is spread across
+    the roles inside it, so a long, senior role can end up with two bullets
+    while an older one takes seven. `min_claims_per_role` and
+    `min_quantitative_per_role` are floors each role block must reach before
+    the rest of the budget is handed out by rank, and `max_claims_per_role` is
+    the ceiling that stops one role absorbing what is left: an older role
+    carrying seven bullets under a newer one carrying two reads as a career
+    running backwards, however the ranking got there.
     """
 
     name_en: str
@@ -108,12 +117,23 @@ class ResumeSectionSpec(StrictModel):
     fact_ids: list[str]
     pinned_fact_ids: list[str] = []
     max_claims: int | None = None
+    min_claims_per_role: int = 0
+    min_quantitative_per_role: int = 0
+    max_claims_per_role: int | None = None
     optional: bool = False
 
     @model_validator(mode="after")
     def validate_pool(self) -> "ResumeSectionSpec":
         if len(set(self.fact_ids)) != len(self.fact_ids):
             raise ValueError(f"section {self.name_en!r} repeats a candidate fact")
+        if self.min_claims_per_role < 0 or self.min_quantitative_per_role < 0:
+            raise ValueError(f"section {self.name_en!r} has a negative role-block floor")
+        if self.max_claims_per_role is not None:
+            ceiling = self.max_claims_per_role
+            if ceiling < max(self.min_claims_per_role, self.min_quantitative_per_role):
+                raise ValueError(
+                    f"section {self.name_en!r} caps a role block below its own floor"
+                )
         outside = sorted(set(self.pinned_fact_ids) - set(self.fact_ids))
         if outside:
             raise ValueError(f"section {self.name_en!r} pins facts outside its pool: {outside}")
@@ -162,6 +182,11 @@ class Profile(StrictModel):
     allowed_emphases: list[Emphasis]
     normalized_role: str
     safe_headlines: list[str]
+    # What the CV says under the name. `normalized_role` stays the filing name —
+    # the PDF filename and role folder — so a headline written for a reader
+    # ("Technical Sales | B2B Sales | Software Background") does not leak into
+    # the artifact path.
+    headline: str | None = None
     required_tags: list[str] = []
     tag_weights: dict[str, int] = {}
     sections: list[ResumeSectionSpec]
@@ -171,6 +196,10 @@ class Profile(StrictModel):
     def validate_default_emphasis(self) -> "Profile":
         if self.default_emphasis not in self.allowed_emphases:
             raise ValueError("default emphasis must be allowed")
+        if self.headline is not None and self.headline not in self.safe_headlines:
+            raise ValueError("headline must be one of the safe headlines")
+        if self.normalized_role not in self.safe_headlines:
+            raise ValueError("normalized role must be a safe headline")
         return self
 
 

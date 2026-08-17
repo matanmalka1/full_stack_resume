@@ -155,7 +155,7 @@ def build_draft(
     ]
     headline = _claim(
         "headline",
-        profile.normalized_role,
+        profile.headline or profile.normalized_role,
         support_ids,
         "headline",
     )

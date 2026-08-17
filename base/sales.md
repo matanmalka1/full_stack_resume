@@ -228,6 +228,27 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "resume_style": "paragraph"
     },
     {
+      "fact_id": "sales.summary.tenure",
+      "meaning": "Total B2B Sales experience runs from March 2019 to January 2025 - nearly six years across field Sales and Sales leadership; the span follows from the canonical role dates.",
+      "renderings": {
+        "en": "Nearly 6 years of B2B Sales experience across full-cycle Sales and team leadership.",
+        "he": "כמעט 6 שנות ניסיון במכירות B2B, לאורך מחזור מכירה מלא וניהול צוות."
+      },
+      "tags": [
+        "sales",
+        "summary",
+        "tenure",
+        "verified-quantitative"
+      ],
+      "status": "canonical",
+      "provenance": "User confirmation 2026-08-17; span follows from canonical role dates 2019-03/2025-01",
+      "confirmed_at": null,
+      "effective_dates": "2019-03/2025-01",
+      "replaces": null,
+      "source_file": "",
+      "resume_style": "paragraph"
+    },
+    {
       "fact_id": "sales.cycle.prospecting",
       "meaning": "Prospecting used cold leads, proactive calls, field activity, referrals, customer databases, business relationships, and tenders.",
       "renderings": {

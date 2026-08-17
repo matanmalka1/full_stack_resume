@@ -11,7 +11,7 @@ from cv_engine.models import FactStatus
 
 def test_canonical_fact_store_has_unique_stable_ids(fact_store) -> None:
     facts = fact_store
-    assert len(facts.facts) == 85
+    assert len(facts.facts) == 86
     assert facts.get("sales.metric.team_size").renderings["en"].startswith("Managed a team of approximately 2-3")
     assert "YoY" not in facts.get("sales.metric.performance").renderings["en"]
     assert facts.get("sales.role.leader.dates").effective_dates == "2020-08/2025-01"

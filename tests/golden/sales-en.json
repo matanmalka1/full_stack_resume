@@ -5,13 +5,14 @@
   "emphasis": "account-growth",
   "language": "en",
   "snapshot": {
-    "markdown_sha256": "f780dfcc1c606885d671e90318e1bcbdf50ddaa7d9cb7276e8f69715eb1f2f33",
-    "html_sha256": "99c798aa6ba5c2d23c242bb66cfeecefeedf956dfd8a28fbdd01a890933a6d15",
+    "markdown_sha256": "0528b305a24fe909cb0f645e54b970ac9e6a484511ff914d2b45df333e7bf813",
+    "html_sha256": "790d7d2c5d86c9d45766b9e317be64cac7017dc34de5cb60da10d7cca19dfda2",
     "selected_fact_ids": [
       "common.contact.email",
       "common.contact.linkedin",
       "common.contact.location",
       "common.contact.phone",
+      "common.education.fullstack",
       "common.language.arabic",
       "common.language.english",
       "common.language.french",
@@ -20,8 +21,10 @@
       "sales.achievement.reactivation",
       "sales.achievement.retention",
       "sales.cycle.account_management",
+      "sales.cycle.closing",
       "sales.cycle.discovery",
       "sales.leadership.strategic_customers",
+      "sales.metric.new_customers",
       "sales.metric.performance",
       "sales.metric.portfolio_growth",
       "sales.metric.recurring_customers",
@@ -39,6 +42,7 @@
       "Work Experience",
       "Core Skills",
       "Tools",
+      "Education",
       "Languages"
     ]
   }

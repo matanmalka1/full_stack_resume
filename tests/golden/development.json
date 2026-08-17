@@ -5,8 +5,8 @@
   "emphasis": "development-backend",
   "language": "en",
   "snapshot": {
-    "markdown_sha256": "e3ecaa40f4b49834464493b99ac749e93c528c3b3b4d66f310080d1b3f99be6b",
-    "html_sha256": "e3287e833fbc6433aef4dcd45e23a8d476eb98ee899bc92cee6c2889d9b66ee4",
+    "markdown_sha256": "f0e0cd89f10b38f8f3faf1ea1727f7ce5a3ca750afa27f40ac538db5b81896e2",
+    "html_sha256": "fd6ff63db8d419206085be6f22201d1b505f18684574bbe2b470c9e2dfaec91d",
     "selected_fact_ids": [
       "common.contact.email",
       "common.contact.github",
@@ -18,6 +18,7 @@
       "common.language.english",
       "common.language.french",
       "common.language.hebrew",
+      "development.phdigital.agile",
       "development.phdigital.cicd",
       "development.phdigital.crm",
       "development.phdigital.dates",
@@ -29,6 +30,7 @@
       "development.skills.devops",
       "development.summary",
       "sales.metric.performance",
+      "sales.metric.team_size",
       "sales.role.leader.dates",
       "sales.role.leader.title"
     ],

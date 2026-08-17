@@ -1,6 +1,6 @@
 {
   "profile_id": "sales.tech-sales.v1",
-  "version": "1.2.0",
+  "version": "1.4.0",
   "track": "tech-sales",
   "profile": "tech-sales",
   "default_emphasis": "tech-consultative-sales",
@@ -11,8 +11,10 @@
     "balanced-sales"
   ],
   "normalized_role": "Tech Sales",
+  "headline": "Technical Sales | B2B Sales | Software Background",
   "safe_headlines": [
     "Tech Sales",
+    "Technical Sales | B2B Sales | Software Background",
     "B2B Sales | Technology | Account Management"
   ],
   "required_tags": [
@@ -21,6 +23,8 @@
   "tag_weights": {
     "technical": 100,
     "sales": 100,
+    "tenure": 60,
+    "skill": 60,
     "closing": 40,
     "consultative": 30,
     "communication": 20,
@@ -31,11 +35,13 @@
       "name_en": "Professional Summary",
       "name_he": "תקציר מקצועי",
       "fact_ids": [
+        "sales.summary.tenure",
         "sales.summary.tech",
         "sales.summary.new_business",
+        "sales.summary.leadership",
         "sales.summary.account"
       ],
-      "max_claims": 2
+      "max_claims": 3
     },
     {
       "name_en": "Sales Experience",
@@ -45,29 +51,41 @@
         "sales.role.leader.dates",
         "sales.metric.performance",
         "sales.metric.team_size",
+        "sales.leadership.player_coach",
+        "sales.leadership.pipeline",
+        "sales.leadership.coaching",
+        "sales.leadership.strategic_customers",
+        "sales.leadership.commercial_approval",
+        "sales.metric.portfolio_growth",
         "sales.cycle.account_management",
         "sales.metric.recurring_customers",
-        "sales.leadership.pipeline",
+        "sales.achievement.process",
         "sales.role.field.title",
         "sales.role.field.dates",
         "sales.cycle.discovery",
         "sales.cycle.outreach",
         "sales.cycle.negotiation",
+        "sales.achievement.complex_deals",
         "sales.cycle.quotations",
         "sales.cycle.prospecting",
         "sales.cycle.closing",
         "sales.metric.new_customers",
-        "sales.achievement.complex_deals"
+        "sales.cycle.velocity",
+        "sales.company.customers"
       ],
       "pinned_fact_ids": [
         "sales.metric.performance",
+        "sales.metric.team_size",
         "sales.cycle.discovery"
       ],
-      "max_claims": 13
+      "max_claims": 16,
+      "min_claims_per_role": 4,
+      "min_quantitative_per_role": 2,
+      "max_claims_per_role": 7
     },
     {
-      "name_en": "Technology Background",
-      "name_he": "רקע טכנולוגי",
+      "name_en": "Technology Experience",
+      "name_he": "ניסיון טכנולוגי",
       "fact_ids": [
         "development.phdigital.role",
         "development.phdigital.dates",
@@ -83,14 +101,25 @@
       "max_claims": 5
     },
     {
-      "name_en": "Business & Technology Tools",
-      "name_he": "כלים עסקיים וטכנולוגיים",
+      "name_en": "Sales & Technical Skills",
+      "name_he": "כישורי מכירות וטכנולוגיה",
       "fact_ids": [
+        "development.skills.backend",
+        "development.skills.frontend",
+        "development.skills.databases",
+        "development.skills.ai",
         "sales.tool.priority",
-        "sales.tool.excel",
-        "sales.tool.communication"
+        "sales.tool.excel"
       ],
-      "max_claims": 3
+      "max_claims": 6
+    },
+    {
+      "name_en": "Education",
+      "name_he": "השכלה",
+      "fact_ids": [
+        "common.education.fullstack"
+      ],
+      "max_claims": 1
     },
     {
       "name_en": "Languages",

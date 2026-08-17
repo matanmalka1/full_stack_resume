@@ -1,6 +1,6 @@
 {
   "profile_id": "development.v1",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "track": "development",
   "profile": "development",
   "default_emphasis": "development-balanced",
@@ -51,7 +51,9 @@
         "development.phdigital.fullstack",
         "sales.metric.performance"
       ],
-      "max_claims": 9
+      "max_claims": 11,
+      "min_claims_per_role": 2,
+      "min_quantitative_per_role": 1
     },
     {
       "name_en": "Education",

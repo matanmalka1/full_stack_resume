@@ -1,6 +1,6 @@
 {
   "profile_id": "sales.account-executive.v1",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "track": "sales",
   "profile": "account-executive",
   "default_emphasis": "new-business",
@@ -50,13 +50,17 @@
         "sales.cycle.discovery",
         "sales.cycle.quotations",
         "sales.cycle.prospecting",
-        "sales.cycle.account_management"
+        "sales.cycle.account_management",
+        "sales.activity.lead_mix",
+        "sales.cycle.velocity"
       ],
       "pinned_fact_ids": [
         "sales.metric.performance",
         "sales.cycle.negotiation"
       ],
-      "max_claims": 10
+      "max_claims": 12,
+      "min_claims_per_role": 3,
+      "min_quantitative_per_role": 1
     },
     {
       "name_en": "Selected Achievements",
@@ -77,6 +81,14 @@
         "sales.tool.excel"
       ],
       "max_claims": 2
+    },
+    {
+      "name_en": "Education",
+      "name_he": "השכלה",
+      "fact_ids": [
+        "common.education.fullstack"
+      ],
+      "max_claims": 1
     },
     {
       "name_en": "Languages",

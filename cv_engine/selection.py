@@ -45,6 +45,14 @@ SELECTION_POLICY_VERSION = "1.0.0"
 # compete with bullets for a section budget.
 STRUCTURAL_STYLES = frozenset({"heading", "date", "contact"})
 
+# A historical job title opens a role block; everything until the next title
+# belongs to that role.
+ROLE_BLOCK_TAG = "historical-title"
+
+# Facts carrying a verified number. A role block described only in duties reads
+# as an unmeasured role, so these have their own floor.
+QUANTITATIVE_TAG = "verified-quantitative"
+
 
 class SelectionError(ValueError):
     pass
@@ -155,6 +163,62 @@ def _omission_reason(scored: _Scored) -> OmissionReason:
     return "not_relevant_to_emphasis" if scored.semantic_score == 0 else "below_section_budget"
 
 
+def _pinned_in_block(pool: list[_Scored], block_of: dict[str, int]) -> dict[int, int]:
+    counts: dict[int, int] = {}
+    for item in pool:
+        if item.pinned and not item.structural and item.fact_id in block_of:
+            counts[block_of[item.fact_id]] = counts.get(block_of[item.fact_id], 0) + 1
+    return counts
+
+
+def _role_blocks(pool: list[_Scored]) -> list[list[_Scored]]:
+    """Split a section pool into the role blocks its titles open.
+
+    Facts before the first historical title belong to the section, not to a
+    role, so they are left out: a section without titles has no blocks and no
+    floors to honour.
+    """
+    blocks: list[list[_Scored]] = []
+    for item in pool:
+        if ROLE_BLOCK_TAG in item.tags:
+            blocks.append([])
+        elif blocks:
+            blocks[-1].append(item)
+    return blocks
+
+
+def _block_floor_picks(block: list[_Scored], spec: ResumeSectionSpec) -> list[_Scored]:
+    """The contenders a role block needs to reach its floors, best-ranked first.
+
+    Pinned evidence already under the heading counts towards both floors, so a
+    block that is already substantial pulls nothing extra out of the budget.
+    """
+    held = [item for item in block if item.pinned and not item.structural]
+    ranked = sorted(
+        (item for item in block if not (item.structural or item.pinned)),
+        key=lambda item: item.rank,
+        reverse=True,
+    )
+    picks: list[_Scored] = []
+    quantitative_needed = spec.min_quantitative_per_role - sum(
+        1 for item in held if QUANTITATIVE_TAG in item.tags
+    )
+    for item in ranked:
+        if quantitative_needed <= 0:
+            break
+        if QUANTITATIVE_TAG in item.tags:
+            picks.append(item)
+            quantitative_needed -= 1
+    claims_needed = spec.min_claims_per_role - len(held) - len(picks)
+    for item in ranked:
+        if claims_needed <= 0:
+            break
+        if item not in picks:
+            picks.append(item)
+            claims_needed -= 1
+    return picks
+
+
 def build_selection(
     *,
     analysis: JobAnalysis,
@@ -176,6 +240,7 @@ def build_selection(
     chosen: dict[str, set[str]] = {}
     outcomes: dict[str, SelectionOutcome] = {}
     reasons: dict[str, OmissionReason] = {}
+    protected: set[str] = set()
 
     for spec in profile.sections:
         section = spec.name_en
@@ -199,22 +264,61 @@ def build_selection(
             raise SelectionError(
                 f"section {section!r} pins {len(held)} facts into a budget of {budget}"
             )
+        allowance = budget - len(held)
+        floor_picks: list[_Scored] = []
+        for block in _role_blocks(pool):
+            for item in _block_floor_picks(block, spec):
+                if item not in floor_picks:
+                    floor_picks.append(item)
+        if len(floor_picks) > allowance:
+            raise SelectionError(
+                f"section {section!r} needs {len(floor_picks)} claims to reach its "
+                f"role-block floors but has room for {allowance}"
+            )
+        protected.update(item.fact_id for item in floor_picks)
         contenders = sorted(
             (item for item in pool if not (item.structural or item.pinned)),
             key=lambda item: item.rank,
             reverse=True,
         )
-        winners = contenders[: budget - len(held)]
-        chosen[section] = {item.fact_id for item in held} | {item.fact_id for item in winners}
+        floor_ids = {item.fact_id for item in floor_picks}
+        block_of = {
+            item.fact_id: index
+            for index, block in enumerate(_role_blocks(pool))
+            for item in block
+        }
+        taken = _pinned_in_block(pool, block_of)
+        for item in floor_picks:
+            taken[block_of[item.fact_id]] = taken.get(block_of[item.fact_id], 0) + 1
+        winners = list(floor_picks)
+        for item in contenders:
+            if len(winners) >= allowance:
+                break
+            if item.fact_id in floor_ids:
+                continue
+            block = block_of.get(item.fact_id)
+            if (
+                block is not None
+                and spec.max_claims_per_role is not None
+                and taken.get(block, 0) >= spec.max_claims_per_role
+            ):
+                continue
+            winners.append(item)
+            if block is not None:
+                taken[block] = taken.get(block, 0) + 1
+        winner_ids = {item.fact_id for item in winners}
+        chosen[section] = {item.fact_id for item in held} | winner_ids
         for item in held:
             outcomes[item.fact_id] = "pinned"
         for item in winners:
             outcomes[item.fact_id] = "selected"
-        for item in contenders[budget - len(held):]:
+        for item in contenders:
+            if item.fact_id in winner_ids:
+                continue
             outcomes[item.fact_id] = "omitted"
             reasons[item.fact_id] = _omission_reason(item)
 
-    _rescue_required_tags(profile, scored, chosen, outcomes, reasons)
+    _rescue_required_tags(profile, scored, chosen, outcomes, reasons, protected)
 
     selected_by_section = {
         spec.name_en: [fact_id for fact_id in spec.fact_ids if fact_id in chosen[spec.name_en]]
@@ -272,6 +376,7 @@ def _rescue_required_tags(
     chosen: dict[str, set[str]],
     outcomes: dict[str, SelectionOutcome],
     reasons: dict[str, OmissionReason],
+    protected: set[str],
 ) -> None:
     """Force a Profile's structural invariants back into the document.
 
@@ -281,6 +386,10 @@ def _rescue_required_tags(
     uncovered by scoring pulls in the best-ranked omitted fact carrying it and
     evicts the weakest ordinary selection from that same section, keeping the
     budget intact. Emphasis preferences deliberately get no such power.
+
+    Claims holding a role block up to its floors are not ordinary selections and
+    cannot be evicted: a rescue that emptied a role to satisfy a tag would trade
+    one structural invariant for another.
     """
     for tag in profile.required_tags:
         selected = {fact_id for ids in chosen.values() for fact_id in ids}
@@ -304,6 +413,7 @@ def _rescue_required_tags(
                 item for item in scored[winner.section]
                 if item.fact_id in chosen[winner.section]
                 and outcomes.get(item.fact_id) == "selected"
+                and item.fact_id not in protected
                 and tag not in item.tags
             ),
             key=lambda item: item.rank,

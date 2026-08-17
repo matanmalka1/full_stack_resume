@@ -122,37 +122,39 @@ def test_a_required_tag_is_rescued_and_the_eviction_is_recorded(
     assert manifest.required_tag_coverage["retention"] == ["sales.achievement.retention"]
 
 
-def test_the_widest_profile_still_fits_its_page_allowance(
+def test_every_profile_still_fits_its_page_allowance(
     v1_repo: Path, tmp_path: Path, profile_store: ProfileStore, draft_factory, render_validator
 ) -> None:
-    """A raised section budget must not push the CV past its page allowance.
+    """Section budgets and role-block floors must not overrun the page.
 
-    Sales Management carries the largest Work Experience budget in the repo — it
-    was raised so an account-growth Emphasis could still evidence account work —
-    so it is the profile that would overflow first.
+    Budgets are the one setting that trades directly against page geometry: a
+    floor that seats a fourth bullet under a role can push the last section past
+    the A4 boundary and silently produce a second, near-empty page. Sales
+    Management carries the largest budget in the repo and Tech Sales the most
+    sections, but a raised budget anywhere is a page risk, so every Profile is
+    rendered rather than the two that look most likely to fail.
     """
-    profile = profile_store.get("sales-management")
-    assert profile.allow_two_pages
-    setup = draft_factory(
-        "Sales team leader managing a B2B account portfolio, coaching, forecasting and growth",
-        profile_override="sales-management",
-        track_override="sales",
-        emphasis_override="account-growth",
-    )
+    for profile in profile_store.profiles.values():
+        setup = draft_factory(
+            "Sales team leader managing a B2B account portfolio, coaching, forecasting and growth",
+            profile_override=profile.profile.value,
+            track_override=profile.track.value,
+            emphasis_override=profile.default_emphasis.value,
+        )
 
-    target = tmp_path / "sales-management"
-    target.mkdir()
-    html = render_html(setup.draft, v1_repo, target / "resume.html")
-    _geometry, report = render_validator(
-        setup.draft,
-        profile,
-        html,
-        target / normalized_role_filename(profile.normalized_role),
-        target / "visual.png",
-    )
+        target = tmp_path / profile.profile.value
+        target.mkdir()
+        html = render_html(setup.draft, v1_repo, target / "resume.html")
+        _geometry, report = render_validator(
+            setup.draft,
+            profile,
+            html,
+            target / normalized_role_filename(profile.normalized_role),
+            target / "visual.png",
+        )
 
-    assert report.passed, report.model_dump()
-    assert report.evidence["page_count"] <= 2
+        assert report.passed, (profile.profile.value, report.model_dump())
+        assert report.evidence["page_count"] <= (2 if profile.allow_two_pages else 1)
 
 
 def test_structure_survives_every_profile_and_emphasis(
@@ -190,6 +192,106 @@ def test_structure_survives_every_profile_and_emphasis(
                 assert supported, f"{label}: trailing heading with no evidence under it"
 
 
+def _role_block_claims(section) -> list[list]:
+    """Evidence claims grouped under the heading that opens each role block."""
+    blocks: list[list] = []
+    for claim in section.claims:
+        if claim.style == "heading":
+            blocks.append([])
+        elif claim.style not in STRUCTURAL_STYLES and blocks:
+            blocks[-1].append(claim)
+    return blocks
+
+
+def _pool_blocks(spec, fact_store) -> list[list[str]]:
+    """The candidate facts each role block in a section pool could draw on."""
+    blocks: list[list[str]] = []
+    for fact_id in spec.fact_ids:
+        fact = fact_store.get(fact_id)
+        if "historical-title" in fact.tags:
+            blocks.append([])
+        elif blocks and fact.resume_style not in STRUCTURAL_STYLES:
+            blocks[-1].append(fact_id)
+    return blocks
+
+
+def test_every_role_block_reaches_its_floor(
+    profile_store: ProfileStore, fact_store, draft_factory
+) -> None:
+    """A long role must not be reduced to a line or two by section-wide ranking.
+
+    Before role-block floors, one section budget was handed out purely by rank,
+    so a Team Leader role of four and a half years could reach the page with two
+    bullets while an older role took seven. A floor is a floor for every Profile
+    and Emphasis, not only the one the complaint came from.
+    """
+    for profile in profile_store.profiles.values():
+        for spec in profile.sections:
+            if not spec.min_claims_per_role and not spec.min_quantitative_per_role:
+                continue
+            for emphasis in profile.allowed_emphases:
+                setup = draft_factory(
+                    ACCOUNT_MANAGER_JOB,
+                    profile_override=profile.profile.value,
+                    track_override=profile.track.value,
+                    emphasis_override=emphasis.value,
+                )
+                section = next(
+                    item for item in setup.draft.sections
+                    if item.name == spec.name_en
+                )
+                pools = _pool_blocks(spec, fact_store)
+                for index, block in enumerate(_role_block_claims(section)):
+                    label = f"{profile.profile.value}/{emphasis.value}/{spec.name_en}/block{index}"
+                    # A floor cannot conjure evidence: a block whose pool is
+                    # shallower than the floor owes only everything it has.
+                    floor = min(spec.min_claims_per_role, len(pools[index]))
+                    assert len(block) >= floor, label
+
+
+def test_role_block_floors_beat_rank_and_survive_a_required_tag_rescue(draft_factory) -> None:
+    """The floor holds against both of the mechanisms that could undo it.
+
+    Ranking would spend the whole Sales Experience budget on new-business
+    evidence from the earlier role, and the `tech-sales` rescue evicts the
+    weakest ordinary selection to seat its own fact. Neither may take the
+    leadership role back below its floor.
+    """
+    setup = draft_factory(
+        PAYME_TECH_SALES_JOB,
+        track_override="tech-sales",
+        profile_override="tech-sales",
+        emphasis_override="new-business",
+    )
+    experience = next(
+        section for section in setup.draft.sections if section.name == "Sales Experience"
+    )
+    leadership, field = _role_block_claims(experience)
+
+    assert len(leadership) >= 4
+    assert len(field) >= 4
+
+    # The leadership block can evidence several verified numbers and must show
+    # two; the field-era pool holds one, and a floor never invents the second.
+    quantitative = {
+        "sales.metric.performance",
+        "sales.metric.team_size",
+        "sales.metric.portfolio_growth",
+        "sales.metric.recurring_customers",
+        "sales.metric.new_customers",
+    }
+    for block, expected in ((leadership, 2), (field, 1)):
+        linked = {fact_id for claim in block for fact_id in claim.fact_ids}
+        assert len(linked & quantitative) >= expected
+
+    evicted = [
+        candidate.fact_id for candidate in setup.draft.selection.candidates
+        if candidate.reason == "evicted_by_required_tag_rescue"
+    ]
+    leadership_ids = {fact_id for claim in leadership for fact_id in claim.fact_ids}
+    assert not (set(evicted) & leadership_ids)
+
+
 def test_payme_tech_sales_selection_uses_job_evidence_and_business_presentations(
     draft_factory,
 ) -> None:
@@ -216,10 +318,14 @@ def test_payme_tech_sales_selection_uses_job_evidence_and_business_presentations
     summary = sections["Professional Summary"].claims
     assert len(summary) == 1
     assert summary[0].claim_type == "composite"
-    assert summary[0].template_id == "tech-sales.summary.new-business"
-    assert "prospecting, needs discovery, negotiation, and closing" in summary[0].text
+    assert summary[0].template_id == "tech-sales.summary.new-business-tenure"
+    assert "prospecting, needs discovery, negotiation, closing" in summary[0].text
+    # The tenure is a canonical fact linked to the claim, never a number the
+    # wording asserts on its own.
+    assert "sales.summary.tenure" in summary[0].fact_ids
+    assert "nearly 6 years" in summary[0].text
 
-    technology = sections["Technology Background"].claims
+    technology = sections["Technology Experience"].claims
     technology_text = " ".join(claim.text for claim in technology)
     assert "how software products are designed and delivered" in technology_text
     assert "automated workflows, document generation, and operational status tracking" in technology_text
@@ -227,10 +333,58 @@ def test_payme_tech_sales_selection_uses_job_evidence_and_business_presentations
     assert "retries" not in technology_text
     assert "state-driven business processes" not in technology_text
 
-    tools = sections["Business & Technology Tools"]
-    tools_text = " ".join(claim.text for claim in tools.claims)
-    assert "Priority ERP" in tools_text
-    assert "Excel" in tools_text
-    assert "Outlook, Gmail, WhatsApp, and Teams" in tools_text
-    assert "Backend:" not in tools_text
-    assert "Frontend:" not in tools_text
+    # A Tech Sales reader is a technical buyer's counterpart: the stack belongs
+    # on the page as searchable terms, but as one line of vocabulary rather than
+    # a framework inventory that reads as a developer's CV.
+    skills = sections["Sales & Technical Skills"].claims
+    skills_text = " ".join(claim.text for claim in skills)
+    assert "Priority ERP" in skills_text
+    assert "Excel" in skills_text
+    assert "REST APIs, Python, FastAPI" in skills_text
+    assert "React" in skills_text
+    assert "PostgreSQL" in skills_text
+    assert len(skills) == 3
+
+
+def test_the_headline_reads_for_a_recruiter_and_the_filename_does_not(
+    profile_store: ProfileStore, draft_factory
+) -> None:
+    """A headline written for a reader must not become the artifact path.
+
+    `normalized_role` files the CV — the PDF name and the role folder — so a
+    headline carrying separators and a positioning statement has to live in its
+    own field or it ends up in a filename.
+    """
+    profile = profile_store.get("tech-sales")
+    setup = draft_factory(
+        PAYME_TECH_SALES_JOB,
+        track_override="tech-sales",
+        profile_override="tech-sales",
+        emphasis_override="new-business",
+    )
+
+    assert setup.draft.headline.text == "Technical Sales | B2B Sales | Software Background"
+    assert setup.draft.headline.text in profile.safe_headlines
+    assert profile.normalized_role == "Tech Sales"
+    assert normalized_role_filename(profile.normalized_role) == "Matan Malka - Tech Sales - CV.pdf"
+
+
+def test_no_role_block_exceeds_its_ceiling(profile_store: ProfileStore, draft_factory) -> None:
+    for profile in profile_store.profiles.values():
+        for spec in profile.sections:
+            if spec.max_claims_per_role is None:
+                continue
+            for emphasis in profile.allowed_emphases:
+                setup = draft_factory(
+                    ACCOUNT_MANAGER_JOB,
+                    profile_override=profile.profile.value,
+                    track_override=profile.track.value,
+                    emphasis_override=emphasis.value,
+                )
+                section = next(
+                    item for item in setup.draft.sections if item.name == spec.name_en
+                )
+                for index, block in enumerate(_role_block_claims(section)):
+                    label = f"{profile.profile.value}/{emphasis.value}/{spec.name_en}/block{index}"
+                    linked = {fact_id for claim in block for fact_id in claim.fact_ids}
+                    assert len(linked) <= spec.max_claims_per_role, label

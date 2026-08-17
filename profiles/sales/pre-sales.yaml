@@ -1,6 +1,6 @@
 {
   "profile_id": "sales.pre-sales.v1",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "track": "tech-sales",
   "profile": "pre-sales-solutions-consultant",
   "default_emphasis": "tech-consultative-sales",
@@ -40,6 +40,8 @@
         "sales.cycle.negotiation",
         "sales.cycle.closing",
         "sales.cycle.account_management",
+        "sales.metric.performance",
+        "sales.metric.recurring_customers",
         "sales.role.field.title",
         "sales.role.field.dates",
         "sales.cycle.outreach",
@@ -49,7 +51,9 @@
         "sales.cycle.discovery",
         "sales.cycle.outreach"
       ],
-      "max_claims": 8
+      "max_claims": 11,
+      "min_claims_per_role": 3,
+      "min_quantitative_per_role": 1
     },
     {
       "name_en": "Technology Background",
@@ -78,6 +82,14 @@
         "sales.tool.priority"
       ],
       "max_claims": 3
+    },
+    {
+      "name_en": "Education",
+      "name_he": "השכלה",
+      "fact_ids": [
+        "common.education.fullstack"
+      ],
+      "max_claims": 1
     },
     {
       "name_en": "Languages",
