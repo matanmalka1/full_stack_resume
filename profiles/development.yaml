@@ -1,6 +1,6 @@
 {
   "profile_id": "development.v1",
-  "version": "1.3.0",
+  "version": "1.6.0",
   "track": "development",
   "profile": "development",
   "default_emphasis": "development-balanced",
@@ -12,7 +12,8 @@
   "normalized_role": "Full Stack Developer",
   "safe_headlines": [
     "Full Stack Developer",
-    "Backend-Oriented Full-Stack Developer"
+    "Backend-Oriented Full-Stack Developer",
+    "Full-Stack Developer | React, TypeScript & Python"
   ],
   "required_tags": [
     "development"
@@ -26,9 +27,12 @@
       "name_en": "Professional Summary",
       "name_he": "תקציר מקצועי",
       "fact_ids": [
+        "development.summary.frontend",
+        "development.summary.backend",
+        "development.summary.delivery",
         "development.summary"
       ],
-      "max_claims": 1
+      "max_claims": 3
     },
     {
       "name_en": "Work Experience",
@@ -37,10 +41,10 @@
         "development.phdigital.role",
         "development.phdigital.dates",
         "development.phdigital.fullstack",
-        "development.phdigital.crm",
-        "development.phdigital.integrations",
-        "development.phdigital.cicd",
         "development.phdigital.nextjs",
+        "development.phdigital.crm",
+        "development.phdigital.cicd",
+        "development.phdigital.integrations",
         "development.phdigital.agile",
         "sales.role.leader.title",
         "sales.role.leader.dates",
@@ -67,11 +71,11 @@
       "name_en": "Core Skills",
       "name_he": "מיומנויות ליבה",
       "fact_ids": [
+        "development.skills.frontend",
         "development.skills.backend",
         "development.skills.databases",
-        "development.skills.ai",
-        "development.skills.frontend",
-        "development.skills.devops"
+        "development.skills.devops",
+        "development.skills.ai"
       ],
       "max_claims": 4
     },
@@ -86,5 +90,6 @@
       ],
       "max_claims": 4
     }
-  ]
+  ],
+  "headline": "Full-Stack Developer | React, TypeScript & Python"
 }

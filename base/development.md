@@ -4,7 +4,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
 
 ```json
 {
-  "source_version": "1.0.0",
+  "source_version": "1.0.3",
   "facts": [
     {
       "fact_id": "development.summary",
@@ -65,10 +65,10 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
     },
     {
       "fact_id": "development.phdigital.fullstack",
-      "meaning": "Built and maintained production applications with React and Python/FastAPI from PostgreSQL data models and APIs through frontend implementation.",
+      "meaning": "Built and maintained production applications with React, TypeScript, and Python/FastAPI from PostgreSQL data models and APIs through frontend implementation.",
       "renderings": {
-        "en": "Built and maintained production applications with React and Python/FastAPI, owning features from PostgreSQL data modeling and APIs through frontend implementation.",
-        "he": "פיתוח ותחזוקה של מערכות production ב-React וב-Python/FastAPI, כולל אחריות על פיצ'רים ממודלי נתונים ב-PostgreSQL ו-APIs ועד המימוש בצד הלקוח."
+        "en": "Built and maintained production applications with React, TypeScript, and Python/FastAPI, owning features from PostgreSQL data modeling and APIs through frontend implementation.",
+        "he": "פיתוח ותחזוקה של מערכות production ב-React, ב-TypeScript וב-Python/FastAPI, כולל אחריות על פיצ'רים ממודלי נתונים ב-PostgreSQL ו-APIs ועד המימוש בצד הלקוח."
       },
       "tags": [
         "development",
@@ -76,7 +76,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
         "full-stack"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
+      "provenance": "base/cv_base.md; TypeScript added on explicit user confirmation 2026-08-17 that the main PH.Digital production applications were written in TypeScript",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -203,10 +203,10 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
     },
     {
       "fact_id": "development.skills.frontend",
-      "meaning": "Frontend skills: React, Next.js, TypeScript, JavaScript.",
+      "meaning": "Frontend skills: React, Next.js, TypeScript, JavaScript, Tailwind CSS.",
       "renderings": {
-        "en": "Frontend: React, Next.js, TypeScript, JavaScript",
-        "he": "Frontend: React, Next.js, TypeScript, JavaScript"
+        "en": "Frontend: React, Next.js, TypeScript, JavaScript, Tailwind CSS",
+        "he": "Frontend: React, Next.js, TypeScript, JavaScript, Tailwind CSS"
       },
       "tags": [
         "development",
@@ -214,7 +214,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
         "frontend"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
+      "provenance": "base/cv_base.md; Tailwind CSS surfaced on user confirmation 2026-08-17 from canonical development.phdigital.nextjs and situational.vite_tailwind",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -263,10 +263,10 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
     },
     {
       "fact_id": "development.skills.devops",
-      "meaning": "DevOps/tool skills: Docker, GitHub Actions, Git, GitHub, Postman, AWS EC2.",
+      "meaning": "DevOps and testing tool skills: Docker, GitHub Actions, Git, AWS EC2, pytest, Vitest, Postman.",
       "renderings": {
-        "en": "DevOps and Tools: Docker, GitHub Actions, Git, GitHub, Postman, AWS EC2",
-        "he": "DevOps וכלים: Docker, GitHub Actions, Git, GitHub, Postman, AWS EC2"
+        "en": "DevOps & Testing: Docker, GitHub Actions, Git, AWS EC2, pytest, Vitest, Postman",
+        "he": "DevOps ובדיקות: Docker, GitHub Actions, Git, AWS EC2, pytest, Vitest, Postman"
       },
       "tags": [
         "development",
@@ -274,7 +274,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
         "devops"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
+      "provenance": "base/cv_base.md; pytest and Vitest surfaced on user confirmation 2026-08-17 from canonical situational.testing and development.phdigital.nextjs",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -338,6 +338,70 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "replaces": null,
       "source_file": "",
       "resume_style": "bullet"
+    },
+    {
+      "fact_id": "development.summary.frontend",
+      "meaning": "Summary-level frontend positioning: builds user-facing applications with React, Next.js, and TypeScript.",
+      "renderings": {
+        "en": "Full-Stack Developer experienced in React, Next.js, and TypeScript.",
+        "he": "מפתח Full-Stack עם ניסיון ב-React, ב-Next.js וב-TypeScript."
+      },
+      "tags": [
+        "development",
+        "summary",
+        "frontend",
+        "nextjs"
+      ],
+      "status": "canonical",
+      "provenance": "Summary restatement of canonical development.phdigital.nextjs and development.skills.frontend; no new claim. User request 2026-08-17 to lead with TypeScript/React positioning.",
+      "confirmed_at": "2026-08-17",
+      "effective_dates": null,
+      "replaces": null,
+      "source_file": "",
+      "resume_style": "paragraph"
+    },
+    {
+      "fact_id": "development.summary.backend",
+      "meaning": "Summary-level backend positioning: production APIs, workflow systems, and PostgreSQL-based applications built with Python/FastAPI.",
+      "renderings": {
+        "en": "Strong backend experience building production APIs, workflow systems, and PostgreSQL-based applications with Python/FastAPI.",
+        "he": "ניסיון backend חזק בבניית APIs ב-production, מערכות workflow ואפליקציות מבוססות PostgreSQL עם Python/FastAPI."
+      },
+      "tags": [
+        "development",
+        "summary",
+        "backend",
+        "databases"
+      ],
+      "status": "canonical",
+      "provenance": "Summary restatement of canonical development.phdigital.fullstack and development.phdigital.crm; no new claim. User request 2026-08-17.",
+      "confirmed_at": "2026-08-17",
+      "effective_dates": null,
+      "replaces": null,
+      "source_file": "",
+      "resume_style": "paragraph"
+    },
+    {
+      "fact_id": "development.summary.delivery",
+      "meaning": "Summary-level delivery positioning: owns features from architecture and data modeling through frontend implementation, testing, and CI/CD.",
+      "renderings": {
+        "en": "Takes features from architecture and data modeling through frontend implementation, testing, and CI/CD.",
+        "he": "מוביל פיצ׳רים מארכיטקטורה ומידול נתונים ועד למימוש frontend, בדיקות ו-CI/CD."
+      },
+      "tags": [
+        "development",
+        "summary",
+        "full-stack",
+        "testing",
+        "devops"
+      ],
+      "status": "canonical",
+      "provenance": "Summary restatement of canonical development.phdigital.fullstack and development.phdigital.cicd; no new claim. User request 2026-08-17.",
+      "confirmed_at": "2026-08-17",
+      "effective_dates": null,
+      "replaces": null,
+      "source_file": "",
+      "resume_style": "paragraph"
     }
   ]
 }
