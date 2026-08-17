@@ -4,8 +4,27 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
 
 ```json
 {
-  "source_version": "1.0.0",
+  "source_version": "1.0.1",
   "facts": [
+    {
+      "fact_id": "common.identity.name",
+      "meaning": "The candidate's professional name is Matan Malka; the Hebrew rendering is מתן מלכה.",
+      "renderings": {
+        "en": "Matan Malka",
+        "he": "מתן מלכה"
+      },
+      "tags": [
+        "identity",
+        "contact"
+      ],
+      "status": "canonical",
+      "provenance": "base/cv_base.md and every rendered v1 CV; relocated into its canonical location for v2 without change",
+      "confirmed_at": "2026-08-17",
+      "effective_dates": null,
+      "replaces": null,
+      "source_file": "",
+      "resume_style": "heading"
+    },
     {
       "fact_id": "common.contact.location",
       "meaning": "Professional location is Tel Aviv.",

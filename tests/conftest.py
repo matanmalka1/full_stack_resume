@@ -13,10 +13,11 @@ from typing import Any
 import pytest
 
 from cv_engine.analysis import classify_job
-from cv_engine.canonical_data import write_canonical_sources
+from cv_engine.canonical_data import V2_IDENTITY_FACT, write_canonical_sources
 from cv_engine.db import Repository, connect
 from cv_engine.drafts import build_draft, write_working_draft
-from cv_engine.facts import FactStore
+from cv_engine.candidate import load_candidate_context
+from cv_engine.facts import FactStore, create_fact
 from cv_engine.migration import create_snapshot, dry_run_migration, migrate_legacy_state, verify_snapshot
 from cv_engine.models import (
     Emphasis,
@@ -92,6 +93,7 @@ class DraftSetup:
     analysis: Any
     draft: Any
     markdown: Path | None
+    candidate: Any = None
 
     def __iter__(self):
         yield self.facts
@@ -135,6 +137,11 @@ def v1_repo(tmp_path: Path) -> Path:
     root = tmp_path / "repo"
     root.mkdir()
     write_canonical_sources(root / "base")
+    # The identity fact and candidate context are v2 additions to the knowledge
+    # store, so the fixture adds them the way the product does rather than
+    # baking them into the frozen v1 migration baseline.
+    create_fact(root / "base", "common.md", dict(V2_IDENTITY_FACT), canonical=True)
+    shutil.copy2(SOURCE_ROOT / "base/candidate.json", root / "base/candidate.json")
     for name in ("profiles", "rendering", "ai", "config"):
         shutil.copytree(SOURCE_ROOT / name, root / name)
     create_workspace(root, purpose="test", data_class="test")
@@ -159,6 +166,11 @@ def profile_store(v1_repo: Path, fact_store: FactStore) -> ProfileStore:
 @pytest.fixture
 def policy_store(v1_repo: Path) -> EmphasisPolicyStore:
     return EmphasisPolicyStore.load(v1_repo)
+
+
+@pytest.fixture
+def candidate_context(v1_repo: Path, fact_store: FactStore):
+    return load_candidate_context(v1_repo, fact_store)
 
 
 @pytest.fixture
@@ -284,6 +296,7 @@ def draft_factory(
     fact_store: FactStore,
     profile_store: ProfileStore,
     policy_store: EmphasisPolicyStore,
+    candidate_context,
 ):
     def build(
         job: str,
@@ -304,9 +317,10 @@ def draft_factory(
             profile=profile,
             facts=fact_store,
             policies=policy_store,
+            candidate=candidate_context,
         )
         markdown = write_working_draft(v1_repo / "artifacts", draft)[0] if write else None
-        return DraftSetup(fact_store, profile, analysis, draft, markdown)
+        return DraftSetup(fact_store, profile, analysis, draft, markdown, candidate_context)
 
     return build
 
@@ -372,9 +386,9 @@ def provider_analysis(engine: Engine, monkeypatch):
 
 @pytest.fixture
 def render_validator():
-    def validate(draft, profile, html: Path, pdf: Path, screenshot: Path):
+    def validate(draft, profile, html: Path, pdf: Path, screenshot: Path, candidate):
         geometry = render_pdf(html, pdf, screenshot)
-        report = validate_rendered(draft, profile, html, pdf, screenshot, geometry)
+        report = validate_rendered(draft, profile, html, pdf, screenshot, geometry, candidate)
         return geometry, report
 
     return validate

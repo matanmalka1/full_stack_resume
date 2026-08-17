@@ -38,6 +38,26 @@ def _fact(
 HANDOFF = "v1 handoff Section 7; explicitly canonical"
 LEGACY = "base/cv_base.md; migrated without strengthening"
 
+# Post-v1 addition, deliberately outside the generated sources below. Those
+# sources reproduce the v1 migrated state, whose per-file hashes are recorded in
+# docs/v1-retrospective-migration-verification.json; adding a v2 fact to them
+# would silently invalidate that evidence. This fact is created through the
+# normal lifecycle instead, exactly as any later canonical fact would be.
+V2_IDENTITY_FACT = {
+    "fact_id": "common.identity.name",
+    "meaning": "The candidate's professional name is Matan Malka; the Hebrew rendering is מתן מלכה.",
+    "renderings": {"en": "Matan Malka", "he": "מתן מלכה"},
+    "tags": ["identity", "contact"],
+    "provenance": (
+        "base/cv_base.md and every rendered v1 CV; relocated into its canonical "
+        "location for v2 without change"
+    ),
+    "confirmed_at": "2026-08-17",
+    "effective_dates": None,
+    "replaces": None,
+    "resume_style": "heading",
+}
+
 
 COMMON_FACTS = [
     _fact("common.contact.location", "Professional location is Tel Aviv.", "Tel Aviv", he="תל אביב", tags=["contact"], provenance=LEGACY, style="contact"),

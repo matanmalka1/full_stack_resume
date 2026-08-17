@@ -13,6 +13,19 @@ from cv_engine.util import sha256_text
 GOLDEN_DIR = Path(__file__).parent / "golden"
 
 
+def _front_matter_and_body(markdown: str) -> tuple[str, str]:
+    """Split the provenance header from the document itself.
+
+    The header carries knowledge versions, which legitimately move whenever a
+    fact is added anywhere in the store. Pinning the body separately keeps the
+    golden comparison about content: a changed claim, contact, section, or name
+    still fails, while a knowledge-version bump is asserted against the live
+    store instead of being frozen into a hash nobody can interpret later.
+    """
+    front, _, body = markdown.partition("\n---\n")
+    return front, body
+
+
 @pytest.mark.parametrize("fixture", sorted(GOLDEN_DIR.glob("*.json")), ids=lambda path: path.stem)
 def test_golden_profile_snapshot_and_ready_pdf(
     v1_repo: Path,
@@ -23,7 +36,7 @@ def test_golden_profile_snapshot_and_ready_pdf(
 ) -> None:
     case = json.loads(fixture.read_text(encoding="utf-8"))
     overrides = case.get("overrides", {})
-    facts, profile, analysis, draft, _markdown = draft_factory(
+    setup = draft_factory(
         case["job"],
         track_override=overrides.get("track"),
         profile_override=overrides.get("profile"),
@@ -31,6 +44,8 @@ def test_golden_profile_snapshot_and_ready_pdf(
         application_id="00000000-0000-0000-0000-000000000001",
         job_snapshot_id="00000000-0000-0000-0000-000000000002",
     )
+    facts, profile, analysis, draft = setup.facts, setup.profile, setup.analysis, setup.draft
+    candidate = setup.candidate
     assert analysis.track.value == case["track"]
     assert analysis.profile.value == case["profile"]
     assert analysis.emphasis.value == case["emphasis"]
@@ -48,10 +63,13 @@ def test_golden_profile_snapshot_and_ready_pdf(
 
     target = tmp_path / fixture.stem
     target.mkdir()
-    html = render_html(draft, v1_repo, target / "resume.html")
+    html = render_html(draft, v1_repo, target / "resume.html", candidate)
     html_text = html.read_text(encoding="utf-8")
+    front_matter, markdown_body = _front_matter_and_body(markdown)
+    assert f'fact_store_version: "{facts.version}"' in front_matter
+    assert draft.fact_store_version == facts.version
     snapshot = {
-        "markdown_sha256": sha256_text(markdown),
+        "markdown_body_sha256": sha256_text(markdown_body),
         "html_sha256": sha256_text(html_text),
         "selected_fact_ids": draft.selected_fact_ids,
         "sections": [section.name for section in draft.sections],
@@ -66,8 +84,8 @@ def test_golden_profile_snapshot_and_ready_pdf(
         assert '<html lang="he" dir="rtl">' in html_text
         assert '<bdi dir="ltr">B2B</bdi>' in html_text
 
-    pdf = target / normalized_role_filename(profile.normalized_role)
+    pdf = target / normalized_role_filename(profile.normalized_role, candidate)
     screenshot = target / "visual.png"
-    geometry, report = render_validator(draft, profile, html, pdf, screenshot)
+    geometry, report = render_validator(draft, profile, html, pdf, screenshot, candidate)
     assert report.passed, report.model_dump()
     assert report.evidence["page_count"] in {1, 2}

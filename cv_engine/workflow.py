@@ -7,6 +7,7 @@ from typing import Any
 
 from . import __version__
 from .analysis import classify_job, merge_classification, unresolved_approval_reasons
+from .candidate import load_candidate_context
 from .chain import ChainError, check_draft_chain, decision_record_analysis_id
 from .db import Repository
 from .drafts import (
@@ -22,6 +23,7 @@ from .facts import create_fact as persist_new_fact
 from .facts import promote_fact as persist_promotion
 from .models import (
     ApplicationStatus,
+    CandidateContext,
     DraftDocument,
     Fact,
     FactStatus,
@@ -71,6 +73,27 @@ class Engine:
             ProfileStore.load(self.knowledge_root, facts),
             EmphasisPolicyStore.load(self.knowledge_root),
         )
+
+    def candidate(self, facts: FactStore) -> CandidateContext:
+        return load_candidate_context(self.knowledge_root, facts)
+
+    def knowledge_versions(self) -> dict[str, str]:
+        """One hash surface per knowledge dependency an artifact can depend on.
+
+        Recorded and compared per dependency rather than as a single store-wide
+        version, so an unrelated fact change does not have to look like a change
+        to every profile, policy, and candidate context.
+        """
+        facts, profiles, policies = self.knowledge()
+        presentations = PresentationStore.for_facts(facts)
+        return {
+            "facts": facts.version,
+            "facts_lifecycle": facts.lifecycle_version,
+            "profiles": profiles.version,
+            "emphasis_policies": policies.version,
+            "presentations": presentations.version if presentations is not None else "",
+            "candidate_context": self.candidate(facts).version_hash,
+        }
 
     def list_facts(self, status: str | None = None) -> list[dict[str, Any]]:
         facts = FactStore.load(self.base_dir)
@@ -456,6 +479,7 @@ class Engine:
             profile=profile,
             facts=facts,
             policies=policies,
+            candidate=self.candidate(facts),
         )
         presentation_rules = PresentationStore.for_facts(facts)
         markdown, manifest = write_working_draft(self.artifacts_root, draft)
@@ -600,7 +624,9 @@ class Engine:
             facts_version=facts.version,
             approved_at=now,
         )
-        expected_pdf = approved_dir / normalized_role_filename(profiles.get(draft.profile).normalized_role)
+        expected_pdf = approved_dir / normalized_role_filename(
+            profiles.get(draft.profile).normalized_role, self.candidate(facts)
+        )
         application = self.repo.get_application(application_id)
         structured = {
             "company": application["company"],
@@ -664,12 +690,15 @@ class Engine:
         self.repo.record_validation(application_id, "approved-source-pre-render", source_report)
         if not source_report.passed:
             raise WorkflowError("render blocked because the approved Markdown no longer matches its validated claims")
+        candidate = self.candidate(facts)
         html_path = directory / "resume.html"
-        pdf_path = directory / normalized_role_filename(profile.normalized_role)
+        pdf_path = directory / normalized_role_filename(profile.normalized_role, candidate)
         screenshot_path = directory / "visual.png"
-        render_html(draft, self.knowledge_root, html_path)
+        render_html(draft, self.knowledge_root, html_path, candidate)
         geometry = render_pdf(html_path, pdf_path, screenshot_path)
-        report = validate_rendered(draft, profile, html_path, pdf_path, screenshot_path, geometry)
+        report = validate_rendered(
+            draft, profile, html_path, pdf_path, screenshot_path, geometry, candidate
+        )
         lifecycle = "rendered" if report.passed else "rendered-invalid"
         artifact_ids = []
         for artifact_type, logical_name, path in [

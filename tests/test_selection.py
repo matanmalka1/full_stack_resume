@@ -144,13 +144,14 @@ def test_every_profile_still_fits_its_page_allowance(
 
         target = tmp_path / profile.profile.value
         target.mkdir()
-        html = render_html(setup.draft, v1_repo, target / "resume.html")
+        html = render_html(setup.draft, v1_repo, target / "resume.html", setup.candidate)
         _geometry, report = render_validator(
             setup.draft,
             profile,
             html,
-            target / normalized_role_filename(profile.normalized_role),
+            target / normalized_role_filename(profile.normalized_role, setup.candidate),
             target / "visual.png",
+            setup.candidate,
         )
 
         assert report.passed, (profile.profile.value, report.model_dump())
@@ -369,7 +370,9 @@ def test_the_headline_reads_for_a_recruiter_and_the_filename_does_not(
     assert setup.draft.headline.text == "Technical Sales | B2B Sales | Software Background"
     assert setup.draft.headline.text in profile.safe_headlines
     assert profile.normalized_role == "Tech Sales"
-    assert normalized_role_filename(profile.normalized_role) == "Matan Malka - Tech Sales - CV.pdf"
+    assert normalized_role_filename(profile.normalized_role, setup.candidate) == (
+        "Matan Malka - Tech Sales - CV.pdf"
+    )
 
 
 def test_the_role_ceiling_counts_lines_not_facts(draft_factory) -> None:

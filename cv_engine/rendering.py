@@ -9,7 +9,14 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoes
 from markupsafe import Markup
 from pypdf import PdfReader
 
-from .models import DraftDocument, Profile, ValidationIssue, ValidationReport
+from .candidate import contact_href
+from .models import (
+    CandidateContext,
+    DraftDocument,
+    Profile,
+    ValidationIssue,
+    ValidationReport,
+)
 from .util import normalized_text, sha256_file
 
 
@@ -20,13 +27,13 @@ MIXED_LTR = re.compile(
 )
 
 
-def normalized_role_filename(role: str) -> str:
+def normalized_role_filename(role: str, candidate: CandidateContext) -> str:
     cleaned = re.sub(r"\b(?:senior|junior|lead|principal)\b", "", role, flags=re.IGNORECASE)
     cleaned = re.sub(r"[^A-Za-z0-9+ /&.-]+", "", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned).strip(" .-")
     if not cleaned:
         cleaned = "B2B Sales"
-    return f"Matan Malka - {cleaned} - CV.pdf"
+    return f"{candidate.resolved_filename_name} - {cleaned} - CV.pdf"
 
 
 def _bidi(value: str, rtl: bool) -> Markup:
@@ -43,23 +50,17 @@ def _bidi(value: str, rtl: bool) -> Markup:
     return Markup("".join(parts))
 
 
-def _contact_html(claim: Any, rtl: bool) -> Markup:
+def _contact_html(claim: Any, rtl: bool, candidate: CandidateContext) -> Markup:
     text = claim.text
-    fact_id = claim.fact_ids[0]
-    if fact_id.endswith("email"):
-        href = f"mailto:{text}"
-    elif fact_id.endswith("phone"):
-        href = f"tel:{re.sub(r'[^\d+]', '', text)}"
-    elif fact_id.endswith("linkedin"):
-        href = "https://www.linkedin.com/in/matanmalka1"
-    elif fact_id.endswith("github"):
-        href = "https://github.com/matanmalka1"
-    else:
+    href = contact_href(candidate, claim.fact_ids[0], text)
+    if href is None:
         return _bidi(text, rtl)
     return Markup(f'<a href="{html.escape(href)}">{_bidi(text, rtl)}</a>')
 
 
-def render_html(draft: DraftDocument, repo: Path, output_path: Path) -> Path:
+def render_html(
+    draft: DraftDocument, repo: Path, output_path: Path, candidate: CandidateContext
+) -> Path:
     rtl = draft.language == "he"
     if draft.track.value == "development":
         template_name = "development_ltr.html.j2"
@@ -87,7 +88,7 @@ def render_html(draft: DraftDocument, repo: Path, output_path: Path) -> Path:
         name=draft.name,
         headline=_bidi(draft.headline.text, rtl),
         headline_text=draft.headline.text,
-        contacts=[_contact_html(claim, rtl) for claim in draft.contacts],
+        contacts=[_contact_html(claim, rtl, candidate) for claim in draft.contacts],
         sections=sections,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -182,6 +183,7 @@ def validate_rendered(
     pdf_path: Path,
     screenshot_path: Path,
     geometry: dict[str, Any],
+    candidate: CandidateContext,
 ) -> ValidationReport:
     groups = {
         "render": True,
@@ -223,9 +225,13 @@ def validate_rendered(
         groups["ats"] = False
         issues.append(ValidationIssue(group="ats", code="text-coverage", message=f"PDF text coverage is {coverage:.1%}"))
 
-    expected_links = {"mailto:matan1391@gmail.com", "tel:+972506688386", "https://www.linkedin.com/in/matanmalka1"}
-    if draft.track.value == "development":
-        expected_links.add("https://github.com/matanmalka1")
+    # Expected links are derived from the contacts this document actually
+    # carries, so the check follows the candidate's canonical facts instead of
+    # a list that has to be remembered separately.
+    expected_links = {
+        href for claim in draft.contacts
+        if (href := contact_href(candidate, claim.fact_ids[0], claim.text)) is not None
+    }
     actual_links = {value.rstrip("/") for value in geometry.get("links", [])}
     if not {value.rstrip("/") for value in expected_links}.issubset(actual_links):
         groups["links"] = False
@@ -245,7 +251,7 @@ def validate_rendered(
     if draft.language == "he" and '<bdi dir="ltr">' not in html_text:
         groups["direction"] = False
         issues.append(ValidationIssue(group="direction", code="mixed-direction-isolation", message="No LTR isolation was rendered."))
-    expected_filename = normalized_role_filename(profile.normalized_role)
+    expected_filename = normalized_role_filename(profile.normalized_role, candidate)
     if pdf_path.name != expected_filename:
         groups["filename"] = False
         issues.append(ValidationIssue(group="filename", code="filename", message=f"expected {expected_filename}"))

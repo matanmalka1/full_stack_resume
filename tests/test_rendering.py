@@ -24,9 +24,13 @@ def test_missing_browser_install_is_not_reported_as_a_sandbox_block() -> None:
     assert 'pytest -m "not browser"' in message
 
 
-def test_filename_normalization_does_not_add_seniority() -> None:
-    assert normalized_role_filename("Senior Account Executive") == "Matan Malka - Account Executive - CV.pdf"
-    assert normalized_role_filename("Full Stack Developer") == "Matan Malka - Full Stack Developer - CV.pdf"
+def test_filename_normalization_does_not_add_seniority(candidate_context) -> None:
+    assert normalized_role_filename("Senior Account Executive", candidate_context) == (
+        "Matan Malka - Account Executive - CV.pdf"
+    )
+    assert normalized_role_filename("Full Stack Developer", candidate_context) == (
+        "Matan Malka - Full Stack Developer - CV.pdf"
+    )
 
 
 def test_rtl_ats_comparison_accepts_bidi_token_reordering() -> None:

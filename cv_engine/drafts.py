@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .facts import FactStore
 from .models import (
+    CandidateContext,
     ClaimLine,
     DraftDocument,
     JobAnalysis,
@@ -21,12 +22,6 @@ from .selection import EmphasisPolicyStore, build_selection
 from .util import canonical_json, sha256_text
 
 
-CONTACT_FACTS = [
-    "common.contact.location",
-    "common.contact.phone",
-    "common.contact.email",
-    "common.contact.linkedin",
-]
 CLAIM_NAMESPACE = uuid.UUID("e47cfc95-7f5c-4dd2-acd4-19be02c8f988")
 CANONICAL_JOIN_TEMPLATE = ("canonical-renderings", "1.0.0")
 EXTRACTIVE_DERIVATION = ("extractive-clauses", "1.0.0")
@@ -122,6 +117,7 @@ def build_draft(
     profile: Profile,
     facts: FactStore,
     policies: EmphasisPolicyStore,
+    candidate: CandidateContext,
 ) -> DraftDocument:
     if analysis.profile is not profile.profile or analysis.track is not profile.track:
         raise ValueError("analysis and profile do not match")
@@ -129,9 +125,7 @@ def build_draft(
         raise ValueError(f"emphasis {analysis.emphasis} is not allowed for {profile.profile}")
 
     language = analysis.language
-    contact_ids = list(CONTACT_FACTS)
-    if analysis.track.value == "development":
-        contact_ids.append("common.contact.github")
+    contact_ids = candidate.contacts_for_track(analysis.track.value)
     contacts = [
         _claim("contact", facts.rendering(fact_id, language), [fact_id])
         for fact_id in contact_ids
@@ -229,7 +223,7 @@ def build_draft(
         track=analysis.track,
         profile=analysis.profile,
         emphasis=analysis.emphasis,
-        name="Matan Malka" if language == "en" else "מתן מלכה",
+        name=candidate.display_name(language),
         headline=headline,
         contacts=contacts,
         sections=sections,

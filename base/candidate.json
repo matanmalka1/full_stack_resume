@@ -1,0 +1,29 @@
+{
+  "context_version": "1.0.0",
+  "name_fact_id": "common.identity.name",
+  "filename_language": "en",
+  "locale": "he-IL",
+  "timezone": "Asia/Jerusalem",
+  "contact_fact_ids": [
+    "common.contact.location",
+    "common.contact.phone",
+    "common.contact.email",
+    "common.contact.linkedin"
+  ],
+  "track_contact_fact_ids": {
+    "development": [
+      "common.contact.github"
+    ]
+  },
+  "link_schemes": {
+    "common.contact.location": "text",
+    "common.contact.phone": "tel",
+    "common.contact.email": "mailto",
+    "common.contact.linkedin": "https",
+    "common.contact.github": "https"
+  },
+  "link_targets": {
+    "common.contact.linkedin": "https://www.linkedin.com/in/matanmalka1",
+    "common.contact.github": "https://github.com/matanmalka1"
+  }
+}

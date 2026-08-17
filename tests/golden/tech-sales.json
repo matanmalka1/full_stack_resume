@@ -5,7 +5,7 @@
   "emphasis": "tech-consultative-sales",
   "language": "en",
   "snapshot": {
-    "markdown_sha256": "8a8bda8c34976c6a8a07dc54dc8cae8bc417154ecc6b633e2d7e5059193dfa9e",
+    "markdown_body_sha256": "ec755abffdc2ce2556c5c5bb19dc842c5604067444da72d7d40ef8ba82d9d5a3",
     "html_sha256": "399e8f105b38563914d8786bb96629df203c0f9f7a61a340ec9f77f51b853a53",
     "selected_fact_ids": [
       "common.contact.email",
@@ -55,5 +55,6 @@
       "Education",
       "Languages"
     ]
-  }
+  },
+  "snapshot_note": "markdown_body_sha256 replaces markdown_sha256: the front matter carries knowledge versions, which the test now asserts against the live fact store instead of freezing. The body bytes are unchanged from the v1.0.0 baseline."
 }

@@ -203,6 +203,58 @@ class Profile(StrictModel):
         return self
 
 
+ContactScheme = Literal["text", "mailto", "tel", "https"]
+
+
+class CandidateContext(StrictModel):
+    """Who this Workspace is about, expressed as references rather than literals.
+
+    The candidate's name and contacts stay canonical facts with one location.
+    This context only says which fact plays which role, how a contact becomes a
+    link, and how the recruiter-facing filename is built, so no renderer,
+    validator, or filename policy contains a candidate literal.
+
+    `names` and `resolved_filename_name` are resolved from the canonical facts
+    at load time. They are a projection of those facts, never a second place to
+    edit them.
+    """
+
+    context_version: str
+    name_fact_id: str
+    filename_name: str | None = None
+    filename_language: Literal["en", "he"] = "en"
+    locale: str
+    timezone: str
+    contact_fact_ids: list[str]
+    track_contact_fact_ids: dict[str, list[str]] = {}
+    link_schemes: dict[str, ContactScheme] = {}
+    # `mailto`/`tel` addresses are the fact's own rendering. A profile URL is
+    # not: its canonical rendering is display text ("linkedin.com/in/..."),
+    # so the absolute target is declared here instead of being guessed from it.
+    link_targets: dict[str, str] = {}
+    names: dict[str, str] = {}
+    resolved_filename_name: str = ""
+    version_hash: str = ""
+
+    def contacts_for_track(self, track: str) -> list[str]:
+        extra = [
+            fact_id for fact_id in self.track_contact_fact_ids.get(track, [])
+            if fact_id not in self.contact_fact_ids
+        ]
+        return [*self.contact_fact_ids, *extra]
+
+    def display_name(self, language: str) -> str:
+        try:
+            return self.names[language]
+        except KeyError as exc:
+            raise ValueError(
+                f"candidate fact {self.name_fact_id} has no {language!r} rendering"
+            ) from exc
+
+    def scheme(self, fact_id: str) -> ContactScheme:
+        return self.link_schemes.get(fact_id, "text")
+
+
 class Gap(StrictModel):
     requirement: str
     severity: Literal["warning", "hard"]

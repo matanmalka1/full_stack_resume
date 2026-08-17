@@ -5,7 +5,7 @@
   "emphasis": "account-growth",
   "language": "en",
   "snapshot": {
-    "markdown_sha256": "7042b25815cd15a71e0e467ba41c0bcdf319910553699e99ccf3572b39b64e84",
+    "markdown_body_sha256": "e22d4d9d7fac55168d5ad6ad8989a504b2d6d83f2992b33184f486776aa867fd",
     "html_sha256": "80084e86f77ab02fda74f8e88dd17562932ba96e1021afbc03d62aaa8e0f19be",
     "selected_fact_ids": [
       "common.contact.email",
@@ -45,5 +45,6 @@
       "Education",
       "Languages"
     ]
-  }
+  },
+  "snapshot_note": "markdown_body_sha256 replaces markdown_sha256: the front matter carries knowledge versions, which the test now asserts against the live fact store instead of freezing. The body bytes are unchanged from the v1.0.0 baseline."
 }
