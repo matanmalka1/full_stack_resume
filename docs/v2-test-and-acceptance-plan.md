@@ -1,6 +1,6 @@
 # v2.0 Test and Acceptance Plan
 
-Status: **Draft for review**
+Status: **Approved for v2.0 implementation (2026-08-17)**
 
 Product authority: `docs/v2-product-spec.md`
 
@@ -204,7 +204,8 @@ Create
 - inject render/browser failure
 - assert ApprovedRevision remains approved
 - retry through a new Operation
-- qualify the same ApprovedRevision as Ready only after exact passing artifacts
+- establish `ready_qualified` for the same ApprovedRevision only after exact passing
+  artifacts, then assert active Ready separately from snapshot+analysis compatibility
 
 ### 5.5 Ready plus parallel draft
 
@@ -272,6 +273,9 @@ Required tests:
 - same key with a different payload hash
 - two workers attempt to claim one Operation
 - foreground CLI runner races a Web worker for one Operation and only one claims it
+- CLI render contending with the global Web-worker render lease remains queued with an
+  observable waiting phase and completes/cancels without an immediate lock failure or
+  duplicate render
 - expired lease and restart
 - cancellation before execution
 - cancellation after an immutable output exists but before activation

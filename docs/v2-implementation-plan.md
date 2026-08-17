@@ -1,6 +1,6 @@
 # v2.0 Implementation Plan
 
-Status: **Draft for review**
+Status: **Approved for v2.0 implementation (2026-08-17)**
 
 Product authority: `docs/v2-product-spec.md`
 
@@ -43,12 +43,15 @@ Evidence:
 - v2 branch: `v2-main`
 - v2 worktree: `/Users/matanmalka/Projects/resume_python-v2`
 
-Remaining M0 gate before M1:
+Completed M0 gates:
 
-- [ ] Approve the six v2 planning documents.
-- [ ] Update repository authority/agent instructions for v2.
-- [ ] Create and validate a v2 development Workspace marker/config.
-- [ ] Create an isolated v2 data copy without pointing to v1 live paths.
+- [x] Six v2 planning documents approved on 2026-08-17 after blocker review.
+- [x] Repository authority/agent instructions updated for v2.
+
+The v2 development Workspace marker/config and isolated data copy are the first M1
+Workspace tasks below. Creating them through the implemented guard/config contracts,
+rather than as unvalidated manual files, is part of proving M1. M1 is authorized to
+start; no v2 command may point to live v1 paths while those tasks are implemented.
 
 ## 3. M1 — Application foundation
 

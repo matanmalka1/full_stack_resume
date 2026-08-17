@@ -1,6 +1,6 @@
 # v2.0 Architecture
 
-Status: **Draft for review**
+Status: **Approved for v2.0 implementation (2026-08-17)**
 
 Product authority: `docs/v2-product-spec.md`
 
@@ -371,10 +371,12 @@ Operation is an application/infrastructure concern, not the central domain aggre
 The Operation runner has two hosts but one execution contract. Under `cv web`,
 lightweight worker loops run inside the supervised local backend process, poll/claim
 SQLite rows atomically, and execute jobs outside requests. A standalone CLI command
-that creates an Operation atomically claims its own row and runs it in the foreground
-in the CLI process with the same leases, heartbeat, resource locks, cancellation,
-idempotency, and optimistic activation checks. It does not require FastAPI or a running
-Web server. Neither host is a separately deployed service or requires Celery/Redis.
+that creates an Operation attempts to claim that row and runs it in the foreground in
+the CLI process with the same leases, heartbeat, resource locks, cancellation,
+idempotency, and optimistic activation checks. If another eligible runner claims the
+same row first, the CLI observes that one Operation through its terminal outcome rather
+than duplicating it. It does not require FastAPI or a running Web server. Neither host
+is a separately deployed service or requires Celery/Redis.
 
 Default limits are:
 
@@ -384,6 +386,12 @@ Default limits are:
 
 Locks are resource-specific. Render for one Application does not block analysis for
 another.
+
+Contention for the global render/browser slot is queueing, not an immediate failure. A
+CLI foreground render remains queued with an observable `waiting_for_render_slot`
+phase and waits/polls the same durable Operation until an eligible runner claims it or
+the user cancels/interruption policy applies. It never starts a duplicate render merely
+because a Web worker owns the current global lease.
 
 Operation records contain type, full secret-free structured payload and hash,
 idempotency key, provider/model, source IDs, expected versions/hashes, lifecycle

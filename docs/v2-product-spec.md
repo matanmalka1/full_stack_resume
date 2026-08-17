@@ -1,6 +1,6 @@
 # Local-First CV Workspace v2.0 Product Specification
 
-Status: **Draft for review**
+Status: **Approved for v2.0 implementation (2026-08-17)**
 
 Product version: **2.0**
 
@@ -173,7 +173,10 @@ decision.
    validation, and successful current integrity verification.
    `PreparationState=ready` is the separate active-context projection of a compatible
    `ready_qualified` revision.
-7. `latest_ready_revision_id` always refers to an ApprovedRevision ID.
+7. `latest_ready_revision_id` refers to the newest currently `ready_qualified`
+   ApprovedRevision across the Application's full history, regardless of active-context
+   compatibility. `PreparationState` and historical-context warnings state whether it
+   is compatible with the active JobSnapshot + JobAnalysis.
 8. Ready compatibility is defined by JobSnapshot + JobAnalysis, not SelectionPlan. A
    new plan or draft under the same snapshot and analysis does not demote the active
    Ready projection. A new snapshot or analysis removes it from the active projection

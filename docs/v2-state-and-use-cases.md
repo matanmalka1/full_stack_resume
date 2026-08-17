@@ -1,6 +1,6 @@
 # v2.0 State and Use-Case Contracts
 
-Status: **Draft for review**
+Status: **Approved for v2.0 implementation (2026-08-17)**
 
 Product authority: `docs/v2-product-spec.md`
 
@@ -58,6 +58,11 @@ latest_approved_revision_id
 latest_ready_revision_id
 newer_draft_in_progress
 ```
+
+`latest_ready_revision_id` is the newest currently `ready_qualified` ApprovedRevision
+across the complete Application history, not the newest revision compatible with the
+active context. Compatibility is expressed separately by PreparationState and
+historical-context warnings.
 
 Ready compatibility is JobSnapshot ID + JobAnalysis ID. A SelectionPlan or WorkingDraft
 change under the same pair does not demote `PreparationState=ready`. A JobSnapshot or

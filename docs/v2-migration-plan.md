@@ -1,6 +1,6 @@
 # v1 to v2 Migration Plan
 
-Status: **Draft for review**
+Status: **Approved for v2.0 implementation (2026-08-17)**
 
 Product authority: `docs/v2-product-spec.md`
 
@@ -238,17 +238,19 @@ not re-rendered merely to fit the v2 path model.
 
 ### 6.9 Ready qualification
 
-There is no ReadyRevision table. Migration may project an ApprovedRevision as Ready only
-when it can prove all v2 requirements against exact migrated artifacts:
+There is no ReadyRevision table. Migration may establish `ready_qualified` for an
+ApprovedRevision only when it can prove the context-independent v2 requirements against
+exact migrated artifacts:
 
 - exact approved content and claim lineage
 - registered HTML/PDF/visual artifacts
 - passing render/PDF/ATS validation applicable to those exact artifacts
 - successful integrity verification
-- JobSnapshot + JobAnalysis compatibility
 
-Otherwise preserve the historical v1 ready claim as metadata/history and derive the
-active PreparationState without granting v2 Ready.
+JobSnapshot + JobAnalysis compatibility is evaluated separately when deriving the
+active PreparationState. A qualified but incompatible revision remains historical for
+the active context. If qualification itself cannot be proven, preserve the historical
+v1 ready claim as metadata/history without granting `ready_qualified`.
 
 ### 6.10 Decisions, runs, and validations
 
