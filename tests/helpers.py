@@ -12,6 +12,15 @@ ACCOUNT_MANAGER_JOB = (
     "and customer relationships."
 )
 
+# Hebrew, low confidence, one hard gap and one warning gap: the deterministic
+# classifier requires approval here, so it exposes anything a provider could
+# quietly relax.
+AMBIGUOUS_HEBREW_JOB = (
+    "דרוש מנהל לקוחות עם ניסיון בפיתוח עסקי ובניהול תיק לקוחות מול ארגונים גדולים. "
+    "התפקיד כולל אחריות על שימור, גיוס לקוחות חדשים והובלת תהליכי מכירה מורכבים. "
+    "דרישות: account manager, business development, Salesforce, must have direct saas sales."
+)
+
 
 def working_claim(engine: Engine, application_id: str, fact_id: str):
     manifest = engine.root / "artifacts/working" / application_id / "resume.claims.json"

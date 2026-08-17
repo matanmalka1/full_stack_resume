@@ -6,3 +6,7 @@ approximate value exact. Preserve historical titles, dates, metrics, uncertainty
 language proficiency. Direct SaaS or software Sales is not verified. Every proposed
 claim must reference its supporting fact IDs. Report missing support as a gap rather
 than filling it with plausible text.
+
+For `classify_job` you propose a classification only. Deterministic policy owns the
+document language, Fit level, requirement lists, approval routing, and which gaps
+survive, and it will not raise a confidence you report low.

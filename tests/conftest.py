@@ -18,10 +18,11 @@ from cv_engine.db import Repository, connect
 from cv_engine.drafts import build_draft, write_working_draft
 from cv_engine.facts import FactStore
 from cv_engine.migration import create_snapshot, dry_run_migration, migrate_legacy_state, verify_snapshot
+from cv_engine.models import Emphasis, JobAnalysis, JobClassificationProposal, ProfileName, Track
 from cv_engine.profiles import ProfileStore
 from cv_engine.rendering import render_pdf, validate_rendered
 from cv_engine.workflow import Engine
-from helpers import ACCOUNT_MANAGER_JOB, seal_report
+from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB, seal_report
 
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
@@ -88,6 +89,19 @@ class DraftSetup:
         yield self.analysis
         yield self.draft
         yield self.markdown
+
+
+@dataclass(frozen=True)
+class ProposalSetup:
+    engine: Engine
+    application_id: str
+    analysis: JobAnalysis
+    payload: dict[str, Any]
+
+    def __iter__(self):
+        yield self.engine
+        yield self.application_id
+        yield self.analysis
 
 
 @dataclass(frozen=True)
@@ -224,6 +238,65 @@ def draft_factory(v1_repo: Path, fact_store: FactStore, profile_store: ProfileSt
         return DraftSetup(fact_store, profile, analysis, draft, markdown)
 
     return build
+
+
+@pytest.fixture
+def classification_proposal():
+    """Build what an AI provider may return for `classify_job`.
+
+    Defaults are a confident, internally consistent Account Manager proposal, so
+    each test only states the field it is actually probing.
+    """
+
+    def build(**overrides) -> JobClassificationProposal:
+        return JobClassificationProposal(**{
+            "track": Track.SALES,
+            "profile": ProfileName.ACCOUNT_MANAGER,
+            "emphasis": Emphasis.ACCOUNT_GROWTH,
+            "confidence": 0.99,
+            "rationale": "provider rationale",
+            "gaps": [],
+            "keywords": ["provider-keyword"],
+            **overrides,
+        })
+
+    return build
+
+
+@pytest.fixture
+def provider_analysis(engine: Engine, monkeypatch):
+    """Run `Engine.analyze` end to end against a stubbed AI provider."""
+
+    def run(
+        response: JobClassificationProposal,
+        *,
+        job_text: str = AMBIGUOUS_HEBREW_JOB,
+        company: str = "Provider Co",
+        role: str = "Account Manager",
+        **analyze_kwargs,
+    ) -> ProposalSetup:
+        captured: dict[str, Any] = {}
+
+        class _StubProvider:
+            name = "openai"
+
+            def __init__(self, **_kwargs):
+                pass
+
+            def run(self, task, payload, output_model):
+                assert task == "classify_job"
+                assert output_model is JobClassificationProposal
+                captured.update(payload)
+                return response, None
+
+        monkeypatch.setattr("cv_engine.workflow.OpenAIResponsesProvider", _StubProvider)
+        application_id, _ = engine.ingest(company, role, job_text)
+        _, analysis = engine.analyze(
+            application_id, provider="openai", model="gpt-test", **analyze_kwargs
+        )
+        return ProposalSetup(engine, application_id, analysis, captured)
+
+    return run
 
 
 @pytest.fixture

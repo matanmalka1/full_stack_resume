@@ -2,11 +2,20 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
-from .models import Emphasis, FitLevel, Gap, JobAnalysis, ProfileName, Track
+from .models import Emphasis, FitLevel, Gap, JobAnalysis, JobClassificationProposal, ProfileName, Track
+
+if TYPE_CHECKING:
+    from .profiles import ProfileStore
 
 
 HEBREW = re.compile(r"[\u0590-\u05ff]")
+
+CONFIDENCE_APPROVAL_THRESHOLD = 0.72
+
+FIT_SEVERITY = {FitLevel.HIGH: 0, FitLevel.MEDIUM: 1, FitLevel.LOW: 2}
 
 PROFILE_TERMS: dict[ProfileName, tuple[str, ...]] = {
     ProfileName.DEVELOPMENT: ("developer", "software", "backend", "frontend", "full stack", "python", "react", "api"),
@@ -30,6 +39,104 @@ def detect_language(text: str) -> str:
     if not letters:
         return "en"
     return "he" if sum(bool(HEBREW.match(char)) for char in letters) / len(letters) >= 0.25 else "en"
+
+
+def derive_fit(gaps: Sequence[Gap]) -> FitLevel:
+    if any(gap.severity == "hard" for gap in gaps):
+        return FitLevel.LOW
+    return FitLevel.MEDIUM if gaps else FitLevel.HIGH
+
+
+def merge_gaps(deterministic: Sequence[Gap], proposed: Sequence[Gap]) -> list[Gap]:
+    """Union the two gap sets under a monotonic policy.
+
+    Every deterministic gap survives with its own reason and substitute facts. A
+    proposal may add a gap or raise an existing one from warning to hard; it can
+    never drop a gap, soften its severity, or rewrite its authoritative text.
+    """
+    merged: dict[str, Gap] = {gap.requirement: gap for gap in deterministic}
+    for gap in proposed:
+        existing = merged.get(gap.requirement)
+        if existing is None:
+            merged[gap.requirement] = gap
+        elif gap.severity == "hard" and existing.severity == "warning":
+            merged[gap.requirement] = Gap(
+                requirement=existing.requirement,
+                severity="hard",
+                reason=existing.reason,
+                substitute_fact_ids=existing.substitute_fact_ids,
+            )
+    return list(merged.values())
+
+
+def merge_classification(
+    deterministic: JobAnalysis,
+    proposal: JobClassificationProposal,
+    profiles: "ProfileStore",
+) -> JobAnalysis:
+    """Fold an AI classification proposal into deterministic policy.
+
+    The proposal may move Track/Profile/Emphasis, lower confidence, add gaps and
+    keywords, and supply a rationale. It cannot decide approval routing, Fit,
+    language, requirements, or which gaps survive, and an explicit user override
+    still wins over both classifiers.
+    """
+    overrides = dict(deterministic.user_override)
+    consistent = profiles.get(proposal.profile).track is proposal.track
+    pinned = consistent and not ("track" in overrides or "profile" in overrides)
+    track = proposal.track if pinned else deterministic.track
+    profile = proposal.profile if pinned else deterministic.profile
+
+    allowed = profiles.get(profile).allowed_emphases
+    if "emphasis" in overrides:
+        emphasis = deterministic.emphasis
+    elif proposal.emphasis in allowed:
+        emphasis = proposal.emphasis
+    elif deterministic.emphasis in allowed:
+        emphasis = deterministic.emphasis
+    else:
+        emphasis = profiles.get(profile).default_emphasis
+
+    # Section 9.4 routes a materially ambiguous classification to the user. Two
+    # classifiers that disagree on Track/Profile are exactly that: neither is
+    # authoritative, so neither may be applied silently. Emphasis is a refinement
+    # inside one Profile and does not currently change selected content, so a
+    # disagreement there is not an approval gate. An internally inconsistent
+    # proposal is treated as disagreement rather than trusted or raised.
+    disagreement = (track, profile) != (deterministic.track, deterministic.profile) or not consistent
+
+    confidence = min(deterministic.confidence, proposal.confidence)
+    gaps = merge_gaps(deterministic.gaps, proposal.gaps)
+    fit = max(derive_fit(gaps), deterministic.fit, key=lambda level: FIT_SEVERITY[level])
+
+    rationale = proposal.rationale
+    if (track, profile) != (proposal.track, proposal.profile):
+        rationale = (
+            f"{deterministic.rationale} Proposed {proposal.track.value}/{proposal.profile.value} "
+            "was not applied."
+        )
+
+    return JobAnalysis(
+        track=track,
+        profile=profile,
+        emphasis=emphasis,
+        confidence=confidence,
+        deterministic_confidence=deterministic.confidence,
+        proposal_confidence=proposal.confidence,
+        rationale=rationale,
+        fit=fit,
+        gaps=gaps,
+        mandatory_requirements=[gap.requirement for gap in gaps if gap.severity == "hard"],
+        preferred_requirements=[gap.requirement for gap in gaps if gap.severity == "warning"],
+        keywords=sorted(set(deterministic.keywords) | set(proposal.keywords)),
+        language=deterministic.language,
+        classification_requires_approval=(
+            deterministic.classification_requires_approval
+            or disagreement
+            or confidence < CONFIDENCE_APPROVAL_THRESHOLD
+        ),
+        user_override=overrides,
+    )
 
 
 def classify_job(
@@ -117,7 +224,7 @@ def classify_job(
             reason="Canonical professional Development history does not meet this threshold.",
         ))
 
-    fit = FitLevel.LOW if any(gap.severity == "hard" for gap in gaps) else (FitLevel.MEDIUM if gaps else FitLevel.HIGH)
+    fit = derive_fit(gaps)
     overrides = {
         key: value for key, value in {
             "track": track_override,
@@ -139,6 +246,6 @@ def classify_job(
         preferred_requirements=[gap.requirement for gap in gaps if gap.severity == "warning"],
         keywords=keywords,
         language=language_override or detect_language(text),
-        classification_requires_approval=ambiguous or confidence < 0.72,
+        classification_requires_approval=ambiguous or confidence < CONFIDENCE_APPROVAL_THRESHOLD,
         user_override=overrides,
     )

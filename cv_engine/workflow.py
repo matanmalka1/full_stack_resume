@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
-from .analysis import classify_job
+from .analysis import classify_job, merge_classification
 from .db import Repository
 from .drafts import (
     apply_claim_edit,
@@ -17,7 +17,7 @@ from .drafts import (
     write_working_draft,
 )
 from .facts import FactStore
-from .models import ApplicationStatus, JobAnalysis, ValidationReport
+from .models import ApplicationStatus, JobAnalysis, JobClassificationProposal, ValidationReport
 from .profiles import ProfileStore
 from .providers import OpenAIResponsesProvider
 from .ready import verify_ready_integrity
@@ -70,37 +70,41 @@ class Engine:
         )
         result = deterministic
         used_provider, used_model = "deterministic", "rules-v1"
+        _, profiles = self.knowledge()
         if provider == "openai":
             adapter = OpenAIResponsesProvider(
                 model=model,
                 prompt_path=self.root / "ai" / "prompts" / "system-v1.md",
             )
+            # The provider sees the full deterministic picture as context, but it
+            # answers on the narrower proposal contract; deterministic policy decides
+            # what survives.
             proposal, _ = adapter.run(
                 "classify_job",
                 {
                     "job_text": snapshot["original_text"],
-                    "deterministic_hard_gaps": [gap.model_dump(mode="json") for gap in deterministic.gaps if gap.severity == "hard"],
+                    "deterministic_classification": {
+                        "track": deterministic.track.value,
+                        "profile": deterministic.profile.value,
+                        "emphasis": deterministic.emphasis.value,
+                        "confidence": deterministic.confidence,
+                        "language": deterministic.language,
+                    },
+                    "deterministic_gaps": [gap.model_dump(mode="json") for gap in deterministic.gaps],
                     "overrides": deterministic.user_override,
                 },
-                JobAnalysis,
+                JobClassificationProposal,
             )
-            hard = {gap.requirement: gap for gap in proposal.gaps}
-            for gap in deterministic.gaps:
-                if gap.severity == "hard":
-                    hard[gap.requirement] = gap
-            result = proposal.model_copy(update={
-                "gaps": list(hard.values()),
-                "fit": deterministic.fit if deterministic.fit.value == "low" else proposal.fit,
-                "user_override": deterministic.user_override,
-            })
+            result = merge_classification(deterministic, proposal, profiles)
             used_provider, used_model = "openai", model
         elif provider != "deterministic":
             raise WorkflowError(f"unsupported provider: {provider}")
 
         if accept_low_fit:
-            overrides = dict(result.user_override)
-            overrides["fit"] = "accepted-low-fit"
-            result = result.model_copy(update={"user_override": overrides})
+            # Rebuilt through validation rather than model_copy(update=...), which
+            # would skip the model validators that guard this state.
+            overrides = {**result.user_override, "fit": "accepted-low-fit"}
+            result = JobAnalysis.model_validate({**result.model_dump(mode="json"), "user_override": overrides})
         analysis_id = self.repo.save_analysis(
             application_id,
             snapshot["id"],
@@ -108,7 +112,6 @@ class Engine:
             provider=used_provider,
             model=used_model,
         )
-        facts, profiles = self.knowledge()
         selected_profile = profiles.get(result.profile)
         if result.track is not selected_profile.track:
             raise WorkflowError("classified Track and Profile are inconsistent")

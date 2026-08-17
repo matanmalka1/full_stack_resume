@@ -128,12 +128,33 @@ class Gap(StrictModel):
     substitute_fact_ids: list[str] = []
 
 
+class JobClassificationProposal(StrictModel):
+    """What an AI provider is allowed to propose for `classify_job`.
+
+    Deliberately narrower than `JobAnalysis`: the fields that route safety
+    decisions — language, Fit, approval, requirements, overrides, analysis
+    version — are absent, so a provider cannot express them at all. Adding a new
+    safety field to `JobAnalysis` therefore keeps it out of provider reach by
+    default instead of relying on a merge whitelist staying up to date.
+    """
+
+    track: Track
+    profile: ProfileName
+    emphasis: Emphasis
+    confidence: float = Field(ge=0, le=1)
+    rationale: str
+    gaps: list[Gap]
+    keywords: list[str]
+
+
 class JobAnalysis(StrictModel):
     analysis_version: str = "1.0"
     track: Track
     profile: ProfileName
     emphasis: Emphasis
     confidence: float = Field(ge=0, le=1)
+    deterministic_confidence: float | None = Field(default=None, ge=0, le=1)
+    proposal_confidence: float | None = Field(default=None, ge=0, le=1)
     rationale: str
     fit: FitLevel
     gaps: list[Gap]
