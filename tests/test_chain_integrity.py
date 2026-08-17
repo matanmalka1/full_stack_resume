@@ -16,7 +16,7 @@ from pydantic import ValidationError
 
 from cv_engine.application.chain import check_draft_chain, decision_record_analysis_id
 from cv_engine.infrastructure.db import connect
-from cv_engine.domain.drafts import load_draft, serialize_markdown
+from cv_engine.domain.drafts import parse_draft, serialize_markdown
 from cv_engine.domain.models import DraftDocument
 from cv_engine.application.ready import verify_ready_integrity
 from cv_engine.runtime.workspace import Workspace
@@ -76,7 +76,7 @@ def test_new_snapshot_requires_a_new_analysis_before_drafting(
     assert analysis_id != stale_analysis_id
     _markdown, manifest, report = engine.draft(app_id)
     assert report.passed, report.model_dump()
-    draft = load_draft(manifest)
+    draft = parse_draft(manifest.read_text(encoding="utf-8"))
     assert draft.job_analysis_id == analysis_id
     assert draft.job_snapshot_id == new_snapshot_id
 
@@ -89,7 +89,7 @@ def test_newer_material_analysis_invalidates_the_working_draft(
 ) -> None:
     setup = drafted_application("Emphasis Drift")
     engine, app_id = setup.engine, setup.application_id
-    drafted_analysis_id = load_draft(setup.manifest).job_analysis_id
+    drafted_analysis_id = parse_draft(setup.manifest.read_text(encoding="utf-8")).job_analysis_id
     newer_analysis_id, newer = engine.analyze(app_id, emphasis="balanced-sales")
     assert newer.emphasis.value == "balanced-sales"
     assert newer_analysis_id != drafted_analysis_id
@@ -105,7 +105,7 @@ def test_newer_material_analysis_invalidates_the_working_draft(
     # record then binds that analysis.
     _markdown, manifest, report = engine.draft(app_id)
     assert report.passed, report.model_dump()
-    assert load_draft(manifest).job_analysis_id == newer_analysis_id
+    assert parse_draft(manifest.read_text(encoding="utf-8")).job_analysis_id == newer_analysis_id
     engine.approve(app_id)
     assert engine.repo.latest_decision(app_id)["job_analysis_id"] == newer_analysis_id
 
@@ -115,7 +115,7 @@ def test_approval_binds_the_draft_analysis_not_the_latest(drafted_application) -
     approval still records the analysis the draft was actually built from."""
     setup = drafted_application("Rerun Analysis")
     engine, app_id = setup.engine, setup.application_id
-    bound_analysis_id = load_draft(setup.manifest).job_analysis_id
+    bound_analysis_id = parse_draft(setup.manifest.read_text(encoding="utf-8")).job_analysis_id
     rerun_analysis_id, _ = engine.analyze(app_id)
     assert rerun_analysis_id != bound_analysis_id
 
@@ -294,7 +294,7 @@ def test_pre_binding_manifest_resolves_through_its_decision_record(
 
 def test_draft_chain_binding_is_immutable(drafted_application) -> None:
     setup = drafted_application("Immutable Binding")
-    draft = load_draft(setup.manifest)
+    draft = parse_draft(setup.manifest.read_text(encoding="utf-8"))
     for field in ("application_id", "job_snapshot_id", "job_analysis_id"):
         with pytest.raises(ValidationError):
             setattr(draft, field, "rebound")

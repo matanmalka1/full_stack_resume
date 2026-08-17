@@ -8,13 +8,10 @@ from ..domain.analysis import classify_job, merge_classification, unresolved_app
 from ..domain.drafts import (
     apply_claim_edit,
     build_draft,
-    load_draft,
     serialize_markdown,
     synchronize_markdown_claims,
 )
 from ..domain.facts import FactStore, FactStoreError
-from ..domain.facts import create_fact as persist_new_fact
-from ..domain.facts import promote_fact as persist_promotion
 from ..domain.knowledge import Knowledge
 from ..domain.models import (
     ApplicationStatus,
@@ -25,7 +22,7 @@ from ..domain.models import (
     JobAnalysis,
     ValidationReport,
 )
-from ..domain.profiles import ProfileStore, attach_fact_to_section
+from ..domain.profiles import ProfileStore
 from ..domain.selection import EmphasisPolicyStore
 from ..domain.validation import validate_draft
 from ..util import sha256_file, utc_now
@@ -66,10 +63,6 @@ class ServiceBase:
         self._knowledge = knowledge
         self._renderer = renderer
         self._provider = provider
-
-    @property
-    def base_dir(self) -> Path:
-        return self._knowledge.base_dir
 
     def load_knowledge(self) -> Knowledge:
         return self._knowledge.load()
@@ -124,7 +117,7 @@ class KnowledgeService(ServiceBase):
         return self.load_knowledge().versions()
 
     def list_facts(self, status: str | None = None) -> list[dict[str, Any]]:
-        facts = FactStore.load(self.base_dir)
+        facts = self._knowledge.facts()
         recorded = self.repo.latest_fact_statuses()
         return [
             {**fact.model_dump(mode="json"), "recorded_status": recorded.get(fact.fact_id)}
@@ -132,7 +125,7 @@ class KnowledgeService(ServiceBase):
         ]
 
     def show_fact(self, fact_id: str) -> dict[str, Any]:
-        facts = FactStore.load(self.base_dir)
+        facts = self._knowledge.facts()
         return {
             **facts.get(fact_id).model_dump(mode="json"),
             "events": self.repo.fact_events(fact_id),
@@ -157,7 +150,7 @@ class KnowledgeService(ServiceBase):
         trail are the ones a later reader will actually find on disk rather than
         the pre-write ones held in memory.
         """
-        facts = FactStore.load(self.base_dir)
+        facts = self._knowledge.facts()
         event_id = self.repo.record_fact_event(
             fact_id=fact.fact_id,
             source_file=fact.source_file,
@@ -193,7 +186,7 @@ class KnowledgeService(ServiceBase):
         Without `canonical`, the fact lands as `pending` and cannot reach a CV:
         every rendering path resolves facts with `canonical_only=True`.
         """
-        fact = persist_new_fact(self.base_dir, source, payload, canonical=canonical)
+        fact = self._knowledge.create_fact(source, payload, canonical=canonical)
         return self._record_fact_event(
             fact,
             event_type="fact_created",
@@ -211,8 +204,7 @@ class KnowledgeService(ServiceBase):
         explicitly_confirmed: bool,
         reason: str = "",
     ) -> dict[str, Any]:
-        before, after = persist_promotion(
-            self.base_dir,
+        before, after = self._knowledge.promote_fact(
             fact_id,
             target,
             explicitly_confirmed=explicitly_confirmed,
@@ -299,8 +291,7 @@ class KnowledgeService(ServiceBase):
             raise WorkflowError(
                 f"only canonical facts may enter a Profile pool: {exc}"
             ) from exc
-        path = profiles.path(profile)
-        updated = attach_fact_to_section(path, fact_id, section, pin=pin)
+        updated, source = self._knowledge.attach_fact(profile, fact_id, section, pin=pin)
         # Reload so a Profile that no longer validates against the fact store
         # fails here rather than at the next draft.
         reloaded = self.load_knowledge().profiles
@@ -315,7 +306,7 @@ class KnowledgeService(ServiceBase):
             "profile": updated.profile.value,
             "section": section,
             "pinned": pin,
-            "profile_path": self.artifacts.relative(path),
+            "profile_path": self.artifacts.relative(Path(source)),
             "profile_store_version": reloaded.version,
         }
 
@@ -327,7 +318,7 @@ class KnowledgeService(ServiceBase):
         that contradicts the last recorded one. Each means a status was changed
         outside the lifecycle, which is exactly what the trail exists to catch.
         """
-        facts = FactStore.load(self.base_dir)
+        facts = self._knowledge.facts()
         recorded = self.repo.latest_fact_statuses()
         problems: list[str] = []
         for fact_id, status in recorded.items():
@@ -458,7 +449,8 @@ class DraftService(ServiceBase):
     """The working draft: generation, manual edits, validation, approval."""
 
     def draft(self, application_id: str) -> tuple[Path, Path, ValidationReport]:
-        facts, profiles, policies = self.knowledge()
+        knowledge = self.load_knowledge()
+        facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
         analysis_id, analysis = self.repo.latest_analysis(application_id)
         if analysis.fit.value == "low" and analysis.user_override.get("fit") != "accepted-low-fit":
             raise WorkflowError("low fit blocks CV generation until --accept-low-fit is recorded")
@@ -479,6 +471,7 @@ class DraftService(ServiceBase):
                 "analyze the new snapshot before drafting against it"
             )
         profile = profiles.get(analysis.profile)
+        presentation_rules = knowledge.presentations
         draft = build_draft(
             application_id=application_id,
             job_snapshot_id=record["job_snapshot_id"],
@@ -487,12 +480,20 @@ class DraftService(ServiceBase):
             profile=profile,
             facts=facts,
             policies=policies,
-            candidate=self.candidate(facts),
+            candidate=knowledge.candidate,
+            presentations=presentation_rules,
         )
-        presentation_rules = self.load_knowledge().presentations
-        paths = self.artifacts.write_working_draft(draft)
-        markdown, manifest = paths.markdown, paths.manifest
-        report = validate_draft(draft, markdown, facts, profile, analysis, policies=policies)
+        stored = self.artifacts.write_working_draft(draft)
+        markdown, manifest = stored.paths.markdown, stored.paths.manifest
+        report = validate_draft(
+            draft,
+            stored.markdown,
+            facts,
+            profile,
+            analysis,
+            policies=policies,
+            presentations=presentation_rules,
+        )
         self.repo.record_validation(application_id, "pre-render", report)
         self.repo.record_generation_run({
             "application_id": application_id,
@@ -514,19 +515,27 @@ class DraftService(ServiceBase):
         return markdown, manifest, report
 
     def validate_working(self, application_id: str) -> ValidationReport:
-        facts, profiles, policies = self.knowledge()
+        knowledge = self.load_knowledge()
+        facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
         draft = self.artifacts.load_working_draft(application_id)
         _, analysis = self._bound_analysis(application_id, draft, profiles, facts)
-        markdown_path = self.artifacts.working_paths(application_id).markdown
-        actual = markdown_path.read_text(encoding="utf-8") if markdown_path.is_file() else ""
-        if actual != serialize_markdown(draft):
+        markdown = self.artifacts.working_markdown(application_id)
+        if markdown != serialize_markdown(draft):
             try:
-                draft = synchronize_markdown_claims(draft, markdown_path, facts)
+                draft = synchronize_markdown_claims(draft, markdown, facts)
             except ValueError:
                 pass
             else:
-                markdown_path = self.artifacts.write_working_draft(draft).markdown
-        report = validate_draft(draft, markdown_path, facts, profiles.get(draft.profile), analysis, policies=policies)
+                markdown = self.artifacts.write_working_draft(draft).markdown
+        report = validate_draft(
+            draft,
+            markdown,
+            facts,
+            profiles.get(draft.profile),
+            analysis,
+            policies=policies,
+            presentations=knowledge.presentations,
+        )
         self.repo.record_validation(application_id, "pre-render", report)
         return report
 
@@ -540,7 +549,8 @@ class DraftService(ServiceBase):
         template_id: str | None = None,
         template_version: str | None = None,
     ) -> tuple[Path, ValidationReport]:
-        facts, profiles, policies = self.knowledge()
+        knowledge = self.load_knowledge()
+        facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
         draft = self.artifacts.load_working_draft(application_id)
         _, analysis = self._bound_analysis(application_id, draft, profiles, facts)
         updated = apply_claim_edit(
@@ -552,31 +562,48 @@ class DraftService(ServiceBase):
             template_id=template_id,
             template_version=template_version,
         )
-        markdown = self.artifacts.write_working_draft(updated).markdown
-        report = validate_draft(updated, markdown, facts, profiles.get(updated.profile), analysis, policies=policies)
+        stored = self.artifacts.write_working_draft(updated)
+        report = validate_draft(
+            updated,
+            stored.markdown,
+            facts,
+            profiles.get(updated.profile),
+            analysis,
+            policies=policies,
+            presentations=knowledge.presentations,
+        )
         self.repo.record_validation(application_id, "manual-claim-edit", report)
-        return markdown, report
+        return stored.paths.markdown, report
 
     def link_claim(self, application_id: str, claim_id: str, text: str, fact_ids: list[str]) -> tuple[Path, ValidationReport]:
         return self.edit_claim(application_id, claim_id, fact_ids, text=text)
 
     def sync_working_claims(self, application_id: str) -> tuple[Path, ValidationReport]:
-        facts, profiles, policies = self.knowledge()
+        knowledge = self.load_knowledge()
+        facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
         draft = self.artifacts.load_working_draft(application_id)
         _, analysis = self._bound_analysis(application_id, draft, profiles, facts)
         updated = synchronize_markdown_claims(
-            draft, self.artifacts.working_paths(application_id).markdown, facts
+            draft, self.artifacts.working_markdown(application_id), facts
         )
-        markdown = self.artifacts.write_working_draft(updated).markdown
-        report = validate_draft(updated, markdown, facts, profiles.get(updated.profile), analysis, policies=policies)
+        stored = self.artifacts.write_working_draft(updated)
+        report = validate_draft(
+            updated,
+            stored.markdown,
+            facts,
+            profiles.get(updated.profile),
+            analysis,
+            policies=policies,
+            presentations=knowledge.presentations,
+        )
         self.repo.record_validation(application_id, "manual-markdown-sync", report)
-        return markdown, report
+        return stored.paths.markdown, report
 
     def approve(self, application_id: str) -> dict[str, Any]:
         report = self.validate_working(application_id)
         if not report.passed:
             raise WorkflowError("approval blocked by pre-render validation")
-        facts, profiles, policies = self.knowledge()
+        facts, profiles, _ = self.knowledge()
         draft = self.artifacts.load_working_draft(application_id)
         # The decision record explains the draft being approved, so it is bound to
         # that draft's own analysis. A newer analysis does not get to describe an
@@ -623,8 +650,13 @@ class DraftService(ServiceBase):
             facts_version=facts.version,
             approved_at=now,
         )
-        expected_pdf = approved_dir / self.renderer.filename_for(
-            profiles.get(draft.profile).normalized_role, self.candidate(facts)
+        # The decision record names where rendering will put its outputs, so it
+        # asks the artifact store the same question the renderer will.
+        expected = self.artifacts.render_targets(
+            manifest_path,
+            self.renderer.filename_for(
+                profiles.get(draft.profile).normalized_role, self.candidate(facts)
+            ),
         )
         application = self.repo.get_application(application_id)
         structured = {
@@ -650,8 +682,8 @@ class DraftService(ServiceBase):
             "job_analysis_id": analysis_id,
             "artifact_paths": {
                 "markdown": relative_markdown,
-                "html": self.artifacts.relative(approved_dir / "resume.html"),
-                "pdf": self.artifacts.relative(expected_pdf),
+                "html": self.artifacts.relative(expected.html),
+                "pdf": self.artifacts.relative(expected.pdf),
             },
         }
         decision_id = self.repo.record_decision(
@@ -676,12 +708,12 @@ class RenderingService(ServiceBase):
     """Rendering an approved revision and reporting ready state."""
 
     def render(self, application_id: str) -> tuple[Path, ValidationReport]:
-        facts, profiles, policies = self.knowledge()
+        knowledge = self.load_knowledge()
+        facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
         manifest_record = self.repo.latest_artifact_version(application_id, "claim_manifest", "approved")
         manifest_path = self.artifacts.resolve(manifest_record["path"])
-        draft = load_draft(manifest_path)
+        draft = self.artifacts.load_draft(manifest_path)
         profile = profiles.get(draft.profile)
-        directory = manifest_path.parent
         _, analysis = self._bound_analysis(
             application_id,
             draft,
@@ -689,14 +721,23 @@ class RenderingService(ServiceBase):
             facts,
             recorded_analysis_id=decision_record_analysis_id(self.repo, application_id),
         )
-        source_report = validate_draft(draft, directory / "resume.md", facts, profile, analysis, policies=policies)
+        source_report = validate_draft(
+            draft,
+            self.artifacts.read_document(self.artifacts.paths_beside(manifest_path).markdown),
+            facts,
+            profile,
+            analysis,
+            policies=policies,
+            presentations=knowledge.presentations,
+        )
         self.repo.record_validation(application_id, "approved-source-pre-render", source_report)
         if not source_report.passed:
             raise WorkflowError("render blocked because the approved Markdown no longer matches its validated claims")
-        candidate = self.candidate(facts)
-        html_path = directory / "resume.html"
-        pdf_path = directory / self.renderer.filename_for(profile.normalized_role, candidate)
-        screenshot_path = directory / "visual.png"
+        candidate = knowledge.candidate
+        targets = self.artifacts.render_targets(
+            manifest_path, self.renderer.filename_for(profile.normalized_role, candidate)
+        )
+        html_path, pdf_path, screenshot_path = targets.html, targets.pdf, targets.screenshot
         self.renderer.render_html(draft, html_path, candidate)
         geometry = self.renderer.render_pdf(html_path, pdf_path, screenshot_path)
         report = self.renderer.validate_rendered(

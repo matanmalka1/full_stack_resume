@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 from .analysis import unresolved_approval_reasons
 from .drafts import render_composite_claim, serialize_markdown, validate_derived_wording
 from .facts import FactStore, FactStoreError
 from .models import DraftDocument, JobAnalysis, Profile, ValidationIssue, ValidationReport
-from .presentations import PresentationError, PresentationStore
+from .presentations import PresentationStore
 from .selection import STRUCTURAL_STYLES, EmphasisPolicyStore
 from ..util import sha256_text
 
@@ -45,14 +44,19 @@ def _uncovered_tags(tags: list[str], selected_fact_ids: list[str], facts: FactSt
 
 def validate_draft(
     draft: DraftDocument,
-    markdown_path: Path,
+    markdown: str,
     facts: FactStore,
     profile: Profile,
     analysis: JobAnalysis,
     *,
     policies: EmphasisPolicyStore | None = None,
+    presentations: PresentationStore | None = None,
 ) -> ValidationReport:
     """Check a draft against the Profile, the facts, and the classification.
+
+    `markdown` is the stored document's exact text, read by the caller, so this
+    stays a decision about content rather than about files. A document that does
+    not exist is an empty string, which fails the manifest check as it should.
 
     `policies` enables the Emphasis coverage warning, which needs the authoritative
     tag policy rather than the draft's own selection manifest — the manifest travels
@@ -62,18 +66,8 @@ def validate_draft(
     """
     issues: list[ValidationIssue] = []
     groups = {"content": True, "profile": True, "structure": True, "filename": True}
-    try:
-        presentations = PresentationStore.for_facts(facts)
-    except PresentationError as exc:
-        presentations = None
-        groups["content"] = False
-        issues.append(ValidationIssue(
-            group="content",
-            code="invalid-presentation-rules",
-            message=str(exc),
-        ))
     expected = serialize_markdown(draft)
-    actual = markdown_path.read_text(encoding="utf-8") if markdown_path.is_file() else ""
+    actual = markdown
     if actual != expected or sha256_text(actual) != draft.content_hash:
         groups["content"] = False
         issues.append(ValidationIssue(

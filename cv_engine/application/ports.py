@@ -22,24 +22,55 @@ class DraftPaths:
     manifest: Path
 
 
+@dataclass(frozen=True)
+class StoredDraft:
+    """A draft as it was stored, with the exact document text that was written.
+
+    The text travels with the locations so a caller can validate what is stored
+    without reading it back, and cannot accidentally validate something else.
+    """
+
+    paths: DraftPaths
+    markdown: str
+
+
+@dataclass(frozen=True)
+class RenderTargets:
+    """Where one approved version's rendered outputs belong."""
+
+    html: Path
+    pdf: Path
+    screenshot: Path
+
+
 class ArtifactStore(Protocol):
     """Where immutable and working payloads live.
 
     The application layer asks for "this application's working draft" or "this
-    approved version"; it never composes a directory name. That is what keeps
-    the storage layout an infrastructure decision instead of a rule spread
-    across services.
+    approved version"; it never composes a directory name and never opens a
+    file. That is what keeps the storage layout an infrastructure decision
+    instead of a rule spread across services.
     """
 
     def working_paths(self, application_id: str) -> DraftPaths: ...
 
-    def write_working_draft(self, draft: Any) -> DraftPaths: ...
+    def write_working_draft(self, draft: Any) -> StoredDraft: ...
 
     def load_working_draft(self, application_id: str) -> Any: ...
+
+    def working_markdown(self, application_id: str) -> str: ...
+
+    def read_document(self, path: Path) -> str: ...
+
+    def load_draft(self, manifest_path: Path) -> Any: ...
+
+    def paths_beside(self, manifest_path: Path) -> DraftPaths: ...
 
     def approved_version_dir(self, application_id: str, version: int) -> Path: ...
 
     def publish_working_draft(self, application_id: str, version: int) -> DraftPaths: ...
+
+    def render_targets(self, manifest_path: Path, pdf_filename: str) -> RenderTargets: ...
 
     def resolve(self, stored_path: str) -> Path: ...
 
@@ -47,12 +78,26 @@ class ArtifactStore(Protocol):
 
 
 class KnowledgeStore(Protocol):
-    """Where canonical knowledge comes from, without saying it is files."""
+    """Where canonical knowledge comes from, without saying it is files.
 
-    @property
-    def base_dir(self) -> Path: ...
+    Writes go through it too: creating, promoting, and attaching a fact all
+    rewrite a canonical source, and where that source lives is not something
+    the application layer is allowed to know.
+    """
 
     def load(self) -> Knowledge: ...
+
+    def facts(self) -> Any: ...
+
+    def create_fact(self, source_name: str, payload: dict, *, canonical: bool = False) -> Any: ...
+
+    def promote_fact(
+        self, fact_id: str, target: Any, *, explicitly_confirmed: bool
+    ) -> tuple[Any, Any]: ...
+
+    def attach_fact(
+        self, profile: str, fact_id: str, section: str, *, pin: bool = False
+    ) -> tuple[Profile, str]: ...
 
 
 class Renderer(Protocol):

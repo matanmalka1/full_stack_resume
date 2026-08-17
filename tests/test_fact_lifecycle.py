@@ -6,7 +6,8 @@ from pathlib import Path
 import pytest
 
 from cv_engine.infrastructure.db import connect
-from cv_engine.domain.facts import FactStore, FactStoreError
+from cv_engine.domain.facts import FactStore
+from cv_engine.infrastructure.knowledge import load_fact_store, FactStoreError
 from cv_engine.domain.models import FactStatus
 from cv_engine.application.services import WorkflowError
 from cv_engine.compat import Engine
@@ -25,7 +26,7 @@ NEW_FACT = {
 
 def _reload(engine: Engine) -> FactStore:
     """Read the fact store back from disk, as a later process would."""
-    return FactStore.load(engine.root / "base")
+    return load_fact_store(engine.root / "base")
 
 
 def test_new_fact_is_persisted_as_pending_and_cannot_reach_a_cv(engine: Engine) -> None:
@@ -95,7 +96,7 @@ def test_lifecycle_survives_process_boundaries_through_the_cli(cli_runner, v1_re
     assert listed.returncode == 0
     ids = [fact["fact_id"] for fact in json.loads(listed.stdout)]
     assert "situational.sqlite" in ids
-    assert FactStore.load(v1_repo / "base").get("situational.sqlite").status is FactStatus.CANONICAL
+    assert load_fact_store(v1_repo / "base").get("situational.sqlite").status is FactStatus.CANONICAL
 
     history = json.loads(cli_runner("fact", "history", "situational.sqlite").stdout)
     assert [(event["from_status"], event["to_status"]) for event in history] == [

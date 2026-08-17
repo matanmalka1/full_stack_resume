@@ -2,9 +2,26 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cv_engine.domain.drafts import load_draft
+from cv_engine.domain.drafts import parse_draft
+from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
+from cv_engine.runtime.workspace import load_workspace
 from cv_engine.util import canonical_json, sha256_text
 from cv_engine.compat import Engine
+
+
+def artifact_store(root: Path) -> FilesystemArtifactStore:
+    """The real artifact adapter for a test Workspace.
+
+    Tests that need a draft on disk go through the same adapter the product
+    uses, so no test carries its own copy of the storage layout.
+    """
+    return FilesystemArtifactStore(load_workspace(root))
+
+
+def store_draft(root: Path, draft):
+    """Write a working draft and return its Markdown path and exact text."""
+    stored = artifact_store(root).write_working_draft(draft)
+    return stored.paths.markdown, stored.markdown
 
 
 ACCOUNT_MANAGER_JOB = (
@@ -34,7 +51,7 @@ PAYME_TECH_SALES_JOB = (
 
 def working_claim(engine: Engine, application_id: str, fact_id: str):
     manifest = engine.root / "artifacts/working" / application_id / "resume.claims.json"
-    draft = load_draft(manifest)
+    draft = parse_draft(manifest.read_text(encoding="utf-8"))
     return next(
         claim
         for section in draft.sections

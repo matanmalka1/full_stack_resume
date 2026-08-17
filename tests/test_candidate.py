@@ -8,14 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from cv_engine.domain.candidate import (
-    CANDIDATE_FILE,
-    CandidateContextError,
-    contact_href,
-    load_candidate_context,
-)
-from cv_engine.domain.drafts import load_draft
+from cv_engine.domain.candidate import CANDIDATE_FILE, CandidateContextError, contact_href
+from cv_engine.domain.drafts import parse_draft
 from cv_engine.domain.facts import FactStore, FactStoreError
+from cv_engine.infrastructure.knowledge import load_candidate_context, load_fact_store
 from cv_engine.infrastructure.rendering import normalized_role_filename
 
 
@@ -79,13 +75,13 @@ def test_an_explicit_filename_override_wins(v1_repo: Path, fact_store: FactStore
 
 def test_the_version_hash_follows_the_facts_it_resolved(v1_repo: Path) -> None:
     """A changed contact rendering is a changed context, not a silent one."""
-    before = load_candidate_context(v1_repo, FactStore.load(v1_repo / "base")).version_hash
+    before = load_candidate_context(v1_repo, load_fact_store(v1_repo / "base")).version_hash
 
     common = v1_repo / "base/common.md"
     text = common.read_text(encoding="utf-8")
     common.write_text(text.replace("linkedin.com/in/matanmalka1", "linkedin.com/in/other"), encoding="utf-8")
 
-    after = load_candidate_context(v1_repo, FactStore.load(v1_repo / "base")).version_hash
+    after = load_candidate_context(v1_repo, load_fact_store(v1_repo / "base")).version_hash
     assert after != before
 
 
@@ -114,7 +110,7 @@ def test_contact_links_follow_the_declared_scheme(candidate_context) -> None:
 
 def test_a_drafted_document_takes_its_identity_from_the_context(drafted_application) -> None:
     setup = drafted_application("Context Co")
-    document = load_draft(setup.manifest)
+    document = parse_draft(setup.manifest.read_text(encoding="utf-8"))
 
     assert document.name == "Matan Malka"
     assert [claim.fact_ids[0] for claim in document.contacts] == [
@@ -160,21 +156,21 @@ def _rewrite_linkedin_target(root: Path, target: str | None) -> None:
 def test_an_https_contact_whose_fact_carries_no_target_is_refused(v1_repo: Path) -> None:
     _rewrite_linkedin_target(v1_repo, None)
     with pytest.raises(CandidateContextError, match="carries no link target"):
-        load_candidate_context(v1_repo, FactStore.load(v1_repo / "base"))
+        load_candidate_context(v1_repo, load_fact_store(v1_repo / "base"))
 
 
 def test_a_non_https_link_target_is_refused(v1_repo: Path) -> None:
     """The address is the fact's own invariant, so the fact source fails to load."""
     _rewrite_linkedin_target(v1_repo, "http://www.linkedin.com/in/matanmalka1")
     with pytest.raises(FactStoreError, match="link target is not https"):
-        FactStore.load(v1_repo / "base")
+        load_fact_store(v1_repo / "base")
 
 
 def test_a_link_target_that_drifts_from_its_rendering_is_refused(v1_repo: Path) -> None:
     """A fact may not display one profile and link to another."""
     _rewrite_linkedin_target(v1_repo, "https://www.linkedin.com/in/someone-else")
     with pytest.raises(FactStoreError, match="does not carry the fact's English rendering"):
-        FactStore.load(v1_repo / "base")
+        load_fact_store(v1_repo / "base")
 
 
 def test_the_candidate_context_may_not_declare_a_resolved_field(

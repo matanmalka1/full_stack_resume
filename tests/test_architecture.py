@@ -87,19 +87,104 @@ def test_no_application_module_reaches_the_composition_root() -> None:
     assert not offenders, offenders
 
 
-def test_application_composes_no_storage_paths() -> None:
-    """Layout is asked for through the artifact store, never assembled here."""
+# Reading or writing a file, and building the name of one, are both storage
+# decisions. Listing the calls rather than a couple of known directory names is
+# what makes this catch the next violation instead of the last one.
+FILESYSTEM_CALLS = (
+    ".read_text(",
+    ".write_text(",
+    ".read_bytes(",
+    ".write_bytes(",
+    ".open(",
+    ".mkdir(",
+    ".glob(",
+    ".rglob(",
+    ".iterdir(",
+    ".unlink(",
+    ".touch(",
+    "open(",
+    "shutil.",
+    "os.path",
+)
+
+
+def _code_lines(path: Path) -> list[tuple[int, str]]:
+    """Executable lines only, so prose in a docstring cannot trip a rule."""
+    source = path.read_text(encoding="utf-8")
+    spans: set[int] = set()
+    for node in ast.walk(ast.parse(source)):
+        if (
+            isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+        ):
+            spans.update(range(node.lineno, (node.end_lineno or node.lineno) + 1))
+    return [
+        (number, line)
+        for number, line in enumerate(source.splitlines(), start=1)
+        if number not in spans and not line.lstrip().startswith("#")
+    ]
+
+
+@pytest.mark.parametrize("layer", ["domain", "application"])
+def test_layer_never_touches_the_filesystem(layer: str) -> None:
+    """Neither layer reads, writes, or lists a file.
+
+    This is the rule the earlier, narrower check missed: moving path
+    composition out of the application layer only pushed it down into the
+    domain, where the same storage knowledge was just as wrong.
+    """
     offenders = [
         f"{path.name}:{number}: {line.strip()}"
-        for path in _modules("application")
-        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1)
-        if "artifacts_root" in line or '"working"' in line or "mkdir(" in line
+        for path in _modules(layer)
+        for number, line in _code_lines(path)
+        if any(call in line for call in FILESYSTEM_CALLS)
+    ]
+    assert not offenders, offenders
+
+
+def _joined_path_literals(path: Path) -> list[int]:
+    """Lines where a name is divided by a string — i.e. a path is being built.
+
+    Matched on the syntax tree rather than the text so that `"a/b".rsplit("/")`
+    and `"https://..."` are not mistaken for layout.
+    """
+    found: list[int] = []
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if not isinstance(node, ast.BinOp) or not isinstance(node.op, ast.Div):
+            continue
+        for side in (node.left, node.right):
+            if isinstance(side, ast.JoinedStr) or (
+                isinstance(side, ast.Constant) and isinstance(side.value, str)
+            ):
+                found.append(node.lineno)
+    return found
+
+
+@pytest.mark.parametrize("layer", ["domain", "application"])
+def test_layer_composes_no_storage_layout(layer: str) -> None:
+    """Neither layer builds a location out of names it knows.
+
+    A path joined to a literal is a layout decision, wherever it happens: it
+    hard-codes where something lives into code that is supposed to only decide
+    what it means.
+    """
+    offenders = [
+        f"{path.name}:{line}"
+        for path in _modules(layer)
+        for line in _joined_path_literals(path)
+    ]
+    offenders += [
+        f"{path.name}:{number}: {line.strip()}"
+        for path in _modules(layer)
+        for number, line in _code_lines(path)
+        if "artifacts_root" in line or "knowledge_root" in line or "base_dir" in line
     ]
     assert not offenders, offenders
 
 
 def test_domain_modules_never_import_the_workspace() -> None:
-    """Domain code receives paths; it does not resolve them."""
+    """Domain code receives what it needs; it does not resolve locations."""
     offenders = [
         f"{path.name}:{line}"
         for path in _modules("domain")

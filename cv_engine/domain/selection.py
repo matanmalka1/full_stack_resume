@@ -19,9 +19,7 @@ heading from the bullets underneath it.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
-from pathlib import Path
 
 from .facts import FactStore
 from .models import (
@@ -68,14 +66,12 @@ class EmphasisPolicyStore:
         }))
 
     @classmethod
-    def load(cls, root: Path) -> "EmphasisPolicyStore":
-        path = root / "config" / "emphasis.json"
-        if not path.is_file():
-            raise SelectionError(f"missing emphasis policy: {path}")
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            raise SelectionError(f"invalid emphasis policy {path}: {exc}") from exc
+    def from_payload(cls, payload: dict, *, origin: str = "emphasis policy") -> "EmphasisPolicyStore":
+        """Build the store from an already-read policy document.
+
+        Locating and reading it belongs to the storage adapter; what a complete
+        and self-consistent policy set is stays here.
+        """
         try:
             policies = {
                 Emphasis(key): EmphasisPolicy.model_validate(value)
@@ -83,7 +79,7 @@ class EmphasisPolicyStore:
             }
             policy_version = payload["policy_version"]
         except (KeyError, ValueError) as exc:
-            raise SelectionError(f"invalid emphasis policy {path}: {exc}") from exc
+            raise SelectionError(f"invalid emphasis policy {origin}: {exc}") from exc
         for emphasis, policy in policies.items():
             if policy.emphasis is not emphasis:
                 raise SelectionError(f"emphasis policy {emphasis} is filed under the wrong key")

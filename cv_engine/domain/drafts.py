@@ -4,7 +4,6 @@ import json
 import re
 import uuid
 from dataclasses import dataclass
-from pathlib import Path
 
 from .facts import FactStore
 from .models import (
@@ -118,6 +117,7 @@ def build_draft(
     facts: FactStore,
     policies: EmphasisPolicyStore,
     candidate: CandidateContext,
+    presentations: PresentationStore | None = None,
 ) -> DraftDocument:
     if analysis.profile is not profile.profile or analysis.track is not profile.track:
         raise ValueError("analysis and profile do not match")
@@ -131,7 +131,6 @@ def build_draft(
         for fact_id in contact_ids
     ]
 
-    presentations = PresentationStore.for_facts(facts)
     selected_by_section, selection = build_selection(
         analysis=analysis,
         profile=profile,
@@ -281,23 +280,21 @@ def serialize_markdown(draft: DraftDocument) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def write_working_draft(artifacts_root: Path, draft: DraftDocument) -> tuple[Path, Path]:
-    target = artifacts_root / "working" / draft.application_id
-    target.mkdir(parents=True, exist_ok=True)
-    markdown_path = target / "resume.md"
-    manifest_path = target / "resume.claims.json"
+def seal_draft(draft: DraftDocument) -> tuple[DraftDocument, str, str]:
+    """The two payloads a stored draft consists of, and the draft they describe.
+
+    The content hash is bound to the Markdown here, so the pair cannot be
+    written out of step. Where the two payloads land is a storage decision made
+    outside this layer.
+    """
     markdown = serialize_markdown(draft)
-    draft = draft.model_copy(update={"content_hash": sha256_text(markdown)})
-    markdown_path.write_text(markdown, encoding="utf-8")
-    manifest_path.write_text(
-        json.dumps(draft.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    return markdown_path, manifest_path
+    sealed = draft.model_copy(update={"content_hash": sha256_text(markdown)})
+    manifest = json.dumps(sealed.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n"
+    return sealed, markdown, manifest
 
 
-def load_draft(manifest_path: Path) -> DraftDocument:
-    return DraftDocument.model_validate_json(manifest_path.read_text(encoding="utf-8"))
+def parse_draft(manifest: str) -> DraftDocument:
+    return DraftDocument.model_validate_json(manifest)
 
 
 def _claims(draft: DraftDocument) -> list[ClaimLine]:
@@ -585,12 +582,11 @@ def _extract_marked_claims(markdown: str, claims: dict[str, ClaimLine]) -> tuple
 
 def synchronize_markdown_claims(
     draft: DraftDocument,
-    markdown_path: Path,
+    markdown: str,
     facts: FactStore,
 ) -> DraftDocument:
     current_claims = {claim.claim_id: claim for claim in _claims(draft)}
-    actual = markdown_path.read_text(encoding="utf-8")
-    extracted, actual_skeleton = _extract_marked_claims(actual, current_claims)
+    extracted, actual_skeleton = _extract_marked_claims(markdown, current_claims)
     expected, expected_skeleton = _extract_marked_claims(serialize_markdown(draft), current_claims)
     if actual_skeleton != expected_skeleton or set(extracted) != set(current_claims):
         raise ValueError("manual Markdown changed document structure or removed claim markers")

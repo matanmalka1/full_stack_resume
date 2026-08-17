@@ -15,7 +15,8 @@ from typing import Any
 
 from .canonical_data import write_canonical_sources
 from .db import Repository, connect
-from ..domain.facts import FactStoreError, load_fact_source
+from ..domain.facts import FactStoreError
+from .knowledge import read_fact_source
 from ..util import canonical_json, sha256_bytes, sha256_file, sha256_text, utc_now
 
 
@@ -681,10 +682,10 @@ def _fact_source_baseline(name: str, live_path: Path, expected_path: Path) -> tu
     source file. Facts added afterwards are reported, never a failure.
     """
     try:
-        live = {fact.fact_id: fact.model_dump(mode="json") for fact in load_fact_source(live_path).facts}
+        live = {fact.fact_id: fact.model_dump(mode="json") for fact in read_fact_source(live_path).facts}
     except FactStoreError as exc:
         return [f"canonical fact source is unreadable: base/{name} ({exc})"], []
-    baseline = {fact.fact_id: fact.model_dump(mode="json") for fact in load_fact_source(expected_path).facts}
+    baseline = {fact.fact_id: fact.model_dump(mode="json") for fact in read_fact_source(expected_path).facts}
     problems = []
     for fact_id, payload in baseline.items():
         if fact_id not in live:

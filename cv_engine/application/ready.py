@@ -5,11 +5,7 @@ from typing import Any
 
 from .chain import check_draft_chain, decision_record_analysis_id, material_analysis_key
 from .ports import ApplicationRepository, ArtifactStore, KnowledgeStore
-from ..domain.drafts import load_draft
-from ..domain.facts import FactStore
 from ..domain.models import ValidationIssue, ValidationReport
-from ..domain.profiles import ProfileStore
-from ..domain.selection import EmphasisPolicyStore
 from ..util import sha256_file
 from ..domain.validation import validate_draft
 
@@ -80,7 +76,7 @@ def verify_ready_integrity(
     draft = None
     if groups["approved_source"]:
         try:
-            draft = load_draft(manifest_path)
+            draft = artifacts.load_draft(manifest_path)
         except Exception as exc:  # noqa: BLE001 - any load failure is a hard integrity failure
             fail("approved_source", "manifest-unreadable", str(exc))
 
@@ -89,6 +85,7 @@ def verify_ready_integrity(
         try:
             loaded = knowledge.load()
             facts, profiles, policies = loaded.facts, loaded.profiles, loaded.policies
+            presentations = loaded.presentations
             profile = profiles.get(draft.profile)
         except Exception as exc:  # noqa: BLE001 - knowledge load failure blocks ready
             fail("approved_source", "knowledge-load-failed", str(exc))
@@ -114,7 +111,13 @@ def verify_ready_integrity(
             if chain.valid:
                 _, analysis = chain.bound()
                 source_report = validate_draft(
-                    draft, markdown_path, facts, profile, analysis, policies=policies
+                    draft,
+                    artifacts.read_document(markdown_path),
+                    facts,
+                    profile,
+                    analysis,
+                    policies=policies,
+                    presentations=presentations,
                 )
                 evidence["source_validation"] = source_report.model_dump(mode="json")
                 if not source_report.passed:

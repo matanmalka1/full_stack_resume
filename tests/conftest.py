@@ -15,11 +15,19 @@ import pytest
 
 import cv_engine
 from cv_engine.domain.analysis import classify_job
+from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.infrastructure.canonical_data import V2_IDENTITY_FACT, write_canonical_sources
+from cv_engine.infrastructure.knowledge import (
+    create_fact,
+    load_candidate_context,
+    load_emphasis_policies,
+    load_fact_store,
+    load_presentations,
+    load_profile_store,
+)
 from cv_engine.infrastructure.db import Repository, connect
-from cv_engine.domain.drafts import build_draft, write_working_draft
-from cv_engine.domain.candidate import load_candidate_context
-from cv_engine.domain.facts import FactStore, create_fact
+from cv_engine.domain.drafts import build_draft
+from cv_engine.domain.facts import FactStore
 from cv_engine.infrastructure.migration import create_snapshot, dry_run_migration, migrate_legacy_state, verify_snapshot
 from cv_engine.domain.models import (
     Emphasis,
@@ -197,17 +205,22 @@ def workspace(v1_repo: Path) -> Workspace:
 
 @pytest.fixture
 def fact_store(v1_repo: Path) -> FactStore:
-    return FactStore.load(v1_repo / "base")
+    return load_fact_store(v1_repo / "base")
 
 
 @pytest.fixture
 def profile_store(v1_repo: Path, fact_store: FactStore) -> ProfileStore:
-    return ProfileStore.load(v1_repo, fact_store)
+    return load_profile_store(v1_repo, fact_store)
 
 
 @pytest.fixture
 def policy_store(v1_repo: Path) -> EmphasisPolicyStore:
-    return EmphasisPolicyStore.load(v1_repo)
+    return load_emphasis_policies(v1_repo)
+
+
+@pytest.fixture
+def presentation_store(v1_repo: Path, fact_store: FactStore):
+    return load_presentations(v1_repo, fact_store)
 
 
 @pytest.fixture
@@ -360,8 +373,10 @@ def draft_factory(
             facts=fact_store,
             policies=policy_store,
             candidate=candidate_context,
+            presentations=load_presentations(v1_repo, fact_store),
         )
-        markdown = write_working_draft(v1_repo / "artifacts", draft)[0] if write else None
+        store = FilesystemArtifactStore(load_workspace(v1_repo))
+        markdown = store.write_working_draft(draft).paths.markdown if write else None
         return DraftSetup(fact_store, profile, analysis, draft, markdown, candidate_context)
 
     return build

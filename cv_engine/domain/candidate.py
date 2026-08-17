@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 from .facts import FactStore, FactStoreError
 from .models import CandidateContext
 from ..util import canonical_json, sha256_text
@@ -19,21 +16,19 @@ class CandidateContextError(ValueError):
     pass
 
 
-def load_candidate_context(knowledge_root: Path, facts: FactStore) -> CandidateContext:
-    """Load the one CandidateContext and bind it to canonical facts.
+def build_candidate_context(
+    payload: dict, facts: FactStore, *, origin: str = CANDIDATE_FILE
+) -> CandidateContext:
+    """Bind an already-read candidate context to canonical facts.
 
     Every referenced fact must exist and be canonical, so a Workspace whose
     identity or contact facts were removed, renamed, or left pending fails here
     rather than rendering a CV with a missing name or a dead link.
     """
-    path = Path(knowledge_root) / "base" / CANDIDATE_FILE
-    if not path.is_file():
-        raise CandidateContextError(f"no candidate context in this Workspace: {path}")
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
         context = CandidateContext.model_validate(payload)
-    except (json.JSONDecodeError, ValueError) as exc:
-        raise CandidateContextError(f"invalid candidate context {path}: {exc}") from exc
+    except ValueError as exc:
+        raise CandidateContextError(f"invalid candidate context {origin}: {exc}") from exc
 
     # These fields are resolved from canonical facts below. A file that declares
     # one is a second place to edit what the facts already state, so it is

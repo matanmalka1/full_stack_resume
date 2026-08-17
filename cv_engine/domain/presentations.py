@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, model_validator
@@ -73,21 +71,19 @@ class PresentationStore:
                 )
 
     @classmethod
-    def load(cls, root: Path, facts: FactStore) -> "PresentationStore":
-        path = root / "rendering" / "rules" / "presentations.json"
-        if not path.is_file():
-            raise PresentationError(f"missing presentation rules: {path}")
-        try:
-            payload = PresentationRules.model_validate(json.loads(path.read_text(encoding="utf-8")))
-        except (json.JSONDecodeError, ValueError) as exc:
-            raise PresentationError(f"invalid presentation rules {path}: {exc}") from exc
-        return cls(payload, facts)
+    def from_payload(
+        cls, payload: dict, facts: FactStore, *, origin: str = "presentation rules"
+    ) -> "PresentationStore":
+        """Build the store from an already-read rules document.
 
-    @classmethod
-    def for_facts(cls, facts: FactStore) -> "PresentationStore | None":
-        if facts.base_dir is None:
-            return None
-        return cls.load(facts.base_dir.parent, facts)
+        Locating and reading it belongs to the storage adapter; whether a rule
+        set is coherent against the facts it presents stays here.
+        """
+        try:
+            rules = PresentationRules.model_validate(payload)
+        except ValueError as exc:
+            raise PresentationError(f"invalid presentation rules {origin}: {exc}") from exc
+        return cls(rules, facts)
 
     def line_groups(
         self,

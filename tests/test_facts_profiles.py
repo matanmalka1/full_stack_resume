@@ -7,9 +7,10 @@ import pytest
 
 import uuid
 
-from cv_engine.domain.facts import FactStore, FactStoreError
+from cv_engine.domain.facts import FactStoreError
 from cv_engine.domain.models import FactStatus
 from cv_engine.infrastructure.canonical_data import V2_IDENTITY_FACT
+from cv_engine.infrastructure.knowledge import load_fact_store
 
 
 def test_canonical_fact_store_has_unique_stable_ids(fact_store) -> None:
@@ -33,7 +34,7 @@ def test_duplicate_fact_id_is_rejected(v1_repo: Path) -> None:
     payload["facts"].append(payload["facts"][0])
     common.write_text("# duplicate\n\n```json\n" + json.dumps(payload) + "\n```\n", encoding="utf-8")
     with pytest.raises(FactStoreError, match="duplicate fact_id"):
-        FactStore.load(v1_repo / "base")
+        load_fact_store(v1_repo / "base")
 
 
 def test_fact_lifecycle_requires_confirmation(fact_store) -> None:
