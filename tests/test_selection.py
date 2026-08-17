@@ -304,9 +304,12 @@ def test_payme_tech_sales_selection_uses_job_evidence_and_business_presentations
     draft = setup.draft
 
     assert setup.analysis.fit.value == "medium"
+    # `sales.cycle.closing` is deliberately absent: five lines per role is the
+    # ceiling, and closing evidence already reaches the page through the merged
+    # negotiation/tenders bullet and the leadership block. Outreach has no such
+    # substitute, and the posting asks for phone and email engagement by name.
     assert {
         "sales.cycle.outreach",
-        "sales.cycle.closing",
         "sales.cycle.prospecting",
         "sales.leadership.pipeline",
         "sales.metric.new_customers",
@@ -369,6 +372,33 @@ def test_the_headline_reads_for_a_recruiter_and_the_filename_does_not(
     assert normalized_role_filename(profile.normalized_role) == "Matan Malka - Tech Sales - CV.pdf"
 
 
+def test_the_role_ceiling_counts_lines_not_facts(draft_factory) -> None:
+    """The ceiling has to mean what a reader counts.
+
+    Selection chooses facts; a presentation rule can then render two of them as
+    one bullet. Counting facts let a block of six facts print six bullets under
+    a ceiling of five whenever nothing merged, and five whenever something did —
+    the same setting meaning two different documents.
+    """
+    setup = draft_factory(
+        PAYME_TECH_SALES_JOB,
+        track_override="tech-sales",
+        profile_override="tech-sales",
+        emphasis_override="new-business",
+    )
+    experience = next(
+        section for section in setup.draft.sections if section.name == "Sales Experience"
+    )
+    _leadership, field = _role_block_claims(experience)
+
+    assert len(field) == 5
+    merged = [claim for claim in field if len(claim.fact_ids) > 1]
+    assert len(merged) == 1
+    assert merged[0].fact_ids == ["sales.cycle.negotiation", "sales.achievement.complex_deals"]
+    # Six facts, five lines: the merge bought a fact, not a bullet.
+    assert sum(len(claim.fact_ids) for claim in field) == 6
+
+
 def test_no_role_block_exceeds_its_ceiling(profile_store: ProfileStore, draft_factory) -> None:
     for profile in profile_store.profiles.values():
         for spec in profile.sections:
@@ -386,5 +416,4 @@ def test_no_role_block_exceeds_its_ceiling(profile_store: ProfileStore, draft_fa
                 )
                 for index, block in enumerate(_role_block_claims(section)):
                     label = f"{profile.profile.value}/{emphasis.value}/{spec.name_en}/block{index}"
-                    linked = {fact_id for claim in block for fact_id in claim.fact_ids}
-                    assert len(linked) <= spec.max_claims_per_role, label
+                    assert len(block) <= spec.max_claims_per_role, label

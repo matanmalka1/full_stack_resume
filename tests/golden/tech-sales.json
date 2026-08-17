@@ -5,8 +5,8 @@
   "emphasis": "tech-consultative-sales",
   "language": "en",
   "snapshot": {
-    "markdown_sha256": "3cf753939a36dbd70f8af269c8cf771e45cd623470b6a1201371e425b1743255",
-    "html_sha256": "5549441cb86401d2375d66ae3d4ace5251e05fdf6f3059df976e3d6749ecd3ec",
+    "markdown_sha256": "6e76edc2bdba4347dc5a7ce90acde2b9b6d6dafe2aa8e8d04ee6a511c18c5cdb",
+    "html_sha256": "399e8f105b38563914d8786bb96629df203c0f9f7a61a340ec9f77f51b853a53",
     "selected_fact_ids": [
       "common.contact.email",
       "common.contact.linkedin",
@@ -31,7 +31,6 @@
       "sales.cycle.closing",
       "sales.cycle.discovery",
       "sales.cycle.negotiation",
-      "sales.cycle.outreach",
       "sales.cycle.quotations",
       "sales.leadership.commercial_approval",
       "sales.leadership.pipeline",

@@ -89,6 +89,27 @@ class PresentationStore:
             return None
         return cls.load(facts.base_dir.parent, facts)
 
+    def line_groups(
+        self,
+        profile: Profile,
+        emphasis: Emphasis,
+    ) -> dict[str, list[tuple[str, ...]]]:
+        """Per section, the fact groups that would be emitted as one line.
+
+        Selection states role-block floors and ceilings in lines, so it needs
+        this before it chooses: two facts a rule combines cost one line, not two.
+        """
+        groups: dict[str, list[tuple[str, ...]]] = {}
+        for rule in self.rules:
+            if rule.profile is not profile.profile:
+                continue
+            if rule.emphases and emphasis not in rule.emphases:
+                continue
+            if len(rule.fact_ids) < 2:
+                continue
+            groups.setdefault(rule.section, []).append(tuple(rule.fact_ids))
+        return groups
+
     def render_rule(
         self,
         rule_id: str,

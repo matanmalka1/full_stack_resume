@@ -136,14 +136,19 @@ def build_draft(
         for fact_id in contact_ids
     ]
 
+    presentations = PresentationStore.for_facts(facts)
     selected_by_section, selection = build_selection(
         analysis=analysis,
         profile=profile,
         policy=policies.get(analysis.emphasis),
         policy_store_version=policies.version,
         facts=facts,
+        line_groups=(
+            presentations.line_groups(profile, analysis.emphasis)
+            if presentations is not None
+            else None
+        ),
     )
-    presentations = PresentationStore.for_facts(facts)
 
     # The headline is supported by the historical titles that actually reached
     # the document, not by every title the Profile could have shown.

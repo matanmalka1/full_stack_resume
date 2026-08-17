@@ -163,14 +163,6 @@ def _omission_reason(scored: _Scored) -> OmissionReason:
     return "not_relevant_to_emphasis" if scored.semantic_score == 0 else "below_section_budget"
 
 
-def _pinned_in_block(pool: list[_Scored], block_of: dict[str, int]) -> dict[int, int]:
-    counts: dict[int, int] = {}
-    for item in pool:
-        if item.pinned and not item.structural and item.fact_id in block_of:
-            counts[block_of[item.fact_id]] = counts.get(block_of[item.fact_id], 0) + 1
-    return counts
-
-
 def _role_blocks(pool: list[_Scored]) -> list[list[_Scored]]:
     """Split a section pool into the role blocks its titles open.
 
@@ -187,11 +179,17 @@ def _role_blocks(pool: list[_Scored]) -> list[list[_Scored]]:
     return blocks
 
 
-def _block_floor_picks(block: list[_Scored], spec: ResumeSectionSpec) -> list[_Scored]:
+def _block_floor_picks(
+    block: list[_Scored],
+    spec: ResumeSectionSpec,
+    line_of: dict[str, str],
+) -> list[_Scored]:
     """The contenders a role block needs to reach its floors, best-ranked first.
 
     Pinned evidence already under the heading counts towards both floors, so a
     block that is already substantial pulls nothing extra out of the budget.
+    Floors count *lines*, not facts: two facts a presentation rule combines into
+    one bullet are one line on the page, which is the only thing a reader counts.
     """
     held = [item for item in block if item.pinned and not item.structural]
     ranked = sorted(
@@ -209,13 +207,13 @@ def _block_floor_picks(block: list[_Scored], spec: ResumeSectionSpec) -> list[_S
         if QUANTITATIVE_TAG in item.tags:
             picks.append(item)
             quantitative_needed -= 1
-    claims_needed = spec.min_claims_per_role - len(held) - len(picks)
+    lines = {line_of.get(item.fact_id, item.fact_id) for item in held + picks}
     for item in ranked:
-        if claims_needed <= 0:
+        if len(lines) >= spec.min_claims_per_role:
             break
         if item not in picks:
             picks.append(item)
-            claims_needed -= 1
+            lines.add(line_of.get(item.fact_id, item.fact_id))
     return picks
 
 
@@ -226,11 +224,17 @@ def build_selection(
     policy: EmphasisPolicy,
     policy_store_version: str,
     facts: FactStore,
+    line_groups: dict[str, list[tuple[str, ...]]] | None = None,
 ) -> tuple[dict[str, list[str]], SelectionManifest]:
     """Choose each section's facts and record why.
 
     Returns the per-section selected fact IDs in pool order, plus the manifest
     describing every candidate that was considered.
+
+    `line_groups` names, per section, the fact groups a presentation rule would
+    render as a single line. Role-block floors and ceilings are stated in lines,
+    so selection has to know which facts will share one, or a section that
+    combines two facts into one bullet quietly overshoots its own ceiling.
     """
     gap_substitutes = frozenset(
         fact_id for gap in analysis.gaps for fact_id in gap.substitute_fact_ids
@@ -265,9 +269,14 @@ def build_selection(
                 f"section {section!r} pins {len(held)} facts into a budget of {budget}"
             )
         allowance = budget - len(held)
+        line_of = {
+            fact_id: group[0]
+            for group in (line_groups or {}).get(section, [])
+            for fact_id in group
+        }
         floor_picks: list[_Scored] = []
         for block in _role_blocks(pool):
-            for item in _block_floor_picks(block, spec):
+            for item in _block_floor_picks(block, spec, line_of):
                 if item not in floor_picks:
                     floor_picks.append(item)
         if len(floor_picks) > allowance:
@@ -287,9 +296,18 @@ def build_selection(
             for index, block in enumerate(_role_blocks(pool))
             for item in block
         }
-        taken = _pinned_in_block(pool, block_of)
+        # Lines already spoken for in each block: pinned evidence, then the
+        # floor picks. Facts that share a presentation line share one entry.
+        taken: dict[int, set[str]] = {}
+        for item in pool:
+            if item.pinned and not item.structural and item.fact_id in block_of:
+                taken.setdefault(block_of[item.fact_id], set()).add(
+                    line_of.get(item.fact_id, item.fact_id)
+                )
         for item in floor_picks:
-            taken[block_of[item.fact_id]] = taken.get(block_of[item.fact_id], 0) + 1
+            taken.setdefault(block_of[item.fact_id], set()).add(
+                line_of.get(item.fact_id, item.fact_id)
+            )
         winners = list(floor_picks)
         for item in contenders:
             if len(winners) >= allowance:
@@ -297,15 +315,17 @@ def build_selection(
             if item.fact_id in floor_ids:
                 continue
             block = block_of.get(item.fact_id)
+            line = line_of.get(item.fact_id, item.fact_id)
             if (
                 block is not None
                 and spec.max_claims_per_role is not None
-                and taken.get(block, 0) >= spec.max_claims_per_role
+                and line not in taken.get(block, set())
+                and len(taken.get(block, set())) >= spec.max_claims_per_role
             ):
                 continue
             winners.append(item)
             if block is not None:
-                taken[block] = taken.get(block, 0) + 1
+                taken.setdefault(block, set()).add(line)
         winner_ids = {item.fact_id for item in winners}
         chosen[section] = {item.fact_id for item in held} | winner_ids
         for item in held:
