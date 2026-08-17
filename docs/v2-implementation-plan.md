@@ -60,7 +60,9 @@ introducing HTTP or React.
 - Add explicit Workspace path/config models and marker validation.
 - Add separate Workspace ID and installation ID.
 - Implement config precedence: CLI > environment > Workspace config > defaults.
-- Add live/copy/test/development guard policy.
+- Add fail-closed marker policy for all normal v2 commands. Add a distinct read-only v1
+  migration-source adapter that binds an explicit source path to an inventory hash and
+  never writes a marker into that source.
 - Add CandidateContext loader referencing canonical identity/contact facts.
 - Remove candidate literals from filename and rendering policy.
 - Add version/hash surfaces for CandidateContext and Knowledge dependencies.
@@ -80,6 +82,8 @@ introducing HTTP or React.
 - Move orchestration out of `Engine` into application use-cases.
 - Make `Engine` a compatibility façade with no independent business logic.
 - Migrate central CLI commands to the services.
+- Preserve `cv fast` as an explicit CLI user-approval orchestration over exact validate,
+  approve, render, and Ready checks; it may not bypass any blocker.
 - Add compatibility resolvers/warnings only where legacy CLI signatures omit an
   explicit v2 source ID.
 - Audit whether the v1 CSV export has a real consumer. Retain a versioned v2 CLI export;
@@ -92,7 +96,8 @@ introducing HTTP or React.
 - [ ] Selected facts, claims, validation outcomes, Ready eligibility, and decision
       behavior retain semantic parity with v1.
 - [ ] Candidate name is not hardcoded in core or renderer policy.
-- [ ] Workspace guards reject a marked v1 live Workspace in v2 development.
+- [ ] Normal v2 commands reject every missing, legacy, unknown, or unsafe marker; only
+      the dedicated migration adapter can inventory an explicit v1 source read-only.
 - [ ] All applicable v1 tests pass.
 
 Stable commit boundary: application seam complete and CLI green.
@@ -136,6 +141,8 @@ them inside endpoints later.
 - Implement Operation schema, atomic claiming, resource leases, heartbeat, phases,
   cancellation, retry, idempotency, safe failure metadata, and inactive outputs.
 - Implement the internal low-concurrency worker.
+- Implement the same Operation runner as a foreground CLI executor so asynchronous
+  commands complete without FastAPI or `cv web`.
 - Implement startup interruption of expired queued/running work.
 - Implement optimistic pre-execution and pre-activation checks with `SOURCE_CHANGED`.
 - Implement one classified automatic transient retry.
@@ -187,14 +194,18 @@ large frontend.
 
 - Create Application and immutable JobSnapshot with duplicate warnings.
 - Analyze in deterministic and AI modes through Operation.
-- Apply review decisions and create immutable SelectionPlan.
+- Commit one initial deterministic SelectionPlan with every successful JobAnalysis.
+- Apply review decisions and create replacement immutable SelectionPlans.
+- Run AI `propose_selection_plan` as a `202 + Location` Operation; keep deterministic
+  plan creation synchronous.
 - Generate/replace WorkingDraft.
 - Read/update WorkingDraft with ETag.
 - Apply deterministic fact selection changes.
 - Run section/claim regeneration Operations.
 - Validate exact WorkingDraft.
 - Explicitly approve exact validated content.
-- Render ApprovedRevision and qualify Ready.
+- Render ApprovedRevision, establish `ready_qualified`, and project Ready when its
+  snapshot+analysis match the active context.
 - Query Operation progress and complete state/action projection.
 - Download the exact Ready PDF.
 
@@ -213,6 +224,8 @@ large frontend.
 - [ ] Real FastAPI + worker + SQLite + filesystem test completes the API sequence
       Create -> Analyze -> Review if needed -> Draft -> Edit -> Validate -> Approve ->
       Render -> Ready.
+- [ ] The no-review path receives an initial SelectionPlan from Analyze and can
+      auto-generate without another selection command.
 - [ ] NeedsReview and validation failure are successful outcomes.
 - [ ] Routers contain no business logic.
 - [ ] Commands use explicit source IDs; latest appears only in read/query helpers.
@@ -283,7 +296,8 @@ Objective: add recruitment management only after the preparation workflow is sta
   revisions/artifacts, submissions, and navigation to editor.
 - Implement allowed forward RecruitmentStatus transitions.
 - Implement explicit correction events and transactionally consistent status/outcome.
-- Implement internal submission with explicit Ready revision/PDF IDs.
+- Implement internal submission with explicit `ready_qualified` revision/PDF IDs,
+  including historical-context warnings when active snapshot/analysis moved on.
 - Implement external submission without fake revision/artifact.
 - Implement multiple append-only submissions.
 - Implement next action, date, event history, and computed overdue warning.

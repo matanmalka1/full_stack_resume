@@ -34,16 +34,19 @@ frozen v1 backup and runs v1; it does not downgrade a v2 database.
 
 ## 3. Workspace isolation
 
-The v1 and v2 development Workspaces use distinct marker/config, SQLite, Knowledge,
-artifact, temp, and log roots.
+The v1 and v2 development Workspaces use distinct config, SQLite, Knowledge, artifact,
+temp, and log roots. A legacy v1 source is not assumed to have a Workspace marker.
 
-The v2 runtime guard refuses a Workspace marked as:
+Every normal v2 runtime command fails closed on a missing, legacy, unknown, or unsafe
+marker. The dedicated migration source adapter is the only code allowed to inspect an
+unmarked v1 root: it receives an explicit source path, opens it read-only, inventories
+it, and binds subsequent reads to the inventory hash. It never writes a marker, temp
+file, database change, or other payload into the source. The v2 marker is created only
+on the separate target copy.
 
-- workspace version 1 with live data in development mode
-- an unknown/missing marker during a mutating migration command
-- a Workspace ID or data class that differs from the signed/verified migration input
-
-Guarding is based on marker metadata and expected hashes, not path naming.
+Migration apply also refuses a target marker whose Workspace ID, purpose, or data class
+differs from the verified gate input. Guarding is based on target marker metadata and
+source inventory hashes, not path naming.
 
 ## 4. Source inventory
 
@@ -134,8 +137,27 @@ old status string. A historical v1 `ready` claim is retained in migration histor
 does not qualify as v2 Ready unless the exact v2 qualification can be verified.
 
 Preserve status-history IDs when representation and identity are semantically
-equivalent. Otherwise create explicit migration events with source references. Do not
-invent dates or reasons.
+equivalent. Every legacy history entry containing `preparing` or `ready`, which are not
+valid v2 RecruitmentStatus values, is retained as an append-only migration event with:
+
+```text
+actor_type = migration
+legacy_event_id
+legacy_from_status
+legacy_to_status
+mapped_from_status = map(legacy_from_status)
+mapped_to_status = map(legacy_to_status)
+source timestamp and metadata
+```
+
+The raw legacy status strings remain textual provenance and are not inserted into the
+v2 enum-constrained transition columns. The mapping function is the status table above,
+so `preparing -> ready` becomes `saved -> saved`, while `ready -> applied` becomes
+`saved -> applied`. Repeated mapped `saved` values do not invent new business
+transitions; the migration event appears in the unified timeline while the
+Application's current status projection uses the mapping above. No legacy event is
+deleted or folded. For all other non-equivalent representations, create explicit
+migration events with source references. Do not invent dates or reasons.
 
 For closed Applications, derive terminal outcome only from actual preserved status
 history; do not guess.
@@ -309,7 +331,9 @@ Applications; unrelated reference artifacts do not become Applications.
 
 The apply command requires an exact gate report proving:
 
-- expected source Workspace ID/data class/version
+- explicit source root identity, source format/version where discoverable, and exact
+  inventory hash; a v1 Workspace ID/marker is not required when v1 has none
+- expected target v2 Workspace ID/purpose/data class/version
 - source inventory hash and counts
 - verified backup/archive/manifest hashes
 - verified restore path/report hash

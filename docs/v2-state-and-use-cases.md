@@ -34,7 +34,9 @@ Immutable/versioned or append-only:
 - completed Operation lifecycle record
 - historical draft snapshot when explicitly kept
 
-Ready is a qualification of an ApprovedRevision and is not another entity.
+`ready_qualified` is a context-independent qualification projection of an
+ApprovedRevision and its exact artifacts; it is not another entity.
+`PreparationState=ready` is the compatible active-context projection.
 
 ## 3. Active context and milestones
 
@@ -47,8 +49,9 @@ active_selection_plan_id
 active_working_draft_id
 ```
 
-Approved and Ready revisions are immutable milestones and are not active context merely
-because they are newest. Query projections additionally expose:
+Approved revisions, including those that are `ready_qualified`, are immutable
+milestones and are not active context merely because they are newest. Query projections
+additionally expose:
 
 ```text
 latest_approved_revision_id
@@ -57,8 +60,10 @@ newer_draft_in_progress
 ```
 
 Ready compatibility is JobSnapshot ID + JobAnalysis ID. A SelectionPlan or WorkingDraft
-change under the same pair does not demote Ready. A JobSnapshot or JobAnalysis change
-does.
+change under the same pair does not demote `PreparationState=ready`. A JobSnapshot or
+JobAnalysis change makes that milestone historical for the active context without
+changing qualification solely because context moved. Missing or corrupt artifacts can
+still make `ready_qualified=false`.
 
 ## 4. PreparationState
 
@@ -74,26 +79,26 @@ approved
 ready
 ```
 
-Projection rules are evaluated within one consistent read transaction.
+Projection rules use the following exact precedence and are evaluated within one
+consistent read transaction. The first matching rule wins:
 
-1. If there is no compatible JobAnalysis for the active JobSnapshot, the state is
-   `needs_analysis`.
-2. If the active analysis/plan has an unresolved explicit decision, the state is
-   `needs_review`.
-3. If there is a compatible analysis/plan but no usable current draft or milestone, the
-   state is `ready_to_draft`.
-4. If an active WorkingDraft exists but has no exact passing eligible ValidationRun, the
-   state is `draft_in_progress`.
-5. If the active WorkingDraft has an exact passing eligible ValidationRun, the state is
+1. No compatible JobAnalysis for the active JobSnapshot -> `needs_analysis`.
+2. A compatible `ready_qualified` ApprovedRevision exists -> `ready`.
+3. A compatible ApprovedRevision exists without Ready qualification -> `approved`.
+4. The active analysis/plan has an unresolved explicit decision -> `needs_review`.
+5. The active WorkingDraft is stale -> `needs_review` only when a real decision is
+   required, otherwise `ready_to_draft`.
+6. The active WorkingDraft has an exact passing eligible ValidationRun ->
    `ready_for_approval`.
-6. If a compatible ApprovedRevision exists without full Ready qualification, the state
-   is `approved`.
-7. If a compatible ApprovedRevision qualifies as Ready, the state is `ready`.
+7. An active WorkingDraft exists without such a ValidationRun -> `draft_in_progress`.
+8. A compatible analysis and initial/active SelectionPlan exist -> `ready_to_draft`.
 
-Milestone capability takes precedence over parallel work under the same compatible
-JobSnapshot + JobAnalysis. Therefore a compatible ready revision plus a newer editing
-draft projects `ready`, while WorkingDraftState and `newer_draft_in_progress` describe
-the parallel work.
+Milestone capability therefore takes precedence over parallel work under the same
+compatible JobSnapshot + JobAnalysis. A compatible Ready revision plus an unresolved
+review reason or newer editing draft still projects `ready`; the review reasons,
+blocked actions, WorkingDraftState, and `newer_draft_in_progress` describe the newer
+parallel work without erasing the usable milestone. The same rule applies to
+`approved`.
 
 When the active JobSnapshot or JobAnalysis changes, old approved/ready milestones remain
 historical references but do not participate in active PreparationState.
@@ -355,8 +360,11 @@ There is no hard-delete command in v2.0 Web.
 
 Asynchronous and idempotent. It runs deterministic analysis and, in AI mode, a
 `propose_job_analysis` task. It validates and merges the Proposal without allowing it to
-override hard gaps, factual policy, or schemas. It creates an immutable JobAnalysis and
-returns NeedsReview as a successful outcome when applicable.
+override hard gaps, factual policy, or schemas. Every successful activation atomically
+creates an immutable JobAnalysis and its initial immutable deterministic SelectionPlan,
+with the plan's frozen candidate/policy context. It returns both IDs and NeedsReview as
+a successful outcome when applicable. This guarantees that the no-review path can call
+`create_draft` with explicit source IDs.
 
 Preconditions:
 
@@ -366,17 +374,23 @@ Preconditions:
 
 ### `apply_analysis_decisions`
 
-Synchronous. It accepts one local form submission and creates one new immutable
-JobAnalysis when requirement meaning/classification changes and/or one SelectionPlan
-when only selection/accepted-gap decisions change. It records overrides and never
-mutates the original analysis.
+Synchronous. It accepts one local form submission. When requirement
+meaning/classification changes, it creates one new immutable JobAnalysis together with
+that analysis's initial deterministic SelectionPlan. When only selection/accepted-gap
+decisions change, it creates one replacement SelectionPlan. It records overrides and
+never mutates the original analysis or plan.
 
 ### `create_selection_plan`
 
-Synchronous unless an AI proposal is requested. It receives an explicit analysis ID,
-candidate context, selected/excluded/pinned facts, accepted gaps, and policy versions.
-It validates Profile/Track/Emphasis and allowed-fact constraints, then creates an
-immutable plan and frozen candidate context.
+The deterministic form is synchronous and returns the immutable plan directly. It
+receives an explicit analysis ID, candidate context, selected/excluded/pinned facts,
+accepted gaps, and policy versions, validates Profile/Track/Emphasis and allowed-fact
+constraints, then creates an immutable plan and frozen candidate context.
+
+When AI `propose_selection_plan` mode is requested, the command creates an asynchronous,
+idempotent Operation. The provider output is only a Proposal; activation repeats the
+same deterministic validations and optimistic source checks before committing the new
+plan. No provider call occurs inside a synchronous HTTP request.
 
 ## 14. Draft commands
 
@@ -455,9 +469,17 @@ no unresolved blocker or review reason exists
 ```
 
 It writes immutable revision JSON/Markdown, registers one ApprovedRevision, records the
-decision/provenance, and leaves the WorkingDraft available as policy specifies. The same
-idempotency key/payload returns the same revision. A reused key with another payload
-fails.
+decision/provenance, deactivates the WorkingDraft, and sets
+`active_working_draft_id=null` in the same transaction. The mutable draft is closed;
+the ApprovedRevision is its immutable content/lineage record. A later edit or New Draft
+action explicitly creates another WorkingDraft with `parent_revision_id`, analysis ID,
+and SelectionPlan ID. The same idempotency key/payload returns the same revision. A
+reused key with another payload fails.
+
+The CLI compatibility command `cv fast` is an explicit user approval action. It may
+orchestrate validate -> approve -> render -> Ready checks with
+`actor_type=user/client=cli`, but it is subject to every exact-validation, warning
+confirmation, blocker, and idempotency rule above.
 
 Warnings may require one general confirmation. No warning that actually requires a
 specific resolution may reach this command as a warning.
@@ -472,13 +494,16 @@ page count, PDF/ATS text, links, direction, filename metadata and integrity, the
 registers immutable artifacts.
 
 Render failure leaves ApprovedRevision approved and returns a failed Operation/report.
-Retry creates a new Operation. A successful result qualifies the ApprovedRevision for
-Ready; it does not create a ReadyRevision row.
+Retry creates a new Operation. A successful result records the exact passing evidence
+needed for the ApprovedRevision to project `ready_qualified`; it projects active Ready
+only when its JobSnapshot + JobAnalysis are compatible. It does not create a
+ReadyRevision row.
 
 ### `export_recruiter_pdf(approved_revision_id, pdf_artifact_id)`
 
-Synchronous read/export. It verifies registration, hash, Ready qualification, and path
-containment before returning a friendly Content-Disposition filename.
+Synchronous read/export. It verifies registration, hash, `ready_qualified`, and path
+containment before returning a friendly Content-Disposition filename. Active-context
+compatibility is not required to export a historical qualified revision.
 
 ### `export_decision_markdown(application_id, approved_revision_id)`
 
@@ -523,9 +548,12 @@ mutates the old fact content.
 ### `submit_application`
 
 Input names Application ID, ApprovedRevision ID, exact PDF Artifact ID, submission time,
-and metadata. It verifies current Ready qualification/integrity, inserts immutable
-Submission, transitions to `applied` if required, and appends status/audit events in one
-SQLite transaction. It never resolves latest implicitly.
+and metadata. It verifies the revision's current `ready_qualified` status, exact PDF,
+and current artifact integrity; inserts immutable Submission; transitions to `applied`
+if required; and appends status/audit events in one SQLite transaction. It never
+resolves latest implicitly. Active-context compatibility is not a precondition: when
+the active snapshot or analysis is newer, the outcome includes the corresponding
+`READY_REVISION_FOR_OLDER_*` warning.
 
 Multiple submissions are allowed. Later submissions do not add a redundant `applied`
 transition or reset recruitment state.
@@ -621,6 +649,9 @@ POST   /api/v1/applications/{id}/recruitment-corrections
 Final path names remain an internal design choice if resource identity, explicit source
 IDs, and use-case semantics do not change.
 
+`POST /analyses/{id}/selection-plans` returns `201` for deterministic mode and `202`
+plus `Location` for AI proposal mode.
+
 ## 22. HTTP outcomes
 
 - `200`: query/update or successful outcome such as validation failure
@@ -662,8 +693,9 @@ Create
 ```
 
 Auto-generation is enabled by default when review is not required and the Workspace
-setting allows it. The UI may chain commands, but each remains an independent
-application use-case.
+setting allows it. Successful Analyze already returns the explicit initial
+SelectionPlan ID used by Draft. The UI may chain commands, but each remains an
+independent application use-case.
 
 Dashboard and recruitment management may not begin until this path and its central
 failure modes pass through both the Application API and the Web UI.

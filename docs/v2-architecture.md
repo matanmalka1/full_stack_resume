@@ -169,9 +169,16 @@ The Workspace marker includes at least:
 ```
 
 `purpose` and `data_class` distinguish development/test/live and copy/test/live data.
-The runtime refuses unsafe combinations, including a v2 development process attempting
-to open a marker identified as a v1 live Workspace. Guards use metadata rather than
-folder-name heuristics.
+Normal v2 runtime commands fail closed unless the selected root contains a valid v2
+marker whose purpose/data class is allowed for that command. An unmarked directory,
+legacy v1 root, unknown marker version, or unsafe development/live combination is never
+opened as a normal v2 Workspace. Guards use metadata rather than folder-name
+heuristics.
+
+The dedicated migration source adapter is the sole exception: it may inventory an
+explicit unmarked v1 source path in read-only mode, bind it to an inventory hash, and
+copy from it into a separately marked v2 target. It never writes a marker or any other
+file into the v1 source. A v2 marker is created only in the target copy.
 
 `installation_id` is durable runtime identity stored in state metadata and remains
 separate from `workspace_id`, even though v2.0 operates one Workspace at a time.
@@ -333,9 +340,13 @@ hashes determine dependency staleness. SelectionPlan additionally freezes candid
 fact IDs/hashes, Profile, selection policy, and Track/Emphasis dependencies. An
 unrelated fact change does not invalidate every draft.
 
-Ready is computed, never stored as a second revision type. An ApprovedRevision qualifies
-when its exact HTML/PDF/visual artifacts exist, render/PDF/ATS validation passes, and
-integrity verification passes. `latest_ready_revision_id` is an ApprovedRevision ID.
+Ready is computed, never stored as a second revision type. An ApprovedRevision becomes
+`ready_qualified` when its exact HTML/PDF/visual artifacts exist, render/PDF/ATS
+validation passes, and current integrity verification passes. This projection is
+independent of the active context but may become false if registered artifacts are
+missing or corrupt. `PreparationState=ready` additionally requires compatibility with
+the active JobSnapshot + JobAnalysis, and
+`latest_ready_revision_id` is an ApprovedRevision ID.
 
 Ready remains compatible across a new SelectionPlan/WorkingDraft under the same
 JobSnapshot + JobAnalysis. A new snapshot or analysis demotes it only for the active
@@ -357,9 +368,13 @@ API and CLI consume this policy. React does not duplicate it.
 ## 10. Operation runner
 
 Operation is an application/infrastructure concern, not the central domain aggregate.
-The lightweight worker runs inside the supervised local backend process, polls/claims
-SQLite rows atomically, and runs jobs outside requests. It is not a separate deployed
-service and requires no Celery or Redis.
+The Operation runner has two hosts but one execution contract. Under `cv web`,
+lightweight worker loops run inside the supervised local backend process, poll/claim
+SQLite rows atomically, and execute jobs outside requests. A standalone CLI command
+that creates an Operation atomically claims its own row and runs it in the foreground
+in the CLI process with the same leases, heartbeat, resource locks, cancellation,
+idempotency, and optimistic activation checks. It does not require FastAPI or a running
+Web server. Neither host is a separately deployed service or requires Celery/Redis.
 
 Default limits are:
 
@@ -419,8 +434,9 @@ facts. True use-cases use action endpoints such as validate, approve, render, ca
 and retry rather than artificial CRUD.
 
 Asynchronous commands return `202 Accepted` plus an Operation Location. Synchronous
-creation returns `201 Created`. NeedsReview and failed validation are successful domain
-outcomes.
+creation returns `201 Created`. SelectionPlan creation is `201` in deterministic mode
+and `202` with a Location when AI proposal mode is requested. NeedsReview and failed
+validation are successful domain outcomes.
 
 API schemas are separate from domain and persistence types. OpenAPI is generated and
 validated; TypeScript types are generated and checked for drift. A small handwritten

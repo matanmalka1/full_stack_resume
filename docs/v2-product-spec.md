@@ -168,13 +168,17 @@ decision.
    Submission, and completed Operation records are immutable/versioned as specified.
 5. An approved revision is never edited. Editing it creates a new WorkingDraft with an
    explicit parent revision and source analysis/selection plan.
-6. `ReadyRevision` is not an entity. `ready` is a projection over an ApprovedRevision
-   with exact artifacts, passing render/PDF/ATS validation, and successful integrity
-   verification.
+6. `ReadyRevision` is not an entity. `ready_qualified` is a context-independent
+   projection over an ApprovedRevision with exact artifacts, passing render/PDF/ATS
+   validation, and successful current integrity verification.
+   `PreparationState=ready` is the separate active-context projection of a compatible
+   `ready_qualified` revision.
 7. `latest_ready_revision_id` always refers to an ApprovedRevision ID.
 8. Ready compatibility is defined by JobSnapshot + JobAnalysis, not SelectionPlan. A
-   new plan or draft under the same snapshot and analysis does not demote an existing
-   ready revision. A new snapshot or analysis does.
+   new plan or draft under the same snapshot and analysis does not demote the active
+   Ready projection. A new snapshot or analysis removes it from the active projection
+   without changing qualification solely because the active context moved. Missing or
+   corrupted artifacts may still make `ready_qualified=false`.
 9. Approval requires a passing ValidationRun for the exact WorkingDraft ID,
    `edit_version`, content hash, facts and knowledge context, analysis context, and
    validator versions being approved.
@@ -257,6 +261,13 @@ JobAnalysis owns requirement interpretation, classification, fit, gaps, and ambi
 SelectionPlan owns selected, excluded, and pinned facts, content emphasis overrides,
 candidate context, and explicit accepted gaps. Both are immutable and versioned.
 
+Every successful `analyze_job` commit creates both the immutable JobAnalysis and one
+initial deterministic SelectionPlan for that exact analysis. The plan is produced by
+the deterministic selection policy and freezes its own policy/candidate-context
+versions. An AI `propose_selection_plan` task is an optional, separate Operation that
+may propose a replacement plan; it is never required to make the no-review path
+draftable.
+
 A change to the meaning or classification of a requirement creates a JobAnalysis. A
 change only to which facts will address an already understood requirement creates a
 SelectionPlan.
@@ -316,14 +327,25 @@ that warnings remain. Any item requiring a specific business decision is a block
 review reason rather than a warning.
 
 Web approval is always an explicit trust-boundary action. It creates an immutable
-ApprovedRevision. Rendering is a separate use-case and may be chained by the UI. A
-render failure does not revoke approval; the user may retry or create a new WorkingDraft
-from that revision.
+ApprovedRevision and clears `active_working_draft_id`; the approved content and lineage
+remain frozen in the revision rather than as an active mutable draft. Rendering is a
+separate use-case and may be chained by the UI. A render failure does not revoke
+approval; the user may retry or explicitly create a new WorkingDraft from that
+revision. `newer_draft_in_progress` becomes true only after such a later draft is
+created.
+
+The v1 `cv fast` workflow remains available as a CLI compatibility command. Invoking
+it is itself an explicit user approval instruction and is recorded with
+`actor_type=user`, `client=cli`. It may chain exact validation, approval, rendering,
+and Ready checks, but it never bypasses blockers or validation and never auto-approves
+merely because an AI Operation completed.
 
 A prior Ready projection remains usable while a newer SelectionPlan or WorkingDraft is
 in progress under the same JobSnapshot and JobAnalysis. The UI shows `Ready` and
 `newer_draft_in_progress`. A new snapshot or analysis makes the prior Ready projection
 historical for the active context and exposes a warning while preserving its files.
+The context change alone does not affect `ready_qualified`; artifact/integrity checks
+still do.
 
 The Ready screen contains preview, recruiter-facing PDF download, validation summary,
 revision/provenance summary, and creation of a new WorkingDraft. Submission is added in
@@ -425,10 +447,13 @@ Application Detail contains header/status/next action, current preparation, one 
 timeline, focused revisions/artifacts and submissions sections, and navigation back to
 the editor.
 
-`submit_application` verifies an explicit Ready ApprovedRevision and exact PDF artifact,
-creates an immutable Submission, transitions to `applied` if necessary, and appends
-status/audit history in one SQLite transaction. It never resolves `latest` inside the
-command. Multiple submissions are append-only and do not reset recruitment state.
+`submit_application` verifies an explicit `ready_qualified` ApprovedRevision and exact
+PDF artifact, creates an immutable Submission, transitions to `applied` if necessary,
+and appends status/audit history in one SQLite transaction. It never resolves `latest`
+inside the command. The revision need not match the current active snapshot/analysis;
+that case returns `READY_REVISION_FOR_OLDER_SNAPSHOT` or
+`READY_REVISION_FOR_OLDER_ANALYSIS` as a non-blocking historical-context warning.
+Multiple submissions are append-only and do not reset recruitment state.
 
 `record_external_submission` is a distinct use-case. It may reference a file already
 known to the system but never invents an ApprovedRevision or Artifact.
@@ -577,9 +602,13 @@ specific rather than one global mutex.
 
 Operations store a full structured, secret-free payload and hash, resource IDs,
 expected versions/hashes, provider/model, timestamps, phases, safe user message,
-technical log reference, and failure metadata. An internal worker uses atomic SQLite
-claiming, leases, and heartbeat. Expired queued/running work becomes `interrupted` after
-restart; AI/browser work is never resumed mid-call.
+technical log reference, and failure metadata. The shared Operation runner uses atomic
+SQLite claiming, leases, and heartbeat. Under `cv web`, the supervisor hosts background
+worker loops. A standalone CLI command that creates an Operation atomically claims and
+executes that Operation in the foreground in the same CLI process, using the identical
+runner, lease, heartbeat, idempotency, and commit checks; it never requires FastAPI or
+`cv web`. Expired queued/running work becomes `interrupted` after restart; AI/browser
+work is never resumed mid-call.
 
 Queued cancellation is immediate. Running cancellation is best-effort and prevents
 activation. A completed output after cancellation is recorded as inactive evidence.

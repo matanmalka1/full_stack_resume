@@ -30,6 +30,8 @@ Cover:
 - approval exactness
 - Ready qualification and compatibility
 - PreparationState and WorkingDraftState
+- exact PreparationState precedence with milestones plus newer review/draft work
+- WorkingDraft deactivation on approval and explicit later-draft creation
 - warnings, blockers, review and stale reasons
 - available/blocked/recommended action policy
 - recruitment transitions, correction, closed/terminal outcome
@@ -174,6 +176,8 @@ Create
 ```
 
 Assert state/action projection after every step.
+Assert Analyze atomically returns an initial deterministic SelectionPlan ID and the
+no-review path passes that explicit ID to Draft without another plan-creation request.
 
 ### 5.2 Review path
 
@@ -209,6 +213,17 @@ Create
 - assert PreparationState remains Ready and newer draft is visible
 - create a new analysis or snapshot
 - assert old Ready becomes historical for active context
+- submit the exact older `ready_qualified` revision/PDF and assert success plus the
+  older-snapshot/analysis warning rather than a false precondition failure
+
+### 5.6 Approval and CLI execution boundaries
+
+- approve an exact validated WorkingDraft and assert the active draft pointer is clear
+- assert `newer_draft_in_progress=false` until a later draft is explicitly created
+- run analyze/generate/render from CLI with no FastAPI/`cv web` process and assert the
+  foreground runner uses leases/heartbeat/idempotency and completes the Operations
+- run `cv fast` and assert it records explicit user/CLI approval and cannot bypass a
+  validation blocker
 
 ## 6. AI tests
 
@@ -256,6 +271,7 @@ Required tests:
 - duplicate approve request with the same idempotency key
 - same key with a different payload hash
 - two workers attempt to claim one Operation
+- foreground CLI runner races a Web worker for one Operation and only one claims it
 - expired lease and restart
 - cancellation before execution
 - cancellation after an immutable output exists but before activation
@@ -319,6 +335,9 @@ Required:
 - sanitized raw provider artifact
 - prompt-injection fixtures
 - Workspace marker/live-data guard
+- every normal v2 command rejects an unmarked v1 root
+- migration source inventory reads an explicit unmarked v1 root without creating or
+  modifying any file in it, while the v2 marker exists only in the target copy
 - foreign process on default port
 - same-instance health/identity detection
 
@@ -387,6 +406,8 @@ the real v1 Workspace and must record:
 - target counts
 - mapped and preserved IDs
 - status mappings
+- raw `preparing`/`ready` history preserved as migration events without inserting
+  invalid values into v2 RecruitmentStatus columns
 - snapshot and artifact hashes
 - historical semantics
 - warnings/exceptions
