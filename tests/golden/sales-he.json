@@ -10,7 +10,7 @@
     "emphasis": "account-growth"
   },
   "snapshot": {
-    "markdown_sha256": "efd08b51b5dcc426e1328073de2a67965bfe66928e010848ba973facee138e9a",
+    "markdown_sha256": "579942c7be2d34ab890673bb4b0faa4909b502a7332ec8d009a054e9ba0d5557",
     "html_sha256": "04684fbf6efdcaf3e95a82457d4f3060a7af55f5188bc1a8f006971dba670481",
     "selected_fact_ids": [
       "common.contact.email",

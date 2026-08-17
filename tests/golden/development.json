@@ -5,8 +5,8 @@
   "emphasis": "development-backend",
   "language": "en",
   "snapshot": {
-    "markdown_sha256": "14c8f262fd2bfc4d56ec0209aaff73b9da5b6e5773a73e9a2ec4f4e7066b88a3",
-    "html_sha256": "94740636943d2def7c76e821e34e5898b4916e38019273743c9f0995ab6050e3",
+    "markdown_sha256": "a21274fc8dd242a0050f51ab0ec3c3e15fd374567ac310e6f5d88bdd2ce404b8",
+    "html_sha256": "46b62d47e41138d88d8c2afd1b980dcdc363af489ce2be22e5697330de370341",
     "selected_fact_ids": [
       "common.contact.email",
       "common.contact.github",
@@ -25,6 +25,7 @@
       "development.phdigital.fullstack",
       "development.phdigital.integrations",
       "development.phdigital.role",
+      "development.project.mm_backend_core",
       "development.skills.ai",
       "development.skills.backend",
       "development.skills.databases",
@@ -40,6 +41,7 @@
     "sections": [
       "Professional Summary",
       "Work Experience",
+      "Projects",
       "Education",
       "Core Skills",
       "Languages"

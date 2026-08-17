@@ -3,7 +3,18 @@
   "track": "development",
   "default_pages": 1,
   "maximum_pages": 1,
-  "required_sections": ["Professional Summary", "Work Experience", "Education", "Core Skills", "Languages"],
-  "contact_links": ["email", "linkedin", "github"],
+  "required_sections": [
+    "Professional Summary",
+    "Work Experience",
+    "Projects",
+    "Education",
+    "Core Skills",
+    "Languages"
+  ],
+  "contact_links": [
+    "email",
+    "linkedin",
+    "github"
+  ],
   "direction": "ltr"
 }

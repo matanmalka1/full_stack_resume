@@ -36,6 +36,17 @@ def _fact(
 
 
 HANDOFF = "v1 handoff Section 7; explicitly canonical"
+# Personal/open-source work, deliberately not attributed to PH.Digital. Every
+# technology named below was read off the published package before it was
+# written down, so the bullet is evidence rather than a self-report.
+MM_BACKEND_CORE = (
+    "User statement 2026-08-17, independently verified against "
+    "https://github.com/matanmalka1/mm-backend-core (public, JavaScript, MIT) and the npm "
+    "registry (mm-backend-core@2.0.2, engines node>=18); template package.json confirms "
+    "express@5, mongoose, passport OAuth, jsonwebtoken, multer, zod, helmet, "
+    "express-rate-limit, express-mongo-sanitize, winston, vitest, supertest. "
+    "Personal/open-source work; not attributable to PH.Digital."
+)
 LEGACY = "base/cv_base.md; migrated without strengthening"
 # Summary-level restatements of evidence that is already canonical elsewhere in
 # this file. They exist so a Profile can lead with the stack a job asks about
@@ -130,6 +141,7 @@ DEVELOPMENT_FACTS = [
     _fact("development.skills.ai", "AI integration skills: OpenAI API, Anthropic API, LLM integrations, Prompt Engineering.", "AI and LLM Integrations: OpenAI API, Anthropic API, LLM integrations, Prompt Engineering", he="AI ו-LLM Integrations: OpenAI API, Anthropic API, LLM integrations, Prompt Engineering", tags=["development", "skill", "ai"], provenance=LEGACY, style="item"),
     _fact("development.skills.databases", "Database skills: PostgreSQL, MySQL, MongoDB, SQLAlchemy, SQL.", "Databases: PostgreSQL, MySQL, MongoDB, SQLAlchemy, SQL", he="Databases: PostgreSQL, MySQL, MongoDB, SQLAlchemy, SQL", tags=["development", "skill", "databases"], provenance=LEGACY, style="item"),
     _fact("development.skills.devops", "DevOps and testing tool skills: Docker, GitHub Actions, Git, AWS EC2, pytest, Vitest, Postman.", "DevOps & Testing: Docker, GitHub Actions, Git, AWS EC2, pytest, Vitest, Postman", he="DevOps ובדיקות: Docker, GitHub Actions, Git, AWS EC2, pytest, Vitest, Postman", tags=["development", "skill", "devops"], provenance=LEGACY, style="item"),
+    _fact("development.project.mm_backend_core", "Personal open-source project: built and published mm-backend-core, an npm-distributed Node.js/Express CLI that scaffolds a MongoDB REST API template with JWT auth and refresh tokens, RBAC, Passport OAuth, file uploads, Zod validation, Helmet/rate-limiting/mongo-sanitize security middleware, Winston logging, and Vitest/Supertest tests. Not PH.Digital work.", "Built and published mm-backend-core on npm, a Node.js/Express backend scaffolding CLI generating a MongoDB REST API with JWT/RBAC authentication, OAuth, validation, security middleware, and automated testing.", he="פיתוח ופרסום של mm-backend-core ב-npm — CLI ליצירת שלד backend ב-Node.js/Express, המייצר REST API על MongoDB עם אימות JWT/RBAC, OAuth, ולידציה, middleware אבטחה ובדיקות אוטומטיות.", tags=["development", "project", "backend", "nodejs", "open-source", "testing"], provenance=MM_BACKEND_CORE),
     _fact("development.project.mami", "Personal Mami Supermarket project is a full-stack grocery platform using Flask, PostgreSQL, SQLAlchemy, React, TypeScript, Vite, Tailwind, JWT, Alembic, and Pydantic.", "Mami Supermarket: full-stack grocery delivery and operations platform built with Flask, PostgreSQL, SQLAlchemy, React, TypeScript, Vite, Tailwind CSS, JWT, Alembic, and Pydantic.", tags=["development", "project", "full-stack"], provenance=LEGACY),
     _fact("development.project.bar_exam", "Personal Bar Exam Practice App uses FastAPI, PostgreSQL, SQLAlchemy, Alembic, Pydantic, JWT, slowapi, Sentry, PDF parsing, React, TypeScript, React Query, Zod, Tailwind, and pytest.", "Bar Exam Practice App: FastAPI/PostgreSQL backend and React/TypeScript frontend with authentication, migrations, rate limiting, monitoring, PDF ingestion, and pytest coverage.", tags=["development", "project", "backend"], provenance=LEGACY),
     _fact("development.project.gd", "Freelance G.D Financial Services responsive marketing site used React, Vite, Tailwind CSS, Radix UI, React Hook Form, and Zod.", "G.D Financial Services: responsive freelance marketing site built with React, Vite, Tailwind CSS, Radix UI, React Hook Form, and Zod.", tags=["development", "project", "frontend", "freelance"], provenance=LEGACY),

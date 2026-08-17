@@ -4,7 +4,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
 
 ```json
 {
-  "source_version": "1.0.3",
+  "source_version": "1.0.4",
   "facts": [
     {
       "fact_id": "development.summary",
@@ -402,6 +402,29 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "replaces": null,
       "source_file": "",
       "resume_style": "paragraph"
+    },
+    {
+      "fact_id": "development.project.mm_backend_core",
+      "meaning": "Personal open-source project: built and published mm-backend-core, an npm-distributed Node.js/Express CLI that scaffolds a MongoDB REST API template with JWT auth and refresh tokens, RBAC, Passport OAuth, file uploads, Zod validation, Helmet/rate-limiting/mongo-sanitize security middleware, Winston logging, and Vitest/Supertest tests. Not PH.Digital work.",
+      "renderings": {
+        "en": "Built and published mm-backend-core on npm, a Node.js/Express backend scaffolding CLI generating a MongoDB REST API with JWT/RBAC authentication, OAuth, validation, security middleware, and automated testing.",
+        "he": "פיתוח ופרסום של mm-backend-core ב-npm — CLI ליצירת שלד backend ב-Node.js/Express, המייצר REST API על MongoDB עם אימות JWT/RBAC, OAuth, ולידציה, middleware אבטחה ובדיקות אוטומטיות."
+      },
+      "tags": [
+        "development",
+        "project",
+        "backend",
+        "nodejs",
+        "open-source",
+        "testing"
+      ],
+      "status": "canonical",
+      "provenance": "User statement 2026-08-17, independently verified against https://github.com/matanmalka1/mm-backend-core (public, JavaScript, MIT) and the npm registry (mm-backend-core@2.0.2, engines node>=18); template package.json confirms express@5, mongoose, passport OAuth, jsonwebtoken, multer, zod, helmet, express-rate-limit, express-mongo-sanitize, winston, vitest, supertest. Personal/open-source work; not attributable to PH.Digital.",
+      "confirmed_at": "2026-08-17",
+      "effective_dates": null,
+      "replaces": null,
+      "source_file": "",
+      "resume_style": "bullet"
     }
   ]
 }

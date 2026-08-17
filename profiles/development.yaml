@@ -1,6 +1,6 @@
 {
   "profile_id": "development.v1",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "track": "development",
   "profile": "development",
   "default_emphasis": "development-balanced",
@@ -58,6 +58,17 @@
       "max_claims": 11,
       "min_claims_per_role": 2,
       "min_quantitative_per_role": 1
+    },
+    {
+      "name_en": "Projects",
+      "name_he": "פרויקטים",
+      "fact_ids": [
+        "development.project.mm_backend_core"
+      ],
+      "pinned_fact_ids": [
+        "development.project.mm_backend_core"
+      ],
+      "max_claims": 1
     },
     {
       "name_en": "Education",

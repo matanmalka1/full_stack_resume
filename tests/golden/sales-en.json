@@ -5,7 +5,7 @@
   "emphasis": "account-growth",
   "language": "en",
   "snapshot": {
-    "markdown_sha256": "b80ea6d83bb2a88cf1b400efd4d3d8d77f87a8d11579a48e62ad349741c6ae8d",
+    "markdown_sha256": "6ff17e8ea397aa3e3c5e4b74c3a2a26ee0c57fc75d0a52333a1a47766d989d89",
     "html_sha256": "80084e86f77ab02fda74f8e88dd17562932ba96e1021afbc03d62aaa8e0f19be",
     "selected_fact_ids": [
       "common.contact.email",
