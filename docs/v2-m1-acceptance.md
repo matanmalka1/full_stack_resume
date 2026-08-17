@@ -13,11 +13,13 @@ review then showed was not isolated from the v1 worktree, so its test evidence c
 not support the claim it made. Keeping two contradictory records would leave the
 milestone's status a matter of which file a reader opened first.
 
-Two review rounds have run against this milestone. The first found eight items, closed
-in section 2. The second found four more (section 3) and did not accept M1: three were
-architectural gaps this record had either not detected or had re-scoped without
-approval. Those are now closed, and this file records both what was wrong and what the
-earlier version of it got wrong.
+Three review rounds have run against this milestone. The first found eight items,
+closed in section 2. The second found four more (section 3) and did not accept M1:
+three were architectural gaps this record had either not detected or had re-scoped
+without approval. A third boundary audit then found that the declared application
+contracts were still not the contracts clients actually used. Those gaps are also
+closed in 3.5, and this file records both what was wrong and what the earlier version
+of it got wrong.
 
 ## 1. Commits in this milestone
 
@@ -33,6 +35,7 @@ earlier version of it got wrong.
 | `c7150ff` | File access moved out of the domain and application layers |
 | `0b720f2` | Command/query DTOs, error taxonomy, focused repository ports, UnitOfWork |
 | `85aa841` | Explicit source IDs in commands; `latest` resolution in the compatibility layer |
+| `a755ee0` | Application contracts made load-bearing: Pydantic DTOs, read projections, focused service ports, stable failures, explicit-commit UnitOfWork |
 
 ## 2. First review round, and its resolution
 
@@ -184,13 +187,26 @@ file listed UnitOfWork as deferred to M2 under "Deviations", which is a scope ch
 nobody approved, and did not mention DTOs or error types at all. `ApplicationRepository`
 was one broad port that also exposed `path: Path`.
 
-Now: `application/commands.py` carries the command inputs and results, and services
-return them instead of tuples and bare dicts; `application/errors.py` defines
-`ApplicationError` with `UnknownRecord`, `StateConflict`, `ValidationBlocked` (carrying
-its report), `LineageBroken`, `KnowledgeRejected`, and `DependencyUnavailable`;
-`ApplicationRepository` is composed from `ApplicationStore`, `JobStore`,
-`ArtifactRegistry`, and `FactAudit`, and exposes no path, connection, or private method;
-`UnitOfWork` is declared and implemented over the adapter's existing transaction.
+Now: `application/commands.py` carries Pydantic command and result DTOs, and
+`application/queries.py` carries purpose-built read projections. Application results
+name records by stable IDs and do not expose filesystem locations, database rows, or
+serialized database columns. `application/errors.py` defines `ApplicationError` with
+`UnknownRecord`, `StateConflict`, `PreconditionFailed`, `ValidationBlocked` (carrying
+its report), `LineageBroken`, `KnowledgeRejected`, `DependencyUnavailable`, and
+`InfrastructureFailure`. Expected missing-record, knowledge, provider, renderer, and
+filesystem failures are normalized at the boundary.
+
+Services are typed against the port they use (`ApplicationStore`,
+`PreparationRepository`, `DraftRepository`, `ReadinessRepository`,
+`TrackingRepository`, `KnowledgeAuditRepository`, or `QueryRepository`), not the
+composition-root repository. CLI list/show/versions/decision and recruitment mutations
+now go through query/application services rather than reading or mutating SQLite rows.
+`ApplicationRepository` remains only the composition-root view of the single SQLite
+adapter and exposes no path, connection, or private method.
+
+`UnitOfWork` is declared and implemented as an explicit-commit transaction: exception,
+explicit rollback, and normal exit without `commit()` all roll back. The boundary is
+not yet used to regroup v1 commands; that deliberate M1 limit is recorded in section 6.
 
 `WorkflowError` stays bound to `ApplicationError`, so the v1 CLI and test suite catch
 exactly what they caught before. `tests/test_application_contracts.py` holds all of it.
@@ -231,6 +247,29 @@ not carry 3.1–3.3 as blockers. Section 4 now reports the current run, and the 
 are recorded above as what they were: blockers, two of them created by this file's own
 earlier judgements.
 
+### 3.5 The application contracts were declared but not load-bearing — closed
+
+The third audit read production code independently of the test refactor and found four
+remaining gaps behind 3.2's earlier claim:
+
+- command/result classes were dataclasses, results still returned `Path`, and there
+  were no query DTOs;
+- the focused repository protocols were nominal while every service and several CLI
+  business commands still used the broad repository directly;
+- expected `KeyError`, `FileNotFoundError`, provider, renderer, and knowledge failures
+  could cross the application boundary outside the declared taxonomy;
+- `SqliteUnitOfWork` committed any exception-free scope, so a forgotten explicit
+  commit published state rather than rolling it back.
+
+Commit `a755ee0` closes those gaps. Pydantic boundary DTOs are now the actual service
+inputs and outputs; filesystem paths are resolved only by CLI compatibility or
+infrastructure code; read projections strip `path`, `*_json`, and persistence-only
+payloads; each service is parameterized by its focused port; normal CLI queries and
+tracking mutations call services; expected failures use the application taxonomy; and
+UnitOfWork requires `commit()`. The compatibility façade still converts the v2 models
+back to v1 return shapes where old callers require them, without making those shapes
+the application contract.
+
 ## 4. Checklist evidence
 
 ### Domain/application code imports no FastAPI, SQLite, path layout, or provider HTTP
@@ -252,9 +291,9 @@ enforces this on the source itself rather than by review. Over both layers it re
 It is one test rather than five so the whole boundary is stated once and a violation is
 reported with every other violation beside it.
 
-`cv_engine/application/ports.py` defines `ApplicationRepository` — composed from
-`ApplicationStore`, `JobStore`, `ArtifactRegistry`, and `FactAudit` — plus `UnitOfWork`,
-`ArtifactStore`, `KnowledgeStore`, `Renderer`, and `ClassificationProvider`.
+`cv_engine/application/ports.py` defines use-case-oriented repository ports and their
+composition-root `ApplicationRepository`, plus `UnitOfWork`, `ArtifactStore`,
+`KnowledgeStore`, `Renderer`, and `ClassificationProvider`.
 `cv_engine/runtime/composition.py` is the only module that binds them to `Repository`,
 `FilesystemArtifactStore`, `FileKnowledge`, `PlaywrightRenderer`, and
 `OpenAIClassificationProvider`.
@@ -296,6 +335,12 @@ concrete reason 2.5 did not derive targets from renderings.
 
 Every command is dispatched to an application service; only the chained `cv fast` flow
 goes through the façade.
+
+After the third audit, the journey was repeated in a fresh temporary Workspace with
+explicit snapshot and analysis IDs. `ingest -> analyze -> draft -> validate -> approve
+-> render -> ready -> reconcile` passed; all six Ready-integrity groups were true, five
+artifact versions were registered, and list/show/versions/decision plus next-action
+updates succeeded through the new query and tracking services.
 
 ### Selected facts, claims, validation outcomes, Ready eligibility, and decision behaviour retain semantic parity with v1
 
@@ -350,12 +395,12 @@ one place.
 ### All applicable v1 safety invariants remain covered
 
 ```text
-CV_REQUIRE_BROWSER=1 python -m pytest -q  ->  100 passed in 31.88s
+CV_REQUIRE_BROWSER=1 python -m pytest -q  ->  102 passed in 26.20s
 ```
 
 The suite had grown from 131 tests at the v1 baseline to 209 during M1, largely by
 turning individual checklist bullets and equivalent input variants into separate test
-items. It is now consolidated to 100 tests. The four golden scenarios still run, and
+items. It is now consolidated to 102 tests. The four golden scenarios still run, and
 the suite still covers Workspace isolation, CandidateContext, the architectural
 boundary, cross-worktree imports, fact/claim safety, application contracts, explicit
 source ownership, UnitOfWork behavior, Ready integrity, rendering/PDF/ATS, and guarded
@@ -379,7 +424,7 @@ as if it settled the item:
   before the changes in section 3.
 
 The earlier 209-test run remains historical evidence for the pre-consolidation suite.
-The 100-test browser-required run above is the current evidence behind this record.
+The 102-test browser-required run above is the current evidence behind this record.
 
 ## 5. Migration safety note for `link_target`
 
@@ -406,11 +451,12 @@ Consequences to be aware of:
 ## 6. Deviations and open items
 
 - **The UnitOfWork boundary is declared, not yet load-bearing.** It is defined,
-  implemented, wired into the composition root, and tested, which is what plan §3.2
-  asks for. No command's writes were regrouped behind it, because that would change
-  durability semantics and M1 requires v1 parity. `approve` still writes its two
-  artifact versions and its decision record in three transactions, as v1 did. This is
-  stated as a limit of the step, not as a deferral of the item.
+  implemented with explicit-commit semantics, exposed by the repository, and tested
+  for commit, exception rollback, and normal-exit rollback. No command's writes were
+  regrouped behind it, because that would change durability semantics and M1 requires
+  v1 parity. `approve` still writes its two artifact versions and its decision record
+  in three transactions, as v1 did. M2 makes the boundary load-bearing for the new
+  multi-record v2 commands; this is a staged activation, not a missing M1 contract.
 - `migrate verify-live` has not been re-run — see section 5. That is the one piece of
   confirming evidence this record cannot produce from this worktree.
 - `cv fast` is retained as the CLI compatibility flow and is documented in code as an
