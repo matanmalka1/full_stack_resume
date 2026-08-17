@@ -7,6 +7,7 @@ from .analysis import unresolved_approval_reasons
 from .drafts import render_composite_claim, serialize_markdown, validate_derived_wording
 from .facts import FactStore, FactStoreError
 from .models import DraftDocument, JobAnalysis, Profile, ValidationIssue, ValidationReport
+from .selection import STRUCTURAL_STYLES, EmphasisPolicyStore
 from .util import sha256_text
 
 
@@ -17,13 +18,47 @@ STALE_OR_UNSUPPORTED = {
 }
 
 
+def _dangling_heading(claims: list) -> str | None:
+    """The last heading in a section that no evidence follows, if any."""
+    heading: str | None = None
+    supported = True
+    for claim in claims:
+        if claim.style == "heading":
+            if heading is not None and not supported:
+                return heading
+            heading, supported = claim.text, False
+        elif claim.style not in STRUCTURAL_STYLES:
+            supported = True
+    return None if supported else heading
+
+
+def _uncovered_tags(tags: list[str], selected_fact_ids: list[str], facts: FactStore) -> list[str]:
+    present = {
+        tag
+        for fact_id in selected_fact_ids
+        if fact_id in facts.facts
+        for tag in facts.get(fact_id).tags
+    }
+    return sorted(set(tags) - present)
+
+
 def validate_draft(
     draft: DraftDocument,
     markdown_path: Path,
     facts: FactStore,
     profile: Profile,
     analysis: JobAnalysis,
+    *,
+    policies: EmphasisPolicyStore | None = None,
 ) -> ValidationReport:
+    """Check a draft against the Profile, the facts, and the classification.
+
+    `policies` enables the Emphasis coverage warning, which needs the authoritative
+    tag policy rather than the draft's own selection manifest — the manifest travels
+    in an editable working file and is not trusted here. Omitting it drops that
+    warning only; every hard gate, the Profile's `required_tags` among them, is
+    derived from arguments that are always present.
+    """
     issues: list[ValidationIssue] = []
     groups = {"content": True, "profile": True, "structure": True, "filename": True}
     expected = serialize_markdown(draft)
@@ -192,6 +227,65 @@ def validate_draft(
                     code="fact-outside-profile-section",
                     message=f"claim {claim.claim_id} links facts outside {section.name}: {disallowed}",
                 ))
+        if spec.max_claims is not None and len(section.claims) > spec.max_claims:
+            groups["structure"] = False
+            issues.append(ValidationIssue(
+                group="structure",
+                code="section-budget-exceeded",
+                message=f"{section.name}: {len(section.claims)} claims over a budget of {spec.max_claims}",
+            ))
+        missing_pins = sorted(
+            set(spec.pinned_fact_ids)
+            - {fact_id for claim in section.claims for fact_id in claim.fact_ids}
+        )
+        if missing_pins:
+            groups["structure"] = False
+            issues.append(ValidationIssue(
+                group="structure",
+                code="pinned-fact-dropped",
+                message=f"{section.name} lost pinned facts: {missing_pins}",
+            ))
+        # Selection may drop bullets but must never leave a role heading standing
+        # on its own: a title and dates with no evidence under them reads as a
+        # gap in the history rather than as a tailored CV.
+        trailing_structural = _dangling_heading(section.claims)
+        if trailing_structural:
+            groups["structure"] = False
+            issues.append(ValidationIssue(
+                group="structure",
+                code="role-block-empty",
+                message=f"{section.name}: heading {trailing_structural} has no claims under it",
+            ))
+
+    # `Profile.required_tags` is what the Profile must be able to evidence at
+    # all; failing it means the document no longer supports the role it claims.
+    uncovered = _uncovered_tags(profile.required_tags, draft.selected_fact_ids, facts)
+    if uncovered:
+        groups["profile"] = False
+        issues.append(ValidationIssue(
+            group="profile",
+            code="required-tag-uncovered",
+            message=f"no selected fact evidences required tags: {uncovered}",
+        ))
+
+    # Emphasis coverage is a policy expectation, not a structural invariant, so
+    # it is reported and does not block on its own.
+    if policies is not None:
+        policy = policies.get(draft.emphasis)
+        covered = [
+            tag for tag in policy.preferred_tags
+            if tag not in _uncovered_tags([tag], draft.selected_fact_ids, facts)
+        ]
+        if len(covered) < policy.minimum_coverage:
+            issues.append(ValidationIssue(
+                group="profile",
+                code="emphasis-coverage-low",
+                message=(
+                    f"{draft.emphasis.value} covers {len(covered)} of its preferred tags; "
+                    f"policy expects {policy.minimum_coverage}"
+                ),
+                hard=False,
+            ))
     linked_fact_ids = sorted({fact_id for claim in claims for fact_id in claim.fact_ids})
     if draft.selected_fact_ids != linked_fact_ids:
         groups["content"] = False

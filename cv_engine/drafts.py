@@ -7,7 +7,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .facts import FactStore
-from .models import ClaimLine, DraftDocument, JobAnalysis, Profile, ResumeSection
+from .models import (
+    ClaimLine,
+    DraftDocument,
+    JobAnalysis,
+    OmissionReason,
+    Profile,
+    ResumeSection,
+    SelectionManifest,
+)
+from .selection import EmphasisPolicyStore, build_selection
 from .util import canonical_json, sha256_text
 
 
@@ -81,6 +90,28 @@ def _claim(
     )
 
 
+def _omitted_facts(
+    facts: FactStore,
+    selection: SelectionManifest,
+    selected: set[str],
+) -> dict[str, OmissionReason]:
+    """Why each unused canonical fact is absent, in codes rather than prose.
+
+    A fact the Profile never offered is a different situation from one that
+    competed and lost, and both are different from one evicted to restore a
+    required tag. Callers and tests can tell them apart.
+    """
+    considered: dict[str, OmissionReason] = {
+        candidate.fact_id: candidate.reason
+        for candidate in selection.candidates
+        if candidate.reason is not None
+    }
+    return {
+        fact_id: considered.get(fact_id, "not_in_profile_pool")
+        for fact_id in sorted(set(facts.facts) - selected)
+    }
+
+
 def build_draft(
     *,
     application_id: str,
@@ -88,6 +119,7 @@ def build_draft(
     analysis: JobAnalysis,
     profile: Profile,
     facts: FactStore,
+    policies: EmphasisPolicyStore,
 ) -> DraftDocument:
     if analysis.profile is not profile.profile or analysis.track is not profile.track:
         raise ValueError("analysis and profile do not match")
@@ -103,10 +135,20 @@ def build_draft(
         for fact_id in contact_ids
     ]
 
+    selected_by_section, selection = build_selection(
+        analysis=analysis,
+        profile=profile,
+        policy=policies.get(analysis.emphasis),
+        policy_store_version=policies.version,
+        facts=facts,
+    )
+
+    # The headline is supported by the historical titles that actually reached
+    # the document, not by every title the Profile could have shown.
     support_ids = [
         fact_id
         for section in profile.sections
-        for fact_id in section.fact_ids
+        for fact_id in selected_by_section[section.name_en]
         if "historical-title" in facts.get(fact_id).tags
     ]
     headline = _claim(
@@ -116,11 +158,11 @@ def build_draft(
         "headline",
     )
 
-    selected = set(contact_ids + support_ids)
+    selected = set(contact_ids)
     sections: list[ResumeSection] = []
     for spec in profile.sections:
         claims = []
-        for fact_id in spec.fact_ids:
+        for fact_id in selected_by_section[spec.name_en]:
             fact = facts.get(fact_id, canonical_only=True)
             text = facts.rendering(fact_id, language)
             claims.append(_claim(fact.resume_style, text, [fact_id]))
@@ -143,10 +185,8 @@ def build_draft(
         contacts=contacts,
         sections=sections,
         selected_fact_ids=sorted(selected),
-        omitted_facts={
-            fact_id: "not selected by the active Profile and rendering budget"
-            for fact_id in sorted(set(facts.facts) - selected)
-        },
+        omitted_facts=_omitted_facts(facts, selection, selected),
+        selection=selection,
         fact_store_version=facts.version,
     )
     markdown = serialize_markdown(draft)
@@ -241,10 +281,29 @@ def _replace_claim(draft: DraftDocument, claim_id: str, replacement: ClaimLine) 
 def _refresh_selection(draft: DraftDocument, facts: FactStore) -> DraftDocument:
     selected = {fact_id for claim in _claims(draft) for fact_id in claim.fact_ids}
     draft.selected_fact_ids = sorted(selected)
-    draft.omitted_facts = {
-        fact_id: "not selected by the active Profile and rendering budget"
-        for fact_id in sorted(set(facts.facts) - selected)
-    }
+    if draft.selection is not None:
+        # A manual edit may relink a claim to a different fact in the pool. The
+        # engine's decision record is not rewritten to match: it is flagged, so
+        # the audit trail keeps saying what the policy actually chose.
+        body = {
+            fact_id
+            for section in draft.sections
+            for claim in section.claims
+            for fact_id in claim.fact_ids
+        }
+        if body != set(draft.selection.selected_fact_ids):
+            draft.selection = draft.selection.model_copy(
+                update={"superseded_by_manual_edit": True}
+            )
+    draft.omitted_facts = _omitted_facts(
+        facts,
+        draft.selection or SelectionManifest(
+            policy_version="",
+            emphasis=draft.emphasis,
+            emphasis_policy_version="",
+        ),
+        selected,
+    )
     return draft.model_copy(update={"content_hash": sha256_text(serialize_markdown(draft))})
 
 

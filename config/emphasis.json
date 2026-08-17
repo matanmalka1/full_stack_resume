@@ -1,0 +1,100 @@
+{
+  "policy_version": "1.0.0",
+  "emphases": {
+    "development-balanced": {
+      "emphasis": "development-balanced",
+      "tag_weights": {
+        "full-stack": 100, "development": 80, "frontend": 75, "backend": 75,
+        "technical": 60, "integrations": 50, "databases": 45, "devops": 45,
+        "ai": 40, "testing": 35, "agile": 35, "nextjs": 35, "project": 30,
+        "skill": 25, "education": 20
+      },
+      "preferred_tags": ["full-stack", "development"],
+      "minimum_coverage": 1
+    },
+    "development-backend": {
+      "emphasis": "development-backend",
+      "tag_weights": {
+        "backend": 100, "databases": 90, "integrations": 85, "devops": 70,
+        "testing": 55, "development": 50, "technical": 50, "async": 45,
+        "validation": 35, "full-stack": 35, "project": 30, "skill": 25,
+        "ai": 20, "agile": 20, "frontend": 10, "nextjs": 5
+      },
+      "preferred_tags": ["backend", "databases"],
+      "minimum_coverage": 1
+    },
+    "development-ai": {
+      "emphasis": "development-ai",
+      "tag_weights": {
+        "ai": 100, "machine-learning": 95, "ai-assisted": 85, "integrations": 70,
+        "backend": 65, "databases": 55, "development": 50, "technical": 50,
+        "full-stack": 35, "devops": 30, "project": 30, "skill": 25,
+        "testing": 20, "agile": 20, "frontend": 10, "nextjs": 5
+      },
+      "preferred_tags": ["ai"],
+      "minimum_coverage": 1
+    },
+    "new-business": {
+      "emphasis": "new-business",
+      "tag_weights": {
+        "new-business": 100, "prospecting": 95, "closing": 85, "negotiation": 75,
+        "full-sales-cycle": 70, "velocity": 65, "discovery": 60, "quotations": 55,
+        "sales-cycle": 50, "verified-quantitative": 45, "commercial": 40,
+        "communication": 35, "field-sales": 30, "customers": 25,
+        "account-management": 15, "account-growth": 15, "retention": 10,
+        "leadership": 10, "coaching": 5
+      },
+      "preferred_tags": ["new-business", "prospecting"],
+      "minimum_coverage": 1
+    },
+    "account-growth": {
+      "emphasis": "account-growth",
+      "tag_weights": {
+        "account-management": 100, "account-growth": 95, "retention": 90,
+        "strategic-accounts": 75, "post-sales": 65, "customers": 55,
+        "verified-quantitative": 45, "negotiation": 40, "discovery": 40,
+        "consultative": 35, "commercial": 30, "communication": 25,
+        "new-business": 20, "prospecting": 15, "leadership": 15, "closing": 15
+      },
+      "preferred_tags": ["account-management", "account-growth"],
+      "minimum_coverage": 1
+    },
+    "leadership": {
+      "emphasis": "leadership",
+      "tag_weights": {
+        "leadership": 100, "coaching": 95, "player-coach": 90, "pipeline": 85,
+        "forecasting": 80, "strategic-accounts": 60, "commercial": 55,
+        "verified-quantitative": 50, "process": 45, "account-growth": 30,
+        "account-management": 25, "new-business": 25, "closing": 20,
+        "prospecting": 15
+      },
+      "preferred_tags": ["leadership"],
+      "minimum_coverage": 1
+    },
+    "tech-consultative-sales": {
+      "emphasis": "tech-consultative-sales",
+      "tag_weights": {
+        "tech-sales": 100, "technical": 95, "consultative": 90, "discovery": 85,
+        "development": 70, "boundary": 65, "integrations": 60, "full-stack": 60,
+        "backend": 55, "frontend": 45, "databases": 40, "quotations": 35,
+        "negotiation": 30, "closing": 30, "commercial": 30, "skill": 25,
+        "account-management": 20, "new-business": 20, "prospecting": 10
+      },
+      "preferred_tags": ["technical", "consultative"],
+      "minimum_coverage": 1
+    },
+    "balanced-sales": {
+      "emphasis": "balanced-sales",
+      "tag_weights": {
+        "full-sales-cycle": 70, "sales": 60, "new-business": 55,
+        "account-management": 55, "closing": 50, "discovery": 50,
+        "negotiation": 50, "account-growth": 50, "prospecting": 45,
+        "retention": 45, "leadership": 45, "verified-quantitative": 45,
+        "quotations": 40, "commercial": 35, "communication": 30,
+        "customers": 25, "coaching": 25
+      },
+      "preferred_tags": ["sales"],
+      "minimum_coverage": 1
+    }
+  }
+}

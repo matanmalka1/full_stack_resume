@@ -8,6 +8,7 @@ from .drafts import load_draft
 from .facts import FactStore
 from .models import ValidationIssue, ValidationReport
 from .profiles import ProfileStore
+from .selection import EmphasisPolicyStore
 from .util import sha256_file
 from .validation import validate_draft
 
@@ -80,6 +81,7 @@ def verify_ready_integrity(root: Path, repo: Repository, application_id: str) ->
         try:
             facts = FactStore.load(root / "base")
             profiles = ProfileStore.load(root, facts)
+            policies = EmphasisPolicyStore.load(root)
             profile = profiles.get(draft.profile)
             _, analysis = repo.latest_analysis(application_id)
         except KeyError:
@@ -87,7 +89,9 @@ def verify_ready_integrity(root: Path, repo: Repository, application_id: str) ->
         except Exception as exc:  # noqa: BLE001 - knowledge load failure blocks ready
             fail("approved_source", "knowledge-load-failed", str(exc))
         else:
-            source_report = validate_draft(draft, markdown_path, facts, profile, analysis)
+            source_report = validate_draft(
+                draft, markdown_path, facts, profile, analysis, policies=policies
+            )
             evidence["source_validation"] = source_report.model_dump(mode="json")
             if not source_report.passed:
                 fail(

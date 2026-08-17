@@ -27,6 +27,7 @@ from cv_engine.models import (
     ValidationReport,
 )
 from cv_engine.profiles import ProfileStore
+from cv_engine.selection import EmphasisPolicyStore
 from cv_engine.rendering import render_pdf, validate_rendered
 from cv_engine.workflow import Engine
 from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB, seal_report
@@ -127,7 +128,7 @@ def v1_repo(tmp_path: Path) -> Path:
     root = tmp_path / "repo"
     root.mkdir()
     write_canonical_sources(root / "base")
-    for name in ("profiles", "rendering", "ai"):
+    for name in ("profiles", "rendering", "ai", "config"):
         shutil.copytree(SOURCE_ROOT / name, root / name)
     return root
 
@@ -140,6 +141,11 @@ def fact_store(v1_repo: Path) -> FactStore:
 @pytest.fixture
 def profile_store(v1_repo: Path, fact_store: FactStore) -> ProfileStore:
     return ProfileStore.load(v1_repo, fact_store)
+
+
+@pytest.fixture
+def policy_store(v1_repo: Path) -> EmphasisPolicyStore:
+    return EmphasisPolicyStore.load(v1_repo)
 
 
 @pytest.fixture
@@ -260,7 +266,12 @@ def ready_application(approved_application, monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.fixture
-def draft_factory(v1_repo: Path, fact_store: FactStore, profile_store: ProfileStore):
+def draft_factory(
+    v1_repo: Path,
+    fact_store: FactStore,
+    profile_store: ProfileStore,
+    policy_store: EmphasisPolicyStore,
+):
     def build(
         job: str,
         *,
@@ -277,6 +288,7 @@ def draft_factory(v1_repo: Path, fact_store: FactStore, profile_store: ProfileSt
             analysis=analysis,
             profile=profile,
             facts=fact_store,
+            policies=policy_store,
         )
         markdown = write_working_draft(v1_repo, draft)[0] if write else None
         return DraftSetup(fact_store, profile, analysis, draft, markdown)

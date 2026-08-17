@@ -1,13 +1,97 @@
 {
-  "profile_id": "sales.account-manager.v1", "version": "1.0.0", "track": "sales", "profile": "account-manager",
-  "default_emphasis": "account-growth", "allowed_emphases": ["account-growth", "new-business", "balanced-sales", "tech-consultative-sales"],
-  "normalized_role": "Account Manager", "safe_headlines": ["Account Manager", "B2B Sales | Account Management | Business Development"],
-  "required_tags": ["account-management"], "tag_weights": {"account-management": 100, "account-growth": 90},
+  "profile_id": "sales.account-manager.v1",
+  "version": "1.1.0",
+  "track": "sales",
+  "profile": "account-manager",
+  "default_emphasis": "account-growth",
+  "allowed_emphases": [
+    "account-growth",
+    "new-business",
+    "balanced-sales",
+    "tech-consultative-sales"
+  ],
+  "normalized_role": "Account Manager",
+  "safe_headlines": [
+    "Account Manager",
+    "B2B Sales | Account Management | Business Development"
+  ],
+  "required_tags": [
+    "account-management"
+  ],
+  "tag_weights": {
+    "account-management": 100,
+    "account-growth": 90
+  },
   "sections": [
-    {"name_en": "Professional Summary", "name_he": "תקציר מקצועי", "fact_ids": ["sales.summary.account"]},
-    {"name_en": "Work Experience", "name_he": "ניסיון מקצועי", "fact_ids": ["sales.role.leader.title", "sales.role.leader.dates", "sales.metric.recurring_customers", "sales.metric.performance", "sales.metric.portfolio_growth", "sales.cycle.account_management", "sales.role.field.title", "sales.role.field.dates", "sales.cycle.discovery", "sales.cycle.negotiation"]},
-    {"name_en": "Core Skills", "name_he": "מיומנויות ליבה", "fact_ids": ["sales.achievement.account_expansion", "sales.achievement.reactivation", "sales.achievement.retention"]},
-    {"name_en": "Tools", "name_he": "כלים", "fact_ids": ["sales.tool.priority", "sales.tool.excel", "sales.tool.communication"]},
-    {"name_en": "Languages", "name_he": "שפות", "fact_ids": ["common.language.hebrew", "common.language.english", "common.language.arabic", "common.language.french"]}
+    {
+      "name_en": "Professional Summary",
+      "name_he": "תקציר מקצועי",
+      "fact_ids": [
+        "sales.summary.account",
+        "sales.summary.new_business",
+        "sales.summary.tech"
+      ],
+      "max_claims": 1
+    },
+    {
+      "name_en": "Work Experience",
+      "name_he": "ניסיון מקצועי",
+      "fact_ids": [
+        "sales.role.leader.title",
+        "sales.role.leader.dates",
+        "sales.metric.recurring_customers",
+        "sales.metric.portfolio_growth",
+        "sales.metric.performance",
+        "sales.cycle.account_management",
+        "sales.leadership.strategic_customers",
+        "sales.metric.team_size",
+        "sales.role.field.title",
+        "sales.role.field.dates",
+        "sales.cycle.discovery",
+        "sales.cycle.negotiation",
+        "sales.cycle.prospecting",
+        "sales.cycle.closing",
+        "sales.metric.new_customers",
+        "sales.cycle.quotations"
+      ],
+      "pinned_fact_ids": [
+        "sales.metric.performance",
+        "sales.cycle.discovery"
+      ],
+      "max_claims": 10
+    },
+    {
+      "name_en": "Core Skills",
+      "name_he": "מיומנויות ליבה",
+      "fact_ids": [
+        "sales.achievement.account_expansion",
+        "sales.achievement.reactivation",
+        "sales.achievement.retention",
+        "sales.achievement.complex_deals",
+        "sales.achievement.difficult_market"
+      ],
+      "max_claims": 3
+    },
+    {
+      "name_en": "Tools",
+      "name_he": "כלים",
+      "fact_ids": [
+        "sales.tool.priority",
+        "sales.tool.excel",
+        "sales.tool.communication"
+      ],
+      "max_claims": 3
+    },
+    {
+      "name_en": "Languages",
+      "name_he": "שפות",
+      "fact_ids": [
+        "common.language.hebrew",
+        "common.language.english",
+        "common.language.arabic",
+        "common.language.french"
+      ],
+      "max_claims": 4
+    }
   ]
 }

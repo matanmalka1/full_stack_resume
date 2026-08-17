@@ -139,9 +139,17 @@ def test_track_or_profile_disagreement_requires_approval(
     assert merged.classification_requires_approval
 
 
-def test_emphasis_is_a_refinement_not_an_approval_gate(
+def test_emphasis_disagreement_is_an_approval_gate(
     profile_store: ProfileStore, classification_proposal
 ) -> None:
+    """Emphasis selects content, so disagreeing about it materially changes the CV.
+
+    This inverts the earlier rule. Emphasis used to be inert metadata — the draft
+    was identical whichever one won — so a disagreement was safe to apply
+    silently. Now it drives fact selection, which puts it under the same §9.4
+    routing as Track and Profile: two classifiers disagreeing means neither is
+    authoritative, and only an Emphasis override settles it.
+    """
     deterministic = classify_job("Account Executive closing quota new business")
     assert not deterministic.classification_requires_approval
     assert deterministic.emphasis is Emphasis.NEW_BUSINESS
@@ -168,8 +176,27 @@ def test_emphasis_is_a_refinement_not_an_approval_gate(
     )
 
     assert moved.emphasis is Emphasis.TECH_CONSULTATIVE
-    assert not moved.classification_requires_approval
+    assert moved.approval_reasons == ["emphasis-disagreement"]
+    assert moved.classification_requires_approval
+
+    # Falling back to the deterministic Emphasis is agreement, not disagreement.
     assert disallowed.emphasis in profile_store.get(disallowed.profile).allowed_emphases
+    assert "emphasis-disagreement" not in disallowed.approval_reasons
+
+    # Only an Emphasis override answers it; a Profile override does not.
+    settled = merge_classification(
+        classify_job(
+            "Account Executive closing quota new business",
+            emphasis_override="tech-consultative-sales",
+        ),
+        classification_proposal(
+            track=deterministic.track,
+            profile=deterministic.profile,
+            emphasis=Emphasis.NEW_BUSINESS,
+        ),
+        profile_store,
+    )
+    assert not settled.classification_requires_approval
 
 
 def test_inconsistent_proposal_is_rejected_rather_than_applied(

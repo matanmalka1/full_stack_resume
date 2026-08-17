@@ -19,14 +19,15 @@ FIT_SEVERITY = {FitLevel.HIGH: 0, FitLevel.MEDIUM: 1, FitLevel.LOW: 2}
 
 # Which explicit user overrides settle each reason an approval was demanded for.
 # A Profile determines its own Track, so choosing a Profile settles the pair;
-# choosing only a Track leaves the Profile inside it undecided. Emphasis and
-# language never settle a classification question — that asymmetry is the point:
-# an unrelated override must not open the gate.
+# choosing only a Track leaves the Profile inside it undecided. Each reason is
+# settled only by an override that actually answers it — an unrelated override
+# must not open the gate.
 APPROVAL_RESOLVING_OVERRIDES: dict[str, frozenset[str]] = {
     "ambiguous-signals": frozenset({"track", "profile"}),
     "low-confidence": frozenset({"track", "profile"}),
     "track-disagreement": frozenset({"track", "profile"}),
     "profile-disagreement": frozenset({"profile"}),
+    "emphasis-disagreement": frozenset({"emphasis"}),
     "inconsistent-proposal": frozenset({"track", "profile"}),
     # Analyses written before reasons were recorded: fail closed on the pair.
     "unspecified-ambiguity": frozenset({"track", "profile"}),
@@ -135,10 +136,10 @@ def merge_classification(
     confidence = min(deterministic.confidence, proposal.confidence)
 
     # Section 9.4 routes a materially ambiguous classification to the user. Two
-    # classifiers that disagree on Track/Profile are exactly that: neither is
-    # authoritative, so neither may be applied silently. Emphasis is a refinement
-    # inside one Profile and does not currently change selected content, so a
-    # disagreement there is not an approval gate. An internally inconsistent
+    # classifiers that disagree are exactly that: neither is authoritative, so
+    # neither may be applied silently. Emphasis is included because it now drives
+    # fact selection — a different Emphasis produces a different document, which
+    # is the definition of materially changing the CV. An internally inconsistent
     # proposal is recorded as its own reason rather than trusted or raised.
     reasons = list(deterministic.approval_reasons)
     if not consistent:
@@ -148,6 +149,8 @@ def merge_classification(
             reasons.append("track-disagreement")
         if proposal.profile is not deterministic.profile:
             reasons.append("profile-disagreement")
+    if emphasis is not deterministic.emphasis:
+        reasons.append("emphasis-disagreement")
     if confidence < CONFIDENCE_APPROVAL_THRESHOLD:
         reasons.append("low-confidence")
     reasons = list(dict.fromkeys(reasons))

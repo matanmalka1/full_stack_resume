@@ -1,13 +1,93 @@
 {
-  "profile_id": "sales.account-executive.v1", "version": "1.0.0", "track": "sales", "profile": "account-executive",
-  "default_emphasis": "new-business", "allowed_emphases": ["new-business", "account-growth", "tech-consultative-sales", "balanced-sales"],
-  "normalized_role": "Account Executive", "safe_headlines": ["Account Executive", "B2B Sales | Account Management | Business Development"],
-  "required_tags": ["full-sales-cycle"], "tag_weights": {"closing": 100, "new-business": 90},
+  "profile_id": "sales.account-executive.v1",
+  "version": "1.1.0",
+  "track": "sales",
+  "profile": "account-executive",
+  "default_emphasis": "new-business",
+  "allowed_emphases": [
+    "new-business",
+    "account-growth",
+    "tech-consultative-sales",
+    "balanced-sales"
+  ],
+  "normalized_role": "Account Executive",
+  "safe_headlines": [
+    "Account Executive",
+    "B2B Sales | Account Management | Business Development"
+  ],
+  "required_tags": [
+    "closing"
+  ],
+  "tag_weights": {
+    "closing": 100,
+    "new-business": 90
+  },
   "sections": [
-    {"name_en": "Professional Summary", "name_he": "תקציר מקצועי", "fact_ids": ["sales.summary.new_business"]},
-    {"name_en": "Work Experience", "name_he": "ניסיון מקצועי", "fact_ids": ["sales.role.leader.title", "sales.role.leader.dates", "sales.metric.performance", "sales.metric.new_customers", "sales.cycle.negotiation", "sales.cycle.closing", "sales.role.field.title", "sales.role.field.dates", "sales.cycle.discovery", "sales.cycle.quotations"]},
-    {"name_en": "Selected Achievements", "name_he": "הישגים נבחרים", "fact_ids": ["sales.achievement.complex_deals", "sales.achievement.difficult_market"]},
-    {"name_en": "Tools", "name_he": "כלים", "fact_ids": ["sales.tool.priority", "sales.tool.excel"]},
-    {"name_en": "Languages", "name_he": "שפות", "fact_ids": ["common.language.hebrew", "common.language.english", "common.language.arabic", "common.language.french"]}
+    {
+      "name_en": "Professional Summary",
+      "name_he": "תקציר מקצועי",
+      "fact_ids": [
+        "sales.summary.new_business",
+        "sales.summary.account",
+        "sales.summary.tech"
+      ],
+      "max_claims": 1
+    },
+    {
+      "name_en": "Work Experience",
+      "name_he": "ניסיון מקצועי",
+      "fact_ids": [
+        "sales.role.leader.title",
+        "sales.role.leader.dates",
+        "sales.metric.performance",
+        "sales.metric.new_customers",
+        "sales.metric.portfolio_growth",
+        "sales.leadership.pipeline",
+        "sales.role.field.title",
+        "sales.role.field.dates",
+        "sales.cycle.negotiation",
+        "sales.cycle.closing",
+        "sales.cycle.discovery",
+        "sales.cycle.quotations",
+        "sales.cycle.prospecting",
+        "sales.cycle.account_management"
+      ],
+      "pinned_fact_ids": [
+        "sales.metric.performance",
+        "sales.cycle.negotiation"
+      ],
+      "max_claims": 10
+    },
+    {
+      "name_en": "Selected Achievements",
+      "name_he": "הישגים נבחרים",
+      "fact_ids": [
+        "sales.achievement.complex_deals",
+        "sales.achievement.difficult_market",
+        "sales.achievement.account_expansion",
+        "sales.achievement.reactivation"
+      ],
+      "max_claims": 2
+    },
+    {
+      "name_en": "Tools",
+      "name_he": "כלים",
+      "fact_ids": [
+        "sales.tool.priority",
+        "sales.tool.excel"
+      ],
+      "max_claims": 2
+    },
+    {
+      "name_en": "Languages",
+      "name_he": "שפות",
+      "fact_ids": [
+        "common.language.hebrew",
+        "common.language.english",
+        "common.language.arabic",
+        "common.language.french"
+      ],
+      "max_claims": 4
+    }
   ]
 }

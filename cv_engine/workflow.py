@@ -22,6 +22,7 @@ from .profiles import ProfileStore
 from .providers import OpenAIResponsesProvider
 from .ready import verify_ready_integrity
 from .rendering import normalized_role_filename, render_html, render_pdf, validate_rendered
+from .selection import EmphasisPolicyStore
 from .util import sha256_file, utc_now
 from .validation import validate_draft
 
@@ -36,9 +37,9 @@ class Engine:
         self.db_path = db_path or self.root / "data" / "applications.sqlite3"
         self.repo = Repository(self.db_path)
 
-    def knowledge(self) -> tuple[FactStore, ProfileStore]:
+    def knowledge(self) -> tuple[FactStore, ProfileStore, EmphasisPolicyStore]:
         facts = FactStore.load(self.root / "base")
-        return facts, ProfileStore.load(self.root, facts)
+        return facts, ProfileStore.load(self.root, facts), EmphasisPolicyStore.load(self.root)
 
     def ingest(self, company: str, role: str, job_text: str, url: str | None = None) -> tuple[str, str]:
         return self.repo.create_application(
@@ -70,7 +71,7 @@ class Engine:
         )
         result = deterministic
         used_provider, used_model = "deterministic", "rules-v1"
-        _, profiles = self.knowledge()
+        _, profiles, _ = self.knowledge()
         if provider == "openai":
             adapter = OpenAIResponsesProvider(
                 model=model,
@@ -119,7 +120,7 @@ class Engine:
         return analysis_id, result
 
     def draft(self, application_id: str) -> tuple[Path, Path, ValidationReport]:
-        facts, profiles = self.knowledge()
+        facts, profiles, policies = self.knowledge()
         _, analysis = self.repo.latest_analysis(application_id)
         if analysis.fit.value == "low" and analysis.user_override.get("fit") != "accepted-low-fit":
             raise WorkflowError("low fit blocks CV generation until --accept-low-fit is recorded")
@@ -137,9 +138,10 @@ class Engine:
             analysis=analysis,
             profile=profile,
             facts=facts,
+            policies=policies,
         )
         markdown, manifest = write_working_draft(self.root, draft)
-        report = validate_draft(draft, markdown, facts, profile, analysis)
+        report = validate_draft(draft, markdown, facts, profile, analysis, policies=policies)
         self.repo.record_validation(application_id, "pre-render", report)
         self.repo.record_generation_run({
             "application_id": application_id,
@@ -158,7 +160,7 @@ class Engine:
         return markdown, manifest, report
 
     def validate_working(self, application_id: str) -> ValidationReport:
-        facts, profiles = self.knowledge()
+        facts, profiles, policies = self.knowledge()
         _, analysis = self.repo.latest_analysis(application_id)
         target = self.root / "artifacts" / "working" / application_id
         draft = load_draft(target / "resume.claims.json")
@@ -171,7 +173,7 @@ class Engine:
                 pass
             else:
                 markdown_path, _ = write_working_draft(self.root, draft)
-        report = validate_draft(draft, markdown_path, facts, profiles.get(draft.profile), analysis)
+        report = validate_draft(draft, markdown_path, facts, profiles.get(draft.profile), analysis, policies=policies)
         self.repo.record_validation(application_id, "pre-render", report)
         return report
 
@@ -185,7 +187,7 @@ class Engine:
         template_id: str | None = None,
         template_version: str | None = None,
     ) -> tuple[Path, ValidationReport]:
-        facts, profiles = self.knowledge()
+        facts, profiles, policies = self.knowledge()
         _, analysis = self.repo.latest_analysis(application_id)
         target = self.root / "artifacts" / "working" / application_id
         draft = load_draft(target / "resume.claims.json")
@@ -199,7 +201,7 @@ class Engine:
             template_version=template_version,
         )
         markdown, _ = write_working_draft(self.root, updated)
-        report = validate_draft(updated, markdown, facts, profiles.get(updated.profile), analysis)
+        report = validate_draft(updated, markdown, facts, profiles.get(updated.profile), analysis, policies=policies)
         self.repo.record_validation(application_id, "manual-claim-edit", report)
         return markdown, report
 
@@ -207,13 +209,13 @@ class Engine:
         return self.edit_claim(application_id, claim_id, fact_ids, text=text)
 
     def sync_working_claims(self, application_id: str) -> tuple[Path, ValidationReport]:
-        facts, profiles = self.knowledge()
+        facts, profiles, policies = self.knowledge()
         _, analysis = self.repo.latest_analysis(application_id)
         target = self.root / "artifacts" / "working" / application_id
         draft = load_draft(target / "resume.claims.json")
         updated = synchronize_markdown_claims(draft, target / "resume.md", facts)
         markdown, _ = write_working_draft(self.root, updated)
-        report = validate_draft(updated, markdown, facts, profiles.get(updated.profile), analysis)
+        report = validate_draft(updated, markdown, facts, profiles.get(updated.profile), analysis, policies=policies)
         self.repo.record_validation(application_id, "manual-markdown-sync", report)
         return markdown, report
 
@@ -227,7 +229,7 @@ class Engine:
         report = self.validate_working(application_id)
         if not report.passed:
             raise WorkflowError("approval blocked by pre-render validation")
-        facts, profiles = self.knowledge()
+        facts, profiles, policies = self.knowledge()
         analysis_id, analysis = self.repo.latest_analysis(application_id)
         working = self.root / "artifacts" / "working" / application_id
         draft = load_draft(working / "resume.claims.json")
@@ -315,14 +317,14 @@ class Engine:
         return {"version": version, "directory": approved_dir, "decision_record_id": decision_id}
 
     def render(self, application_id: str) -> tuple[Path, ValidationReport]:
-        facts, profiles = self.knowledge()
+        facts, profiles, policies = self.knowledge()
         manifest_record = self.repo.latest_artifact_version(application_id, "claim_manifest", "approved")
         manifest_path = self.root / manifest_record["path"]
         draft = load_draft(manifest_path)
         profile = profiles.get(draft.profile)
         directory = manifest_path.parent
         _, analysis = self.repo.latest_analysis(application_id)
-        source_report = validate_draft(draft, directory / "resume.md", facts, profile, analysis)
+        source_report = validate_draft(draft, directory / "resume.md", facts, profile, analysis, policies=policies)
         self.repo.record_validation(application_id, "approved-source-pre-render", source_report)
         if not source_report.passed:
             raise WorkflowError("render blocked because the approved Markdown no longer matches its validated claims")

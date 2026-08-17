@@ -94,10 +94,63 @@ class FactSource(StrictModel):
 
 
 class ResumeSectionSpec(StrictModel):
+    """A section's candidate pool, not its output.
+
+    `fact_ids` is everything this section is *allowed* to say; the selection
+    policy chooses a subset of it under `max_claims`. `pinned_fact_ids` names
+    the non-structural facts that must survive regardless of score — the ones
+    that keep a role block from rendering as a heading with no evidence.
+    Structural facts (headings, dates, contacts) are pinned implicitly.
+    """
+
     name_en: str
     name_he: str
     fact_ids: list[str]
+    pinned_fact_ids: list[str] = []
+    max_claims: int | None = None
     optional: bool = False
+
+    @model_validator(mode="after")
+    def validate_pool(self) -> "ResumeSectionSpec":
+        if len(set(self.fact_ids)) != len(self.fact_ids):
+            raise ValueError(f"section {self.name_en!r} repeats a candidate fact")
+        outside = sorted(set(self.pinned_fact_ids) - set(self.fact_ids))
+        if outside:
+            raise ValueError(f"section {self.name_en!r} pins facts outside its pool: {outside}")
+        if self.max_claims is not None:
+            if self.max_claims < 1:
+                raise ValueError(f"section {self.name_en!r} has a non-positive claim budget")
+            if self.max_claims > len(self.fact_ids):
+                raise ValueError(
+                    f"section {self.name_en!r} budgets more claims than its pool holds"
+                )
+        return self
+
+
+class EmphasisPolicy(StrictModel):
+    """How one Emphasis weights the shared canonical tag vocabulary.
+
+    Emphasis is orthogonal to Profile, so its policy lives once here rather than
+    being copied into every Profile that allows it. `preferred_tags` is a
+    coverage expectation, not a structural invariant: unlike `Profile.required_tags`
+    it never forces a fact into the document, it only reports when the selected
+    content drifted away from what the Emphasis is supposed to be about.
+    """
+
+    emphasis: Emphasis
+    tag_weights: dict[str, int]
+    preferred_tags: list[str] = []
+    minimum_coverage: int = 0
+
+    @model_validator(mode="after")
+    def validate_coverage(self) -> "EmphasisPolicy":
+        if any(weight < 0 for weight in self.tag_weights.values()):
+            raise ValueError(f"emphasis {self.emphasis} has a negative tag weight")
+        if self.minimum_coverage > len(self.preferred_tags):
+            raise ValueError(
+                f"emphasis {self.emphasis} requires more coverage than it has preferred tags"
+            )
+        return self
 
 
 class Profile(StrictModel):
@@ -204,6 +257,54 @@ class ResumeSection(StrictModel):
     claims: list[ClaimLine]
 
 
+OmissionReason = Literal[
+    "below_section_budget",
+    "not_relevant_to_emphasis",
+    "evicted_by_required_tag_rescue",
+    "not_in_profile_pool",
+]
+
+SelectionOutcome = Literal["pinned", "selected", "rescued", "omitted"]
+
+
+class SelectionCandidate(StrictModel):
+    """One fact's full accounting in the selection decision.
+
+    Recorded so a later reader can answer not only which policy ran but why
+    fact A beat fact B: the ranking is the lexicographic tuple
+    (gap_substitute, semantic_score, keyword_hits, -pool_index).
+    """
+
+    fact_id: str
+    section: str
+    pool_index: int
+    profile_score: int
+    emphasis_score: int
+    semantic_score: int
+    keyword_hits: int
+    gap_substitute: bool
+    outcome: SelectionOutcome
+    reason: OmissionReason | None = None
+
+
+class SelectionManifest(StrictModel):
+    """The engine's selection decision, as decided at build time.
+
+    Manual claim edits afterwards do not rewrite this record; they set
+    `superseded_by_manual_edit` so the audit trail keeps the original decision
+    instead of quietly reshaping itself around the edit.
+    """
+
+    policy_version: str
+    emphasis: Emphasis
+    emphasis_policy_version: str
+    candidates: list[SelectionCandidate] = []
+    selected_fact_ids: list[str] = []
+    required_tag_coverage: dict[str, list[str]] = {}
+    preferred_tag_coverage: dict[str, list[str]] = {}
+    superseded_by_manual_edit: bool = False
+
+
 class DraftDocument(StrictModel):
     schema_version: str = "1.0"
     application_id: str
@@ -217,7 +318,8 @@ class DraftDocument(StrictModel):
     contacts: list[ClaimLine]
     sections: list[ResumeSection]
     selected_fact_ids: list[str]
-    omitted_facts: dict[str, str] = {}
+    omitted_facts: dict[str, OmissionReason] = {}
+    selection: SelectionManifest | None = None
     fact_store_version: str
     content_hash: str = ""
 

@@ -99,6 +99,14 @@ Low fit and material classification ambiguity stop by default. Record explicit
 overrides through `analyze --track ... --profile ... --emphasis ...` and, when the user
 accepts a low fit, `--accept-low-fit`. Overrides never authorize fabricated facts.
 
+Emphasis is a content decision, not a label. A Profile's `fact_ids` are the candidate
+pool a section may draw from, and `config/emphasis.json` weights the canonical fact tags
+per Emphasis, so the same Profile produces a different CV under `account-growth` than
+under `new-business`. Selection is deterministic and recorded: `resume.claims.json`
+carries the score, outcome and omission reason for every candidate considered. Because
+Emphasis now changes the document, a disagreement about it between the deterministic
+classifier and an AI proposal requires an explicit `--emphasis` decision.
+
 ## Tracking and inspection
 
 ```bash

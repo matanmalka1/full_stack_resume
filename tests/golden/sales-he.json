@@ -10,8 +10,8 @@
     "emphasis": "account-growth"
   },
   "snapshot": {
-    "markdown_sha256": "c24c3b11392a5feebe996275d42a33bfdd149c8d728f0ed86067b48ae65c0f51",
-    "html_sha256": "ef00933500fd783b8c523c5485c239d8e9d84d7a09192ddb78fae3888064ad54",
+    "markdown_sha256": "70edcbf795b432c86dbed75ea535da51078ce9cab72e660bd3c505f8e145003a",
+    "html_sha256": "8ea0969da2715a179f2ab172fc668e3b30d14fde9c80e06dd08f4631fc70b467",
     "selected_fact_ids": [
       "common.contact.email",
       "common.contact.linkedin",
@@ -26,7 +26,7 @@
       "sales.achievement.retention",
       "sales.cycle.account_management",
       "sales.cycle.discovery",
-      "sales.cycle.negotiation",
+      "sales.leadership.strategic_customers",
       "sales.metric.performance",
       "sales.metric.portfolio_growth",
       "sales.metric.recurring_customers",

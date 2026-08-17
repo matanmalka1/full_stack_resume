@@ -70,6 +70,11 @@ required work remains. Historical artifacts were not overwritten.
 - [x] Canonical Pcom facts match Section 7, not stale legacy claims.
 - [x] Development behavior remains supported after migration.
 - [x] Sales and Tech Sales Profiles work with dynamic Emphasis.
+  - Originally checked against classification only. Emphasis was stored and validated
+    but never reached content selection: a Profile's `fact_ids` were a fixed output
+    list, so four Emphases produced identical Markdown bodies. Closed by
+    `cv_engine/selection.py`; `tests/test_selection.py` now fails if any two Emphases
+    for one Profile yield the same selected facts.
 - [x] Classification returns Track/Profile/Emphasis, confidence, rationale, and supports
   recorded overrides.
 - [x] High/medium/low fit and hard-gap behavior work as specified.

@@ -1,19 +1,88 @@
 {
   "profile_id": "development.v1",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "track": "development",
   "profile": "development",
   "default_emphasis": "development-balanced",
-  "allowed_emphases": ["development-balanced", "development-backend", "development-ai"],
+  "allowed_emphases": [
+    "development-balanced",
+    "development-backend",
+    "development-ai"
+  ],
   "normalized_role": "Full Stack Developer",
-  "safe_headlines": ["Full Stack Developer", "Backend-Oriented Full-Stack Developer"],
-  "required_tags": ["development"],
-  "tag_weights": {"development": 100, "technical": 80},
+  "safe_headlines": [
+    "Full Stack Developer",
+    "Backend-Oriented Full-Stack Developer"
+  ],
+  "required_tags": [
+    "development"
+  ],
+  "tag_weights": {
+    "development": 100,
+    "technical": 80
+  },
   "sections": [
-    {"name_en": "Professional Summary", "name_he": "תקציר מקצועי", "fact_ids": ["development.summary"]},
-    {"name_en": "Work Experience", "name_he": "ניסיון מקצועי", "fact_ids": ["development.phdigital.role", "development.phdigital.dates", "development.phdigital.fullstack", "development.phdigital.crm", "development.phdigital.cicd", "development.phdigital.integrations", "sales.role.leader.title", "sales.role.leader.dates", "sales.metric.team_size", "sales.metric.performance"]},
-    {"name_en": "Education", "name_he": "השכלה", "fact_ids": ["common.education.fullstack"]},
-    {"name_en": "Core Skills", "name_he": "מיומנויות ליבה", "fact_ids": ["development.skills.backend", "development.skills.frontend", "development.skills.databases", "development.skills.devops", "development.skills.ai"]},
-    {"name_en": "Languages", "name_he": "שפות", "fact_ids": ["common.language.hebrew", "common.language.english", "common.language.arabic", "common.language.french"]}
+    {
+      "name_en": "Professional Summary",
+      "name_he": "תקציר מקצועי",
+      "fact_ids": [
+        "development.summary"
+      ],
+      "max_claims": 1
+    },
+    {
+      "name_en": "Work Experience",
+      "name_he": "ניסיון מקצועי",
+      "fact_ids": [
+        "development.phdigital.role",
+        "development.phdigital.dates",
+        "development.phdigital.fullstack",
+        "development.phdigital.crm",
+        "development.phdigital.integrations",
+        "development.phdigital.cicd",
+        "development.phdigital.nextjs",
+        "development.phdigital.agile",
+        "sales.role.leader.title",
+        "sales.role.leader.dates",
+        "sales.metric.performance",
+        "sales.metric.team_size"
+      ],
+      "pinned_fact_ids": [
+        "development.phdigital.fullstack",
+        "sales.metric.performance"
+      ],
+      "max_claims": 9
+    },
+    {
+      "name_en": "Education",
+      "name_he": "השכלה",
+      "fact_ids": [
+        "common.education.fullstack"
+      ],
+      "max_claims": 1
+    },
+    {
+      "name_en": "Core Skills",
+      "name_he": "מיומנויות ליבה",
+      "fact_ids": [
+        "development.skills.backend",
+        "development.skills.databases",
+        "development.skills.ai",
+        "development.skills.frontend",
+        "development.skills.devops"
+      ],
+      "max_claims": 3
+    },
+    {
+      "name_en": "Languages",
+      "name_he": "שפות",
+      "fact_ids": [
+        "common.language.hebrew",
+        "common.language.english",
+        "common.language.arabic",
+        "common.language.french"
+      ],
+      "max_claims": 4
+    }
   ]
 }
