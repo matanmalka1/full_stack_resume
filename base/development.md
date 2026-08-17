@@ -39,26 +39,26 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "status": "canonical",
       "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
-      "effective_dates": "2025/2026",
+      "effective_dates": "2025-02/2026-06",
       "replaces": null,
       "source_file": "",
       "resume_style": "heading"
     },
     {
       "fact_id": "development.phdigital.dates",
-      "meaning": "PH.Digital role dates are 2025-2026.",
+      "meaning": "PH.Digital role dates are February 2025 to June 2026, approximately 1 year and 5 months.",
       "renderings": {
-        "en": "2025 - 2026",
-        "he": "2025 - 2026"
+        "en": "February 2025 - June 2026",
+        "he": "פברואר 2025 - יוני 2026"
       },
       "tags": [
         "development",
         "date"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
+      "provenance": "base/cv_base.md; months supplied by the user 2026-08-17 from their LinkedIn employment record (Feb 2025 - Jun 2026, 1 yr 5 mos)",
       "confirmed_at": null,
-      "effective_dates": "2025/2026",
+      "effective_dates": "2025-02/2026-06",
       "replaces": null,
       "source_file": "",
       "resume_style": "date"

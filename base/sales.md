@@ -48,10 +48,10 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
     },
     {
       "fact_id": "sales.role.field.title",
-      "meaning": "Historical title: Field Sales Representative (B2B) at Pcom Solutions.",
+      "meaning": "Historical title: Field Sales Representative (B2B) at Pcom Solutions, Tel Aviv.",
       "renderings": {
-        "en": "Field Sales Representative (B2B) | Pcom Solutions",
-        "he": "Field Sales Representative (B2B) | Pcom Solutions"
+        "en": "Field Sales Representative (B2B) | Pcom Solutions, Tel Aviv",
+        "he": "Field Sales Representative (B2B) | Pcom Solutions, תל אביב"
       },
       "tags": [
         "sales",
@@ -59,7 +59,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
         "field-sales"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
+      "provenance": "v1 handoff Section 7.1; explicitly canonical, location Tel Aviv District rendered as Tel Aviv to match the Development entry",
       "confirmed_at": "2026-08-16",
       "effective_dates": "2019-03/2020-08",
       "replaces": null,
@@ -87,10 +87,10 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
     },
     {
       "fact_id": "sales.role.leader.title",
-      "meaning": "Historical title: Team Leader / Sales Supervisor (B2B) at Pcom Solutions.",
+      "meaning": "Historical title: Team Leader / Sales Supervisor (B2B) at Pcom Solutions, Tel Aviv.",
       "renderings": {
-        "en": "Team Leader / Sales Supervisor (B2B) | Pcom Solutions",
-        "he": "Team Leader / Sales Supervisor (B2B) | Pcom Solutions"
+        "en": "Team Leader / Sales Supervisor (B2B) | Pcom Solutions, Tel Aviv",
+        "he": "Team Leader / Sales Supervisor (B2B) | Pcom Solutions, תל אביב"
       },
       "tags": [
         "sales",
@@ -98,7 +98,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
         "leadership"
       ],
       "status": "canonical",
-      "provenance": "v1 handoff Section 7; explicitly canonical",
+      "provenance": "v1 handoff Section 7.1; explicitly canonical, location Tel Aviv District rendered as Tel Aviv to match the Development entry",
       "confirmed_at": "2026-08-16",
       "effective_dates": "2020-08/2025-01",
       "replaces": null,

@@ -5,8 +5,8 @@
   "emphasis": "account-growth",
   "language": "en",
   "snapshot": {
-    "markdown_sha256": "ac4b88055f82e5ab45294c37e31eae249b5be475a413fa73c36b4069b6004610",
-    "html_sha256": "80084e86f77ab02fda74f8e88dd17562932ba96e1021afbc03d62aaa8e0f19be",
+    "markdown_sha256": "52d124ff3ee6063c11ee7eb623ae62ff56a64af16dbd345e5cec46cb733b6d67",
+    "html_sha256": "e59bac5f1b1d686a0953b88c7eaf5e2a10b2e60c37a1312d87252d022fa77249",
     "selected_fact_ids": [
       "common.contact.email",
       "common.contact.linkedin",

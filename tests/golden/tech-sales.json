@@ -5,8 +5,8 @@
   "emphasis": "tech-consultative-sales",
   "language": "en",
   "snapshot": {
-    "markdown_sha256": "1360a08b4053a7af9fd07f5bedea58dc7269b61658bdf60ff8331b92c48ad2c9",
-    "html_sha256": "399e8f105b38563914d8786bb96629df203c0f9f7a61a340ec9f77f51b853a53",
+    "markdown_sha256": "4cd755984c5a373d8eacaa3734c51e1991a4b7fd3c5fe4d2588ce31aa544af79",
+    "html_sha256": "1e742f0f6663019066c1e8b4ca1e77eea5d05a118694257f0cc4c78d7b5f37eb",
     "selected_fact_ids": [
       "common.contact.email",
       "common.contact.linkedin",
