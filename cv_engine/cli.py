@@ -342,9 +342,7 @@ def fact_command(knowledge: Any, args: argparse.Namespace) -> int:
 def generic_reconcile(workspace: Workspace, repository: Repository) -> dict[str, Any]:
     problems = repository.integrity_check()
     checked = 0
-    with connect(repository.path) as connection:
-        rows = connection.execute("SELECT path, content_hash FROM artifact_versions").fetchall()
-    for row in rows:
+    for row in repository.artifact_inventory():
         checked += 1
         path = workspace.root / row["path"]
         if not path.is_file():
@@ -452,10 +450,13 @@ def main(argv: list[str] | None = None) -> int:
         repository = services.repository
         engine = Engine(workspace, services=services)
         if args.command == "ingest":
-            app_id, snapshot_id = services.applications.ingest(args.company, args.role, _job_text(args), args.url)
-            _print({"application_id": app_id, "job_snapshot_id": snapshot_id})
+            ingested = services.applications.ingest(args.company, args.role, _job_text(args), args.url)
+            _print({
+                "application_id": ingested.application_id,
+                "job_snapshot_id": ingested.job_snapshot_id,
+            })
         elif args.command == "analyze":
-            analysis_id, analysis = services.analysis.analyze(
+            analysed = services.analysis.analyze(
                 args.application_id,
                 track=args.track,
                 profile=args.profile,
@@ -465,20 +466,36 @@ def main(argv: list[str] | None = None) -> int:
                 provider=args.provider,
                 model=args.model,
             )
-            _print({"analysis_id": analysis_id, "analysis": analysis.model_dump(mode="json")})
+            _print({
+                "analysis_id": analysed.analysis_id,
+                "analysis": analysed.analysis.model_dump(mode="json"),
+            })
         elif args.command == "draft":
-            markdown, manifest, report = services.drafts.draft(args.application_id)
-            _print({"markdown": str(markdown), "claim_manifest": str(manifest), "validation": report.model_dump(mode="json"), "review_required": True})
+            drafted = services.drafts.draft(args.application_id)
+            _print({
+                "markdown": str(drafted.markdown),
+                "claim_manifest": str(drafted.manifest),
+                "validation": drafted.validation.model_dump(mode="json"),
+                "review_required": True,
+            })
         elif args.command == "validate":
             report = services.drafts.validate_working(args.application_id)
             _print(report.model_dump(mode="json"))
             return 0 if report.passed else 1
         elif args.command == "approve":
-            _print(services.drafts.approve(args.application_id))
+            approved = services.drafts.approve(args.application_id)
+            _print({
+                "version": approved.version,
+                "directory": approved.directory,
+                "decision_record_id": approved.decision_record_id,
+            })
         elif args.command == "render":
-            pdf, report = services.rendering.render(args.application_id)
-            _print({"pdf": str(pdf), "ready_validation": report.model_dump(mode="json")})
-            return 0 if report.passed else 1
+            rendered = services.rendering.render(args.application_id)
+            _print({
+                "pdf": str(rendered.pdf),
+                "ready_validation": rendered.validation.model_dump(mode="json"),
+            })
+            return 0 if rendered.validation.passed else 1
         elif args.command == "ready":
             report = services.rendering.ready_report(args.application_id)
             _print(report.model_dump(mode="json"))
@@ -507,7 +524,12 @@ def main(argv: list[str] | None = None) -> int:
             _print(record)
         elif args.command == "status":
             if args.status == ApplicationStatus.APPLIED.value:
-                _print(services.tracking.submit(args.application_id, args.reason))
+                submitted = services.tracking.submit(args.application_id, args.reason)
+                _print({
+                    "application_id": submitted.application_id,
+                    "pdf_artifact_version_id": submitted.pdf_artifact_version_id,
+                    **submitted.application,
+                })
             else:
                 repository.transition_status(args.application_id, args.status, args.reason)
                 _print(repository.get_application(args.application_id))
@@ -515,7 +537,7 @@ def main(argv: list[str] | None = None) -> int:
             repository.set_next_action(args.application_id, args.next_action, args.date)
             _print(repository.get_application(args.application_id))
         elif args.command == "edit-claim":
-            markdown, report = services.drafts.edit_claim(
+            edited = services.drafts.edit_claim(
                 args.application_id,
                 args.claim_id,
                 args.fact_id,
@@ -523,16 +545,25 @@ def main(argv: list[str] | None = None) -> int:
                 template_id=args.template,
                 template_version=args.template_version,
             )
-            _print({"markdown": str(markdown), "validation": report.model_dump(mode="json")})
-            return 0 if report.passed else 1
+            _print({
+                "markdown": str(edited.markdown),
+                "validation": edited.validation.model_dump(mode="json"),
+            })
+            return 0 if edited.validation.passed else 1
         elif args.command == "sync-draft":
-            markdown, report = services.drafts.sync_working_claims(args.application_id)
-            _print({"markdown": str(markdown), "validation": report.model_dump(mode="json")})
-            return 0 if report.passed else 1
+            edited = services.drafts.sync_working_claims(args.application_id)
+            _print({
+                "markdown": str(edited.markdown),
+                "validation": edited.validation.model_dump(mode="json"),
+            })
+            return 0 if edited.validation.passed else 1
         elif args.command == "link-claim":
-            markdown, report = services.drafts.link_claim(args.application_id, args.claim_id, args.text, args.fact_id)
-            _print({"markdown": str(markdown), "validation": report.model_dump(mode="json")})
-            return 0 if report.passed else 1
+            edited = services.drafts.link_claim(args.application_id, args.claim_id, args.text, args.fact_id)
+            _print({
+                "markdown": str(edited.markdown),
+                "validation": edited.validation.model_dump(mode="json"),
+            })
+            return 0 if edited.validation.passed else 1
         elif args.command == "export":
             exported = export_csv(repository, args.output.resolve())
             _print({

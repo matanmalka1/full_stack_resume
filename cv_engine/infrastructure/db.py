@@ -271,6 +271,41 @@ def _require_owned_snapshot(
         )
 
 
+class SqliteUnitOfWork:
+    """One SQLite transaction, exposed as the application's write boundary.
+
+    Entering it opens the same `BEGIN IMMEDIATE` transaction the repository's
+    own methods use, so a command that declares a boundary and one that relies
+    on the adapter's default get identical durability.
+    """
+
+    def __init__(self, repository: "Repository"):
+        self._repository = repository
+        self._transaction = None
+        self.connection: sqlite3.Connection | None = None
+
+    def __enter__(self) -> "SqliteUnitOfWork":
+        self._transaction = self._repository.transaction()
+        self.connection = self._transaction.__enter__()
+        return self
+
+    def __exit__(self, *exc: Any) -> bool | None:
+        assert self._transaction is not None
+        try:
+            return self._transaction.__exit__(*exc)
+        finally:
+            self._transaction = None
+            self.connection = None
+
+    def commit(self) -> None:
+        if self.connection is not None:
+            self.connection.commit()
+
+    def rollback(self) -> None:
+        if self.connection is not None:
+            self.connection.rollback()
+
+
 class Repository:
     def __init__(self, path: Path):
         self.path = path
@@ -288,6 +323,22 @@ class Repository:
             raise
         finally:
             connection.close()
+
+    def unit_of_work(self) -> "SqliteUnitOfWork":
+        """The application layer's atomic boundary, over this same transaction.
+
+        v1 wrote each command through one such boundary already; naming it here
+        is what lets a use-case declare the boundary instead of inheriting it.
+        """
+        return SqliteUnitOfWork(self)
+
+    def artifact_inventory(self) -> list[dict[str, Any]]:
+        """Every recorded artifact version's path and hash, for reconciliation."""
+        with connect(self.path) as connection:
+            rows = connection.execute(
+                "SELECT path, content_hash FROM artifact_versions"
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def create_application(
         self,

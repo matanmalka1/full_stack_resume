@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .application.services import WorkflowError
+from .application.errors import WorkflowError
 from .domain.facts import FactStore
 from .domain.models import CandidateContext, ValidationReport
 from .domain.profiles import ProfileStore
@@ -86,13 +86,16 @@ class Engine:
     # --- preparation -----------------------------------------------------
 
     def ingest(self, company: str, role: str, job_text: str, url: str | None = None) -> tuple[str, str]:
-        return self.services.applications.ingest(company, role, job_text, url)
+        ingested = self.services.applications.ingest(company, role, job_text, url)
+        return ingested.application_id, ingested.job_snapshot_id
 
     def analyze(self, application_id: str, **kwargs: Any) -> tuple[str, Any]:
-        return self.services.analysis.analyze(application_id, **kwargs)
+        analysed = self.services.analysis.analyze(application_id, **kwargs)
+        return analysed.analysis_id, analysed.analysis
 
     def draft(self, application_id: str) -> tuple[Path, Path, ValidationReport]:
-        return self.services.drafts.draft(application_id)
+        drafted = self.services.drafts.draft(application_id)
+        return drafted.markdown, drafted.manifest, drafted.validation
 
     def validate_working(self, application_id: str) -> ValidationReport:
         return self.services.drafts.validate_working(application_id)
@@ -100,29 +103,43 @@ class Engine:
     def edit_claim(
         self, application_id: str, claim_id: str, fact_ids: list[str], **kwargs: Any
     ) -> tuple[Path, ValidationReport]:
-        return self.services.drafts.edit_claim(application_id, claim_id, fact_ids, **kwargs)
+        edited = self.services.drafts.edit_claim(application_id, claim_id, fact_ids, **kwargs)
+        return edited.markdown, edited.validation
 
     def link_claim(
         self, application_id: str, claim_id: str, text: str, fact_ids: list[str]
     ) -> tuple[Path, ValidationReport]:
-        return self.services.drafts.link_claim(application_id, claim_id, text, fact_ids)
+        edited = self.services.drafts.link_claim(application_id, claim_id, text, fact_ids)
+        return edited.markdown, edited.validation
 
     def sync_working_claims(self, application_id: str) -> tuple[Path, ValidationReport]:
-        return self.services.drafts.sync_working_claims(application_id)
+        edited = self.services.drafts.sync_working_claims(application_id)
+        return edited.markdown, edited.validation
 
     def approve(self, application_id: str) -> dict[str, Any]:
-        return self.services.drafts.approve(application_id)
+        approved = self.services.drafts.approve(application_id)
+        return {
+            "version": approved.version,
+            "directory": approved.directory,
+            "decision_record_id": approved.decision_record_id,
+        }
 
     # --- rendering and tracking ------------------------------------------
 
     def render(self, application_id: str) -> tuple[Path, ValidationReport]:
-        return self.services.rendering.render(application_id)
+        rendered = self.services.rendering.render(application_id)
+        return rendered.pdf, rendered.validation
 
     def ready_report(self, application_id: str) -> ValidationReport:
         return self.services.rendering.ready_report(application_id)
 
     def submit(self, application_id: str, reason: str = "submitted to employer") -> dict[str, Any]:
-        return self.services.tracking.submit(application_id, reason)
+        submitted = self.services.tracking.submit(application_id, reason)
+        return {
+            "application_id": submitted.application_id,
+            "pdf_artifact_version_id": submitted.pdf_artifact_version_id,
+            **submitted.application,
+        }
 
     def fast(
         self,

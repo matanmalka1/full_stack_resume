@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from ..application.ports import (
     ClassificationProvider,
     KnowledgeStore,
     Renderer,
+    UnitOfWork,
 )
 from ..application.services import (
     AnalysisService,
@@ -34,6 +36,7 @@ class Services:
     repository: ApplicationRepository
     knowledge: KnowledgeStore
     artifacts: ArtifactStore
+    unit_of_work: Callable[[], UnitOfWork]
     applications: ApplicationService
     analysis: AnalysisService
     drafts: DraftService
@@ -77,6 +80,7 @@ def build_services(
         repository=resolved_repository,
         knowledge=resolved_knowledge,
         artifacts=resolved_artifacts,
+        unit_of_work=resolved_repository.unit_of_work,
         applications=ApplicationService(**shared),
         analysis=AnalysisService(**shared),
         drafts=DraftService(**shared),

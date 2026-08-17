@@ -27,6 +27,26 @@ from ..domain.selection import EmphasisPolicyStore
 from ..domain.validation import validate_draft
 from ..util import sha256_file, utc_now
 from .chain import ChainError, check_draft_chain, decision_record_analysis_id
+from .commands import (
+    AnalysisResult,
+    ApprovalResult,
+    DraftResult,
+    EditResult,
+    IngestedApplication,
+    RenderResult,
+    SubmissionResult,
+)
+from .errors import (
+    # Re-exported: the v1 CLI and test suite catch WorkflowError from here, and
+    # it is bound to the taxonomy's base class, so every refusal below is caught.
+    DependencyUnavailable,
+    KnowledgeRejected,
+    LineageBroken,
+    StateConflict,
+    UnknownRecord,
+    ValidationBlocked,
+    WorkflowError,
+)
 from .ports import (
     ApplicationRepository,
     ArtifactStore,
@@ -35,10 +55,6 @@ from .ports import (
     Renderer,
 )
 from .ready import verify_ready_integrity
-
-
-class WorkflowError(RuntimeError):
-    pass
 
 
 class ServiceBase:
@@ -100,12 +116,12 @@ class ServiceBase:
         try:
             return chain.bound()
         except ChainError as exc:
-            raise WorkflowError(f"draft chain rejected: {exc}") from exc
+            raise LineageBroken(f"draft chain rejected: {exc}") from exc
 
     @property
     def renderer(self) -> Renderer:
         if self._renderer is None:
-            raise WorkflowError("this command needs a renderer and none was configured")
+            raise DependencyUnavailable("this command needs a renderer and none was configured")
         return self._renderer
 
 
@@ -245,14 +261,14 @@ class KnowledgeService(ServiceBase):
         try:
             claim = next(item for item in claims if item.claim_id == claim_id)
         except StopIteration as exc:
-            raise WorkflowError(f"unknown claim in the working draft: {claim_id}") from exc
+            raise UnknownRecord(f"unknown claim in the working draft: {claim_id}") from exc
         if claim.style == "headline" or claim.claim_type == "headline":
-            raise WorkflowError("the document headline is not a factual claim and cannot become a fact")
+            raise KnowledgeRejected("the document headline is not a factual claim and cannot become a fact")
         renderings: dict[str, str] = {}
         if draft.language == "he":
             renderings["he"] = hebrew or claim.text
             if not english:
-                raise WorkflowError(
+                raise KnowledgeRejected(
                     "a fact captured from a Hebrew draft needs its English rendering (--en); "
                     "facts are stored language-neutrally"
                 )
@@ -288,7 +304,7 @@ class KnowledgeService(ServiceBase):
         try:
             fact = facts.get(fact_id, canonical_only=True)
         except FactStoreError as exc:
-            raise WorkflowError(
+            raise KnowledgeRejected(
                 f"only canonical facts may enter a Profile pool: {exc}"
             ) from exc
         updated, source = self._knowledge.attach_fact(profile, fact_id, section, pin=pin)
@@ -350,13 +366,14 @@ class KnowledgeService(ServiceBase):
 class ApplicationService(ServiceBase):
     """Creating an application and its immutable job snapshot."""
 
-    def ingest(self, company: str, role: str, job_text: str, url: str | None = None) -> tuple[str, str]:
-        return self.repo.create_application(
+    def ingest(self, company: str, role: str, job_text: str, url: str | None = None) -> IngestedApplication:
+        application_id, snapshot_id = self.repo.create_application(
             company=company,
             target_role=role,
             original_job_text=job_text,
             source_url=url,
         )
+        return IngestedApplication(application_id, snapshot_id)
 
 
 class AnalysisService(ServiceBase):
@@ -387,7 +404,7 @@ class AnalysisService(ServiceBase):
         _, profiles, _ = self.knowledge()
         if provider == "openai":
             if self._provider is None:
-                raise WorkflowError("AI classification was requested but no provider is configured")
+                raise DependencyUnavailable("AI classification was requested but no provider is configured")
             # The provider sees the full deterministic picture as context, but it
             # answers on the narrower proposal contract; deterministic policy decides
             # what survives.
@@ -409,7 +426,7 @@ class AnalysisService(ServiceBase):
             result = merge_classification(deterministic, proposal, profiles)
             used_provider, used_model = "openai", model
         elif provider != "deterministic":
-            raise WorkflowError(f"unsupported provider: {provider}")
+            raise DependencyUnavailable(f"unsupported provider: {provider}")
 
         if accept_low_fit:
             # Rebuilt through validation rather than model_copy(update=...), which
@@ -423,13 +440,13 @@ class AnalysisService(ServiceBase):
         # refuses to act on.
         selected_profile = profiles.get(result.profile)
         if result.track is not selected_profile.track:
-            raise WorkflowError(
+            raise StateConflict(
                 f"classified Track {result.track.value} and Profile {result.profile.value} "
                 f"are inconsistent: {result.profile.value} belongs to Track "
                 f"{selected_profile.track.value}"
             )
         if result.emphasis not in selected_profile.allowed_emphases:
-            raise WorkflowError(
+            raise StateConflict(
                 f"Emphasis {result.emphasis.value} is not allowed for Profile "
                 f"{result.profile.value}"
             )
@@ -442,21 +459,21 @@ class AnalysisService(ServiceBase):
             model=used_model,
         )
         self.repo.set_normalized_role(application_id, selected_profile.normalized_role)
-        return analysis_id, result
+        return AnalysisResult(analysis_id, result)
 
 
 class DraftService(ServiceBase):
     """The working draft: generation, manual edits, validation, approval."""
 
-    def draft(self, application_id: str) -> tuple[Path, Path, ValidationReport]:
+    def draft(self, application_id: str) -> DraftResult:
         knowledge = self.load_knowledge()
         facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
         analysis_id, analysis = self.repo.latest_analysis(application_id)
         if analysis.fit.value == "low" and analysis.user_override.get("fit") != "accepted-low-fit":
-            raise WorkflowError("low fit blocks CV generation until --accept-low-fit is recorded")
+            raise StateConflict("low fit blocks CV generation until --accept-low-fit is recorded")
         unresolved = unresolved_approval_reasons(analysis)
         if unresolved:
-            raise WorkflowError(
+            raise StateConflict(
                 "ambiguous classification requires an explicit Track/Profile override: "
                 f"{unresolved}"
             )
@@ -466,7 +483,7 @@ class DraftService(ServiceBase):
         record = self.repo.get_analysis(analysis_id)
         latest_snapshot = self.repo.latest_snapshot(application_id)
         if record["job_snapshot_id"] != latest_snapshot["id"]:
-            raise WorkflowError(
+            raise StateConflict(
                 f"job snapshot {latest_snapshot['id']} is newer than the analysis in hand; "
                 "analyze the new snapshot before drafting against it"
             )
@@ -512,7 +529,7 @@ class DraftService(ServiceBase):
             "instruction_overrides": analysis.user_override,
             "status": "completed" if report.passed else "validation-failed",
         })
-        return markdown, manifest, report
+        return DraftResult(markdown, manifest, report)
 
     def validate_working(self, application_id: str) -> ValidationReport:
         knowledge = self.load_knowledge()
@@ -548,7 +565,7 @@ class DraftService(ServiceBase):
         text: str | None = None,
         template_id: str | None = None,
         template_version: str | None = None,
-    ) -> tuple[Path, ValidationReport]:
+    ) -> EditResult:
         knowledge = self.load_knowledge()
         facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
         draft = self.artifacts.load_working_draft(application_id)
@@ -573,12 +590,12 @@ class DraftService(ServiceBase):
             presentations=knowledge.presentations,
         )
         self.repo.record_validation(application_id, "manual-claim-edit", report)
-        return stored.paths.markdown, report
+        return EditResult(stored.paths.markdown, report)
 
-    def link_claim(self, application_id: str, claim_id: str, text: str, fact_ids: list[str]) -> tuple[Path, ValidationReport]:
+    def link_claim(self, application_id: str, claim_id: str, text: str, fact_ids: list[str]) -> EditResult:
         return self.edit_claim(application_id, claim_id, fact_ids, text=text)
 
-    def sync_working_claims(self, application_id: str) -> tuple[Path, ValidationReport]:
+    def sync_working_claims(self, application_id: str) -> EditResult:
         knowledge = self.load_knowledge()
         facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
         draft = self.artifacts.load_working_draft(application_id)
@@ -597,12 +614,12 @@ class DraftService(ServiceBase):
             presentations=knowledge.presentations,
         )
         self.repo.record_validation(application_id, "manual-markdown-sync", report)
-        return stored.paths.markdown, report
+        return EditResult(stored.paths.markdown, report)
 
-    def approve(self, application_id: str) -> dict[str, Any]:
+    def approve(self, application_id: str) -> ApprovalResult:
         report = self.validate_working(application_id)
         if not report.passed:
-            raise WorkflowError("approval blocked by pre-render validation")
+            raise ValidationBlocked("approval blocked by pre-render validation", report)
         facts, profiles, _ = self.knowledge()
         draft = self.artifacts.load_working_draft(application_id)
         # The decision record explains the draft being approved, so it is bound to
@@ -617,7 +634,7 @@ class DraftService(ServiceBase):
         try:
             published = self.artifacts.publish_working_draft(application_id, version)
         except FileExistsError as exc:
-            raise WorkflowError(str(exc)) from exc
+            raise StateConflict(str(exc)) from exc
         markdown_path, manifest_path = published.markdown, published.manifest
         approved_dir = markdown_path.parent
         now = utc_now()
@@ -701,13 +718,13 @@ class DraftService(ServiceBase):
                 ApplicationStatus.PREPARING,
                 "new approved version requires fresh rendering and ready validation",
             )
-        return {"version": version, "directory": approved_dir, "decision_record_id": decision_id}
+        return ApprovalResult(version, approved_dir, decision_id)
 
 
 class RenderingService(ServiceBase):
     """Rendering an approved revision and reporting ready state."""
 
-    def render(self, application_id: str) -> tuple[Path, ValidationReport]:
+    def render(self, application_id: str) -> RenderResult:
         knowledge = self.load_knowledge()
         facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
         manifest_record = self.repo.latest_artifact_version(application_id, "claim_manifest", "approved")
@@ -732,7 +749,10 @@ class RenderingService(ServiceBase):
         )
         self.repo.record_validation(application_id, "approved-source-pre-render", source_report)
         if not source_report.passed:
-            raise WorkflowError("render blocked because the approved Markdown no longer matches its validated claims")
+            raise ValidationBlocked(
+                "render blocked because the approved Markdown no longer matches its validated claims",
+                source_report,
+            )
         candidate = knowledge.candidate
         targets = self.artifacts.render_targets(
             manifest_path, self.renderer.filename_for(profile.normalized_role, candidate)
@@ -769,37 +789,37 @@ class RenderingService(ServiceBase):
         if report.passed:
             integrity = verify_ready_integrity(self.artifacts, self._knowledge, self.repo, application_id)
             if not integrity.passed:
-                raise WorkflowError(
+                raise ValidationBlocked(
                     "render succeeded but fresh ready integrity verification failed: "
                     f"{[issue.code for issue in integrity.issues]}"
                 )
             self.repo.set_ready(application_id, artifact_ids[1], "all ready validation groups passed")
-        return pdf_path, report
+        return RenderResult(pdf_path, report)
 
     def ready_report(self, application_id: str) -> ValidationReport:
         application = self.repo.get_application(application_id)
         if application["current_status"] != ApplicationStatus.READY.value:
-            raise WorkflowError("application is not ready")
+            raise StateConflict("application is not ready")
         return verify_ready_integrity(self.artifacts, self._knowledge, self.repo, application_id)
 
 
 class TrackingService(ServiceBase):
     """Recruitment-side state: submission and its evidence."""
 
-    def submit(self, application_id: str, reason: str = "submitted to employer") -> dict[str, Any]:
+    def submit(self, application_id: str, reason: str = "submitted to employer") -> SubmissionResult:
         application = self.repo.get_application(application_id)
         if application["current_status"] != ApplicationStatus.READY.value:
-            raise WorkflowError("applied requires a currently valid ready application")
+            raise StateConflict("applied requires a currently valid ready application")
         integrity = verify_ready_integrity(self.artifacts, self._knowledge, self.repo, application_id)
         if not integrity.passed:
-            raise WorkflowError(
+            raise ValidationBlocked(
                 "applied blocked by stale or tampered ready state: "
                 f"{[issue.code for issue in integrity.issues]}"
             )
         pdf_artifact_version_id = integrity.evidence["pdf_artifact_version_id"]
         self.repo.record_submission(application_id, pdf_artifact_version_id, reason)
-        return {
-            "application_id": application_id,
-            "pdf_artifact_version_id": pdf_artifact_version_id,
-            **self.repo.get_application(application_id),
-        }
+        return SubmissionResult(
+            application_id,
+            pdf_artifact_version_id,
+            self.repo.get_application(application_id),
+        )

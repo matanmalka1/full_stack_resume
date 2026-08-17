@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 from ..domain.knowledge import Knowledge
 from ..domain.models import (
@@ -138,15 +138,26 @@ class ClassificationProvider(Protocol):
     ) -> JobClassificationProposal: ...
 
 
-class ApplicationRepository(Protocol):
-    """The persisted application state the application layer depends on.
+@runtime_checkable
+class UnitOfWork(Protocol):
+    """One atomic boundary around a command's writes.
 
-    Structural, so infrastructure's SQLite repository satisfies it without
-    importing anything from this layer, and so no service has to know that the
-    store is SQLite at all.
+    Declared here because whether a command's records land together is an
+    application decision, not a storage detail. v1's per-statement transaction
+    behaviour is unchanged: the adapter's existing boundary is what this names.
     """
 
-    path: Path
+    def __enter__(self) -> "UnitOfWork": ...
+
+    def __exit__(self, *exc: Any) -> bool | None: ...
+
+    def commit(self) -> None: ...
+
+    def rollback(self) -> None: ...
+
+
+class ApplicationStore(Protocol):
+    """Applications themselves: identity, status, and tracking fields."""
 
     def create_application(
         self, *, company: str, target_role: str, original_job_text: str, source_url: str | None
@@ -156,16 +167,6 @@ class ApplicationRepository(Protocol):
 
     def list_applications(self) -> list[dict[str, Any]]: ...
 
-    def latest_snapshot(self, application_id: str) -> dict[str, Any]: ...
-
-    def save_analysis(
-        self, application_id: str, snapshot_id: str, analysis: Any, *, provider: str, model: str
-    ) -> str: ...
-
-    def get_analysis(self, analysis_id: str) -> dict[str, Any]: ...
-
-    def latest_analysis(self, application_id: str) -> tuple[str, Any]: ...
-
     def transition_status(self, application_id: str, target: Any, reason: str = ...) -> None: ...
 
     def set_next_action(
@@ -174,15 +175,33 @@ class ApplicationRepository(Protocol):
 
     def set_normalized_role(self, application_id: str, normalized_role: str) -> None: ...
 
-    def record_event(
-        self, application_id: str, event_type: str, payload: dict[str, Any]
+    def set_ready(self, application_id: str, pdf_artifact_version_id: str, reason: str = ...) -> None: ...
+
+    def record_submission(
+        self, application_id: str, pdf_artifact_version_id: str, reason: str = ...
     ) -> str: ...
 
-    def record_fact_event(self, **kwargs: Any) -> str: ...
 
-    def fact_events(self, fact_id: str | None = ...) -> list[dict[str, Any]]: ...
+class JobStore(Protocol):
+    """Immutable job snapshots and the analyses derived from them."""
 
-    def latest_fact_statuses(self) -> dict[str, str]: ...
+    def latest_snapshot(self, application_id: str) -> dict[str, Any]: ...
+
+    def get_snapshot(self, snapshot_id: str) -> dict[str, Any]: ...
+
+    def save_analysis(
+        self, application_id: str, snapshot_id: str, analysis: Any, *, provider: str, model: str
+    ) -> str: ...
+
+    def get_analysis(self, analysis_id: str) -> dict[str, Any]: ...
+
+    def analyses(self, application_id: str) -> list[dict[str, Any]]: ...
+
+    def latest_analysis(self, application_id: str) -> tuple[str, Any]: ...
+
+
+class ArtifactRegistry(Protocol):
+    """What was produced, what validated it, and what decided it."""
 
     def register_artifact_version(self, *args: Any, **kwargs: Any) -> str: ...
 
@@ -194,6 +213,8 @@ class ApplicationRepository(Protocol):
 
     def latest_decision(self, application_id: str) -> dict[str, Any]: ...
 
+    def decision_for_artifact_version(self, artifact_version_id: str) -> dict[str, Any]: ...
+
     def record_generation_run(self, values: dict[str, Any]) -> str: ...
 
     def record_validation(self, *args: Any, **kwargs: Any) -> str: ...
@@ -202,10 +223,36 @@ class ApplicationRepository(Protocol):
         self, application_id: str, phase: str, artifact_version_id: str
     ) -> ValidationReport: ...
 
+
+class FactAudit(Protocol):
+    """The fact lifecycle's trail, which lives beside the files it describes."""
+
+    def record_fact_event(self, **kwargs: Any) -> str: ...
+
+    def fact_events(self, fact_id: str | None = ...) -> list[dict[str, Any]]: ...
+
+    def latest_fact_statuses(self) -> dict[str, str]: ...
+
+
+class ApplicationRepository(
+    ApplicationStore, JobStore, ArtifactRegistry, FactAudit, Protocol
+):
+    """Everything a service may ask persistence for, as one composed port.
+
+    The focused protocols above are the real contracts — a service depends on
+    the narrow one it uses. This composition exists because one SQLite adapter
+    satisfies all of them, and the composition root binds it once.
+
+    It deliberately exposes no connection, path, or private adapter method: the
+    application layer must not be able to reach around the port.
+    """
+
+    def unit_of_work(self) -> UnitOfWork: ...
+
+    def record_event(
+        self, application_id: str, event_type: str, payload: dict[str, Any]
+    ) -> str: ...
+
     def integrity_check(self) -> list[str]: ...
 
-    def set_ready(self, application_id: str, pdf_artifact_version_id: str, reason: str = ...) -> None: ...
-
-    def record_submission(
-        self, application_id: str, pdf_artifact_version_id: str, reason: str = ...
-    ) -> str: ...
+    def artifact_inventory(self) -> list[dict[str, Any]]: ...
