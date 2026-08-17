@@ -27,7 +27,7 @@ from .domain.facts import FACT_SOURCE_NAMES
 from .domain.models import ApplicationStatus, FactStatus
 from .util import sha256_file, utc_now
 from .application.services import WorkflowError
-from .compat import Engine
+from .compat import Engine, resolve_job_analysis_id, resolve_job_snapshot_id
 from .runtime.composition import build_services
 
 
@@ -131,9 +131,15 @@ def build_parser() -> argparse.ArgumentParser:
     _add_overrides(analyze)
     analyze.add_argument("--provider", choices=["deterministic", "openai"], default="deterministic")
     analyze.add_argument("--model", default="gpt-5.6")
+    # v2 commands take an explicit source ID. The legacy signature omits it,
+    # so the compatibility resolver fills it in when the flag is absent.
+    analyze.add_argument("--job-snapshot", dest="job_snapshot", default=None)
+
+    draft = sub.add_parser("draft", help="create or update the active working draft")
+    draft.add_argument("application_id")
+    draft.add_argument("--job-analysis", dest="job_analysis", default=None)
 
     for name, help_text in [
-        ("draft", "create or update the active working draft"),
         ("validate", "run pre-render validation"),
         ("approve", "approve and version the working draft"),
         ("render", "render the latest approved version and run ready checks"),
@@ -458,6 +464,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "analyze":
             analysed = services.analysis.analyze(
                 args.application_id,
+                args.job_snapshot or resolve_job_snapshot_id(repository, args.application_id),
                 track=args.track,
                 profile=args.profile,
                 emphasis=args.emphasis,
@@ -471,7 +478,10 @@ def main(argv: list[str] | None = None) -> int:
                 "analysis": analysed.analysis.model_dump(mode="json"),
             })
         elif args.command == "draft":
-            drafted = services.drafts.draft(args.application_id)
+            drafted = services.drafts.draft(
+                args.application_id,
+                args.job_analysis or resolve_job_analysis_id(repository, args.application_id),
+            )
             _print({
                 "markdown": str(drafted.markdown),
                 "claim_manifest": str(drafted.manifest),

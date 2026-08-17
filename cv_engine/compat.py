@@ -12,6 +12,21 @@ from .runtime.composition import build_services
 from .runtime.workspace import Workspace, load_workspace
 
 
+def resolve_job_snapshot_id(repository: Any, application_id: str) -> str:
+    """The snapshot a legacy caller meant when it named none.
+
+    v2 commands take explicit source IDs. v1 signatures do not carry one, so
+    the resolution happens here, in the compatibility layer, where `latest` is
+    a query convenience rather than part of what a command means.
+    """
+    return repository.latest_snapshot(application_id)["id"]
+
+
+def resolve_job_analysis_id(repository: Any, application_id: str) -> str:
+    """The analysis a legacy caller meant when it named none."""
+    return repository.latest_analysis(application_id)[0]
+
+
 class Engine:
     """Temporary compatibility façade over the application services.
 
@@ -90,11 +105,17 @@ class Engine:
         return ingested.application_id, ingested.job_snapshot_id
 
     def analyze(self, application_id: str, **kwargs: Any) -> tuple[str, Any]:
-        analysed = self.services.analysis.analyze(application_id, **kwargs)
+        job_snapshot_id = kwargs.pop(
+            "job_snapshot_id", None
+        ) or resolve_job_snapshot_id(self.repo, application_id)
+        analysed = self.services.analysis.analyze(application_id, job_snapshot_id, **kwargs)
         return analysed.analysis_id, analysed.analysis
 
-    def draft(self, application_id: str) -> tuple[Path, Path, ValidationReport]:
-        drafted = self.services.drafts.draft(application_id)
+    def draft(
+        self, application_id: str, job_analysis_id: str | None = None
+    ) -> tuple[Path, Path, ValidationReport]:
+        analysis_id = job_analysis_id or resolve_job_analysis_id(self.repo, application_id)
+        drafted = self.services.drafts.draft(application_id, analysis_id)
         return drafted.markdown, drafted.manifest, drafted.validation
 
     def validate_working(self, application_id: str) -> ValidationReport:
@@ -179,4 +200,9 @@ class Engine:
         return {"application_id": application_id, "approval": approval, "pdf": str(pdf), "ready": True}
 
 
-__all__ = ["Engine", "WorkflowError"]
+__all__ = [
+    "Engine",
+    "WorkflowError",
+    "resolve_job_analysis_id",
+    "resolve_job_snapshot_id",
+]

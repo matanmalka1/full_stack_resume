@@ -382,6 +382,7 @@ class AnalysisService(ServiceBase):
     def analyze(
         self,
         application_id: str,
+        job_snapshot_id: str,
         *,
         track: str | None = None,
         profile: str | None = None,
@@ -390,8 +391,19 @@ class AnalysisService(ServiceBase):
         accept_low_fit: bool = False,
         provider: str = "deterministic",
         model: str = "rules-v1",
-    ) -> tuple[str, JobAnalysis]:
-        snapshot = self.repo.latest_snapshot(application_id)
+    ) -> AnalysisResult:
+        """Classify one exact job snapshot.
+
+        The snapshot is named by the caller. `latest` is a query convenience
+        and belongs to the compatibility layer, not to a command: a command
+        that picks its own source can silently analyse something other than
+        what the caller was looking at.
+        """
+        snapshot = self.repo.get_snapshot(job_snapshot_id)
+        if snapshot["application_id"] != application_id:
+            raise LineageBroken(
+                f"job snapshot {job_snapshot_id} does not belong to application {application_id}"
+            )
         deterministic = classify_job(
             snapshot["original_text"],
             track_override=track,
@@ -465,10 +477,22 @@ class AnalysisService(ServiceBase):
 class DraftService(ServiceBase):
     """The working draft: generation, manual edits, validation, approval."""
 
-    def draft(self, application_id: str) -> DraftResult:
+    def draft(self, application_id: str, job_analysis_id: str) -> DraftResult:
+        """Build the working draft from one exact analysis.
+
+        The analysis is named by the caller for the same reason the snapshot is
+        in `analyze`: a command that resolves `latest` itself can draft from an
+        analysis the caller never saw.
+        """
         knowledge = self.load_knowledge()
         facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
-        analysis_id, analysis = self.repo.latest_analysis(application_id)
+        analysis_id = job_analysis_id
+        record = self.repo.get_analysis(analysis_id)
+        if record["application_id"] != application_id:
+            raise LineageBroken(
+                f"analysis {analysis_id} does not belong to application {application_id}"
+            )
+        analysis = record["analysis"]
         if analysis.fit.value == "low" and analysis.user_override.get("fit") != "accepted-low-fit":
             raise StateConflict("low fit blocks CV generation until --accept-low-fit is recorded")
         unresolved = unresolved_approval_reasons(analysis)
@@ -479,8 +503,8 @@ class DraftService(ServiceBase):
             )
         # The draft is built from the analysis's own snapshot, never from whichever
         # snapshot is newest: a job snapshot added after the analysis describes a
-        # job nothing has analyzed yet.
-        record = self.repo.get_analysis(analysis_id)
+        # job nothing has analyzed yet. `latest_snapshot` is read as a staleness
+        # check on the named analysis, not to choose what to draft from.
         latest_snapshot = self.repo.latest_snapshot(application_id)
         if record["job_snapshot_id"] != latest_snapshot["id"]:
             raise StateConflict(

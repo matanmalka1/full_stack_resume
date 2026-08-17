@@ -7,6 +7,7 @@ only described in a document drifts the first time a service is edited.
 
 from __future__ import annotations
 
+import inspect
 import sqlite3
 from pathlib import Path
 
@@ -29,7 +30,8 @@ from cv_engine.application.ports import (
     JobStore,
     UnitOfWork,
 )
-from cv_engine.application.services import RenderingService
+from cv_engine.application.services import AnalysisService, DraftService, RenderingService
+from cv_engine.compat import resolve_job_analysis_id, resolve_job_snapshot_id
 from cv_engine.infrastructure.db import Repository
 from helpers import ACCOUNT_MANAGER_JOB
 
@@ -45,11 +47,13 @@ def test_commands_answer_with_named_results(engine) -> None:
     )
     assert isinstance(ingested, IngestedApplication)
 
-    analysed = services.analysis.analyze(ingested.application_id)
+    analysed = services.analysis.analyze(
+        ingested.application_id, ingested.job_snapshot_id
+    )
     assert isinstance(analysed, AnalysisResult)
     assert analysed.analysis.track.value
 
-    drafted = services.drafts.draft(ingested.application_id)
+    drafted = services.drafts.draft(ingested.application_id, analysed.analysis_id)
     assert isinstance(drafted, DraftResult)
     assert drafted.markdown.is_file() and drafted.manifest.is_file()
     assert drafted.validation.passed, drafted.validation.model_dump()
@@ -181,3 +185,47 @@ def test_the_unit_of_work_rolls_back_a_failed_command(tmp_path: Path) -> None:
 
     with pytest.raises((KeyError, sqlite3.Error)):
         repository.get_application("b")
+
+
+# --- commands take explicit sources; `latest` lives outside them --------------
+
+
+def test_commands_take_explicit_source_ids() -> None:
+    """Architecture §8: `latest` is query convenience, not command semantics."""
+    assert "job_snapshot_id" in inspect.signature(AnalysisService.analyze).parameters
+    assert "job_analysis_id" in inspect.signature(DraftService.draft).parameters
+
+
+def test_a_source_from_another_application_is_refused(engine) -> None:
+    """An explicit ID is only worth taking if it is checked."""
+    mine = engine.services.applications.ingest("Mine Co", "Account Manager", ACCOUNT_MANAGER_JOB)
+    theirs = engine.services.applications.ingest("Theirs Co", "Account Manager", ACCOUNT_MANAGER_JOB)
+
+    with pytest.raises(errors.LineageBroken, match="does not belong"):
+        engine.services.analysis.analyze(mine.application_id, theirs.job_snapshot_id)
+
+    analysed = engine.services.analysis.analyze(theirs.application_id, theirs.job_snapshot_id)
+    with pytest.raises(errors.LineageBroken, match="does not belong"):
+        engine.services.drafts.draft(mine.application_id, analysed.analysis_id)
+
+
+def test_the_compatibility_layer_is_what_resolves_latest(engine) -> None:
+    """A v1 signature carries no source ID, so the resolver supplies one."""
+    ingested = engine.services.applications.ingest("Legacy Co", "Account Manager", ACCOUNT_MANAGER_JOB)
+
+    assert resolve_job_snapshot_id(engine.repo, ingested.application_id) == ingested.job_snapshot_id
+
+    analysed = engine.services.analysis.analyze(ingested.application_id, ingested.job_snapshot_id)
+    assert resolve_job_analysis_id(engine.repo, ingested.application_id) == analysed.analysis_id
+
+
+def test_no_command_resolves_its_own_source(engine) -> None:
+    """`latest_analysis` may not appear in a command's body at all.
+
+    `latest_snapshot` survives in `draft` as a staleness check on the analysis
+    the caller named, which is a guard rather than a choice of source, so it is
+    asserted to appear exactly once and only there.
+    """
+    source = (Path(inspect.getfile(DraftService))).read_text(encoding="utf-8")
+    assert "latest_analysis" not in source
+    assert source.count("latest_snapshot(") == 1
