@@ -26,8 +26,10 @@ otherwise install Playwright Chromium:
 - `base/common.md`, `base/sales.md`, `base/development.md`, and
   `base/situational_skills.md` are the modular canonical fact store after migration.
 - `profiles/` selects and weights facts without duplicating content.
-- `rendering/rules/` and `rendering/templates/` define Development, Sales LTR, and
-  Sales RTL output.
+- `rendering/rules/` and `rendering/templates/` define Development, Sales LTR/RTL,
+  and deterministic profile-specific presentations of canonical facts. Tech Sales
+  can therefore shorten Development evidence into business-value wording without
+  changing or duplicating the underlying fact.
 - `cv_engine/` owns deterministic workflow, validation, persistence, rendering, AI
   boundaries, and migration.
 - `data/applications.sqlite3` stores mutable application state and immutable history.
@@ -106,6 +108,12 @@ under `new-business`. Selection is deterministic and recorded: `resume.claims.js
 carries the score, outcome and omission reason for every candidate considered. Because
 Emphasis now changes the document, a disagreement about it between the deterministic
 classifier and an AI proposal requires an explicit `--emphasis` decision.
+
+The analyzer also normalizes job language such as outbound, discovery, closing, CRM,
+pipeline, integrations, and onboarding into the canonical tag vocabulary. Unverified
+direct SaaS Sales, named Sales-CRM usage, and strategic-partnership ownership remain
+recorded gaps; verified substitute facts may be selected, but the missing experience
+is never inferred from them.
 
 ## Fact lifecycle
 

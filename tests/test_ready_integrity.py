@@ -205,14 +205,12 @@ def test_missing_visual_evidence_fails_ready_inspection(v1_repo: Path, ready_app
 
 
 def test_newer_approved_version_stales_prior_ready(ready_application) -> None:
-    """A newer approved version that supersedes the rendered/ready one must make
-    ready inspection fail, even though current_status is still 'ready'."""
+    """A newer approved version demotes ready until that version is rendered."""
     engine, app_id = ready_application("Superseded")
     engine.approve(app_id)  # approves a second version without re-rendering it
-    assert engine.repo.get_application(app_id)["current_status"] == "ready"
-    report = engine.ready_report(app_id)
-    assert not report.passed
-    assert any(issue.code == "superseded-by-newer-version" for issue in report.issues)
+    assert engine.repo.get_application(app_id)["current_status"] == "preparing"
+    with pytest.raises(WorkflowError, match="not ready"):
+        engine.ready_report(app_id)
 
 
 def test_new_job_snapshot_stales_prior_ready(ready_application) -> None:
@@ -226,9 +224,9 @@ def test_new_job_snapshot_stales_prior_ready(ready_application) -> None:
 def test_new_analysis_stales_prior_ready(ready_application) -> None:
     engine, app_id = ready_application("New Analysis")
     engine.analyze(app_id)
-    report = engine.ready_report(app_id)
-    assert not report.passed
-    assert any(issue.code == "new-analysis-since-approval" for issue in report.issues)
+    assert engine.repo.get_application(app_id)["current_status"] == "preparing"
+    with pytest.raises(WorkflowError, match="not ready"):
+        engine.ready_report(app_id)
 
 
 # --- APPLIED binding ------------------------------------------------------

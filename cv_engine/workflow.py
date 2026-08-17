@@ -28,6 +28,7 @@ from .models import (
     ValidationReport,
 )
 from .profiles import ProfileStore, attach_fact_to_section
+from .presentations import PresentationStore
 from .providers import OpenAIResponsesProvider
 from .ready import verify_ready_integrity
 from .rendering import normalized_role_filename, render_html, render_pdf, validate_rendered
@@ -382,6 +383,7 @@ class Engine:
             facts=facts,
             policies=policies,
         )
+        presentation_rules = PresentationStore.for_facts(facts)
         markdown, manifest = write_working_draft(self.root, draft)
         report = validate_draft(draft, markdown, facts, profile, analysis, policies=policies)
         self.repo.record_validation(application_id, "pre-render", report)
@@ -389,7 +391,10 @@ class Engine:
             "application_id": application_id,
             "engine_version": __version__,
             "profile_version": profiles.version,
-            "rendering_rules_version": "1.0.0",
+            "rendering_rules_version": (
+                f"1.0.0+presentations.{presentation_rules.version[:12]}"
+                if presentation_rules is not None else "1.0.0"
+            ),
             "facts_version": facts.version,
             "ai_provider": "deterministic",
             "ai_model": "rules-v1",
@@ -556,6 +561,12 @@ class Engine:
             f"Approved {draft.profile.value} / {draft.emphasis.value} CV for {application['company']}.",
         )
         self.repo.record_event(application_id, "draft_approved", {"decision_record_id": decision_id, "version": version})
+        if application["current_status"] == ApplicationStatus.READY.value:
+            self.repo.transition_status(
+                application_id,
+                ApplicationStatus.PREPARING,
+                "new approved version requires fresh rendering and ready validation",
+            )
         return {"version": version, "directory": approved_dir, "decision_record_id": decision_id}
 
     def render(self, application_id: str) -> tuple[Path, ValidationReport]:

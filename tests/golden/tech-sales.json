@@ -5,8 +5,8 @@
   "emphasis": "tech-consultative-sales",
   "language": "en",
   "snapshot": {
-    "markdown_sha256": "39bc2395785dbb8f10081605c697ac9f17608df8c4f3a545e90eb327158f2e2b",
-    "html_sha256": "03c2176f5ce66316acdfffd8c45a4bd321749ba54c0eacac63b5fa9a26134d63",
+    "markdown_sha256": "9c74d1779a8c7b20ea21a719904af2ea27152e001d6177208e40af05ce6e556d",
+    "html_sha256": "9a28526e41362e4ee5bab1ebb508a826f1fc230dae71677aad6947478618496f",
     "selected_fact_ids": [
       "common.contact.email",
       "common.contact.linkedin",
@@ -21,12 +21,12 @@
       "development.phdigital.fullstack",
       "development.phdigital.integrations",
       "development.phdigital.role",
-      "development.skills.backend",
-      "development.skills.databases",
-      "development.skills.frontend",
+      "sales.achievement.complex_deals",
       "sales.cycle.account_management",
+      "sales.cycle.closing",
       "sales.cycle.discovery",
       "sales.cycle.negotiation",
+      "sales.cycle.outreach",
       "sales.cycle.prospecting",
       "sales.cycle.quotations",
       "sales.metric.performance",
@@ -34,14 +34,17 @@
       "sales.role.field.title",
       "sales.role.leader.dates",
       "sales.role.leader.title",
+      "sales.summary.new_business",
       "sales.summary.tech",
+      "sales.tool.communication",
+      "sales.tool.excel",
       "sales.tool.priority"
     ],
     "sections": [
       "Professional Summary",
       "Sales Experience",
       "Technology Background",
-      "Tools",
+      "Business & Technology Tools",
       "Languages"
     ]
   }

@@ -7,6 +7,7 @@ from .analysis import unresolved_approval_reasons
 from .drafts import render_composite_claim, serialize_markdown, validate_derived_wording
 from .facts import FactStore, FactStoreError
 from .models import DraftDocument, JobAnalysis, Profile, ValidationIssue, ValidationReport
+from .presentations import PresentationError, PresentationStore
 from .selection import STRUCTURAL_STYLES, EmphasisPolicyStore
 from .util import sha256_text
 
@@ -61,6 +62,16 @@ def validate_draft(
     """
     issues: list[ValidationIssue] = []
     groups = {"content": True, "profile": True, "structure": True, "filename": True}
+    try:
+        presentations = PresentationStore.for_facts(facts)
+    except PresentationError as exc:
+        presentations = None
+        groups["content"] = False
+        issues.append(ValidationIssue(
+            group="content",
+            code="invalid-presentation-rules",
+            message=str(exc),
+        ))
     expected = serialize_markdown(draft)
     actual = markdown_path.read_text(encoding="utf-8") if markdown_path.is_file() else ""
     if actual != expected or sha256_text(actual) != draft.content_hash:
@@ -105,6 +116,7 @@ def validate_draft(
                     claim.style,
                     claim.derivation_id or "",
                     claim.derivation_version or "",
+                    presentations,
                 )
             except (FactStoreError, ValueError) as exc:
                 groups["content"] = False
@@ -136,6 +148,7 @@ def validate_draft(
                     claim.style,
                     claim.template_id or "",
                     claim.template_version or "",
+                    presentations,
                 )
             except (FactStoreError, ValueError) as exc:
                 groups["content"] = False

@@ -14,6 +14,7 @@ from cv_engine.models import Emphasis, Profile
 from cv_engine.profiles import ProfileStore
 from cv_engine.rendering import normalized_role_filename, render_html
 from cv_engine.selection import STRUCTURAL_STYLES, build_selection
+from helpers import PAYME_TECH_SALES_JOB
 
 ACCOUNT_MANAGER_JOB = (
     "Account Manager for B2B customers: retention, portfolio growth, renewals, "
@@ -187,3 +188,49 @@ def test_structure_survives_every_profile_and_emphasis(
                     elif claim.style not in STRUCTURAL_STYLES:
                         supported = True
                 assert supported, f"{label}: trailing heading with no evidence under it"
+
+
+def test_payme_tech_sales_selection_uses_job_evidence_and_business_presentations(
+    draft_factory,
+) -> None:
+    setup = draft_factory(
+        PAYME_TECH_SALES_JOB,
+        track_override="tech-sales",
+        profile_override="tech-sales",
+        emphasis_override="new-business",
+    )
+    draft = setup.draft
+
+    assert setup.analysis.fit.value == "medium"
+    assert {
+        "sales.cycle.outreach",
+        "sales.cycle.closing",
+        "sales.cycle.prospecting",
+        "sales.leadership.pipeline",
+        "sales.metric.new_customers",
+        "sales.achievement.complex_deals",
+        "development.phdigital.crm",
+    } <= set(draft.selected_fact_ids)
+
+    sections = {section.name: section for section in draft.sections}
+    summary = sections["Professional Summary"].claims
+    assert len(summary) == 1
+    assert summary[0].claim_type == "composite"
+    assert summary[0].template_id == "tech-sales.summary.new-business"
+    assert "prospecting, needs discovery, negotiation, and closing" in summary[0].text
+
+    technology = sections["Technology Background"].claims
+    technology_text = " ".join(claim.text for claim in technology)
+    assert "how software products are designed and delivered" in technology_text
+    assert "automated workflows, document generation, and operational status tracking" in technology_text
+    assert "scheduled jobs" not in technology_text
+    assert "retries" not in technology_text
+    assert "state-driven business processes" not in technology_text
+
+    tools = sections["Business & Technology Tools"]
+    tools_text = " ".join(claim.text for claim in tools.claims)
+    assert "Priority ERP" in tools_text
+    assert "Excel" in tools_text
+    assert "Outlook, Gmail, WhatsApp, and Teams" in tools_text
+    assert "Backend:" not in tools_text
+    assert "Frontend:" not in tools_text

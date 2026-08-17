@@ -21,6 +21,16 @@ AMBIGUOUS_HEBREW_JOB = (
     "דרישות: account manager, business development, Salesforce, must have direct saas sales."
 )
 
+PAYME_TECH_SALES_JOB = (
+    "FinTech platform for small businesses. Strategic Partnerships Sales Manager "
+    "responsible for new partner acquisition and outbound Sales to website builders, "
+    "CRMs, marketplaces, and software providers that can embed financial products. "
+    "Engage prospects by phone and email, understand their needs, offer tailored "
+    "solutions, pitch the service, guide the Sales process through closing, onboard "
+    "customers, and maintain Sales progress and follow-up tasks in our CRM system. "
+    "Prefer inside Sales experience in a SaaS or tech-related industry."
+)
+
 
 def working_claim(engine: Engine, application_id: str, fact_id: str):
     manifest = engine.root / "artifacts/working" / application_id / "resume.claims.json"

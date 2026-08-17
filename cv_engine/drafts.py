@@ -16,6 +16,7 @@ from .models import (
     ResumeSection,
     SelectionManifest,
 )
+from .presentations import PresentationStore, PresentedClaim
 from .selection import EmphasisPolicyStore, build_selection
 from .util import canonical_json, sha256_text
 
@@ -142,6 +143,7 @@ def build_draft(
         policy_store_version=policies.version,
         facts=facts,
     )
+    presentations = PresentationStore.for_facts(facts)
 
     # The headline is supported by the historical titles that actually reached
     # the document, not by every title the Profile could have shown.
@@ -162,11 +164,51 @@ def build_draft(
     sections: list[ResumeSection] = []
     for spec in profile.sections:
         claims = []
-        for fact_id in selected_by_section[spec.name_en]:
-            fact = facts.get(fact_id, canonical_only=True)
-            text = facts.rendering(fact_id, language)
-            claims.append(_claim(fact.resume_style, text, [fact_id]))
-            selected.add(fact_id)
+        selected_ids = selected_by_section[spec.name_en]
+        presented = (
+            presentations.render_section(
+                profile=profile,
+                section=spec.name_en,
+                emphasis=analysis.emphasis,
+                selected_fact_ids=selected_ids,
+                language=language,
+                facts=facts,
+            )
+            if presentations is not None
+            else []
+        )
+        if presentations is None:
+            presented = [
+                PresentedClaim(
+                    style=facts.get(fact_id, canonical_only=True).resume_style,
+                    text=facts.rendering(fact_id, language),
+                    fact_ids=(fact_id,),
+                )
+                for fact_id in selected_ids
+            ]
+        for item in presented:
+            fact_ids = list(item.fact_ids)
+            if item.rule_id is None:
+                claims.append(_claim(item.style, item.text, fact_ids))
+            elif len(fact_ids) == 1:
+                claims.append(_claim(
+                    item.style,
+                    item.text,
+                    fact_ids,
+                    "derived",
+                    derivation_id=item.rule_id,
+                    derivation_version=item.rule_version,
+                ))
+            else:
+                claims.append(_claim(
+                    item.style,
+                    item.text,
+                    fact_ids,
+                    "composite",
+                    template_id=item.rule_id,
+                    template_version=item.rule_version,
+                ))
+            selected.update(fact_ids)
         if claims or not spec.optional:
             sections.append(ResumeSection(
                 name=spec.name_he if language == "he" else spec.name_en,
@@ -323,9 +365,23 @@ def validate_derived_wording(
     style: str,
     derivation_id: str,
     derivation_version: str,
+    presentations: PresentationStore | None = None,
 ) -> None:
     if (derivation_id, derivation_version) != EXTRACTIVE_DERIVATION:
-        raise ValueError(f"unknown derivation contract: {derivation_id}@{derivation_version}")
+        if presentations is None:
+            raise ValueError(f"unknown derivation contract: {derivation_id}@{derivation_version}")
+        expected = presentations.render_rule(
+            derivation_id,
+            derivation_version,
+            fact_ids,
+            language,
+            style,
+        )
+        if text != expected:
+            raise ValueError(
+                f"derived wording does not match presentation {derivation_id}@{derivation_version}"
+            )
+        return
     if len(fact_ids) != 1:
         raise ValueError("extractive derived wording must link exactly one canonical fact")
     fact = facts.get(fact_ids[0], canonical_only=True)
@@ -354,11 +410,20 @@ def render_composite_claim(
     output_style: str,
     template_id: str,
     template_version: str,
+    presentations: PresentationStore | None = None,
 ) -> str:
     try:
         template = COMPOSITE_TEMPLATES[(template_id, template_version)]
     except KeyError as exc:
-        raise ValueError(f"unknown deterministic claim template: {template_id}@{template_version}") from exc
+        if presentations is None:
+            raise ValueError(f"unknown deterministic claim template: {template_id}@{template_version}") from exc
+        return presentations.render_rule(
+            template_id,
+            template_version,
+            fact_ids,
+            language,
+            output_style,
+        )
     if len(fact_ids) < 2 or len(fact_ids) != len(set(fact_ids)):
         raise ValueError("deterministic composite claims require at least two distinct canonical facts")
     if output_style not in template.output_styles:

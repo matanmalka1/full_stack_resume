@@ -16,7 +16,7 @@ from cv_engine.drafts import (
 from cv_engine.models import ClaimLine
 from cv_engine.util import sha256_text
 from cv_engine.validation import validate_draft
-from helpers import claim_by_id, exact_fact_claim
+from helpers import PAYME_TECH_SALES_JOB, claim_by_id, exact_fact_claim
 
 
 def test_generated_draft_has_exact_canonical_claim_links(draft_factory) -> None:
@@ -156,6 +156,32 @@ def test_forged_composite_wording_blocks_approval(v1_repo: Path, draft_factory) 
     markdown, _manifest = write_working_draft(v1_repo, updated)
 
     report = validate_draft(updated, markdown, facts, profile, analysis)
+
+    assert not report.passed
+    assert any(issue.code == "composite-wording-mismatch" for issue in report.issues)
+
+
+def test_profile_presentation_wording_is_recomputed_during_validation(
+    v1_repo: Path,
+    draft_factory,
+) -> None:
+    facts, profile, analysis, draft, _markdown = draft_factory(
+        PAYME_TECH_SALES_JOB,
+        track_override="tech-sales",
+        profile_override="tech-sales",
+        emphasis_override="new-business",
+        write=True,
+    )
+    summary = next(
+        claim for section in draft.sections if section.name == "Professional Summary"
+        for claim in section.claims
+    )
+    summary.text = "Sold SaaS through strategic channel partnerships."
+    summary.text_hash = sha256_text(summary.text)
+    draft.content_hash = sha256_text(serialize_markdown(draft))
+    markdown, _manifest = write_working_draft(v1_repo, draft)
+
+    report = validate_draft(draft, markdown, facts, profile, analysis)
 
     assert not report.passed
     assert any(issue.code == "composite-wording-mismatch" for issue in report.issues)

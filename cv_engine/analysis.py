@@ -49,6 +49,22 @@ PROFILE_TERMS: dict[ProfileName, tuple[str, ...]] = {
 SALES_TERMS = ("sales", "revenue", "pipeline", "account", "prospect", "customer", "business development", "quota")
 TECH_TERMS = ("software", "saas", "api", "cloud", "technical", "developer", "technology", "solution")
 
+# Job language is normalized to the same tag vocabulary used by canonical facts.
+# This keeps matching deterministic while allowing a posting's phrasing (for
+# example "follow-up tasks in CRM") to select the corresponding pipeline fact.
+SELECTION_CONCEPTS: dict[str, tuple[str, ...]] = {
+    "new-business": ("new partner acquisition", "new customer acquisition", "new business"),
+    "prospecting": ("outbound", "potential customers", "prospects", "leads"),
+    "discovery": ("understanding their needs", "needs discovery", "tailored solutions"),
+    "closing": ("closing", "close the deal", "closing the deal"),
+    "communication": ("phone", "email", "online communication"),
+    "pipeline": ("sales progress", "follow-up tasks", "multiple leads", "crm system"),
+    "crm": ("crm",),
+    "integrations": ("embed", "integrated", "integration"),
+    "technical": ("software provider", "tech-related", "product knowledge", "platform"),
+    "onboarding": ("onboarding", "onboard"),
+}
+
 
 def detect_language(text: str) -> str:
     letters = [char for char in text if char.isalpha()]
@@ -247,12 +263,51 @@ def classify_job(
     emphasis = Emphasis(emphasis_override) if emphasis_override else default_emphasis
 
     gaps: list[Gap] = []
-    if re.search(r"(?:direct|proven|must have|required).{0,40}saas sales", lowered):
+    hard_saas = bool(re.search(r"(?:direct|proven|must have|required).{0,40}saas sales", lowered))
+    if hard_saas:
         gaps.append(Gap(
             requirement="Direct SaaS Sales",
             severity="hard",
             reason="Device Sales plus separate Development experience does not verify direct SaaS Sales.",
             substitute_fact_ids=["sales.company.activity", "development.phdigital.role"],
+        ))
+    elif "saas" in lowered:
+        gaps.append(Gap(
+            requirement="Direct SaaS Sales preference",
+            severity="warning",
+            reason=(
+                "Direct SaaS/software Sales is not verified; B2B Sales and separate "
+                "professional Development experience may be presented without merging them."
+            ),
+            substitute_fact_ids=["development.phdigital.role", "development.phdigital.fullstack"],
+        ))
+    if re.search(r"(?:using|use|experience|familiarity).{0,50}\bcrm\b|\bcrm\b.{0,30}(?:tool|system)", lowered):
+        gaps.append(Gap(
+            requirement="Sales CRM usage",
+            severity="warning",
+            reason=(
+                "Use of a named Sales CRM is not verified; canonical pipeline, Priority ERP, "
+                "and CRM-development experience may be shown instead."
+            ),
+            substitute_fact_ids=[
+                "sales.leadership.pipeline",
+                "sales.tool.priority",
+                "development.phdigital.crm",
+            ],
+        ))
+    if re.search(r"strategic partnerships?|distribution partners?|strategic b2b channels?", lowered):
+        gaps.append(Gap(
+            requirement="Strategic partnerships / channel Sales experience",
+            severity="warning",
+            reason=(
+                "Direct strategic-partnership or channel-Sales ownership is not verified; "
+                "new-business prospecting, complex deals, and strategic-customer work may be shown."
+            ),
+            substitute_fact_ids=[
+                "sales.cycle.prospecting",
+                "sales.achievement.complex_deals",
+                "sales.leadership.strategic_customers",
+            ],
         ))
     if "salesforce" in lowered:
         gaps.append(Gap(
@@ -278,7 +333,14 @@ def classify_job(
             "language": language_override,
         }.items() if value
     }
-    keywords = sorted({term for terms in PROFILE_TERMS.values() for term in terms if term in lowered})
+    keywords = {
+        term for terms in PROFILE_TERMS.values() for term in terms if term in lowered
+    }
+    keywords.update(
+        concept
+        for concept, phrases in SELECTION_CONCEPTS.items()
+        if any(phrase in lowered for phrase in phrases)
+    )
     reasons = [
         *(["ambiguous-signals"] if ambiguous else []),
         *(["low-confidence"] if confidence < CONFIDENCE_APPROVAL_THRESHOLD else []),
@@ -293,7 +355,7 @@ def classify_job(
         gaps=gaps,
         mandatory_requirements=[gap.requirement for gap in gaps if gap.severity == "hard"],
         preferred_requirements=[gap.requirement for gap in gaps if gap.severity == "warning"],
-        keywords=keywords,
+        keywords=sorted(keywords),
         language=language_override or detect_language(text),
         classification_requires_approval=bool(unresolved_reasons(reasons, overrides)),
         approval_reasons=reasons,

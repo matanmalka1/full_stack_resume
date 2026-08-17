@@ -1,6 +1,6 @@
 {
   "profile_id": "sales.tech-sales.v1",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "track": "tech-sales",
   "profile": "tech-sales",
   "default_emphasis": "tech-consultative-sales",
@@ -20,7 +20,11 @@
   ],
   "tag_weights": {
     "technical": 100,
-    "sales": 100
+    "sales": 100,
+    "closing": 40,
+    "consultative": 30,
+    "communication": 20,
+    "pipeline": 20
   },
   "sections": [
     {
@@ -31,7 +35,7 @@
         "sales.summary.new_business",
         "sales.summary.account"
       ],
-      "max_claims": 1
+      "max_claims": 2
     },
     {
       "name_en": "Sales Experience",
@@ -43,19 +47,23 @@
         "sales.metric.team_size",
         "sales.cycle.account_management",
         "sales.metric.recurring_customers",
+        "sales.leadership.pipeline",
         "sales.role.field.title",
         "sales.role.field.dates",
         "sales.cycle.discovery",
+        "sales.cycle.outreach",
         "sales.cycle.negotiation",
         "sales.cycle.quotations",
         "sales.cycle.prospecting",
-        "sales.metric.new_customers"
+        "sales.cycle.closing",
+        "sales.metric.new_customers",
+        "sales.achievement.complex_deals"
       ],
       "pinned_fact_ids": [
         "sales.metric.performance",
         "sales.cycle.discovery"
       ],
-      "max_claims": 10
+      "max_claims": 13
     },
     {
       "name_en": "Technology Background",
@@ -75,16 +83,14 @@
       "max_claims": 5
     },
     {
-      "name_en": "Tools",
-      "name_he": "כלים",
+      "name_en": "Business & Technology Tools",
+      "name_he": "כלים עסקיים וטכנולוגיים",
       "fact_ids": [
         "sales.tool.priority",
         "sales.tool.excel",
-        "development.skills.backend",
-        "development.skills.frontend",
-        "development.skills.databases"
+        "sales.tool.communication"
       ],
-      "max_claims": 4
+      "max_claims": 3
     },
     {
       "name_en": "Languages",

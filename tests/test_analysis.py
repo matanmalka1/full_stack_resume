@@ -1,4 +1,5 @@
 from cv_engine.analysis import classify_job
+from helpers import PAYME_TECH_SALES_JOB
 
 
 def test_development_classification() -> None:
@@ -29,3 +30,34 @@ def test_hebrew_language_detection_and_override() -> None:
     overridden = classify_job("developer Python API", language_override="he")
     assert overridden.language == "he"
     assert overridden.user_override["language"] == "he"
+
+
+def test_tech_sales_analysis_records_preference_gaps_and_selection_concepts() -> None:
+    result = classify_job(
+        PAYME_TECH_SALES_JOB,
+        track_override="tech-sales",
+        profile_override="tech-sales",
+        emphasis_override="new-business",
+    )
+
+    assert result.fit.value == "medium"
+    gaps = {gap.requirement: gap for gap in result.gaps}
+    assert gaps["Direct SaaS Sales preference"].severity == "warning"
+    assert gaps["Sales CRM usage"].substitute_fact_ids == [
+        "sales.leadership.pipeline",
+        "sales.tool.priority",
+        "development.phdigital.crm",
+    ]
+    assert gaps["Strategic partnerships / channel Sales experience"].severity == "warning"
+    assert {
+        "closing",
+        "communication",
+        "crm",
+        "discovery",
+        "integrations",
+        "new-business",
+        "onboarding",
+        "pipeline",
+        "prospecting",
+        "technical",
+    } <= set(result.keywords)

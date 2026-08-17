@@ -1,0 +1,70 @@
+{
+  "schema_version": "1.0.0",
+  "rules": [
+    {
+      "rule_id": "tech-sales.summary.new-business",
+      "version": "1.0.0",
+      "profile": "tech-sales",
+      "section": "Professional Summary",
+      "emphases": ["new-business"],
+      "fact_ids": ["sales.summary.tech", "sales.summary.new_business"],
+      "style": "paragraph",
+      "renderings": {
+        "en": "Full-cycle B2B Sales professional with account leadership and hands-on Full-Stack Development experience, combining prospecting, needs discovery, negotiation, and closing with practical understanding of software products and workflows.",
+        "he": "איש מכירות B2B במחזור מכירה מלא, עם ניסיון בניהול לקוחות וב-Full-Stack Development, המשלב איתור לקוחות, אפיון צרכים, משא ומתן וסגירה עם הבנה מעשית של מוצרי תוכנה ותהליכי עבודה."
+      }
+    },
+    {
+      "rule_id": "tech-sales.summary.consultative",
+      "version": "1.0.0",
+      "profile": "tech-sales",
+      "section": "Professional Summary",
+      "emphases": ["tech-consultative-sales", "balanced-sales"],
+      "fact_ids": ["sales.summary.tech", "sales.summary.new_business"],
+      "style": "paragraph",
+      "renderings": {
+        "en": "Commercial and technical professional combining full-cycle B2B Sales, needs discovery, negotiation, and closing with hands-on Full-Stack Development experience.",
+        "he": "איש מקצוע מסחרי וטכנולוגי המשלב מכירות B2B במחזור מלא, אפיון צרכים, משא ומתן וסגירה עם ניסיון מעשי ב-Full-Stack Development."
+      }
+    },
+    {
+      "rule_id": "tech-sales.summary.account-growth",
+      "version": "1.0.0",
+      "profile": "tech-sales",
+      "section": "Professional Summary",
+      "emphases": ["account-growth"],
+      "fact_ids": ["sales.summary.tech", "sales.summary.account"],
+      "style": "paragraph",
+      "renderings": {
+        "en": "B2B Sales and account-management professional with hands-on Full-Stack Development experience, combining customer growth, retention, and commercial ownership with practical understanding of software products and workflows.",
+        "he": "איש מכירות B2B וניהול לקוחות עם ניסיון מעשי ב-Full-Stack Development, המשלב צמיחת לקוחות, שימור ואחריות מסחרית עם הבנה מעשית של מוצרי תוכנה ותהליכי עבודה."
+      }
+    },
+    {
+      "rule_id": "tech-sales.technology.fullstack-value",
+      "version": "1.0.0",
+      "profile": "tech-sales",
+      "section": "Technology Background",
+      "emphases": [],
+      "fact_ids": ["development.phdigital.fullstack"],
+      "style": "bullet",
+      "renderings": {
+        "en": "Built production software end to end across data models, APIs, and frontend experiences, providing hands-on understanding of how software products are designed and delivered.",
+        "he": "פיתוח מערכות production מקצה לקצה, ממודלי נתונים ו-APIs ועד חוויית המשתמש, עם הבנה מעשית של תכנון ואספקת מוצרי תוכנה."
+      }
+    },
+    {
+      "rule_id": "tech-sales.technology.crm-integrations-value",
+      "version": "1.0.0",
+      "profile": "tech-sales",
+      "section": "Technology Background",
+      "emphases": [],
+      "fact_ids": ["development.phdigital.crm", "development.phdigital.integrations"],
+      "style": "bullet",
+      "renderings": {
+        "en": "Built a production CRM and WhatsApp/email integrations that automated workflows, document generation, and operational status tracking.",
+        "he": "פיתוח מערכת CRM ב-production ואינטגרציות WhatsApp ודוא\"ל לאוטומציית תהליכים, הפקת מסמכים ומעקב סטטוסים תפעולי."
+      }
+    }
+  ]
+}

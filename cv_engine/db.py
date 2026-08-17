@@ -377,6 +377,12 @@ class Repository:
         current = ApplicationStatus(self.get_application(application_id)["current_status"])
         if current is ApplicationStatus.SAVED:
             self.transition_status(application_id, ApplicationStatus.PREPARING, "analysis created")
+        elif current is ApplicationStatus.READY:
+            self.transition_status(
+                application_id,
+                ApplicationStatus.PREPARING,
+                "new analysis invalidated the prior ready version",
+            )
         return analysis_id
 
     def latest_analysis(self, application_id: str) -> tuple[str, JobAnalysis]:
