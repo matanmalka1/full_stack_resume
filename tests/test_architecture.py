@@ -9,6 +9,7 @@ dependency, expressed so it keeps holding as later milestones add code.
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 ENGINE = Path(__file__).resolve().parent.parent / "cv_engine"
@@ -28,6 +29,17 @@ ARCHITECTURE_DEBT_ALLOWLIST = {
     "cli.py: imports infrastructure.db",
     "infrastructure/migration.py: imports subprocess",
 }
+
+# Wave 0 installs the destination rules before Wave 1 moves this module. It is
+# the one temporary move source; once its SQL is replaced by re-exports the
+# exception becomes inert, and Wave 2 deletes the file.
+PERSISTENCE_MOVE_SOURCE = "db.py"
+PERSISTENCE_KNOWN_OFFENDERS = {"migration.py", "legacy_source.py"}
+SQL_STATEMENT = re.compile(
+    r"\b(?:SELECT\b[\s\S]*\bFROM|INSERT\s+INTO|UPDATE\b[\s\S]*\bSET|DELETE\s+FROM|CREATE\s+(?:TABLE|INDEX|TRIGGER)|"
+    r"ALTER\s+TABLE|DROP\s+(?:TABLE|INDEX|TRIGGER))\b",
+    re.IGNORECASE,
+)
 
 
 def _modules(package: str) -> list[Path]:
@@ -163,6 +175,31 @@ def _direct_validation_report_calls(path: Path) -> list[int]:
     return found
 
 
+def _sql_string_lines(path: Path) -> list[int]:
+    return [
+        node.lineno
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and SQL_STATEMENT.search(node.value)
+    ]
+
+
+def _containment_test_lines(path: Path) -> list[int]:
+    """Find independent containment predicates, not relative path formatting."""
+    found: list[int] = []
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Attribute) and node.attr == "parents":
+            found.append(node.lineno)
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "is_relative_to"
+        ):
+            found.append(node.lineno)
+    return found
+
+
 def test_domain_and_application_dependencies_point_inward() -> None:
     """Report every dependency and storage-boundary violation in one contract."""
     offenders: list[str] = []
@@ -219,6 +256,73 @@ def test_known_outer_layer_policy_debt_does_not_grow() -> None:
 
     unexpected = offenders - ARCHITECTURE_DEBT_ALLOWLIST
     assert not unexpected, sorted(unexpected)
+
+
+def test_sqlite_and_sql_are_owned_by_persistence() -> None:
+    """New SQLite access lands in persistence; only audited legacy adapters remain."""
+    offenders: list[str] = []
+    for path in _modules("infrastructure"):
+        relative = path.relative_to(ENGINE / "infrastructure").as_posix()
+        if relative.startswith("persistence/"):
+            continue
+        if relative in PERSISTENCE_KNOWN_OFFENDERS or relative == PERSISTENCE_MOVE_SOURCE:
+            continue
+        if any(name == "sqlite3" for name, _line in _imports(path)):
+            offenders.append(f"{relative}: imports sqlite3")
+        offenders.extend(
+            f"{relative}:{line} contains SQL"
+            for line in _sql_string_lines(path)
+        )
+        offenders.extend(
+            f"{relative}:{line} issues PRAGMA"
+            for line, source in _code_lines(path)
+            if "PRAGMA" in source
+        )
+    assert not offenders, offenders
+
+
+def test_path_containment_has_one_implementation() -> None:
+    owner = ENGINE / "infrastructure/paths.py"
+    assert owner.is_file()
+    offenders = [
+        f"{path.relative_to(ENGINE)}:{line} implements containment"
+        for path in sorted(ENGINE.rglob("*.py"))
+        if path != owner
+        for line in _containment_test_lines(path)
+    ]
+    assert not offenders, offenders
+
+
+def test_numbered_migrations_are_registered_once() -> None:
+    migration_dir = ENGINE / "infrastructure/persistence/migrations"
+    if not migration_dir.exists():
+        return
+    files = sorted(migration_dir.glob("*.sql"))
+    assert files
+    numbered: dict[str, str] = {}
+    for path in files:
+        match = re.fullmatch(r"(\d{4})_[a-z0-9_]+\.sql", path.name)
+        assert match, f"unnumbered migration: {path.name}"
+        assert match.group(1) not in numbered, (
+            f"duplicate migration number {match.group(1)}: "
+            f"{numbered.get(match.group(1))}, {path.name}"
+        )
+        numbered[match.group(1)] = path.name
+
+    from cv_engine.infrastructure.persistence.schema import registered_migration_names
+
+    registered = registered_migration_names()
+    assert len(registered) == len(set(registered)), "migration runner registers a file twice"
+    assert registered == [path.name for path in files], (
+        f"migration files and runner registry differ: files={[p.name for p in files]} "
+        f"registered={registered}"
+    )
+
+
+def test_composite_repository_contains_no_sql() -> None:
+    composite = ENGINE / "infrastructure/persistence/composite.py"
+    if composite.exists():
+        assert not _sql_string_lines(composite)
 
 
 def test_validation_report_has_one_in_package_construction_authority() -> None:
