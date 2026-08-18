@@ -84,23 +84,33 @@ produces. `test_m1_sqlite_master_fingerprint_is_frozen` must therefore build a d
 the head schema. **Regenerating `tests/fixtures/m1_sqlite_master.tsv` remains forbidden**; it is
 the parity evidence that `0001_baseline.sql` reproduces the M1 schema.
 
-**D4 — no backfill; the schema change is a clean break.** `0002` defines the final
-`job_snapshots` shape with **no** `original_text` column, so the filesystem owns the payload from
-this boundary onward and invariant 19 holds immediately. Nothing needs migrating: `.workspace/`
-is gitignored, no code or test references it, and the only v2 databases in existence are three
-development Workspaces holding one Application each, reproducible with `cv workspace init` plus
-`cv fast`. They are treated as disposable and recreated; boundary 1's version gate refuses them
-as they stand, which is the correct behaviour. Real v1 data never travels `0001 → 0002` — it
-lands once, at cutover, in whatever schema is then current, and writing its snapshot text to
-`snapshots/{application_id}/{snapshot_id}.txt` is already `docs/v2-migration-plan.md` §6.3's
-requirement on the v1→v2 mapping. Snapshot-payload writing is therefore implemented once, in
-`infrastructure/migration.py`, rather than twice.
+**D4 — no backfill, and the column is removed in two steps inside this boundary.** Nothing needs
+migrating: `.workspace/` is gitignored, no code or test references it, and the only v2 databases
+in existence are three development Workspaces holding one Application each, reproducible with
+`cv workspace init` plus `cv fast`. They are disposable and recreated. Real v1 data never travels
+`0001 → 0002`; it lands once, at cutover, in whatever schema is then current, and writing its
+snapshot text to `snapshots/{application_id}/{snapshot_id}.txt` is already
+`docs/v2-migration-plan.md` §6.3's requirement on the v1→v2 mapping, so payload writing is
+implemented once, in `infrastructure/migration.py`.
 
-*Withdrawn during review:* an earlier draft added nullable columns, an explicit
-`cv workspace upgrade` backfill with per-row hash verification, and retention of
-`original_text` as inert legacy evidence until §4.6 could drop it behind a verified backup. That
-apparatus protected only disposable development data, duplicated the §6.3 mapping, and deferred
-invariant 19 for a milestone. It was cut.
+The removal itself is staged: **`0002` adds `payload_path`, `source_hash`, and `normalized_hash`
+and keeps `original_text`; `0003` drops `original_text` after the readers have moved.** Both
+migrations land inside this boundary. The retained column exists for one execution stage, is
+never written after the cutover commit, and is not a second source of truth at any point: during
+`0002` it is still the only source, and after the cutover the payload is.
+
+*Why it is staged, recorded so the reasoning is not lost:* the first version of this design had
+`0002` remove the column outright. `original_text` has four production consumers —
+`infrastructure/persistence/preparation.py`, `application/queries.py`,
+`application/services/analysis.py`, and `infrastructure/migration.py`. Removing the column while
+three of those still read it makes the suite fail, and no single work package could repair it
+without reaching across the ownership boundary. The staged form is the protocol's §4 interface
+contract applied to storage shape rather than to imports: preserve the old read path for the
+duration of the package that changes the shape.
+
+*Also withdrawn earlier:* an explicit `cv workspace upgrade` backfill with per-row hash
+verification and retention of `original_text` until §4.6. That protected only disposable
+development data, duplicated the §6.3 mapping, and deferred invariant 19 by a milestone.
 
 **D5 — the on-disk Markdown becomes a declared projection, and `cv sync-draft` becomes an
 explicit import.** SQLite owns the WorkingDraft structured source per architecture §6.1, so
@@ -121,24 +131,26 @@ an absent version means legacy; historical rows are never rewritten.
 
 ## 3. Record model — 2a
 
-### 3.1 JobSnapshot (migration `0002`)
+### 3.1 JobSnapshot (migrations `0002` and `0003`)
 
-`0002` rebuilds `job_snapshots` with `payload_path TEXT NOT NULL`, `source_hash TEXT NOT NULL`,
-and `normalized_hash TEXT NOT NULL`, and without `original_text`. The rebuild is the standard
-SQLite sequence — drop triggers, create the new table, copy rows, drop the old table, rename,
-recreate the trigger pair — inside one transaction, and it is correct for an empty table because
-no database carrying rows is upgraded (D4).
+`0002` adds `payload_path TEXT`, `source_hash TEXT`, and `normalized_hash TEXT` to
+`job_snapshots` as nullable columns and leaves `original_text` in place, so every existing reader
+keeps working while the payload writers are built. `0003`, after the readers have moved, rebuilds
+the table without `original_text` and with the three new columns `NOT NULL` — the standard SQLite
+sequence in one transaction: drop triggers, create the new table, copy rows, drop the old, rename,
+recreate the `no_update_`/`no_delete_` pair. `UNIQUE(application_id, version_number)` and
+`UNIQUE(application_id, content_hash)` survive both migrations; D6 keeps the latter deliberately.
 
 The payload lives at `snapshots/{application_id}/{snapshot_id}.txt`, byte-exact, with no
 line-ending normalisation (`docs/v2-migration-plan.md` §6.3). `source_hash` is the hash over the
 exact received representation — today's `content_hash` value — and `normalized_hash` is the
-separate dedupe hash `docs/v2-product-spec.md` §8 requires. Writers follow §7.1: write the
-payload through `PayloadStore.commit` first, register second, so a failed registration leaves a
+separate dedupe hash `docs/v2-product-spec.md` §8 requires. Writers follow §7.1: write the payload
+through `PayloadStore.commit` first, register second, so a failed registration leaves a
 reconcilable orphan rather than a dangling row.
 
 Two writers exist and both must produce identical results: the ingest path in the application
-layer, and `infrastructure/migration.py`'s v1→v2 mapping, which currently inserts
-`original_text` directly and must instead write the payload and record its path and hashes.
+layer, and `infrastructure/migration.py`'s v1→v2 mapping, which currently inserts `original_text`
+directly.
 
 ### 3.2 SelectionPlan (new immutable table)
 
@@ -195,61 +207,57 @@ path in `domain/` or `application/`; all SQL under `infrastructure/persistence/`
 only in `infrastructure/paths.py`; every new migration numbered and registered;
 `ValidationReport.from_findings` remains the sole construction authority.
 
-## 5. Waves and ownership — 2a
+## 5. Execution shape — 2a runs serially
 
-**There is no wave 0.** Boundary 1 needed one because its work was a *move*: guards had to exist
-before the code shifted, since a guard written afterwards cannot fail on the move it was meant to
-catch, and dead symbols had to be deleted before a lane started using them. 2a is additive — new
-tables, new models — so neither rationale applies, and a serial lead wave would be pure latency.
-The three candidate wave-0 items were re-examined and reassigned:
+**2a has no parallel lanes, and no wave 0.** Both conclusions were reached the hard way and are
+recorded here so the next boundary inherits the reasoning rather than the habit.
 
-- Re-pointing the fingerprint guard (D3) is *forced* by migration `0002` and belongs to the lane
-  that writes it. `tests/test_database.py` is therefore Lane A's, and the re-point is Lane A's
-  first commit, before `0002`.
-- Registering the new tables in the guard checklists of §4 **cannot** precede the tables:
-  `_persisted()` in `tests/test_chain_integrity.py` runs `SELECT 1 FROM {table}` for every entry,
-  and `tests/test_persistence.py` iterates `IMMUTABLE_TABLES` to seed and tamper each one, so an
-  entry for a table that does not exist yet fails with *no such table* rather than standing as a
-  placeholder. `working_drafts` must never appear in `IMMUTABLE_TABLES` at all — it is the one
-  mutable record. These updates belong to the integration wave, and they stay definition-of-done
-  items rather than becoming a wave.
-- Pinning today's unconditional draft-overwrite behaviour is a before-state test. It must be
-  committed *before* the behaviour changes, but that ordering is a commit sequence inside the
-  integration wave, not a wave of its own.
+*No wave 0*: boundary 1 needed one because its work was a **move**, where a guard written
+afterwards cannot fail on the move it was meant to catch, and where dead symbols had to go before
+a lane adopted them. 2a is additive. Of the three candidate wave-0 items, one belonged to the
+package that forces it, one was impossible before its tables existed (`_persisted()` runs
+`SELECT 1 FROM {table}` per entry, and `IMMUTABLE_TABLES` is iterated to seed and tamper each
+one), and one was a commit-ordering constraint.
 
-Lead-only for the whole sub-boundary: `tests/conftest.py`, `tests/test_architecture.py`,
-`tests/test_candidate.py`, `tests/test_chain_integrity.py`, `tests/test_ready_integrity.py`,
-`tests/test_integration.py`, `tests/test_migration.py`, `cv_engine/cli.py`,
-`cv_engine/runtime/**`, `cv_engine/application/services/**`, `cv_engine/application/chain.py`,
-`cv_engine/application/ready.py`, `cv_engine/infrastructure/artifacts.py`,
-`cv_engine/infrastructure/migration.py`, `docs/**`.
+*No lanes*: the first attempt split persistence from domain records and deadlocked. Two distinct
+dependencies made the split unsound. The schema package could not reach the three lead-owned
+`original_text` readers it had just invalidated, so its own green gate was unreachable (see D4).
+And the typed accessors were assigned to the schema package while the models they return were
+assigned to the domain package, so neither could be tested meaningfully alone. The dependency
+graph here is a **chain**, not a fan, and the parallel half was small — models plus one rename.
+Per `docs/v2-execution-protocol.md` §7, serial is the honest shape.
 
-**Wave 1 — two lanes, both branched from the boundary base commit.**
+One executor works three stages in order, on one branch, in one worktree. Every stage ends green
+before the next begins, which is the property the lane split destroyed.
 
-- **Lane A — persistence.** Owns `cv_engine/infrastructure/persistence/**`,
-  `tests/test_persistence.py`, and `tests/test_database.py`. First commit re-points the
-  fingerprint guard per D3; then migration `0002` with §3.1's rebuilt `job_snapshots`, §3.2's
-  `selection_plans`, §3.3's `working_drafts` and its partial unique index, §3.4's
-  `validation_runs` columns, every trigger pair, and the repository methods with typed accessors
-  per D2. Cross-owner atomicity uses `bind(uow)`, not new private reach-ins. No service or CLI
-  wiring.
-- **Lane B — domain records.** Owns `cv_engine/domain/models.py`,
-  `cv_engine/domain/validation.py`, `tests/test_domain_contracts.py`,
-  `tests/test_drafts_validation.py`. Delivers the typed SelectionPlan and WorkingDraft models,
-  the ValidationRun lineage type, and Stage 7b per D7. Touches no persistence and no service.
+**Stage 1 — domain records.** The typed SelectionPlan and WorkingDraft models and the
+ValidationRun lineage type per §3.2–§3.4, plus Stage 7b per D7. Pure models: no filesystem call,
+no composed storage path, no `sqlite3`. `SelectionManifest` and its `superseded_by_manual_edit`
+flag stay as they are.
 
-Lane B does not need Lane A's fingerprint re-point: it adds no migration, so the frozen fixture
-still matches on its branch.
+**Stage 2 — schema, additive.** Migration `0002` registered in `schema.py`: `job_snapshots` gains
+`payload_path`, `source_hash`, `normalized_hash` and **keeps** `original_text`; `selection_plans`
+and `working_drafts` are created, the latter with its partial unique index and no immutability
+triggers; `validation_runs` gains its lineage columns. Repository methods return the Stage 1
+models for the new records; existing dict-returning accessors are untouched. Because the change
+is additive, every current reader still works and the suite stays green.
 
-**Wave 2 — lead alone.** Merge A then B, testing after each. Then, in order: the before-state
-test for draft overwriting; snapshot payloads through both writers; atomic analysis-plus-plan;
-WorkingDraft reads and writes through the record with `edit_version`; the CLI's
-`--selection-plan` resolver and `cv sync-draft` redefined per D5; the §4 checklist updates now
-that the tables exist; then full verification.
+**Stage 3 — cutover and integration.** In order: the before-state test pinning today's
+unconditional draft overwrite; PayloadStore wired into the ingest path and into
+`infrastructure/migration.py`'s §6.3 mapping, both writing the payload before registering the
+row; `application/services/analysis.py` and `application/queries.py` moved onto the payload;
+atomic analysis-plus-plan; WorkingDraft reads and writes through the record with `edit_version`;
+the CLI's `--selection-plan` resolver and `cv sync-draft` redefined per D5; the §4 guard
+checklists now that the tables exist; migration `0003` dropping `original_text`; then full
+verification per §6.
+
+Salvage from the abandoned lane attempt: the fingerprint-guard re-point (D3) stands as committed
+and is stage-independent. The additive rework replaces the schema commit that removed the column.
+Uncommitted domain work becomes Stage 1.
 
 ## 6. Verification — 2a
 
-Canonical interpreter `./.venv/bin/python`. Baseline at `856fc7c`: **154 passed**, including the
+Canonical interpreter `./.venv/bin/python`. Baseline at `5c2407d`: **154 passed**, including the
 browser-required gate.
 
 1. `./.venv/bin/python -m pytest -q` and `env CV_REQUIRE_BROWSER=1 ./.venv/bin/python -m pytest -q`,
@@ -257,19 +265,23 @@ browser-required gate.
 2. `tests/test_golden.py` — the Markdown and HTML hashes must not move. The WorkingDraft
    becoming a SQLite record changes where the draft is stored, not what it renders; a golden
    difference means the move changed behaviour.
-3. Migration `0002` applies to a fresh database and to a `0001`-only database; the checksum,
-   ordering, and version-gate behaviour from boundary 1 still holds.
-4. Snapshot payloads, proven on both writers: the CLI ingest path and the legacy-migration
+3. Each stage ends with `./.venv/bin/python -m pytest -q` green before the next begins — the
+   property the abandoned lane split destroyed.
+4. Migrations `0002` and `0003` each apply to a fresh database and in sequence from a
+   `0001`-only database; the checksum, ordering, and version-gate behaviour from boundary 1 still
+   holds, and no database carrying rows is upgraded (D4).
+5. After `0003`, no production module references `original_text`; proven by grep.
+6. Snapshot payloads, proven on both writers: the CLI ingest path and the legacy-migration
    fixture each produce a payload whose SHA-256 matches its recorded `source_hash`, with the
    payload written before the row is registered. A fresh development Workspace is created from
    scratch to confirm the recreation path the disposal decision depends on.
-5. `edit_version` concurrency: two saves from the same expected version — the second is refused
+7. `edit_version` concurrency: two saves from the same expected version — the second is refused
    and changes nothing.
-6. One active WorkingDraft per Application enforced by the index, proven by a direct SQL insert
+8. One active WorkingDraft per Application enforced by the index, proven by a direct SQL insert
    attempt.
-7. Offline CLI end to end on a fresh `development` / `copy` Workspace with `OPENAI_API_KEY`
+9. Offline CLI end to end on a fresh `development` / `copy` Workspace with `OPENAI_API_KEY`
    unset, through Ready, plus `cv fast`.
-8. Live v1 data is never opened.
+10. Live v1 data is never opened.
 
 ## 7. 2b outline
 
