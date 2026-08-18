@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import sqlite3
 import uuid
 from pathlib import Path
 
@@ -17,12 +18,13 @@ import pytest
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
 from cv_engine.application.errors import StateConflict
 from cv_engine.infrastructure.persistence import connect
+from cv_engine.infrastructure.persistence.drafts import SqliteDraftRepository
 from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.application.ready import verify_ready_integrity
 from cv_engine.runtime.workspace import Workspace
 from cv_engine.runtime.composition import Services
 from cv_engine.application.errors import WorkflowError
-from cv_engine.util import normalized_text, sha256_text
+from cv_engine.util import normalized_text, sha256_file, sha256_text
 from helpers import ACCOUNT_MANAGER_JOB
 
 
@@ -176,7 +178,9 @@ def test_newer_material_analysis_invalidates_the_working_draft(
     assert services.repository.latest_decision(app_id)["job_analysis_id"] == newer.analysis_id
 
 
-def test_approval_binds_the_draft_analysis_not_the_latest(drafted_application) -> None:
+def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registration(
+    drafted_application, monkeypatch: pytest.MonkeyPatch, v1_repo: Path
+) -> None:
     """A re-run that changes nothing material leaves the draft valid -- and the
     approval still records the analysis the draft was actually built from."""
     setup = drafted_application("Rerun Analysis")
@@ -184,12 +188,100 @@ def test_approval_binds_the_draft_analysis_not_the_latest(drafted_application) -
     bound_analysis_id = parse_draft(setup.manifest.read_text(encoding="utf-8")).job_analysis_id
     rerun = _analyze(services, app_id)
     assert rerun.analysis_id != bound_analysis_id
+    working = services.repository.active_working_draft(app_id)
+    plan = services.repository.selection_plan(working.selection_plan_id)
 
-    services.drafts.approve(app_id)
+    # A historical artifact row must not participate in the ApprovedRevision
+    # sequence. It remains unbound, while revision 1's markdown is artifact
+    # version 2 for the existing logical artifact.
+    services.repository.register_artifact_version(
+        app_id,
+        "resume_markdown",
+        "resume",
+        f"artifacts/historical/{app_id}/resume.md",
+        "0" * 64,
+        "approved",
+        job_snapshot_id=working.source.job_snapshot_id,
+    )
+
+    original_create = SqliteDraftRepository.create_approved_revision
+    observed: dict[str, bool] = {}
+
+    def require_payloads_first(repository, *args, **kwargs):
+        for reference, expected_hash in ((args[4], args[5]), (args[6], args[7])):
+            path = v1_repo / reference
+            assert path.is_file()
+            assert sha256_file(path) == expected_hash
+        observed["payloads_precede_row"] = True
+        return original_create(repository, *args, **kwargs)
+
+    monkeypatch.setattr(
+        SqliteDraftRepository, "create_approved_revision", require_payloads_first
+    )
+
+    approved = services.drafts.approve(app_id)
 
     decision = services.repository.latest_decision(app_id)
     assert decision["job_analysis_id"] == bound_analysis_id
     assert json.loads(decision["structured_json"])["job_analysis_id"] == bound_analysis_id
+    assert observed == {"payloads_precede_row": True}
+    assert approved.version == 1
+    revision = services.repository.approved_revision(approved.revision_id)
+    lineage = services.repository.validation_lineage(revision.validation_run_id)
+    assert revision.application_id == app_id
+    assert revision.job_snapshot_id == working.source.job_snapshot_id
+    assert revision.job_analysis_id == working.job_analysis_id == bound_analysis_id
+    assert revision.selection_plan_id == working.selection_plan_id
+    assert revision.working_draft_id == working.id
+    assert revision.draft_edit_version == working.edit_version
+    assert revision.draft_content_hash == working.content_hash
+    assert revision.candidate_context_version == plan.candidate_context_version
+    assert revision.candidate_context_hash == plan.candidate_context_hash
+    assert revision.profile_version == plan.profile_version
+    assert revision.selection_policy_version == plan.selection_policy_version
+    assert revision.track_emphasis_dependencies == plan.track_emphasis_dependencies
+    assert revision.knowledge_context_hash == lineage.knowledge_context_hash
+    assert revision.validator_versions == lineage.validator_versions
+    assert revision.decision_provenance == {
+        "actor_type": "user",
+        "client": "cli",
+        "command": "approve_draft",
+    }
+    assert revision.resume_json_reference == (
+        f"artifacts/revisions/{app_id}/{revision.id}/resume.json"
+    )
+    assert revision.resume_markdown_reference == (
+        f"artifacts/revisions/{app_id}/{revision.id}/resume.md"
+    )
+    assert sha256_file(v1_repo / revision.resume_json_reference) == revision.resume_json_hash
+    assert sha256_file(v1_repo / revision.resume_markdown_reference) == revision.resume_markdown_hash
+    assert parse_draft(
+        (v1_repo / revision.resume_json_reference).read_text(encoding="utf-8")
+    ) == working.source
+
+    versions = services.repository.artifact_versions(app_id)
+    current = [row for row in versions if row["revision_id"] == revision.id]
+    assert {row["artifact_type"] for row in current} == {
+        "resume_markdown",
+        "claim_manifest",
+    }
+    assert next(
+        row for row in current if row["artifact_type"] == "resume_markdown"
+    )["version_number"] == 2
+    assert next(
+        row for row in current if row["artifact_type"] == "claim_manifest"
+    )["path"] == revision.resume_json_reference
+    assert services.repository.working_draft(working.id).active is False
+    with pytest.raises(KeyError, match="active working draft"):
+        services.repository.active_working_draft(app_id)
+
+    for statement in (
+        "UPDATE approved_revisions SET draft_content_hash=draft_content_hash WHERE id=?",
+        "DELETE FROM approved_revisions WHERE id=?",
+    ):
+        with pytest.raises(sqlite3.IntegrityError, match="immutable record"):
+            with services.repository.transaction() as connection:
+                connection.execute(statement, (revision.id,))
 
 
 # --- 3. records may not cross application ownership boundaries -------------
@@ -353,3 +445,15 @@ def test_ready_integrity_holds_through_an_immaterial_reanalysis(
         services.artifacts, services.knowledge, services.repository, app_id
     )
     assert report.passed, report.model_dump()
+    revision_id = services.repository.latest_approved_revision(app_id).id
+    assert {
+        row["artifact_type"]
+        for row in services.repository.artifact_versions(app_id)
+        if row["revision_id"] == revision_id
+    } == {
+        "resume_markdown",
+        "claim_manifest",
+        "resume_html",
+        "resume_pdf",
+        "visual_evidence",
+    }

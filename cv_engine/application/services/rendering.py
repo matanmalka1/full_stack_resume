@@ -111,6 +111,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
                 f"could not resolve approved revision: {exc}"
             ) from exc
         draft = self.stored_draft(manifest_path)
+        revision_id = manifest_record.get("revision_id")
         profile = profiles.get(draft.profile)
         _, analysis = self._bound_analysis(
             application_id,
@@ -165,6 +166,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
                 self.artifacts.relative(path),
                 sha256_file(path),
                 lifecycle,
+                revision_id=revision_id,
                 job_snapshot_id=draft.job_snapshot_id,
                 track=draft.track.value,
                 profile=draft.profile.value,

@@ -110,9 +110,12 @@ def _fast(
         "application_id": ingested.application_id,
         "approval": {
             "version": approved.version,
-            "directory": services.artifacts.approved_version_dir(
-                ingested.application_id, approved.version
-            ),
+            "directory": services.artifacts.resolve(
+                services.repository.approved_revision(
+                    approved.revision_id
+                ).resume_markdown_reference
+            ).parent,
+            "revision_id": approved.revision_id,
             "decision_record_id": approved.decision_record_id,
         },
         "pdf": str(services.artifacts.resolve(pdf_record["path"])),
@@ -592,9 +595,12 @@ def main(argv: list[str] | None = None) -> int:
             approved = services.drafts.approve(args.application_id)
             _print({
                 "version": approved.version,
-                "directory": str(services.artifacts.approved_version_dir(
-                    args.application_id, approved.version
-                )),
+                "directory": str(services.artifacts.resolve(
+                    repository.approved_revision(
+                        approved.revision_id
+                    ).resume_markdown_reference
+                ).parent),
+                "revision_id": approved.revision_id,
                 "decision_record_id": approved.decision_record_id,
             })
         elif args.command == "render":

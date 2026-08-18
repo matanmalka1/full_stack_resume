@@ -10,7 +10,7 @@ from ..application.ports import (
     ClassificationProvider,
     KnowledgeStore,
     Renderer,
-    SnapshotPayloadStore,
+    RevisionPayloadStore,
     UnitOfWork,
 )
 from ..application.services.analysis import AnalysisService
@@ -37,7 +37,7 @@ class Services:
     repository: ApplicationRepository
     knowledge: KnowledgeStore
     artifacts: ArtifactStore
-    payloads: SnapshotPayloadStore
+    payloads: RevisionPayloadStore
     unit_of_work: Callable[[], UnitOfWork]
     applications: ApplicationService
     queries: ApplicationQueryService
@@ -55,7 +55,7 @@ def build_services(
     repository: ApplicationRepository | None = None,
     knowledge: KnowledgeStore | None = None,
     artifacts: ArtifactStore | None = None,
-    payloads: SnapshotPayloadStore | None = None,
+    payloads: RevisionPayloadStore | None = None,
     renderer: Renderer | None = None,
     provider: ClassificationProvider | None = None,
 ) -> Services:

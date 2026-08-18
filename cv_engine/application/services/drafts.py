@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import uuid
 from typing import Any, Generic, TypeVar
 
 from ... import __version__
 from ...domain.analysis.approval import unresolved_approval_reasons
 from ...domain.draft_markdown import serialize_markdown, synchronize_markdown_claims
-from ...domain.drafts import apply_claim_edit, build_draft
+from ...domain.drafts import apply_claim_edit, build_draft, seal_draft
 from ...domain.facts import FactStore, FactStoreError
 from ...domain.knowledge import Knowledge
 from ...domain.models import (
@@ -22,7 +23,7 @@ from ...domain.models import (
 from ...domain.profiles import ProfileStore
 from ...domain.selection import EmphasisPolicyStore
 from ...domain.validation import validate_draft
-from ...util import canonical_json, sha256_file, sha256_text, utc_now
+from ...util import canonical_json, sha256_text, utc_now
 from ..chain import ChainError, check_draft_chain, decision_record_analysis_id
 from ..commands import (
     AnalyzeCommand,
@@ -278,7 +279,7 @@ class DraftService(ServiceBase[DraftRepository]):
                 "import it with 'cv sync-draft' or regenerate the draft to discard it"
             )
 
-    def validate_working(self, application_id: str) -> ValidationReport:
+    def _validate_working(self, application_id: str) -> tuple[ValidationReport, str]:
         knowledge = self.load_knowledge()
         facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
         working = self.working_draft_record(application_id)
@@ -294,12 +295,16 @@ class DraftService(ServiceBase[DraftRepository]):
             policies=policies,
             presentations=knowledge.presentations,
         )
-        self.repo.record_validation(
+        validation_id = self.repo.record_validation(
             application_id,
             "pre-render",
             report,
             lineage=self._lineage(working, knowledge),
         )
+        return report, validation_id
+
+    def validate_working(self, application_id: str) -> ValidationReport:
+        report, _validation_id = self._validate_working(application_id)
         return report
 
     def edit_claim(
@@ -398,61 +403,41 @@ class DraftService(ServiceBase[DraftRepository]):
         self._require_synced_projection(
             application_id, self.working_draft_record(application_id).source
         )
-        report = self.validate_working(application_id)
+        report, validation_id = self._validate_working(application_id)
         if not report.passed:
             raise ValidationBlocked("approval blocked by pre-render validation", report)
         facts, profiles, _ = self.knowledge()
         working = self.working_draft_record(application_id)
         draft = working.source
-        # SQLite is authoritative. Rebuild both projections immediately before
-        # publishing so an unsynchronised manual file edit cannot be approved.
-        self.store_working_draft(draft)
+        # SQLite is authoritative. Seal the exact stored document and commit its
+        # immutable payloads before any revision row can become visible.
+        sealed, markdown, structured_json = seal_draft(draft)
+        if sealed.content_hash != working.content_hash:
+            raise StateConflict("working draft content hash changed before approval")
         # The decision record explains the draft being approved, so it is bound to
         # that draft's own analysis. A newer analysis does not get to describe an
         # older document.
         analysis_id, analysis = self._bound_analysis(application_id, draft, profiles, facts)
-        existing = [
-            row for row in self.repo.artifact_versions(application_id)
-            if row["artifact_type"] == "resume_markdown"
-        ]
-        version = len(existing) + 1
+        revision_id = str(uuid.uuid4())
         try:
-            published = self.artifacts.publish_working_draft(application_id, version)
+            published = self.revision_payloads.commit_revision(
+                application_id,
+                revision_id,
+                structured_json,
+                markdown,
+            )
         except FileExistsError as exc:
             raise StateConflict(str(exc)) from exc
-        except OSError as exc:
-            raise InfrastructureFailure(f"could not publish approved draft: {exc}") from exc
-        markdown_path, manifest_path = published.markdown, published.manifest
+        except (OSError, ValueError) as exc:
+            raise InfrastructureFailure(f"could not publish approved revision: {exc}") from exc
+        if (
+            published.structured.sha256 != sha256_text(structured_json)
+            or published.markdown.sha256 != sha256_text(markdown)
+        ):
+            raise InfrastructureFailure("approved revision payload hash verification failed")
+
         now = utc_now()
-        relative_markdown = self.artifacts.relative(markdown_path)
-        markdown_version_id = self.repo.register_artifact_version(
-            application_id,
-            "resume_markdown",
-            "resume",
-            relative_markdown,
-            sha256_file(markdown_path),
-            "approved",
-            job_snapshot_id=draft.job_snapshot_id,
-            track=draft.track.value,
-            profile=draft.profile.value,
-            emphasis=draft.emphasis.value,
-            facts_version=facts.version,
-            approved_at=now,
-        )
-        manifest_version_id = self.repo.register_artifact_version(
-            application_id,
-            "claim_manifest",
-            "resume-claims",
-            self.artifacts.relative(manifest_path),
-            sha256_file(manifest_path),
-            "approved",
-            job_snapshot_id=draft.job_snapshot_id,
-            track=draft.track.value,
-            profile=draft.profile.value,
-            emphasis=draft.emphasis.value,
-            facts_version=facts.version,
-            approved_at=now,
-        )
+        manifest_path = self.artifacts.resolve(published.structured.reference)
         # The decision record names where rendering will put its outputs, so it
         # asks the artifact store the same question the renderer will.
         expected = self.artifacts.render_targets(
@@ -484,29 +469,94 @@ class DraftService(ServiceBase[DraftRepository]):
             "job_snapshot_id": draft.job_snapshot_id,
             "job_analysis_id": analysis_id,
             "artifact_paths": {
-                "markdown": relative_markdown,
+                "markdown": published.markdown.reference,
                 "html": self.artifacts.relative(expected.html),
                 "pdf": self.artifacts.relative(expected.pdf),
             },
         }
-        decision_id = self.repo.record_decision(
-            application_id,
-            markdown_version_id,
-            draft.job_snapshot_id,
-            analysis_id,
-            structured,
-            f"Approved {draft.profile.value} / {draft.emphasis.value} CV for {application['company']}.",
+        decision_summary = (
+            f"Approved {draft.profile.value} / {draft.emphasis.value} CV for "
+            f"{application['company']}."
         )
-        self.repo.record_event(application_id, "draft_approved", {"decision_record_id": decision_id, "version": version})
-        if application["current_status"] == ApplicationStatus.READY.value:
-            self.repo.transition_status(
+        decision_provenance = {
+            "actor_type": "user",
+            "client": "cli",
+            "command": "approve_draft",
+        }
+        with self.repo.unit_of_work() as uow:
+            transaction = self.repo.bind(uow)
+            revision = transaction.create_approved_revision(
                 application_id,
-                ApplicationStatus.PREPARING,
-                "new approved version requires fresh rendering and ready validation",
+                revision_id,
+                working.id,
+                validation_id,
+                published.structured.reference,
+                published.structured.sha256,
+                published.markdown.reference,
+                published.markdown.sha256,
+                decision_provenance,
+                approved_at=now,
             )
+            markdown_version_id = transaction.register_artifact_version(
+                application_id,
+                "resume_markdown",
+                "resume",
+                published.markdown.reference,
+                published.markdown.sha256,
+                "approved",
+                revision_id=revision.id,
+                job_snapshot_id=draft.job_snapshot_id,
+                track=draft.track.value,
+                profile=draft.profile.value,
+                emphasis=draft.emphasis.value,
+                facts_version=facts.version,
+                approved_at=now,
+            )
+            # resume.json is one physical payload with two roles: revision-owned
+            # structured content and the separately registered claim manifest.
+            manifest_version_id = transaction.register_artifact_version(
+                application_id,
+                "claim_manifest",
+                "resume-claims",
+                published.structured.reference,
+                published.structured.sha256,
+                "approved",
+                revision_id=revision.id,
+                job_snapshot_id=draft.job_snapshot_id,
+                track=draft.track.value,
+                profile=draft.profile.value,
+                emphasis=draft.emphasis.value,
+                facts_version=facts.version,
+                approved_at=now,
+            )
+            decision_id = transaction.record_decision(
+                application_id,
+                markdown_version_id,
+                draft.job_snapshot_id,
+                analysis_id,
+                structured,
+                decision_summary,
+            )
+            transaction.record_event(
+                application_id,
+                "draft_approved",
+                {
+                    "approved_revision_id": revision.id,
+                    "decision_record_id": decision_id,
+                    "version": revision.version_number,
+                },
+            )
+            if application["current_status"] == ApplicationStatus.READY.value:
+                transaction.transition_status(
+                    application_id,
+                    ApplicationStatus.PREPARING,
+                    "new approved version requires fresh rendering and ready validation",
+                )
+            uow.commit()
         return ApprovalResult(
             application_id=application_id,
-            version=version,
+            revision_id=revision.id,
+            version=revision.version_number,
             markdown_artifact_version_id=markdown_version_id,
             manifest_artifact_version_id=manifest_version_id,
             decision_record_id=decision_id,

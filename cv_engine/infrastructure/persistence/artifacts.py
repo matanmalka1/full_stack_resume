@@ -30,6 +30,7 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
         content_hash: str,
         lifecycle_status: str,
         *,
+        revision_id: str | None = None,
         job_snapshot_id: str | None = None,
         track: str | None = None,
         profile: str | None = None,
@@ -46,6 +47,23 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
                 _require_owned_snapshot(
                     connection, application_id, job_snapshot_id, "artifact version"
                 )
+            if revision_id is not None:
+                revision = connection.execute(
+                    "SELECT application_id, job_snapshot_id FROM approved_revisions WHERE id=?",
+                    (revision_id,),
+                ).fetchone()
+                if revision is None or revision["application_id"] != application_id:
+                    raise ValueError(
+                        "an artifact version cannot reference an approved revision "
+                        "belonging to another application"
+                    )
+                if (
+                    job_snapshot_id is not None
+                    and revision["job_snapshot_id"] != job_snapshot_id
+                ):
+                    raise ValueError(
+                        "an artifact version's revision and job snapshot must match"
+                    )
             artifact = connection.execute(
                 "SELECT id FROM artifacts WHERE application_id IS ? "
                 "AND artifact_type=? AND logical_name=?",
@@ -66,8 +84,8 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
                 (artifact_id,),
             ).fetchone()["version"]
             connection.execute(
-                "INSERT INTO artifact_versions(id, artifact_id, version_number, lifecycle_status, path, content_hash, created_at, approved_at, submitted_at, track, profile, emphasis, facts_version, job_snapshot_id, metadata_json) "
-                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO artifact_versions(id, artifact_id, version_number, lifecycle_status, path, content_hash, created_at, approved_at, submitted_at, track, profile, emphasis, facts_version, job_snapshot_id, metadata_json, revision_id) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     version_id,
                     artifact_id,
@@ -84,6 +102,7 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
                     facts_version,
                     job_snapshot_id,
                     canonical_json(metadata or {}),
+                    revision_id,
                 ),
             )
         return version_id

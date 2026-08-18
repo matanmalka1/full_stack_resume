@@ -86,6 +86,7 @@ class EditResult(BoundaryDTO):
 
 class ApprovalResult(BoundaryDTO):
     application_id: str
+    revision_id: str
     version: int
     markdown_artifact_version_id: str
     manifest_artifact_version_id: str

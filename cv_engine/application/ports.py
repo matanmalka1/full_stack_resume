@@ -6,6 +6,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from ..domain.knowledge import Knowledge
 from ..domain.models import (
+    ApprovedRevision,
     CandidateContext,
     DraftDocument,
     JobClassificationProposal,
@@ -45,6 +46,14 @@ class SnapshotPayload:
     reference: str
     sha256: str
     size: int
+
+
+@dataclass(frozen=True)
+class RevisionPayloads:
+    """The two verified immutable payloads owned by one ApprovedRevision."""
+
+    structured: SnapshotPayload
+    markdown: SnapshotPayload
 
 
 @dataclass(frozen=True)
@@ -99,6 +108,16 @@ class SnapshotPayloadStore(Protocol):
     ) -> SnapshotPayload: ...
 
     def read_snapshot(self, reference: str, expected_hash: str) -> str: ...
+
+
+class RevisionPayloadStore(SnapshotPayloadStore, Protocol):
+    def commit_revision(
+        self,
+        application_id: str,
+        revision_id: str,
+        structured_json: str,
+        markdown: str,
+    ) -> RevisionPayloads: ...
 
 
 class KnowledgeStore(Protocol):
@@ -282,6 +301,7 @@ class ArtifactRegistry(Protocol):
         content_hash: str,
         lifecycle_status: str,
         *,
+        revision_id: str | None = None,
         job_snapshot_id: str | None = None,
         track: str | None = None,
         profile: str | None = None,
@@ -386,6 +406,29 @@ class DraftRepository(ApplicationStore, JobStore, ArtifactRegistry, Protocol):
         *,
         updated_at: str | None = None,
     ) -> WorkingDraft: ...
+
+    def create_approved_revision(
+        self,
+        application_id: str,
+        revision_id: str,
+        working_draft_id: str,
+        validation_run_id: str,
+        resume_json_reference: str,
+        resume_json_hash: str,
+        resume_markdown_reference: str,
+        resume_markdown_hash: str,
+        decision_provenance: dict[str, str],
+        *,
+        approved_at: str,
+    ) -> ApprovedRevision: ...
+
+    def approved_revision(self, revision_id: str) -> ApprovedRevision: ...
+
+    def latest_approved_revision(self, application_id: str) -> ApprovedRevision: ...
+
+    def unit_of_work(self) -> UnitOfWork: ...
+
+    def bind(self, uow: UnitOfWork) -> "DraftRepository": ...
 
 
 class KnowledgeAuditRepository(FactAudit, Protocol):

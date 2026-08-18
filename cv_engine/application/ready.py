@@ -57,7 +57,15 @@ def verify_ready_integrity(
     markdown_path = artifacts.resolve(markdown_version["path"])
     manifest_path = artifacts.resolve(manifest_version["path"])
     markdown_dir = markdown_path.parent
-    if manifest_path.parent != markdown_dir:
+    approved_revision_binding = (
+        markdown_version.get("revision_id"), manifest_version.get("revision_id")
+    )
+    if (
+        any(approved_revision_binding)
+        and approved_revision_binding[0] != approved_revision_binding[1]
+    ) or (
+        not any(approved_revision_binding) and manifest_path.parent != markdown_dir
+    ):
         fail(
             "approved_source",
             "markdown-manifest-version-mismatch",
@@ -141,7 +149,15 @@ def verify_ready_integrity(
 
     if pdf_version is not None:
         pdf_dir = artifacts.resolve(pdf_version["path"]).parent
-        if pdf_dir != markdown_dir:
+        rendered_revision_binding = (
+            markdown_version.get("revision_id"), pdf_version.get("revision_id")
+        )
+        if (
+            any(rendered_revision_binding)
+            and rendered_revision_binding[0] != rendered_revision_binding[1]
+        ) or (
+            not any(rendered_revision_binding) and pdf_dir != markdown_dir
+        ):
             fail(
                 "not_stale",
                 "superseded-by-newer-version",
@@ -161,7 +177,15 @@ def verify_ready_integrity(
                 fail("rendered_artifacts", f"no-{label}", f"no successfully rendered {label} artifact exists")
                 continue
             path = artifacts.resolve(version["path"])
-            if path.parent != pdf_dir:
+            evidence_revision_binding = (
+                pdf_version.get("revision_id"), version.get("revision_id")
+            )
+            if (
+                any(evidence_revision_binding)
+                and evidence_revision_binding[0] != evidence_revision_binding[1]
+            ) or (
+                not any(evidence_revision_binding) and path.parent != pdf_dir
+            ):
                 fail(
                     "rendered_artifacts",
                     f"{label}-version-mismatch",

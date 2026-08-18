@@ -150,6 +150,7 @@ def test_ready_submission_and_artifact_registry_preconditions(application_repo) 
     assert [(row["id"], row["version_number"]) for row in versions] == [
         (pdf_id, 1), (second_id, 2),
     ]
+    assert all(row["revision_id"] is None for row in versions)
     inventory = repo.artifact_inventory()
     assert len(inventory) == 3
     assert {(row["path"], row["content_hash"]) for row in versions}.issubset(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import time
 import uuid
@@ -8,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from ..application.ports import SnapshotPayload
+from ..application.ports import RevisionPayloads, SnapshotPayload
 from ..util import sha256_file
 from .paths import relative_within, resolve_within
 
@@ -258,6 +259,53 @@ class PayloadStore:
                 f"snapshot payload hash mismatch: expected {expected_hash}, got {actual_hash}"
             )
         return approved.read_bytes().decode("utf-8")
+
+    @staticmethod
+    def _reference(stored: StoredPayload) -> SnapshotPayload:
+        return SnapshotPayload(
+            reference=stored.workspace_relative,
+            sha256=stored.sha256,
+            size=stored.size,
+        )
+
+    @staticmethod
+    def _valid_json(path: Path) -> bool:
+        json.loads(path.read_text(encoding="utf-8"))
+        return True
+
+    def commit_revision(
+        self,
+        application_id: str,
+        revision_id: str,
+        structured_json: str,
+        markdown: str,
+    ) -> RevisionPayloads:
+        """Commit and re-hash both immutable ApprovedRevision payloads.
+
+        SQLite registration is deliberately left to the caller. If either
+        registration later fails, these files are safe reconciliation orphans.
+        """
+        structured = self.commit(
+            self.revision_path(application_id, revision_id, format="json"),
+            write=lambda path: path.write_bytes(structured_json.encode("utf-8")),
+            validate=self._valid_json,
+        )
+        rendered = self.commit(
+            self.revision_path(application_id, revision_id, format="md"),
+            write=lambda path: path.write_bytes(markdown.encode("utf-8")),
+            validate=lambda path: path.is_file(),
+        )
+        for stored in (structured, rendered):
+            actual = sha256_file(stored.path)
+            if actual != stored.sha256:
+                raise ValueError(
+                    "committed revision payload hash mismatch: "
+                    f"expected {stored.sha256}, got {actual}"
+                )
+        return RevisionPayloads(
+            structured=self._reference(structured),
+            markdown=self._reference(rendered),
+        )
 
     def temp_orphans(self, *, now: float | None = None) -> list[TempOrphan]:
         """Report store-owned temp files for reconciliation without deleting them."""

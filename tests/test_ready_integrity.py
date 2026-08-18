@@ -5,7 +5,7 @@ import uuid
 
 import pytest
 
-from cv_engine.application.commands import AnalyzeCommand
+from cv_engine.application.commands import AnalyzeCommand, DraftCommand
 import cv_engine.infrastructure.rendering as rendering_module
 from cv_engine.infrastructure.rendering import validate_rendered as real_validate_rendered
 from cv_engine.util import normalized_text, sha256_file, sha256_text, verify_payload
@@ -17,6 +17,16 @@ def _reanalyze(services, application_id: str):
     return services.analysis.analyze(AnalyzeCommand(
         application_id=application_id,
         job_snapshot_id=services.repository.latest_snapshot(application_id)["id"],
+    ))
+
+
+def _start_new_draft(services, application_id: str):
+    analysis_id, _analysis = services.repository.latest_analysis(application_id)
+    plan = services.repository.latest_selection_plan(application_id)
+    return services.drafts.draft(DraftCommand(
+        application_id=application_id,
+        job_analysis_id=analysis_id,
+        selection_plan_id=plan.id,
     ))
 
 
@@ -98,6 +108,7 @@ def test_public_workflow_cannot_restore_ready_after_tamper_without_fresh_render(
     # The only supported route back to ready is a full fresh render, which
     # writes a brand-new PDF artifact version rather than reusing the tampered
     # historical one.
+    _start_new_draft(services, app_id)
     services.drafts.approve(app_id)
     rendered = services.rendering.render(app_id)
     assert rendered.validation.passed
@@ -146,6 +157,7 @@ def test_ready_integrity_rejects_missing_or_tampered_registered_artifacts(
 
 def test_new_revision_snapshot_or_analysis_stales_prior_ready(ready_application) -> None:
     services, app_id = ready_application("Superseded")
+    _start_new_draft(services, app_id)
     services.drafts.approve(app_id)
     from cv_engine.infrastructure.persistence import connect
 
@@ -196,6 +208,7 @@ def test_submission_binds_current_pdf_and_remains_immutable_after_later_versions
 
     services, app_id = ready_application("Two Cycles")
     first_pdf = services.repository.latest_artifact_version(app_id, "resume_pdf", "rendered")
+    _start_new_draft(services, app_id)
     services.drafts.approve(app_id)
     second_render = services.rendering.render(app_id)
     assert second_render.validation.passed, second_render.validation.model_dump()
@@ -211,6 +224,7 @@ def test_submission_binds_current_pdf_and_remains_immutable_after_later_versions
     assert [row["artifact_version_id"] for row in before] == [submitted_pdf_id]
 
     # A later approved version must not rewrite or relink the existing submission.
+    _start_new_draft(services, app_id)
     services.drafts.approve(app_id)
     with connect(services.repository.path) as connection:
         after = connection.execute(

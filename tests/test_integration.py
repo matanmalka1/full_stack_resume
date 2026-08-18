@@ -177,8 +177,10 @@ def test_cli_exposes_style_safe_composite_edit(drafted_application, cli_runner) 
 def test_render_revalidates_approved_markdown_before_browser(approved_application) -> None:
     setup = approved_application("Acme", "Developer", "Python backend developer API React")
     services, app_id = setup
-    approved = setup.approved
-    markdown = services.artifacts.approved_version_dir(app_id, approved.version) / "resume.md"
+    markdown_record = services.repository.latest_artifact_version(
+        app_id, "resume_markdown", "approved"
+    )
+    markdown = services.artifacts.resolve(markdown_record["path"])
     markdown.write_text(markdown.read_text(encoding="utf-8") + "\nUnsupported claim.\n", encoding="utf-8")
     try:
         services.rendering.render(app_id)

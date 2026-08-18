@@ -187,6 +187,26 @@ def test_verified_baseline_adoption_and_difference_reporting(tmp_path: Path) -> 
     assert columns["source_hash"] == 1
     assert columns["normalized_hash"] == 1
 
+    fresh = tmp_path / "fresh-head.sqlite3"
+    Repository(fresh)
+    with connect(adoptable) as upgraded_connection, connect(fresh) as fresh_connection:
+        assert sqlite_master_fingerprint(upgraded_connection) == sqlite_master_fingerprint(
+            fresh_connection
+        )
+        revision_columns = {
+            row["name"]: row["notnull"]
+            for row in upgraded_connection.execute(
+                "PRAGMA table_info(approved_revisions)"
+            )
+        }
+        artifact_columns = {
+            row["name"]: row["notnull"]
+            for row in upgraded_connection.execute("PRAGMA table_info(artifact_versions)")
+        }
+    assert revision_columns["validation_run_id"] == 1
+    assert revision_columns["resume_json_path"] == 1
+    assert artifact_columns["revision_id"] == 0
+
     mismatch = tmp_path / "mismatch.sqlite3"
     with connect(mismatch) as connection:
         connection.executescript(sql)
@@ -589,4 +609,3 @@ def test_only_one_working_draft_per_application_can_be_active(tmp_path: Path) ->
         assert connection.execute(
             "SELECT COUNT(*) FROM working_drafts WHERE application_id='a'"
         ).fetchone()[0] == 2
-

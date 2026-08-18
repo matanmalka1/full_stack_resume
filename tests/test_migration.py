@@ -141,6 +141,10 @@ def test_retrospective_verification_reproduces_completed_migration(completed_mig
     with connect(root / "data/applications.sqlite3") as connection:
         assert connection.execute("SELECT COUNT(*) FROM selection_plans").fetchone()[0] == 0
         assert connection.execute("SELECT COUNT(*) FROM working_drafts").fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM approved_revisions").fetchone()[0] == 0
+        assert connection.execute(
+            "SELECT COUNT(*) FROM artifact_versions WHERE revision_id IS NOT NULL"
+        ).fetchone()[0] == 0
     assert report["artifact_hashes_checked"] == 13
 
 

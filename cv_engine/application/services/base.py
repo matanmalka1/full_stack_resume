@@ -69,7 +69,7 @@ from ..ports import (
     QueryRepository,
     ReadinessRepository,
     Renderer,
-    SnapshotPayloadStore,
+    RevisionPayloadStore,
     TrackingRepository,
 )
 from ..queries import (
@@ -105,7 +105,7 @@ class ServiceBase(Generic[RepoT]):
         artifacts: ArtifactStore,
         renderer: Renderer | None = None,
         provider: ClassificationProvider | None = None,
-        snapshots: SnapshotPayloadStore | None = None,
+        snapshots: RevisionPayloadStore | None = None,
     ):
         self.repo = repository
         self.artifacts = artifacts
@@ -138,10 +138,18 @@ class ServiceBase(Generic[RepoT]):
             raise KnowledgeRejected(str(exc)) from exc
 
     @property
-    def snapshot_payloads(self) -> SnapshotPayloadStore:
+    def snapshot_payloads(self) -> RevisionPayloadStore:
         if self._snapshots is None:
             raise DependencyUnavailable(
                 "this command needs the snapshot payload store and none was configured"
+            )
+        return self._snapshots
+
+    @property
+    def revision_payloads(self) -> RevisionPayloadStore:
+        if self._snapshots is None:
+            raise DependencyUnavailable(
+                "this command needs the revision payload store and none was configured"
             )
         return self._snapshots
 

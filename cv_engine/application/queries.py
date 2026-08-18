@@ -67,6 +67,7 @@ class ApplicationListView(BoundaryDTO):
 class ArtifactVersionView(BoundaryDTO):
     id: str
     artifact_id: str
+    revision_id: str | None = None
     artifact_type: str
     logical_name: str
     version_number: int
