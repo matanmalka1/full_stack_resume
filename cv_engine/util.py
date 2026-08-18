@@ -32,22 +32,5 @@ def canonical_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
-def slug(value: str) -> str:
-    normalized = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-    return normalized or "item"
-
-
-def safe_relative_path(repo: Path, value: str | Path) -> Path:
-    candidate = Path(value)
-    if candidate.is_absolute():
-        try:
-            candidate = candidate.resolve().relative_to(repo.resolve())
-        except ValueError as exc:
-            raise ValueError(f"path is outside repository: {value}") from exc
-    if any(part in {"", ".", ".."} for part in candidate.parts):
-        raise ValueError(f"unsafe repository-relative path: {value}")
-    return candidate
-
-
 def normalized_text(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip().casefold()
