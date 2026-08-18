@@ -41,10 +41,13 @@ Carried forward:
 
 ## B. 2b — remainder of §4.2
 
-- [ ] `ApprovedRevision` owning `revisions/{application_id}/{revision_id}/resume.{json,md}`
-      through the payload store.
-- [ ] Artifact metadata rows keyed to the revision: HTML, PDF, screenshot, claim manifest,
-      provenance export.
+- [x] `ApprovedRevision` owning `revisions/{application_id}/{revision_id}/resume.{json,md}`
+      through the payload store (`3f030ad`).
+- [x] Artifact metadata rows keyed to the revision: approval artifacts plus rendered HTML, PDF,
+      and screenshot (`3f030ad`). Provenance export remains under its open item below.
+- [ ] Relocate rendered HTML/PDF/screenshot bytes to
+      `outputs/{application_id}/{revision_id}/`; rows are revision-bound now, but physical
+      relocation still spans the renderer, recruiter filename, and browser suite.
 - [ ] **A4** — the eight render groups into `domain/render_validation.py` behind a typed
       `RenderEvidence` DTO. Breaks both `monkeypatch.setattr` targets in `tests/conftest.py` and
       the duplicated group-name set there.
