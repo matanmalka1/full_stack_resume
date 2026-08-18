@@ -10,8 +10,11 @@ import pytest
 import cv_engine.application.services.drafts as draft_service_module
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
 from cv_engine.application.errors import WorkflowError
+from cv_engine.domain.draft_markdown import parse_draft, serialize_markdown
 from cv_engine.domain.models import ValidationIssue, ValidationReport
+from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.infrastructure.persistence import connect
+from cv_engine.runtime.workspace import Workspace
 from helpers import ACCOUNT_MANAGER_JOB, working_claim as _working_claim
 
 
@@ -77,6 +80,35 @@ def test_csv_export_declares_its_schema_version(services, tmp_path: Path) -> Non
     assert metadata["row_count"] == 1
     assert metadata["columns"][0] == "id"
     assert "current_status" in metadata["columns"]
+
+
+def test_filesystem_working_draft_unconditionally_overwrites_the_projection(
+    workspace: Workspace,
+    draft_factory,
+) -> None:
+    application_id = "overwrite-projection"
+    first = draft_factory(
+        ACCOUNT_MANAGER_JOB,
+        application_id=application_id,
+    ).draft
+    replacement = draft_factory(
+        "Python backend developer API React",
+        application_id=application_id,
+    ).draft
+    store = FilesystemArtifactStore(workspace)
+
+    first_stored = store.write_working_draft(first)
+    first_markdown = first_stored.paths.markdown.read_text(encoding="utf-8")
+    replacement_stored = store.write_working_draft(replacement)
+
+    assert replacement_stored.paths == first_stored.paths
+    assert replacement_stored.paths.markdown.read_text(encoding="utf-8") == (
+        serialize_markdown(replacement)
+    )
+    assert parse_draft(
+        replacement_stored.paths.manifest.read_text(encoding="utf-8")
+    ).profile == replacement.profile
+    assert first_markdown != replacement_stored.markdown
 
 
 def test_validate_extracts_safe_manual_markdown_wording(drafted_application) -> None:
