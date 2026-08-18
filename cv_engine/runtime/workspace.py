@@ -68,9 +68,21 @@ class Workspace:
     """
 
     def __init__(self, root: Path, marker: WorkspaceMarker):
-        self.root = resolve_within(root, root)
+        resolved_root = Path(root).resolve()
+        self.root = resolve_within(resolved_root, resolved_root)
         self.marker = marker
-        resolved = default_roots(self.root)
+        resolved: dict[str, Path] = {}
+        for name, candidate in default_roots(self.root).items():
+            if name != "knowledge_root" and candidate.is_symlink():
+                raise WorkspaceError(
+                    f"Workspace root {name} may not be a symlink: {candidate}"
+                )
+            try:
+                resolved[name] = resolve_within(self.root, candidate)
+            except ValueError as exc:
+                raise WorkspaceError(
+                    f"Workspace root {name} escapes the Workspace: {candidate}"
+                ) from exc
         for name, value in marker.roots.items():
             if name not in ROOT_NAMES:
                 raise WorkspaceError(f"unknown Workspace root: {name}")

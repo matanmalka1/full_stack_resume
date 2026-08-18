@@ -10,7 +10,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from .infrastructure.persistence import Repository, initialize
+from .infrastructure.paths import resolve_within
+from .infrastructure.persistence import Repository, current_schema_version, initialize
 from .infrastructure.legacy_source import LegacySourceError, LegacyV1Source
 from .runtime.config import resolve_config
 from .runtime.workspace import Workspace, WorkspaceError, create_workspace, load_workspace
@@ -444,14 +445,16 @@ def _resolve_root(args: argparse.Namespace) -> tuple[Path, Any]:
     selected = args.workspace or args.repo
     config = resolve_config(cli={"workspace": selected, "database": args.db}, env=os.environ)
     root = Path(config.get("workspace") or _repo_root()).resolve()
-    return root, resolve_config(
-        cli={"workspace": selected, "database": args.db},
-        env=os.environ,
-        workspace_root=root,
-    )
+    return root, config
 
 
-def workspace_command(root: Path, config: Any, args: argparse.Namespace) -> int:
+def workspace_command(
+    root: Path,
+    config: Any,
+    args: argparse.Namespace,
+    *,
+    opened: Workspace | None = None,
+) -> int:
     if args.workspace_command == "init":
         created = create_workspace(
             root,
@@ -462,11 +465,12 @@ def workspace_command(root: Path, config: Any, args: argparse.Namespace) -> int:
         _print({**created.describe(), "installation_id": created.installation_id(), "created": True})
         return 0
     if args.workspace_command == "status":
-        opened = load_workspace(root)
+        opened = opened or load_workspace(root)
         _print({
             **opened.describe(),
             "installation_id": opened.installation_id(),
             "database": str(opened.database_path),
+            "schema_version": current_schema_version(opened.database_path),
             "configuration": config.describe(),
         })
         return 0
@@ -484,14 +488,27 @@ def main(argv: list[str] | None = None) -> int:
     except (WorkspaceError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
-    db_override = config.get("database")
     try:
         if args.command == "workspace":
-            return workspace_command(root, config, args)
+            if args.workspace_command != "status":
+                return workspace_command(root, config, args)
+            workspace = load_workspace(root)
+            config = resolve_config(
+                cli={"workspace": args.workspace or args.repo, "database": args.db},
+                env=os.environ,
+                workspace_root=workspace.root,
+            )
+            return workspace_command(root, config, args, opened=workspace)
 
         # Every remaining command is a normal v2 command, so it opens the
         # Workspace fail-closed before it touches state.
         workspace = load_workspace(root)
+        config = resolve_config(
+            cli={"workspace": args.workspace or args.repo, "database": args.db},
+            env=os.environ,
+            workspace_root=workspace.root,
+        )
+        db_override = config.get("database")
         if args.command == "migrate":
             if args.migration_command == "verify-snapshot":
                 report = verify_snapshot(args.snapshot.resolve())
@@ -499,7 +516,11 @@ def main(argv: list[str] | None = None) -> int:
                 report = retrospective_verify_migration(root, args.snapshot.resolve())
             _print(report)
             return 0 if report["passed"] else 1
-        db_path = Path(db_override).resolve() if db_override else workspace.database_path
+        db_path = (
+            resolve_within(workspace.state_root, db_override)
+            if db_override
+            else workspace.database_path
+        )
         if args.command == "init":
             initialize(db_path)
             _print({"database": str(db_path), "schema_initialized": True})
