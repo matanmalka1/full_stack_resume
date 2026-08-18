@@ -1,25 +1,35 @@
 # Stage 7 options memo — ValidationReport construction
 
-Status: **Decision required; no Stage 7 code authorized or started (2026-08-18)**
+Status: **Decision taken (2026-08-18): Stage 7a landed; Stage 7b is deferred to M2**
 
 Authority: `docs/v2-product-spec.md`, `docs/v2-state-and-use-cases.md`,
 `docs/v2-architecture.md`, and finding A1 / Stage 7 in
 `docs/v2-architecture-audit.md`.
 
-## 1. Decision in scope
+## 1. Decision and sequencing
 
-Stage 7 would unify the three independent `ValidationReport` construction paths in:
+Stage 7 was defined to unify the three independent `ValidationReport` construction
+paths in:
 
 - `domain/validation.py` for draft/content validation;
 - `infrastructure/rendering.py` for render/PDF/ATS validation; and
 - `application/ready.py` for current Ready-integrity verification.
 
-This memo makes no code or data change. Before implementation, the user must decide:
+The decision splits the work so the pass-rule invariant does not force a premature
+persisted-shape transition immediately before M2's numbered-migration work:
 
-1. whether to rename the two different groups currently called `"filename"`;
-2. whether historical `validation_runs.report_json` rows are rewritten or retained
-   under an explicitly versioned report shape; and
-3. whether the shared pass formula always includes the hard-issue term.
+1. **Stage 7a (landed):** one domain-owned factory derives `passed` from groups and hard
+   issues. All five production construction sites use it, and an architecture test
+   prevents another direct in-package constructor. This changes no group name, report
+   field, stored JSON shape, or reader behavior.
+2. **Stage 7b (pre-approved in shape, deferred to M2):** adopt group-name Option B and
+   history Option 2 when the explicit v2 schema and numbered migrations are designed.
+   Rename the draft/content group to `"headline_safety"`, retain render's `"filename"`,
+   and carry `report_schema_version` inside new report JSON. An absent version means
+   legacy. Historical rows are never rewritten.
+
+Historical Option 1 (back-fill) and Option 3 (dual aliases) are permanently rejected.
+Back-filling violates immutable evidence, while aliases would preserve the ambiguity.
 
 ## 2. Current behavior and stored shape
 
@@ -148,38 +158,42 @@ produce a normal executed validation result with `passed=false`. That is a chang
 validator execution failure to explicit domain failure, not from a currently passing
 outcome to a failing one.
 
-Before any implementation, characterization tests should prove:
+Stage 7a characterization tests prove:
 
 - all current render and Ready issues still fail the same groups;
 - a soft issue with all groups true still passes;
 - a hard issue with all groups true produces `passed=false` through the factory; and
 - legacy stored reports deserialize without reinterpretation.
 
-## 6. Recommendation
+## 6. Accepted decision
 
-Adopt the following package as one decision:
+The user accepted the following target, split across 7a and 7b:
 
 1. **Rename only the draft/content group to `"headline_safety"`; keep the render group
    as `"filename"`** (group-name Option B).
 2. **Preserve historical rows and version the new report shape** (historical Option 2).
-   An absent version means legacy v1; Stage 7 writes a new explicit version.
+   An absent version means legacy v1; Stage 7b writes a new explicit version with M2.
 3. **Use one domain-owned factory that derives `passed` and never accepts it from the
    caller**, with the formula including both group results and hard issues.
 4. **Do not dual-write aliases and do not back-fill immutable validation rows.**
 
-This recommendation gives each group one meaning, preserves the render name that
+This decision gives each group one meaning, preserves the render name that
 already matches the product contract, keeps historical evidence immutable, and turns a
 future inconsistent hard issue into an ordinary blocking result rather than a validator
-execution exception. Its cost is deliberate dual-shape read compatibility, which is
-safer and more transparent than rewriting history.
+execution exception. Stage 7a realizes only the factory portion. Stage 7b deliberately
+absorbs the dual-shape compatibility cost into M2 so there is one persisted-shape
+transition rather than two.
 
-## 7. Decision required before code
+The 7b naming documentation must also preserve an important coupling: draft headline
+safety and render filename policy both consume `Profile.safe_headlines`, and
+`Profile.validate_default_emphasis` requires `normalized_role` to be a safe headline.
+The distinct group names describe distinct findings, not independent policy inputs.
 
-The user must approve or replace each choice below before Stage 7 begins:
+## 7. Stage boundary
 
-- Group naming: keep both / rename headline only / rename both.
-- History: back-fill / version without back-fill / dual aliases.
-- Pass rule: shared groups-plus-hard formula / another explicitly stated rule.
+Stage 7a is behavior-preserving: no threshold, message, exception type, group name,
+status, public signature, stored report shape, artifact path, or fact semantic changed.
 
-No Stage 7 implementation, schema change, historical-row mutation, or Stage 8 work is
-authorized by this memo.
+Stage 7b remains deferred to M2 despite its pre-approved shape. No schema field, group
+rename, compatibility reader, historical-row mutation, or Stage 8 work was authorized
+or performed in 7a.

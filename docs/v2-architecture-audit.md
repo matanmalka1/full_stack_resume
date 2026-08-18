@@ -1,6 +1,7 @@
 # v2 Architecture Audit — responsibility boundaries in `cv_engine`
 
-Status: **Stages 1–6 implemented and verified; stages 7–8 not started (2026-08-18)**
+Status: **Stages 1–7a implemented and verified; Stage 7b and Stage 8 deferred to M2
+(2026-08-18)**
 
 Scope: `cv_engine` module and file responsibility boundaries at M1 close, before M2
 begins. Baseline commit: `a68bcec`.
@@ -69,6 +70,14 @@ submission (`docs/v1-upgrade-handoff.md` §14). Three authors means the soft/har
 distinction can diverge per site. Today `validate_rendered` pairs every issue with
 `groups[x] = False`, so the missing `hard` term is latent rather than live — but nothing
 detects the next issue added without that pairing.
+
+**Stage 7a resolution:** construction authority now lives in
+`ValidationReport.from_findings`, which derives the pass result from both groups and
+hard issues and accepts no caller-supplied `passed`. All five production sites use it,
+and an architecture test forbids direct `ValidationReport(...)` construction elsewhere
+in `cv_engine/`. This closes A1's multiple-author/pass-rule defect without changing a
+group name or persisted shape. The approved `"headline_safety"` rename and report-shape
+version are split into Stage 7b and deferred to M2.
 
 **A2 — the READY-demotion rule lives in two layers, and the repository orchestrates it
 outside its own transaction.**
@@ -363,14 +372,13 @@ orchestration alone in this stage. Exception types and message text must be pres
 byte-for-byte, because tests match on them. Risk: **medium** (touches the status
 machine).
 
-**Stage 7 — requires explicit approval before starting: unify `ValidationReport`
-construction (A1).** One domain factory applying the `hard` rule, used by
-`validation.py`, `ready.py`, and render validation, plus disambiguation of the two
-`"filename"` groups. This changes validation behaviour and the persisted
-`validation_runs.report_json` key set: historical rows keep the old keys while new rows
-get the new ones. `CLAUDE.md` forbids changing validation behaviour silently and requires
-migration safety for stored shapes, so the options (rename versus keep both group names;
-back-fill versus version the report shape) must be presented before any code is written.
+**Stage 7 — split by explicit decision.** Stage 7a is complete: one domain factory
+applies the groups-plus-hard rule, all five production sites use it, and architecture
+coverage enforces that construction authority. Stage 7b is pre-approved in shape but
+deferred to M2: rename only the draft/content group to `"headline_safety"`, retain the
+render `"filename"` group, add an in-report `report_schema_version`, treat an absent
+version as legacy, and never rewrite historical rows. The two checks remain coupled
+through `Profile.safe_headlines`; `normalized_role` must remain a safe headline.
 
 **Stage 8 — M2-aligned; not started now.** Sequenced with the §3.3 repository split so
 the work happens once: move Ready groups 4–10 into `domain/render_validation.py` behind a
@@ -521,9 +529,11 @@ signature, stored report shape, artifact path policy, or fact semantic changed.
 
 ### Remaining work and residual allowlist debt
 
-- **Stage 7 remains approval-gated and was not started.** `ValidationReport`
-  construction, group naming, and stored report-shape decisions remain exactly as they
-  were at the audit baseline.
+- **Stage 7a is complete; Stage 7b is deferred to M2.** The domain-owned factory and
+  architecture enforcement close A1's multiple-construction/pass-rule defect. Group
+  names and the stored report shape remain byte-for-byte unchanged in 7a. The approved
+  `"headline_safety"` rename and in-report schema version land only with M2's numbered
+  migrations; absent version means legacy, and historical rows are never rewritten.
 - **Stage 8 remains deferred to M2 and was not started.** This includes render/Ready
   policy extraction, decision-record typing, CLI policy removal, artifact-integrity
   consolidation, compatibility-façade retirement, Profile-backed default emphasis,

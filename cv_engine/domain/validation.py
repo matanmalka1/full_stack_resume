@@ -317,8 +317,7 @@ def validate_draft(
         groups["filename"] = False
         issues.append(ValidationIssue(group="filename", code="unsafe-headline", message=draft.headline.text))
 
-    return ValidationReport(
-        passed=all(groups.values()) and not any(issue.hard for issue in issues),
+    return ValidationReport.from_findings(
         groups=groups,
         issues=issues,
         evidence={"claim_count": len(claims), "selected_fact_count": len(draft.selected_fact_ids)},

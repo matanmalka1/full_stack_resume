@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -492,6 +492,22 @@ class ValidationReport(StrictModel):
     groups: dict[str, bool]
     issues: list[ValidationIssue] = []
     evidence: dict[str, Any] = {}
+
+    @classmethod
+    def from_findings(
+        cls,
+        groups: dict[str, bool],
+        issues: list[ValidationIssue],
+        *,
+        evidence: dict[str, Any] | None = None,
+    ) -> Self:
+        """Build a report whose pass result is derived from its findings."""
+        return cls(
+            passed=all(groups.values()) and not any(issue.hard for issue in issues),
+            groups=groups,
+            issues=issues,
+            evidence=evidence if evidence is not None else {},
+        )
 
     @model_validator(mode="after")
     def passed_agrees_with_findings(self) -> "ValidationReport":

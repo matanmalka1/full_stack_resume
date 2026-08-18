@@ -9,6 +9,8 @@ which layer happens to build the value.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -93,6 +95,48 @@ def test_a_reported_warning_still_passes() -> None:
         issues=[ValidationIssue(group="profile", code="emphasis-coverage-low", message="x", hard=False)],
     )
     assert report.passed
+
+
+def test_validation_report_factory_preserves_a_soft_warning_pass() -> None:
+    issue = ValidationIssue(
+        group="profile",
+        code="emphasis-coverage-low",
+        message="x",
+        hard=False,
+    )
+
+    report = ValidationReport.from_findings(
+        groups={"profile": True},
+        issues=[issue],
+        evidence={"source": "characterization"},
+    )
+
+    assert report.passed
+    assert report.evidence == {"source": "characterization"}
+
+
+def test_validation_report_factory_turns_an_unpaired_hard_issue_into_failure() -> None:
+    report = ValidationReport.from_findings(
+        groups={"content": True},
+        issues=[ValidationIssue(group="content", code="future-hard-finding", message="x")],
+    )
+
+    assert not report.passed
+    assert report.groups == {"content": True}
+
+
+def test_legacy_validation_report_json_round_trips_without_a_shape_change() -> None:
+    legacy = {
+        "passed": True,
+        "groups": {"filename": True},
+        "issues": [],
+        "evidence": {"phase": "pre-render"},
+    }
+
+    report = ValidationReport.model_validate_json(json.dumps(legacy))
+
+    assert report.model_dump(mode="json") == legacy
+    assert "report_schema_version" not in report.model_dump(mode="json")
 
 
 def test_an_emphasis_policy_refuses_a_negative_coverage_expectation() -> None:

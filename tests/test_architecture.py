@@ -140,6 +140,29 @@ def _imports_relative_module(path: Path, module: str) -> bool:
     )
 
 
+def _direct_validation_report_calls(path: Path) -> list[int]:
+    """Direct model construction sites, excluding the sanctioned factory call."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    constructor_names = {"ValidationReport"}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        constructor_names.update(
+            alias.asname or alias.name
+            for alias in node.names
+            if alias.name == "ValidationReport"
+        )
+    found: list[int] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if isinstance(node.func, ast.Name) and node.func.id in constructor_names:
+            found.append(node.lineno)
+        elif isinstance(node.func, ast.Attribute) and node.func.attr == "ValidationReport":
+            found.append(node.lineno)
+    return found
+
+
 def test_domain_and_application_dependencies_point_inward() -> None:
     """Report every dependency and storage-boundary violation in one contract."""
     offenders: list[str] = []
@@ -196,3 +219,39 @@ def test_known_outer_layer_policy_debt_does_not_grow() -> None:
 
     unexpected = offenders - ARCHITECTURE_DEBT_ALLOWLIST
     assert not unexpected, sorted(unexpected)
+
+
+def test_validation_report_has_one_in_package_construction_authority() -> None:
+    """Production callers use the domain factory; fixtures remain unrestricted."""
+    offenders = [
+        f"{path.relative_to(ENGINE)}:{line} constructs ValidationReport directly"
+        for path in sorted(ENGINE.rglob("*.py"))
+        if path != ENGINE / "domain/models.py"
+        for line in _direct_validation_report_calls(path)
+    ]
+
+    assert not offenders, offenders
+    models_tree = ast.parse(
+        (ENGINE / "domain/models.py").read_text(encoding="utf-8")
+    )
+    report_class = next(
+        node
+        for node in models_tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "ValidationReport"
+    )
+    factory = next(
+        node
+        for node in report_class.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name == "from_findings"
+    )
+    assert any(
+        isinstance(decorator, ast.Name) and decorator.id == "classmethod"
+        for decorator in factory.decorator_list
+    )
+    assert any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "cls"
+        for node in ast.walk(factory)
+    )

@@ -52,7 +52,7 @@ def verify_ready_integrity(
         manifest_version = None
 
     if markdown_version is None or manifest_version is None:
-        return ValidationReport(passed=False, groups=groups, issues=issues, evidence=evidence)
+        return ValidationReport.from_findings(groups=groups, issues=issues, evidence=evidence)
 
     markdown_path = artifacts.resolve(markdown_version["path"])
     manifest_path = artifacts.resolve(manifest_version["path"])
@@ -231,4 +231,4 @@ def verify_ready_integrity(
         evidence["pdf_artifact_version_id"] = pdf_version["id"]
         evidence["pdf_path"] = pdf_version["path"]
 
-    return ValidationReport(passed=all(groups.values()), groups=groups, issues=issues, evidence=evidence)
+    return ValidationReport.from_findings(groups=groups, issues=issues, evidence=evidence)

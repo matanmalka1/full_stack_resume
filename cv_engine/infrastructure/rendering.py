@@ -203,7 +203,7 @@ def validate_rendered(
     if not pdf_path.is_file() or pdf_path.stat().st_size == 0:
         groups["pdf"] = False
         issues.append(ValidationIssue(group="pdf", code="pdf-missing", message=str(pdf_path)))
-        return ValidationReport(passed=False, groups=groups, issues=issues)
+        return ValidationReport.from_findings(groups=groups, issues=issues)
     try:
         reader = PdfReader(str(pdf_path))
         page_count = len(reader.pages)
@@ -257,8 +257,7 @@ def validate_rendered(
         groups["filename"] = False
         issues.append(ValidationIssue(group="filename", code="filename", message=f"expected {expected_filename}"))
 
-    return ValidationReport(
-        passed=all(groups.values()),
+    return ValidationReport.from_findings(
         groups=groups,
         issues=issues,
         evidence={

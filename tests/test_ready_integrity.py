@@ -98,16 +98,16 @@ def test_ready_integrity_rejects_missing_or_tampered_registered_artifacts(
     v1_repo: Path, ready_application
 ) -> None:
     cases = [
-        ("resume_pdf", "rendered", "tamper", "pdf-tampered"),
-        ("resume_markdown", "approved", "tamper", "approved-markdown-tampered"),
-        ("claim_manifest", "approved", "tamper", "approved-manifest-tampered"),
-        ("resume_html", "rendered", "tamper", "html-tampered"),
-        ("visual_evidence", "rendered", "tamper", "visual-tampered"),
-        ("resume_pdf", "rendered", "missing", "pdf-missing"),
-        ("resume_html", "rendered", "missing", "html-missing"),
-        ("visual_evidence", "rendered", "missing", "visual-missing"),
+        ("resume_pdf", "rendered", "tamper", "pdf-tampered", "rendered_artifacts"),
+        ("resume_markdown", "approved", "tamper", "approved-markdown-tampered", "approved_source"),
+        ("claim_manifest", "approved", "tamper", "approved-manifest-tampered", "approved_source"),
+        ("resume_html", "rendered", "tamper", "html-tampered", "rendered_artifacts"),
+        ("visual_evidence", "rendered", "tamper", "visual-tampered", "rendered_artifacts"),
+        ("resume_pdf", "rendered", "missing", "pdf-missing", "rendered_artifacts"),
+        ("resume_html", "rendered", "missing", "html-missing", "rendered_artifacts"),
+        ("visual_evidence", "rendered", "missing", "visual-missing", "rendered_artifacts"),
     ]
-    for index, (artifact_type, state, mutation, issue_code) in enumerate(cases):
+    for index, (artifact_type, state, mutation, issue_code, issue_group) in enumerate(cases):
         engine, app_id = ready_application(f"Artifact Integrity {index}")
         _version, path = artifact_version_and_path(
             engine, app_id, v1_repo, artifact_type, state
@@ -118,7 +118,9 @@ def test_ready_integrity_rejects_missing_or_tampered_registered_artifacts(
             path.write_bytes(path.read_bytes() + b"tampered")
         report = engine.ready_report(app_id)
         assert not report.passed, issue_code
-        assert any(issue.code == issue_code for issue in report.issues), issue_code
+        issue = next(issue for issue in report.issues if issue.code == issue_code)
+        assert issue.group == issue_group
+        assert report.groups[issue_group] is False
 
 
 def test_new_revision_snapshot_or_analysis_stales_prior_ready(ready_application) -> None:
