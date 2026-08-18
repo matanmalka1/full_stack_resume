@@ -10,7 +10,11 @@ from ..domain.models import (
     DraftDocument,
     JobClassificationProposal,
     Profile,
+    SelectionManifest,
+    SelectionPlan,
     ValidationReport,
+    ValidationRunLineage,
+    WorkingDraft,
 )
 
 
@@ -205,6 +209,25 @@ class JobStore(Protocol):
 
     def latest_analysis(self, application_id: str) -> tuple[str, Any]: ...
 
+    def create_selection_plan(
+        self,
+        application_id: str,
+        job_analysis_id: str,
+        plan: SelectionManifest,
+        *,
+        candidate_context_version: str,
+        candidate_context_hash: str,
+        profile_version: str,
+        selection_policy_version: str,
+        track_emphasis_dependencies: dict[str, str],
+        plan_id: str | None = None,
+        created_at: str | None = None,
+    ) -> SelectionPlan: ...
+
+    def selection_plan(self, selection_plan_id: str) -> SelectionPlan: ...
+
+    def latest_selection_plan(self, application_id: str) -> SelectionPlan: ...
+
 
 class ArtifactRegistry(Protocol):
     """What was produced, what validated it, and what decided it."""
@@ -259,11 +282,15 @@ class ArtifactRegistry(Protocol):
         phase: str,
         report: ValidationReport,
         artifact_version_id: str | None = None,
+        *,
+        lineage: ValidationRunLineage | None = None,
     ) -> str: ...
 
     def validation_for_artifact(
         self, application_id: str, phase: str, artifact_version_id: str
     ) -> ValidationReport: ...
+
+    def validation_lineage(self, validation_id: str) -> ValidationRunLineage: ...
 
 
 class FactAudit(Protocol):
@@ -282,6 +309,31 @@ class PreparationRepository(ApplicationStore, JobStore, Protocol):
 
 class DraftRepository(ApplicationStore, JobStore, ArtifactRegistry, Protocol):
     """The records needed to validate, approve, render, and qualify a draft."""
+
+    def create_working_draft(
+        self,
+        application_id: str,
+        job_analysis_id: str,
+        selection_plan_id: str,
+        source: DraftDocument,
+        *,
+        parent_revision_id: str | None = None,
+        working_draft_id: str | None = None,
+        created_at: str | None = None,
+    ) -> WorkingDraft: ...
+
+    def working_draft(self, working_draft_id: str) -> WorkingDraft: ...
+
+    def active_working_draft(self, application_id: str) -> WorkingDraft: ...
+
+    def update_working_draft(
+        self,
+        working_draft_id: str,
+        expected_version: int,
+        source: DraftDocument,
+        *,
+        updated_at: str | None = None,
+    ) -> WorkingDraft: ...
 
 
 class KnowledgeAuditRepository(FactAudit, Protocol):

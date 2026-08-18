@@ -1,14 +1,26 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
-from ...domain.models import ApplicationStatus, JobAnalysis
+from ...domain.models import (
+    ApplicationStatus,
+    JobAnalysis,
+    SelectionManifest,
+    SelectionPlan,
+)
 from ...util import canonical_json, sha256_text, utc_now
 from .applications import SqliteApplicationRepository
 from .base import SqliteRepositoryBase
 from .connection import SqliteUnitOfWork
 from .primitives import new_id
+
+
+_LEGACY_SNAPSHOT_COLUMNS = (
+    "id, application_id, version_number, original_text, source_url, captured_at, "
+    "source_metadata_json, content_hash, prior_snapshot_id"
+)
 
 
 def _require_owned_snapshot(
@@ -176,7 +188,7 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
     def latest_snapshot(self, application_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
             row = connection.execute(
-                "SELECT * FROM job_snapshots WHERE application_id=? "
+                f"SELECT {_LEGACY_SNAPSHOT_COLUMNS} FROM job_snapshots WHERE application_id=? "
                 "ORDER BY version_number DESC LIMIT 1",
                 (application_id,),
             ).fetchone()
@@ -187,7 +199,8 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
     def get_snapshot(self, snapshot_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
             row = connection.execute(
-                "SELECT * FROM job_snapshots WHERE id=?", (snapshot_id,)
+                f"SELECT {_LEGACY_SNAPSHOT_COLUMNS} FROM job_snapshots WHERE id=?",
+                (snapshot_id,),
             ).fetchone()
         if row is None:
             raise KeyError(f"no job snapshot {snapshot_id}")
@@ -258,6 +271,130 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
                     now,
                 )
         return analysis_id
+
+    def create_selection_plan(
+        self,
+        application_id: str,
+        job_analysis_id: str,
+        plan: SelectionManifest,
+        *,
+        candidate_context_version: str,
+        candidate_context_hash: str,
+        profile_version: str,
+        selection_policy_version: str,
+        track_emphasis_dependencies: dict[str, str],
+        plan_id: str | None = None,
+        created_at: str | None = None,
+    ) -> SelectionPlan:
+        selection_plan_id = plan_id or new_id()
+        now = created_at or utc_now()
+        with self.transaction() as connection:
+            self._insert_selection_plan(
+                connection,
+                selection_plan_id,
+                application_id,
+                job_analysis_id,
+                plan,
+                candidate_context_version,
+                candidate_context_hash,
+                profile_version,
+                selection_policy_version,
+                track_emphasis_dependencies,
+                now,
+            )
+            row = connection.execute(
+                "SELECT * FROM selection_plans WHERE id=?", (selection_plan_id,)
+            ).fetchone()
+        return self._selection_plan_record(row)
+
+    @staticmethod
+    def _insert_selection_plan(
+        connection: Any,
+        selection_plan_id: str,
+        application_id: str,
+        job_analysis_id: str,
+        plan: SelectionManifest,
+        candidate_context_version: str,
+        candidate_context_hash: str,
+        profile_version: str,
+        selection_policy_version: str,
+        track_emphasis_dependencies: dict[str, str],
+        created_at: str,
+    ) -> None:
+        analysis = connection.execute(
+            "SELECT application_id FROM job_analyses WHERE id=?", (job_analysis_id,)
+        ).fetchone()
+        if analysis is None or analysis["application_id"] != application_id:
+            raise ValueError(
+                "a selection plan cannot reference a job analysis belonging to "
+                "another application"
+            )
+        version = connection.execute(
+            "SELECT COALESCE(MAX(version_number), 0) + 1 AS version "
+            "FROM selection_plans WHERE application_id=?",
+            (application_id,),
+        ).fetchone()["version"]
+        connection.execute(
+            "INSERT INTO selection_plans(id, application_id, job_analysis_id, "
+            "version_number, plan_json, candidate_context_version, "
+            "candidate_context_hash, profile_version, selection_policy_version, "
+            "track_emphasis_dependencies_json, created_at) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                selection_plan_id,
+                application_id,
+                job_analysis_id,
+                version,
+                canonical_json(plan.model_dump(mode="json")),
+                candidate_context_version,
+                candidate_context_hash,
+                profile_version,
+                selection_policy_version,
+                canonical_json(track_emphasis_dependencies),
+                created_at,
+            ),
+        )
+
+    @staticmethod
+    def _selection_plan_record(row: Any) -> SelectionPlan:
+        if row is None:
+            raise KeyError("selection plan does not exist")
+        record = dict(row)
+        return SelectionPlan(
+            id=record["id"],
+            application_id=record["application_id"],
+            job_analysis_id=record["job_analysis_id"],
+            version_number=record["version_number"],
+            plan=SelectionManifest.model_validate_json(record["plan_json"]),
+            candidate_context_version=record["candidate_context_version"],
+            candidate_context_hash=record["candidate_context_hash"],
+            profile_version=record["profile_version"],
+            selection_policy_version=record["selection_policy_version"],
+            track_emphasis_dependencies=json.loads(
+                record["track_emphasis_dependencies_json"]
+            ),
+            created_at=record["created_at"],
+        )
+
+    def selection_plan(self, selection_plan_id: str) -> SelectionPlan:
+        with self.read_connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM selection_plans WHERE id=?", (selection_plan_id,)
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"no selection plan {selection_plan_id}")
+        return self._selection_plan_record(row)
+
+    def latest_selection_plan(self, application_id: str) -> SelectionPlan:
+        with self.read_connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM selection_plans WHERE application_id=? "
+                "ORDER BY version_number DESC LIMIT 1",
+                (application_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"no selection plan for application {application_id}")
+        return self._selection_plan_record(row)
 
     @staticmethod
     def _analysis_record(row: Any) -> dict[str, Any]:

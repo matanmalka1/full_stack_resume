@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
-from ...domain.models import ValidationReport
+from ...domain.models import ValidationReport, ValidationRunLineage
 from ...util import canonical_json, utc_now
 from .base import SqliteRepositoryBase
 from .connection import integrity_results
@@ -232,12 +233,38 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
         phase: str,
         report: ValidationReport,
         artifact_version_id: str | None = None,
+        *,
+        lineage: ValidationRunLineage | None = None,
     ) -> str:
         validation_id = new_id()
         with self.transaction() as connection:
+            if lineage is not None:
+                draft = connection.execute(
+                    "SELECT wd.application_id, wd.job_analysis_id, "
+                    "wd.selection_plan_id, wd.edit_version, wd.content_hash, "
+                    "ja.job_snapshot_id FROM working_drafts wd "
+                    "JOIN job_analyses ja ON ja.id=wd.job_analysis_id "
+                    "WHERE wd.id=?",
+                    (lineage.working_draft_id,),
+                ).fetchone()
+                if (
+                    draft is None
+                    or draft["application_id"] != application_id
+                    or draft["job_analysis_id"] != lineage.job_analysis_id
+                    or draft["selection_plan_id"] != lineage.selection_plan_id
+                    or draft["edit_version"] != lineage.edit_version
+                    or draft["content_hash"] != lineage.content_hash
+                    or draft["job_snapshot_id"] != lineage.job_snapshot_id
+                ):
+                    raise ValueError(
+                        "validation lineage does not match the exact working draft context"
+                    )
             connection.execute(
-                "INSERT INTO validation_runs(id, application_id, artifact_version_id, phase, report_json, created_at) "
-                "VALUES(?, ?, ?, ?, ?, ?)",
+                "INSERT INTO validation_runs(id, application_id, artifact_version_id, "
+                "phase, report_json, created_at, working_draft_id, edit_version, "
+                "content_hash, job_snapshot_id, job_analysis_id, selection_plan_id, "
+                "knowledge_context_hash, validator_versions_json) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     validation_id,
                     application_id,
@@ -245,9 +272,38 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
                     phase,
                     report.model_dump_json(),
                     utc_now(),
+                    lineage.working_draft_id if lineage else None,
+                    lineage.edit_version if lineage else None,
+                    lineage.content_hash if lineage else None,
+                    lineage.job_snapshot_id if lineage else None,
+                    lineage.job_analysis_id if lineage else None,
+                    lineage.selection_plan_id if lineage else None,
+                    lineage.knowledge_context_hash if lineage else None,
+                    canonical_json(lineage.validator_versions) if lineage else None,
                 ),
             )
         return validation_id
+
+    def validation_lineage(self, validation_id: str) -> ValidationRunLineage:
+        with self.read_connection() as connection:
+            row = connection.execute(
+                "SELECT working_draft_id, edit_version, content_hash, job_snapshot_id, "
+                "job_analysis_id, selection_plan_id, knowledge_context_hash, "
+                "validator_versions_json FROM validation_runs WHERE id=?",
+                (validation_id,),
+            ).fetchone()
+        if row is None or row["working_draft_id"] is None:
+            raise KeyError(f"no validation lineage {validation_id}")
+        return ValidationRunLineage(
+            working_draft_id=row["working_draft_id"],
+            edit_version=row["edit_version"],
+            content_hash=row["content_hash"],
+            job_snapshot_id=row["job_snapshot_id"],
+            job_analysis_id=row["job_analysis_id"],
+            selection_plan_id=row["selection_plan_id"],
+            knowledge_context_hash=row["knowledge_context_hash"],
+            validator_versions=json.loads(row["validator_versions_json"]),
+        )
 
     def latest_validation(
         self, application_id: str, phase: str | None = None

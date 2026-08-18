@@ -11,6 +11,12 @@ import pytest
 
 from cv_engine.application.ports import ArtifactRegistry
 from cv_engine.domain.analysis.classification import classify_job
+from cv_engine.domain.models import (
+    SelectionPlan,
+    ValidationReport,
+    ValidationRunLineage,
+    WorkingDraft,
+)
 from cv_engine.infrastructure.persistence.applications import SqliteApplicationRepository
 from cv_engine.infrastructure.persistence import (
     MigrationChecksumError,
@@ -50,7 +56,7 @@ def test_numbered_migration_application_reapplication_and_version_gates(
 ) -> None:
     path = tmp_path / "state.sqlite3"
     repository = Repository(path)
-    assert current_schema_version(path) == "0001"
+    assert current_schema_version(path) == "0002"
     with connect(path) as connection:
         assert connection.execute(
             "SELECT value FROM schema_meta WHERE key='schema_version'"
@@ -70,13 +76,14 @@ def test_numbered_migration_application_reapplication_and_version_gates(
         Repository(path)
 
     path = tmp_path / "lower.sqlite3"
-    Repository(path)
     with connect(path) as connection:
-        connection.execute("DELETE FROM schema_migrations")
-        connection.commit()
+        connection.executescript(
+            (MIGRATIONS_DIR / "0001_baseline.sql").read_text(encoding="utf-8")
+        )
     with pytest.raises(SchemaVersionError, match="cv workspace upgrade"):
         Repository(path)
-    assert apply_migrations(path) == "0001"
+    assert current_schema_version(path) == "0001"
+    assert apply_migrations(path) == "0002"
 
     with connect(path) as connection:
         connection.execute(
@@ -91,7 +98,7 @@ def test_numbered_migration_application_reapplication_and_version_gates(
     empty = tmp_path / "empty.sqlite3"
     empty.touch()
     Repository(empty)
-    assert current_schema_version(empty) == "0001"
+    assert current_schema_version(empty) == "0002"
 
 
 def test_verified_baseline_adoption_and_difference_reporting(tmp_path: Path) -> None:
@@ -102,12 +109,23 @@ def test_verified_baseline_adoption_and_difference_reporting(tmp_path: Path) -> 
     before = None
     with connect(adoptable) as connection:
         before = sqlite_master_fingerprint(connection)
-    Repository(adoptable)
+    with pytest.raises(SchemaVersionError, match="cv workspace upgrade"):
+        Repository(adoptable)
     with connect(adoptable) as connection:
         assert sqlite_master_fingerprint(connection) == before == baseline_fingerprint()
         assert connection.execute(
             "SELECT version FROM schema_migrations"
         ).fetchone()[0] == "0001"
+    assert apply_migrations(adoptable) == "0002"
+    with connect(adoptable) as connection:
+        columns = {
+            row["name"]: row["notnull"]
+            for row in connection.execute("PRAGMA table_info(job_snapshots)")
+        }
+    assert columns["original_text"] == 1
+    assert columns["payload_path"] == 0
+    assert columns["source_hash"] == 0
+    assert columns["normalized_hash"] == 0
 
     mismatch = tmp_path / "mismatch.sqlite3"
     with connect(mismatch) as connection:
@@ -319,3 +337,139 @@ def test_analysis_and_ready_demotion_commit_atomically(
             "FROM applications WHERE id=?", (app_id,)
         ).fetchone()
     assert tuple(application) == ("ready", None, None, None, None, None)
+
+
+def test_typed_preparation_records_round_trip_and_refuse_stale_edits(
+    tmp_path: Path,
+    draft_factory,
+) -> None:
+    repository = Repository(tmp_path / "preparation-records.sqlite3")
+    app_id, snapshot_id = repository.create_application(
+        company="Typed Records",
+        target_role="Developer",
+        original_job_text="Python backend developer API React",
+    )
+    assert set(repository.get_snapshot(snapshot_id)) == {
+        "id",
+        "application_id",
+        "version_number",
+        "original_text",
+        "source_url",
+        "captured_at",
+        "source_metadata_json",
+        "content_hash",
+        "prior_snapshot_id",
+    }
+    analysis = classify_job("Python backend developer API React")
+    analysis_id = repository.save_analysis(app_id, snapshot_id, analysis)
+    document = draft_factory(
+        "Python backend developer API React",
+        application_id=app_id,
+        job_snapshot_id=snapshot_id,
+        job_analysis_id=analysis_id,
+    ).draft
+    assert document.selection is not None
+
+    plan = repository.create_selection_plan(
+        app_id,
+        analysis_id,
+        document.selection,
+        candidate_context_version="candidate-v1",
+        candidate_context_hash="candidate-hash",
+        profile_version="profile-v1",
+        selection_policy_version=document.selection.policy_version,
+        track_emphasis_dependencies={
+            "track": analysis.track.value,
+            "emphasis": analysis.emphasis.value,
+        },
+    )
+    assert isinstance(plan, SelectionPlan)
+    assert repository.selection_plan(plan.id) == plan
+
+    working = repository.create_working_draft(
+        app_id,
+        analysis_id,
+        plan.id,
+        document,
+    )
+    assert isinstance(working, WorkingDraft)
+    assert repository.active_working_draft(app_id) == working
+
+    changed_source = document.model_copy(update={"content_hash": "changed-hash"})
+    changed = repository.update_working_draft(
+        working.id,
+        working.edit_version,
+        changed_source,
+    )
+    assert changed.edit_version == working.edit_version + 1
+    assert changed.content_hash == "changed-hash"
+
+    with pytest.raises(ValueError, match="edit version mismatch"):
+        repository.update_working_draft(
+            working.id,
+            working.edit_version,
+            document.model_copy(update={"content_hash": "stale-write"}),
+        )
+    assert repository.working_draft(working.id) == changed
+
+    lineage = ValidationRunLineage(
+        working_draft_id=changed.id,
+        edit_version=changed.edit_version,
+        content_hash=changed.content_hash,
+        job_snapshot_id=snapshot_id,
+        job_analysis_id=analysis_id,
+        selection_plan_id=plan.id,
+        knowledge_context_hash="knowledge-hash",
+        validator_versions={"draft": "2.0"},
+    )
+    validation_id = repository.record_validation(
+        app_id,
+        "pre-render",
+        ValidationReport.from_findings({"content": True}, []),
+        lineage=lineage,
+    )
+    assert repository.validation_lineage(validation_id) == lineage
+
+
+def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
+    tmp_path: Path,
+    draft_factory,
+) -> None:
+    repository = Repository(tmp_path / "preparation-constraints.sqlite3")
+    app_id, snapshot_id = repository.create_application(
+        company="Constraint Records",
+        target_role="Developer",
+        original_job_text="Python backend developer API React",
+    )
+    analysis = classify_job("Python backend developer API React")
+    analysis_id = repository.save_analysis(app_id, snapshot_id, analysis)
+    document = draft_factory(
+        "Python backend developer API React",
+        application_id=app_id,
+        job_snapshot_id=snapshot_id,
+        job_analysis_id=analysis_id,
+    ).draft
+    assert document.selection is not None
+    plan = repository.create_selection_plan(
+        app_id,
+        analysis_id,
+        document.selection,
+        candidate_context_version="candidate-v1",
+        candidate_context_hash="candidate-hash",
+        profile_version="profile-v1",
+        selection_policy_version=document.selection.policy_version,
+        track_emphasis_dependencies={},
+    )
+    repository.create_working_draft(app_id, analysis_id, plan.id, document)
+
+    with pytest.raises(sqlite3.IntegrityError, match="immutable record"):
+        with repository.transaction() as connection:
+            connection.execute(
+                "UPDATE selection_plans SET plan_json=plan_json WHERE id=?",
+                (plan.id,),
+            )
+    with pytest.raises(sqlite3.IntegrityError, match="immutable record"):
+        with repository.transaction() as connection:
+            connection.execute("DELETE FROM selection_plans WHERE id=?", (plan.id,))
+    with pytest.raises(sqlite3.IntegrityError, match="UNIQUE constraint failed"):
+        repository.create_working_draft(app_id, analysis_id, plan.id, document)
