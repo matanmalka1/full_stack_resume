@@ -307,3 +307,52 @@ exception type; a new immutable table cannot be covered by triggers; the archite
 would need a new entry; a lane needs a file it does not own; or
 `infrastructure/migration.py` cannot write snapshot payloads without restructuring beyond the
 §6.3 mapping it already owes.
+
+## 9. 2a closure record
+
+Boundary 2a implementation merged at `a9cc63a`; close-out and the two repairs below by the lead.
+Independently verified on 2026-08-18 with this worktree's `./.venv/bin/python`.
+
+| Gate | Result |
+| --- | --- |
+| `env CV_REQUIRE_BROWSER=1 … pytest -q` | **164 passed**, no test removed |
+| `tests/test_golden.py` | hashes unmoved; a second case now guards the persisted-plan path |
+| Migrations | a `0001`-only database upgrades through `0002` and `0003`; the resulting `job_snapshots` shape is identical to a fresh head database |
+| `original_text` | no production module references it after `0003` |
+| Snapshot payloads | written at the §6.2 path before registration, SHA-256 matching `source_hash`, normalized hash present |
+| `edit_version` | a stale write raises `edit version mismatch` and leaves the record unchanged |
+| One active WorkingDraft | the partial unique index refuses a second active row through raw SQL (fdb3515) |
+| Offline CLI | fresh development/copy Workspace, `OPENAI_API_KEY` unset: ingest → analyze → draft → validate → approve → render → ready → reconcile, plus `cv fast`; both PDFs one page with the correct recruiter filename |
+| Architecture allowlist | still one entry (`infrastructure/migration.py: imports subprocess`) |
+| Frozen fingerprint | `tests/fixtures/m1_sqlite_master.tsv` byte-identical; the guard now builds a `0001`-only database, per D3 |
+
+### Two repairs the verification required
+
+**Approval was destroying unimported manual edits silently** (`21906be`). SQLite became
+authoritative here and approval rebuilds the Markdown projection from it, so a manual file edit
+that had not been imported was overwritten without a word — something v1 never did. Approval now
+refuses while the projection disagrees with the stored draft and names `cv sync-draft`.
+`validate` deliberately does not refuse: its report on the stored draft is true, and approval is
+the trust boundary. A foreign projection copied over a working file consequently cannot reach a
+revision at all.
+
+**A plan frozen under a different Profile version was silently reused** (`21906be`). Reusing it
+re-derives section assignment from a Profile the plan never saw, so the draft would not be the
+plan's decision. Drafting now refuses; §4.3 replaces the refusal with a stale reason.
+
+### Verification gap that was closed, not merely noted
+
+`tests/test_golden.py` proved parity for the *computed* selection path while production had moved
+to the *persisted-plan* path. The two could have drifted in section assignment or claim order with
+every golden hash still matching. They are now asserted equal across all four cases (`95942b8`).
+
+### Carried forward
+
+- `cv fact attach` requires a re-analysis before a plan can select the new fact;
+  `confirm_and_use_fact` (§4.5) is the proper command.
+- `selection_plans.selection_policy_version` freezes the manifest's own policy version while the
+  knowledge store reports a content hash, so the column cannot be compared against current state.
+  §4.3 needs one comparable value before `POLICY_CHANGED` can rely on it.
+- Codex committed one documentation change (`2abd23b`) despite `docs/**` being lead-only. Harmless
+  and accurate; noted so the ownership rule is not quietly eroded.
+
