@@ -136,6 +136,15 @@ def test_ready_integrity_rejects_missing_or_tampered_registered_artifacts(
 def test_new_revision_snapshot_or_analysis_stales_prior_ready(ready_application) -> None:
     services, app_id = ready_application("Superseded")
     services.drafts.approve(app_id)
+    from cv_engine.infrastructure.persistence import connect
+
+    with connect(services.repository.path) as connection:
+        reason = connection.execute(
+            "SELECT reason FROM status_history WHERE application_id=? "
+            "ORDER BY id DESC LIMIT 1",
+            (app_id,),
+        ).fetchone()["reason"]
+    assert reason == "new approved version requires fresh rendering and ready validation"
     with pytest.raises(WorkflowError, match="not ready"):
         services.rendering.ready_report(app_id)
 
@@ -146,6 +155,13 @@ def test_new_revision_snapshot_or_analysis_stales_prior_ready(ready_application)
 
     services, app_id = ready_application("New Analysis")
     _reanalyze(services, app_id)
+    with connect(services.repository.path) as connection:
+        reason = connection.execute(
+            "SELECT reason FROM status_history WHERE application_id=? "
+            "ORDER BY id DESC LIMIT 1",
+            (app_id,),
+        ).fetchone()["reason"]
+    assert reason == "new analysis invalidated the prior ready version"
     with pytest.raises(WorkflowError, match="not ready"):
         services.rendering.ready_report(app_id)
 

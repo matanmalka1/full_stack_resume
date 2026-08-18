@@ -121,21 +121,34 @@ class SqliteApplicationRepository(SqliteRepositoryBase):
             )
         now = utc_now()
         with self.transaction() as connection:
-            row = connection.execute(
-                "SELECT current_status FROM applications WHERE id=?", (application_id,)
-            ).fetchone()
-            if row is None:
-                raise KeyError(application_id)
-            current = ApplicationStatus(row["current_status"])
-            if target_status is current:
-                return
-            if not transition_allowed(current, target_status):
-                raise ValueError(
-                    f"invalid status transition: {current.value} -> {target_status.value}"
-                )
-            self._set_status(
-                connection, application_id, current, target_status, now, reason
+            self._transition_status(
+                connection, application_id, target_status, reason, now
             )
+
+    def _transition_status(
+        self,
+        connection: Any,
+        application_id: str,
+        target_status: ApplicationStatus,
+        reason: str,
+        now: str,
+    ) -> None:
+        """Apply one domain-approved transition on the caller's transaction."""
+        row = connection.execute(
+            "SELECT current_status FROM applications WHERE id=?", (application_id,)
+        ).fetchone()
+        if row is None:
+            raise KeyError(application_id)
+        current = ApplicationStatus(row["current_status"])
+        if target_status is current:
+            return
+        if not transition_allowed(current, target_status):
+            raise ValueError(
+                f"invalid status transition: {current.value} -> {target_status.value}"
+            )
+        self._set_status(
+            connection, application_id, current, target_status, now, reason
+        )
 
     def record_event(
         self, application_id: str, event_type: str, payload: dict[str, Any]

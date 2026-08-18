@@ -10,6 +10,8 @@ from pathlib import Path
 import pytest
 
 from cv_engine.application.ports import ArtifactRegistry
+from cv_engine.domain.analysis.classification import classify_job
+from cv_engine.infrastructure.persistence.applications import SqliteApplicationRepository
 from cv_engine.infrastructure.persistence import (
     MigrationChecksumError,
     Repository,
@@ -285,3 +287,35 @@ def test_identity_serialization_registry_and_typed_artifact_ports() -> None:
             not in (parameter.VAR_POSITIONAL, parameter.VAR_KEYWORD)
             for parameter in parameters
         )
+
+
+def test_analysis_and_ready_demotion_commit_atomically(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = Repository(tmp_path / "atomic-analysis.sqlite3")
+    app_id, snapshot_id = repository.create_application(
+        company="Atomic", target_role="Developer", original_job_text="Python developer"
+    )
+    with repository.transaction() as connection:
+        connection.execute(
+            "UPDATE applications SET current_status='ready' WHERE id=?", (app_id,)
+        )
+
+    def fail_demotion(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("injected demotion failure")
+
+    monkeypatch.setattr(SqliteApplicationRepository, "_set_status", fail_demotion)
+    with pytest.raises(RuntimeError, match="injected demotion failure"):
+        repository.save_analysis(
+            app_id, snapshot_id, classify_job("Python backend developer role")
+        )
+
+    with connect(repository.path) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM job_analyses WHERE application_id=?", (app_id,)
+        ).fetchone()[0] == 0
+        application = connection.execute(
+            "SELECT current_status, language, track, profile, emphasis, fit_level "
+            "FROM applications WHERE id=?", (app_id,)
+        ).fetchone()
+    assert tuple(application) == ("ready", None, None, None, None, None)

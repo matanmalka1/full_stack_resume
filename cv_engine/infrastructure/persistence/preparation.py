@@ -238,19 +238,25 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
                     application_id,
                 ),
             )
-        current = ApplicationStatus(
-            self.applications.get_application(application_id)["current_status"]
-        )
-        if current is ApplicationStatus.SAVED:
-            self.applications.transition_status(
-                application_id, ApplicationStatus.PREPARING, "analysis created"
-            )
-        elif current is ApplicationStatus.READY:
-            self.applications.transition_status(
-                application_id,
-                ApplicationStatus.PREPARING,
-                "new analysis invalidated the prior ready version",
-            )
+            current_row = connection.execute(
+                "SELECT current_status FROM applications WHERE id=?", (application_id,)
+            ).fetchone()
+            if current_row is None:
+                raise KeyError(application_id)
+            current = ApplicationStatus(current_row["current_status"])
+            if current in (ApplicationStatus.SAVED, ApplicationStatus.READY):
+                reason = (
+                    "analysis created"
+                    if current is ApplicationStatus.SAVED
+                    else "new analysis invalidated the prior ready version"
+                )
+                self.applications._transition_status(
+                    connection,
+                    application_id,
+                    ApplicationStatus.PREPARING,
+                    reason,
+                    now,
+                )
         return analysis_id
 
     @staticmethod
