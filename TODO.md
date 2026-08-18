@@ -4,8 +4,8 @@ Execution rule: work serially. Complete and verify one item, then wait for expli
 approval before starting the next. These items do not silently expand product semantics
 or weaken an existing acceptance gate.
 
-- [ ] **TODO 1 — in progress:** add Ruff, define the lint contract, remove dead/copied
-      imports, and verify no behavioral change.
+- [x] **TODO 1 — completed (`ab63ef6`):** added Ruff, defined the lint/format contract,
+      removed dead/copied imports, and verified no behavioral change.
 - [ ] **TODO 2:** split the default fast non-browser pytest run from an explicit
       browser-complete gate.
 - [ ] **TODO 3:** evaluate pytest-xdist isolation and add it only after explicit
