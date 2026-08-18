@@ -107,6 +107,24 @@ workflow.
 - A warning may be reported and accepted only where the specification permits it. Hard
   failures block `ready_qualified`, `PreparationState=ready`, and completion.
 
+## Documentation boundaries
+
+One fact has one place. Do not restate the same status in several documents.
+
+- Current state — done, remaining, blocked — belongs only in the milestone tracker
+  (`docs/v2-m2-remaining.md` for M2).
+- Decisions and the reasoning behind them belong in that boundary's design brief.
+- Findings about the code as it was belong in `docs/v2-architecture-audit.md`, which is
+  historical and is not rewritten at each boundary. Which findings remain open is state,
+  so it lives in the tracker.
+- Proof that something ran belongs in the boundary's close-out section, its commit, and
+  the test output. It is not copied into the tracker or the audit.
+- Milestone stages and gates stay in `docs/v2-implementation-plan.md`.
+
+Prefer deriving a check from the code or schema over maintaining a list by hand. Where a
+guard needs a list, make it a small list of deliberate exceptions rather than a list of
+things to cover, so that forgetting to register something fails instead of passing.
+
 ## Change management
 
 - Keep changes scoped to the active implementation stage.

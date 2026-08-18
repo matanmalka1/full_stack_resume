@@ -3,45 +3,41 @@
 Status tracker. Updated as boundaries close. Authority for scope remains
 `docs/v2-implementation-plan.md` §4.1–§4.7; this file only tracks state.
 
+## Where things are written
+
+One fact, one place. This file is the only record of *state*.
+
+| Question | Answer lives in |
+| --- | --- |
+| What is done, what remains, what is blocked | **this file** |
+| What was decided and why | that boundary's design brief |
+| What was found in the code, historically | `docs/v2-architecture-audit.md`, frozen — not updated per boundary |
+| Proof that something ran | the boundary's close-out section, the commit, the test run |
+| Stages and gates per milestone | `docs/v2-implementation-plan.md`, stable |
+
+Evidence is not copied here. A closed item names its commit and, where one exists, its
+close-out section; the numbers live there.
+
 Closed: **§4.1 schema and repositories** (boundary 1, `4796744`, record in
 `docs/v2-m2-schema-and-repositories.md`).
 
-## A. 2a close-out — lead work, no executor
+## A. 2a — preparation records
 
-Implementation merged at `a9cc63a`. Verification and the two repairs below are lead work.
+**Closed.** Implementation merged at `a9cc63a`; close-out record in
+`docs/v2-m2-domain-records.md` §9, which holds the gates and their numbers.
 
-- [x] `cv_engine/domain/drafts.py` read. `build_draft` now accepts a frozen selection and
-      re-derives section assignment from the Profile rather than recomputing the selection.
-- [x] Semantic test changes reviewed across 12 files. The manual-Markdown tests document the
-      intended D5 split: `validate` reports on the stored draft, `sync-draft` imports the file.
-- [x] **Projection-divergence rule decided and implemented** (`21906be`). Approval refuses while
-      the projection disagrees with the stored draft; `validate` does not, because its report on
-      the stored draft is true. Approval was destroying unimported manual edits silently.
-- [x] **Stale plan context now refused** (`21906be`). Drafting from a SelectionPlan that froze a
-      different Profile version is refused instead of silently re-deriving the sectioning.
-- [x] Persisted-plan parity guarded (`95942b8`). The plan path and the computed path produce
-      identical Markdown, fact IDs, and per-section claim order across all four golden cases —
-      previously the parity evidence covered a path production no longer takes.
-- [x] One active WorkingDraft asserted at the storage level (`fdb3515`), through raw SQL rather
-      than through a repository method.
-- [x] `edit_version` conflict refusal verified: a stale write raises `edit version mismatch` and
-      leaves the record unchanged.
-- [x] `0002` then `0003` verified from a `0001`-only database. The upgraded `job_snapshots` shape
-      is identical to a fresh head database.
-- [x] Snapshot payload writer verified: payloads at the §6.2 path, SHA-256 matching `source_hash`,
-      normalized hash present, payload written before registration.
-- [x] Offline CLI on a Workspace created from scratch: ingest → analyze → draft → validate →
-      approve → render → ready → reconcile, plus `cv fast`. Both PDFs one page, recruiter
-      filename correct, `OPENAI_API_KEY` unset. This also proves the recreation path that the
-      disposability decision (D4) depends on.
-- [x] Full gate: **164 passed** with `CV_REQUIRE_BROWSER=1`, golden hashes unmoved, allowlist
-      still one entry.
-- [ ] Write the 2a closure record in `docs/v2-m2-domain-records.md` and remove the lane worktree.
-- [ ] Carry forward: `cv fact attach` requires a re-analysis to obtain a plan that can select the
-      new fact; `confirm_and_use_fact` (§4.5) is the proper command.
-- [ ] Carry forward: `selection_plans.selection_policy_version` freezes the manifest's own policy
-      version while the store reports a content hash, so the column cannot be compared to current
-      state. §4.3 needs one comparable value before `POLICY_CHANGED` can use it.
+Two repairs the verification required, both fail-closed, both at `21906be`: approval refuses
+while the Markdown projection holds unimported edits, and drafting refuses a SelectionPlan frozen
+under a different Profile version. Parity for the persisted-plan path guarded at `95942b8`; one
+active working draft asserted at storage level at `fdb3515`.
+
+Carried forward:
+
+- [ ] `cv fact attach` requires a re-analysis before a plan can select the new fact.
+      `confirm_and_use_fact` (§4.5) is the proper command.
+- [ ] `selection_plans.selection_policy_version` freezes the manifest's own policy version while
+      the store reports a content hash, so the column cannot be compared against current state.
+      §4.3 needs one comparable value before `POLICY_CHANGED` can rely on it.
 
 ## B. 2b — remainder of §4.2
 
@@ -114,9 +110,18 @@ Stage 7b landed in 2a and does not recur.
 - [ ] Backup restores to an independently openable and reconcilable Workspace.
 - [ ] No M2 code points to live v1 paths.
 
-## H. Carried debt and housekeeping
+## H. Open audit findings and housekeeping
 
-- [ ] **A3** — default emphasis resolved from the Profile store instead of the hardcoded map.
+The register of what was found is `docs/v2-architecture-audit.md`. What is still *open* is here.
+
+- [ ] **A3** — default emphasis resolved from the Profile store instead of the hardcoded map (§4.2/§4.3).
+- [ ] **A6** — confirm/promote mapping and the `--confirm` refusal leave `cli.py` (§4.5).
+- [ ] **A24** — the `subprocess` pytest call; the only architecture-debt allowlist entry (§4.6).
+- [ ] **A28** — `--knowledge-from` bound to an inventory (§4.6).
+- [x] Guard sets derived instead of listed (`d37cc13`). Immutability, chain-integrity counts, and
+      candidate literals now discover their subject and carry small exception lists, so no list
+      grows with a new table or module. Found and fixed a real omission: `artifacts` had no
+      immutability triggers since M1, added in migration `0004`.
 - [ ] Delete the boundary 1 lane branches `m2-boundary1-persistence` and `m2-boundary1-payloads`.
 
 ## Dependency order
