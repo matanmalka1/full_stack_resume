@@ -6,7 +6,11 @@ from pathlib import Path
 import pytest
 
 from cv_engine.application.commands import IngestCommand, NextActionCommand
-from cv_engine.infrastructure.persistence import connect
+from cv_engine.infrastructure.persistence import connect, current_schema_version
+from cv_engine.infrastructure.persistence.schema import (
+    MIGRATIONS_DIR,
+    registered_migration_names,
+)
 from cv_engine.domain.models import ApplicationStatus, ValidationReport
 
 
@@ -67,12 +71,23 @@ def test_next_action_is_not_a_status(application_repo) -> None:
     assert row["next_action"] == "Follow up"
 
 
-def test_m1_sqlite_master_fingerprint_is_frozen(application_repo) -> None:
+def test_m1_sqlite_master_fingerprint_is_frozen(tmp_path: Path) -> None:
+    baseline_path = tmp_path / "m1-baseline.sqlite3"
+    with connect(baseline_path) as connection:
+        connection.executescript(
+            (MIGRATIONS_DIR / "0001_baseline.sql").read_text(encoding="utf-8")
+        )
     expected = [
         tuple(line.split("\t", 3))
         for line in SCHEMA_FIXTURE.read_text(encoding="utf-8").splitlines()
     ]
-    assert _sqlite_master_fingerprint(application_repo.path) == expected
+    assert _sqlite_master_fingerprint(baseline_path) == expected
+
+
+def test_database_is_at_registered_head_schema(application_repo) -> None:
+    # The frozen fingerprint proves 0001 parity; head is allowed to evolve independently.
+    registered_head = registered_migration_names()[-1].split("_", 1)[0]
+    assert current_schema_version(application_repo.path) == registered_head
 
 
 def test_ready_submission_and_artifact_registry_preconditions(application_repo) -> None:
