@@ -12,8 +12,8 @@ or weaken an existing acceptance gate.
       in-process `cli.main(...)` calls while retaining the real process-boundary coverage.
 - [x] **TODO 5 — completed (`fd12c20`):** split `cli.main()` into a stage-aware
       command-handler registry; CLI signatures, output, and errors unchanged.
-- [ ] **TODO 6:** extract `validate_draft` into an ordered registry of focused validation
-      rules without changing validation behavior.
+- [x] **TODO 6 — completed (`9e82131`):** extracted `validate_draft` into ordered
+      document and per-claim rule registries without changing validation behavior.
 - [ ] **TODO 7:** remove the transitional composite repository while preserving the
       approved repository boundaries and UnitOfWork behavior.
 - [ ] **TODO 8:** retire `persistence/primitives.py` without duplicating UUID policy.
