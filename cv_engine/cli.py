@@ -19,11 +19,6 @@ from .application.commands import (
 )
 from .application.errors import WorkflowError
 from .application.queries import ApplicationListView
-from .compat import (
-    resolve_job_analysis_id,
-    resolve_job_snapshot_id,
-    resolve_selection_plan_id,
-)
 from .domain.facts import FACT_SOURCE_NAMES
 from .domain.models import ApplicationStatus, FactStatus
 from .infrastructure.legacy_source import LegacySourceError, LegacyV1Source
@@ -56,6 +51,26 @@ def _job_text(args: argparse.Namespace) -> str:
     if getattr(args, "job_text", None):
         return args.job_text
     raise ValueError("one of --job-file or --job-text is required")
+
+
+def _latest_job_snapshot_id(repository: Any, application_id: str) -> str:
+    """The snapshot a legacy CLI signature meant when it named none.
+
+    v2 commands take explicit source IDs. The v1 CLI signatures do not carry
+    one, so the resolution happens here, at the CLI boundary, where `latest`
+    is a query convenience rather than part of what a command means.
+    """
+    return repository.latest_snapshot(application_id)["id"]
+
+
+def _latest_job_analysis_id(repository: Any, application_id: str) -> str:
+    """The analysis a legacy CLI signature meant when it named none."""
+    return repository.latest_analysis(application_id)[0]
+
+
+def _latest_selection_plan_id(repository: Any, application_id: str) -> str:
+    """The immutable plan a legacy CLI signature meant when it named none."""
+    return repository.latest_selection_plan(application_id).id
 
 
 def _fast(
@@ -225,7 +240,7 @@ def build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--provider", choices=["deterministic", "openai"], default="deterministic")
     analyze.add_argument("--model", default="gpt-5.6")
     # v2 commands take an explicit source ID. The legacy signature omits it,
-    # so the compatibility resolver fills it in when the flag is absent.
+    # so the CLI-boundary resolver fills it in when the flag is absent.
     analyze.add_argument("--job-snapshot", dest="job_snapshot", default=None)
 
     draft = sub.add_parser("draft", help="create or update the active working draft")
@@ -620,7 +635,7 @@ def main(argv: list[str] | None = None) -> int:
                     application_id=args.application_id,
                     job_snapshot_id=(
                         args.job_snapshot
-                        or resolve_job_snapshot_id(repository, args.application_id)
+                        or _latest_job_snapshot_id(repository, args.application_id)
                     ),
                     track_override=args.track,
                     profile_override=args.profile,
@@ -644,11 +659,11 @@ def main(argv: list[str] | None = None) -> int:
                     application_id=args.application_id,
                     job_analysis_id=(
                         args.job_analysis
-                        or resolve_job_analysis_id(repository, args.application_id)
+                        or _latest_job_analysis_id(repository, args.application_id)
                     ),
                     selection_plan_id=(
                         args.selection_plan
-                        or resolve_selection_plan_id(repository, args.application_id)
+                        or _latest_selection_plan_id(repository, args.application_id)
                     ),
                 )
             )

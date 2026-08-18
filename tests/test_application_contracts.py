@@ -50,7 +50,7 @@ from cv_engine.application.queries import (
     JobSnapshotView,
 )
 from cv_engine.application.services.rendering import RenderingService
-from cv_engine.compat import resolve_job_analysis_id, resolve_job_snapshot_id
+from cv_engine.cli import _latest_job_analysis_id, _latest_job_snapshot_id
 from cv_engine.infrastructure.persistence import Repository
 from cv_engine.util import sha256_file, sha256_text
 
@@ -366,7 +366,7 @@ def test_unit_of_work_commits_success_and_rolls_back_failure(tmp_path: Path) -> 
 # --- commands take explicit sources; `latest` lives outside them --------------
 
 
-def test_commands_require_owned_explicit_sources_and_compat_resolves_latest(services) -> None:
+def test_commands_require_owned_explicit_sources_and_cli_resolves_latest(services) -> None:
     mine = services.applications.ingest(
         IngestCommand(
             company="Mine Co", target_role="Account Manager", job_text=ACCOUNT_MANAGER_JOB
@@ -407,7 +407,7 @@ def test_commands_require_owned_explicit_sources_and_compat_resolves_latest(serv
     )
 
     assert (
-        resolve_job_snapshot_id(services.repository, ingested.application_id)
+        _latest_job_snapshot_id(services.repository, ingested.application_id)
         == ingested.job_snapshot_id
     )
 
@@ -418,7 +418,7 @@ def test_commands_require_owned_explicit_sources_and_compat_resolves_latest(serv
         )
     )
     assert (
-        resolve_job_analysis_id(services.repository, ingested.application_id)
+        _latest_job_analysis_id(services.repository, ingested.application_id)
         == analysed.analysis_id
     )
     from cv_engine.application.services.drafts import DraftService
