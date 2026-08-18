@@ -17,18 +17,15 @@ from cv_engine.infrastructure.rendering import normalized_role_filename
 
 ENGINE_DIR = Path(__file__).resolve().parent.parent / "cv_engine"
 
-# The migration baseline and the legacy artifact inventory legitimately quote
-# v1 evidence. Everything that decides what a rendered CV says must not.
-POLICY_MODULES = (
-    "domain/drafts.py",
-    "domain/validation.py",
-    "domain/selection.py",
-    "domain/presentations.py",
-    "domain/candidate.py",
-    "domain/profiles.py",
-    "domain/facts.py",
-    "application/ready.py",
-    "infrastructure/rendering.py",
+# Every module is policy unless it is one of these two, which quote v1 evidence
+# on purpose: the canonical source writer and the legacy migration mapping. An
+# inclusion list had to be extended for each new module and silently stopped
+# covering anything nobody remembered to add.
+CANDIDATE_EVIDENCE_MODULES = frozenset(
+    {
+        "infrastructure/canonical_data.py",
+        "infrastructure/migration.py",
+    }
 )
 CANDIDATE_LITERALS = ("Matan Malka", "מתן מלכה", "matanmalka1", "matan1391")
 
@@ -124,20 +121,25 @@ def test_candidate_context_rejects_missing_or_unusable_identity(
 # --- no candidate literals in policy code -----------------------------------
 
 
-def test_policy_modules_contain_no_candidate_literal() -> None:
-    service_path = ENGINE_DIR / "application/services.py"
-    service_modules = (
-        [service_path]
-        if service_path.is_file()
-        else sorted((ENGINE_DIR / "application/services").rglob("*.py"))
-    )
-    policy_paths = [*(ENGINE_DIR / module for module in POLICY_MODULES), *service_modules]
+def test_no_module_carries_a_candidate_literal_except_declared_evidence() -> None:
+    """The candidate lives in Knowledge, not in code.
+
+    Scanned across the whole engine rather than a listed subset, because the
+    listed-subset form could only protect modules someone remembered to add — and
+    a renderer, record, or projection added later is exactly where a literal would
+    reappear.
+    """
     offenders = {
-        path.relative_to(ENGINE_DIR).as_posix(): [
-            literal for literal in CANDIDATE_LITERALS if literal in source
-        ]
-        for path in policy_paths
-        if (source := path.read_text(encoding="utf-8"))
-        and any(literal in source for literal in CANDIDATE_LITERALS)
+        relative: [literal for literal in CANDIDATE_LITERALS if literal in source]
+        for path in sorted(ENGINE_DIR.rglob("*.py"))
+        if (relative := path.relative_to(ENGINE_DIR).as_posix())
+        not in CANDIDATE_EVIDENCE_MODULES
+        and any(literal in (source := path.read_text(encoding="utf-8")) for literal in CANDIDATE_LITERALS)
     }
     assert not offenders, offenders
+    # The exemptions must stay real, or the rule has quietly become decoration.
+    for relative in sorted(CANDIDATE_EVIDENCE_MODULES):
+        source = (ENGINE_DIR / relative).read_text(encoding="utf-8")
+        assert any(literal in source for literal in CANDIDATE_LITERALS), (
+            f"{relative} is exempt but carries no candidate literal; drop the exemption"
+        )

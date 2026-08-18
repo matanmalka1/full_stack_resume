@@ -26,17 +26,6 @@ from cv_engine.util import normalized_text, sha256_text
 from helpers import ACCOUNT_MANAGER_JOB
 
 
-PERSISTED_TABLES = (
-    "job_snapshots",
-    "job_analyses",
-    "selection_plans",
-    "working_drafts",
-    "status_history",
-    "application_events",
-    "decision_records",
-    "generation_runs",
-    "validation_runs",
-)
 
 
 def _rows(services: Services, sql: str, *params) -> list[dict]:
@@ -44,14 +33,26 @@ def _rows(services: Services, sql: str, *params) -> list[dict]:
         return [dict(row) for row in connection.execute(sql, params).fetchall()]
 
 
-def _persisted(services: Services, application_id: str) -> dict[str, int]:
-    """Everything this application could have written, counted in one place."""
-    counts = {
-        table: len(_rows(services, f"SELECT 1 FROM {table} WHERE application_id=?", application_id))
-        for table in PERSISTED_TABLES
-    }
-    counts["artifact_versions"] = len(services.repository.artifact_versions(application_id))
-    return counts
+def _persisted(services: Services) -> dict[str, int]:
+    """Row counts for every product table, discovered rather than listed.
+
+    A rejected command must leave nothing behind anywhere, so this counts the whole
+    database instead of a remembered set of tables filtered by application_id. That
+    covers indirect records with no application_id column of their own — artifact
+    versions, selection plans, working drafts — and, more importantly, covers the
+    next table automatically: a list would have gone on passing while a new table
+    quietly gained a row.
+    """
+    with connect(services.repository.path) as connection:
+        tables = sorted(
+            row[0]
+            for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            if not row[0].startswith("sqlite_")
+        )
+        return {
+            table: connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            for table in tables
+        }
 
 
 def _analyze(services: Services, application_id: str, **overrides):
@@ -92,13 +93,13 @@ def test_new_snapshot_requires_a_new_analysis_before_drafting(
         sha256_text(normalized_text(new_text)),
         snapshot_id=new_snapshot_id,
     )
-    before = _persisted(services, app_id)
+    before = _persisted(services)
 
     with pytest.raises(WorkflowError, match="snapshot"):
         _draft(services, app_id, stale_analysis_id)
 
     assert not (v1_repo / "artifacts/working" / app_id).exists()
-    assert _persisted(services, app_id) == before
+    assert _persisted(services) == before
 
     # Analyzing the new snapshot unblocks drafting, and the draft binds both ends
     # of the chain exactly rather than inheriting a "latest" of either kind.
@@ -124,13 +125,13 @@ def test_newer_material_analysis_invalidates_the_working_draft(
     newer = _analyze(services, app_id, emphasis="balanced-sales")
     assert newer.analysis.emphasis.value == "balanced-sales"
     assert newer.analysis_id != drafted_analysis_id
-    before = _persisted(services, app_id)
+    before = _persisted(services)
 
     with pytest.raises(WorkflowError, match="analysis"):
         services.drafts.approve(app_id)
 
     assert not (v1_repo / "artifacts" / app_id).exists()
-    assert _persisted(services, app_id) == before
+    assert _persisted(services) == before
 
     # Re-drafting under the newer analysis is the way forward, and the decision
     # record then binds that analysis.
@@ -168,8 +169,8 @@ def test_foreign_working_projection_cannot_replace_the_sqlite_source(v1_repo: Pa
     working = v1_repo / "artifacts/working"
     for name in ("resume.md", "resume.claims.json"):
         shutil.copy2(working / other.application_id / name, working / target.application_id / name)
-    before_target = _persisted(services, target.application_id)
-    before_other = _persisted(services, other.application_id)
+    before_target = _persisted(services)
+    before_other = _persisted(services)
 
     # SQLite is authoritative, so the foreign projection cannot become the
     # approved content. It does not silently lose either: approval refuses while
@@ -178,8 +179,8 @@ def test_foreign_working_projection_cannot_replace_the_sqlite_source(v1_repo: Pa
     with pytest.raises(StateConflict, match="differs from the stored draft"):
         services.drafts.approve(target.application_id)
 
-    assert _persisted(services, target.application_id) == before_target
-    assert _persisted(services, other.application_id) == before_other
+    assert _persisted(services) == before_target
+    assert _persisted(services) == before_other
     # Regenerating rewrites the projection from SQLite, and approval proceeds.
     services.drafts.draft(DraftCommand(
         application_id=target.application_id,
@@ -204,7 +205,7 @@ def test_decision_and_artifact_records_cannot_cross_applications(drafted_applica
     stranger_analysis_id, _ = services.repository.latest_analysis(stranger.application_id)
     owner_snapshot_id = services.repository.latest_snapshot(owner.application_id)["id"]
     owner_analysis_id, _ = services.repository.latest_analysis(owner.application_id)
-    before = _persisted(services, stranger.application_id)
+    before = _persisted(services)
 
     # A foreign artifact version, a foreign snapshot, and a foreign analysis are
     # each rejected on their own.
@@ -230,7 +231,7 @@ def test_decision_and_artifact_records_cannot_cross_applications(drafted_applica
             job_snapshot_id=stranger_snapshot_id,
         )
 
-    assert _persisted(services, stranger.application_id) == before
+    assert _persisted(services) == before
     assert [row["application_id"] for row in _rows(services, "SELECT * FROM decision_records")] == [
         owner.application_id
     ]
@@ -252,11 +253,11 @@ def test_invalid_classifications_are_rejected_before_any_persistence(services: S
         ))
         app_id = ingested.application_id
         before_application = services.repository.get_application(app_id)
-        before = _persisted(services, app_id)
+        before = _persisted(services)
         with pytest.raises(WorkflowError, match=match):
             _analyze(services, app_id, **overrides)
         assert services.repository.get_application(app_id) == before_application
-        assert _persisted(services, app_id) == before
+        assert _persisted(services) == before
         with pytest.raises(KeyError):
             services.repository.latest_analysis(app_id)
 

@@ -13,6 +13,7 @@ REGISTERED_MIGRATIONS = (
     "0001_baseline.sql",
     "0002_preparation_records.sql",
     "0003_snapshot_payload_cutover.sql",
+    "0004_artifact_identity_immutability.sql",
 )
 SCHEMA_VERSION = "2"
 

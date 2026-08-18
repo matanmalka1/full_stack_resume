@@ -33,26 +33,32 @@ from cv_engine.infrastructure.persistence.schema import (
     MIGRATIONS_DIR,
     baseline_fingerprint,
     initialize,
+    registered_migration_names,
     sqlite_master_fingerprint,
 )
 from cv_engine.infrastructure.persistence.serialization import serialization_version
 from cv_engine.util import normalized_text, sha256_text
 
 
-IMMUTABLE_TABLES = (
-    "fact_events",
-    "job_snapshots",
-    "job_analyses",
-    "selection_plans",
-    "status_history",
-    "application_events",
-    "artifact_versions",
-    "decision_records",
-    "generation_runs",
-    "validation_runs",
-    "migration_runs",
-    "submissions",
+# Immutability is the default, so nothing has to be registered when an immutable
+# table is added. A table is exempt only by being named here, which means that
+# forgetting a trigger pair fails this module instead of passing silently — the
+# defect an inclusion list cannot detect, because a table nobody remembered to
+# list looks exactly like a table that does not exist.
+MUTABLE_TABLES = frozenset(
+    {
+        "applications",      # the current recruitment projection and tracking fields
+        "working_drafts",    # the one mutable resume document (product invariant 3)
+        "schema_meta",       # bookkeeping
+        "schema_migrations", # bookkeeping
+        "sqlite_sequence",   # SQLite's own AUTOINCREMENT bookkeeping
+    }
 )
+
+IMMUTABLE_ABORT = "RAISE(ABORT, 'immutable record')"
+
+# Derived, never written down: a new migration must not require editing a test.
+HEAD_VERSION = registered_migration_names()[-1].split("_", 1)[0]
 
 
 def _create_application(repository, *, company: str, target_role: str, text: str):
@@ -95,7 +101,7 @@ def test_numbered_migration_application_reapplication_and_version_gates(
 ) -> None:
     path = tmp_path / "state.sqlite3"
     repository = Repository(path)
-    assert current_schema_version(path) == "0003"
+    assert current_schema_version(path) == HEAD_VERSION
     with connect(path) as connection:
         assert connection.execute(
             "SELECT value FROM schema_meta WHERE key='schema_version'"
@@ -122,7 +128,7 @@ def test_numbered_migration_application_reapplication_and_version_gates(
     with pytest.raises(SchemaVersionError, match="cv workspace upgrade"):
         Repository(path)
     assert current_schema_version(path) == "0001"
-    assert apply_migrations(path) == "0003"
+    assert apply_migrations(path) == HEAD_VERSION
 
     with connect(path) as connection:
         connection.execute(
@@ -137,7 +143,7 @@ def test_numbered_migration_application_reapplication_and_version_gates(
     empty = tmp_path / "empty.sqlite3"
     empty.touch()
     Repository(empty)
-    assert current_schema_version(empty) == "0003"
+    assert current_schema_version(empty) == HEAD_VERSION
 
 
 def test_verified_baseline_adoption_and_difference_reporting(tmp_path: Path) -> None:
@@ -170,7 +176,7 @@ def test_verified_baseline_adoption_and_difference_reporting(tmp_path: Path) -> 
     assert additive_columns["source_hash"] == 0
     assert additive_columns["normalized_hash"] == 0
 
-    assert apply_migrations(adoptable) == "0003"
+    assert apply_migrations(adoptable) == HEAD_VERSION
     with connect(adoptable) as connection:
         columns = {
             row["name"]: row["notnull"]
@@ -259,93 +265,74 @@ def test_two_writers_honor_busy_wait_and_commit_serially(tmp_path: Path) -> None
     assert repository.list_applications()[0]["notes"] == "second"
 
 
-def _seed_immutable_tables(repository: Repository) -> None:
-    with repository.transaction() as connection:
-        connection.execute(
-            "INSERT INTO applications(id, company, target_role, current_status, created_at, updated_at) "
-            "VALUES('app', 'Co', 'Role', 'saved', '2026', '2026')"
-        )
-        connection.execute(
-            "INSERT INTO job_snapshots(id, application_id, version_number, payload_path, "
-            "source_hash, normalized_hash, captured_at, source_metadata_json, content_hash) "
-            "VALUES('snapshot', 'app', 1, 'artifacts/snapshots/app/snapshot.txt', "
-            "'hash', 'normalized', '2026', '{}', 'hash')"
-        )
-        connection.execute(
-            "INSERT INTO job_analyses(id, application_id, job_snapshot_id, version_number, "
-            "structured_json, provider, model, created_at) "
-            "VALUES('analysis', 'app', 'snapshot', 1, '{}', 'deterministic', 'rules-v1', '2026')"
-        )
-        connection.execute(
-            "INSERT INTO selection_plans(id, application_id, job_analysis_id, version_number, "
-            "plan_json, candidate_context_version, candidate_context_hash, profile_version, "
-            "selection_policy_version, track_emphasis_dependencies_json, created_at) "
-            "VALUES('plan', 'app', 'analysis', 1, '{}', 'candidate-v1', 'candidate-hash', "
-            "'profile-v1', 'selection-v1', '{}', '2026')"
-        )
-        connection.execute(
-            "INSERT INTO status_history(application_id, from_status, to_status, changed_at) "
-            "VALUES('app', NULL, 'saved', '2026')"
-        )
-        connection.execute(
-            "INSERT INTO application_events(id, application_id, event_type, payload_json, created_at) "
-            "VALUES('event', 'app', 'created', '{}', '2026')"
-        )
-        connection.execute(
-            "INSERT INTO artifacts(id, application_id, artifact_type, logical_name, created_at) "
-            "VALUES('artifact', 'app', 'resume_pdf', 'resume', '2026')"
-        )
-        connection.execute(
-            "INSERT INTO artifact_versions(id, artifact_id, version_number, lifecycle_status, "
-            "path, content_hash, created_at) "
-            "VALUES('version', 'artifact', 1, 'rendered', 'output.pdf', 'hash', '2026')"
-        )
-        connection.execute(
-            "INSERT INTO decision_records(id, application_id, artifact_version_id, job_snapshot_id, "
-            "job_analysis_id, structured_json, summary, created_at) "
-            "VALUES('decision', 'app', 'version', 'snapshot', 'analysis', '{}', 'summary', '2026')"
-        )
-        connection.execute(
-            "INSERT INTO generation_runs(id, application_id, created_at, engine_version, profile_version, "
-            "rendering_rules_version, facts_version, ai_provider, ai_model, task_contract_version, "
-            "prompt_version, job_analysis_version, instruction_overrides_json, status) "
-            "VALUES('generation', 'app', '2026', '1', '1', '1', '1', 'none', 'none', '1', '1', '1', '{}', 'completed')"
-        )
-        connection.execute(
-            "INSERT INTO validation_runs(id, application_id, artifact_version_id, phase, report_json, created_at) "
-            "VALUES('validation', 'app', 'version', 'post-render', '{}', '2026')"
-        )
-        connection.execute(
-            "INSERT INTO migration_runs(id, snapshot_id, manifest_hash, dry_run_report_hash, row_count, "
-            "artifact_count, report_json, created_at) "
-            "VALUES('migration', 'backup', 'hash', 'hash', 1, 1, '{}', '2026')"
-        )
-        connection.execute(
-            "INSERT INTO submissions(id, application_id, artifact_version_id, submitted_at) "
-            "VALUES('submission', 'app', 'version', '2026')"
-        )
-        connection.execute(
-            "INSERT INTO fact_events(id, fact_id, source_file, event_type, to_status, fact_json, "
-            "fact_hash, facts_version, lifecycle_version, created_at) "
-            "VALUES('fact-event', 'fact', 'base/common.md', 'fact_created', 'pending', '{}', 'hash', '1', '1', '2026')"
-        )
+def test_every_product_table_is_immutable_unless_explicitly_exempt(tmp_path: Path) -> None:
+    """Completeness, not a roll-call.
+
+    The previous version listed the immutable tables by hand, so a new immutable
+    table was protected only if someone remembered to add it — and a forgotten
+    trigger pair was indistinguishable from a table that did not exist. Here the
+    tables are discovered and immutability is assumed, so the only way to be
+    exempt is to say so in MUTABLE_TABLES.
+    """
+    repository = Repository(tmp_path / "immutability.sqlite3")
+    with connect(repository.path) as connection:
+        tables = {
+            row[0]
+            for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        triggers = {
+            row[0]: " ".join((row[1] or "").split())
+            for row in connection.execute(
+                "SELECT name, sql FROM sqlite_master WHERE type='trigger'"
+            )
+        }
+
+    problems: list[str] = []
+    for table in sorted(tables - MUTABLE_TABLES):
+        for verb in ("update", "delete"):
+            name = f"no_{verb}_{table}"
+            if name not in triggers:
+                problems.append(f"{table} is not exempt but has no {name} trigger")
+            elif IMMUTABLE_ABORT not in triggers[name]:
+                problems.append(f"{name} does not raise the immutable-record abort")
+
+    for name in sorted(triggers):
+        for verb, partner_verb in (("update", "delete"), ("delete", "update")):
+            prefix = f"no_{verb}_"
+            if not name.startswith(prefix):
+                continue
+            table = name[len(prefix) :]
+            if f"no_{partner_verb}_{table}" not in triggers:
+                problems.append(f"{name} has no counterpart no_{partner_verb}_{table}")
+            if table in MUTABLE_TABLES:
+                problems.append(f"{name} guards {table}, which is declared mutable")
+
+    assert not problems, problems
+    # A guard that cannot be observed failing is not evidence.
+    assert tables - MUTABLE_TABLES
 
 
-@pytest.mark.parametrize("operation", ["update", "delete"])
-def test_all_immutable_tables_reject_sql_bypass(
-    tmp_path: Path, operation: str
-) -> None:
-    repository = Repository(tmp_path / f"{operation}.sqlite3")
-    _seed_immutable_tables(repository)
-    for table in IMMUTABLE_TABLES:
-        statement = (
-            f"UPDATE {table} SET rowid=rowid"
-            if operation == "update"
-            else f"DELETE FROM {table}"
-        )
-        with pytest.raises(sqlite3.IntegrityError, match="immutable record"):
-            with repository.transaction() as connection:
-                connection.execute(statement)
+def test_immutability_triggers_refuse_real_repository_writes(tmp_path: Path) -> None:
+    """Behavioural evidence over records the repository actually wrote.
+
+    The structural test above proves every immutable table is guarded; this proves
+    the guards bite, using rows created through the repository rather than a
+    hand-maintained seeder that duplicated the schema's NOT NULLs and foreign keys.
+    """
+    repository = Repository(tmp_path / "refusals.sqlite3")
+    repository.create_application(
+        company="Immutable Co",
+        target_role="Account Manager",
+        payload_path="artifacts/snapshots/app/snapshot.txt",
+        source_hash="s" * 64,
+        normalized_hash="n" * 64,
+    )
+
+    for table in ("job_snapshots", "status_history"):
+        for statement in (f"UPDATE {table} SET rowid=rowid", f"DELETE FROM {table}"):
+            with pytest.raises(sqlite3.IntegrityError, match="immutable record"):
+                with repository.transaction() as connection:
+                    connection.execute(statement)
 
 
 def test_identity_serialization_registry_and_typed_artifact_ports() -> None:
