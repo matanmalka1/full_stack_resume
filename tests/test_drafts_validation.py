@@ -2,10 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cv_engine.domain.drafts import (
-    register_linked_claim,
-    serialize_markdown,
-)
+from cv_engine.domain.draft_markdown import serialize_markdown
+from cv_engine.domain.drafts import register_linked_claim
 from cv_engine.domain.models import ClaimLine
 from cv_engine.util import sha256_text
 from cv_engine.domain.validation import validate_draft
