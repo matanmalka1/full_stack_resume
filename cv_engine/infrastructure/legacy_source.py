@@ -6,6 +6,7 @@ from pathlib import Path
 
 from ..runtime.workspace import MARKER_NAME
 from ..util import canonical_json, sha256_bytes, sha256_text, utc_now
+from .paths import resolve_within
 
 
 SKIP_DIRECTORIES = frozenset({".git", ".venv", "__pycache__", "node_modules", ".pytest_cache"})
@@ -84,9 +85,10 @@ class LegacyV1Source:
 
     def _resolve(self, relative: str | Path) -> Path:
         candidate = Path(self._relative_key(relative))
-        resolved = (self.root / candidate).resolve()
-        if resolved != self.root and self.root not in resolved.parents:
-            raise LegacySourceError(f"path escapes the legacy source: {relative}")
+        try:
+            resolved = resolve_within(self.root, candidate)
+        except ValueError as exc:
+            raise LegacySourceError(f"path escapes the legacy source: {relative}") from exc
         if not resolved.is_file():
             raise LegacySourceError(f"no such file in the legacy source: {relative}")
         return resolved

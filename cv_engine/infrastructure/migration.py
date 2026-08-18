@@ -17,6 +17,7 @@ from .canonical_data import write_canonical_sources
 from .db import Repository, connect
 from ..domain.facts import FactStoreError
 from .knowledge import read_fact_source
+from .paths import resolve_within
 from ..util import canonical_json, sha256_file, sha256_text, utc_now
 
 
@@ -242,11 +243,11 @@ def create_snapshot(root: Path) -> Path:
 
 
 def _safe_extract(tar: tarfile.TarFile, target: Path) -> None:
-    target_resolved = target.resolve()
     for member in tar.getmembers():
-        member_path = (target / member.name).resolve()
-        if member_path != target_resolved and target_resolved not in member_path.parents:
-            raise MigrationSafetyError(f"unsafe archive member: {member.name}")
+        try:
+            resolve_within(target, member.name)
+        except ValueError as exc:
+            raise MigrationSafetyError(f"unsafe archive member: {member.name}") from exc
         if member.issym() and (Path(member.linkname).is_absolute() or ".." in Path(member.linkname).parts):
             raise MigrationSafetyError(f"unsafe archive symlink: {member.name}")
     tar.extractall(target, filter="data")

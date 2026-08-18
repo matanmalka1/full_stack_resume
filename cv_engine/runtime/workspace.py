@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 from ..domain.models import StrictModel
+from ..infrastructure.paths import relative_within, resolve_within
 from ..util import utc_now
 
 
@@ -67,15 +68,18 @@ class Workspace:
     """
 
     def __init__(self, root: Path, marker: WorkspaceMarker):
-        self.root = root.resolve()
+        self.root = resolve_within(root, root)
         self.marker = marker
         resolved = default_roots(self.root)
         for name, value in marker.roots.items():
             if name not in ROOT_NAMES:
                 raise WorkspaceError(f"unknown Workspace root: {name}")
-            candidate = (self.root / value).resolve()
-            if candidate != self.root and self.root not in candidate.parents:
-                raise WorkspaceError(f"Workspace root {name} escapes the Workspace: {value}")
+            try:
+                candidate = resolve_within(self.root, value)
+            except ValueError as exc:
+                raise WorkspaceError(
+                    f"Workspace root {name} escapes the Workspace: {value}"
+                ) from exc
             resolved[name] = candidate
         self.knowledge_root = resolved["knowledge_root"]
         self.state_root = resolved["state_root"]
@@ -106,9 +110,8 @@ class Workspace:
         backed up, restored, or copied to another directory without rewriting
         SQLite, and so no absolute local path becomes part of the record.
         """
-        resolved = Path(path).resolve()
         try:
-            return resolved.relative_to(self.root).as_posix()
+            return relative_within(self.root, path).as_posix()
         except ValueError as exc:
             raise WorkspaceError(f"path is outside the Workspace: {path}") from exc
 
