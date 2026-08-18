@@ -8,12 +8,10 @@ or weaken an existing acceptance gate.
       removed dead/copied imports, and verified no behavioral change.
 - [x] **TODO 2:** split the default fast non-browser pytest run from an explicit
       browser-complete gate.
-- [ ] **TODO 3:** evaluate pytest-xdist isolation and add it only after explicit
-      dependency-baseline approval.
 - [x] **TODO 4 — completed (`c712aca`):** converted redundant CLI subprocess tests to
       in-process `cli.main(...)` calls while retaining the real process-boundary coverage.
-- [ ] **TODO 5:** split `cli.main()` into a command-handler registry without changing
-      CLI signatures, output, or errors.
+- [x] **TODO 5 — completed (`fd12c20`):** split `cli.main()` into a stage-aware
+      command-handler registry; CLI signatures, output, and errors unchanged.
 - [ ] **TODO 6:** extract `validate_draft` into an ordered registry of focused validation
       rules without changing validation behavior.
 - [ ] **TODO 7:** remove the transitional composite repository while preserving the
