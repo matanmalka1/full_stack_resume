@@ -197,36 +197,55 @@ only in `infrastructure/paths.py`; every new migration numbered and registered;
 
 ## 5. Waves and ownership — 2a
 
+**There is no wave 0.** Boundary 1 needed one because its work was a *move*: guards had to exist
+before the code shifted, since a guard written afterwards cannot fail on the move it was meant to
+catch, and dead symbols had to be deleted before a lane started using them. 2a is additive — new
+tables, new models — so neither rationale applies, and a serial lead wave would be pure latency.
+The three candidate wave-0 items were re-examined and reassigned:
+
+- Re-pointing the fingerprint guard (D3) is *forced* by migration `0002` and belongs to the lane
+  that writes it. `tests/test_database.py` is therefore Lane A's, and the re-point is Lane A's
+  first commit, before `0002`.
+- Registering the new tables in the guard checklists of §4 **cannot** precede the tables:
+  `_persisted()` in `tests/test_chain_integrity.py` runs `SELECT 1 FROM {table}` for every entry,
+  and `tests/test_persistence.py` iterates `IMMUTABLE_TABLES` to seed and tamper each one, so an
+  entry for a table that does not exist yet fails with *no such table* rather than standing as a
+  placeholder. `working_drafts` must never appear in `IMMUTABLE_TABLES` at all — it is the one
+  mutable record. These updates belong to the integration wave, and they stay definition-of-done
+  items rather than becoming a wave.
+- Pinning today's unconditional draft-overwrite behaviour is a before-state test. It must be
+  committed *before* the behaviour changes, but that ordering is a commit sequence inside the
+  integration wave, not a wave of its own.
+
 Lead-only for the whole sub-boundary: `tests/conftest.py`, `tests/test_architecture.py`,
 `tests/test_candidate.py`, `tests/test_chain_integrity.py`, `tests/test_ready_integrity.py`,
 `tests/test_integration.py`, `tests/test_migration.py`, `cv_engine/cli.py`,
 `cv_engine/runtime/**`, `cv_engine/application/services/**`, `cv_engine/application/chain.py`,
-`cv_engine/application/ready.py`, `cv_engine/infrastructure/artifacts.py`, `docs/**`.
+`cv_engine/application/ready.py`, `cv_engine/infrastructure/artifacts.py`,
+`cv_engine/infrastructure/migration.py`, `docs/**`.
 
-**Wave 0 — lead alone.** Re-point the fingerprint guard at migration `0001` per D3 and add the
-head-schema assertion. Register the new-table checklists of §4 as *failing* placeholders where
-possible. Add coverage for the current draft-overwrite behaviour so the `edit_version` change
-has a before-state to compare against.
+**Wave 1 — two lanes, both branched from the boundary base commit.**
 
-**Wave 1 — two lanes.**
-
-- **Lane A — persistence.** Owns `cv_engine/infrastructure/persistence/**` (migration `0002`,
-  registration in `schema.py`, the preparation and draft repositories) and
-  `tests/test_persistence.py`. Delivers §3.1's columns, §3.2's table, §3.3's table and partial
-  unique index, §3.4's columns, all trigger pairs, and the repository methods with typed
-  accessors per D2. Does **not** wire services or the CLI.
+- **Lane A — persistence.** Owns `cv_engine/infrastructure/persistence/**`,
+  `tests/test_persistence.py`, and `tests/test_database.py`. First commit re-points the
+  fingerprint guard per D3; then migration `0002` with §3.1's rebuilt `job_snapshots`, §3.2's
+  `selection_plans`, §3.3's `working_drafts` and its partial unique index, §3.4's
+  `validation_runs` columns, every trigger pair, and the repository methods with typed accessors
+  per D2. Cross-owner atomicity uses `bind(uow)`, not new private reach-ins. No service or CLI
+  wiring.
 - **Lane B — domain records.** Owns `cv_engine/domain/models.py`,
   `cv_engine/domain/validation.py`, `tests/test_domain_contracts.py`,
-  `tests/test_drafts_validation.py`. Delivers the typed SelectionPlan and WorkingDraft record
-  models, the ValidationRun lineage type, and Stage 7b per D7. Touches no persistence and no
-  service.
+  `tests/test_drafts_validation.py`. Delivers the typed SelectionPlan and WorkingDraft models,
+  the ValidationRun lineage type, and Stage 7b per D7. Touches no persistence and no service.
 
-**Wave 2 — lead alone.** Wire the services: atomic analysis-plus-plan, WorkingDraft reads and
-writes through the record with `edit_version`, the payload-store snapshot writer in both the
-ingest path and `infrastructure/migration.py`'s §6.3 mapping,
-`--selection-plan` plus its compatibility
-resolver, `cv sync-draft` redefined per D5, and every §4 checklist updated. Then full
-verification.
+Lane B does not need Lane A's fingerprint re-point: it adds no migration, so the frozen fixture
+still matches on its branch.
+
+**Wave 2 — lead alone.** Merge A then B, testing after each. Then, in order: the before-state
+test for draft overwriting; snapshot payloads through both writers; atomic analysis-plus-plan;
+WorkingDraft reads and writes through the record with `edit_version`; the CLI's
+`--selection-plan` resolver and `cv sync-draft` redefined per D5; the §4 checklist updates now
+that the tables exist; then full verification.
 
 ## 6. Verification — 2a
 
