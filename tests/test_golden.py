@@ -88,3 +88,56 @@ def test_representative_profiles_match_their_golden_ready_outputs(
         _geometry, report = render_validator(draft, profile, html, pdf, screenshot, candidate)
         assert report.passed, f"{fixture.stem}: {report.model_dump()}"
         assert report.evidence["page_count"] in {1, 2}
+
+
+def test_persisted_plan_reproduces_the_computed_selection(
+    v1_repo: Path,
+    draft_factory,
+    fact_store,
+    profile_store,
+    policy_store,
+    candidate_context,
+) -> None:
+    """The plan path must render exactly what the computing path rendered.
+
+    Production drafts from a persisted SelectionPlan, while the golden cases above
+    build their selection by computing it. Without this, the parity evidence would
+    cover a path the product no longer takes: the two could drift — in section
+    assignment or claim order — and every golden hash would still match.
+    """
+    from cv_engine.domain.drafts import build_draft
+    from cv_engine.infrastructure.knowledge import load_presentations
+
+    differences: list[str] = []
+    for fixture in sorted(GOLDEN_DIR.glob("*.json")):
+        case = json.loads(fixture.read_text(encoding="utf-8"))
+        overrides = case.get("overrides", {})
+        computed = draft_factory(
+            case["job"],
+            track_override=overrides.get("track"),
+            profile_override=overrides.get("profile"),
+            emphasis_override=overrides.get("emphasis"),
+        )
+        rebuilt = build_draft(
+            application_id=computed.draft.application_id,
+            job_snapshot_id=computed.draft.job_snapshot_id,
+            job_analysis_id=computed.draft.job_analysis_id,
+            analysis=computed.analysis,
+            profile=computed.profile,
+            facts=fact_store,
+            policies=policy_store,
+            candidate=candidate_context,
+            presentations=load_presentations(v1_repo, fact_store),
+            selection=computed.draft.selection,
+        )
+        if serialize_markdown(computed.draft) != serialize_markdown(rebuilt):
+            differences.append(f"{fixture.name}: Markdown differs")
+        if computed.draft.selected_fact_ids != rebuilt.selected_fact_ids:
+            differences.append(f"{fixture.name}: selected fact IDs differ")
+        for original, replayed in zip(computed.draft.sections, rebuilt.sections):
+            if [claim.fact_ids for claim in original.claims] != [
+                claim.fact_ids for claim in replayed.claims
+            ]:
+                differences.append(f"{fixture.name}: {original.name} claim order differs")
+
+    assert not differences, differences
