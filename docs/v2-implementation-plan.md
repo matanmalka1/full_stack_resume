@@ -92,17 +92,26 @@ introducing HTTP or React.
 - Audit whether the v1 CSV export has a real consumer. Retain a versioned v2 CLI export;
   add `--legacy-format` only when that consumer is demonstrated.
 
+M1 completion tightened the temporary compatibility design above: commit `d34cf50`
+moved the exact `cv fast` orchestration into `cli.py`, repointed workflow consumers to
+the services, and removed `Engine`. `compat.py` retains only the two sanctioned legacy
+source-ID resolvers.
+
 ### 3.4 M1 acceptance
 
-- [ ] Domain/application code imports no FastAPI, SQLite, path layout, or provider HTTP.
-- [ ] CLI completes the deterministic v1 Definition of Done through services.
-- [ ] Selected facts, claims, validation outcomes, Ready eligibility, and decision
+- [x] Domain/application code imports no FastAPI, SQLite, path layout, or provider HTTP.
+- [x] CLI completes the deterministic v1 Definition of Done through services.
+- [x] Selected facts, claims, validation outcomes, Ready eligibility, and decision
       behavior retain semantic parity with v1.
-- [ ] Candidate name is not hardcoded in core or renderer policy.
-- [ ] Normal v2 commands reject every missing, legacy, unknown, or unsafe marker; only
+- [x] Candidate name is not hardcoded in core or renderer policy.
+- [x] Normal v2 commands reject every missing, legacy, unknown, or unsafe marker; only
       the dedicated migration adapter can inventory an explicit v1 source read-only.
-- [ ] All applicable v1 safety invariants remain covered and the consolidated suite
+- [x] All applicable v1 safety invariants remain covered and the consolidated suite
       passes; retaining every legacy test item is not required.
+
+M1's implementation boundary closed on 2026-08-18 at `67a80d5`. Command evidence and
+the exact scope of each criterion are recorded in `docs/v2-m1-acceptance.md`; the
+browser-required suite passed 124 tests in the dedicated v2 environment.
 
 Stable commit boundary: application seam complete and CLI green.
 

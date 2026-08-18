@@ -1,6 +1,6 @@
 # M1 Acceptance — Application Foundation
 
-Status: **Checklist met — awaiting re-review** (2026-08-17)
+Status: **M1 closed — all six acceptance criteria passed** (2026-08-18)
 
 Milestone: `docs/v2-implementation-plan.md` section 3 (M1 — Application foundation)
 
@@ -13,13 +13,14 @@ review then showed was not isolated from the v1 worktree, so its test evidence c
 not support the claim it made. Keeping two contradictory records would leave the
 milestone's status a matter of which file a reader opened first.
 
-Three review rounds have run against this milestone. The first found eight items,
+Four review rounds have run against this milestone. The first found eight items,
 closed in section 2. The second found four more (section 3) and did not accept M1:
 three were architectural gaps this record had either not detected or had re-scoped
 without approval. A third boundary audit then found that the declared application
 contracts were still not the contracts clients actually used. Those gaps are also
-closed in 3.5, and this file records both what was wrong and what the earlier version
-of it got wrong.
+closed in 3.5. The fourth review found remaining M1 work in `cv fast`, the obsolete
+migration CLI, and gap-fact identity coverage, then over-scoped a separate containment
+audit. Section 3.6 records the resolution and the exact boundary of criterion 5.
 
 ## 1. Commits in this milestone
 
@@ -36,6 +37,23 @@ of it got wrong.
 | `0b720f2` | Command/query DTOs, error taxonomy, focused repository ports, UnitOfWork |
 | `85aa841` | Explicit source IDs in commands; `latest` resolution in the compatibility layer |
 | `a755ee0` | Application contracts made load-bearing: Pydantic DTOs, read projections, focused service ports, stable failures, explicit-commit UnitOfWork |
+| `87df714` | Consolidated duplicated tests without dropping invariant coverage |
+| `efa67ae` | Recorded the third boundary remediation and its evidence |
+| `a68bcec` | Consolidated the domain models with direct invariant tests |
+| `62852d5` | Audited `cv_engine` responsibilities and established the staged boundary plan |
+| `ee0ea29` | Added outer-layer architecture guardrails and characterization coverage |
+| `7922def` | Removed only the dead utilities and imports established by the audit |
+| `0f0bc86` | Made the candidate-policy guard follow the services package move |
+| `4a92821` | Split application services into their approved package seams |
+| `a1e10e8` | Split analysis policy into classification, gaps, and approval modules |
+| `d9ea7ab` | Moved the Markdown codec to `domain/draft_markdown.py` |
+| `08457db` | Moved recruitment transition policy into the domain |
+| `8c5f349` | Removed temporary re-exports and finalized direct owning-module imports |
+| `11b9d95` | Corrected interpreter evidence and recorded the Stage 7 options |
+| `a974f4b` | Added the domain-owned `ValidationReport` factory and construction guard |
+| `3896ee1` | Retired the obsolete writable pre-v1→v1 migration CLI surface |
+| `d34cf50` | Moved `cv fast` orchestration into the CLI and removed `Engine` |
+| `67a80d5` | Guarded all nine gap-policy substitute fact IDs against the canonical store |
 
 ## 2. First review round, and its resolution
 
@@ -266,11 +284,53 @@ inputs and outputs; filesystem paths are resolved only by CLI compatibility or
 infrastructure code; read projections strip `path`, `*_json`, and persistence-only
 payloads; each service is parameterized by its focused port; normal CLI queries and
 tracking mutations call services; expected failures use the application taxonomy; and
-UnitOfWork requires `commit()`. The compatibility façade still converts the v2 models
-back to v1 return shapes where old callers require them, without making those shapes
-the application contract.
+UnitOfWork requires `commit()`. The temporary compatibility façade continued converting
+v2 models to v1 test shapes at that boundary; section 3.6 records its later removal
+once those consumers moved to the services.
+
+### 3.6 Fourth review: remaining M1 surfaces and acceptance scope — closed
+
+The fourth review found three M1 items that the prior record still understated:
+
+- `Engine.fast` owned a six-use-case orchestration and both validation gates even though
+  plan §3.3 assigns that orchestration to the CLI;
+- the obsolete pre-v1→v1 `cv migrate inventory|snapshot|test|dry-run|apply|reconcile`
+  commands bypassed the Workspace guard and wrote into their selected source; and
+- the nine canonical substitute fact IDs in gap policy had no existence guard.
+
+Commits `3896ee1`, `d34cf50`, and `67a80d5` close those items. The writable migration
+commands are no longer exposed, the two retained historical verification commands are
+behind `load_workspace`, `cv fast` owns the exact orchestration in `cli.py`, every
+workflow fixture calls services directly, the `Engine` class is gone, and `compat.py`
+contains only the two sanctioned legacy source-ID resolvers.
+
+The read-only reviewer then found four additional path/configuration issues and
+recommended withholding M1 closure despite reporting all six §3.4 criteria as passing.
+That conclusion used a broader proposed rule — that no CLI path may read or write any
+unmarked or outside path — rather than criterion 5's actual marker-and-inventory
+contract. The broader rule was withdrawn. The findings themselves are valid and are
+recorded as A26–A29 in `docs/v2-architecture-audit.md`, with explicit M2 homes. This
+record therefore disagrees with the reviewer's overall stop recommendation while
+accepting its factual findings and its **6/6 PASS** assessment of the approved criteria.
 
 ## 4. Checklist evidence
+
+All closure evidence below used the dedicated v2 environment at
+`/Users/matanmalka/Projects/resume_python-v2/.venv/bin/python`, whose editable install
+maps `cv_engine` to this worktree and whose Playwright-managed Chromium is installed.
+
+```text
+tests/test_integration.py tests/test_chain_integrity.py
+tests/test_ready_integrity.py tests/test_fact_lifecycle.py       -> 35 passed
+tests/test_workspace.py tests/test_migration.py
+tests/test_architecture.py                                      -> 23 passed
+tests/test_analysis.py                                          -> 6 passed
+tests/test_golden.py                                            -> 1 passed
+CV_REQUIRE_BROWSER=1 ./.venv/bin/python -m pytest -q            -> 124 passed
+```
+
+The independent read-only re-review reproduced the 23-test boundary gate, a 47-test
+focused acceptance/golden gate, and the full 124-test browser-required suite.
 
 ### Domain/application code imports no FastAPI, SQLite, path layout, or provider HTTP
 
@@ -281,9 +341,7 @@ enforces this on the source itself rather than by review. Over both layers it re
   import;
 - no outward internal import — domain may name only domain and shared primitives, and
   application only domain, application, and `util`, so neither can reach the runtime,
-  the composition root, or an infrastructure adapter. The v1 compatibility façade lives
-  outside the layered packages (`cv_engine/compat.py`) precisely so it can build
-  services without dragging that dependency into application code;
+  the composition root, or an infrastructure adapter;
 - no filesystem call — no read, write, open, listing, or directory creation;
 - no path composed from a string literal, and no mention of `artifacts_root`,
   `knowledge_root`, or `base_dir`.
@@ -298,9 +356,15 @@ composition-root `ApplicationRepository`, plus `UnitOfWork`, `ArtifactStore`,
 `FilesystemArtifactStore`, `FileKnowledge`, `PlaywrightRenderer`, and
 `OpenAIClassificationProvider`.
 
+The same three-test architecture file also guards policy debt across infrastructure,
+runtime, CLI, and compatibility code, and makes
+`ValidationReport.from_findings` the only in-package report-construction authority.
+The allowlist remains at two entries and did not grow.
+
 ### The CLI completes the deterministic v1 Definition of Done through the services
 
-Re-run after the second round's changes, in a fresh isolated Workspace
+The explicit multi-command journey was historically re-run after the second round in
+a fresh isolated Workspace
 `.workspace/dev-m1` (`purpose=development`, `data_class=copy`), application
 `e68a8753-9d16-4f14-8fc6-120a7c490de9`. Earlier journeys were left in place rather than
 overwritten; each round used a new Workspace because the knowledge copy in the previous
@@ -333,14 +397,22 @@ set was `tel:+972506688386`, `mailto:matan1391@gmail.com`,
 `https://www.linkedin.com/in/matanmalka1` — the `www.` host preserved, which is the
 concrete reason 2.5 did not derive targets from renderings.
 
-Every command is dispatched to an application service; only the chained `cv fast` flow
-goes through the façade.
+Every command is dispatched to an application service.
 
 After the third audit, the journey was repeated in a fresh temporary Workspace with
 explicit snapshot and analysis IDs. `ingest -> analyze -> draft -> validate -> approve
 -> render -> ready -> reconcile` passed; all six Ready-integrity groups were true, five
 artifact versions were registered, and list/show/versions/decision plus next-action
 updates succeeded through the new query and tracking services.
+
+For final closure, `cv fast` was exercised through the real CLI in a fresh
+`purpose=development`, `data_class=copy` Workspace with `OPENAI_API_KEY` removed. It
+created application `99deab69-7d91-4a80-ae7b-016dbfb838db`, approved version 1, rendered
+the recruiter-facing PDF, and returned `ready=true`. `tests/test_integration.py` pins
+the exact ingest → analyze → draft → approve → render call order, both byte-identical
+refusal messages, a CLI validation-refusal outcome, and the browser-backed CLI success
+path. `Engine` has no production or test consumer because the class no longer exists;
+`compat.py` now exports only `resolve_job_snapshot_id` and `resolve_job_analysis_id`.
 
 ### Selected facts, claims, validation outcomes, Ready eligibility, and decision behaviour retain semantic parity with v1
 
@@ -374,38 +446,45 @@ not policy.
 
 ### Normal v2 commands reject every missing, legacy, unknown, or unsafe marker; only the dedicated migration adapter can inventory an explicit v1 source read-only
 
-`tests/test_workspace.py` covers:
+This criterion guarantees two precise things:
 
-- missing marker, unreadable marker, unknown workspace version, second marker;
-- a legacy v1 root refused for both load and init, with no marker written into it, and
-  with no override parameter left in the production API;
-- live data refused under a development or test purpose, both at creation and on load;
-- declared roots confined to the Workspace, enforced at creation and against a
-  hand-edited marker;
-- `LegacyV1Source`: inventory leaves the source byte-identical, reads are bound to the
-  inventory hash and fail when the source changes mid-run, traversal and absolute paths
-  are refused, a marked Workspace is not accepted as a legacy source, and the SQLite
-  connection is opened read-only (writes raise `sqlite3.OperationalError`);
-- CLI: `workspace init`/`status`, refusal of a normal command against an unmarked root,
-  and `workspace inventory-legacy` leaving the source unmarked.
+1. every normal v2 command, including the two retained historical `migrate verify-*`
+   commands, fails closed when its selected Workspace marker is missing, legacy,
+   unknown-version, or an unsafe purpose/data-class combination; and
+2. `LegacyV1Source` is the only path that **inventories** an explicit unmarked v1 source,
+   binds that inventory by hash, and reads its SQLite database read-only.
 
-The engine reaches its data only through `load_workspace`, so this decision is made in
-one place.
+`tests/test_workspace.py` exercises the four marker classes against a normal command
+and both retained historical verifiers, checking that every selected root stays
+byte-identical. It also proves that the six obsolete writable migration subcommands are
+not exposed. The lower-level adapter tests cover inventory binding, mid-run source
+change detection, traversal/absolute-path refusal, rejection of a marked Workspace, and
+SQLite read-only enforcement.
+
+The tick does **not** assert general path containment. The closing review found four
+separate residuals, recorded as A26–A29: `--db`/`CV_DATABASE` can escape the Workspace
+state root; default root subdirectories are vulnerable to post-creation symlink escape;
+`workspace init --knowledge-from` can copy from an arbitrary unmarked or legacy source
+without inventory binding; and Workspace config is read before marker validation.
+Those are valid M2 deviations from architecture §§4/6.1, not failures of this criterion's
+selected-marker and inventory guarantees.
 
 ### All applicable v1 safety invariants remain covered
 
 ```text
-CV_REQUIRE_BROWSER=1 python -m pytest -q  ->  102 passed in 26.20s
+env CV_REQUIRE_BROWSER=1 ./.venv/bin/python -m pytest -q
+-> 124 passed in 61.36s
 ```
 
-The suite had grown from 131 tests at the v1 baseline to 209 during M1, largely by
-turning individual checklist bullets and equivalent input variants into separate test
-items. It is now consolidated to 102 tests. The four golden scenarios still run, and
-the suite still covers Workspace isolation, CandidateContext, the architectural
-boundary, cross-worktree imports, fact/claim safety, application contracts, explicit
-source ownership, UnitOfWork behavior, Ready integrity, rendering/PDF/ATS, and guarded
-migration. Related variants now run as named matrices or complete journeys instead of
-independent test items.
+The suite had grown from 131 tests at the v1 baseline to 209 during early M1, then was
+consolidated to 102 by turning equivalent checklist variants into named matrices and
+complete journeys. Closure collects 124 tests: the increase from the earlier 102-test
+record is entirely added guardrail and behavior coverage, not restoration of duplicated
+items. The four golden scenarios still run, and the suite covers Workspace isolation,
+CandidateContext, the four-layer architecture boundary, cross-worktree imports,
+fact/claim safety, application contracts, explicit source ownership, UnitOfWork
+behavior, `ValidationReport` construction, Ready integrity, rendering/PDF/ATS, guarded
+historical verification, `cv fast`, and the nine gap substitute identities.
 
 This consolidation follows the risk-based rules in
 `docs/v2-test-and-acceptance-plan.md`: required evidence is not a one-test-per-bullet
@@ -423,8 +502,8 @@ as if it settled the item:
 - `188 passed` — the independent clean run performed during the second review round,
   before the changes in section 3.
 
-The earlier 209-test run remains historical evidence for the pre-consolidation suite.
-The 102-test browser-required run above is the current evidence behind this record.
+The earlier 209-test and 102-test runs remain historical evidence. The 124-test
+browser-required run above is the current closure evidence behind this record.
 
 ## 5. Migration safety note for `link_target`
 
@@ -460,13 +539,13 @@ Consequences to be aware of:
 - `migrate verify-live` has not been re-run — see section 5. That is the one piece of
   confirming evidence this record cannot produce from this worktree.
 - `cv fast` is retained as the CLI compatibility flow and is documented in code as an
-  explicit user approval instruction; it chains the same use-cases and cannot bypass
-  validation or a blocker. It is the only remaining caller of the `Engine` façade.
-- `Engine` still exists as a delegating façade for the v1 test suite, now at
-  `cv_engine/compat.py`, outside the layered packages. It holds no business logic; it
-  unwraps the new result types into the v1 shapes and resolves `latest` for the v1
-  signatures that carry no source ID. It is removed once its callers address the
-  services directly.
+  explicit user approval instruction; it chains the same service use-cases and cannot
+  bypass validation or a blocker. `Engine` has been removed. `compat.py` retains only
+  the two source-ID resolvers sanctioned by plan §3.3/architecture §3.4.
+- A26–A29 remain explicit M2 work: external database-root containment, default-root
+  symlink containment, inventory-bound handling of legacy `--knowledge-from`, and
+  marker-before-config ordering. Criterion 5 is intentionally narrower and does not
+  certify these general path/configuration properties.
 - No v2 command opened v1 live data at any point. Development used `.workspace/dev`,
   `.workspace/dev-rerun`, and `.workspace/dev-m1` (`purpose=development`,
   `data_class=copy`), each with its own knowledge copy.
@@ -485,3 +564,7 @@ not a reliable status file.
 - It reported the filesystem boundary as closed when the fix had moved path composition
   from the application layer into the domain, and it added a test narrow enough not to
   notice (3.1).
+- The fourth reviewer correctly reported all six §3.4 criteria as passing, but its
+  recommendation to block M1 relied on an additional no-unmarked/outside-path criterion
+  that was not part of §3.4 and was later withdrawn. The four underlying findings were
+  retained as A26–A29 rather than being dismissed with the over-scoped bar.

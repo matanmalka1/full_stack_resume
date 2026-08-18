@@ -1,7 +1,7 @@
 # v2 Architecture Audit — responsibility boundaries in `cv_engine`
 
-Status: **Stages 1–7a implemented and verified; Stage 7b and Stage 8 deferred to M2
-(2026-08-18)**
+Status: **M1 and Stages 1–7a implemented and verified; Stage 7b and remaining boundary
+work deferred to M2 (2026-08-18)**
 
 Scope: `cv_engine` module and file responsibility boundaries at M1 close, before M2
 begins. Baseline commit: `a68bcec`.
@@ -156,6 +156,11 @@ builds every workflow fixture (`analyzed_ → drafted_ → approved_ → ready_a
 through it — so the layer `docs/v2-architecture.md` §3.4 says to remove is what the suite
 actually exercises.
 
+**M1 closure resolution:** commit `d34cf50` moved the exact fast-mode orchestration and
+both refusal gates into `cli.py`, repointed workflow fixtures and tests at the service
+DTOs, and removed `Engine`. `compat.py` now contains only the two explicitly sanctioned
+source-ID resolvers. The CLI success/refusal paths and exact call order are covered.
+
 **A9 — a production rule is verified against its own copy.**
 `tests/helpers.py:92-96 seal_report` is a verbatim re-implementation of
 `infrastructure/migration.py:55-58 _seal_report`. A change to the migration sealing rule
@@ -167,6 +172,16 @@ InfrastructureFailure`), and **six are used by exactly one subclass** (`candidat
 `fact_store`, `store_working_draft`, `working_markdown`, `stored_draft`,
 `artifact_text`). Only `_bound_analysis:175-201` and the `renderer` guard carry a rule.
 `candidate(facts=None)` ignores its argument entirely (`:132-133`).
+
+**A26 (High) — `--db` / `CV_DATABASE` escapes the Workspace state root.** The global
+override is accepted at `cv_engine/cli.py:172` and resolved without containment at
+`:487,502`; both `initialize` and the composition root receive that external path
+(`:503-507`). `infrastructure/db.py:212-223` creates parent directories and SQLite state
+there. A valid marked Workspace can therefore write its database into an arbitrary
+outside or unmarked root. This deviates from architecture §4's Workspace-root ownership
+and §6.1's structured-state boundary. Resolve it in M2 §4.1 alongside the schema,
+repositories, and filesystem stores; changing the documented `--db` behavior requires
+explicit compatibility tests.
 
 ### Medium
 
@@ -187,9 +202,22 @@ InfrastructureFailure`), and **six are used by exactly one subclass** (`candidat
 | A23 | package-wide | `sha256_text(canonical_json(...))` appears twelve times; only `migration._content_hash:35-40` factors out the "pop the hash field" variant. Three `json.dumps` conventions coexist. Four path-containment implementations with **different symlink semantics**: `util.py:40-50` (dead, part inspection), `legacy_source.py:76-83` (part inspection), `workspace.py:102-113` and `migration.py:244-253` (resolve plus `parents`). |
 | A24 | `migration.py:294-310` | Library code spawns the test suite via `subprocess.run([… "-m","pytest","tests/test_migration.py"])`, and `migration_gate:529-531` calls it by default. Production code depends on `tests/`. |
 | A25 | `tests/` | No coverage at all for `list_facts`, `show_fact`, `knowledge_versions`, `reconcile_facts`, `link_claim`, `sync_working_claims`, `list_applications`, `latest_decision`, or most CLI branches (`reconcile`, `export`, `status`, `validate`, `approve`, `render`, `ready`). `TrackingService.transition_status` and `set_next_action` are exercised only through `Repository` (`tests/test_database.py`), never through the service. |
+| A27 | `runtime/workspace.py:46-53,69-84,102-113` | Root overrides are resolved and contained, but default `data`, `artifacts`, `tmp`, and `logs` children are not re-resolved before writes. Replacing a default child with a post-creation symlink escapes the marked Workspace; only `Workspace.relative()` checks an already-named path. This deviates from architecture §§4 and 14. It is the write-side manifestation of A23's divergent containment semantics and belongs in M2 §4.1 with their common containment policy. |
+| A28 | `runtime/workspace.py:197-222` | `workspace init --knowledge-from` reads and copies five Knowledge trees from an arbitrary, possibly unmarked or legacy root without marker validation or `LegacyV1Source` inventory binding. It does not write into the source, but deviates from architecture §4 and migration plan §3's sole-exception rule for inspecting an unmarked v1 source. Resolve it in M2 §4.6 with the v1 inventory and mapping contracts; the documented initialization flag requires compatibility coverage. |
+
+**A19 M1 resolution:** `tests/test_analysis.py:68-93` now exercises every gap-policy
+branch that supplies substitute facts, asserts the exact nine-ID set, and requires each
+ID to resolve as canonical. A fact rename can no longer silently leave dead gap advice.
 
 ### Low
 
+- **A29 (Low) — Workspace configuration is read before marker validation.**
+  `runtime/config.py:74-100` reads `cv-workspace.config.json` when `_resolve_root`
+  calls it at `cli.py:447-450`; `load_workspace` does not validate the marker until
+  `cli.py:494`. The access is read-only and a normal command still rejects the bad
+  marker, but the ordering weakens architecture §4's fail-closed boundary. Move config
+  loading behind marker validation in M2 §4.1, where configuration and schema opening
+  are made one ordered gate.
 - **Naming**: `services.py` (a module of seven services), `db.py` (schema, repository,
   and lifecycle policy in one), `util.py`, `ServiceBase`. Three classes cover one
   aggregate: `ApplicationService` (create), `ApplicationQueryService` (read),
@@ -387,10 +415,15 @@ typed `RenderEvidence` DTO (A4) — note this breaks the monkeypatch targets at
 `tests/test_candidate.py:22-33`; move the `_set_ready`, `_record_submission`, and
 `record_decision` rules plus `save_analysis`'s orchestration out of `db.py` (A2); give
 the decision record a typed shape (A5); move the confirm/promote rule from `cli.py` into
-`KnowledgeService` (A6); collapse the four artifact-integrity copies (A7); retire
-`compat.Engine` and re-point the `conftest.py` fixtures at the services (A8); resolve
+`KnowledgeService` (A6); collapse the four artifact-integrity copies (A7); resolve
 default emphasis from the Profile store (A3); unify path containment (A23); remove the
-`subprocess` pytest call (A24).
+`subprocess` pytest call (A24). A8 is no longer part of this deferred work: M1 commit
+`d34cf50` removed `Engine` and moved its test consumers to the services.
+
+**M2 containment carry-forward.** A26, A27, and A29 belong to M2 §4.1, where the
+schema, repositories, filesystem stores, and ordered Workspace-opening boundary are
+designed together. A28 belongs to M2 §4.6 with the v1 inventory and mapping contracts.
+Recording those homes does not authorize their implementation in this milestone.
 
 ---
 
@@ -524,6 +557,21 @@ combined Wave 2 boundary subset passed 54 tests. Final verification passed:
   render → Ready → reconcile all passed. The PDF was one page with ATS claim coverage
   `1.0`; Ready integrity and reconciliation both reported `passed=true`.
 
+### M1 closure addendum
+
+Commits `3896ee1`, `d34cf50`, and `67a80d5` retired the writable legacy-migration CLI
+surface, moved `cv fast` orchestration into the CLI and removed `Engine`, and guarded
+the exact nine canonical gap-substitute fact IDs. Stage 7a commit `a974f4b` had already
+made `ValidationReport.from_findings` the only in-package construction authority.
+
+All closure evidence used this worktree's dedicated `.venv`. The focused workflow gate
+passed 35 tests; Workspace/migration/architecture passed 23; analysis passed 6; golden
+parity passed 1; and
+`env CV_REQUIRE_BROWSER=1 ./.venv/bin/python -m pytest -q` passed **124 tests**. A fresh
+development/copy Workspace with no AI key also completed the real `cv fast` CLI path to
+Ready and produced its PDF. The independent read-only review reproduced the focused
+and browser-complete results and assessed the six M1 §3.4 criteria **6/6 PASS**.
+
 No threshold, message string, exception type, validation-group name, status, public
 signature, stored report shape, artifact path policy, or fact semantic changed.
 
@@ -536,8 +584,10 @@ signature, stored report shape, artifact path policy, or fact semantic changed.
   migrations; absent version means legacy, and historical rows are never rewritten.
 - **Stage 8 remains deferred to M2 and was not started.** This includes render/Ready
   policy extraction, decision-record typing, CLI policy removal, artifact-integrity
-  consolidation, compatibility-façade retirement, Profile-backed default emphasis,
-  path-containment unification, and removal of the migration-time pytest subprocess.
+  consolidation, Profile-backed default emphasis, path-containment unification, and
+  removal of the migration-time pytest subprocess. Compatibility-façade retirement is
+  complete: M1 removed `Engine`, leaving only the two sanctioned source-ID resolvers in
+  `compat.py`.
 - **A2 is partly addressed, not closed.** Stage 6 moved the transition graph into the
   domain and removed its architecture-allowlist entry. The duplicated READY-demotion
   rule in `Repository.save_analysis` and `DraftService.approve`, plus
@@ -550,3 +600,8 @@ signature, stored report shape, artifact path policy, or fact semantic changed.
   infrastructure-owned `ApplicationStatus` transition table resolved by Stage 6. The
   two explicit residual entries are `cli.py` importing `infrastructure.db` (A6) and
   `infrastructure/migration.py` importing `subprocess` (A24); both belong to Stage 8.
+- **A26–A29 are recorded, not fixed.** External database-root containment (A26),
+  default-root symlink containment (A27), inventory-bound handling of
+  `--knowledge-from` (A28), and marker-before-config ordering (A29) remain M2 work at
+  the homes stated above. They are outside M1 criterion 5's selected-marker and
+  inventory guarantee.
