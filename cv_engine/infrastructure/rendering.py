@@ -11,14 +11,20 @@ from pypdf import PdfReader
 
 from ..application.errors import InfrastructureFailure
 from ..domain.candidate import contact_href
+from ..domain.render_validation import (
+    RenderEvidence,
+    RenderGeometry,
+    _claim_recoverable,
+    normalized_role_filename,
+    validate_render_evidence,
+)
 from ..domain.models import (
     CandidateContext,
     DraftDocument,
     Profile,
-    ValidationIssue,
     ValidationReport,
 )
-from ..util import normalized_text, sha256_file
+from ..util import sha256_file
 
 
 MIXED_LTR = re.compile(
@@ -26,15 +32,6 @@ MIXED_LTR = re.compile(
     r"Priority ERP|Excel|WhatsApp|Teams|Python|FastAPI|React|PostgreSQL|API|APIs|PDF|CI/CD|OpenAPI|"
     r"GitHub Actions|Node\.js|TypeScript|JavaScript|Flask|Express|SQL|AWS EC2|LLM)\b|\d+(?:[.-]\d+)*%?)"
 )
-
-
-def normalized_role_filename(role: str, candidate: CandidateContext) -> str:
-    cleaned = re.sub(r"\b(?:senior|junior|lead|principal)\b", "", role, flags=re.IGNORECASE)
-    cleaned = re.sub(r"[^A-Za-z0-9+ /&.-]+", "", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip(" .-")
-    if not cleaned:
-        cleaned = "B2B Sales"
-    return f"{candidate.resolved_filename_name} - {cleaned} - CV.pdf"
 
 
 def _bidi(value: str, rtl: bool) -> Markup:
@@ -186,105 +183,69 @@ def validate_rendered(
     geometry: dict[str, Any],
     candidate: CandidateContext,
 ) -> ValidationReport:
-    groups = {
-        "render": True,
-        "page_count": True,
-        "pdf": True,
-        "ats": True,
-        "links": True,
-        "visual": True,
-        "direction": True,
-        "filename": True,
-    }
-    issues: list[ValidationIssue] = []
-    if not html_path.is_file() or html_path.stat().st_size == 0:
-        groups["render"] = False
-        issues.append(ValidationIssue(group="render", code="html-missing", message=str(html_path)))
-    if not pdf_path.is_file() or pdf_path.stat().st_size == 0:
-        groups["pdf"] = False
-        issues.append(ValidationIssue(group="pdf", code="pdf-missing", message=str(pdf_path)))
-        return ValidationReport.from_findings(groups=groups, issues=issues)
-    try:
-        reader = PdfReader(str(pdf_path))
-        page_count = len(reader.pages)
-        extracted = "\n".join(page.extract_text() or "" for page in reader.pages)
-    except Exception as exc:
-        groups["pdf"] = False
-        issues.append(ValidationIssue(group="pdf", code="pdf-corrupt", message=str(exc)))
-        page_count, extracted = 0, ""
-    maximum = 2 if profile.allow_two_pages else 1
-    if page_count < 1 or page_count > maximum:
-        groups["page_count"] = False
-        issues.append(ValidationIssue(group="page_count", code="page-count", message=f"{page_count} pages; maximum {maximum}"))
-
-    claim_texts = [draft.headline.text, *(claim.text for claim in draft.contacts)]
-    claim_texts.extend(claim.text for section in draft.sections for claim in section.claims)
-    normalized_pdf = normalized_text(extracted)
-    found = sum(_claim_recoverable(text, normalized_pdf, draft.language == "he") for text in claim_texts)
-    coverage = found / len(claim_texts) if claim_texts else 0
-    if coverage < 0.9:
-        groups["ats"] = False
-        issues.append(ValidationIssue(group="ats", code="text-coverage", message=f"PDF text coverage is {coverage:.1%}"))
-
-    # Expected links are derived from the contacts this document actually
-    # carries, so the check follows the candidate's canonical facts instead of
-    # a list that has to be remembered separately.
-    expected_links = {
-        href for claim in draft.contacts
-        if (href := contact_href(candidate, claim.fact_ids[0], claim.text)) is not None
-    }
-    actual_links = {value.rstrip("/") for value in geometry.get("links", [])}
-    if not {value.rstrip("/") for value in expected_links}.issubset(actual_links):
-        groups["links"] = False
-        issues.append(ValidationIssue(group="links", code="link-targets", message=f"found {sorted(actual_links)}"))
-
-    if geometry.get("scrollWidth", 0) > geometry.get("clientWidth", 0) + 1 or geometry.get("offenders"):
-        groups["visual"] = False
-        issues.append(ValidationIssue(group="visual", code="overflow", message=str(geometry.get("offenders", []))))
-    if not screenshot_path.is_file() or screenshot_path.stat().st_size == 0:
-        groups["visual"] = False
-        issues.append(ValidationIssue(group="visual", code="screenshot-missing", message=str(screenshot_path)))
-    expected_dir = "rtl" if draft.language == "he" else "ltr"
-    html_text = html_path.read_text(encoding="utf-8")
-    if geometry.get("dir") != expected_dir:
-        groups["direction"] = False
-        issues.append(ValidationIssue(group="direction", code="document-direction", message=str(geometry.get("dir"))))
-    if draft.language == "he" and '<bdi dir="ltr">' not in html_text:
-        groups["direction"] = False
-        issues.append(ValidationIssue(group="direction", code="mixed-direction-isolation", message="No LTR isolation was rendered."))
-    expected_filename = normalized_role_filename(profile.normalized_role, candidate)
-    if pdf_path.name != expected_filename:
-        groups["filename"] = False
-        issues.append(ValidationIssue(group="filename", code="filename", message=f"expected {expected_filename}"))
-
-    return ValidationReport.from_findings(
-        groups=groups,
-        issues=issues,
-        evidence={
-            "page_count": page_count,
-            "ats_claim_coverage": coverage,
-            "pdf_sha256": sha256_file(pdf_path),
-            "screenshot": str(screenshot_path),
-            "geometry": geometry,
-        },
+    evidence = collect_render_evidence(
+        draft, profile, html_path, pdf_path, screenshot_path, geometry, candidate
     )
+    return validate_render_evidence(draft, profile, evidence, candidate)
 
 
-def _claim_recoverable(text: str, normalized_pdf: str, rtl: bool) -> bool:
-    if not rtl:
-        return normalized_text(text) in normalized_pdf
-    # PDF extractors commonly reorder adjacent RTL narrative and isolated LTR tokens
-    # (dates, percentages, B2B, product names). Requiring phrase order would reject a
-    # readable tagged PDF. Require nearly every meaningful source token instead.
-    tokens = [
-        token.casefold()
-        for token in re.findall(r"[\u0590-\u05ff]+|[A-Za-z]+|\d+", text)
-        if len(token) > 1 or token.isdigit()
-    ]
-    if not tokens:
-        return False
-    recovered = sum(token in normalized_pdf for token in tokens)
-    return recovered / len(tokens) >= 0.9
+def collect_render_evidence(
+    _draft: DraftDocument,
+    _profile: Profile,
+    html_path: Path,
+    pdf_path: Path,
+    screenshot_path: Path,
+    geometry: dict[str, Any],
+    _candidate: CandidateContext,
+) -> RenderEvidence:
+    html_exists = html_path.is_file()
+    html_size = html_path.stat().st_size if html_exists else 0
+    pdf_exists = pdf_path.is_file()
+    pdf_size = pdf_path.stat().st_size if pdf_exists else 0
+    screenshot_exists = screenshot_path.is_file()
+    screenshot_size = screenshot_path.stat().st_size if screenshot_exists else 0
+    page_count = 0
+    extracted = ""
+    pdf_error = None
+    html_text = ""
+    pdf_sha256 = None
+    if pdf_exists and pdf_size:
+        try:
+            reader = PdfReader(str(pdf_path))
+            page_count = len(reader.pages)
+            extracted = "\n".join(page.extract_text() or "" for page in reader.pages)
+        except Exception as exc:
+            pdf_error = str(exc)
+        html_text = html_path.read_text(encoding="utf-8")
+        pdf_sha256 = sha256_file(pdf_path)
+
+    return RenderEvidence(
+        html_path=str(html_path),
+        html_exists=html_exists,
+        html_size=html_size,
+        html_text=html_text,
+        pdf_path=str(pdf_path),
+        pdf_name=pdf_path.name,
+        pdf_exists=pdf_exists,
+        pdf_size=pdf_size,
+        pdf_error=pdf_error,
+        page_count=page_count,
+        extracted_text=extracted,
+        pdf_sha256=pdf_sha256,
+        screenshot_path=str(screenshot_path),
+        screenshot_exists=screenshot_exists,
+        screenshot_size=screenshot_size,
+        geometry=RenderGeometry(
+            scroll_width=geometry.get("scrollWidth", 0),
+            client_width=geometry.get("clientWidth", 0),
+            scroll_height=geometry.get("scrollHeight", 0),
+            client_height=geometry.get("clientHeight", 0),
+            offenders=geometry.get("offenders", []),
+            direction=geometry.get("dir"),
+            links=geometry.get("links", []),
+            raw=geometry,
+        ),
+    )
 
 
 class PlaywrightRenderer:

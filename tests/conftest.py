@@ -37,9 +37,10 @@ from cv_engine.domain.models import (
     JobClassificationProposal,
     ProfileName,
     Track,
-    ValidationReport,
 )
 from cv_engine.domain.profiles import ProfileStore
+from cv_engine.domain.candidate import contact_href
+from cv_engine.domain.render_validation import RenderEvidence, RenderGeometry
 from cv_engine.runtime.workspace import (
     MARKER_NAME,
     WORKSPACE_VERSION,
@@ -340,26 +341,53 @@ def ready_application(approved_application, monkeypatch: pytest.MonkeyPatch):
             "links": [],
         }
 
-    def accept_deterministic_render(*_args, **_kwargs) -> ValidationReport:
-        groups = {
-            "render": True,
-            "page_count": True,
-            "pdf": True,
-            "ats": True,
-            "links": True,
-            "visual": True,
-            "direction": True,
-            "filename": True,
-        }
-        return ValidationReport(
-            passed=True,
-            groups=groups,
-            issues=[],
-            evidence={"renderer": "deterministic-integrity-double", "page_count": 1},
+    def deterministic_render_evidence(
+        draft, _profile, html_path, pdf_path, screenshot_path, geometry, candidate
+    ) -> RenderEvidence:
+        extracted_text = "\n".join([
+            draft.headline.text,
+            *(claim.text for claim in draft.contacts),
+            *(claim.text for section in draft.sections for claim in section.claims),
+        ])
+        links = [
+            href
+            for claim in draft.contacts
+            if (href := contact_href(candidate, claim.fact_ids[0], claim.text)) is not None
+        ]
+        complete_geometry = {**geometry, "links": links}
+        return RenderEvidence(
+            html_path=str(html_path),
+            html_exists=True,
+            html_size=html_path.stat().st_size,
+            html_text=html_path.read_text(encoding="utf-8"),
+            pdf_path=str(pdf_path),
+            pdf_name=pdf_path.name,
+            pdf_exists=True,
+            pdf_size=pdf_path.stat().st_size,
+            pdf_error=None,
+            page_count=1,
+            extracted_text=extracted_text,
+            pdf_sha256="deterministic-integrity-double",
+            screenshot_path=str(screenshot_path),
+            screenshot_exists=True,
+            screenshot_size=screenshot_path.stat().st_size,
+            geometry=RenderGeometry(
+                scroll_width=complete_geometry["scrollWidth"],
+                client_width=complete_geometry["clientWidth"],
+                scroll_height=complete_geometry["scrollHeight"],
+                client_height=complete_geometry["clientHeight"],
+                offenders=complete_geometry["offenders"],
+                direction=complete_geometry["dir"],
+                links=complete_geometry["links"],
+                raw=complete_geometry,
+            ),
         )
 
     monkeypatch.setattr("cv_engine.infrastructure.rendering.render_pdf", render_without_browser)
-    monkeypatch.setattr("cv_engine.infrastructure.rendering.validate_rendered", accept_deterministic_render)
+    monkeypatch.setattr(
+        "cv_engine.infrastructure.rendering.collect_render_evidence",
+        deterministic_render_evidence,
+    )
 
     def build(
         company: str = "Ready Co",
