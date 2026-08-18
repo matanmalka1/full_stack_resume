@@ -32,6 +32,7 @@ from cv_engine.infrastructure.persistence.primitives import new_id
 from cv_engine.infrastructure.persistence.schema import (
     MIGRATIONS_DIR,
     baseline_fingerprint,
+    initialize,
     sqlite_master_fingerprint,
 )
 from cv_engine.infrastructure.persistence.serialization import serialization_version
@@ -542,3 +543,63 @@ def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
             connection.execute("DELETE FROM selection_plans WHERE id=?", (plan.id,))
     with pytest.raises(sqlite3.IntegrityError, match="UNIQUE constraint failed"):
         repository.create_working_draft(app_id, analysis_id, plan.id, document)
+
+
+def test_only_one_working_draft_per_application_can_be_active(tmp_path: Path) -> None:
+    """Product invariant 3, enforced by storage rather than by a filesystem path.
+
+    Before this boundary "one active draft" was an accident of every draft living
+    at `working/{application_id}/`, which a second writer would simply overwrite.
+    The partial unique index is what makes the invariant real, so it is asserted
+    through raw SQL: a repository method could satisfy it by convention while the
+    table underneath still allowed two.
+    """
+    database = tmp_path / "one-active.sqlite3"
+    initialize(database)
+    now = "2026-08-18T00:00:00+00:00"
+
+    def insert_draft(connection: object, draft_id: str, *, active: int) -> None:
+        connection.execute(
+            "INSERT INTO working_drafts(id, application_id, job_analysis_id, selection_plan_id, "
+            "source_json, edit_version, content_hash, active, created_at, updated_at) "
+            "VALUES(?, 'a', 'an', 'pl', '{}', 1, 'h', ?, ?, ?)",
+            (draft_id, active, now, now),
+        )
+
+    with connect(database) as connection:
+        connection.execute(
+            "INSERT INTO applications(id, company, target_role, current_status, created_at, "
+            "updated_at) VALUES('a', 'C', 'R', 'saved', ?, ?)",
+            (now, now),
+        )
+        connection.execute(
+            "INSERT INTO job_snapshots(id, application_id, version_number, payload_path, "
+            "source_hash, normalized_hash, captured_at, source_metadata_json, content_hash) "
+            "VALUES('s', 'a', 1, 'p', 'h', 'n', ?, '{}', 'h')",
+            (now,),
+        )
+        connection.execute(
+            "INSERT INTO job_analyses(id, application_id, job_snapshot_id, version_number, "
+            "structured_json, provider, model, created_at) "
+            "VALUES('an', 'a', 's', 1, '{}', 'deterministic', 'rules-v1', ?)",
+            (now,),
+        )
+        connection.execute(
+            "INSERT INTO selection_plans(id, application_id, job_analysis_id, version_number, "
+            "plan_json, candidate_context_version, candidate_context_hash, profile_version, "
+            "selection_policy_version, track_emphasis_dependencies_json, created_at) "
+            "VALUES('pl', 'a', 'an', 1, '{}', 'v', 'h', 'pv', '1.0.0', '{}', ?)",
+            (now,),
+        )
+        insert_draft(connection, "first", active=1)
+
+        with pytest.raises(sqlite3.IntegrityError, match="working_drafts.application_id"):
+            insert_draft(connection, "second", active=1)
+
+        # Deactivating releases the slot, and the superseded row survives as history.
+        connection.execute("UPDATE working_drafts SET active=0 WHERE id='first'")
+        insert_draft(connection, "third", active=1)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM working_drafts WHERE application_id='a'"
+        ).fetchone()[0] == 2
+
