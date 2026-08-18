@@ -1,6 +1,6 @@
 """An AI classification proposal may not decide deterministic policy.
 
-`Engine.analyze` used to build its authoritative `JobAnalysis` from the provider
+`AnalysisService.analyze` used to build its authoritative `JobAnalysis` from the provider
 response and merge only hard gaps back, so a provider could raise confidence,
 switch the document language, clear `classification_requires_approval`, and erase
 deterministic warning gaps. These tests pin the policy that replaced it.
@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 
+from cv_engine.application.commands import DraftCommand
 from cv_engine.domain.analysis.approval import merge_classification
 from cv_engine.domain.analysis.classification import classify_job
 from cv_engine.domain.models import Emphasis, FitLevel, Gap, ProfileName, Track
@@ -26,19 +27,23 @@ def test_provider_cannot_relax_approval_confidence_or_language(
     assert deterministic.language == "he"
 
     # The job's hard gap is accepted, so the approval gate is what must block.
-    engine, application_id, analysis = provider_analysis(
+    setup = provider_analysis(
         classification_proposal(), accept_low_fit=True
     )
+    services, application_id, analysis = setup
 
     assert analysis.classification_requires_approval
     assert analysis.language == "he"
     assert analysis.confidence == deterministic.confidence
     with pytest.raises(WorkflowError, match="ambiguous classification"):
-        engine.draft(application_id)
+        services.drafts.draft(DraftCommand(
+            application_id=application_id,
+            job_analysis_id=setup.analysis_id,
+        ))
 
-    _, stored = engine.repo.latest_analysis(application_id)
+    _, stored = services.repository.latest_analysis(application_id)
     assert stored == analysis
-    assert engine.repo.get_application(application_id)["language"] == "he"
+    assert services.repository.get_application(application_id)["language"] == "he"
 
 
 def test_explicit_user_override_beats_the_provider(

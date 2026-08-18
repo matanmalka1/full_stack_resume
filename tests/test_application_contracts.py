@@ -54,9 +54,7 @@ from helpers import ACCOUNT_MANAGER_JOB, working_claim
 # --- results are typed, not positional --------------------------------------
 
 
-def test_commands_answer_with_named_results(engine) -> None:
-    services = engine.services
-
+def test_commands_answer_with_named_results(services) -> None:
     ingested = services.applications.ingest(IngestCommand(
         company="Named Co",
         target_role="Account Manager",
@@ -84,34 +82,34 @@ def test_commands_answer_with_named_results(engine) -> None:
     assert approved.version == 1
 
 
-def test_application_dtos_do_not_expose_filesystem_locations(engine) -> None:
+def test_application_dtos_do_not_expose_filesystem_locations(services) -> None:
     for model in (DraftResult, ApprovalResult, RenderResult, ArtifactVersionView):
         assert "path" not in model.model_fields
         assert all("Path" not in str(field.annotation) for field in model.model_fields.values())
 
-    ingested = engine.services.applications.ingest(IngestCommand(
+    ingested = services.applications.ingest(IngestCommand(
         company="Projection Co",
         target_role="Account Manager",
         job_text=ACCOUNT_MANAGER_JOB,
     ))
-    analysed = engine.services.analysis.analyze(AnalyzeCommand(
+    analysed = services.analysis.analyze(AnalyzeCommand(
         application_id=ingested.application_id,
         job_snapshot_id=ingested.job_snapshot_id,
     ))
-    engine.services.drafts.draft(DraftCommand(
+    services.drafts.draft(DraftCommand(
         application_id=ingested.application_id,
         job_analysis_id=analysed.analysis_id,
     ))
-    engine.services.drafts.approve(ingested.application_id)
+    services.drafts.approve(ingested.application_id)
 
-    projection = engine.services.queries.artifact_versions(ingested.application_id)
+    projection = services.queries.artifact_versions(ingested.application_id)
     serialized = projection.model_dump(mode="json")
     assert serialized["items"]
     assert all("path" not in item and "metadata_json" not in item for item in serialized["items"])
 
 
-def test_knowledge_query_and_reconciliation_services_return_typed_results(engine) -> None:
-    knowledge = engine.services.knowledge_lifecycle
+def test_knowledge_query_and_reconciliation_services_return_typed_results(services) -> None:
+    knowledge = services.knowledge_lifecycle
 
     versions = knowledge.knowledge_versions()
     assert isinstance(versions, KnowledgeVersionsResult)
@@ -133,9 +131,9 @@ def test_knowledge_query_and_reconciliation_services_return_typed_results(engine
 
 def test_draft_link_and_markdown_sync_services_preserve_validation(drafted_application) -> None:
     setup = drafted_application("Editing Boundary Co")
-    claim = working_claim(setup.engine, setup.application_id, "common.language.hebrew")
+    claim = working_claim(setup.services, setup.application_id, "common.language.hebrew")
 
-    linked = setup.engine.services.drafts.link_claim(
+    linked = setup.services.drafts.link_claim(
         setup.application_id,
         claim.claim_id,
         claim.text,
@@ -143,13 +141,13 @@ def test_draft_link_and_markdown_sync_services_preserve_validation(drafted_appli
     )
     assert linked.validation.passed, linked.validation.model_dump()
 
-    synchronized = setup.engine.services.drafts.sync_working_claims(setup.application_id)
+    synchronized = setup.services.drafts.sync_working_claims(setup.application_id)
     assert synchronized.validation.passed, synchronized.validation.model_dump()
 
 
 def test_query_and_tracking_services_expose_the_application_boundary(approved_application) -> None:
     setup = approved_application("Query Boundary Co")
-    services = setup.engine.services
+    services = setup.services
 
     applications = services.queries.list_applications()
     assert isinstance(applications, ApplicationListView)
@@ -157,7 +155,7 @@ def test_query_and_tracking_services_expose_the_application_boundary(approved_ap
 
     decision = services.queries.latest_decision(setup.application_id)
     assert isinstance(decision, DecisionRecordView)
-    assert decision.id == setup.approved["decision_record_id"]
+    assert decision.id == setup.approved.decision_record_id
 
     transitioned = services.tracking.transition_status(RecruitmentStatusCommand(
         application_id=setup.application_id,
@@ -181,7 +179,7 @@ def test_query_and_tracking_services_expose_the_application_boundary(approved_ap
 # --- refusals are typed -----------------------------------------------------
 
 
-def test_refusals_share_one_taxonomy_and_report_missing_dependencies(engine) -> None:
+def test_refusals_share_one_taxonomy_and_report_missing_dependencies(services) -> None:
     """One base class, so an outer layer can catch the layer rather than a list."""
     for name in (
         "UnknownRecord",
@@ -196,31 +194,31 @@ def test_refusals_share_one_taxonomy_and_report_missing_dependencies(engine) -> 
         assert issubclass(getattr(errors, name), errors.ApplicationError)
     assert errors.WorkflowError is errors.ApplicationError
     rendering = RenderingService(
-        repository=engine.services.repository,
-        knowledge=engine.services.knowledge,
-        artifacts=engine.services.artifacts,
+        repository=services.repository,
+        knowledge=services.knowledge,
+        artifacts=services.artifacts,
         renderer=None,
     )
     with pytest.raises(errors.DependencyUnavailable, match="renderer"):
         rendering.renderer
 
 
-def test_expected_boundary_refusals_do_not_leak_adapter_or_domain_errors(engine) -> None:
+def test_expected_boundary_refusals_do_not_leak_adapter_or_domain_errors(services) -> None:
     with pytest.raises(errors.PreconditionFailed, match="required"):
-        engine.services.applications.ingest(IngestCommand(
+        services.applications.ingest(IngestCommand(
             company="",
             target_role="Account Manager",
             job_text=ACCOUNT_MANAGER_JOB,
         ))
 
     with pytest.raises(errors.UnknownRecord, match="job snapshot"):
-        engine.services.analysis.analyze(AnalyzeCommand(
+        services.analysis.analyze(AnalyzeCommand(
             application_id="missing-application",
             job_snapshot_id="missing-snapshot",
         ))
 
     with pytest.raises(errors.UnknownRecord, match="job analysis"):
-        engine.services.drafts.draft(DraftCommand(
+        services.drafts.draft(DraftCommand(
             application_id="missing-application",
             job_analysis_id="missing-analysis",
         ))
@@ -228,12 +226,12 @@ def test_expected_boundary_refusals_do_not_leak_adapter_or_domain_errors(engine)
 
 def test_a_blocked_validation_carries_its_report(drafted_application) -> None:
     setup = drafted_application("Blocked Co")
-    engine, application_id = setup
+    services, application_id = setup
     markdown = setup.markdown
     markdown.write_text(markdown.read_text(encoding="utf-8") + "\n- Grew revenue 30% YoY.\n", encoding="utf-8")
 
     with pytest.raises(errors.ValidationBlocked) as raised:
-        engine.services.drafts.approve(application_id)
+        services.drafts.approve(application_id)
 
     assert raised.value.report is not None
     assert not raised.value.report.passed
@@ -293,40 +291,40 @@ def test_unit_of_work_commits_success_and_rolls_back_failure(tmp_path: Path) -> 
 # --- commands take explicit sources; `latest` lives outside them --------------
 
 
-def test_commands_require_owned_explicit_sources_and_compat_resolves_latest(engine) -> None:
-    mine = engine.services.applications.ingest(IngestCommand(
+def test_commands_require_owned_explicit_sources_and_compat_resolves_latest(services) -> None:
+    mine = services.applications.ingest(IngestCommand(
         company="Mine Co", target_role="Account Manager", job_text=ACCOUNT_MANAGER_JOB
     ))
-    theirs = engine.services.applications.ingest(IngestCommand(
+    theirs = services.applications.ingest(IngestCommand(
         company="Theirs Co", target_role="Account Manager", job_text=ACCOUNT_MANAGER_JOB
     ))
 
     with pytest.raises(errors.LineageBroken, match="does not belong"):
-        engine.services.analysis.analyze(AnalyzeCommand(
+        services.analysis.analyze(AnalyzeCommand(
             application_id=mine.application_id,
             job_snapshot_id=theirs.job_snapshot_id,
         ))
 
-    analysed = engine.services.analysis.analyze(AnalyzeCommand(
+    analysed = services.analysis.analyze(AnalyzeCommand(
         application_id=theirs.application_id,
         job_snapshot_id=theirs.job_snapshot_id,
     ))
     with pytest.raises(errors.LineageBroken, match="does not belong"):
-        engine.services.drafts.draft(DraftCommand(
+        services.drafts.draft(DraftCommand(
             application_id=mine.application_id,
             job_analysis_id=analysed.analysis_id,
         ))
-    ingested = engine.services.applications.ingest(IngestCommand(
+    ingested = services.applications.ingest(IngestCommand(
         company="Legacy Co", target_role="Account Manager", job_text=ACCOUNT_MANAGER_JOB
     ))
 
-    assert resolve_job_snapshot_id(engine.repo, ingested.application_id) == ingested.job_snapshot_id
+    assert resolve_job_snapshot_id(services.repository, ingested.application_id) == ingested.job_snapshot_id
 
-    analysed = engine.services.analysis.analyze(AnalyzeCommand(
+    analysed = services.analysis.analyze(AnalyzeCommand(
         application_id=ingested.application_id,
         job_snapshot_id=ingested.job_snapshot_id,
     ))
-    assert resolve_job_analysis_id(engine.repo, ingested.application_id) == analysed.analysis_id
+    assert resolve_job_analysis_id(services.repository, ingested.application_id) == analysed.analysis_id
     from cv_engine.application.services.drafts import DraftService
 
     source = inspect.getsource(DraftService.draft)

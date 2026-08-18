@@ -31,8 +31,8 @@ from .application.commands import (
     RecruitmentStatusCommand,
 )
 from .application.queries import ApplicationListView
-from .compat import Engine, resolve_job_analysis_id, resolve_job_snapshot_id
-from .runtime.composition import build_services
+from .compat import resolve_job_analysis_id, resolve_job_snapshot_id
+from .runtime.composition import Services, build_services
 
 
 def _repo_root() -> Path:
@@ -51,6 +51,67 @@ def _job_text(args: argparse.Namespace) -> str:
     if getattr(args, "job_text", None):
         return args.job_text
     raise ValueError("one of --job-file or --job-text is required")
+
+
+def _fast(
+    services: Services,
+    company: str,
+    role: str,
+    job_text: str,
+    *,
+    url: str | None = None,
+    track: str | None = None,
+    profile: str | None = None,
+    emphasis: str | None = None,
+    language: str | None = None,
+    accept_low_fit: bool = False,
+) -> dict[str, Any]:
+    """The explicit no-pause flow: an approval instruction, not a bypass.
+
+    Invoking it is itself the user's approval decision, recorded as such.
+    It chains the same use-cases in the same order and every validation and
+    blocker still applies; nothing here can approve unvalidated content.
+    """
+    ingested = services.applications.ingest(IngestCommand(
+        company=company,
+        target_role=role,
+        job_text=job_text,
+        source_url=url,
+    ))
+    analysed = services.analysis.analyze(AnalyzeCommand(
+        application_id=ingested.application_id,
+        job_snapshot_id=ingested.job_snapshot_id,
+        track_override=track,
+        profile_override=profile,
+        emphasis_override=emphasis,
+        language_override=language,
+        accept_low_fit=accept_low_fit,
+    ))
+    drafted = services.drafts.draft(DraftCommand(
+        application_id=ingested.application_id,
+        job_analysis_id=analysed.analysis_id,
+    ))
+    if not drafted.validation.passed:
+        raise WorkflowError("fast mode blocked by pre-render validation")
+    approved = services.drafts.approve(ingested.application_id)
+    rendered = services.rendering.render(ingested.application_id)
+    if not rendered.validation.passed:
+        raise WorkflowError("fast mode blocked by post-render validation")
+    pdf_record = services.repository.latest_artifact_version(
+        ingested.application_id, "resume_pdf"
+    )
+    return {
+        "application_id": ingested.application_id,
+        "approval": {
+            "version": approved.version,
+            "directory": services.artifacts.approved_version_dir(
+                ingested.application_id, approved.version
+            ),
+            "decision_record_id": approved.decision_record_id,
+        },
+        "pdf": str(services.artifacts.resolve(pdf_record["path"])),
+        "ready": True,
+    }
 
 
 def _add_job_input(parser: argparse.ArgumentParser) -> None:
@@ -445,7 +506,6 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         services = build_services(workspace, database_path=db_path)
         repository = services.repository
-        engine = Engine(workspace, services=services)
         if args.command == "ingest":
             ingested = services.applications.ingest(IngestCommand(
                 company=args.company,
@@ -517,7 +577,8 @@ def main(argv: list[str] | None = None) -> int:
             _print(report.model_dump(mode="json"))
             return 0 if report.passed else 1
         elif args.command == "fast":
-            _print(engine.fast(
+            _print(_fast(
+                services,
                 args.company, args.role, _job_text(args), url=args.url,
                 track=args.track, profile=args.profile, emphasis=args.emphasis,
                 language=args.language, accept_low_fit=args.accept_low_fit,

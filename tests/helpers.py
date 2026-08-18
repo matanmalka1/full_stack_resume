@@ -5,8 +5,8 @@ from pathlib import Path
 from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.infrastructure.migration import _seal_report as seal_report
+from cv_engine.runtime.composition import Services
 from cv_engine.runtime.workspace import load_workspace
-from cv_engine.compat import Engine
 
 
 def artifact_store(root: Path) -> FilesystemArtifactStore:
@@ -49,8 +49,8 @@ PAYME_TECH_SALES_JOB = (
 )
 
 
-def working_claim(engine: Engine, application_id: str, fact_id: str):
-    manifest = engine.root / "artifacts/working" / application_id / "resume.claims.json"
+def working_claim(services: Services, application_id: str, fact_id: str):
+    manifest = services.artifacts.working_paths(application_id).manifest
     draft = parse_draft(manifest.read_text(encoding="utf-8"))
     return next(
         claim
@@ -79,14 +79,15 @@ def claim_by_id(draft, claim_id: str):
 
 
 def artifact_version_and_path(
-    engine: Engine,
+    services: Services,
     application_id: str,
-    root: Path,
     artifact_type: str,
     lifecycle_status: str,
 ):
-    version = engine.repo.latest_artifact_version(application_id, artifact_type, lifecycle_status)
-    return version, root / version["path"]
+    version = services.repository.latest_artifact_version(
+        application_id, artifact_type, lifecycle_status
+    )
+    return version, services.artifacts.resolve(version["path"])
 
 
 def passing_migration_test_runner(root: Path) -> Path:

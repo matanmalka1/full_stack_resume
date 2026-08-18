@@ -16,13 +16,13 @@ import pytest
 
 from cv_engine.infrastructure.legacy_source import LegacySourceError, LegacyV1Source
 from cv_engine.runtime.config import CONFIG_NAME, resolve_config
+from cv_engine.runtime.composition import build_services
 from cv_engine.runtime.workspace import (
     MARKER_NAME,
     WorkspaceError,
     create_workspace,
     load_workspace,
 )
-from cv_engine.compat import Engine
 
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
@@ -104,7 +104,7 @@ def test_workspace_markers_fail_closed_for_plain_legacy_invalid_and_reused_roots
     with pytest.raises(WorkspaceError, match="unreadable Workspace marker"):
         load_workspace(workspace.root)
     with pytest.raises(WorkspaceError):
-        Engine(plain)
+        build_services(load_workspace(plain))
 
 
 def test_live_data_is_refused_outside_a_live_runtime(tmp_path: Path) -> None:

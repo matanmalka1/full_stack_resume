@@ -14,6 +14,8 @@ from typing import Any
 import pytest
 
 import cv_engine
+from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
+from cv_engine.application.commands import ApprovalResult
 from cv_engine.domain.analysis.classification import classify_job
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.infrastructure.canonical_data import V2_IDENTITY_FACT, write_canonical_sources
@@ -48,7 +50,7 @@ from cv_engine.runtime.workspace import (
 )
 from cv_engine.domain.selection import EmphasisPolicyStore
 from cv_engine.infrastructure.rendering import render_pdf, validate_rendered
-from cv_engine.compat import Engine
+from cv_engine.runtime.composition import Services, build_services
 from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB, seal_report
 
 
@@ -121,18 +123,19 @@ def pytest_collection_finish(session) -> None:
 
 @dataclass(frozen=True)
 class WorkflowSetup:
-    engine: Engine
+    services: Services
     application_id: str
     snapshot_id: str
+    analysis_id: str | None = None
     markdown: Path | None = None
     manifest: Path | None = None
     draft_report: Any = None
-    approved: dict[str, Any] | None = None
+    approved: ApprovalResult | None = None
     pdf: Path | None = None
     ready_report: Any = None
 
     def __iter__(self):
-        yield self.engine
+        yield self.services
         yield self.application_id
 
 
@@ -155,13 +158,14 @@ class DraftSetup:
 
 @dataclass(frozen=True)
 class ProposalSetup:
-    engine: Engine
+    services: Services
     application_id: str
+    analysis_id: str
     analysis: JobAnalysis
     payload: dict[str, Any]
 
     def __iter__(self):
-        yield self.engine
+        yield self.services
         yield self.application_id
         yield self.analysis
 
@@ -229,8 +233,8 @@ def candidate_context(v1_repo: Path, fact_store: FactStore):
 
 
 @pytest.fixture
-def engine(v1_repo: Path) -> Engine:
-    return Engine(v1_repo)
+def services(workspace: Workspace) -> Services:
+    return build_services(workspace)
 
 
 @pytest.fixture
@@ -252,15 +256,27 @@ def cli_runner(v1_repo: Path):
 
 
 @pytest.fixture
-def analyzed_application(engine: Engine):
+def analyzed_application(services: Services):
     def build(
         company: str,
         role: str = "Account Manager",
         job_text: str = ACCOUNT_MANAGER_JOB,
     ) -> WorkflowSetup:
-        application_id, snapshot_id = engine.ingest(company, role, job_text)
-        engine.analyze(application_id)
-        return WorkflowSetup(engine, application_id, snapshot_id)
+        ingested = services.applications.ingest(IngestCommand(
+            company=company,
+            target_role=role,
+            job_text=job_text,
+        ))
+        analysed = services.analysis.analyze(AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+        ))
+        return WorkflowSetup(
+            services=services,
+            application_id=ingested.application_id,
+            snapshot_id=ingested.job_snapshot_id,
+            analysis_id=analysed.analysis_id,
+        )
 
     return build
 
@@ -273,8 +289,18 @@ def drafted_application(analyzed_application):
         job_text: str = ACCOUNT_MANAGER_JOB,
     ) -> WorkflowSetup:
         setup = analyzed_application(company, role, job_text)
-        markdown, manifest, report = setup.engine.draft(setup.application_id)
-        return replace(setup, markdown=markdown, manifest=manifest, draft_report=report)
+        assert setup.analysis_id is not None
+        drafted = setup.services.drafts.draft(DraftCommand(
+            application_id=setup.application_id,
+            job_analysis_id=setup.analysis_id,
+        ))
+        paths = setup.services.artifacts.working_paths(setup.application_id)
+        return replace(
+            setup,
+            markdown=paths.markdown,
+            manifest=paths.manifest,
+            draft_report=drafted.validation,
+        )
 
     return build
 
@@ -287,7 +313,7 @@ def approved_application(drafted_application):
         job_text: str = ACCOUNT_MANAGER_JOB,
     ) -> WorkflowSetup:
         setup = drafted_application(company, role, job_text)
-        approved = setup.engine.approve(setup.application_id)
+        approved = setup.services.drafts.approve(setup.application_id)
         return replace(setup, approved=approved)
 
     return build
@@ -337,10 +363,14 @@ def ready_application(approved_application, monkeypatch: pytest.MonkeyPatch):
         job_text: str = ACCOUNT_MANAGER_JOB,
     ) -> WorkflowSetup:
         setup = approved_application(company, role, job_text)
-        pdf, report = setup.engine.render(setup.application_id)
-        assert report.passed, report.model_dump()
-        assert setup.engine.repo.get_application(setup.application_id)["current_status"] == "ready"
-        return replace(setup, pdf=pdf, ready_report=report)
+        rendered = setup.services.rendering.render(setup.application_id)
+        pdf_record = setup.services.repository.latest_artifact_version(
+            setup.application_id, "resume_pdf"
+        )
+        pdf = setup.services.artifacts.resolve(pdf_record["path"])
+        assert rendered.validation.passed, rendered.validation.model_dump()
+        assert setup.services.repository.get_application(setup.application_id)["current_status"] == "ready"
+        return replace(setup, pdf=pdf, ready_report=rendered.validation)
 
     return build
 
@@ -406,8 +436,8 @@ def classification_proposal():
 
 
 @pytest.fixture
-def provider_analysis(engine: Engine, monkeypatch):
-    """Run `Engine.analyze` end to end against a stubbed AI provider."""
+def provider_analysis(services: Services, monkeypatch):
+    """Run `AnalysisService.analyze` end to end against a stubbed AI provider."""
 
     def run(
         response: JobClassificationProposal,
@@ -432,11 +462,30 @@ def provider_analysis(engine: Engine, monkeypatch):
                 return response, None
 
         monkeypatch.setattr("cv_engine.infrastructure.providers.OpenAIResponsesProvider", _StubProvider)
-        application_id, _ = engine.ingest(company, role, job_text)
-        _, analysis = engine.analyze(
-            application_id, provider="openai", model="gpt-test", **analyze_kwargs
+        ingested = services.applications.ingest(IngestCommand(
+            company=company,
+            target_role=role,
+            job_text=job_text,
+        ))
+        analysed = services.analysis.analyze(AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+            track_override=analyze_kwargs.pop("track", None),
+            profile_override=analyze_kwargs.pop("profile", None),
+            emphasis_override=analyze_kwargs.pop("emphasis", None),
+            language_override=analyze_kwargs.pop("language", None),
+            accept_low_fit=analyze_kwargs.pop("accept_low_fit", False),
+            provider="openai",
+            model="gpt-test",
+            **analyze_kwargs,
+        ))
+        return ProposalSetup(
+            services=services,
+            application_id=ingested.application_id,
+            analysis_id=analysed.analysis_id,
+            analysis=analysed.analysis,
+            payload=captured,
         )
-        return ProposalSetup(engine, application_id, analysis, captured)
 
     return run
 

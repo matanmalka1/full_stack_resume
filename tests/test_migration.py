@@ -18,7 +18,8 @@ from cv_engine.infrastructure.migration import (
     verify_snapshot,
 )
 from cv_engine.util import canonical_json, sha256_text
-from cv_engine.compat import Engine
+from cv_engine.runtime.composition import build_services
+from cv_engine.runtime.workspace import load_workspace
 from helpers import passing_migration_test_runner as _passing_test_runner
 
 
@@ -167,8 +168,8 @@ def test_retrospective_verification_accepts_post_migration_lifecycle_facts(
     confirmed -> canonical lifecycle writes to these files by design.
     """
     root, snapshot = completed_migration_repo
-    engine = Engine(root)
-    engine.add_fact(
+    knowledge = build_services(load_workspace(root)).knowledge_lifecycle
+    knowledge.add_fact(
         "situational_skills.md",
         {
             "fact_id": "situational.post_migration_example",
@@ -179,8 +180,12 @@ def test_retrospective_verification_accepts_post_migration_lifecycle_facts(
             "resume_style": "bullet",
         },
     )
-    engine.promote_fact("situational.post_migration_example", "confirmed", explicitly_confirmed=True)
-    engine.promote_fact("situational.post_migration_example", "canonical", explicitly_confirmed=True)
+    knowledge.promote_fact(
+        "situational.post_migration_example", "confirmed", explicitly_confirmed=True
+    )
+    knowledge.promote_fact(
+        "situational.post_migration_example", "canonical", explicitly_confirmed=True
+    )
 
     report = retrospective_verify_migration(root, snapshot)
 
