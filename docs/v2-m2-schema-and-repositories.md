@@ -95,8 +95,8 @@ SQL (audit §5.2: fix only its real defects, do not restructure). Its DDL lives 
 
 ## 3. Target schema map
 
-Present today, moved verbatim into `0001_baseline.sql` (tables, indexes, and the eleven
-tables' immutability triggers as explicit DDL rather than a Python loop):
+Present today, moved verbatim into `0001_baseline.sql` (fourteen declared tables, six indexes,
+and the eleven immutable tables' 22 triggers as explicit DDL rather than a Python loop):
 
 `schema_meta`, `applications`, `job_snapshots`, `job_analyses`, `status_history`,
 `application_events`, `artifacts`, `artifact_versions`, `decision_records`, `generation_runs`,
@@ -105,6 +105,19 @@ tables' immutability triggers as explicit DDL rather than a Python loop):
 Added by this boundary: `schema_migrations(version TEXT PRIMARY KEY, name TEXT NOT NULL,
 checksum TEXT NOT NULL, applied_at TEXT NOT NULL)`, bootstrapped by the runner itself rather
 than by a numbered file.
+
+**Two facts the fingerprint guard makes load-bearing** (`tests/fixtures/m1_sqlite_master.tsv`,
+43 rows: 15 tables, 6 indexes, 22 triggers):
+
+1. The fifteenth table is SQLite's own `sqlite_sequence`, which exists only because
+   `status_history.id` is `INTEGER PRIMARY KEY AUTOINCREMENT`. `0001_baseline.sql` must not
+   declare it and must not drop that `AUTOINCREMENT`, or the fingerprint changes.
+2. `schema_migrations` is a **new** row in `sqlite_master`, so a database built by the runner
+   has 44 rows against a 43-row fixture. The fingerprint comparison therefore excludes the
+   bookkeeping table by name, explicitly and with a comment saying why. **Regenerating the
+   fixture is forbidden** — it is the parity evidence that `0001_baseline.sql` reproduces the
+   M1 schema, and a regenerated fixture proves only that the new code agrees with itself. If
+   the fingerprint differs for any other reason, that is a stop condition.
 
 Planned, so later migrations are additive:
 
@@ -299,7 +312,39 @@ Stop and report rather than work around:
 - `tests/test_golden.py` reports any semantic difference;
 - an M2 §4.7 criterion cannot be honestly assessed.
 
-## 12. Evidence
+## 12. Wave 0 verification findings
+
+Wave 0 (`2e7b06f`, `4660f28`, `97c9cf4`, `0cc4b63`) was independently reproduced: 131 passed
+under `./.venv/bin/python -m pytest -q`, +7 from the 124 baseline and fully accounted for (four
+architecture guards, three database/service scenarios, no test removed); the debt allowlist is
+unchanged at two entries; the containment repointing preserves every existing error type and
+message; the frozen fixture matches a freshly built database exactly (43 rows recounted
+independently); and both live new guards were confirmed to **fail** on an injected SQL string
+and an injected containment predicate before the probe was reverted.
+
+Four items to close, none of them blocking wave 1:
+
+1. **The SQL/PRAGMA guard is narrower than §4 requires.**
+   `test_sqlite_and_sql_are_owned_by_persistence` iterates `_modules("infrastructure")` only, so
+   a raw SQL string or `PRAGMA` added to `cli.py`, `runtime/**`, or `application/**` passes
+   undetected. Widen it to the whole package, keeping the same skip list
+   (`persistence/`, `migration.py`, `legacy_source.py`, and the temporary `db.py` exemption).
+2. **Two guards are inert until Lane A creates their targets.**
+   `test_numbered_migrations_are_registered_once` and `test_composite_repository_contains_no_sql`
+   both return early when `persistence/migrations/` and `persistence/composite.py` do not exist.
+   That is correct for wave 0, but wave 2 must prove they are live — a differently named
+   directory would leave them silently vacuous forever.
+3. **`Workspace.relative()` widened for relative input.** It previously resolved a non-absolute
+   path against the process CWD, which almost always raised
+   `WorkspaceError: path is outside the Workspace`; `relative_within` now interprets it as
+   root-relative and returns it. Artifact rows are built from this method, so a CWD-relative
+   accident must not become a valid-looking Workspace-relative record: restore the refusal for
+   non-absolute input, or state explicitly why root-relative is now correct.
+4. **The `db.py` SQL exemption is time-boxed.** `PERSISTENCE_MOVE_SOURCE = "db.py"` in
+   `tests/test_architecture.py` must be deleted in wave 2 together with the file, so a future
+   `infrastructure/db.py` cannot reappear pre-exempted.
+
+## 13. Evidence
 
 Empty until execution. Filled at boundary close with per-wave commits, quoted command output,
 the test-count delta and its explanation, and the §4.7 items this boundary can honestly tick.
