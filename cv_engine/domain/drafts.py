@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass
 
 from .facts import FactStore
-from .draft_markdown import serialize_markdown, synchronize_markdown_claims, parse_draft  # temporary re-export: removed in Wave 2.
+from .draft_markdown import serialize_markdown as _serialize_markdown
 from .models import (
     CandidateContext,
     ClaimLine,
@@ -231,7 +231,7 @@ def build_draft(
         selection=selection,
         fact_store_version=facts.version,
     )
-    markdown = serialize_markdown(draft)
+    markdown = _serialize_markdown(draft)
     return draft.model_copy(update={"content_hash": sha256_text(markdown)})
 
 
@@ -242,7 +242,7 @@ def seal_draft(draft: DraftDocument) -> tuple[DraftDocument, str, str]:
     written out of step. Where the two payloads land is a storage decision made
     outside this layer.
     """
-    markdown = serialize_markdown(draft)
+    markdown = _serialize_markdown(draft)
     sealed = draft.model_copy(update={"content_hash": sha256_text(markdown)})
     manifest = json.dumps(sealed.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n"
     return sealed, markdown, manifest
@@ -298,7 +298,7 @@ def _refresh_selection(draft: DraftDocument, facts: FactStore) -> DraftDocument:
         ),
         selected,
     )
-    return draft.model_copy(update={"content_hash": sha256_text(serialize_markdown(draft))})
+    return draft.model_copy(update={"content_hash": sha256_text(_serialize_markdown(draft))})
 
 
 def _normalized_clause(text: str) -> str:

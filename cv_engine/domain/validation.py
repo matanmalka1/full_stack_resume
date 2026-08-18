@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import re
 
-from .analysis import unresolved_approval_reasons
-from .drafts import render_composite_claim, serialize_markdown, validate_derived_wording
+from .analysis.approval import unresolved_approval_reasons
+from .draft_markdown import serialize_markdown
+from .drafts import render_composite_claim, validate_derived_wording
 from .facts import FactStore, FactStoreError
 from .models import DraftDocument, JobAnalysis, Profile, ValidationIssue, ValidationReport
 from .presentations import PresentationStore

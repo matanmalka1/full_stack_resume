@@ -12,15 +12,13 @@ from ..application.ports import (
     Renderer,
     UnitOfWork,
 )
-from ..application.services import (
-    AnalysisService,
-    ApplicationQueryService,
-    ApplicationService,
-    DraftService,
-    KnowledgeService,
-    RenderingService,
-    TrackingService,
-)
+from ..application.services.analysis import AnalysisService
+from ..application.services.applications import ApplicationService
+from ..application.services.drafts import DraftService
+from ..application.services.knowledge import KnowledgeService
+from ..application.services.projections import ApplicationQueryService
+from ..application.services.rendering import RenderingService
+from ..application.services.tracking import TrackingService
 from ..infrastructure.artifacts import FilesystemArtifactStore
 from ..infrastructure.db import Repository
 from ..infrastructure.knowledge import FileKnowledge

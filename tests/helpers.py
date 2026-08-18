@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cv_engine.domain.drafts import parse_draft
+from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.infrastructure.migration import _seal_report as seal_report
 from cv_engine.runtime.workspace import load_workspace

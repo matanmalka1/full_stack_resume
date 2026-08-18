@@ -28,7 +28,7 @@ from .infrastructure.migration import (
 from .domain.facts import FACT_SOURCE_NAMES
 from .domain.models import ApplicationStatus, FactStatus
 from .util import sha256_file, utc_now
-from .application.services import WorkflowError
+from .application.errors import WorkflowError
 from .application.commands import (
     AnalyzeCommand,
     DraftCommand,

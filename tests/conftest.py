@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 
 import cv_engine
-from cv_engine.domain.analysis import classify_job
+from cv_engine.domain.analysis.classification import classify_job
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.infrastructure.canonical_data import V2_IDENTITY_FACT, write_canonical_sources
 from cv_engine.infrastructure.knowledge import (

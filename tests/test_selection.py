@@ -7,7 +7,7 @@ keywords and gaps could not change a single line of the document.
 
 from __future__ import annotations
 
-from cv_engine.domain.drafts import serialize_markdown
+from cv_engine.domain.draft_markdown import serialize_markdown
 from cv_engine.domain.models import Emphasis, Profile
 from cv_engine.domain.profiles import ProfileStore
 from cv_engine.infrastructure.rendering import normalized_role_filename
@@ -90,7 +90,7 @@ def test_a_required_tag_is_rescued_and_the_eviction_is_recorded(
     profile_store: ProfileStore, policy_store, fact_store
 ) -> None:
     """A Profile invariant outranks the Emphasis that would have dropped it."""
-    from cv_engine.domain.analysis import classify_job
+    from cv_engine.domain.analysis.classification import classify_job
 
     base = profile_store.get("account-manager")
     profile = Profile.model_validate({

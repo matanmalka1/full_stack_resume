@@ -14,10 +14,10 @@ from pathlib import Path
 import pytest
 
 from cv_engine.infrastructure.db import connect
-from cv_engine.domain.drafts import parse_draft
+from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.application.ready import verify_ready_integrity
 from cv_engine.runtime.workspace import Workspace
-from cv_engine.application.services import WorkflowError
+from cv_engine.application.errors import WorkflowError
 from cv_engine.compat import Engine
 from helpers import ACCOUNT_MANAGER_JOB
 

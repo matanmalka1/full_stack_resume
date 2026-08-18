@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from cv_engine.domain.drafts import serialize_markdown
+from cv_engine.domain.draft_markdown import serialize_markdown
 from cv_engine.infrastructure.rendering import normalized_role_filename, render_html
 from cv_engine.util import sha256_text
 

@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from cv_engine.domain.candidate import CANDIDATE_FILE, CandidateContextError, contact_href
-from cv_engine.domain.drafts import parse_draft
+from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.domain.facts import FactStore
 from cv_engine.infrastructure.knowledge import load_candidate_context, load_fact_store
 from cv_engine.infrastructure.rendering import normalized_role_filename

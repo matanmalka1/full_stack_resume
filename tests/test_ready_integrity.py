@@ -7,7 +7,7 @@ import pytest
 import cv_engine.infrastructure.rendering as rendering_module
 from cv_engine.infrastructure.rendering import validate_rendered as real_validate_rendered
 from cv_engine.util import sha256_file
-from cv_engine.application.services import WorkflowError
+from cv_engine.application.errors import WorkflowError
 from helpers import ACCOUNT_MANAGER_JOB, artifact_version_and_path
 
 

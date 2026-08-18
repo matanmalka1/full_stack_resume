@@ -118,7 +118,7 @@ def test_cli_exposes_style_safe_composite_edit(drafted_application, cli_runner) 
 
 
 def test_render_revalidates_approved_markdown_before_browser(approved_application) -> None:
-    from cv_engine.application.services import WorkflowError
+    from cv_engine.application.errors import WorkflowError
 
     setup = approved_application("Acme", "Developer", "Python backend developer API React")
     engine, app_id = setup

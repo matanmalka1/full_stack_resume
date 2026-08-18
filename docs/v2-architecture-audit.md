@@ -1,6 +1,6 @@
 # v2 Architecture Audit — responsibility boundaries in `cv_engine`
 
-Status: **Audit complete; no code changed (2026-08-18)**
+Status: **Stages 1–6 implemented and verified; stages 7–8 not started (2026-08-18)**
 
 Scope: `cv_engine` module and file responsibility boundaries at M1 close, before M2
 begins. Baseline commit: `a68bcec`.
@@ -455,3 +455,51 @@ into the seven repositories named in §3.3.
   key.
 - One commit per stage at a stable boundary, no mixing. Stages 7 and 8 do not begin
   without an explicit decision.
+
+---
+
+## 7. Waves 0–2 execution record
+
+Stages 1–6 landed as behavior-preserving boundary changes on 2026-08-18. The three
+parallel Stage 3–6 lanes were based on the same guarded Wave 0 code, kept exclusive file
+ownership, and were integrated in the required A → B → C order.
+
+| Stage | Result | Scoped commit/evidence |
+| --- | --- | --- |
+| 1 — guardrails | Passed | `ee0ea29`; `tests/test_architecture.py` covers the outer-layer debt, `tests/helpers.py` uses the production report seal, and application move surfaces have direct service tests. `0f0bc86` made the existing candidate-literal guard follow either the service module or package after that exact path dependency was exposed by Stage 3. |
+| 2 — dead code | Passed | `7922def`; removed only `slug`, `safe_relative_path`, and the two audited unused imports. Architecture/golden subset: 3 passed; full suite: 113 passed. |
+| 3 — application services | Passed | `4a92821`; split into the approved focused service modules. Lane gate: 29 passed; lane full suite: 113 passed. |
+| 4 — analysis policy | Passed | `a1e10e8`; split classification, gaps, and approval policy. Stage subset: 21 passed; full suite: 113 passed. |
+| 5 — Markdown codec | Passed | `d9ea7ab`; `draft_markdown.py` owns the projection/round-trip codec and marker. Lane gate: 17 passed; lane full suite: 113 passed. |
+| 6 — recruitment transitions | Passed | `08457db`; the transition graph/predicate moved to `domain/recruitment.py`, while repository exception types and messages remained unchanged. Final lane subset: 23 passed; full suite: 113 passed. |
+
+Integration removed every temporary re-export and repointed callers to the owning
+modules. After each merge, the lane subset and the full 113-test suite passed. The
+combined Wave 2 boundary subset passed 54 tests. Final verification passed:
+
+- `CV_REQUIRE_BROWSER=1 ... -m pytest -q`: 113 passed, including the real browser,
+  rendering, PDF, ATS, and golden parity coverage.
+- `tests/test_golden.py`: no semantic difference in selected facts, rendered claims,
+  validation outcomes, Ready eligibility, or decision behavior.
+- Fresh isolated Workspace (`purpose=development`, `data_class=copy`) with no AI key:
+  workspace status → ingest → deterministic analyze → draft → validate → approve →
+  render → Ready → reconcile all passed. The PDF was one page with ATS claim coverage
+  `1.0`; Ready integrity and reconciliation both reported `passed=true`.
+
+No threshold, message string, exception type, validation-group name, status, public
+signature, stored report shape, artifact path policy, or fact semantic changed.
+
+### Remaining work and residual allowlist debt
+
+- **Stage 7 remains approval-gated and was not started.** `ValidationReport`
+  construction, group naming, and stored report-shape decisions remain exactly as they
+  were at the audit baseline.
+- **Stage 8 remains deferred to M2 and was not started.** This includes render/Ready
+  policy extraction, the remaining READY-demotion and persistence orchestration from
+  A2, decision-record typing, CLI policy removal, artifact-integrity consolidation,
+  compatibility-façade retirement, Profile-backed default emphasis, path-containment
+  unification, and removal of the migration-time pytest subprocess.
+- The Stage 1 allowlist shrank from three entries to two. The removed entry is the
+  infrastructure-owned `ApplicationStatus` transition table resolved by Stage 6. The
+  two explicit residual entries are `cli.py` importing `infrastructure.db` (A6) and
+  `infrastructure/migration.py` importing `subprocess` (A24); both belong to Stage 8.

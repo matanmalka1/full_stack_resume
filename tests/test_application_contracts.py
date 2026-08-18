@@ -45,7 +45,7 @@ from cv_engine.application.ports import (
     JobStore,
     UnitOfWork,
 )
-from cv_engine.application.services import RenderingService
+from cv_engine.application.services.rendering import RenderingService
 from cv_engine.compat import resolve_job_analysis_id, resolve_job_snapshot_id
 from cv_engine.infrastructure.db import Repository
 from helpers import ACCOUNT_MANAGER_JOB, working_claim
@@ -327,7 +327,7 @@ def test_commands_require_owned_explicit_sources_and_compat_resolves_latest(engi
         job_snapshot_id=ingested.job_snapshot_id,
     ))
     assert resolve_job_analysis_id(engine.repo, ingested.application_id) == analysed.analysis_id
-    from cv_engine.application.services import DraftService
+    from cv_engine.application.services.drafts import DraftService
 
     source = inspect.getsource(DraftService.draft)
     assert "latest_analysis" not in source

@@ -3,13 +3,9 @@ from __future__ import annotations
 from typing import Any, Generic, TypeVar
 
 from ... import __version__
-from ...domain.analysis import classify_job, merge_classification, unresolved_approval_reasons
-from ...domain.drafts import (
-    apply_claim_edit,
-    build_draft,
-    serialize_markdown,
-    synchronize_markdown_claims,
-)
+from ...domain.analysis.approval import unresolved_approval_reasons
+from ...domain.draft_markdown import serialize_markdown, synchronize_markdown_claims
+from ...domain.drafts import apply_claim_edit, build_draft
 from ...domain.facts import FactStore, FactStoreError
 from ...domain.knowledge import Knowledge
 from ...domain.models import (

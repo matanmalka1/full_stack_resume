@@ -26,7 +26,6 @@ ALLOWED_INTERNAL = {
 # permitted. Stages remove entries as they move the owning policy inward.
 ARCHITECTURE_DEBT_ALLOWLIST = {
     "cli.py: imports infrastructure.db",
-    "infrastructure/db.py: defines an ApplicationStatus transition table",
     "infrastructure/migration.py: imports subprocess",
 }
 
