@@ -1,4 +1,6 @@
 from cv_engine.domain.analysis.classification import classify_job
+from cv_engine.domain.analysis.gaps import derive_gaps
+from cv_engine.domain.models import Track
 from helpers import PAYME_TECH_SALES_JOB
 
 
@@ -61,3 +63,31 @@ def test_tech_sales_analysis_records_preference_gaps_and_selection_concepts() ->
         "prospecting",
         "technical",
     } <= set(result.keywords)
+
+
+def test_every_gap_policy_substitute_resolves_to_a_canonical_fact(fact_store) -> None:
+    expected = {
+        "sales.company.activity",
+        "development.phdigital.role",
+        "development.phdigital.fullstack",
+        "sales.leadership.pipeline",
+        "sales.tool.priority",
+        "development.phdigital.crm",
+        "sales.cycle.prospecting",
+        "sales.achievement.complex_deals",
+        "sales.leadership.strategic_customers",
+    }
+    policy_cases = [
+        "must have direct saas sales experience using crm, strategic partnerships, and salesforce",
+        "saas sales experience preferred",
+    ]
+    substitutes = {
+        fact_id
+        for job_text in policy_cases
+        for gap in derive_gaps(job_text, Track.SALES)
+        for fact_id in gap.substitute_fact_ids
+    }
+
+    assert substitutes == expected
+    assert substitutes <= set(fact_store.facts)
+    assert all(fact_store.get(fact_id, canonical_only=True) for fact_id in substitutes)
