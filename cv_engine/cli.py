@@ -5,6 +5,8 @@ import csv
 import json
 import os
 import sys
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -567,6 +569,402 @@ def workspace_command(
     return 0
 
 
+@dataclass
+class CommandContext:
+    """What one command was given, opened as far as that command needs.
+
+    A command's stage is what it may touch: `workspace init` runs before a
+    Workspace exists, `migrate` verifies one without opening its database,
+    `init` creates the schema the services would otherwise expect, and every
+    other command gets built services. Building only up to the stage keeps
+    each command's fail-closed order the same as before the split.
+    """
+
+    args: argparse.Namespace
+    root: Path
+    config: Any
+    workspace: Workspace | None = None
+    database_path: Path | None = None
+    services: Services | None = None
+
+    @property
+    def opened_workspace(self) -> Workspace:
+        assert self.workspace is not None
+        return self.workspace
+
+    @property
+    def built_services(self) -> Services:
+        assert self.services is not None
+        return self.services
+
+    @property
+    def repository(self) -> Repository:
+        return self.built_services.repository
+
+
+Handler = Callable[[CommandContext], int]
+
+_HANDLERS: dict[str, tuple[str, Handler]] = {}
+
+
+def _command(name: str, *, needs: str = "services") -> Callable[[Handler], Handler]:
+    """Register the handler for one top-level command and the stage it needs."""
+
+    def register(handler: Handler) -> Handler:
+        _HANDLERS[name] = (needs, handler)
+        return handler
+
+    return register
+
+
+def _workspace_config(args: argparse.Namespace, workspace: Workspace) -> Any:
+    return resolve_config(
+        cli={"workspace": args.workspace or args.repo, "database": args.db},
+        env=os.environ,
+        workspace_root=workspace.root,
+    )
+
+
+def _build_context(args: argparse.Namespace, root: Path, config: Any, needs: str) -> CommandContext:
+    context = CommandContext(args=args, root=root, config=config)
+    if needs == "root":
+        return context
+    # Every remaining command is a normal v2 command, so it opens the
+    # Workspace fail-closed before it touches state.
+    context.workspace = load_workspace(root)
+    context.config = _workspace_config(args, context.workspace)
+    if needs == "workspace":
+        return context
+    db_override = context.config.get("database")
+    context.database_path = (
+        resolve_within(context.workspace.state_root, db_override)
+        if db_override
+        else context.workspace.database_path
+    )
+    if needs == "database":
+        return context
+    context.services = build_services(context.workspace, database_path=context.database_path)
+    return context
+
+
+@_command("workspace", needs="root")
+def _workspace(context: CommandContext) -> int:
+    args = context.args
+    if args.workspace_command != "status":
+        return workspace_command(context.root, context.config, args)
+    workspace = load_workspace(context.root)
+    return workspace_command(
+        context.root, _workspace_config(args, workspace), args, opened=workspace
+    )
+
+
+@_command("migrate", needs="workspace")
+def _migrate(context: CommandContext) -> int:
+    args = context.args
+    if args.migration_command == "verify-snapshot":
+        report = verify_snapshot(args.snapshot.resolve())
+    else:
+        report = retrospective_verify_migration(context.root, args.snapshot.resolve())
+    _print(report)
+    return 0 if report["passed"] else 1
+
+
+@_command("init", needs="database")
+def _init(context: CommandContext) -> int:
+    initialize(context.database_path)
+    _print({"database": str(context.database_path), "schema_initialized": True})
+    return 0
+
+
+@_command("ingest")
+def _ingest(context: CommandContext) -> int:
+    args = context.args
+    ingested = context.built_services.applications.ingest(
+        IngestCommand(
+            company=args.company,
+            target_role=args.role,
+            job_text=_job_text(args),
+            source_url=args.url,
+        )
+    )
+    _print(
+        {
+            "application_id": ingested.application_id,
+            "job_snapshot_id": ingested.job_snapshot_id,
+        }
+    )
+    return 0
+
+
+@_command("analyze")
+def _analyze(context: CommandContext) -> int:
+    args = context.args
+    analysed = context.built_services.analysis.analyze(
+        AnalyzeCommand(
+            application_id=args.application_id,
+            job_snapshot_id=(
+                args.job_snapshot
+                or _latest_job_snapshot_id(context.repository, args.application_id)
+            ),
+            track_override=args.track,
+            profile_override=args.profile,
+            emphasis_override=args.emphasis,
+            language_override=args.language,
+            accept_low_fit=args.accept_low_fit,
+            provider=args.provider,
+            model=args.model,
+        )
+    )
+    _print(
+        {
+            "analysis_id": analysed.analysis_id,
+            "selection_plan_id": analysed.selection_plan_id,
+            "analysis": analysed.analysis.model_dump(mode="json"),
+        }
+    )
+    return 0
+
+
+@_command("draft")
+def _draft(context: CommandContext) -> int:
+    args = context.args
+    services = context.built_services
+    drafted = services.drafts.draft(
+        DraftCommand(
+            application_id=args.application_id,
+            job_analysis_id=(
+                args.job_analysis
+                or _latest_job_analysis_id(context.repository, args.application_id)
+            ),
+            selection_plan_id=(
+                args.selection_plan
+                or _latest_selection_plan_id(context.repository, args.application_id)
+            ),
+        )
+    )
+    paths = services.artifacts.working_paths(args.application_id)
+    _print(
+        {
+            "markdown": str(paths.markdown),
+            "claim_manifest": str(paths.manifest),
+            "validation": drafted.validation.model_dump(mode="json"),
+            "review_required": True,
+        }
+    )
+    return 0
+
+
+@_command("validate")
+def _validate(context: CommandContext) -> int:
+    report = context.built_services.drafts.validate_working(context.args.application_id)
+    _print(report.model_dump(mode="json"))
+    return 0 if report.passed else 1
+
+
+@_command("approve")
+def _approve(context: CommandContext) -> int:
+    services = context.built_services
+    approved = services.drafts.approve(context.args.application_id)
+    _print(
+        {
+            "version": approved.version,
+            "directory": str(
+                services.artifacts.resolve(
+                    context.repository.approved_revision(
+                        approved.revision_id
+                    ).resume_markdown_reference
+                ).parent
+            ),
+            "revision_id": approved.revision_id,
+            "decision_record_id": approved.decision_record_id,
+        }
+    )
+    return 0
+
+
+@_command("render")
+def _render(context: CommandContext) -> int:
+    services = context.built_services
+    application_id = context.args.application_id
+    rendered = services.rendering.render(application_id)
+    pdf_record = context.repository.latest_artifact_version(application_id, "resume_pdf")
+    pdf_metadata = json.loads(pdf_record.get("metadata_json") or "{}")
+    _print(
+        {
+            "pdf": str(services.artifacts.resolve(pdf_record["path"])),
+            "filename": pdf_metadata.get("recruiter_filename"),
+            "ready_validation": rendered.validation.model_dump(mode="json"),
+        }
+    )
+    return 0 if rendered.validation.passed else 1
+
+
+@_command("ready")
+def _ready(context: CommandContext) -> int:
+    report = context.built_services.rendering.ready_report(context.args.application_id)
+    _print(report.model_dump(mode="json"))
+    return 0 if report.passed else 1
+
+
+@_command("fast")
+def _fast_command(context: CommandContext) -> int:
+    args = context.args
+    _print(
+        _fast(
+            context.built_services,
+            args.company,
+            args.role,
+            _job_text(args),
+            url=args.url,
+            track=args.track,
+            profile=args.profile,
+            emphasis=args.emphasis,
+            language=args.language,
+            accept_low_fit=args.accept_low_fit,
+        )
+    )
+    return 0
+
+
+@_command("list")
+def _list(context: CommandContext) -> int:
+    _print(context.built_services.queries.list_applications())
+    return 0
+
+
+@_command("show")
+def _show(context: CommandContext) -> int:
+    _print(context.built_services.queries.application_detail(context.args.application_id))
+    return 0
+
+
+@_command("versions")
+def _versions(context: CommandContext) -> int:
+    _print(context.built_services.queries.artifact_versions(context.args.application_id))
+    return 0
+
+
+@_command("decision")
+def _decision(context: CommandContext) -> int:
+    _print(context.built_services.queries.latest_decision(context.args.application_id))
+    return 0
+
+
+@_command("status")
+def _status(context: CommandContext) -> int:
+    args = context.args
+    tracking = context.built_services.tracking
+    if args.status == ApplicationStatus.APPLIED.value:
+        submitted = tracking.submit(args.application_id, args.reason)
+        _print(
+            {
+                "application_id": submitted.application_id,
+                "pdf_artifact_version_id": submitted.pdf_artifact_version_id,
+                "current_status": submitted.current_status,
+                "next_action": submitted.next_action,
+                "next_action_date": submitted.next_action_date,
+            }
+        )
+        return 0
+    _print(
+        tracking.transition_status(
+            RecruitmentStatusCommand(
+                application_id=args.application_id,
+                target_status=args.status,
+                reason=args.reason,
+            )
+        )
+    )
+    return 0
+
+
+@_command("action")
+def _action(context: CommandContext) -> int:
+    args = context.args
+    _print(
+        context.built_services.tracking.set_next_action(
+            NextActionCommand(
+                application_id=args.application_id,
+                next_action=args.next_action,
+                next_action_date=args.date,
+            )
+        )
+    )
+    return 0
+
+
+def _print_claim_edit(services: Services, application_id: str, edited: Any) -> int:
+    """The one shape every claim edit reports: the draft path and its validation."""
+    _print(
+        {
+            "markdown": str(services.artifacts.working_paths(application_id).markdown),
+            "validation": edited.validation.model_dump(mode="json"),
+        }
+    )
+    return 0 if edited.validation.passed else 1
+
+
+@_command("edit-claim")
+def _edit_claim(context: CommandContext) -> int:
+    args = context.args
+    services = context.built_services
+    edited = services.drafts.edit_claim(
+        args.application_id,
+        args.claim_id,
+        args.fact_id,
+        text=args.text,
+        template_id=args.template,
+        template_version=args.template_version,
+    )
+    return _print_claim_edit(services, args.application_id, edited)
+
+
+@_command("sync-draft")
+def _sync_draft(context: CommandContext) -> int:
+    services = context.built_services
+    edited = services.drafts.sync_working_claims(context.args.application_id)
+    return _print_claim_edit(services, context.args.application_id, edited)
+
+
+@_command("link-claim")
+def _link_claim(context: CommandContext) -> int:
+    args = context.args
+    services = context.built_services
+    edited = services.drafts.link_claim(args.application_id, args.claim_id, args.text, args.fact_id)
+    return _print_claim_edit(services, args.application_id, edited)
+
+
+@_command("export")
+def _export(context: CommandContext) -> int:
+    exported = export_csv(
+        context.built_services.queries.list_applications(), context.args.output.resolve()
+    )
+    _print(
+        {
+            "csv": str(exported),
+            "metadata": str(exported.with_suffix(exported.suffix + ".meta.json")),
+            "export_schema_version": EXPORT_SCHEMA_VERSION,
+        }
+    )
+    return 0
+
+
+@_command("reconcile")
+def _reconcile(context: CommandContext) -> int:
+    services = context.built_services
+    report = generic_reconcile(context.opened_workspace, context.repository)
+    fact_lifecycle = services.knowledge_lifecycle.reconcile_facts()
+    report["fact_lifecycle"] = fact_lifecycle.model_dump(mode="json")
+    report["passed"] = report["passed"] and fact_lifecycle.passed
+    _print(report)
+    return 0 if report["passed"] else 1
+
+
+@_command("fact")
+def _fact(context: CommandContext) -> int:
+    return fact_command(context.built_services.knowledge_lifecycle, context.args)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -575,253 +973,9 @@ def main(argv: list[str] | None = None) -> int:
     except (WorkspaceError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
+    needs, handler = _HANDLERS[args.command]
     try:
-        if args.command == "workspace":
-            if args.workspace_command != "status":
-                return workspace_command(root, config, args)
-            workspace = load_workspace(root)
-            config = resolve_config(
-                cli={"workspace": args.workspace or args.repo, "database": args.db},
-                env=os.environ,
-                workspace_root=workspace.root,
-            )
-            return workspace_command(root, config, args, opened=workspace)
-
-        # Every remaining command is a normal v2 command, so it opens the
-        # Workspace fail-closed before it touches state.
-        workspace = load_workspace(root)
-        config = resolve_config(
-            cli={"workspace": args.workspace or args.repo, "database": args.db},
-            env=os.environ,
-            workspace_root=workspace.root,
-        )
-        db_override = config.get("database")
-        if args.command == "migrate":
-            if args.migration_command == "verify-snapshot":
-                report = verify_snapshot(args.snapshot.resolve())
-            else:
-                report = retrospective_verify_migration(root, args.snapshot.resolve())
-            _print(report)
-            return 0 if report["passed"] else 1
-        db_path = (
-            resolve_within(workspace.state_root, db_override)
-            if db_override
-            else workspace.database_path
-        )
-        if args.command == "init":
-            initialize(db_path)
-            _print({"database": str(db_path), "schema_initialized": True})
-            return 0
-        services = build_services(workspace, database_path=db_path)
-        repository = services.repository
-        if args.command == "ingest":
-            ingested = services.applications.ingest(
-                IngestCommand(
-                    company=args.company,
-                    target_role=args.role,
-                    job_text=_job_text(args),
-                    source_url=args.url,
-                )
-            )
-            _print(
-                {
-                    "application_id": ingested.application_id,
-                    "job_snapshot_id": ingested.job_snapshot_id,
-                }
-            )
-        elif args.command == "analyze":
-            analysed = services.analysis.analyze(
-                AnalyzeCommand(
-                    application_id=args.application_id,
-                    job_snapshot_id=(
-                        args.job_snapshot
-                        or _latest_job_snapshot_id(repository, args.application_id)
-                    ),
-                    track_override=args.track,
-                    profile_override=args.profile,
-                    emphasis_override=args.emphasis,
-                    language_override=args.language,
-                    accept_low_fit=args.accept_low_fit,
-                    provider=args.provider,
-                    model=args.model,
-                )
-            )
-            _print(
-                {
-                    "analysis_id": analysed.analysis_id,
-                    "selection_plan_id": analysed.selection_plan_id,
-                    "analysis": analysed.analysis.model_dump(mode="json"),
-                }
-            )
-        elif args.command == "draft":
-            drafted = services.drafts.draft(
-                DraftCommand(
-                    application_id=args.application_id,
-                    job_analysis_id=(
-                        args.job_analysis
-                        or _latest_job_analysis_id(repository, args.application_id)
-                    ),
-                    selection_plan_id=(
-                        args.selection_plan
-                        or _latest_selection_plan_id(repository, args.application_id)
-                    ),
-                )
-            )
-            paths = services.artifacts.working_paths(args.application_id)
-            _print(
-                {
-                    "markdown": str(paths.markdown),
-                    "claim_manifest": str(paths.manifest),
-                    "validation": drafted.validation.model_dump(mode="json"),
-                    "review_required": True,
-                }
-            )
-        elif args.command == "validate":
-            report = services.drafts.validate_working(args.application_id)
-            _print(report.model_dump(mode="json"))
-            return 0 if report.passed else 1
-        elif args.command == "approve":
-            approved = services.drafts.approve(args.application_id)
-            _print(
-                {
-                    "version": approved.version,
-                    "directory": str(
-                        services.artifacts.resolve(
-                            repository.approved_revision(
-                                approved.revision_id
-                            ).resume_markdown_reference
-                        ).parent
-                    ),
-                    "revision_id": approved.revision_id,
-                    "decision_record_id": approved.decision_record_id,
-                }
-            )
-        elif args.command == "render":
-            rendered = services.rendering.render(args.application_id)
-            pdf_record = repository.latest_artifact_version(args.application_id, "resume_pdf")
-            pdf_metadata = json.loads(pdf_record.get("metadata_json") or "{}")
-            _print(
-                {
-                    "pdf": str(services.artifacts.resolve(pdf_record["path"])),
-                    "filename": pdf_metadata.get("recruiter_filename"),
-                    "ready_validation": rendered.validation.model_dump(mode="json"),
-                }
-            )
-            return 0 if rendered.validation.passed else 1
-        elif args.command == "ready":
-            report = services.rendering.ready_report(args.application_id)
-            _print(report.model_dump(mode="json"))
-            return 0 if report.passed else 1
-        elif args.command == "fast":
-            _print(
-                _fast(
-                    services,
-                    args.company,
-                    args.role,
-                    _job_text(args),
-                    url=args.url,
-                    track=args.track,
-                    profile=args.profile,
-                    emphasis=args.emphasis,
-                    language=args.language,
-                    accept_low_fit=args.accept_low_fit,
-                )
-            )
-        elif args.command == "list":
-            _print(services.queries.list_applications())
-        elif args.command == "show":
-            _print(services.queries.application_detail(args.application_id))
-        elif args.command == "versions":
-            _print(services.queries.artifact_versions(args.application_id))
-        elif args.command == "decision":
-            _print(services.queries.latest_decision(args.application_id))
-        elif args.command == "status":
-            if args.status == ApplicationStatus.APPLIED.value:
-                submitted = services.tracking.submit(args.application_id, args.reason)
-                _print(
-                    {
-                        "application_id": submitted.application_id,
-                        "pdf_artifact_version_id": submitted.pdf_artifact_version_id,
-                        "current_status": submitted.current_status,
-                        "next_action": submitted.next_action,
-                        "next_action_date": submitted.next_action_date,
-                    }
-                )
-            else:
-                _print(
-                    services.tracking.transition_status(
-                        RecruitmentStatusCommand(
-                            application_id=args.application_id,
-                            target_status=args.status,
-                            reason=args.reason,
-                        )
-                    )
-                )
-        elif args.command == "action":
-            _print(
-                services.tracking.set_next_action(
-                    NextActionCommand(
-                        application_id=args.application_id,
-                        next_action=args.next_action,
-                        next_action_date=args.date,
-                    )
-                )
-            )
-        elif args.command == "edit-claim":
-            edited = services.drafts.edit_claim(
-                args.application_id,
-                args.claim_id,
-                args.fact_id,
-                text=args.text,
-                template_id=args.template,
-                template_version=args.template_version,
-            )
-            _print(
-                {
-                    "markdown": str(services.artifacts.working_paths(args.application_id).markdown),
-                    "validation": edited.validation.model_dump(mode="json"),
-                }
-            )
-            return 0 if edited.validation.passed else 1
-        elif args.command == "sync-draft":
-            edited = services.drafts.sync_working_claims(args.application_id)
-            _print(
-                {
-                    "markdown": str(services.artifacts.working_paths(args.application_id).markdown),
-                    "validation": edited.validation.model_dump(mode="json"),
-                }
-            )
-            return 0 if edited.validation.passed else 1
-        elif args.command == "link-claim":
-            edited = services.drafts.link_claim(
-                args.application_id, args.claim_id, args.text, args.fact_id
-            )
-            _print(
-                {
-                    "markdown": str(services.artifacts.working_paths(args.application_id).markdown),
-                    "validation": edited.validation.model_dump(mode="json"),
-                }
-            )
-            return 0 if edited.validation.passed else 1
-        elif args.command == "export":
-            exported = export_csv(services.queries.list_applications(), args.output.resolve())
-            _print(
-                {
-                    "csv": str(exported),
-                    "metadata": str(exported.with_suffix(exported.suffix + ".meta.json")),
-                    "export_schema_version": EXPORT_SCHEMA_VERSION,
-                }
-            )
-        elif args.command == "reconcile":
-            report = generic_reconcile(workspace, repository)
-            fact_lifecycle = services.knowledge_lifecycle.reconcile_facts()
-            report["fact_lifecycle"] = fact_lifecycle.model_dump(mode="json")
-            report["passed"] = report["passed"] and fact_lifecycle.passed
-            _print(report)
-            return 0 if report["passed"] else 1
-        elif args.command == "fact":
-            return fact_command(services.knowledge_lifecycle, args)
-        return 0
+        return handler(_build_context(args, root, config, needs))
     except (
         ValueError,
         KeyError,

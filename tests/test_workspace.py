@@ -7,6 +7,7 @@ safety property means anything.
 
 from __future__ import annotations
 
+import argparse
 import json
 import subprocess
 import sys
@@ -239,6 +240,24 @@ def test_legacy_database_connection_cannot_write(tmp_path: Path) -> None:
 
 def _cv(*args: str, env: dict[str, str] | None = None) -> CliRun:
     return run_cli(*args, env=env)
+
+
+def test_every_parser_command_has_a_registered_handler() -> None:
+    """Registration is derived from the parser, not from a hand-kept list.
+
+    `main()` dispatches through the handler registry, so a subcommand added to
+    the parser without a handler would fail only when someone ran it. This
+    reads the choices out of the parser itself, so forgetting to register one
+    fails here instead.
+    """
+    from cv_engine.cli import _HANDLERS, build_parser
+
+    subparsers = next(
+        action
+        for action in build_parser()._actions
+        if isinstance(action, argparse._SubParsersAction)
+    )
+    assert set(subparsers.choices) == set(_HANDLERS)
 
 
 def test_cli_module_entry_point_reports_the_failure_exit_code(tmp_path: Path) -> None:
