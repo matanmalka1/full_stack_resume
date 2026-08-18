@@ -71,6 +71,8 @@ def test_created_workspace_round_trips_with_identity_and_roots(tmp_path: Path) -
         load_workspace(hand_edited.root)
     assert workspace.relative(workspace.artifacts_root / "a" / "b.pdf") == "payloads/a/b.pdf"
     with pytest.raises(WorkspaceError, match="outside the Workspace"):
+        workspace.relative(Path("payloads/a/b.pdf"))
+    with pytest.raises(WorkspaceError, match="outside the Workspace"):
         workspace.relative(tmp_path / "elsewhere.pdf")
 
 

@@ -122,6 +122,8 @@ class Workspace:
         backed up, restored, or copied to another directory without rewriting
         SQLite, and so no absolute local path becomes part of the record.
         """
+        if not Path(path).is_absolute():
+            raise WorkspaceError(f"path is outside the Workspace: {path}")
         try:
             return relative_within(self.root, path).as_posix()
         except ValueError as exc:

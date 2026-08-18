@@ -256,11 +256,11 @@ def test_known_outer_layer_policy_debt_does_not_grow() -> None:
 def test_sqlite_and_sql_are_owned_by_persistence() -> None:
     """New SQLite access lands in persistence; only audited legacy adapters remain."""
     offenders: list[str] = []
-    for path in _modules("infrastructure"):
-        relative = path.relative_to(ENGINE / "infrastructure").as_posix()
-        if relative.startswith("persistence/"):
+    for path in sorted(ENGINE.rglob("*.py")):
+        relative = path.relative_to(ENGINE).as_posix()
+        if relative.startswith("infrastructure/persistence/"):
             continue
-        if relative in PERSISTENCE_KNOWN_OFFENDERS:
+        if relative.removeprefix("infrastructure/") in PERSISTENCE_KNOWN_OFFENDERS:
             continue
         if any(name == "sqlite3" for name, _line in _imports(path)):
             offenders.append(f"{relative}: imports sqlite3")
@@ -290,8 +290,7 @@ def test_path_containment_has_one_implementation() -> None:
 
 def test_numbered_migrations_are_registered_once() -> None:
     migration_dir = ENGINE / "infrastructure/persistence/migrations"
-    if not migration_dir.exists():
-        return
+    assert migration_dir.is_dir(), "the registered migration directory must exist"
     files = sorted(migration_dir.glob("*.sql"))
     assert files
     numbered: dict[str, str] = {}
@@ -316,8 +315,8 @@ def test_numbered_migrations_are_registered_once() -> None:
 
 def test_composite_repository_contains_no_sql() -> None:
     composite = ENGINE / "infrastructure/persistence/composite.py"
-    if composite.exists():
-        assert not _sql_string_lines(composite)
+    assert composite.is_file(), "the delegation-only composite must exist"
+    assert not _sql_string_lines(composite)
 
 
 def test_validation_report_has_one_in_package_construction_authority() -> None:
