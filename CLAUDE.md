@@ -1,49 +1,87 @@
 # Project Agent Instructions
 
-These instructions govern how coding agents work in this repository.
+These instructions govern how coding agents work in this repository. They are the whole
+working rule set. Reading them is the reading requirement.
 
-## Authority
+## What this system is
 
-Before any repository task, read `docs/v1-upgrade-handoff.md` completely. For v2 work,
-also read the six approved v2 documents relevant to the task; before a new milestone or
-cross-cutting change, read all six:
+A single-candidate CV tailoring tool. One user, local only, not deployed, no auth, no
+cloud. The live v1 data is 25 applications and 192 artifact versions.
 
-- `docs/v2-product-spec.md`
-- `docs/v2-architecture.md`
-- `docs/v2-state-and-use-cases.md`
-- `docs/v2-implementation-plan.md`
-- `docs/v2-test-and-acceptance-plan.md`
-- `docs/v2-migration-plan.md`
+Almost everything the engine produces is regenerable in seconds: drafts, selections,
+renders, projections. Getting one of them wrong costs a re-run. Calibrate effort to
+that, not to the size of the codebase.
 
-Authority order for v2:
+Two things are not regenerable, and they are where care belongs:
 
-1. `docs/v2-product-spec.md` — binding v2 product scope and invariants.
-2. `docs/v2-state-and-use-cases.md` — binding lifecycle, command, query, and permission
-   contracts.
-3. `docs/v2-architecture.md` — binding architecture boundaries.
-4. The v2 implementation, test/acceptance, and migration plans for their respective
-   concerns.
-5. `docs/v1-upgrade-handoff.md` — binding inherited factual, validation, historical,
-   and migration-safety baseline except where the approved v2 documents explicitly
-   change v1 product behavior.
-6. `AGENTS.md` / `CLAUDE.md` — repository working rules.
-7. `README.md` — human-facing setup and usage documentation.
-8. Existing code, configuration, and legacy documentation — current-state evidence.
+1. **The v1 historical record** — 25 applications, 192 artifacts, job snapshots of
+   postings that no longer exist, CVs that were actually sent. One-shot migration.
+2. **Immutable records already written** — approved revisions, submitted artifacts,
+   snapshots. Overwriting one destroys evidence.
 
-If approved v2 documents conflict with inherited v1 behavior, stop unless the v2 change
-is explicit. Do not silently reinterpret a conflict. The pre-v1 generation workflow is
-retired; historical sources and artifacts are evidence only, not an active tailoring
-workflow.
+## Specifications
 
-## Product decisions and autonomy
+`docs/` holds the approved v2 specifications. They are binding on what the product
+does; they are not required reading before every task.
 
-- Internal implementation details may change when observable behavior, safety, and
-  product semantics remain unchanged.
-- Do not silently change workflow, validation behavior, fact semantics, application
-  statuses, migration behavior, artifact lifecycle, or other product decisions.
-- Proceed by default. Stop only for a blocker, unresolved specification conflict,
-  required semantic deviation, material data-loss risk, or migration-safety failure.
-- Explain the issue and consequences before requesting a user decision.
+Read the one that owns the subject you are changing:
+
+| Changing | Read |
+| --- | --- |
+| Product scope, invariants, non-goals | `docs/v2-product-spec.md` |
+| Lifecycle, commands, queries, permissions | `docs/v2-state-and-use-cases.md` |
+| Layer boundaries, filesystem layout, schema shape | `docs/v2-architecture.md` |
+| Migration of v1 data | `docs/v2-migration-plan.md` |
+| Milestone stages and gates | `docs/v2-implementation-plan.md` |
+| What v1 did and why | `docs/v1-upgrade-handoff.md` |
+
+If a specification conflicts with existing behavior, stop and say so. Do not
+reinterpret a conflict silently. The pre-v1 generation workflow is retired; historical
+sources and artifacts are evidence, not an active workflow.
+
+## Change classes
+
+The class follows from what the change touches, not from how it feels.
+
+**Class A — local.** Does not touch `migrations/`, an artifact path, a public callable
+signature, or an error message a test matches on.
+Gates: the focused tests, then the non-browser suite once.
+
+**Class B — contract.** Changes a stored value's meaning, a signature, a projection
+field, or a matched message.
+Gates: Class A, plus golden hashes, the architecture test, and an offline CLI run.
+The reasoning goes in the commit message.
+
+**Class C — schema, artifact paths, or v1 data.** A new migration, a change to where
+immutable payloads live, or anything touching the v1 historical record.
+Gates: Class B, plus the browser suite, a `0001`-only database upgrading cleanly to
+head, and — for v1 data — the migration-safety rules below.
+
+Do not run the browser suite for changes that cannot affect rendering.
+
+## What actually catches defects
+
+These are cheap and have each caught a real bug in this repository. Prefer them over
+process:
+
+- **Run the CLI offline, end to end** — `ingest → analyze → draft → validate → approve
+  → render → ready → reconcile`, with `OPENAI_API_KEY` unset, against a fresh Workspace.
+  This is what found approval silently destroying unimported manual edits.
+- **Golden hashes** — they must not move unless output was meant to change.
+- **Immutability triggers** on records that must never be rewritten.
+- **Derived guards.** Prefer deriving a check from the code or schema over maintaining a
+  list by hand. Where a guard needs a list, make it a small list of deliberate
+  exceptions, so forgetting to register something fails instead of passing. Inverting
+  one such default to "immutable unless exempt" found a table that had been unguarded
+  since M1.
+- **Asking what a passing test actually proves.** A golden test was proving parity for a
+  code path production no longer took.
+
+Add regression coverage for a material bug only when existing coverage would not catch
+it. Prefer extending or parameterizing the closest test over adding another item.
+
+Never claim completion with "implemented" alone. Report what passed, what failed, and
+what remains. A hard failure is never relabelled as a warning.
 
 ## Facts and AI boundaries
 
@@ -59,90 +97,69 @@ workflow.
 - Preserve canonical historical job titles, dates, metrics, uncertainty, and source
   provenance.
 
-## Historical artifacts and migration safety
+## Migration safety
 
-- Historical and submitted CV, HTML, PDF, job snapshots, and application artifacts are
-  immutable. Never overwrite them.
-- Do not migrate live data until a complete snapshot has been created and verified,
-  restore instructions exist, migration tests pass, and every historical record and
-  artifact is accounted for.
+These apply to the v1 historical record and to immutable records already written. They
+are the one place where full ceremony is warranted.
+
+- Historical and submitted CV, HTML, PDF, job snapshot, and application artifacts are
+  immutable. Never overwrite or relocate them.
+- Do not migrate live data until a complete snapshot exists and is verified, restore
+  instructions exist, migration tests pass, and every historical record and artifact is
+  accounted for.
 - Test migration against a copy or snapshot before live migration.
 - If any migration safety check fails, stop. Do not partially continue or guess.
+- Never invent an identity for a historical record that was never recorded. A field that
+  cannot be derived stays NULL.
 - Preserve historical data and output meaning, not the legacy architecture.
 
-## Scope discipline
+## Scope
 
-- Implement only the approved v2.0 scope and respect every non-goal in
+- Implement only approved v2.0 scope and respect every non-goal in
   `docs/v2-product-spec.md`.
-- The local FastAPI + React Web UI is authorized in this v2 worktree. Cloud deployment,
-  authentication, PostgreSQL, multi-candidate support, broad multi-provider support,
-  and other v2 non-goals are not authorized.
+- The local FastAPI + React Web UI is authorized in this worktree. Cloud deployment,
+  authentication, PostgreSQL, multi-candidate support, and broad multi-provider support
+  are not.
 - Keep the CLI first-class. It calls the application layer directly, does not require
   FastAPI, and the deterministic workflow must reach Ready without an AI key.
-- Do not begin Dashboard/tracking UI implementation before the mandatory Web/API
-  vertical slice reaches Ready with its central failure paths passing.
+- Do not begin Dashboard/tracking UI before the Web/API vertical slice reaches Ready
+  with its central failure paths passing.
 - Do not perform unrelated refactors or cleanup.
 - Do not edit generated HTML by hand; fix the source, template, renderer, or rules.
+- The dependency baseline is `docs/v2-architecture.md` section 2. Add a dependency only
+  when it enforces contracts, reduces rendering risk, or gives a concrete portability
+  benefit within v2.0.
 
-## Dependencies
+## Working rules
 
-- The approved dependency baseline is defined in `docs/v2-architecture.md` section 2.
-- Add a dependency only when it enforces contracts, reduces rendering risk, or provides
-  a concrete portability or maintainability benefit within v2.0.
-- Do not introduce frameworks or infrastructure outside that baseline without a
-  demonstrated v2.0 need and a corresponding contract/test update.
-
-## Testing and completion
-
-- Test material changes in proportion to the affected layer.
-- Run unit and integration tests, plus relevant golden, rendering, ATS/PDF, API,
-  frontend, migration, concurrency, recovery, and regression tests.
-- Add targeted regression coverage for every material bug discovered during the work
-  when existing meaningful coverage would not catch it. Prefer extending or
-  parameterizing the closest test over adding another test item.
-- Do not claim completion with "implemented" alone.
-- Preserve every applicable v1 acceptance invariant and run the relevant gates in
-  `docs/v2-test-and-acceptance-plan.md`; report what passed, what failed, and what
-  remains.
-- A warning may be reported and accepted only where the specification permits it. Hard
-  failures block `ready_qualified`, `PreparationState=ready`, and completion.
-
-## Documentation boundaries
-
-One fact has one place. Do not restate the same status in several documents.
-
-- Current state — done, remaining, blocked — belongs only in the milestone tracker
-  (`docs/v2-m2-remaining.md` for M2).
-- Decisions and the reasoning behind them belong in that boundary's design brief.
-- Findings about the code as it was belong in `docs/v2-architecture-audit.md`, which is
-  historical and is not rewritten at each boundary. Which findings remain open is state,
-  so it lives in the tracker.
-- Proof that something ran belongs in the boundary's close-out section, its commit, and
-  the test output. It is not copied into the tracker or the audit.
-- Milestone stages and gates stay in `docs/v2-implementation-plan.md`.
-
-Prefer deriving a check from the code or schema over maintaining a list by hand. Where a
-guard needs a list, make it a small list of deliberate exceptions rather than a list of
-things to cover, so that forgetting to register something fails instead of passing.
-
-## Change management
-
-- Keep changes scoped to the active implementation stage.
-- Perform v2 work only in the dedicated v2 branch/worktree and an explicitly marked,
-  isolated v2 Workspace. Never point development or rehearsal commands at live v1
-  data.
-- Preserve unrelated user changes in a dirty worktree.
-- When implementation work is authorized, create small, intentional commits at stable
-  stage boundaries. Do not mix unrelated changes in one commit.
+- Proceed by default. Stop only for a blocker, an unresolved specification conflict, a
+  required semantic deviation, material data-loss risk, or a migration-safety failure.
+  Explain the issue and its consequences before asking for a decision.
+- Internal implementation details may change freely when observable behavior, safety,
+  and product semantics stay the same.
+- Do not silently change workflow, validation behavior, fact semantics, application
+  statuses, migration behavior, or artifact lifecycle.
+- Work only in the v2 branch/worktree against an explicitly marked, isolated Workspace.
+  Never point any command at live v1 data.
+- Preserve unrelated user changes in a dirty worktree. One agent at a time: concurrent
+  edits race the test runner and make every measurement meaningless.
+- Small, intentional commits. Do not mix unrelated changes in one commit.
 - Never use destructive Git or filesystem operations to simplify migration or cleanup.
 
-## Implementation sequence
+## Documentation
 
-Use the mandated sequence:
+`docs/v2-m2-remaining.md` is the single record of state — what is done, what remains,
+what is blocked. Nothing else records state.
 
-`Review -> Architecture -> Plan -> Implement -> Test -> Migrate -> Verify`
+Decisions and their reasoning go in the commit message. Write a separate design brief
+only for a Class C change whose reasoning will not fit there.
 
-No approval pause is required between Review and Implementation when there is no stop
-condition and the architecture follows the approved v2 specification. Follow M0-M6
-gates in `docs/v2-implementation-plan.md`; live cutover remains a separate,
-user-authorized event after Release Ready.
+## Keeping this file small
+
+Every control here was added because something went wrong once. Nothing removes them,
+so without a counterweight this file can only grow, and the process drifts toward
+treating every change as a release.
+
+The counterweight: when closing a milestone, name one control that was retired, or
+state that none was retirable and why. A guard that has never failed since it was added
+is a candidate for merging into a derived check.
