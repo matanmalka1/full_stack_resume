@@ -109,6 +109,11 @@ def _fast(
     rendered = services.rendering.render(ingested.application_id)
     if not rendered.validation.passed:
         raise WorkflowError("fast mode blocked by post-render validation")
+    qualification = services.rendering.ready_qualification(
+        ingested.application_id,
+        approved.revision_id,
+        rendered.pdf_artifact_version_id,
+    )
     pdf_record = services.repository.latest_artifact_version(ingested.application_id, "resume_pdf")
     pdf_metadata = json.loads(pdf_record.get("metadata_json") or "{}")
     return {
@@ -125,7 +130,7 @@ def _fast(
         },
         "pdf": str(services.artifacts.resolve(pdf_record["path"])),
         "filename": pdf_metadata.get("recruiter_filename"),
-        "ready": True,
+        "ready": qualification.ready_qualified,
     }
 
 

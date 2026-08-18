@@ -73,14 +73,13 @@ def test_failed_post_render_validation_does_not_set_ready(
     rendered = services.rendering.render(app_id)
     assert not rendered.validation.passed
     assert services.repository.get_application(app_id)["current_status"] == "preparing"
+    assert not services.rendering.ready_qualification(app_id).ready_qualified
 
 
-def test_set_ready_primitive_rejects_unlinked_pdf_version(
+def test_no_repository_primitive_can_assert_ready_for_unlinked_pdf(
     v1_repo: Path, approved_application
 ) -> None:
-    """Even the internal _set_ready primitive re-derives proof from DB state;
-    it cannot be fooled by a PDF version lacking a passing post-render
-    validation, even when called directly."""
+    """Ready has no write primitive and exact stored proof is always re-derived."""
     services, app_id = approved_application("Set Ready Bypass")
     _manifest, manifest_path = artifact_version_and_path(
         services, app_id, "claim_manifest", "approved"
@@ -95,33 +94,35 @@ def test_set_ready_primitive_rejects_unlinked_pdf_version(
         fake_pdf.relative_to(v1_repo).as_posix(),
         sha256_file(fake_pdf),
         "rendered",
+        revision_id=services.repository.latest_approved_revision(app_id).id,
     )
-    with pytest.raises(ValueError, match="post-render validation"):
-        services.repository._set_ready(app_id, fake_version_id, "bypass attempt")
+    assert not hasattr(services.repository, "set_ready")
+    assert not hasattr(services.repository, "_set_ready")
+    qualification = services.rendering.ready_qualification(
+        app_id,
+        pdf_artifact_version_id=fake_version_id,
+    )
+    assert not qualification.ready_qualified
+    assert any(
+        issue.code == "no-post-render-validation" for issue in qualification.validation.issues
+    )
     assert services.repository.get_application(app_id)["current_status"] == "preparing"
 
 
 def test_public_workflow_cannot_restore_ready_after_tamper_without_fresh_render(
     v1_repo: Path, ready_application
 ) -> None:
-    """A historical passing post-render validation must never be sufficient to
-    restore READY after filesystem or workflow drift. The only public path back
-    to READY is a full RenderingService.render() call, which always creates brand-new
-    artifact versions rather than reusing an old, possibly-stale id; neither
-    ready_report() nor submit() may resurrect the old ready state from history."""
+    """Stored validation alone cannot qualify a tampered immutable artifact."""
     services, app_id = ready_application("No Stale Restore")
     pdf_version, path = artifact_version_and_path(services, app_id, "resume_pdf", "rendered")
-    services.repository.transition_status(app_id, "preparing", "reverting for edits")
     path.write_bytes(path.read_bytes() + b"tampered")
 
     assert services.repository.get_application(app_id)["current_status"] == "preparing"
-    with pytest.raises(WorkflowError, match="not ready"):
-        services.rendering.ready_report(app_id)
-    with pytest.raises(WorkflowError, match="currently valid ready"):
+    assert not services.rendering.ready_qualification(app_id).ready_qualified
+    with pytest.raises(WorkflowError, match="tampered ready state"):
         services.tracking.submit(app_id)
-    # The only supported route back to ready is a full fresh render, which
-    # writes a brand-new PDF artifact version rather than reusing the tampered
-    # historical one.
+    # A new revision and render create new immutable evidence; the old PDF is
+    # never reused or relinked.
     _start_new_draft(services, app_id)
     services.drafts.approve(app_id)
     rendered = services.rendering.render(app_id)
@@ -167,22 +168,20 @@ def test_ready_integrity_rejects_missing_or_tampered_registered_artifacts(
         assert report.groups[issue_group] is False
 
 
-def test_new_revision_snapshot_or_analysis_stales_prior_ready(ready_application) -> None:
+def test_ready_qualification_is_independent_of_active_context(ready_application) -> None:
     services, app_id = ready_application("Superseded")
+    old_revision = services.repository.latest_approved_revision(app_id)
+    old_pdf = services.repository.artifact_version_for_revision(
+        old_revision.id, "resume_pdf", "rendered"
+    )
     _start_new_draft(services, app_id)
-    services.drafts.approve(app_id)
-    from cv_engine.infrastructure.persistence import connect
+    new_revision = services.drafts.approve(app_id)
+    assert not services.rendering.ready_qualification(app_id).ready_qualified
+    old_qualification = services.rendering.ready_qualification(
+        app_id, old_revision.id, old_pdf["id"]
+    )
+    assert old_qualification.ready_qualified
 
-    with connect(services.repository.path) as connection:
-        reason = connection.execute(
-            "SELECT reason FROM status_history WHERE application_id=? ORDER BY id DESC LIMIT 1",
-            (app_id,),
-        ).fetchone()["reason"]
-    assert reason == "new approved version requires fresh rendering and ready validation"
-    with pytest.raises(WorkflowError, match="not ready"):
-        services.rendering.ready_report(app_id)
-
-    services, app_id = ready_application("New Snapshot")
     new_text = ACCOUNT_MANAGER_JOB + " Updated requirements."
     snapshot_id = str(uuid.uuid4())
     payload = services.payloads.commit_snapshot(app_id, snapshot_id, new_text)
@@ -193,19 +192,11 @@ def test_new_revision_snapshot_or_analysis_stales_prior_ready(ready_application)
         sha256_text(normalized_text(new_text)),
         snapshot_id=snapshot_id,
     )
-    report = services.rendering.ready_report(app_id)
-    assert any(issue.code == "new-job-snapshot-since-approval" for issue in report.issues)
-
-    services, app_id = ready_application("New Analysis")
     _reanalyze(services, app_id)
-    with connect(services.repository.path) as connection:
-        reason = connection.execute(
-            "SELECT reason FROM status_history WHERE application_id=? ORDER BY id DESC LIMIT 1",
-            (app_id,),
-        ).fetchone()["reason"]
-    assert reason == "new analysis invalidated the prior ready version"
-    with pytest.raises(WorkflowError, match="not ready"):
-        services.rendering.ready_report(app_id)
+    assert services.rendering.ready_qualification(
+        app_id, old_revision.id, old_pdf["id"]
+    ).ready_qualified
+    assert services.repository.latest_approved_revision(app_id).id == new_revision.revision_id
 
 
 # --- APPLIED binding ------------------------------------------------------
@@ -243,6 +234,29 @@ def test_submission_binds_current_pdf_and_remains_immutable_after_later_versions
     assert [row["artifact_version_id"] for row in after] == [submitted_pdf_id]
 
 
+def test_submission_and_applied_transition_roll_back_together(
+    ready_application, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cv_engine.infrastructure.persistence import connect
+    from cv_engine.infrastructure.persistence.applications import SqliteApplicationRepository
+
+    services, app_id = ready_application("Atomic Submission")
+
+    def fail_status_write(*_args, **_kwargs) -> None:
+        raise RuntimeError("injected status failure")
+
+    monkeypatch.setattr(SqliteApplicationRepository, "_set_status", fail_status_write)
+    with pytest.raises(RuntimeError, match="injected status failure"):
+        services.tracking.submit(app_id)
+
+    with connect(services.repository.path) as connection:
+        count = connection.execute(
+            "SELECT COUNT(*) FROM submissions WHERE application_id=?", (app_id,)
+        ).fetchone()[0]
+    assert count == 0
+    assert services.repository.get_application(app_id)["current_status"] == "preparing"
+
+
 def test_generic_status_transition_to_applied_is_always_blocked(ready_application) -> None:
     """The generic transition rejects applied unconditionally -- even supplying
     a real, currently-valid rendered PDF artifact version id must not work,
@@ -253,10 +267,9 @@ def test_generic_status_transition_to_applied_is_always_blocked(ready_applicatio
     pdf_version = services.repository.latest_artifact_version(app_id, "resume_pdf", "rendered")
     with pytest.raises(ValueError, match="submission-owned"):
         services.repository.transition_status(app_id, "applied", "direct bypass attempt")
-    assert services.repository.get_application(app_id)["current_status"] == "ready"
+    assert services.repository.get_application(app_id)["current_status"] == "preparing"
 
-    # The dedicated internal primitive is the only thing that can persist a
-    # submission, and it is not reachable from transition_status at all.
+    # No caller-supplied proof can turn the generic transition into submission.
     with pytest.raises(TypeError):
         services.repository.transition_status(
             app_id,
@@ -264,4 +277,4 @@ def test_generic_status_transition_to_applied_is_always_blocked(ready_applicatio
             "direct bypass attempt",
             verified_pdf_artifact_version_id=pdf_version["id"],
         )
-    assert services.repository.get_application(app_id)["current_status"] == "ready"
+    assert services.repository.get_application(app_id)["current_status"] == "preparing"

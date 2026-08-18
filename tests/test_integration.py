@@ -60,8 +60,14 @@ def test_default_flow_stops_for_review_then_reaches_ready(services) -> None:
         "Matan Malka - Account Manager - CV.pdf"
     )
     assert rendered.validation.groups["filename"] is True
-    assert services.repository.get_application(app_id)["current_status"] == "ready"
-    assert services.rendering.ready_report(app_id).passed
+    assert services.repository.get_application(app_id)["current_status"] == "preparing"
+    assert services.rendering.ready_qualification(app_id).ready_qualified
+    with connect(services.repository.path) as connection:
+        statuses = connection.execute(
+            "SELECT to_status FROM status_history WHERE application_id=? ORDER BY id",
+            (app_id,),
+        ).fetchall()
+    assert "ready" not in {row["to_status"] for row in statuses}
     decision = services.repository.latest_decision(app_id)
     assert decision["job_snapshot_id"] == ingested.job_snapshot_id
     submission_result = services.tracking.submit(app_id, "submitted to employer")

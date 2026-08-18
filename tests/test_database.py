@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from cv_engine.application.commands import IngestCommand, NextActionCommand
-from cv_engine.domain.models import ApplicationStatus, ValidationReport
+from cv_engine.domain.models import ApplicationStatus
 from cv_engine.infrastructure.persistence import connect, current_schema_version
 from cv_engine.infrastructure.persistence.schema import (
     MIGRATIONS_DIR,
@@ -103,34 +103,10 @@ def test_database_is_at_registered_head_schema(application_repo) -> None:
     assert current_schema_version(application_repo.path) == registered_head
 
 
-def test_ready_submission_and_artifact_registry_preconditions(application_repo) -> None:
+def test_ready_is_not_persisted_and_submission_storage_commits_atomically(
+    application_repo,
+) -> None:
     repo = application_repo
-    refused_app, refused_snapshot = _create(
-        repo, company="Move Guard", target_role="Developer", text="Python role"
-    )
-    repo.transition_status(refused_app, ApplicationStatus.PREPARING, "analysis")
-    with pytest.raises(ValueError, match="rendered resume PDF"):
-        repo.set_ready(refused_app, "missing")
-    refused_pdf = repo.register_artifact_version(
-        refused_app,
-        "resume_pdf",
-        "resume",
-        "artifacts/refused/v001/resume.pdf",
-        "a" * 64,
-        "rendered",
-        job_snapshot_id=refused_snapshot,
-    )
-    with pytest.raises(ValueError, match="post-render validation"):
-        repo.set_ready(refused_app, refused_pdf)
-    repo.record_validation(
-        refused_app,
-        "post-render",
-        ValidationReport.from_findings({"render": False}, []),
-        refused_pdf,
-    )
-    with pytest.raises(ValueError, match="passing post-render validation"):
-        repo.set_ready(refused_app, refused_pdf)
-
     app_id, snapshot_id = _create(
         repo,
         company="Move Guard Success",
@@ -147,16 +123,26 @@ def test_ready_submission_and_artifact_registry_preconditions(application_repo) 
         "rendered",
         job_snapshot_id=snapshot_id,
     )
-    repo.record_validation(
-        app_id,
-        "post-render",
-        ValidationReport.from_findings({"render": True}, []),
-        pdf_id,
-    )
-    repo.set_ready(app_id, pdf_id)
-    with pytest.raises(ValueError, match="rendered resume PDF"):
-        repo.record_submission(app_id, "missing")
-    assert repo.record_submission(app_id, pdf_id)
+    assert not hasattr(repo, "set_ready")
+    assert not hasattr(repo, "_set_ready")
+    assert not hasattr(repo, "record_submission")
+    assert not hasattr(repo, "_record_submission")
+    with repo.unit_of_work() as uow:
+        transaction = repo.bind(uow)
+        transaction.insert_submission(
+            "submission-1",
+            app_id,
+            pdf_id,
+            "2026-08-18T10:00:00+00:00",
+            {"reason": "application service verified exact Ready proof"},
+        )
+        transaction.store_applied_transition(
+            app_id,
+            ApplicationStatus.PREPARING,
+            "2026-08-18T10:00:00+00:00",
+            "submitted",
+        )
+        uow.commit()
     assert repo.get_application(app_id)["current_status"] == "applied"
 
     second_id = repo.register_artifact_version(
@@ -175,7 +161,7 @@ def test_ready_submission_and_artifact_registry_preconditions(application_repo) 
     ]
     assert all(row["revision_id"] is None for row in versions)
     inventory = repo.artifact_inventory()
-    assert len(inventory) == 3
+    assert len(inventory) == 2
     assert {(row["path"], row["content_hash"]) for row in versions}.issubset(
         {(row["path"], row["content_hash"]) for row in inventory}
     )

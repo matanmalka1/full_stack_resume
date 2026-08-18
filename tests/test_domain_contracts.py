@@ -22,6 +22,7 @@ from cv_engine.domain.models import (
     FactSource,
     FactStatus,
     JobAnalysis,
+    ReadyQualification,
     SelectionManifest,
     SelectionPlan,
     ValidationIssue,
@@ -155,6 +156,27 @@ def test_new_validation_reports_carry_the_stage_7b_schema_version() -> None:
 
     assert report.report_schema_version == "2.0"
     assert report.model_dump(mode="json")["report_schema_version"] == "2.0"
+
+
+def test_ready_qualification_cannot_claim_a_result_its_evidence_did_not_earn() -> None:
+    failed = ValidationReport.from_findings(groups={"rendered_artifacts": False}, issues=[])
+    with pytest.raises(ValidationError, match="derived from its validation evidence"):
+        ReadyQualification(
+            application_id="application-1",
+            approved_revision_id="revision-1",
+            pdf_artifact_version_id="pdf-1",
+            ready_qualified=True,
+            validation=failed,
+        )
+
+    passed = ValidationReport.from_findings(groups={"rendered_artifacts": True}, issues=[])
+    with pytest.raises(ValidationError, match="exact PDF"):
+        ReadyQualification(
+            application_id="application-1",
+            approved_revision_id="revision-1",
+            ready_qualified=True,
+            validation=passed,
+        )
 
 
 def test_preparation_records_preserve_exact_domain_lineage(draft_factory) -> None:

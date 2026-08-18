@@ -18,9 +18,11 @@ from helpers import ACCOUNT_MANAGER_JOB
 
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
 from cv_engine.application.errors import StateConflict, WorkflowError
-from cv_engine.application.ready import verify_ready_integrity
+from cv_engine.application.ready import qualify_ready_revision
 from cv_engine.domain.draft_markdown import parse_draft
+from cv_engine.domain.models import DecisionRecord
 from cv_engine.infrastructure.persistence import connect
+from cv_engine.infrastructure.persistence.artifacts import SqliteArtifactRepository
 from cv_engine.infrastructure.persistence.drafts import SqliteDraftRepository
 from cv_engine.runtime.composition import Services
 from cv_engine.runtime.workspace import Workspace
@@ -326,49 +328,37 @@ def test_foreign_working_projection_cannot_replace_the_sqlite_source(
     assert approved.application_id == target.application_id
 
 
-def test_decision_and_artifact_records_cannot_cross_applications(drafted_application) -> None:
+def test_approval_builds_typed_decision_and_artifacts_cannot_cross_applications(
+    drafted_application, monkeypatch: pytest.MonkeyPatch
+) -> None:
     owner = drafted_application("Owner Co")
     stranger = drafted_application("Stranger Co", role="Key Account Manager")
     services = owner.services
-    services.drafts.approve(owner.application_id)
+    inserted: list[DecisionRecord] = []
+    original_insert = SqliteArtifactRepository.insert_decision
+
+    def capture_insert(repository, record: DecisionRecord) -> None:
+        assert isinstance(record, DecisionRecord)
+        inserted.append(record)
+        original_insert(repository, record)
+
+    monkeypatch.setattr(SqliteArtifactRepository, "insert_decision", capture_insert)
+    approved = services.drafts.approve(owner.application_id)
     owner_markdown = services.repository.latest_artifact_version(
         owner.application_id, "resume_markdown", "approved"
     )
     stranger_snapshot_id = services.repository.latest_snapshot(stranger.application_id)["id"]
-    stranger_analysis_id, _ = services.repository.latest_analysis(stranger.application_id)
     owner_snapshot_id = services.repository.latest_snapshot(owner.application_id)["id"]
     owner_analysis_id, _ = services.repository.latest_analysis(owner.application_id)
+    assert len(inserted) == 1
+    decision = inserted[0]
+    assert decision.application_id == owner.application_id
+    assert decision.artifact_version_id == owner_markdown["id"]
+    assert decision.job_snapshot_id == owner_snapshot_id
+    assert decision.job_analysis_id == owner_analysis_id
+    assert decision.id == approved.decision_record_id
     before = _persisted(services)
 
-    # A foreign artifact version, a foreign snapshot, and a foreign analysis are
-    # each rejected on their own.
-    with pytest.raises(ValueError, match="application"):
-        services.repository.record_decision(
-            stranger.application_id,
-            owner_markdown["id"],
-            stranger_snapshot_id,
-            stranger_analysis_id,
-            {},
-            "foreign artifact version",
-        )
-    with pytest.raises(ValueError, match="application"):
-        services.repository.record_decision(
-            owner.application_id,
-            owner_markdown["id"],
-            stranger_snapshot_id,
-            owner_analysis_id,
-            {},
-            "foreign snapshot",
-        )
-    with pytest.raises(ValueError, match="application"):
-        services.repository.record_decision(
-            owner.application_id,
-            owner_markdown["id"],
-            owner_snapshot_id,
-            stranger_analysis_id,
-            {},
-            "foreign analysis",
-        )
     with pytest.raises(ValueError, match="application"):
         services.repository.register_artifact_version(
             owner.application_id,
@@ -444,21 +434,19 @@ def test_projection_manifest_changes_do_not_mutate_the_working_draft_record(
 # --- ready integrity independently rechecks the chain ----------------------
 
 
-def test_ready_integrity_rechecks_the_chain_after_a_material_reanalysis(
+def test_ready_qualification_is_not_invalidated_by_material_reanalysis(
     workspace: Workspace, ready_application
 ) -> None:
     services, app_id = ready_application("Chain Recheck")
-    assert verify_ready_integrity(
-        services.artifacts, services.knowledge, services.repository, app_id
-    ).passed
+    revision_id = services.repository.latest_approved_revision(app_id).id
+    assert qualify_ready_revision(services.artifacts, services.repository, app_id).ready_qualified
 
     _analyze(services, app_id, emphasis="balanced-sales")
 
-    report = verify_ready_integrity(
-        services.artifacts, services.knowledge, services.repository, app_id
+    qualification = qualify_ready_revision(
+        services.artifacts, services.repository, app_id, revision_id
     )
-    assert not report.passed
-    assert any(issue.code == "new-analysis-since-approval" for issue in report.issues)
+    assert qualification.ready_qualified, qualification.validation.model_dump()
 
 
 def test_ready_integrity_holds_through_an_immaterial_reanalysis(
@@ -467,10 +455,8 @@ def test_ready_integrity_holds_through_an_immaterial_reanalysis(
     """A re-run that changes nothing material is not a reason to fail integrity."""
     services, app_id = ready_application("Immaterial Rerun")
     _analyze(services, app_id)
-    report = verify_ready_integrity(
-        services.artifacts, services.knowledge, services.repository, app_id
-    )
-    assert report.passed, report.model_dump()
+    qualification = qualify_ready_revision(services.artifacts, services.repository, app_id)
+    assert qualification.ready_qualified, qualification.validation.model_dump()
     revision_id = services.repository.latest_approved_revision(app_id).id
     assert {
         row["artifact_type"]

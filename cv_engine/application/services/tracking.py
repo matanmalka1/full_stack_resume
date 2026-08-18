@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import uuid
+
 from ...domain.models import (
     ApplicationStatus,
 )
+from ...util import utc_now
 from ..commands import (
     ApplicationMutationResult,
     NextActionCommand,
@@ -19,7 +22,7 @@ from ..errors import (
 from ..ports import (
     TrackingRepository,
 )
-from ..ready import verify_ready_integrity
+from ..ready import qualify_ready_revision
 from .base import ServiceBase
 
 
@@ -67,18 +70,43 @@ class TrackingService(ServiceBase[TrackingRepository]):
             application = self.repo.get_application(application_id)
         except KeyError as exc:
             raise UnknownRecord(f"unknown application: {application_id}") from exc
-        if application["current_status"] != ApplicationStatus.READY.value:
+        current = ApplicationStatus(application["current_status"])
+        if current not in (ApplicationStatus.PREPARING, ApplicationStatus.READY):
             raise StateConflict("applied requires a currently valid ready application")
-        integrity = verify_ready_integrity(
-            self.artifacts, self._knowledge, self.repo, application_id
-        )
-        if not integrity.passed:
+        try:
+            qualification = qualify_ready_revision(self.artifacts, self.repo, application_id)
+        except KeyError as exc:
+            raise StateConflict("applied requires a currently valid ready application") from exc
+        if not qualification.ready_qualified:
             raise ValidationBlocked(
                 "applied blocked by stale or tampered ready state: "
-                f"{[issue.code for issue in integrity.issues]}"
+                f"{[issue.code for issue in qualification.validation.issues]}"
             )
-        pdf_artifact_version_id = integrity.evidence["pdf_artifact_version_id"]
-        self.repo.record_submission(application_id, pdf_artifact_version_id, reason)
+        pdf_artifact_version_id = qualification.pdf_artifact_version_id
+        if pdf_artifact_version_id is None:
+            raise ValidationBlocked("applied blocked because Ready has no exact PDF artifact")
+        now = utc_now()
+        try:
+            with self.repo.unit_of_work() as uow:
+                transaction = self.repo.bind(uow)
+                transaction.insert_submission(
+                    str(uuid.uuid4()),
+                    application_id,
+                    pdf_artifact_version_id,
+                    now,
+                    {"reason": reason},
+                )
+                transaction.store_applied_transition(
+                    application_id,
+                    current,
+                    now,
+                    reason,
+                )
+                uow.commit()
+        except KeyError as exc:
+            raise UnknownRecord(f"unknown application: {application_id}") from exc
+        except ValueError as exc:
+            raise StateConflict(str(exc)) from exc
         updated = self.repo.get_application(application_id)
         return SubmissionResult(
             application_id=application_id,

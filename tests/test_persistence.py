@@ -356,7 +356,7 @@ def test_identity_serialization_registry_and_typed_artifact_ports() -> None:
 
     for member in (
         "register_artifact_version",
-        "record_decision",
+        "insert_decision",
         "record_validation",
         "latest_artifact_version",
     ):

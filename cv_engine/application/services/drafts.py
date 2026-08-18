@@ -9,6 +9,7 @@ from ...domain.drafts import apply_claim_edit, build_draft, seal_draft
 from ...domain.knowledge import Knowledge
 from ...domain.models import (
     ApplicationStatus,
+    DecisionRecord,
     DraftDocument,
     ValidationReport,
     ValidationRunLineage,
@@ -463,20 +464,23 @@ class DraftService(ServiceBase[DraftRepository]):
                 facts_version=facts.version,
                 approved_at=now,
             )
-            decision_id = transaction.record_decision(
-                application_id,
-                markdown_version_id,
-                draft.job_snapshot_id,
-                analysis_id,
-                structured,
-                decision_summary,
+            decision = DecisionRecord(
+                id=str(uuid.uuid4()),
+                application_id=application_id,
+                artifact_version_id=markdown_version_id,
+                job_snapshot_id=draft.job_snapshot_id,
+                job_analysis_id=analysis_id,
+                structured=structured,
+                summary=decision_summary,
+                created_at=now,
             )
+            transaction.insert_decision(decision)
             transaction.record_event(
                 application_id,
                 "draft_approved",
                 {
                     "approved_revision_id": revision.id,
-                    "decision_record_id": decision_id,
+                    "decision_record_id": decision.id,
                     "version": revision.version_number,
                 },
             )
@@ -493,5 +497,5 @@ class DraftService(ServiceBase[DraftRepository]):
             version=revision.version_number,
             markdown_artifact_version_id=markdown_version_id,
             manifest_artifact_version_id=manifest_version_id,
-            decision_record_id=decision_id,
+            decision_record_id=decision.id,
         )

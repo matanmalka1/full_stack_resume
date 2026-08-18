@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 
 from ...domain.models import (
-    ApplicationStatus,
+    ReadyQualification,
     ValidationReport,
 )
 from ...domain.validation import validate_draft
@@ -25,7 +25,7 @@ from ..errors import (
 from ..ports import (
     ReadinessRepository,
 )
-from ..ready import verify_ready_integrity
+from ..ready import qualify_ready_revision
 from .base import ServiceBase
 
 
@@ -135,28 +135,41 @@ class RenderingService(ServiceBase[ReadinessRepository]):
                 )
         self.repo.record_validation(application_id, "post-render", report, artifact_ids[1])
         if report.passed:
-            integrity = verify_ready_integrity(
-                self.artifacts, self._knowledge, self.repo, application_id
+            qualification = qualify_ready_revision(
+                self.artifacts,
+                self.repo,
+                application_id,
+                revision_id,
+                artifact_ids[1],
             )
-            if not integrity.passed:
+            if not qualification.ready_qualified:
                 raise ValidationBlocked(
                     "render succeeded but fresh ready integrity verification failed: "
-                    f"{[issue.code for issue in integrity.issues]}"
+                    f"{[issue.code for issue in qualification.validation.issues]}"
                 )
-            self.repo.set_ready(
-                application_id, artifact_ids[1], "all ready validation groups passed"
-            )
         return RenderResult(
             application_id=application_id,
             pdf_artifact_version_id=artifact_ids[1],
             validation=report,
         )
 
-    def ready_report(self, application_id: str) -> ValidationReport:
+    def ready_qualification(
+        self,
+        application_id: str,
+        approved_revision_id: str | None = None,
+        pdf_artifact_version_id: str | None = None,
+    ) -> ReadyQualification:
         try:
-            application = self.repo.get_application(application_id)
+            self.repo.get_application(application_id)
+            return qualify_ready_revision(
+                self.artifacts,
+                self.repo,
+                application_id,
+                approved_revision_id,
+                pdf_artifact_version_id,
+            )
         except KeyError as exc:
-            raise UnknownRecord(f"unknown application: {application_id}") from exc
-        if application["current_status"] != ApplicationStatus.READY.value:
-            raise StateConflict("application is not ready")
-        return verify_ready_integrity(self.artifacts, self._knowledge, self.repo, application_id)
+            raise UnknownRecord(f"no approved revision for application: {application_id}") from exc
+
+    def ready_report(self, application_id: str) -> ValidationReport:
+        return self.ready_qualification(application_id).validation

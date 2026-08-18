@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ...domain.models import ValidationReport, ValidationRunLineage
+from ...domain.models import DecisionRecord, ValidationReport, ValidationRunLineage
 from ...util import canonical_json, utc_now
 from .base import SqliteRepositoryBase
 from .connection import integrity_results
@@ -132,57 +132,56 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def record_decision(
+    def artifact_version(self, artifact_version_id: str) -> dict[str, Any]:
+        with self.read_connection() as connection:
+            row = connection.execute(
+                "SELECT av.*, a.application_id, a.artifact_type, a.logical_name "
+                "FROM artifact_versions av JOIN artifacts a ON a.id=av.artifact_id "
+                "WHERE av.id=?",
+                (artifact_version_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"no artifact version {artifact_version_id}")
+        return dict(row)
+
+    def artifact_version_for_revision(
         self,
-        application_id: str,
-        artifact_version_id: str,
-        job_snapshot_id: str,
-        job_analysis_id: str,
-        structured: dict[str, Any],
-        summary: str,
-    ) -> str:
-        decision_id = new_id()
+        revision_id: str,
+        artifact_type: str,
+        lifecycle_status: str | None = None,
+    ) -> dict[str, Any]:
+        query = (
+            "SELECT av.*, a.application_id, a.artifact_type, a.logical_name "
+            "FROM artifact_versions av JOIN artifacts a ON a.id=av.artifact_id "
+            "WHERE av.revision_id=? AND a.artifact_type=?"
+        )
+        params: list[Any] = [revision_id, artifact_type]
+        if lifecycle_status is not None:
+            query += " AND av.lifecycle_status=?"
+            params.append(lifecycle_status)
+        query += " ORDER BY av.created_at DESC, av.version_number DESC LIMIT 1"
+        with self.read_connection() as connection:
+            row = connection.execute(query, params).fetchone()
+        if row is None:
+            raise KeyError(f"no {artifact_type} artifact for approved revision {revision_id}")
+        return dict(row)
+
+    def insert_decision(self, record: DecisionRecord) -> None:
         with self.transaction() as connection:
-            owned_version = connection.execute(
-                "SELECT 1 FROM artifact_versions av JOIN artifacts a ON a.id=av.artifact_id "
-                "WHERE av.id=? AND a.application_id=?",
-                (artifact_version_id, application_id),
-            ).fetchone()
-            if owned_version is None:
-                raise ValueError(
-                    "a decision record cannot reference an artifact version belonging to "
-                    "another application"
-                )
-            _require_owned_snapshot(connection, application_id, job_snapshot_id, "decision record")
-            analysis = connection.execute(
-                "SELECT application_id, job_snapshot_id FROM job_analyses WHERE id=?",
-                (job_analysis_id,),
-            ).fetchone()
-            if analysis is None or analysis["application_id"] != application_id:
-                raise ValueError(
-                    "a decision record cannot reference a job analysis belonging to "
-                    "another application"
-                )
-            if analysis["job_snapshot_id"] != job_snapshot_id:
-                raise ValueError(
-                    "a decision record's job analysis must be the analysis of the job "
-                    "snapshot it records"
-                )
             connection.execute(
                 "INSERT INTO decision_records(id, application_id, artifact_version_id, job_snapshot_id, job_analysis_id, structured_json, summary, created_at) "
                 "VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    decision_id,
-                    application_id,
-                    artifact_version_id,
-                    job_snapshot_id,
-                    job_analysis_id,
-                    canonical_json(structured),
-                    summary,
-                    utc_now(),
+                    record.id,
+                    record.application_id,
+                    record.artifact_version_id,
+                    record.job_snapshot_id,
+                    record.job_analysis_id,
+                    canonical_json(record.structured),
+                    record.summary,
+                    record.created_at,
                 ),
             )
-        return decision_id
 
     def latest_decision(self, application_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
@@ -339,6 +338,15 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
             raise KeyError(
                 f"no {phase} validation references artifact version {artifact_version_id}"
             )
+        return ValidationReport.model_validate_json(row["report_json"])
+
+    def validation_report(self, validation_id: str) -> ValidationReport:
+        with self.read_connection() as connection:
+            row = connection.execute(
+                "SELECT report_json FROM validation_runs WHERE id=?", (validation_id,)
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"no validation report {validation_id}")
         return ValidationReport.model_validate_json(row["report_json"])
 
     def integrity_check(self) -> list[str]:

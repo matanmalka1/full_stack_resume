@@ -547,6 +547,19 @@ class ApprovedRevision(StrictModel):
     approved_at: str
 
 
+class DecisionRecord(StrictModel):
+    """The immutable approval decision stored beside an approved artifact."""
+
+    id: str
+    application_id: str
+    artifact_version_id: str
+    job_snapshot_id: str
+    job_analysis_id: str
+    structured: dict[str, Any]
+    summary: str
+    created_at: str
+
+
 class ValidationRunLineage(StrictModel):
     """Exact mutable-draft and frozen-context inputs validated by one run."""
 
@@ -604,6 +617,24 @@ class ValidationReport(StrictModel):
         hard_issues = sorted({issue.code for issue in self.issues if issue.hard})
         if hard_issues:
             raise ValueError(f"report claims to have passed with hard failures: {hard_issues}")
+        return self
+
+
+class ReadyQualification(StrictModel):
+    """Current integrity projection for one immutable approved revision."""
+
+    application_id: str
+    approved_revision_id: str
+    pdf_artifact_version_id: str | None = None
+    ready_qualified: bool
+    validation: ValidationReport
+
+    @model_validator(mode="after")
+    def qualification_agrees_with_evidence(self) -> ReadyQualification:
+        if self.ready_qualified != self.validation.passed:
+            raise ValueError("ready_qualified must be derived from its validation evidence")
+        if self.ready_qualified and self.pdf_artifact_version_id is None:
+            raise ValueError("ready_qualified requires an exact PDF artifact version")
         return self
 
 

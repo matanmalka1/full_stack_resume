@@ -120,6 +120,36 @@ class SqliteApplicationRepository(SqliteRepositoryBase):
         with self.transaction() as connection:
             self._transition_status(connection, application_id, target_status, reason, now)
 
+    def store_applied_transition(
+        self,
+        application_id: str,
+        expected_current: ApplicationStatus | str,
+        changed_at: str,
+        reason: str,
+    ) -> None:
+        """Persist an application-authorized submission transition."""
+        expected = ApplicationStatus(expected_current)
+        with self.transaction() as connection:
+            row = connection.execute(
+                "SELECT current_status FROM applications WHERE id=?", (application_id,)
+            ).fetchone()
+            if row is None:
+                raise KeyError(application_id)
+            actual = ApplicationStatus(row["current_status"])
+            if actual is not expected:
+                raise ValueError(
+                    f"application status changed before commit: expected {expected.value}, "
+                    f"found {actual.value}"
+                )
+            self._set_status(
+                connection,
+                application_id,
+                expected,
+                ApplicationStatus.APPLIED,
+                changed_at,
+                reason,
+            )
+
     def _transition_status(
         self,
         connection: Any,

@@ -8,6 +8,7 @@ from ..domain.knowledge import Knowledge
 from ..domain.models import (
     ApprovedRevision,
     CandidateContext,
+    DecisionRecord,
     DraftDocument,
     JobClassificationProposal,
     Profile,
@@ -237,13 +238,13 @@ class ApplicationStore(Protocol):
 
     def set_normalized_role(self, application_id: str, normalized_role: str) -> None: ...
 
-    def set_ready(
-        self, application_id: str, pdf_artifact_version_id: str, reason: str = ...
+    def store_applied_transition(
+        self,
+        application_id: str,
+        expected_current: Any,
+        changed_at: str,
+        reason: str,
     ) -> None: ...
-
-    def record_submission(
-        self, application_id: str, pdf_artifact_version_id: str, reason: str = ...
-    ) -> str: ...
 
     def record_event(
         self, application_id: str, event_type: str, payload: dict[str, Any]
@@ -332,15 +333,16 @@ class ArtifactRegistry(Protocol):
 
     def artifact_versions(self, application_id: str) -> list[dict[str, Any]]: ...
 
-    def record_decision(
+    def artifact_version(self, artifact_version_id: str) -> dict[str, Any]: ...
+
+    def artifact_version_for_revision(
         self,
-        application_id: str,
-        artifact_version_id: str,
-        job_snapshot_id: str,
-        job_analysis_id: str,
-        structured: dict[str, Any],
-        summary: str,
-    ) -> str: ...
+        revision_id: str,
+        artifact_type: str,
+        lifecycle_status: str | None = None,
+    ) -> dict[str, Any]: ...
+
+    def insert_decision(self, record: DecisionRecord) -> None: ...
 
     def latest_decision(self, application_id: str) -> dict[str, Any]: ...
 
@@ -361,6 +363,8 @@ class ArtifactRegistry(Protocol):
     def validation_for_artifact(
         self, application_id: str, phase: str, artifact_version_id: str
     ) -> ValidationReport: ...
+
+    def validation_report(self, validation_id: str) -> ValidationReport: ...
 
     def validation_lineage(self, validation_id: str) -> ValidationRunLineage: ...
 
@@ -458,6 +462,15 @@ class ReadinessRepository(DraftRepository, Protocol):
 
 class TrackingRepository(ReadinessRepository, Protocol):
     """Recruitment mutations plus the full Ready proof required by submission."""
+
+    def insert_submission(
+        self,
+        submission_id: str,
+        application_id: str,
+        artifact_version_id: str,
+        submitted_at: str,
+        metadata: dict[str, Any],
+    ) -> None: ...
 
 
 class ApplicationRepository(
