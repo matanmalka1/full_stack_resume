@@ -27,7 +27,6 @@ POLICY_MODULES = (
     "domain/candidate.py",
     "domain/profiles.py",
     "domain/facts.py",
-    "application/services.py",
     "application/ready.py",
     "infrastructure/rendering.py",
 )
@@ -126,10 +125,19 @@ def test_candidate_context_rejects_missing_or_unusable_identity(
 
 
 def test_policy_modules_contain_no_candidate_literal() -> None:
+    service_path = ENGINE_DIR / "application/services.py"
+    service_modules = (
+        [service_path]
+        if service_path.is_file()
+        else sorted((ENGINE_DIR / "application/services").rglob("*.py"))
+    )
+    policy_paths = [*(ENGINE_DIR / module for module in POLICY_MODULES), *service_modules]
     offenders = {
-        module: [literal for literal in CANDIDATE_LITERALS if literal in source]
-        for module in POLICY_MODULES
-        if (source := (ENGINE_DIR / module).read_text(encoding="utf-8"))
+        path.relative_to(ENGINE_DIR).as_posix(): [
+            literal for literal in CANDIDATE_LITERALS if literal in source
+        ]
+        for path in policy_paths
+        if (source := path.read_text(encoding="utf-8"))
         and any(literal in source for literal in CANDIDATE_LITERALS)
     }
     assert not offenders, offenders
