@@ -34,9 +34,7 @@ def _require_owned_snapshot(
         "SELECT application_id FROM job_snapshots WHERE id=?", (snapshot_id,)
     ).fetchone()
     if row is None:
-        raise ValueError(
-            f"a {subject} cannot reference an unknown job snapshot: {snapshot_id}"
-        )
+        raise ValueError(f"a {subject} cannot reference an unknown job snapshot: {snapshot_id}")
     if row["application_id"] != application_id:
         raise ValueError(
             f"a {subject} cannot reference a job snapshot belonging to another application"
@@ -366,8 +364,7 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
         ).fetchone()
         if analysis is None or analysis["application_id"] != application_id:
             raise ValueError(
-                "a selection plan cannot reference a job analysis belonging to "
-                "another application"
+                "a selection plan cannot reference a job analysis belonging to another application"
             )
         version = connection.execute(
             "SELECT COALESCE(MAX(version_number), 0) + 1 AS version "
@@ -410,9 +407,7 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
             candidate_context_hash=record["candidate_context_hash"],
             profile_version=record["profile_version"],
             selection_policy_version=record["selection_policy_version"],
-            track_emphasis_dependencies=json.loads(
-                record["track_emphasis_dependencies_json"]
-            ),
+            track_emphasis_dependencies=json.loads(record["track_emphasis_dependencies_json"]),
             created_at=record["created_at"],
         )
 
@@ -439,9 +434,7 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
     @staticmethod
     def _analysis_record(row: Any) -> dict[str, Any]:
         record = dict(row)
-        record["analysis"] = JobAnalysis.model_validate_json(
-            record.pop("structured_json")
-        )
+        record["analysis"] = JobAnalysis.model_validate_json(record.pop("structured_json"))
         return record
 
     def get_analysis(self, analysis_id: str) -> dict[str, Any]:
@@ -456,8 +449,7 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
     def analyses(self, application_id: str) -> list[dict[str, Any]]:
         with self.read_connection() as connection:
             rows = connection.execute(
-                "SELECT * FROM job_analyses WHERE application_id=? "
-                "ORDER BY version_number",
+                "SELECT * FROM job_analyses WHERE application_id=? ORDER BY version_number",
                 (application_id,),
             ).fetchall()
         return [self._analysis_record(row) for row in rows]

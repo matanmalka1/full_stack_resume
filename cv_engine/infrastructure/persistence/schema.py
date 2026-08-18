@@ -85,16 +85,21 @@ def _bootstrap(connection: Any) -> None:
 
 
 def _has_table(connection: Any, table: str) -> bool:
-    return connection.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
-    ).fetchone() is not None
+    return (
+        connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+        ).fetchone()
+        is not None
+    )
 
 
 def _has_user_schema(connection: Any) -> bool:
-    return connection.execute(
-        "SELECT 1 FROM sqlite_master WHERE sql IS NOT NULL "
-        "AND name NOT LIKE 'sqlite_%' LIMIT 1"
-    ).fetchone() is not None
+    return (
+        connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' LIMIT 1"
+        ).fetchone()
+        is not None
+    )
 
 
 def sqlite_master_fingerprint(connection: Any) -> list[tuple[str, str, str, str]]:
@@ -104,10 +109,7 @@ def sqlite_master_fingerprint(connection: Any) -> list[tuple[str, str, str, str]
         "WHERE sql IS NOT NULL AND name != 'schema_migrations' "
         "ORDER BY type, name"
     ).fetchall()
-    return [
-        (row[0], row[1], row[2], " ".join(row[3].split()))
-        for row in rows
-    ]
+    return [(row[0], row[1], row[2], " ".join(row[3].split())) for row in rows]
 
 
 def baseline_fingerprint(migration_dir: Path = MIGRATIONS_DIR) -> list[tuple[str, str, str, str]]:
@@ -147,8 +149,7 @@ def _adopt_baseline(connection: Any, available: list[Migration]) -> None:
     _bootstrap(connection)
     baseline = available[0]
     connection.execute(
-        "INSERT INTO schema_migrations(version, name, checksum, applied_at) "
-        "VALUES(?, ?, ?, ?)",
+        "INSERT INTO schema_migrations(version, name, checksum, applied_at) VALUES(?, ?, ?, ?)",
         (baseline.version, baseline.name, baseline.checksum, utc_now()),
     )
     connection.commit()
@@ -170,9 +171,7 @@ def _verify_applied(applied: list[Any], available: list[Migration]) -> None:
                 f"database has unknown or newer schema migration {version} ({row['name']})"
             )
         if migration.checksum != row["checksum"]:
-            raise MigrationChecksumError(
-                f"applied migration checksum changed: {migration.name}"
-            )
+            raise MigrationChecksumError(f"applied migration checksum changed: {migration.name}")
     expected_prefix = [migration.version for migration in available[: len(applied)]]
     actual_versions = [row["version"] for row in applied]
     if actual_versions != expected_prefix:
@@ -185,8 +184,7 @@ def _apply_one(connection: Any, migration: Migration) -> None:
     try:
         connection.executescript("BEGIN IMMEDIATE;\n" + migration.sql)
         connection.execute(
-            "INSERT INTO schema_migrations(version, name, checksum, applied_at) "
-            "VALUES(?, ?, ?, ?)",
+            "INSERT INTO schema_migrations(version, name, checksum, applied_at) VALUES(?, ?, ?, ?)",
             (migration.version, migration.name, migration.checksum, utc_now()),
         )
         connection.commit()

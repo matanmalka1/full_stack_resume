@@ -19,12 +19,28 @@ from ..domain.facts import FactStoreError
 from .knowledge import read_fact_source
 from .paths import resolve_within
 from .payloads import PayloadStore
-from ..util import canonical_json, normalized_text, sha256_file, sha256_text, utc_now, verify_payload
+from ..util import (
+    canonical_json,
+    normalized_text,
+    sha256_file,
+    sha256_text,
+    utc_now,
+    verify_payload,
+)
 
 
 MIGRATION_NAMESPACE = uuid.UUID("7650f234-c480-4a9e-9c21-9d5142899a63")
 EXCLUDED_PARTS = {"__pycache__", ".pytest_cache", ".venv", "tmp"}
-EXPECTED_COLUMNS = ["company", "role", "url", "cv_file", "status", "date_created", "date_sent", "notes"]
+EXPECTED_COLUMNS = [
+    "company",
+    "role",
+    "url",
+    "cv_file",
+    "status",
+    "date_created",
+    "date_sent",
+    "notes",
+]
 
 
 class MigrationSafetyError(RuntimeError):
@@ -34,7 +50,9 @@ class MigrationSafetyError(RuntimeError):
 MigrationTestRunner = Callable[[Path], Path]
 
 
-def _content_hash(payload: dict[str, Any], *, hash_field: str, volatile_fields: tuple[str, ...] = ()) -> str:
+def _content_hash(
+    payload: dict[str, Any], *, hash_field: str, volatile_fields: tuple[str, ...] = ()
+) -> str:
     material = dict(payload)
     material.pop(hash_field, None)
     for field in volatile_fields:
@@ -137,12 +155,14 @@ def build_inventory(root: Path) -> dict[str, Any]:
                 continue
             relative = path.relative_to(root).as_posix()
             accounted.add(relative)
-            artifact_data.append({
-                "type": kind,
-                "path": relative,
-                "size": path.stat().st_size,
-                "sha256": sha256_file(path),
-            })
+            artifact_data.append(
+                {
+                    "type": kind,
+                    "path": relative,
+                    "size": path.stat().st_size,
+                    "sha256": sha256_file(path),
+                }
+            )
         applications.append({"csv_row": index, "row": row, "artifacts": artifact_data})
 
     base_paths = [
@@ -157,7 +177,9 @@ def build_inventory(root: Path) -> dict[str, Any]:
             continue
         relative = path.relative_to(root).as_posix()
         accounted.add(relative)
-        base_artifacts.append({"path": relative, "size": path.stat().st_size, "sha256": sha256_file(path)})
+        base_artifacts.append(
+            {"path": relative, "size": path.stat().st_size, "sha256": sha256_file(path)}
+        )
 
     output_files = {
         path.relative_to(root).as_posix()
@@ -230,14 +252,18 @@ def create_snapshot(root: Path) -> Path:
     }
     manifest["manifest_hash"] = sha256_text(canonical_json(manifest))
     target.mkdir(parents=True)
-    (target / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    (target / "manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     shutil.copy2(root / "docs" / "v1-migration-restore.md", target / "RESTORE.md")
     archive = target / "repository.tar.gz"
     with tarfile.open(archive, "w:gz") as tar:
         for path in files:
             tar.add(path, arcname=path.relative_to(root), recursive=False)
     verification = verify_snapshot(target)
-    (target / "verification.json").write_text(json.dumps(verification, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    (target / "verification.json").write_text(
+        json.dumps(verification, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     if not verification["passed"]:
         raise MigrationSafetyError(f"snapshot verification failed: {target}")
     return target
@@ -249,7 +275,9 @@ def _safe_extract(tar: tarfile.TarFile, target: Path) -> None:
             resolve_within(target, member.name)
         except ValueError as exc:
             raise MigrationSafetyError(f"unsafe archive member: {member.name}") from exc
-        if member.issym() and (Path(member.linkname).is_absolute() or ".." in Path(member.linkname).parts):
+        if member.issym() and (
+            Path(member.linkname).is_absolute() or ".." in Path(member.linkname).parts
+        ):
             raise MigrationSafetyError(f"unsafe archive symlink: {member.name}")
     tar.extractall(target, filter="data")
 
@@ -260,7 +288,10 @@ def verify_snapshot(snapshot_dir: Path) -> dict[str, Any]:
     restore_path = snapshot_dir / "RESTORE.md"
     problems = []
     if not manifest_path.is_file() or not archive_path.is_file() or not restore_path.is_file():
-        return {"passed": False, "problems": ["snapshot is missing manifest, archive, or restore instructions"]}
+        return {
+            "passed": False,
+            "problems": ["snapshot is missing manifest, archive, or restore instructions"],
+        }
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     expected_hash = manifest.pop("manifest_hash")
     actual_hash = sha256_text(canonical_json(manifest))
@@ -294,16 +325,26 @@ def verify_snapshot(snapshot_dir: Path) -> dict[str, Any]:
 
 
 def run_migration_tests(root: Path) -> Path:
-    command = [str(root / ".venv" / "bin" / "python") if (root / ".venv/bin/python").is_file() else "python3", "-m", "pytest", "tests/test_migration.py", "-q"]
+    command = [
+        str(root / ".venv" / "bin" / "python")
+        if (root / ".venv/bin/python").is_file()
+        else "python3",
+        "-m",
+        "pytest",
+        "tests/test_migration.py",
+        "-q",
+    ]
     completed = subprocess.run(command, cwd=root, text=True, capture_output=True, timeout=180)
-    report = _seal_report({
-        "passed": completed.returncode == 0,
-        "command": command,
-        "returncode": completed.returncode,
-        "stdout": completed.stdout,
-        "stderr": completed.stderr,
-        "created_at": utc_now(),
-    })
+    report = _seal_report(
+        {
+            "passed": completed.returncode == 0,
+            "command": command,
+            "returncode": completed.returncode,
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
+            "created_at": utc_now(),
+        }
+    )
     target = root / "data/migration/migration-tests.json"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -323,7 +364,10 @@ def migrate_legacy_state(source_root: Path, target_root: Path, *, dry_run: bool)
     db_path = target_root / "data" / "applications.sqlite3"
     if db_path.exists():
         raise MigrationSafetyError(f"refusing to overwrite database: {db_path}")
-    if any((target_root / "base" / name).exists() for name in ("common.md", "sales.md", "development.md", "situational_skills.md")):
+    if any(
+        (target_root / "base" / name).exists()
+        for name in ("common.md", "sales.md", "development.md", "situational_skills.md")
+    ):
         raise MigrationSafetyError("refusing to overwrite existing modular fact sources")
     write_canonical_sources(target_root / "base")
     repository = Repository(db_path)
@@ -349,7 +393,10 @@ def migrate_legacy_state(source_root: Path, target_root: Path, *, dry_run: bool)
             application_id=app_id,
             snapshot_id=snap_id,
             captured_at=f"{row['date_created']}T00:00:00+00:00",
-            source_metadata={"legacy_csv_row": row, "original_path": paths["job_snapshot"].relative_to(source_root).as_posix()},
+            source_metadata={
+                "legacy_csv_row": row,
+                "original_path": paths["job_snapshot"].relative_to(source_root).as_posix(),
+            },
         )
         if row["status"] == "sent":
             with repository.transaction() as connection:
@@ -362,9 +409,15 @@ def migrate_legacy_state(source_root: Path, target_root: Path, *, dry_run: bool)
                     (app_id, f"{row['date_sent']}T00:00:00+00:00"),
                 )
         elif row["status"] == "draft":
-            repository.transition_status(app_id, "preparing", "legacy draft mapped to preparing; v1 ready checks not previously run")
+            repository.transition_status(
+                app_id,
+                "preparing",
+                "legacy draft mapped to preparing; v1 ready checks not previously run",
+            )
         else:
-            raise MigrationSafetyError(f"no deterministic mapping for legacy status {row['status']!r}")
+            raise MigrationSafetyError(
+                f"no deterministic mapping for legacy status {row['status']!r}"
+            )
         for artifact_type, path in paths.items():
             relative = path.relative_to(source_root).as_posix()
             repository.register_artifact_version(
@@ -376,7 +429,9 @@ def migrate_legacy_state(source_root: Path, target_root: Path, *, dry_run: bool)
                 "migrated-historical",
                 job_snapshot_id=snap_id,
                 metadata={"immutable": True, "legacy": True},
-                submitted_at=(f"{row['date_sent']}T00:00:00+00:00" if row["status"] == "sent" else None),
+                submitted_at=(
+                    f"{row['date_sent']}T00:00:00+00:00" if row["status"] == "sent" else None
+                ),
             )
             migrated_artifacts += 1
     for artifact in inventory["base_artifacts"]:
@@ -401,9 +456,13 @@ def migrate_legacy_state(source_root: Path, target_root: Path, *, dry_run: bool)
         problems.append(f"application count {app_count} != legacy rows {len(rows)}")
     if snapshot_count != len(rows):
         problems.append(f"snapshot count {snapshot_count} != legacy rows {len(rows)}")
-    expected_artifacts = inventory["legacy_application_artifact_count"] + inventory["base_artifact_count"]
+    expected_artifacts = (
+        inventory["legacy_application_artifact_count"] + inventory["base_artifact_count"]
+    )
     if artifact_count != expected_artifacts or migrated_artifacts != expected_artifacts:
-        problems.append(f"artifact count mismatch: db={artifact_count}, migrated={migrated_artifacts}, expected={expected_artifacts}")
+        problems.append(
+            f"artifact count mismatch: db={artifact_count}, migrated={migrated_artifacts}, expected={expected_artifacts}"
+        )
     return {
         "passed": not problems,
         "dry_run": dry_run,
@@ -448,10 +507,12 @@ def _execute_snapshot_dry_run(snapshot_dir: Path, verification: dict[str, Any]) 
             if path.exists():
                 path.unlink()
         report = migrate_legacy_state(restored, target, dry_run=True)
-    report.update({
-        "snapshot_id": verification["snapshot_id"],
-        "manifest_hash": verification["manifest_hash"],
-    })
+    report.update(
+        {
+            "snapshot_id": verification["snapshot_id"],
+            "manifest_hash": verification["manifest_hash"],
+        }
+    )
     return report
 
 
@@ -491,7 +552,9 @@ def migration_gate(
     tests_path = root / "data/migration/migration-tests.json"
     dry_run_path = root / "data/migration/dry-run.json"
     if not all(path.is_file() for path in (inventory_path, tests_path, dry_run_path)):
-        raise MigrationSafetyError("inventory, migration tests, and dry-run reports are all required")
+        raise MigrationSafetyError(
+            "inventory, migration tests, and dry-run reports are all required"
+        )
     inventory = _load_json(inventory_path, "inventory report")
     tests = _load_json(tests_path, "migration-test report")
     dry_run = _load_json(dry_run_path, "dry-run report")
@@ -509,10 +572,9 @@ def migration_gate(
         problems.append("dry-run migration failed")
     if not snapshot.get("passed"):
         problems.append("snapshot restore verification failed")
-    if (
-        dry_run.get("snapshot_id") != snapshot.get("snapshot_id")
-        or dry_run.get("manifest_hash") != snapshot.get("manifest_hash")
-    ):
+    if dry_run.get("snapshot_id") != snapshot.get("snapshot_id") or dry_run.get(
+        "manifest_hash"
+    ) != snapshot.get("manifest_hash"):
         problems.append("dry-run was not performed against this snapshot")
     if dry_run.get("inventory_hash") != inventory.get("inventory_hash"):
         problems.append("inventory changed after dry-run")
@@ -546,7 +608,14 @@ def migration_gate(
     if snapshot.get("passed"):
         try:
             fresh_dry_run = _execute_snapshot_dry_run(snapshot_dir, snapshot)
-        except (OSError, MigrationSafetyError, KeyError, ValueError, sqlite3.Error, tarfile.TarError) as exc:
+        except (
+            OSError,
+            MigrationSafetyError,
+            KeyError,
+            ValueError,
+            sqlite3.Error,
+            tarfile.TarError,
+        ) as exc:
             problems.append(f"fresh snapshot dry-run failed: {exc}")
         else:
             if not fresh_dry_run.get("passed") or fresh_dry_run.get("problems"):
@@ -577,7 +646,10 @@ def apply_migration(
         raise MigrationSafetyError(f"migration gate failed: {gate['problems']}")
     final_db = root / "data/applications.sqlite3"
     final_report = root / "data/migration/live-migration.json"
-    final_facts = [root / "base" / name for name in ("common.md", "sales.md", "development.md", "situational_skills.md")]
+    final_facts = [
+        root / "base" / name
+        for name in ("common.md", "sales.md", "development.md", "situational_skills.md")
+    ]
     if final_db.exists() or final_report.exists() or any(path.exists() for path in final_facts):
         raise MigrationSafetyError("live migration targets already exist; refusing to overwrite")
 
@@ -586,11 +658,16 @@ def apply_migration(
     moved: list[tuple[Path, Path]] = []
     try:
         immediate_inventory = build_inventory(root)
-        if immediate_inventory["problems"] or immediate_inventory["inventory_hash"] != gate["inventory_hash"]:
+        if (
+            immediate_inventory["problems"]
+            or immediate_inventory["inventory_hash"] != gate["inventory_hash"]
+        ):
             raise MigrationSafetyError("live inventory changed after the migration gate")
         report = migrate_legacy_state(root, staging, dry_run=False)
         if not report["passed"]:
-            raise MigrationSafetyError(f"staged live migration reconciliation failed: {report['problems']}")
+            raise MigrationSafetyError(
+                f"staged live migration reconciliation failed: {report['problems']}"
+            )
         if report["inventory_hash"] != gate["inventory_hash"]:
             raise MigrationSafetyError("live inventory changed during staged migration")
         report["gate"] = gate
@@ -602,14 +679,22 @@ def apply_migration(
             connection.execute(
                 "INSERT INTO migration_runs(id, snapshot_id, manifest_hash, dry_run_report_hash, row_count, artifact_count, report_json, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    str(uuid.uuid4()), gate["snapshot_id"], gate["manifest_hash"], gate["dry_run_report_hash"],
-                    gate["legacy_row_count"], gate["expected_artifact_count"], canonical_json(report), utc_now(),
+                    str(uuid.uuid4()),
+                    gate["snapshot_id"],
+                    gate["manifest_hash"],
+                    gate["dry_run_report_hash"],
+                    gate["legacy_row_count"],
+                    gate["expected_artifact_count"],
+                    canonical_json(report),
+                    utc_now(),
                 ),
             )
         with connect(staged_db) as connection:
             connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         staged_report = staging / "live-migration.json"
-        staged_report.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        staged_report.write_text(
+            json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
         sources = [staging / "base" / path.name for path in final_facts]
         sources.append(staging / "artifacts" / "snapshots")
         sources.extend([staged_db, staged_report])
@@ -648,26 +733,37 @@ def _read_only_rows(
 
 def _semantic_migration_state(database: Path) -> dict[str, list[dict[str, Any]]]:
     return {
-        "applications": _read_only_rows(database, """
+        "applications": _read_only_rows(
+            database,
+            """
             SELECT id, company, target_role, normalized_role, source_url, language, track, profile,
                    emphasis, classification_confidence, fit_level, current_status, last_contact_date,
                    next_action, next_action_date, notes, source, created_at
             FROM applications WHERE source='legacy-csv' ORDER BY id
-        """),
-        "job_snapshots": _read_only_rows(database, """
+        """,
+        ),
+        "job_snapshots": _read_only_rows(
+            database,
+            """
             SELECT js.id, js.application_id, js.version_number, js.payload_path, js.source_hash,
                    js.normalized_hash, js.source_url, js.captured_at, js.source_metadata_json,
                    js.content_hash, js.prior_snapshot_id
             FROM job_snapshots js JOIN applications a ON a.id=js.application_id
             WHERE a.source='legacy-csv' ORDER BY js.id
-        """),
-        "status_history": _read_only_rows(database, """
+        """,
+        ),
+        "status_history": _read_only_rows(
+            database,
+            """
             SELECT sh.application_id, sh.from_status, sh.to_status, sh.reason
             FROM status_history sh JOIN applications a ON a.id=sh.application_id
             WHERE a.source='legacy-csv'
             ORDER BY sh.application_id, sh.id
-        """),
-        "artifact_versions": _read_only_rows(database, """
+        """,
+        ),
+        "artifact_versions": _read_only_rows(
+            database,
+            """
             SELECT a.application_id, a.artifact_type, a.logical_name, av.version_number,
                    av.lifecycle_status, av.path, av.content_hash, av.approved_at, av.submitted_at,
                    av.track, av.profile, av.emphasis, av.facts_version, av.job_snapshot_id,
@@ -675,11 +771,14 @@ def _semantic_migration_state(database: Path) -> dict[str, list[dict[str, Any]]]
             FROM artifact_versions av JOIN artifacts a ON a.id=av.artifact_id
             WHERE a.logical_name LIKE 'legacy-%'
             ORDER BY a.application_id, a.artifact_type, a.logical_name, av.version_number
-        """),
+        """,
+        ),
     }
 
 
-def _fact_source_baseline(name: str, live_path: Path, expected_path: Path) -> tuple[list[str], list[str]]:
+def _fact_source_baseline(
+    name: str, live_path: Path, expected_path: Path
+) -> tuple[list[str], list[str]]:
     """Compare one live fact source against the migration's expected output.
 
     This is a fact-level comparison rather than a file hash because the fact
@@ -690,10 +789,14 @@ def _fact_source_baseline(name: str, live_path: Path, expected_path: Path) -> tu
     source file. Facts added afterwards are reported, never a failure.
     """
     try:
-        live = {fact.fact_id: fact.model_dump(mode="json") for fact in read_fact_source(live_path).facts}
+        live = {
+            fact.fact_id: fact.model_dump(mode="json") for fact in read_fact_source(live_path).facts
+        }
     except FactStoreError as exc:
         return [f"canonical fact source is unreadable: base/{name} ({exc})"], []
-    baseline = {fact.fact_id: fact.model_dump(mode="json") for fact in read_fact_source(expected_path).facts}
+    baseline = {
+        fact.fact_id: fact.model_dump(mode="json") for fact in read_fact_source(expected_path).facts
+    }
     problems = []
     for fact_id, payload in baseline.items():
         if fact_id not in live:
@@ -715,12 +818,14 @@ def retrospective_verify_migration(root: Path, snapshot_dir: Path) -> dict[str, 
         if not (root / "base" / name).is_file():
             problems.append(f"live canonical fact source is missing: base/{name}")
     if problems:
-        return _seal_report({
-            "schema_version": "1.0.0",
-            "passed": False,
-            "snapshot_id": snapshot.get("snapshot_id"),
-            "problems": problems,
-        })
+        return _seal_report(
+            {
+                "schema_version": "1.0.0",
+                "passed": False,
+                "snapshot_id": snapshot.get("snapshot_id"),
+                "problems": problems,
+            }
+        )
 
     with tempfile.TemporaryDirectory(prefix="cv-retrospective-verification-") as directory:
         temporary = Path(directory)
@@ -732,7 +837,9 @@ def retrospective_verify_migration(root: Path, snapshot_dir: Path) -> dict[str, 
         expected.mkdir()
         migration_report = migrate_legacy_state(restored, expected, dry_run=True)
         if not migration_report["passed"]:
-            problems.append(f"current migration failed on restored snapshot: {migration_report['problems']}")
+            problems.append(
+                f"current migration failed on restored snapshot: {migration_report['problems']}"
+            )
 
         expected_database = expected / "data/applications.sqlite3"
         live_state = _semantic_migration_state(live_database)
@@ -785,30 +892,40 @@ def retrospective_verify_migration(root: Path, snapshot_dir: Path) -> dict[str, 
             (snapshot["snapshot_id"],),
         )
         if len(matching_runs) != 1:
-            problems.append(f"expected one live migration run for snapshot, found {len(matching_runs)}")
+            problems.append(
+                f"expected one live migration run for snapshot, found {len(matching_runs)}"
+            )
         else:
             run = matching_runs[0]
             if run["manifest_hash"] != snapshot.get("manifest_hash"):
-                problems.append("live migration run manifest hash does not match the verified snapshot")
+                problems.append(
+                    "live migration run manifest hash does not match the verified snapshot"
+                )
             if run["row_count"] != migration_report["application_count"]:
-                problems.append("live migration run row count differs from current migration output")
+                problems.append(
+                    "live migration run row count differs from current migration output"
+                )
             if run["artifact_count"] != migration_report["artifact_version_count"]:
-                problems.append("live migration run artifact count differs from current migration output")
+                problems.append(
+                    "live migration run artifact count differs from current migration output"
+                )
 
-    return _seal_report({
-        "schema_version": "1.0.0",
-        "passed": not problems,
-        "snapshot_id": snapshot.get("snapshot_id"),
-        "manifest_hash": snapshot.get("manifest_hash"),
-        "snapshot_archive_sha256": snapshot.get("archive_sha256"),
-        "semantic_counts": semantic_counts,
-        "semantic_hashes": semantic_hashes,
-        "canonical_fact_hashes": fact_hashes,
-        "post_migration_facts": post_migration_facts,
-        "artifact_hashes_checked": artifact_hashes_checked,
-        "live_database": live_database.relative_to(root).as_posix(),
-        "problems": problems,
-    })
+    return _seal_report(
+        {
+            "schema_version": "1.0.0",
+            "passed": not problems,
+            "snapshot_id": snapshot.get("snapshot_id"),
+            "manifest_hash": snapshot.get("manifest_hash"),
+            "snapshot_archive_sha256": snapshot.get("archive_sha256"),
+            "semantic_counts": semantic_counts,
+            "semantic_hashes": semantic_hashes,
+            "canonical_fact_hashes": fact_hashes,
+            "post_migration_facts": post_migration_facts,
+            "artifact_hashes_checked": artifact_hashes_checked,
+            "live_database": live_database.relative_to(root).as_posix(),
+            "problems": problems,
+        }
+    )
 
 
 def reconcile_migration(root: Path) -> dict[str, Any]:
@@ -830,7 +947,9 @@ def reconcile_migration(root: Path) -> dict[str, Any]:
             problems.append(f"missing artifact: {row['path']}")
         elif verification == "tampered":
             problems.append(f"artifact hash mismatch: {row['path']}")
-    expected_versions = inventory["legacy_application_artifact_count"] + inventory["base_artifact_count"]
+    expected_versions = (
+        inventory["legacy_application_artifact_count"] + inventory["base_artifact_count"]
+    )
     if applications != inventory["legacy_row_count"]:
         problems.append("application count does not match inventory")
     if snapshots != inventory["legacy_row_count"]:

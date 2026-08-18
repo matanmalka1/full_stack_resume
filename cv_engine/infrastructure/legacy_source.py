@@ -134,7 +134,8 @@ class LegacyV1Source:
             added = sorted(set(current.files) - set(expected.files))
             removed = sorted(set(expected.files) - set(current.files))
             changed = sorted(
-                key for key in set(current.files) & set(expected.files)
+                key
+                for key in set(current.files) & set(expected.files)
                 if current.files[key] != expected.files[key]
             )
             raise LegacySourceError(

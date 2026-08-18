@@ -167,9 +167,7 @@ class ResumeSectionSpec(StrictModel):
         if self.max_claims_per_role is not None:
             ceiling = self.max_claims_per_role
             if ceiling < max(self.min_claims_per_role, self.min_quantitative_per_role):
-                raise ValueError(
-                    f"section {self.name_en!r} caps a role block below its own floor"
-                )
+                raise ValueError(f"section {self.name_en!r} caps a role block below its own floor")
         outside = sorted(set(self.pinned_fact_ids) - set(self.fact_ids))
         if outside:
             raise ValueError(f"section {self.name_en!r} pins facts outside its pool: {outside}")
@@ -276,7 +274,8 @@ class CandidateContext(StrictModel):
 
     def contacts_for_track(self, track: str) -> list[str]:
         extra = [
-            fact_id for fact_id in self.track_contact_fact_ids.get(track, [])
+            fact_id
+            for fact_id in self.track_contact_fact_ids.get(track, [])
             if fact_id not in self.contact_fact_ids
         ]
         return [*self.contact_fact_ids, *extra]
@@ -483,9 +482,7 @@ class DraftDocument(StrictModel):
     @model_validator(mode="after")
     def validate_analysis_binding(self) -> "DraftDocument":
         if self.schema_version != "1.0" and not self.job_analysis_id:
-            raise ValueError(
-                "a draft must name the exact job analysis it was built from"
-            )
+            raise ValueError("a draft must name the exact job analysis it was built from")
         return self
 
     @model_validator(mode="after")
@@ -603,14 +600,10 @@ class ValidationReport(StrictModel):
             return self
         failed_groups = sorted(group for group, passed in self.groups.items() if not passed)
         if failed_groups:
-            raise ValueError(
-                f"report claims to have passed with failed groups: {failed_groups}"
-            )
+            raise ValueError(f"report claims to have passed with failed groups: {failed_groups}")
         hard_issues = sorted({issue.code for issue in self.issues if issue.hard})
         if hard_issues:
-            raise ValueError(
-                f"report claims to have passed with hard failures: {hard_issues}"
-            )
+            raise ValueError(f"report claims to have passed with hard failures: {hard_issues}")
         return self
 
 

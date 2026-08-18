@@ -1,96 +1,30 @@
 from __future__ import annotations
 
-from typing import Any, Generic, TypeVar
-
-from ... import __version__
 from ...domain.analysis.approval import merge_classification
 from ...domain.analysis.classification import classify_job
-from ...domain.facts import FactStore, FactStoreError
-from ...domain.knowledge import Knowledge
 from ...domain.models import (
-    ApplicationStatus,
-    CandidateContext,
-    DraftDocument,
-    Fact,
-    FactStatus,
     JobAnalysis,
-    ValidationReport,
 )
-from ...domain.profiles import ProfileStore
-from ...domain.selection import EmphasisPolicyStore, build_selection
-from ...domain.validation import validate_draft
-from ...util import sha256_file, utc_now
-from ..chain import ChainError, check_draft_chain, decision_record_analysis_id
+from ...domain.selection import build_selection
 from ..commands import (
     AnalyzeCommand,
     AnalysisResult,
-    ApplicationMutationResult,
-    ApprovalResult,
-    DraftCommand,
-    DraftResult,
-    EditResult,
-    FactAttachmentResult,
-    FactDetailResult,
-    FactHistoryResult,
-    FactListItem,
-    FactListResult,
-    FactMutationResult,
-    FactReconciliationResult,
-    IngestCommand,
-    IngestedApplication,
-    KnowledgeVersionsResult,
-    NextActionCommand,
-    RecruitmentStatusCommand,
-    RenderResult,
-    SubmissionResult,
-    fact_event_view,
 )
 from ..errors import (
     # Re-exported: the v1 CLI and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
-    ApplicationError,
     DependencyUnavailable,
     InfrastructureFailure,
-    KnowledgeRejected,
     LineageBroken,
     PreconditionFailed,
     StateConflict,
     UnknownRecord,
-    ValidationBlocked,
-    WorkflowError,
 )
 from ..ports import (
-    ApplicationStore,
-    ArtifactStore,
-    ClassificationProvider,
-    DraftRepository,
-    KnowledgeAuditRepository,
-    KnowledgeStore,
     PreparationRepository,
-    QueryRepository,
-    ReadinessRepository,
-    Renderer,
-    TrackingRepository,
 )
-from ..queries import (
-    ApplicationDetailView,
-    ApplicationListView,
-    ArtifactVersionsView,
-    DecisionRecordView,
-    analysis_view,
-    application_view,
-    artifact_version_view,
-    decision_view,
-    snapshot_view,
-)
-from ..ready import verify_ready_integrity
-
-
-RepoT = TypeVar("RepoT")
-
-
-
 from .base import ServiceBase
+
 
 class AnalysisService(ServiceBase[PreparationRepository]):
     """Classification, fit, and the analysis record."""
@@ -138,7 +72,9 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         profiles = knowledge.profiles
         if command.provider == "openai":
             if self._provider is None:
-                raise DependencyUnavailable("AI classification was requested but no provider is configured")
+                raise DependencyUnavailable(
+                    "AI classification was requested but no provider is configured"
+                )
             # The provider sees the full deterministic picture as context, but it
             # answers on the narrower proposal contract; deterministic policy decides
             # what survives.
@@ -152,7 +88,9 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                         "confidence": deterministic.confidence,
                         "language": deterministic.language,
                     },
-                    "deterministic_gaps": [gap.model_dump(mode="json") for gap in deterministic.gaps],
+                    "deterministic_gaps": [
+                        gap.model_dump(mode="json") for gap in deterministic.gaps
+                    ],
                     "overrides": deterministic.user_override,
                 },
                 model=command.model,
@@ -166,7 +104,9 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             # Rebuilt through validation rather than model_copy(update=...), which
             # would skip the model validators that guard this state.
             overrides = {**result.user_override, "fit": "accepted-low-fit"}
-            result = JobAnalysis.model_validate({**result.model_dump(mode="json"), "user_override": overrides})
+            result = JobAnalysis.model_validate(
+                {**result.model_dump(mode="json"), "user_override": overrides}
+            )
 
         # Checked before anything is written. An analysis whose Track, Profile,
         # and Emphasis disagree can never produce a draft, so persisting it would
@@ -175,9 +115,7 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         try:
             selected_profile = profiles.get(result.profile)
         except (KeyError, ValueError) as exc:
-            raise PreconditionFailed(
-                f"analysis selected an unavailable Profile: {exc}"
-            ) from exc
+            raise PreconditionFailed(f"analysis selected an unavailable Profile: {exc}") from exc
         if result.track is not selected_profile.track:
             raise StateConflict(
                 f"classified Track {result.track.value} and Profile {result.profile.value} "

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from ...domain.models import ApplicationStatus
@@ -92,9 +91,7 @@ class SqliteApplicationRepository(SqliteRepositoryBase):
         with self.read_connection() as connection:
             return [
                 dict(row)
-                for row in connection.execute(
-                    "SELECT * FROM applications ORDER BY created_at, id"
-                )
+                for row in connection.execute("SELECT * FROM applications ORDER BY created_at, id")
             ]
 
     def transition_status(
@@ -121,9 +118,7 @@ class SqliteApplicationRepository(SqliteRepositoryBase):
             )
         now = utc_now()
         with self.transaction() as connection:
-            self._transition_status(
-                connection, application_id, target_status, reason, now
-            )
+            self._transition_status(connection, application_id, target_status, reason, now)
 
     def _transition_status(
         self,
@@ -143,16 +138,10 @@ class SqliteApplicationRepository(SqliteRepositoryBase):
         if target_status is current:
             return
         if not transition_allowed(current, target_status):
-            raise ValueError(
-                f"invalid status transition: {current.value} -> {target_status.value}"
-            )
-        self._set_status(
-            connection, application_id, current, target_status, now, reason
-        )
+            raise ValueError(f"invalid status transition: {current.value} -> {target_status.value}")
+        self._set_status(connection, application_id, current, target_status, now, reason)
 
-    def record_event(
-        self, application_id: str, event_type: str, payload: dict[str, Any]
-    ) -> str:
+    def record_event(self, application_id: str, event_type: str, payload: dict[str, Any]) -> str:
         event_id = new_id()
         with self.transaction() as connection:
             connection.execute(

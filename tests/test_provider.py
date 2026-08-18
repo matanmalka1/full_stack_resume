@@ -37,7 +37,9 @@ def test_openai_responses_adapter_uses_strict_schema_and_validates_output(
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
     provider = OpenAIResponsesProvider(model="gpt-test", api_key="test-key")
-    parsed, provenance = provider.run("classify_job", {"job_text": "..."}, JobClassificationProposal)
+    parsed, provenance = provider.run(
+        "classify_job", {"job_text": "..."}, JobClassificationProposal
+    )
     assert parsed == proposal
     assert provenance.context.provider == "openai"
     output_format = captured["body"]["text"]["format"]

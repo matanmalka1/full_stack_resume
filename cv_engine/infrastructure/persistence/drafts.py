@@ -56,9 +56,7 @@ class SqliteDraftRepository(SqliteRepositoryBase):
             knowledge_context_hash=record["knowledge_context_hash"],
             profile_version=record["profile_version"],
             selection_policy_version=record["selection_policy_version"],
-            track_emphasis_dependencies=json.loads(
-                record["track_emphasis_dependencies_json"]
-            ),
+            track_emphasis_dependencies=json.loads(record["track_emphasis_dependencies_json"]),
             validation_run_id=record["validation_run_id"],
             validator_versions=json.loads(record["validator_versions_json"]),
             decision_provenance=json.loads(record["decision_provenance_json"]),
@@ -86,13 +84,8 @@ class SqliteDraftRepository(SqliteRepositoryBase):
                 "a working draft cannot reference a selection plan belonging to "
                 "another application or analysis"
             )
-        if (
-            source.application_id != application_id
-            or source.job_analysis_id != job_analysis_id
-        ):
-            raise ValueError(
-                "a working draft source must match its application and job analysis"
-            )
+        if source.application_id != application_id or source.job_analysis_id != job_analysis_id:
+            raise ValueError("a working draft source must match its application and job analysis")
 
     def create_working_draft(
         self,

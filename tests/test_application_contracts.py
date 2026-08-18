@@ -59,26 +59,32 @@ from helpers import ACCOUNT_MANAGER_JOB, working_claim
 
 
 def test_commands_answer_with_named_results(services) -> None:
-    ingested = services.applications.ingest(IngestCommand(
-        company="Named Co",
-        target_role="Account Manager",
-        job_text=ACCOUNT_MANAGER_JOB,
-    ))
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company="Named Co",
+            target_role="Account Manager",
+            job_text=ACCOUNT_MANAGER_JOB,
+        )
+    )
     assert isinstance(ingested, IngestedApplication)
     assert isinstance(ingested, BaseModel)
 
-    analysed = services.analysis.analyze(AnalyzeCommand(
-        application_id=ingested.application_id,
-        job_snapshot_id=ingested.job_snapshot_id,
-    ))
+    analysed = services.analysis.analyze(
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+        )
+    )
     assert isinstance(analysed, AnalysisResult)
     assert analysed.analysis.track.value
 
-    drafted = services.drafts.draft(DraftCommand(
-        application_id=ingested.application_id,
-        job_analysis_id=analysed.analysis_id,
-        selection_plan_id=analysed.selection_plan_id,
-    ))
+    drafted = services.drafts.draft(
+        DraftCommand(
+            application_id=ingested.application_id,
+            job_analysis_id=analysed.analysis_id,
+            selection_plan_id=analysed.selection_plan_id,
+        )
+    )
     assert isinstance(drafted, DraftResult)
     assert drafted.validation.passed, drafted.validation.model_dump()
 
@@ -100,13 +106,17 @@ def test_ingest_commits_exact_snapshot_payload_before_registration(
         return original_create(**values)
 
     monkeypatch.setattr(services.repository, "create_application", assert_payload_exists_first)
-    ingested = services.applications.ingest(IngestCommand(
-        company="Payload Order",
-        target_role="Developer",
-        job_text=received,
-    ))
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company="Payload Order",
+            target_role="Developer",
+            job_text=received,
+        )
+    )
     snapshot = services.repository.get_snapshot(ingested.job_snapshot_id)
-    assert sha256_file(services.workspace.root / snapshot["payload_path"]) == snapshot["source_hash"]
+    assert (
+        sha256_file(services.workspace.root / snapshot["payload_path"]) == snapshot["source_hash"]
+    )
 
 
 def test_application_dtos_do_not_expose_filesystem_locations(services) -> None:
@@ -123,24 +133,29 @@ def test_application_dtos_do_not_expose_filesystem_locations(services) -> None:
         assert all("Path" not in str(field.annotation) for field in model.model_fields.values())
     assert "path" not in SnapshotPayload.__dataclass_fields__
     assert all(
-        "Path" not in str(field.type)
-        for field in SnapshotPayload.__dataclass_fields__.values()
+        "Path" not in str(field.type) for field in SnapshotPayload.__dataclass_fields__.values()
     )
 
-    ingested = services.applications.ingest(IngestCommand(
-        company="Projection Co",
-        target_role="Account Manager",
-        job_text=ACCOUNT_MANAGER_JOB,
-    ))
-    analysed = services.analysis.analyze(AnalyzeCommand(
-        application_id=ingested.application_id,
-        job_snapshot_id=ingested.job_snapshot_id,
-    ))
-    services.drafts.draft(DraftCommand(
-        application_id=ingested.application_id,
-        job_analysis_id=analysed.analysis_id,
-        selection_plan_id=analysed.selection_plan_id,
-    ))
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company="Projection Co",
+            target_role="Account Manager",
+            job_text=ACCOUNT_MANAGER_JOB,
+        )
+    )
+    analysed = services.analysis.analyze(
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+        )
+    )
+    services.drafts.draft(
+        DraftCommand(
+            application_id=ingested.application_id,
+            job_analysis_id=analysed.analysis_id,
+            selection_plan_id=analysed.selection_plan_id,
+        )
+    )
     services.drafts.approve(ingested.application_id)
 
     projection = services.queries.artifact_versions(ingested.application_id)
@@ -198,19 +213,23 @@ def test_query_and_tracking_services_expose_the_application_boundary(approved_ap
     assert isinstance(decision, DecisionRecordView)
     assert decision.id == setup.approved.decision_record_id
 
-    transitioned = services.tracking.transition_status(RecruitmentStatusCommand(
-        application_id=setup.application_id,
-        target_status="withdrawn",
-        reason="boundary contract test",
-    ))
+    transitioned = services.tracking.transition_status(
+        RecruitmentStatusCommand(
+            application_id=setup.application_id,
+            target_status="withdrawn",
+            reason="boundary contract test",
+        )
+    )
     assert isinstance(transitioned, ApplicationMutationResult)
     assert transitioned.current_status == "withdrawn"
 
-    next_action = services.tracking.set_next_action(NextActionCommand(
-        application_id=setup.application_id,
-        next_action="Archive evidence",
-        next_action_date="2026-08-20",
-    ))
+    next_action = services.tracking.set_next_action(
+        NextActionCommand(
+            application_id=setup.application_id,
+            next_action="Archive evidence",
+            next_action_date="2026-08-20",
+        )
+    )
     assert isinstance(next_action, ApplicationMutationResult)
     assert next_action.current_status == "withdrawn"
     assert next_action.next_action == "Archive evidence"
@@ -246,24 +265,30 @@ def test_refusals_share_one_taxonomy_and_report_missing_dependencies(services) -
 
 def test_expected_boundary_refusals_do_not_leak_adapter_or_domain_errors(services) -> None:
     with pytest.raises(errors.PreconditionFailed, match="required"):
-        services.applications.ingest(IngestCommand(
-            company="",
-            target_role="Account Manager",
-            job_text=ACCOUNT_MANAGER_JOB,
-        ))
+        services.applications.ingest(
+            IngestCommand(
+                company="",
+                target_role="Account Manager",
+                job_text=ACCOUNT_MANAGER_JOB,
+            )
+        )
 
     with pytest.raises(errors.UnknownRecord, match="job snapshot"):
-        services.analysis.analyze(AnalyzeCommand(
-            application_id="missing-application",
-            job_snapshot_id="missing-snapshot",
-        ))
+        services.analysis.analyze(
+            AnalyzeCommand(
+                application_id="missing-application",
+                job_snapshot_id="missing-snapshot",
+            )
+        )
 
     with pytest.raises(errors.UnknownRecord, match="job analysis"):
-        services.drafts.draft(DraftCommand(
-            application_id="missing-application",
-            job_analysis_id="missing-analysis",
-            selection_plan_id="missing-selection-plan",
-        ))
+        services.drafts.draft(
+            DraftCommand(
+                application_id="missing-application",
+                job_analysis_id="missing-analysis",
+                selection_plan_id="missing-selection-plan",
+            )
+        )
 
 
 def test_a_blocked_validation_carries_its_report(drafted_application) -> None:
@@ -289,7 +314,9 @@ def test_a_blocked_validation_carries_its_report(drafted_application) -> None:
 # --- ports are focused and expose no adapter internals -----------------------
 
 
-def test_repository_satisfies_focused_ports_without_leaking_adapter_internals(tmp_path: Path) -> None:
+def test_repository_satisfies_focused_ports_without_leaking_adapter_internals(
+    tmp_path: Path,
+) -> None:
     repository = Repository(tmp_path / "applications.sqlite3")
     for port in (ApplicationStore, JobStore, ArtifactRegistry, FactAudit):
         for name in port.__protocol_attrs__:
@@ -341,40 +368,60 @@ def test_unit_of_work_commits_success_and_rolls_back_failure(tmp_path: Path) -> 
 
 
 def test_commands_require_owned_explicit_sources_and_compat_resolves_latest(services) -> None:
-    mine = services.applications.ingest(IngestCommand(
-        company="Mine Co", target_role="Account Manager", job_text=ACCOUNT_MANAGER_JOB
-    ))
-    theirs = services.applications.ingest(IngestCommand(
-        company="Theirs Co", target_role="Account Manager", job_text=ACCOUNT_MANAGER_JOB
-    ))
+    mine = services.applications.ingest(
+        IngestCommand(
+            company="Mine Co", target_role="Account Manager", job_text=ACCOUNT_MANAGER_JOB
+        )
+    )
+    theirs = services.applications.ingest(
+        IngestCommand(
+            company="Theirs Co", target_role="Account Manager", job_text=ACCOUNT_MANAGER_JOB
+        )
+    )
 
     with pytest.raises(errors.LineageBroken, match="does not belong"):
-        services.analysis.analyze(AnalyzeCommand(
-            application_id=mine.application_id,
+        services.analysis.analyze(
+            AnalyzeCommand(
+                application_id=mine.application_id,
+                job_snapshot_id=theirs.job_snapshot_id,
+            )
+        )
+
+    analysed = services.analysis.analyze(
+        AnalyzeCommand(
+            application_id=theirs.application_id,
             job_snapshot_id=theirs.job_snapshot_id,
-        ))
-
-    analysed = services.analysis.analyze(AnalyzeCommand(
-        application_id=theirs.application_id,
-        job_snapshot_id=theirs.job_snapshot_id,
-    ))
+        )
+    )
     with pytest.raises(errors.LineageBroken, match="does not belong"):
-        services.drafts.draft(DraftCommand(
-            application_id=mine.application_id,
-            job_analysis_id=analysed.analysis_id,
-            selection_plan_id=analysed.selection_plan_id,
-        ))
-    ingested = services.applications.ingest(IngestCommand(
-        company="Legacy Co", target_role="Account Manager", job_text=ACCOUNT_MANAGER_JOB
-    ))
+        services.drafts.draft(
+            DraftCommand(
+                application_id=mine.application_id,
+                job_analysis_id=analysed.analysis_id,
+                selection_plan_id=analysed.selection_plan_id,
+            )
+        )
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company="Legacy Co", target_role="Account Manager", job_text=ACCOUNT_MANAGER_JOB
+        )
+    )
 
-    assert resolve_job_snapshot_id(services.repository, ingested.application_id) == ingested.job_snapshot_id
+    assert (
+        resolve_job_snapshot_id(services.repository, ingested.application_id)
+        == ingested.job_snapshot_id
+    )
 
-    analysed = services.analysis.analyze(AnalyzeCommand(
-        application_id=ingested.application_id,
-        job_snapshot_id=ingested.job_snapshot_id,
-    ))
-    assert resolve_job_analysis_id(services.repository, ingested.application_id) == analysed.analysis_id
+    analysed = services.analysis.analyze(
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+        )
+    )
+    assert (
+        resolve_job_analysis_id(services.repository, ingested.application_id)
+        == analysed.analysis_id
+    )
     from cv_engine.application.services.drafts import DraftService
 
     source = inspect.getsource(DraftService.draft)

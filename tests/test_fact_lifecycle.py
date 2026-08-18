@@ -41,7 +41,9 @@ def test_new_fact_is_persisted_as_pending_and_cannot_reach_a_cv(services: Servic
         _reload(services).get("situational.sqlite", canonical_only=True)
 
 
-def test_pending_fact_does_not_invalidate_drafts_built_from_canonical_facts(services: Services) -> None:
+def test_pending_fact_does_not_invalidate_drafts_built_from_canonical_facts(
+    services: Services,
+) -> None:
     """Staging a fact for one application must not break another's draft.
 
     `facts.version` identifies the canonical surface a CV may be built from, so
@@ -65,7 +67,9 @@ def test_pending_fact_does_not_invalidate_drafts_built_from_canonical_facts(serv
     assert _reload(services).version != before.version
 
 
-def test_promotion_requires_explicit_confirmation_and_a_legal_transition(services: Services) -> None:
+def test_promotion_requires_explicit_confirmation_and_a_legal_transition(
+    services: Services,
+) -> None:
     services.knowledge_lifecycle.add_fact("situational_skills.md", dict(NEW_FACT))
 
     with pytest.raises(KnowledgeRejected, match="explicit confirmation"):
@@ -81,15 +85,24 @@ def test_promotion_requires_explicit_confirmation_and_a_legal_transition(service
 
 def test_lifecycle_survives_process_boundaries_through_the_cli(cli_runner, v1_repo: Path) -> None:
     added = cli_runner(
-        "fact", "add",
-        "--source", "situational_skills.md",
-        "--fact-id", "situational.sqlite",
-        "--meaning", NEW_FACT["meaning"],
-        "--en", NEW_FACT["renderings"]["en"],
-        "--tag", "development",
-        "--tag", "situational",
-        "--style", "bullet",
-        "--provenance", NEW_FACT["provenance"],
+        "fact",
+        "add",
+        "--source",
+        "situational_skills.md",
+        "--fact-id",
+        "situational.sqlite",
+        "--meaning",
+        NEW_FACT["meaning"],
+        "--en",
+        NEW_FACT["renderings"]["en"],
+        "--tag",
+        "development",
+        "--tag",
+        "situational",
+        "--style",
+        "bullet",
+        "--provenance",
+        NEW_FACT["provenance"],
     )
     assert added.returncode == 0, added.stdout + added.stderr
     assert json.loads(added.stdout)["fact"]["status"] == "pending"
@@ -105,7 +118,9 @@ def test_lifecycle_survives_process_boundaries_through_the_cli(cli_runner, v1_re
     assert listed.returncode == 0
     ids = [fact["fact_id"] for fact in json.loads(listed.stdout)]
     assert "situational.sqlite" in ids
-    assert load_fact_store(v1_repo / "base").get("situational.sqlite").status is FactStatus.CANONICAL
+    assert (
+        load_fact_store(v1_repo / "base").get("situational.sqlite").status is FactStatus.CANONICAL
+    )
 
     history = json.loads(cli_runner("fact", "history", "situational.sqlite").stdout)
     assert [(event["from_status"], event["to_status"]) for event in history] == [
@@ -177,40 +192,42 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
 
     # Canonical is necessary but not sufficient: until a Profile section offers
     # the fact, no draft may carry it and no claim may link to it.
-    rebuilt_draft = services.drafts.draft(DraftCommand(
-        application_id=app_id,
-        job_analysis_id=setup.analysis_id,
-        selection_plan_id=setup.selection_plan_id,
-    ))
+    rebuilt_draft = services.drafts.draft(
+        DraftCommand(
+            application_id=app_id,
+            job_analysis_id=setup.analysis_id,
+            selection_plan_id=setup.selection_plan_id,
+        )
+    )
     assert rebuilt_draft.validation.passed, rebuilt_draft.validation.model_dump()
     rebuilt = _working_claim(services, app_id, "sales.cycle.account_management")
     blocked = services.drafts.edit_claim(
         app_id, rebuilt.claim_id, ["sales.leadership.pipeline_review"], text=text
     )
-    assert any(
-        issue.code == "fact-outside-profile-section" for issue in blocked.validation.issues
-    )
+    assert any(issue.code == "fact-outside-profile-section" for issue in blocked.validation.issues)
 
     services.knowledge_lifecycle.attach_fact(
         "sales.leadership.pipeline_review", "account-manager", "Work Experience", pin=True
     )
-    refreshed = services.analysis.analyze(AnalyzeCommand(
-        application_id=app_id,
-        job_snapshot_id=setup.snapshot_id,
-    ))
-    attached_draft = services.drafts.draft(DraftCommand(
-        application_id=app_id,
-        job_analysis_id=refreshed.analysis_id,
-        selection_plan_id=refreshed.selection_plan_id,
-    ))
+    refreshed = services.analysis.analyze(
+        AnalyzeCommand(
+            application_id=app_id,
+            job_snapshot_id=setup.snapshot_id,
+        )
+    )
+    attached_draft = services.drafts.draft(
+        DraftCommand(
+            application_id=app_id,
+            job_analysis_id=refreshed.analysis_id,
+            selection_plan_id=refreshed.selection_plan_id,
+        )
+    )
 
     assert attached_draft.validation.passed, attached_draft.validation.model_dump()
     selected = _working_claim(services, app_id, "sales.leadership.pipeline_review")
     assert selected.claim_type == "canonical"
     assert selected.text == text
-    events = services.knowledge_lifecycle.fact_history(
-        "sales.leadership.pipeline_review"
-    ).events
+    events = services.knowledge_lifecycle.fact_history("sales.leadership.pipeline_review").events
     assert [event.event_type for event in events] == [
         "fact_created",
         "fact_promoted",

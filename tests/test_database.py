@@ -38,10 +38,7 @@ def _sqlite_master_fingerprint(path: Path) -> list[tuple[str, str, str, str]]:
             "WHERE sql IS NOT NULL AND name != 'schema_migrations' "
             "ORDER BY type, name"
         ).fetchall()
-    return [
-        (kind, name, table, " ".join(ddl.split()))
-        for kind, name, table, ddl in rows
-    ]
+    return [(kind, name, table, " ".join(ddl.split())) for kind, name, table, ddl in rows]
 
 
 def test_status_history_and_transition_contract(application_repo) -> None:
@@ -62,16 +59,23 @@ def test_status_history_and_transition_contract(application_repo) -> None:
         "verification itself."
     )
     with connect(repo.path) as connection:
-        history = connection.execute("SELECT from_status, to_status FROM status_history WHERE application_id=? ORDER BY id", (app_id,)).fetchall()
+        history = connection.execute(
+            "SELECT from_status, to_status FROM status_history WHERE application_id=? ORDER BY id",
+            (app_id,),
+        ).fetchall()
     assert [tuple(row) for row in history] == [(None, "saved"), ("saved", "preparing")]
 
 
 def test_immutable_job_snapshot_trigger(application_repo) -> None:
     repo = application_repo
-    _, snapshot_id = _create(repo, company="Acme", target_role="Developer", text="Original exact text")
+    _, snapshot_id = _create(
+        repo, company="Acme", target_role="Developer", text="Original exact text"
+    )
     with pytest.raises(sqlite3.IntegrityError, match="immutable record"):
         with repo.transaction() as connection:
-            connection.execute("UPDATE job_snapshots SET source_hash='changed' WHERE id=?", (snapshot_id,))
+            connection.execute(
+                "UPDATE job_snapshots SET source_hash='changed' WHERE id=?", (snapshot_id,)
+            )
 
 
 def test_next_action_is_not_a_status(application_repo) -> None:
@@ -86,9 +90,7 @@ def test_next_action_is_not_a_status(application_repo) -> None:
 def test_m1_sqlite_master_fingerprint_is_frozen(tmp_path: Path) -> None:
     baseline_path = tmp_path / "m1-baseline.sqlite3"
     with connect(baseline_path) as connection:
-        connection.executescript(
-            (MIGRATIONS_DIR / "0001_baseline.sql").read_text(encoding="utf-8")
-        )
+        connection.executescript((MIGRATIONS_DIR / "0001_baseline.sql").read_text(encoding="utf-8"))
     expected = [
         tuple(line.split("\t", 3))
         for line in SCHEMA_FIXTURE.read_text(encoding="utf-8").splitlines()
@@ -111,30 +113,46 @@ def test_ready_submission_and_artifact_registry_preconditions(application_repo) 
     with pytest.raises(ValueError, match="rendered resume PDF"):
         repo.set_ready(refused_app, "missing")
     refused_pdf = repo.register_artifact_version(
-        refused_app, "resume_pdf", "resume", "artifacts/refused/v001/resume.pdf",
-        "a" * 64, "rendered", job_snapshot_id=refused_snapshot,
+        refused_app,
+        "resume_pdf",
+        "resume",
+        "artifacts/refused/v001/resume.pdf",
+        "a" * 64,
+        "rendered",
+        job_snapshot_id=refused_snapshot,
     )
     with pytest.raises(ValueError, match="post-render validation"):
         repo.set_ready(refused_app, refused_pdf)
     repo.record_validation(
-        refused_app, "post-render",
-        ValidationReport.from_findings({"render": False}, []), refused_pdf,
+        refused_app,
+        "post-render",
+        ValidationReport.from_findings({"render": False}, []),
+        refused_pdf,
     )
     with pytest.raises(ValueError, match="passing post-render validation"):
         repo.set_ready(refused_app, refused_pdf)
 
     app_id, snapshot_id = _create(
-        repo, company="Move Guard Success", target_role="Developer",
+        repo,
+        company="Move Guard Success",
+        target_role="Developer",
         text="Another Python role",
     )
     repo.transition_status(app_id, ApplicationStatus.PREPARING, "analysis")
     pdf_id = repo.register_artifact_version(
-        app_id, "resume_pdf", "resume", "artifacts/success/v001/resume.pdf",
-        "c" * 64, "rendered", job_snapshot_id=snapshot_id,
+        app_id,
+        "resume_pdf",
+        "resume",
+        "artifacts/success/v001/resume.pdf",
+        "c" * 64,
+        "rendered",
+        job_snapshot_id=snapshot_id,
     )
     repo.record_validation(
-        app_id, "post-render",
-        ValidationReport.from_findings({"render": True}, []), pdf_id,
+        app_id,
+        "post-render",
+        ValidationReport.from_findings({"render": True}, []),
+        pdf_id,
     )
     repo.set_ready(app_id, pdf_id)
     with pytest.raises(ValueError, match="rendered resume PDF"):
@@ -143,12 +161,18 @@ def test_ready_submission_and_artifact_registry_preconditions(application_repo) 
     assert repo.get_application(app_id)["current_status"] == "applied"
 
     second_id = repo.register_artifact_version(
-        app_id, "resume_pdf", "resume", "artifacts/success/v002/resume.pdf",
-        "b" * 64, "rendered", job_snapshot_id=snapshot_id,
+        app_id,
+        "resume_pdf",
+        "resume",
+        "artifacts/success/v002/resume.pdf",
+        "b" * 64,
+        "rendered",
+        job_snapshot_id=snapshot_id,
     )
     versions = repo.artifact_versions(app_id)
     assert [(row["id"], row["version_number"]) for row in versions] == [
-        (pdf_id, 1), (second_id, 2),
+        (pdf_id, 1),
+        (second_id, 2),
     ]
     assert all(row["revision_id"] is None for row in versions)
     inventory = repo.artifact_inventory()

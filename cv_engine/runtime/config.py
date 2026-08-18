@@ -81,7 +81,9 @@ def load_workspace_config(root: Path) -> dict[str, Any]:
         raise WorkspaceError(f"unreadable Workspace config {path}: {exc}") from exc
     if not isinstance(payload, dict):
         raise WorkspaceError(f"Workspace config must be an object: {path}")
-    unknown = sorted(set(payload) - {name for name, setting in SETTINGS.items() if setting.workspace_scoped})
+    unknown = sorted(
+        set(payload) - {name for name, setting in SETTINGS.items() if setting.workspace_scoped}
+    )
     if unknown:
         raise WorkspaceError(f"unknown Workspace config settings in {path}: {', '.join(unknown)}")
     return payload

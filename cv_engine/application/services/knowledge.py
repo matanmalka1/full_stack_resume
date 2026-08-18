@@ -1,32 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Generic, TypeVar
+from typing import Any
 
-from ... import __version__
-from ...domain.facts import FactStore, FactStoreError
-from ...domain.knowledge import Knowledge
+from ...domain.facts import FactStoreError
 from ...domain.models import (
-    ApplicationStatus,
-    CandidateContext,
-    DraftDocument,
     Fact,
     FactStatus,
-    JobAnalysis,
-    ValidationReport,
 )
-from ...domain.profiles import ProfileStore
-from ...domain.selection import EmphasisPolicyStore
-from ...domain.validation import validate_draft
-from ...util import sha256_file, utc_now
-from ..chain import ChainError, check_draft_chain, decision_record_analysis_id
 from ..commands import (
-    AnalyzeCommand,
-    AnalysisResult,
-    ApplicationMutationResult,
-    ApprovalResult,
-    DraftCommand,
-    DraftResult,
-    EditResult,
     FactAttachmentResult,
     FactDetailResult,
     FactHistoryResult,
@@ -34,61 +15,21 @@ from ..commands import (
     FactListResult,
     FactMutationResult,
     FactReconciliationResult,
-    IngestCommand,
-    IngestedApplication,
     KnowledgeVersionsResult,
-    NextActionCommand,
-    RecruitmentStatusCommand,
-    RenderResult,
-    SubmissionResult,
     fact_event_view,
 )
 from ..errors import (
     # Re-exported: the v1 CLI and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
-    ApplicationError,
-    DependencyUnavailable,
     InfrastructureFailure,
     KnowledgeRejected,
-    LineageBroken,
-    PreconditionFailed,
-    StateConflict,
     UnknownRecord,
-    ValidationBlocked,
-    WorkflowError,
 )
 from ..ports import (
-    ApplicationStore,
-    ArtifactStore,
-    ClassificationProvider,
-    DraftRepository,
     KnowledgeAuditRepository,
-    KnowledgeStore,
-    PreparationRepository,
-    QueryRepository,
-    ReadinessRepository,
-    Renderer,
-    TrackingRepository,
 )
-from ..queries import (
-    ApplicationDetailView,
-    ApplicationListView,
-    ArtifactVersionsView,
-    DecisionRecordView,
-    analysis_view,
-    application_view,
-    artifact_version_view,
-    decision_view,
-    snapshot_view,
-)
-from ..ready import verify_ready_integrity
-
-
-RepoT = TypeVar("RepoT")
-
-
-
 from .base import ServiceBase
+
 
 class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
     """The fact lifecycle and the knowledge version surface."""
@@ -100,10 +41,12 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
     def list_facts(self, status: str | None = None) -> FactListResult:
         facts = self.fact_store()
         recorded = self.repo.latest_fact_statuses()
-        return FactListResult(items=[
-            FactListItem(fact=fact, recorded_status=recorded.get(fact.fact_id))
-            for fact in facts.by_status(status)
-        ])
+        return FactListResult(
+            items=[
+                FactListItem(fact=fact, recorded_status=recorded.get(fact.fact_id))
+                for fact in facts.by_status(status)
+            ]
+        )
 
     def show_fact(self, fact_id: str) -> FactDetailResult:
         facts = self.fact_store()
@@ -183,7 +126,8 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
             fact,
             event_type="fact_created",
             from_status=None,
-            reason=reason or ("explicitly confirmed on creation" if canonical else "new pending fact"),
+            reason=reason
+            or ("explicitly confirmed on creation" if canonical else "new pending fact"),
             application_id=application_id,
             claim_id=claim_id,
         )
@@ -238,13 +182,19 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
         so nothing is strengthened on the way in.
         """
         draft = self.working_draft(application_id)
-        claims = [draft.headline, *draft.contacts, *(claim for section in draft.sections for claim in section.claims)]
+        claims = [
+            draft.headline,
+            *draft.contacts,
+            *(claim for section in draft.sections for claim in section.claims),
+        ]
         try:
             claim = next(item for item in claims if item.claim_id == claim_id)
         except StopIteration as exc:
             raise UnknownRecord(f"unknown claim in the working draft: {claim_id}") from exc
         if claim.style == "headline" or claim.claim_type == "headline":
-            raise KnowledgeRejected("the document headline is not a factual claim and cannot become a fact")
+            raise KnowledgeRejected(
+                "the document headline is not a factual claim and cannot become a fact"
+            )
         renderings: dict[str, str] = {}
         if draft.language == "he":
             renderings["he"] = hebrew or claim.text
@@ -265,7 +215,8 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
                 "meaning": meaning,
                 "renderings": renderings,
                 "tags": tags,
-                "provenance": provenance or (
+                "provenance": provenance
+                or (
                     f"captured from application {application_id} claim {claim_id}; "
                     "candidate wording, not yet verified"
                 ),
@@ -291,9 +242,7 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
                 f"only canonical facts may enter a Profile pool: {exc}"
             ) from exc
         try:
-            updated, source = self._knowledge.attach_fact(
-                profile, fact_id, section, pin=pin
-            )
+            updated, source = self._knowledge.attach_fact(profile, fact_id, section, pin=pin)
         except OSError as exc:
             raise InfrastructureFailure(f"could not attach fact: {exc}") from exc
         except (FactStoreError, ValueError) as exc:
@@ -305,7 +254,8 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
             fact,
             event_type="fact_attached_to_profile",
             from_status=fact.status.value,
-            reason=f"attached to {updated.profile.value} / {section}" + (" (pinned)" if pin else ""),
+            reason=f"attached to {updated.profile.value} / {section}"
+            + (" (pinned)" if pin else ""),
         )
         return FactAttachmentResult(
             **record.model_dump(),
@@ -336,7 +286,8 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
                     f"lifecycle trail last recorded {status}"
                 )
         untracked = [
-            fact.fact_id for fact in facts.by_status()
+            fact.fact_id
+            for fact in facts.by_status()
             if fact.status is not FactStatus.CANONICAL and fact.fact_id not in recorded
         ]
         problems.extend(

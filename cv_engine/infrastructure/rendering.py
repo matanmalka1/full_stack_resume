@@ -14,7 +14,7 @@ from ..domain.candidate import contact_href
 from ..domain.render_validation import (
     RenderEvidence,
     RenderGeometry,
-    _claim_recoverable,
+    _claim_recoverable as _claim_recoverable,
     normalized_role_filename,
     validate_render_evidence,
 )
@@ -41,7 +41,7 @@ def _bidi(value: str, rtl: bool) -> Markup:
     parts: list[str] = []
     cursor = 0
     for match in MIXED_LTR.finditer(value):
-        parts.append(html.escape(value[cursor:match.start()]))
+        parts.append(html.escape(value[cursor : match.start()]))
         parts.append(f'<bdi dir="ltr">{html.escape(match.group(0))}</bdi>')
         cursor = match.end()
     parts.append(html.escape(value[cursor:]))
@@ -76,8 +76,7 @@ def render_html(
         {
             "name": section.name,
             "claims": [
-                {"style": claim.style, "html": _bidi(claim.text, rtl)}
-                for claim in section.claims
+                {"style": claim.style, "html": _bidi(claim.text, rtl)} for claim in section.claims
             ],
         }
         for section in draft.sections
@@ -273,9 +272,7 @@ class PlaywrightRenderer:
     ) -> Path:
         return render_html(draft, self.knowledge_root, output_path, candidate)
 
-    def render_pdf(
-        self, html_path: Path, pdf_path: Path, screenshot_path: Path
-    ) -> dict[str, Any]:
+    def render_pdf(self, html_path: Path, pdf_path: Path, screenshot_path: Path) -> dict[str, Any]:
         return render_pdf(html_path, pdf_path, screenshot_path)
 
     def validate_rendered(

@@ -2,88 +2,33 @@ from __future__ import annotations
 
 from typing import Any, Generic, TypeVar
 
-from ... import __version__
-from ...domain.facts import FactStore, FactStoreError
+from ...domain.facts import FactStore
 from ...domain.knowledge import Knowledge
 from ...domain.models import (
-    ApplicationStatus,
     CandidateContext,
     DraftDocument,
-    Fact,
-    FactStatus,
     JobAnalysis,
-    ValidationReport,
     WorkingDraft,
 )
 from ...domain.profiles import ProfileStore
 from ...domain.selection import EmphasisPolicyStore
-from ...domain.validation import validate_draft
-from ...util import sha256_file, utc_now
-from ..chain import ChainError, check_draft_chain, decision_record_analysis_id
-from ..commands import (
-    AnalyzeCommand,
-    AnalysisResult,
-    ApplicationMutationResult,
-    ApprovalResult,
-    DraftCommand,
-    DraftResult,
-    EditResult,
-    FactAttachmentResult,
-    FactDetailResult,
-    FactHistoryResult,
-    FactListItem,
-    FactListResult,
-    FactMutationResult,
-    FactReconciliationResult,
-    IngestCommand,
-    IngestedApplication,
-    KnowledgeVersionsResult,
-    NextActionCommand,
-    RecruitmentStatusCommand,
-    RenderResult,
-    SubmissionResult,
-    fact_event_view,
-)
+from ..chain import ChainError, check_draft_chain
 from ..errors import (
     # Re-exported: the v1 CLI and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
-    ApplicationError,
     DependencyUnavailable,
     InfrastructureFailure,
     KnowledgeRejected,
     LineageBroken,
-    PreconditionFailed,
-    StateConflict,
     UnknownRecord,
-    ValidationBlocked,
-    WorkflowError,
 )
 from ..ports import (
-    ApplicationStore,
     ArtifactStore,
     ClassificationProvider,
-    DraftRepository,
-    KnowledgeAuditRepository,
     KnowledgeStore,
-    PreparationRepository,
-    QueryRepository,
-    ReadinessRepository,
     Renderer,
     RevisionPayloadStore,
-    TrackingRepository,
 )
-from ..queries import (
-    ApplicationDetailView,
-    ApplicationListView,
-    ArtifactVersionsView,
-    DecisionRecordView,
-    analysis_view,
-    application_view,
-    artifact_version_view,
-    decision_view,
-    snapshot_view,
-)
-from ..ready import verify_ready_integrity
 
 
 RepoT = TypeVar("RepoT")

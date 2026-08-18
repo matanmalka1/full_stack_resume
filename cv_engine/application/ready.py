@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from .chain import check_draft_chain, decision_record_analysis_id, material_analysis_key
@@ -41,14 +40,22 @@ def verify_ready_integrity(
         issues.append(ValidationIssue(group=group, code=code, message=message))
 
     try:
-        markdown_version = repo.latest_artifact_version(application_id, "resume_markdown", "approved")
+        markdown_version = repo.latest_artifact_version(
+            application_id, "resume_markdown", "approved"
+        )
     except KeyError:
-        fail("approved_source", "no-approved-markdown", "no approved resume_markdown artifact exists")
+        fail(
+            "approved_source", "no-approved-markdown", "no approved resume_markdown artifact exists"
+        )
         markdown_version = None
     try:
-        manifest_version = repo.latest_artifact_version(application_id, "claim_manifest", "approved")
+        manifest_version = repo.latest_artifact_version(
+            application_id, "claim_manifest", "approved"
+        )
     except KeyError:
-        fail("approved_source", "no-approved-manifest", "no approved claim_manifest artifact exists")
+        fail(
+            "approved_source", "no-approved-manifest", "no approved claim_manifest artifact exists"
+        )
         manifest_version = None
 
     if markdown_version is None or manifest_version is None:
@@ -58,30 +65,25 @@ def verify_ready_integrity(
     manifest_path = artifacts.resolve(manifest_version["path"])
     markdown_dir = markdown_path.parent
     approved_revision_binding = (
-        markdown_version.get("revision_id"), manifest_version.get("revision_id")
+        markdown_version.get("revision_id"),
+        manifest_version.get("revision_id"),
     )
     if (
         any(approved_revision_binding)
         and approved_revision_binding[0] != approved_revision_binding[1]
-    ) or (
-        not any(approved_revision_binding) and manifest_path.parent != markdown_dir
-    ):
+    ) or (not any(approved_revision_binding) and manifest_path.parent != markdown_dir):
         fail(
             "approved_source",
             "markdown-manifest-version-mismatch",
             "the latest approved markdown and claim manifest are not the same approved version",
         )
 
-    markdown_verification = verify_payload(
-        markdown_path, markdown_version["content_hash"]
-    )
+    markdown_verification = verify_payload(markdown_path, markdown_version["content_hash"])
     if markdown_verification == "missing":
         fail("approved_source", "approved-markdown-missing", str(markdown_path))
     elif markdown_verification == "tampered":
         fail("approved_source", "approved-markdown-tampered", str(markdown_path))
-    manifest_verification = verify_payload(
-        manifest_path, manifest_version["content_hash"]
-    )
+    manifest_verification = verify_payload(manifest_path, manifest_version["content_hash"])
     if manifest_verification == "missing":
         fail("approved_source", "approved-manifest-missing", str(manifest_path))
     elif manifest_verification == "tampered":
@@ -138,7 +140,8 @@ def verify_ready_integrity(
                     fail(
                         "approved_source",
                         "claim-validation-failed",
-                        "; ".join(issue.code for issue in source_report.issues) or "content validation failed",
+                        "; ".join(issue.code for issue in source_report.issues)
+                        or "content validation failed",
                     )
 
     try:
@@ -150,14 +153,13 @@ def verify_ready_integrity(
     if pdf_version is not None:
         pdf_dir = artifacts.resolve(pdf_version["path"]).parent
         rendered_revision_binding = (
-            markdown_version.get("revision_id"), pdf_version.get("revision_id")
+            markdown_version.get("revision_id"),
+            pdf_version.get("revision_id"),
         )
         if (
             any(rendered_revision_binding)
             and rendered_revision_binding[0] != rendered_revision_binding[1]
-        ) or (
-            not any(rendered_revision_binding) and pdf_dir != markdown_dir
-        ):
+        ) or (not any(rendered_revision_binding) and pdf_dir != markdown_dir):
             fail(
                 "not_stale",
                 "superseded-by-newer-version",
@@ -174,18 +176,18 @@ def verify_ready_integrity(
             try:
                 version = repo.latest_artifact_version(application_id, artifact_type, "rendered")
             except KeyError:
-                fail("rendered_artifacts", f"no-{label}", f"no successfully rendered {label} artifact exists")
+                fail(
+                    "rendered_artifacts",
+                    f"no-{label}",
+                    f"no successfully rendered {label} artifact exists",
+                )
                 continue
             path = artifacts.resolve(version["path"])
-            evidence_revision_binding = (
-                pdf_version.get("revision_id"), version.get("revision_id")
-            )
+            evidence_revision_binding = (pdf_version.get("revision_id"), version.get("revision_id"))
             if (
                 any(evidence_revision_binding)
                 and evidence_revision_binding[0] != evidence_revision_binding[1]
-            ) or (
-                not any(evidence_revision_binding) and path.parent != pdf_dir
-            ):
+            ) or (not any(evidence_revision_binding) and path.parent != pdf_dir):
                 fail(
                     "rendered_artifacts",
                     f"{label}-version-mismatch",
@@ -199,7 +201,9 @@ def verify_ready_integrity(
                     fail("rendered_artifacts", f"{label}-tampered", str(path))
 
         try:
-            post_render = repo.validation_for_artifact(application_id, "post-render", pdf_version["id"])
+            post_render = repo.validation_for_artifact(
+                application_id, "post-render", pdf_version["id"]
+            )
         except KeyError:
             fail(
                 "validation_linkage",
@@ -209,12 +213,20 @@ def verify_ready_integrity(
         else:
             evidence["post_render_validation"] = post_render.model_dump(mode="json")
             if not post_render.passed:
-                fail("validation_linkage", "post-render-validation-failed", "referenced post-render validation did not pass")
+                fail(
+                    "validation_linkage",
+                    "post-render-validation-failed",
+                    "referenced post-render validation did not pass",
+                )
 
     try:
         decision = repo.decision_for_artifact_version(markdown_version["id"])
     except KeyError:
-        fail("not_stale", "no-decision-record", "no decision record exists for the latest approved version")
+        fail(
+            "not_stale",
+            "no-decision-record",
+            "no decision record exists for the latest approved version",
+        )
         decision = None
 
     if decision is not None:
@@ -227,8 +239,10 @@ def verify_ready_integrity(
                     "decision-snapshot-mismatch",
                     "the decision record and the approved manifest name different job snapshots",
                 )
-            if chain is not None and chain.job_analysis_id is not None and (
-                decision["job_analysis_id"] != chain.job_analysis_id
+            if (
+                chain is not None
+                and chain.job_analysis_id is not None
+                and (decision["job_analysis_id"] != chain.job_analysis_id)
             ):
                 fail(
                     "chain",
@@ -237,12 +251,20 @@ def verify_ready_integrity(
                 )
         latest_snapshot = repo.latest_snapshot(application_id)
         if decision["job_snapshot_id"] != latest_snapshot["id"]:
-            fail("not_stale", "new-job-snapshot-since-approval", "a newer job snapshot exists since this version was approved")
+            fail(
+                "not_stale",
+                "new-job-snapshot-since-approval",
+                "a newer job snapshot exists since this version was approved",
+            )
         try:
             latest_analysis_id, latest_analysis = repo.latest_analysis(application_id)
             approved_analysis = repo.get_analysis(decision["job_analysis_id"])["analysis"]
         except KeyError:
-            fail("not_stale", "new-analysis-since-approval", "the approved version's job analysis is unavailable")
+            fail(
+                "not_stale",
+                "new-analysis-since-approval",
+                "the approved version's job analysis is unavailable",
+            )
         else:
             # A re-run that reproduces the same classification, gaps, keywords, and
             # routing does not invalidate a rendered version; a materially different

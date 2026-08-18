@@ -4,7 +4,6 @@ from pathlib import Path
 
 from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
-from cv_engine.infrastructure.migration import _seal_report as seal_report
 from cv_engine.runtime.composition import Services
 from cv_engine.runtime.workspace import load_workspace
 
@@ -53,10 +52,7 @@ def working_claim(services: Services, application_id: str, fact_id: str):
     manifest = services.artifacts.working_paths(application_id).manifest
     draft = parse_draft(manifest.read_text(encoding="utf-8"))
     return next(
-        claim
-        for section in draft.sections
-        for claim in section.claims
-        if fact_id in claim.fact_ids
+        claim for section in draft.sections for claim in section.claims if fact_id in claim.fact_ids
     )
 
 

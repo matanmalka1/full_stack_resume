@@ -51,8 +51,7 @@ def test_representative_profiles_match_their_golden_ready_outputs(
         assert "30% YoY" not in markdown, fixture.stem
         assert "3-4 sales representatives" not in markdown.casefold(), fixture.stem
         assert all(
-            facts.get(fact_id).status.value == "canonical"
-            for fact_id in draft.selected_fact_ids
+            facts.get(fact_id).status.value == "canonical" for fact_id in draft.selected_fact_ids
         ), fixture.stem
         if case["language"] == "he":
             assert "תקציר מקצועי" in markdown

@@ -27,20 +27,22 @@ def test_provider_cannot_relax_approval_confidence_or_language(
     assert deterministic.language == "he"
 
     # The job's hard gap is accepted, so the approval gate is what must block.
-    setup = provider_analysis(
-        classification_proposal(), accept_low_fit=True
-    )
+    setup = provider_analysis(classification_proposal(), accept_low_fit=True)
     services, application_id, analysis = setup
 
     assert analysis.classification_requires_approval
     assert analysis.language == "he"
     assert analysis.confidence == deterministic.confidence
     with pytest.raises(WorkflowError, match="ambiguous classification"):
-        services.drafts.draft(DraftCommand(
-            application_id=application_id,
-            job_analysis_id=setup.analysis_id,
-            selection_plan_id=setup.services.repository.latest_selection_plan(application_id).id,
-        ))
+        services.drafts.draft(
+            DraftCommand(
+                application_id=application_id,
+                job_analysis_id=setup.analysis_id,
+                selection_plan_id=setup.services.repository.latest_selection_plan(
+                    application_id
+                ).id,
+            )
+        )
 
     _, stored = services.repository.latest_analysis(application_id)
     assert stored == analysis
@@ -101,7 +103,9 @@ def test_fit_is_derived_from_merged_gaps_and_never_improved(
 
     added = merge_classification(
         clean,
-        classification_proposal(gaps=[Gap(requirement="German", severity="hard", reason="not verified")]),
+        classification_proposal(
+            gaps=[Gap(requirement="German", severity="hard", reason="not verified")]
+        ),
         profile_store,
     )
     assert added.fit is FitLevel.LOW

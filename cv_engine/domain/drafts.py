@@ -128,8 +128,7 @@ def build_draft(
     language = analysis.language
     contact_ids = candidate.contacts_for_track(analysis.track.value)
     contacts = [
-        _claim("contact", facts.rendering(fact_id, language), [fact_id])
-        for fact_id in contact_ids
+        _claim("contact", facts.rendering(fact_id, language), [fact_id]) for fact_id in contact_ids
     ]
 
     if selection is None:
@@ -200,29 +199,35 @@ def build_draft(
             if item.rule_id is None:
                 claims.append(_claim(item.style, item.text, fact_ids))
             elif len(fact_ids) == 1:
-                claims.append(_claim(
-                    item.style,
-                    item.text,
-                    fact_ids,
-                    "derived",
-                    derivation_id=item.rule_id,
-                    derivation_version=item.rule_version,
-                ))
+                claims.append(
+                    _claim(
+                        item.style,
+                        item.text,
+                        fact_ids,
+                        "derived",
+                        derivation_id=item.rule_id,
+                        derivation_version=item.rule_version,
+                    )
+                )
             else:
-                claims.append(_claim(
-                    item.style,
-                    item.text,
-                    fact_ids,
-                    "composite",
-                    template_id=item.rule_id,
-                    template_version=item.rule_version,
-                ))
+                claims.append(
+                    _claim(
+                        item.style,
+                        item.text,
+                        fact_ids,
+                        "composite",
+                        template_id=item.rule_id,
+                        template_version=item.rule_version,
+                    )
+                )
             selected.update(fact_ids)
         if claims or not spec.optional:
-            sections.append(ResumeSection(
-                name=spec.name_he if language == "he" else spec.name_en,
-                claims=claims,
-            ))
+            sections.append(
+                ResumeSection(
+                    name=spec.name_he if language == "he" else spec.name_en,
+                    claims=claims,
+                )
+            )
 
     draft = DraftDocument(
         application_id=application_id,
@@ -296,12 +301,11 @@ def _refresh_selection(draft: DraftDocument, facts: FactStore) -> DraftDocument:
             for fact_id in claim.fact_ids
         }
         if body != set(draft.selection.selected_fact_ids):
-            draft.selection = draft.selection.model_copy(
-                update={"superseded_by_manual_edit": True}
-            )
+            draft.selection = draft.selection.model_copy(update={"superseded_by_manual_edit": True})
     draft.omitted_facts = _omitted_facts(
         facts,
-        draft.selection or SelectionManifest(
+        draft.selection
+        or SelectionManifest(
             policy_version="",
             emphasis=draft.emphasis,
             emphasis_policy_version="",
@@ -378,7 +382,9 @@ def render_composite_claim(
         template = COMPOSITE_TEMPLATES[(template_id, template_version)]
     except KeyError as exc:
         if presentations is None:
-            raise ValueError(f"unknown deterministic claim template: {template_id}@{template_version}") from exc
+            raise ValueError(
+                f"unknown deterministic claim template: {template_id}@{template_version}"
+            ) from exc
         return presentations.render_rule(
             template_id,
             template_version,
@@ -387,11 +393,17 @@ def render_composite_claim(
             output_style,
         )
     if len(fact_ids) < 2 or len(fact_ids) != len(set(fact_ids)):
-        raise ValueError("deterministic composite claims require at least two distinct canonical facts")
+        raise ValueError(
+            "deterministic composite claims require at least two distinct canonical facts"
+        )
     if output_style not in template.output_styles:
-        raise ValueError(f"template {template_id}@{template_version} does not allow output style {output_style!r}")
+        raise ValueError(
+            f"template {template_id}@{template_version} does not allow output style {output_style!r}"
+        )
     support = [facts.get(fact_id, canonical_only=True) for fact_id in fact_ids]
-    invalid_styles = sorted({fact.resume_style for fact in support if fact.resume_style not in template.input_styles})
+    invalid_styles = sorted(
+        {fact.resume_style for fact in support if fact.resume_style not in template.input_styles}
+    )
     if invalid_styles or any(fact.resume_style != output_style for fact in support):
         raise ValueError(
             f"template {template_id}@{template_version} requires every input style to equal "
@@ -416,7 +428,9 @@ def apply_claim_edit(
         raise KeyError(claim_id) from exc
     if template_id is not None:
         if text is not None:
-            raise ValueError("a claim edit must use either text or a deterministic template, not both")
+            raise ValueError(
+                "a claim edit must use either text or a deterministic template, not both"
+            )
         version = template_version or CANONICAL_JOIN_TEMPLATE[1]
         rendered = render_composite_claim(
             fact_ids,

@@ -77,35 +77,39 @@ def _fast(
     It chains the same use-cases in the same order and every validation and
     blocker still applies; nothing here can approve unvalidated content.
     """
-    ingested = services.applications.ingest(IngestCommand(
-        company=company,
-        target_role=role,
-        job_text=job_text,
-        source_url=url,
-    ))
-    analysed = services.analysis.analyze(AnalyzeCommand(
-        application_id=ingested.application_id,
-        job_snapshot_id=ingested.job_snapshot_id,
-        track_override=track,
-        profile_override=profile,
-        emphasis_override=emphasis,
-        language_override=language,
-        accept_low_fit=accept_low_fit,
-    ))
-    drafted = services.drafts.draft(DraftCommand(
-        application_id=ingested.application_id,
-        job_analysis_id=analysed.analysis_id,
-        selection_plan_id=analysed.selection_plan_id,
-    ))
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company=company,
+            target_role=role,
+            job_text=job_text,
+            source_url=url,
+        )
+    )
+    analysed = services.analysis.analyze(
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+            track_override=track,
+            profile_override=profile,
+            emphasis_override=emphasis,
+            language_override=language,
+            accept_low_fit=accept_low_fit,
+        )
+    )
+    drafted = services.drafts.draft(
+        DraftCommand(
+            application_id=ingested.application_id,
+            job_analysis_id=analysed.analysis_id,
+            selection_plan_id=analysed.selection_plan_id,
+        )
+    )
     if not drafted.validation.passed:
         raise WorkflowError("fast mode blocked by pre-render validation")
     approved = services.drafts.approve(ingested.application_id)
     rendered = services.rendering.render(ingested.application_id)
     if not rendered.validation.passed:
         raise WorkflowError("fast mode blocked by post-render validation")
-    pdf_record = services.repository.latest_artifact_version(
-        ingested.application_id, "resume_pdf"
-    )
+    pdf_record = services.repository.latest_artifact_version(ingested.application_id, "resume_pdf")
     pdf_metadata = json.loads(pdf_record.get("metadata_json") or "{}")
     return {
         "application_id": ingested.application_id,
@@ -185,15 +189,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     workspace = sub.add_parser("workspace", help="create and inspect the local Workspace")
     workspace_sub = workspace.add_subparsers(dest="workspace_command", required=True)
-    workspace_init = workspace_sub.add_parser("init", help="create an isolated Workspace and its marker")
-    workspace_init.add_argument("--purpose", choices=["development", "test", "live"], default="development")
+    workspace_init = workspace_sub.add_parser(
+        "init", help="create an isolated Workspace and its marker"
+    )
+    workspace_init.add_argument(
+        "--purpose", choices=["development", "test", "live"], default="development"
+    )
     workspace_init.add_argument("--data-class", choices=["copy", "test", "live"], default="copy")
     workspace_init.add_argument(
         "--knowledge-from",
         type=Path,
         help="copy base/profiles/rendering/config/ai from this directory into the new Workspace",
     )
-    workspace_sub.add_parser("status", help="show Workspace identity, roots, and resolved configuration")
+    workspace_sub.add_parser(
+        "status", help="show Workspace identity, roots, and resolved configuration"
+    )
     workspace_inventory = workspace_sub.add_parser(
         "inventory-legacy",
         help="read-only inventory of an unmarked legacy v1 source",
@@ -247,7 +257,10 @@ def build_parser() -> argparse.ArgumentParser:
     action.add_argument("application_id")
     action.add_argument("--next-action")
     action.add_argument("--date")
-    edit = sub.add_parser("edit-claim", help="classify and save a canonical, derived, composite, or pending claim edit")
+    edit = sub.add_parser(
+        "edit-claim",
+        help="classify and save a canonical, derived, composite, or pending claim edit",
+    )
     edit.add_argument("application_id")
     edit.add_argument("claim_id")
     edit_mode = edit.add_mutually_exclusive_group(required=True)
@@ -255,7 +268,9 @@ def build_parser() -> argparse.ArgumentParser:
     edit_mode.add_argument("--template", choices=["canonical-renderings"])
     edit.add_argument("--template-version", default="1.0.0")
     edit.add_argument("--fact-id", action="append", required=True)
-    sync = sub.add_parser("sync-draft", help="extract marked manual Markdown edits and classify their claims")
+    sync = sub.add_parser(
+        "sync-draft", help="extract marked manual Markdown edits and classify their claims"
+    )
     sync.add_argument("application_id")
     link = sub.add_parser("link-claim", help="compatibility alias for a text-based claim edit")
     link.add_argument("application_id")
@@ -264,15 +279,21 @@ def build_parser() -> argparse.ArgumentParser:
     link.add_argument("--fact-id", action="append", required=True)
     export = sub.add_parser("export", help="export application data to CSV")
     export.add_argument("output", type=Path)
-    sub.add_parser("reconcile", help="reconcile SQLite references, artifact hashes, and the fact lifecycle")
+    sub.add_parser(
+        "reconcile", help="reconcile SQLite references, artifact hashes, and the fact lifecycle"
+    )
 
-    fact = sub.add_parser("fact", help="manage the pending -> confirmed -> canonical fact lifecycle")
+    fact = sub.add_parser(
+        "fact", help="manage the pending -> confirmed -> canonical fact lifecycle"
+    )
     fact_sub = fact.add_subparsers(dest="fact_command", required=True)
     fact_list = fact_sub.add_parser("list", help="list stored facts and their lifecycle status")
     fact_list.add_argument("--status", choices=[item.value for item in FactStatus])
     fact_show = fact_sub.add_parser("show", help="inspect one fact and its lifecycle events")
     fact_show.add_argument("fact_id")
-    fact_add = fact_sub.add_parser("add", help="create a new fact; pending unless explicitly confirmed")
+    fact_add = fact_sub.add_parser(
+        "add", help="create a new fact; pending unless explicitly confirmed"
+    )
     _add_fact_content(fact_add)
     fact_capture = fact_sub.add_parser(
         "capture",
@@ -283,11 +304,15 @@ def build_parser() -> argparse.ArgumentParser:
     _add_fact_content(fact_capture, from_claim=True)
     fact_confirm = fact_sub.add_parser("confirm", help="promote pending -> confirmed")
     fact_confirm.add_argument("fact_id")
-    fact_confirm.add_argument("--confirm", action="store_true", help="required explicit confirmation")
+    fact_confirm.add_argument(
+        "--confirm", action="store_true", help="required explicit confirmation"
+    )
     fact_confirm.add_argument("--reason", default="")
     fact_promote = fact_sub.add_parser("promote", help="promote confirmed -> canonical")
     fact_promote.add_argument("fact_id")
-    fact_promote.add_argument("--confirm", action="store_true", help="required explicit confirmation")
+    fact_promote.add_argument(
+        "--confirm", action="store_true", help="required explicit confirmation"
+    )
     fact_promote.add_argument("--reason", default="")
     fact_attach = fact_sub.add_parser(
         "attach",
@@ -304,7 +329,9 @@ def build_parser() -> argparse.ArgumentParser:
     migrate_sub = migrate.add_subparsers(dest="migration_command", required=True)
     verify = migrate_sub.add_parser("verify-snapshot")
     verify.add_argument("--snapshot", type=Path, required=True)
-    verify_live = migrate_sub.add_parser("verify-live", help="read-only semantic verification of the completed migration")
+    verify_live = migrate_sub.add_parser(
+        "verify-live", help="read-only semantic verification of the completed migration"
+    )
     verify_live.add_argument("--snapshot", type=Path, required=True)
     return parser
 
@@ -326,10 +353,25 @@ def export_csv(applications: ApplicationListView | Repository, output: Path) -> 
         else applications.list_applications()
     )
     fields = [
-        "id", "company", "target_role", "normalized_role", "source_url", "language",
-        "track", "profile", "emphasis", "classification_confidence", "fit_level",
-        "current_status", "last_contact_date", "next_action", "next_action_date",
-        "notes", "source", "created_at", "updated_at",
+        "id",
+        "company",
+        "target_role",
+        "normalized_role",
+        "source_url",
+        "language",
+        "track",
+        "profile",
+        "emphasis",
+        "classification_confidence",
+        "fit_level",
+        "current_status",
+        "last_contact_date",
+        "next_action",
+        "next_action_date",
+        "notes",
+        "source",
+        "created_at",
+        "updated_at",
     ]
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", encoding="utf-8", newline="") as handle:
@@ -362,56 +404,63 @@ def fact_command(knowledge: Any, args: argparse.Namespace) -> int:
     """
     if args.fact_command == "list":
         result = knowledge.list_facts(args.status)
-        _print([
-            {**item.fact.model_dump(mode="json"), "recorded_status": item.recorded_status}
-            for item in result.items
-        ])
+        _print(
+            [
+                {**item.fact.model_dump(mode="json"), "recorded_status": item.recorded_status}
+                for item in result.items
+            ]
+        )
     elif args.fact_command == "show":
         result = knowledge.show_fact(args.fact_id)
-        _print({
-            **result.fact.model_dump(mode="json"),
-            "events": [event.model_dump(mode="json") for event in result.events],
-        })
+        _print(
+            {
+                **result.fact.model_dump(mode="json"),
+                "events": [event.model_dump(mode="json") for event in result.events],
+            }
+        )
     elif args.fact_command == "history":
-        _print([
-            event.model_dump(mode="json")
-            for event in knowledge.fact_history(args.fact_id).events
-        ])
+        _print(
+            [event.model_dump(mode="json") for event in knowledge.fact_history(args.fact_id).events]
+        )
     elif args.fact_command == "add":
         renderings = {"en": args.en}
         if args.he:
             renderings["he"] = args.he
-        _print(knowledge.add_fact(
-            args.source,
-            {
-                "fact_id": args.fact_id,
-                "meaning": args.meaning,
-                "renderings": renderings,
-                "tags": args.tag,
-                "provenance": args.provenance,
-                "effective_dates": args.dates,
-                "replaces": args.replaces,
-                "resume_style": args.style,
-            },
-            canonical=args.canonical,
-            reason=args.reason,
-        ))
+        _print(
+            knowledge.add_fact(
+                args.source,
+                {
+                    "fact_id": args.fact_id,
+                    "meaning": args.meaning,
+                    "renderings": renderings,
+                    "tags": args.tag,
+                    "provenance": args.provenance,
+                    "effective_dates": args.dates,
+                    "replaces": args.replaces,
+                    "resume_style": args.style,
+                },
+                canonical=args.canonical,
+                reason=args.reason,
+            )
+        )
     elif args.fact_command == "capture":
-        _print(knowledge.capture_claim_fact(
-            args.application_id,
-            args.claim_id,
-            source=args.source,
-            fact_id=args.fact_id,
-            meaning=args.meaning,
-            tags=args.tag,
-            english=args.en,
-            hebrew=args.he,
-            provenance=args.provenance,
-            effective_dates=args.dates,
-            replaces=args.replaces,
-            canonical=args.canonical,
-            reason=args.reason,
-        ))
+        _print(
+            knowledge.capture_claim_fact(
+                args.application_id,
+                args.claim_id,
+                source=args.source,
+                fact_id=args.fact_id,
+                meaning=args.meaning,
+                tags=args.tag,
+                english=args.en,
+                hebrew=args.he,
+                provenance=args.provenance,
+                effective_dates=args.dates,
+                replaces=args.replaces,
+                canonical=args.canonical,
+                reason=args.reason,
+            )
+        )
     elif args.fact_command in {"confirm", "promote"}:
         target = FactStatus.CONFIRMED if args.fact_command == "confirm" else FactStatus.CANONICAL
         if not args.confirm:
@@ -420,12 +469,14 @@ def fact_command(knowledge: Any, args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 2
-        _print(knowledge.promote_fact(
-            args.fact_id,
-            target.value,
-            explicitly_confirmed=True,
-            reason=args.reason,
-        ))
+        _print(
+            knowledge.promote_fact(
+                args.fact_id,
+                target.value,
+                explicitly_confirmed=True,
+                reason=args.reason,
+            )
+        )
     elif args.fact_command == "attach":
         _print(knowledge.attach_fact(args.fact_id, args.profile, args.section, pin=args.pin))
     return 0
@@ -474,17 +525,21 @@ def workspace_command(
             data_class=args.data_class,
             knowledge_source=args.knowledge_from.resolve() if args.knowledge_from else None,
         )
-        _print({**created.describe(), "installation_id": created.installation_id(), "created": True})
+        _print(
+            {**created.describe(), "installation_id": created.installation_id(), "created": True}
+        )
         return 0
     if args.workspace_command == "status":
         opened = opened or load_workspace(root)
-        _print({
-            **opened.describe(),
-            "installation_id": opened.installation_id(),
-            "database": str(opened.database_path),
-            "schema_version": current_schema_version(opened.database_path),
-            "configuration": config.describe(),
-        })
+        _print(
+            {
+                **opened.describe(),
+                "installation_id": opened.installation_id(),
+                "database": str(opened.database_path),
+                "schema_version": current_schema_version(opened.database_path),
+                "configuration": config.describe(),
+            }
+        )
         return 0
     source = LegacyV1Source(args.source.resolve())
     inventory = source.inventory()
@@ -540,92 +595,118 @@ def main(argv: list[str] | None = None) -> int:
         services = build_services(workspace, database_path=db_path)
         repository = services.repository
         if args.command == "ingest":
-            ingested = services.applications.ingest(IngestCommand(
-                company=args.company,
-                target_role=args.role,
-                job_text=_job_text(args),
-                source_url=args.url,
-            ))
-            _print({
-                "application_id": ingested.application_id,
-                "job_snapshot_id": ingested.job_snapshot_id,
-            })
+            ingested = services.applications.ingest(
+                IngestCommand(
+                    company=args.company,
+                    target_role=args.role,
+                    job_text=_job_text(args),
+                    source_url=args.url,
+                )
+            )
+            _print(
+                {
+                    "application_id": ingested.application_id,
+                    "job_snapshot_id": ingested.job_snapshot_id,
+                }
+            )
         elif args.command == "analyze":
-            analysed = services.analysis.analyze(AnalyzeCommand(
-                application_id=args.application_id,
-                job_snapshot_id=(
-                    args.job_snapshot
-                    or resolve_job_snapshot_id(repository, args.application_id)
-                ),
-                track_override=args.track,
-                profile_override=args.profile,
-                emphasis_override=args.emphasis,
-                language_override=args.language,
-                accept_low_fit=args.accept_low_fit,
-                provider=args.provider,
-                model=args.model,
-            ))
-            _print({
-                "analysis_id": analysed.analysis_id,
-                "selection_plan_id": analysed.selection_plan_id,
-                "analysis": analysed.analysis.model_dump(mode="json"),
-            })
+            analysed = services.analysis.analyze(
+                AnalyzeCommand(
+                    application_id=args.application_id,
+                    job_snapshot_id=(
+                        args.job_snapshot
+                        or resolve_job_snapshot_id(repository, args.application_id)
+                    ),
+                    track_override=args.track,
+                    profile_override=args.profile,
+                    emphasis_override=args.emphasis,
+                    language_override=args.language,
+                    accept_low_fit=args.accept_low_fit,
+                    provider=args.provider,
+                    model=args.model,
+                )
+            )
+            _print(
+                {
+                    "analysis_id": analysed.analysis_id,
+                    "selection_plan_id": analysed.selection_plan_id,
+                    "analysis": analysed.analysis.model_dump(mode="json"),
+                }
+            )
         elif args.command == "draft":
-            drafted = services.drafts.draft(DraftCommand(
-                application_id=args.application_id,
-                job_analysis_id=(
-                    args.job_analysis
-                    or resolve_job_analysis_id(repository, args.application_id)
-                ),
-                selection_plan_id=(
-                    args.selection_plan
-                    or resolve_selection_plan_id(repository, args.application_id)
-                ),
-            ))
+            drafted = services.drafts.draft(
+                DraftCommand(
+                    application_id=args.application_id,
+                    job_analysis_id=(
+                        args.job_analysis
+                        or resolve_job_analysis_id(repository, args.application_id)
+                    ),
+                    selection_plan_id=(
+                        args.selection_plan
+                        or resolve_selection_plan_id(repository, args.application_id)
+                    ),
+                )
+            )
             paths = services.artifacts.working_paths(args.application_id)
-            _print({
-                "markdown": str(paths.markdown),
-                "claim_manifest": str(paths.manifest),
-                "validation": drafted.validation.model_dump(mode="json"),
-                "review_required": True,
-            })
+            _print(
+                {
+                    "markdown": str(paths.markdown),
+                    "claim_manifest": str(paths.manifest),
+                    "validation": drafted.validation.model_dump(mode="json"),
+                    "review_required": True,
+                }
+            )
         elif args.command == "validate":
             report = services.drafts.validate_working(args.application_id)
             _print(report.model_dump(mode="json"))
             return 0 if report.passed else 1
         elif args.command == "approve":
             approved = services.drafts.approve(args.application_id)
-            _print({
-                "version": approved.version,
-                "directory": str(services.artifacts.resolve(
-                    repository.approved_revision(
-                        approved.revision_id
-                    ).resume_markdown_reference
-                ).parent),
-                "revision_id": approved.revision_id,
-                "decision_record_id": approved.decision_record_id,
-            })
+            _print(
+                {
+                    "version": approved.version,
+                    "directory": str(
+                        services.artifacts.resolve(
+                            repository.approved_revision(
+                                approved.revision_id
+                            ).resume_markdown_reference
+                        ).parent
+                    ),
+                    "revision_id": approved.revision_id,
+                    "decision_record_id": approved.decision_record_id,
+                }
+            )
         elif args.command == "render":
             rendered = services.rendering.render(args.application_id)
             pdf_record = repository.latest_artifact_version(args.application_id, "resume_pdf")
             pdf_metadata = json.loads(pdf_record.get("metadata_json") or "{}")
-            _print({
-                "pdf": str(services.artifacts.resolve(pdf_record["path"])),
-                "filename": pdf_metadata.get("recruiter_filename"),
-                "ready_validation": rendered.validation.model_dump(mode="json"),
-            })
+            _print(
+                {
+                    "pdf": str(services.artifacts.resolve(pdf_record["path"])),
+                    "filename": pdf_metadata.get("recruiter_filename"),
+                    "ready_validation": rendered.validation.model_dump(mode="json"),
+                }
+            )
             return 0 if rendered.validation.passed else 1
         elif args.command == "ready":
             report = services.rendering.ready_report(args.application_id)
             _print(report.model_dump(mode="json"))
             return 0 if report.passed else 1
         elif args.command == "fast":
-            _print(_fast(
-                services,
-                args.company, args.role, _job_text(args), url=args.url,
-                track=args.track, profile=args.profile, emphasis=args.emphasis,
-                language=args.language, accept_low_fit=args.accept_low_fit,
-            ))
+            _print(
+                _fast(
+                    services,
+                    args.company,
+                    args.role,
+                    _job_text(args),
+                    url=args.url,
+                    track=args.track,
+                    profile=args.profile,
+                    emphasis=args.emphasis,
+                    language=args.language,
+                    accept_low_fit=args.accept_low_fit,
+                )
+            )
         elif args.command == "list":
             _print(services.queries.list_applications())
         elif args.command == "show":
@@ -637,25 +718,35 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "status":
             if args.status == ApplicationStatus.APPLIED.value:
                 submitted = services.tracking.submit(args.application_id, args.reason)
-                _print({
-                    "application_id": submitted.application_id,
-                    "pdf_artifact_version_id": submitted.pdf_artifact_version_id,
-                    "current_status": submitted.current_status,
-                    "next_action": submitted.next_action,
-                    "next_action_date": submitted.next_action_date,
-                })
+                _print(
+                    {
+                        "application_id": submitted.application_id,
+                        "pdf_artifact_version_id": submitted.pdf_artifact_version_id,
+                        "current_status": submitted.current_status,
+                        "next_action": submitted.next_action,
+                        "next_action_date": submitted.next_action_date,
+                    }
+                )
             else:
-                _print(services.tracking.transition_status(RecruitmentStatusCommand(
-                    application_id=args.application_id,
-                    target_status=args.status,
-                    reason=args.reason,
-                )))
+                _print(
+                    services.tracking.transition_status(
+                        RecruitmentStatusCommand(
+                            application_id=args.application_id,
+                            target_status=args.status,
+                            reason=args.reason,
+                        )
+                    )
+                )
         elif args.command == "action":
-            _print(services.tracking.set_next_action(NextActionCommand(
-                application_id=args.application_id,
-                next_action=args.next_action,
-                next_action_date=args.date,
-            )))
+            _print(
+                services.tracking.set_next_action(
+                    NextActionCommand(
+                        application_id=args.application_id,
+                        next_action=args.next_action,
+                        next_action_date=args.date,
+                    )
+                )
+            )
         elif args.command == "edit-claim":
             edited = services.drafts.edit_claim(
                 args.application_id,
@@ -665,32 +756,42 @@ def main(argv: list[str] | None = None) -> int:
                 template_id=args.template,
                 template_version=args.template_version,
             )
-            _print({
-                "markdown": str(services.artifacts.working_paths(args.application_id).markdown),
-                "validation": edited.validation.model_dump(mode="json"),
-            })
+            _print(
+                {
+                    "markdown": str(services.artifacts.working_paths(args.application_id).markdown),
+                    "validation": edited.validation.model_dump(mode="json"),
+                }
+            )
             return 0 if edited.validation.passed else 1
         elif args.command == "sync-draft":
             edited = services.drafts.sync_working_claims(args.application_id)
-            _print({
-                "markdown": str(services.artifacts.working_paths(args.application_id).markdown),
-                "validation": edited.validation.model_dump(mode="json"),
-            })
+            _print(
+                {
+                    "markdown": str(services.artifacts.working_paths(args.application_id).markdown),
+                    "validation": edited.validation.model_dump(mode="json"),
+                }
+            )
             return 0 if edited.validation.passed else 1
         elif args.command == "link-claim":
-            edited = services.drafts.link_claim(args.application_id, args.claim_id, args.text, args.fact_id)
-            _print({
-                "markdown": str(services.artifacts.working_paths(args.application_id).markdown),
-                "validation": edited.validation.model_dump(mode="json"),
-            })
+            edited = services.drafts.link_claim(
+                args.application_id, args.claim_id, args.text, args.fact_id
+            )
+            _print(
+                {
+                    "markdown": str(services.artifacts.working_paths(args.application_id).markdown),
+                    "validation": edited.validation.model_dump(mode="json"),
+                }
+            )
             return 0 if edited.validation.passed else 1
         elif args.command == "export":
             exported = export_csv(services.queries.list_applications(), args.output.resolve())
-            _print({
-                "csv": str(exported),
-                "metadata": str(exported.with_suffix(exported.suffix + ".meta.json")),
-                "export_schema_version": EXPORT_SCHEMA_VERSION,
-            })
+            _print(
+                {
+                    "csv": str(exported),
+                    "metadata": str(exported.with_suffix(exported.suffix + ".meta.json")),
+                    "export_schema_version": EXPORT_SCHEMA_VERSION,
+                }
+            )
         elif args.command == "reconcile":
             report = generic_reconcile(workspace, repository)
             fact_lifecycle = services.knowledge_lifecycle.reconcile_facts()

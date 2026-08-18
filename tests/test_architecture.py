@@ -140,9 +140,7 @@ def _defines_application_status_transition_table(path: Path) -> bool:
 def _imports_relative_module(path: Path, module: str) -> bool:
     tree = ast.parse(path.read_text(encoding="utf-8"))
     return any(
-        isinstance(node, ast.ImportFrom)
-        and node.level == 1
-        and node.module == module
+        isinstance(node, ast.ImportFrom) and node.level == 1 and node.module == module
         for node in ast.walk(tree)
     )
 
@@ -155,9 +153,7 @@ def _direct_validation_report_calls(path: Path) -> list[int]:
         if not isinstance(node, ast.ImportFrom):
             continue
         constructor_names.update(
-            alias.asname or alias.name
-            for alias in node.names
-            if alias.name == "ValidationReport"
+            alias.asname or alias.name for alias in node.names if alias.name == "ValidationReport"
         )
     found: list[int] = []
     for node in ast.walk(tree):
@@ -243,9 +239,8 @@ def test_known_outer_layer_policy_debt_does_not_grow() -> None:
         relative = path.relative_to(ENGINE).as_posix()
         if any(name == "subprocess" for name, _line in _imports(path)):
             offenders.add(f"{relative}: imports subprocess")
-        if (
-            not relative.startswith("domain/")
-            and _defines_application_status_transition_table(path)
+        if not relative.startswith("domain/") and _defines_application_status_transition_table(
+            path
         ):
             offenders.add(f"{relative}: defines an ApplicationStatus transition table")
 
@@ -264,10 +259,7 @@ def test_sqlite_and_sql_are_owned_by_persistence() -> None:
             continue
         if any(name == "sqlite3" for name, _line in _imports(path)):
             offenders.append(f"{relative}: imports sqlite3")
-        offenders.extend(
-            f"{relative}:{line} contains SQL"
-            for line in _sql_string_lines(path)
-        )
+        offenders.extend(f"{relative}:{line} contains SQL" for line in _sql_string_lines(path))
         offenders.extend(
             f"{relative}:{line} issues PRAGMA"
             for line, source in _code_lines(path)
@@ -329,9 +321,7 @@ def test_validation_report_has_one_in_package_construction_authority() -> None:
     ]
 
     assert not offenders, offenders
-    models_tree = ast.parse(
-        (ENGINE / "domain/models.py").read_text(encoding="utf-8")
-    )
+    models_tree = ast.parse((ENGINE / "domain/models.py").read_text(encoding="utf-8"))
     report_class = next(
         node
         for node in models_tree.body
@@ -348,8 +338,6 @@ def test_validation_report_has_one_in_package_construction_authority() -> None:
         for decorator in factory.decorator_list
     )
     assert any(
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "cls"
+        isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "cls"
         for node in ast.walk(factory)
     )

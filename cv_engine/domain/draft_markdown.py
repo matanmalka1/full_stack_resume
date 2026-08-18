@@ -79,7 +79,9 @@ def _decode_claim_line(line: str, style: str) -> str:
     raise ValueError(f"edited claim line does not preserve its {style!r} Markdown style")
 
 
-def _extract_marked_claims(markdown: str, claims: dict[str, ClaimLine]) -> tuple[dict[str, str], str]:
+def _extract_marked_claims(
+    markdown: str, claims: dict[str, ClaimLine]
+) -> tuple[dict[str, str], str]:
     lines = markdown.splitlines()
     extracted: dict[str, str] = {}
     skeleton: list[str] = []

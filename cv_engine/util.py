@@ -28,9 +28,7 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def verify_payload(
-    path: Path, expected_hash: str
-) -> Literal["ok", "missing", "tampered"]:
+def verify_payload(path: Path, expected_hash: str) -> Literal["ok", "missing", "tampered"]:
     """Classify one immutable payload without imposing caller-specific messages."""
     if not path.is_file():
         return "missing"

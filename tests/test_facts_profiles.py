@@ -14,14 +14,16 @@ def test_canonical_fact_store_has_unique_stable_ids(fact_store) -> None:
     uuid.UUID(V2_IDENTITY_FACT["fact_id"])
     identity = facts.get(V2_IDENTITY_FACT["fact_id"], canonical_only=True)
     assert identity.renderings == {"en": "Matan Malka", "he": "מתן מלכה"}
-    assert facts.get("sales.metric.team_size").renderings["en"] == "Managed a team of 2-3 sales representatives."
+    assert (
+        facts.get("sales.metric.team_size").renderings["en"]
+        == "Managed a team of 2-3 sales representatives."
+    )
     assert "YoY" not in facts.get("sales.metric.performance").renderings["en"]
     assert facts.get("sales.role.leader.dates").effective_dates == "2020-08/2025-01"
     assert len(facts.version) == 64
 
 
 def test_all_required_profiles_reference_existing_facts(fact_store, profile_store) -> None:
-    facts = fact_store
     profiles = profile_store
     assert len(profiles.profiles) == 10
     assert profiles.get("tech-sales").track.value == "tech-sales"

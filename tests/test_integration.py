@@ -20,20 +20,26 @@ from helpers import ACCOUNT_MANAGER_JOB, working_claim as _working_claim
 
 @pytest.mark.browser
 def test_default_flow_stops_for_review_then_reaches_ready(services) -> None:
-    ingested = services.applications.ingest(IngestCommand(
-        company="Acme",
-        target_role="Account Manager",
-        job_text=ACCOUNT_MANAGER_JOB,
-    ))
-    analysed = services.analysis.analyze(AnalyzeCommand(
-        application_id=ingested.application_id,
-        job_snapshot_id=ingested.job_snapshot_id,
-    ))
-    drafted = services.drafts.draft(DraftCommand(
-        application_id=ingested.application_id,
-        job_analysis_id=analysed.analysis_id,
-        selection_plan_id=analysed.selection_plan_id,
-    ))
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company="Acme",
+            target_role="Account Manager",
+            job_text=ACCOUNT_MANAGER_JOB,
+        )
+    )
+    analysed = services.analysis.analyze(
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+        )
+    )
+    drafted = services.drafts.draft(
+        DraftCommand(
+            application_id=ingested.application_id,
+            job_analysis_id=analysed.analysis_id,
+            selection_plan_id=analysed.selection_plan_id,
+        )
+    )
     app_id = ingested.application_id
     paths = services.artifacts.working_paths(app_id)
     assert drafted.validation.passed
@@ -60,7 +66,9 @@ def test_default_flow_stops_for_review_then_reaches_ready(services) -> None:
     submission_result = services.tracking.submit(app_id, "submitted to employer")
     assert submission_result.current_status == "applied"
     with connect(services.repository.path) as connection:
-        submission = connection.execute("SELECT artifact_version_id FROM submissions WHERE application_id=?", (app_id,)).fetchone()
+        submission = connection.execute(
+            "SELECT artifact_version_id FROM submissions WHERE application_id=?", (app_id,)
+        ).fetchone()
     assert submission is not None
     assert submission["artifact_version_id"] == submission_result.pdf_artifact_version_id
 
@@ -70,9 +78,9 @@ def test_csv_export_declares_its_schema_version(services, tmp_path: Path) -> Non
 
     from cv_engine.cli import EXPORT_SCHEMA_VERSION, export_csv
 
-    ingested = services.applications.ingest(IngestCommand(
-        company="Acme", target_role="Developer", job_text="Python developer role"
-    ))
+    ingested = services.applications.ingest(
+        IngestCommand(company="Acme", target_role="Developer", job_text="Python developer role")
+    )
     app_id = ingested.application_id
     output = export_csv(services.queries.list_applications(), tmp_path / "applications.csv")
     text = output.read_text(encoding="utf-8")
@@ -111,9 +119,10 @@ def test_filesystem_working_draft_unconditionally_overwrites_the_projection(
     assert replacement_stored.paths.markdown.read_text(encoding="utf-8") == (
         serialize_markdown(replacement)
     )
-    assert parse_draft(
-        replacement_stored.paths.manifest.read_text(encoding="utf-8")
-    ).profile == replacement.profile
+    assert (
+        parse_draft(replacement_stored.paths.manifest.read_text(encoding="utf-8")).profile
+        == replacement.profile
+    )
     assert first_markdown != replacement_stored.markdown
 
 
@@ -176,7 +185,10 @@ def test_cli_exposes_style_safe_composite_edit(drafted_application, cli_runner) 
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert _working_claim(services, app_id, "sales.metric.recurring_customers").claim_type == "composite"
+    assert (
+        _working_claim(services, app_id, "sales.metric.recurring_customers").claim_type
+        == "composite"
+    )
 
 
 def test_render_revalidates_approved_markdown_before_browser(approved_application) -> None:
@@ -186,7 +198,9 @@ def test_render_revalidates_approved_markdown_before_browser(approved_applicatio
         app_id, "resume_markdown", "approved"
     )
     markdown = services.artifacts.resolve(markdown_record["path"])
-    markdown.write_text(markdown.read_text(encoding="utf-8") + "\nUnsupported claim.\n", encoding="utf-8")
+    markdown.write_text(
+        markdown.read_text(encoding="utf-8") + "\nUnsupported claim.\n", encoding="utf-8"
+    )
     try:
         services.rendering.render(app_id)
     except WorkflowError as exc:
@@ -219,35 +233,40 @@ def test_fast_orchestration_preserves_call_order_and_gate_messages(
 
     def report(phase: str) -> ValidationReport:
         passed = failed_phase != phase
-        issues = [] if passed else [
-            ValidationIssue(group="content", code=f"injected-{phase}-failure", message="x")
-        ]
+        issues = (
+            []
+            if passed
+            else [ValidationIssue(group="content", code=f"injected-{phase}-failure", message="x")]
+        )
         return ValidationReport.from_findings(groups={"content": passed}, issues=issues)
 
     fake_services = SimpleNamespace(
-        applications=SimpleNamespace(ingest=lambda _command: (
-            calls.append("ingest") or SimpleNamespace(
-                application_id="application-1", job_snapshot_id="snapshot-1"
+        applications=SimpleNamespace(
+            ingest=lambda _command: (
+                calls.append("ingest")
+                or SimpleNamespace(application_id="application-1", job_snapshot_id="snapshot-1")
             )
-        )),
-        analysis=SimpleNamespace(analyze=lambda _command: (
-            calls.append("analyze") or SimpleNamespace(
-                analysis_id="analysis-1", selection_plan_id="selection-plan-1"
+        ),
+        analysis=SimpleNamespace(
+            analyze=lambda _command: (
+                calls.append("analyze")
+                or SimpleNamespace(analysis_id="analysis-1", selection_plan_id="selection-plan-1")
             )
-        )),
+        ),
         drafts=SimpleNamespace(
             draft=lambda _command: (
                 calls.append("draft") or SimpleNamespace(validation=report("pre-render"))
             ),
             approve=lambda _application_id: (
-                calls.append("approve") or SimpleNamespace(
-                    version=1, decision_record_id="decision-1"
-                )
+                calls.append("approve")
+                or SimpleNamespace(version=1, decision_record_id="decision-1")
             ),
         ),
-        rendering=SimpleNamespace(render=lambda _application_id: (
-            calls.append("render") or SimpleNamespace(validation=report("post-render"))
-        )),
+        rendering=SimpleNamespace(
+            render=lambda _application_id: (
+                calls.append("render") or SimpleNamespace(validation=report("post-render"))
+            )
+        ),
     )
 
     with pytest.raises(WorkflowError, match=re.escape(message)):
@@ -283,17 +302,19 @@ def test_cli_fast_mode_refuses_pre_render_validation_failure(
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr(draft_service_module, "validate_draft", fail_validation)
 
-    result = main([
-        "--workspace",
-        str(v1_repo),
-        "fast",
-        "--company",
-        "CLI Refusal",
-        "--role",
-        "Account Manager",
-        "--job-text",
-        ACCOUNT_MANAGER_JOB,
-    ])
+    result = main(
+        [
+            "--workspace",
+            str(v1_repo),
+            "fast",
+            "--company",
+            "CLI Refusal",
+            "--role",
+            "Account Manager",
+            "--job-text",
+            ACCOUNT_MANAGER_JOB,
+        ]
+    )
     captured = capsys.readouterr()
 
     assert result == 2

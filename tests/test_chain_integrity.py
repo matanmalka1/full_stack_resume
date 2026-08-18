@@ -28,8 +28,6 @@ from cv_engine.util import normalized_text, sha256_file, sha256_text
 from helpers import ACCOUNT_MANAGER_JOB
 
 
-
-
 def _rows(services: Services, sql: str, *params) -> list[dict]:
     with connect(services.repository.path) as connection:
         return [dict(row) for row in connection.execute(sql, params).fetchall()]
@@ -59,22 +57,26 @@ def _persisted(services: Services) -> dict[str, int]:
 
 def _analyze(services: Services, application_id: str, **overrides):
     snapshot_id = services.repository.latest_snapshot(application_id)["id"]
-    return services.analysis.analyze(AnalyzeCommand(
-        application_id=application_id,
-        job_snapshot_id=snapshot_id,
-        track_override=overrides.get("track"),
-        profile_override=overrides.get("profile"),
-        emphasis_override=overrides.get("emphasis"),
-        language_override=overrides.get("language"),
-    ))
+    return services.analysis.analyze(
+        AnalyzeCommand(
+            application_id=application_id,
+            job_snapshot_id=snapshot_id,
+            track_override=overrides.get("track"),
+            profile_override=overrides.get("profile"),
+            emphasis_override=overrides.get("emphasis"),
+            language_override=overrides.get("language"),
+        )
+    )
 
 
 def _draft(services: Services, application_id: str, analysis_id: str):
-    return services.drafts.draft(DraftCommand(
-        application_id=application_id,
-        job_analysis_id=analysis_id,
-        selection_plan_id=services.repository.latest_selection_plan(application_id).id,
-    ))
+    return services.drafts.draft(
+        DraftCommand(
+            application_id=application_id,
+            job_analysis_id=analysis_id,
+            selection_plan_id=services.repository.latest_selection_plan(application_id).id,
+        )
+    )
 
 
 # --- 1. a plan may only be drafted from while its context still holds ------
@@ -215,9 +217,7 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
         observed["payloads_precede_row"] = True
         return original_create(repository, *args, **kwargs)
 
-    monkeypatch.setattr(
-        SqliteDraftRepository, "create_approved_revision", require_payloads_first
-    )
+    monkeypatch.setattr(SqliteDraftRepository, "create_approved_revision", require_payloads_first)
 
     approved = services.drafts.approve(app_id)
 
@@ -254,10 +254,13 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
         f"artifacts/revisions/{app_id}/{revision.id}/resume.md"
     )
     assert sha256_file(v1_repo / revision.resume_json_reference) == revision.resume_json_hash
-    assert sha256_file(v1_repo / revision.resume_markdown_reference) == revision.resume_markdown_hash
-    assert parse_draft(
-        (v1_repo / revision.resume_json_reference).read_text(encoding="utf-8")
-    ) == working.source
+    assert (
+        sha256_file(v1_repo / revision.resume_markdown_reference) == revision.resume_markdown_hash
+    )
+    assert (
+        parse_draft((v1_repo / revision.resume_json_reference).read_text(encoding="utf-8"))
+        == working.source
+    )
 
     versions = services.repository.artifact_versions(app_id)
     current = [row for row in versions if row["revision_id"] == revision.id]
@@ -265,12 +268,14 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
         "resume_markdown",
         "claim_manifest",
     }
-    assert next(
-        row for row in current if row["artifact_type"] == "resume_markdown"
-    )["version_number"] == 2
-    assert next(
-        row for row in current if row["artifact_type"] == "claim_manifest"
-    )["path"] == revision.resume_json_reference
+    assert (
+        next(row for row in current if row["artifact_type"] == "resume_markdown")["version_number"]
+        == 2
+    )
+    assert (
+        next(row for row in current if row["artifact_type"] == "claim_manifest")["path"]
+        == revision.resume_json_reference
+    )
     assert services.repository.working_draft(working.id).active is False
     with pytest.raises(KeyError, match="active working draft"):
         services.repository.active_working_draft(app_id)
@@ -287,7 +292,9 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
 # --- 3. records may not cross application ownership boundaries -------------
 
 
-def test_foreign_working_projection_cannot_replace_the_sqlite_source(v1_repo: Path, drafted_application) -> None:
+def test_foreign_working_projection_cannot_replace_the_sqlite_source(
+    v1_repo: Path, drafted_application
+) -> None:
     target = drafted_application("Target Co")
     other = drafted_application("Other Co", role="Key Account Manager")
     services = target.services
@@ -307,11 +314,13 @@ def test_foreign_working_projection_cannot_replace_the_sqlite_source(v1_repo: Pa
     assert _persisted(services) == before_target
     assert _persisted(services) == before_other
     # Regenerating rewrites the projection from SQLite, and approval proceeds.
-    services.drafts.draft(DraftCommand(
-        application_id=target.application_id,
-        job_analysis_id=target.analysis_id,
-        selection_plan_id=target.selection_plan_id,
-    ))
+    services.drafts.draft(
+        DraftCommand(
+            application_id=target.application_id,
+            job_analysis_id=target.analysis_id,
+            selection_plan_id=target.selection_plan_id,
+        )
+    )
     restored = services.artifacts.load_working_draft(target.application_id)
     assert restored.application_id == target.application_id
     approved = services.drafts.approve(target.application_id)
@@ -336,23 +345,39 @@ def test_decision_and_artifact_records_cannot_cross_applications(drafted_applica
     # each rejected on their own.
     with pytest.raises(ValueError, match="application"):
         services.repository.record_decision(
-            stranger.application_id, owner_markdown["id"], stranger_snapshot_id,
-            stranger_analysis_id, {}, "foreign artifact version",
+            stranger.application_id,
+            owner_markdown["id"],
+            stranger_snapshot_id,
+            stranger_analysis_id,
+            {},
+            "foreign artifact version",
         )
     with pytest.raises(ValueError, match="application"):
         services.repository.record_decision(
-            owner.application_id, owner_markdown["id"], stranger_snapshot_id,
-            owner_analysis_id, {}, "foreign snapshot",
+            owner.application_id,
+            owner_markdown["id"],
+            stranger_snapshot_id,
+            owner_analysis_id,
+            {},
+            "foreign snapshot",
         )
     with pytest.raises(ValueError, match="application"):
         services.repository.record_decision(
-            owner.application_id, owner_markdown["id"], owner_snapshot_id,
-            stranger_analysis_id, {}, "foreign analysis",
+            owner.application_id,
+            owner_markdown["id"],
+            owner_snapshot_id,
+            stranger_analysis_id,
+            {},
+            "foreign analysis",
         )
     with pytest.raises(ValueError, match="application"):
         services.repository.register_artifact_version(
-            owner.application_id, "resume_markdown", "cross-owner",
-            "artifacts/cross-owner.md", "0" * 64, "approved",
+            owner.application_id,
+            "resume_markdown",
+            "cross-owner",
+            "artifacts/cross-owner.md",
+            "0" * 64,
+            "approved",
             job_snapshot_id=stranger_snapshot_id,
         )
 
@@ -371,11 +396,13 @@ def test_invalid_classifications_are_rejected_before_any_persistence(services: S
         ({"profile": "account-manager", "emphasis": "leadership"}, "mphasis"),
     ]
     for index, (overrides, match) in enumerate(cases):
-        ingested = services.applications.ingest(IngestCommand(
-            company=f"Inconsistent Co {index}",
-            target_role="Account Manager",
-            job_text=ACCOUNT_MANAGER_JOB,
-        ))
+        ingested = services.applications.ingest(
+            IngestCommand(
+                company=f"Inconsistent Co {index}",
+                target_role="Account Manager",
+                job_text=ACCOUNT_MANAGER_JOB,
+            )
+        )
         app_id = ingested.application_id
         before_application = services.repository.get_application(app_id)
         before = _persisted(services)

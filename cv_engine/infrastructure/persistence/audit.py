@@ -58,10 +58,7 @@ class SqliteAuditRepository(SqliteRepositoryBase):
             parameters = (fact_id,)
         query += " ORDER BY created_at, rowid"
         with self.read_connection() as connection:
-            return [
-                dict(row)
-                for row in connection.execute(query, parameters).fetchall()
-            ]
+            return [dict(row) for row in connection.execute(query, parameters).fetchall()]
 
     def latest_fact_statuses(self) -> dict[str, str]:
         with self.read_connection() as connection:

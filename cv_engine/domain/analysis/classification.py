@@ -11,20 +11,65 @@ from .gaps import derive_fit, derive_gaps
 HEBREW = re.compile(r"[\u0590-\u05ff]")
 
 PROFILE_TERMS: dict[ProfileName, tuple[str, ...]] = {
-    ProfileName.DEVELOPMENT: ("developer", "software", "backend", "frontend", "full stack", "python", "react", "api"),
+    ProfileName.DEVELOPMENT: (
+        "developer",
+        "software",
+        "backend",
+        "frontend",
+        "full stack",
+        "python",
+        "react",
+        "api",
+    ),
     ProfileName.FIELD_SALES: ("field sales", "territory", "on-site", "travel", "route sales"),
-    ProfileName.ACCOUNT_MANAGER: ("account manager", "retention", "portfolio", "renewal", "customer relationships"),
+    ProfileName.ACCOUNT_MANAGER: (
+        "account manager",
+        "retention",
+        "portfolio",
+        "renewal",
+        "customer relationships",
+    ),
     ProfileName.KEY_ACCOUNT_MANAGER: ("key account", "strategic account", "enterprise account"),
     ProfileName.SDR_BDR: ("sdr", "bdr", "sales development", "cold call", "outbound"),
     ProfileName.ACCOUNT_EXECUTIVE: ("account executive", "closing", "quota", "new business"),
     ProfileName.BUSINESS_DEVELOPMENT: ("business development", "market expansion", "new markets"),
-    ProfileName.SALES_MANAGEMENT: ("sales manager", "team leader", "sales leadership", "coach", "forecast"),
+    ProfileName.SALES_MANAGEMENT: (
+        "sales manager",
+        "team leader",
+        "sales leadership",
+        "coach",
+        "forecast",
+    ),
     ProfileName.TECH_SALES: ("tech sales", "technical sales", "saas sales", "technology sales"),
-    ProfileName.PRE_SALES: ("pre-sales", "presales", "solutions consultant", "sales engineer", "solution consultant"),
+    ProfileName.PRE_SALES: (
+        "pre-sales",
+        "presales",
+        "solutions consultant",
+        "sales engineer",
+        "solution consultant",
+    ),
 }
 
-SALES_TERMS = ("sales", "revenue", "pipeline", "account", "prospect", "customer", "business development", "quota")
-TECH_TERMS = ("software", "saas", "api", "cloud", "technical", "developer", "technology", "solution")
+SALES_TERMS = (
+    "sales",
+    "revenue",
+    "pipeline",
+    "account",
+    "prospect",
+    "customer",
+    "business development",
+    "quota",
+)
+TECH_TERMS = (
+    "software",
+    "saas",
+    "api",
+    "cloud",
+    "technical",
+    "developer",
+    "technology",
+    "solution",
+)
 
 # Job language is normalized to the same tag vocabulary used by canonical facts.
 # This keeps matching deterministic while allowing a posting's phrasing (for
@@ -47,7 +92,9 @@ def detect_language(text: str) -> str:
     letters = [char for char in text if char.isalpha()]
     if not letters:
         return "en"
-    return "he" if sum(bool(HEBREW.match(char)) for char in letters) / len(letters) >= 0.25 else "en"
+    return (
+        "he" if sum(bool(HEBREW.match(char)) for char in letters) / len(letters) >= 0.25 else "en"
+    )
 
 
 def classify_job(
@@ -59,7 +106,12 @@ def classify_job(
     language_override: str | None = None,
 ) -> JobAnalysis:
     lowered = text.casefold()
-    scores = Counter({profile: sum(lowered.count(term) for term in terms) for profile, terms in PROFILE_TERMS.items()})
+    scores = Counter(
+        {
+            profile: sum(lowered.count(term) for term in terms)
+            for profile, terms in PROFILE_TERMS.items()
+        }
+    )
     has_sales = sum(term in lowered for term in SALES_TERMS)
     has_tech = sum(term in lowered for term in TECH_TERMS)
 
@@ -76,14 +128,30 @@ def classify_job(
             if track is Track.DEVELOPMENT:
                 profile = ProfileName.DEVELOPMENT
             elif track is Track.TECH_SALES:
-                profile = ProfileName.PRE_SALES if scores[ProfileName.PRE_SALES] > scores[ProfileName.TECH_SALES] else ProfileName.TECH_SALES
-            elif profile in {ProfileName.DEVELOPMENT, ProfileName.TECH_SALES, ProfileName.PRE_SALES}:
+                profile = (
+                    ProfileName.PRE_SALES
+                    if scores[ProfileName.PRE_SALES] > scores[ProfileName.TECH_SALES]
+                    else ProfileName.TECH_SALES
+                )
+            elif profile in {
+                ProfileName.DEVELOPMENT,
+                ProfileName.TECH_SALES,
+                ProfileName.PRE_SALES,
+            }:
                 sales_scores = {
-                    key: value for key, value in scores.items()
-                    if key not in {ProfileName.DEVELOPMENT, ProfileName.TECH_SALES, ProfileName.PRE_SALES}
+                    key: value
+                    for key, value in scores.items()
+                    if key
+                    not in {ProfileName.DEVELOPMENT, ProfileName.TECH_SALES, ProfileName.PRE_SALES}
                 }
-                profile = max(sales_scores, key=sales_scores.get) if max(sales_scores.values(), default=0) else ProfileName.ACCOUNT_MANAGER
-    elif profile in {ProfileName.TECH_SALES, ProfileName.PRE_SALES} or (has_sales >= 2 and has_tech >= 2):
+                profile = (
+                    max(sales_scores, key=sales_scores.get)
+                    if max(sales_scores.values(), default=0)
+                    else ProfileName.ACCOUNT_MANAGER
+                )
+    elif profile in {ProfileName.TECH_SALES, ProfileName.PRE_SALES} or (
+        has_sales >= 2 and has_tech >= 2
+    ):
         track = Track.TECH_SALES
         if profile not in {ProfileName.TECH_SALES, ProfileName.PRE_SALES}:
             profile = ProfileName.TECH_SALES
@@ -99,7 +167,9 @@ def classify_job(
     ambiguous = top == second and top > 0
 
     default_emphasis = {
-        ProfileName.DEVELOPMENT: Emphasis.DEVELOPMENT_BACKEND if "backend" in lowered else Emphasis.DEVELOPMENT_BALANCED,
+        ProfileName.DEVELOPMENT: Emphasis.DEVELOPMENT_BACKEND
+        if "backend" in lowered
+        else Emphasis.DEVELOPMENT_BALANCED,
         ProfileName.FIELD_SALES: Emphasis.NEW_BUSINESS,
         ProfileName.ACCOUNT_MANAGER: Emphasis.ACCOUNT_GROWTH,
         ProfileName.KEY_ACCOUNT_MANAGER: Emphasis.ACCOUNT_GROWTH,
@@ -115,16 +185,16 @@ def classify_job(
     gaps = derive_gaps(lowered, track)
     fit = derive_fit(gaps)
     overrides = {
-        key: value for key, value in {
+        key: value
+        for key, value in {
             "track": track_override,
             "profile": profile_override,
             "emphasis": emphasis_override,
             "language": language_override,
-        }.items() if value
+        }.items()
+        if value
     }
-    keywords = {
-        term for terms in PROFILE_TERMS.values() for term in terms if term in lowered
-    }
+    keywords = {term for terms in PROFILE_TERMS.values() for term in terms if term in lowered}
     keywords.update(
         concept
         for concept, phrases in SELECTION_CONCEPTS.items()

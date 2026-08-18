@@ -43,9 +43,7 @@ class SqliteTrackingRepository(SqliteRepositoryBase):
         pdf_artifact_version_id: str,
         reason: str = "",
     ) -> str:
-        return self._record_submission(
-            application_id, pdf_artifact_version_id, reason
-        )
+        return self._record_submission(application_id, pdf_artifact_version_id, reason)
 
     def _set_ready(
         self,

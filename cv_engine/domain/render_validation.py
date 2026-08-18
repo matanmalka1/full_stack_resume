@@ -77,16 +77,12 @@ def validate_render_evidence(
         )
     if not evidence.pdf_exists or evidence.pdf_size == 0:
         groups["pdf"] = False
-        issues.append(
-            ValidationIssue(group="pdf", code="pdf-missing", message=evidence.pdf_path)
-        )
+        issues.append(ValidationIssue(group="pdf", code="pdf-missing", message=evidence.pdf_path))
         return ValidationReport.from_findings(groups=groups, issues=issues)
 
     if evidence.pdf_error is not None:
         groups["pdf"] = False
-        issues.append(
-            ValidationIssue(group="pdf", code="pdf-corrupt", message=evidence.pdf_error)
-        )
+        issues.append(ValidationIssue(group="pdf", code="pdf-corrupt", message=evidence.pdf_error))
 
     maximum = 2 if profile.allow_two_pages else 1
     if evidence.page_count < 1 or evidence.page_count > maximum:
@@ -103,8 +99,7 @@ def validate_render_evidence(
     claim_texts.extend(claim.text for section in draft.sections for claim in section.claims)
     normalized_pdf = normalized_text(evidence.extracted_text)
     found = sum(
-        _claim_recoverable(text, normalized_pdf, draft.language == "he")
-        for text in claim_texts
+        _claim_recoverable(text, normalized_pdf, draft.language == "he") for text in claim_texts
     )
     coverage = found / len(claim_texts) if claim_texts else 0
     if coverage < 0.9:

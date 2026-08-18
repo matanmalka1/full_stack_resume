@@ -25,7 +25,9 @@ class AIProvider(Protocol):
     name: str
     model: str
 
-    def run(self, task: str, payload: dict[str, Any], output_model: type[OutputT]) -> tuple[OutputT, ProviderTaskResult]: ...
+    def run(
+        self, task: str, payload: dict[str, Any], output_model: type[OutputT]
+    ) -> tuple[OutputT, ProviderTaskResult]: ...
 
 
 def _strict_schema(schema: dict[str, Any]) -> dict[str, Any]:
@@ -71,11 +73,13 @@ class OpenAIResponsesProvider:
         self.prompt_path = prompt_path
         self.timeout = timeout
 
-    def run(self, task: str, payload: dict[str, Any], output_model: type[OutputT]) -> tuple[OutputT, ProviderTaskResult]:
+    def run(
+        self, task: str, payload: dict[str, Any], output_model: type[OutputT]
+    ) -> tuple[OutputT, ProviderTaskResult]:
         system = (
             self.prompt_path.read_text(encoding="utf-8")
-            if self.prompt_path else
-            "Use only supplied canonical facts. Return the exact requested schema."
+            if self.prompt_path
+            else "Use only supplied canonical facts. Return the exact requested schema."
         )
         schema = _strict_schema(output_model.model_json_schema())
         request_body = {
@@ -107,7 +111,9 @@ class OpenAIResponsesProvider:
                 raw = response.read().decode("utf-8")
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace")
-            raise ProviderError(f"OpenAI Responses API returned HTTP {exc.code}: {body[:1000]}") from exc
+            raise ProviderError(
+                f"OpenAI Responses API returned HTTP {exc.code}: {body[:1000]}"
+            ) from exc
         except OSError as exc:
             raise ProviderError(f"OpenAI Responses API request failed: {exc}") from exc
         try:
@@ -149,9 +155,7 @@ class OpenAIClassificationProvider:
     def __init__(self, prompt_path: Path):
         self.prompt_path = Path(prompt_path)
 
-    def classify_job(
-        self, payload: dict[str, Any], *, model: str
-    ) -> JobClassificationProposal:
+    def classify_job(self, payload: dict[str, Any], *, model: str) -> JobClassificationProposal:
         adapter = OpenAIResponsesProvider(model=model, prompt_path=self.prompt_path)
         proposal, _raw = adapter.run("classify_job", payload, JobClassificationProposal)
         return proposal

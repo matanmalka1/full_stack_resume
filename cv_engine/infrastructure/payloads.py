@@ -55,19 +55,19 @@ class PayloadStore:
 
     def __init__(self, workspace: PayloadWorkspace):
         self._workspace_root = Path(workspace.root).resolve()
-        self._artifacts_root = resolve_within(
-            self._workspace_root, workspace.artifacts_root
-        )
+        self._artifacts_root = resolve_within(self._workspace_root, workspace.artifacts_root)
         self._temp_root = resolve_within(self._workspace_root, workspace.temp_root)
 
     @classmethod
     def for_workspace_root(cls, root: Path) -> "PayloadStore":
         resolved = Path(root).resolve()
-        return cls(_PayloadRoots(
-            root=resolved,
-            artifacts_root=resolved / "artifacts",
-            temp_root=resolved / "tmp",
-        ))
+        return cls(
+            _PayloadRoots(
+                root=resolved,
+                artifacts_root=resolved / "artifacts",
+                temp_root=resolved / "tmp",
+            )
+        )
 
     @staticmethod
     def _component(value: str, *, name: str) -> str:
@@ -92,9 +92,7 @@ class PayloadStore:
             f"{self._component(snapshot_id, name='snapshot_id')}.txt",
         )
 
-    def revision_path(
-        self, application_id: str, revision_id: str, *, format: str
-    ) -> Path:
+    def revision_path(self, application_id: str, revision_id: str, *, format: str) -> Path:
         if format not in {"json", "md"}:
             raise ValueError(f"unsupported revision format: {format}")
         return self._target(
@@ -144,9 +142,7 @@ class PayloadStore:
             recruiter_pdf_filename=recruiter_pdf_filename,
         )
 
-    def provider_path(
-        self, application_id: str, operation_id: str, artifact_id: str
-    ) -> Path:
+    def provider_path(self, application_id: str, operation_id: str, artifact_id: str) -> Path:
         return self._target(
             "provider",
             self._component(application_id, name="application_id"),
@@ -222,9 +218,7 @@ class PayloadStore:
 
         temp_directory = resolve_within(self._temp_root, self._TEMP_DIRECTORY)
         temp_directory.mkdir(parents=True, exist_ok=True)
-        temporary = resolve_within(
-            self._temp_root, temp_directory / f"{uuid.uuid4()}.tmp"
-        )
+        temporary = resolve_within(self._temp_root, temp_directory / f"{uuid.uuid4()}.tmp")
 
         write(temporary)
         resolved_temporary = resolve_within(self._temp_root, temporary)
@@ -243,9 +237,7 @@ class PayloadStore:
 
         return StoredPayload(
             path=target,
-            workspace_relative=relative_within(
-                self._workspace_root, target
-            ).as_posix(),
+            workspace_relative=relative_within(self._workspace_root, target).as_posix(),
             sha256=digest,
             size=size,
         )
@@ -345,9 +337,7 @@ class PayloadStore:
             orphans.append(
                 TempOrphan(
                     path=path,
-                    workspace_relative=relative_within(
-                        self._workspace_root, path
-                    ).as_posix(),
+                    workspace_relative=relative_within(self._workspace_root, path).as_posix(),
                     age_seconds=max(0.0, observed_at - stat.st_mtime),
                     size=stat.st_size,
                 )

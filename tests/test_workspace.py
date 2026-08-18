@@ -79,7 +79,9 @@ def test_created_workspace_round_trips_with_identity_and_roots(tmp_path: Path) -
 # --- fail-closed guards -----------------------------------------------------
 
 
-def test_workspace_markers_fail_closed_for_plain_legacy_invalid_and_reused_roots(tmp_path: Path) -> None:
+def test_workspace_markers_fail_closed_for_plain_legacy_invalid_and_reused_roots(
+    tmp_path: Path,
+) -> None:
     plain = tmp_path / "plain"
     plain.mkdir()
     with pytest.raises(WorkspaceError, match="no v2 Workspace marker"):
@@ -149,7 +151,9 @@ def test_config_precedence_is_cli_then_env_then_workspace_then_default(tmp_path:
     (workspace.root / CONFIG_NAME).write_text(json.dumps({"nonsense": 1}), encoding="utf-8")
     with pytest.raises(WorkspaceError, match="unknown Workspace config settings"):
         resolve_config(cli={}, env={}, workspace_root=workspace.root)
-    (workspace.root / CONFIG_NAME).write_text(json.dumps({"workspace": "/elsewhere"}), encoding="utf-8")
+    (workspace.root / CONFIG_NAME).write_text(
+        json.dumps({"workspace": "/elsewhere"}), encoding="utf-8"
+    )
     with pytest.raises(WorkspaceError, match="unknown Workspace config settings"):
         resolve_config(cli={}, env={}, workspace_root=workspace.root)
 
@@ -249,7 +253,9 @@ def test_cli_workspace_surface_guards_normal_and_legacy_roots(
     tmp_path: Path, legacy_source_root: Path, v1_repo: Path
 ) -> None:
     root = tmp_path / "cli-ws"
-    created = _cv("--workspace", str(root), "workspace", "init", "--purpose", "test", "--data-class", "test")
+    created = _cv(
+        "--workspace", str(root), "workspace", "init", "--purpose", "test", "--data-class", "test"
+    )
     assert created.returncode == 0, created.stderr
     identity = json.loads(created.stdout)
     assert identity["purpose"] == "test"
@@ -336,9 +342,7 @@ def test_marker_is_validated_before_workspace_config_is_read(tmp_path: Path) -> 
 
 
 @pytest.mark.parametrize("child", ["data", "artifacts", "tmp", "logs"])
-def test_symlinked_default_child_roots_are_refused(
-    tmp_path: Path, child: str
-) -> None:
+def test_symlinked_default_child_roots_are_refused(tmp_path: Path, child: str) -> None:
     workspace = create_workspace(tmp_path / f"workspace-{child}")
     child_path = workspace.root / child
     child_path.rmdir()
@@ -346,25 +350,21 @@ def test_symlinked_default_child_roots_are_refused(
     outside.mkdir()
     child_path.symlink_to(outside, target_is_directory=True)
 
-    with pytest.raises(WorkspaceError, match=f"Workspace root .* may not be a symlink"):
+    with pytest.raises(WorkspaceError, match="Workspace root .* may not be a symlink"):
         load_workspace(workspace.root)
 
 
 @pytest.mark.parametrize("source", ["flag", "environment"])
-def test_database_override_is_contained_inside_state_root(
-    tmp_path: Path, source: str
-) -> None:
-    workspace = create_workspace(
-        tmp_path / f"database-{source}", purpose="test", data_class="test"
-    )
+def test_database_override_is_contained_inside_state_root(tmp_path: Path, source: str) -> None:
+    workspace = create_workspace(tmp_path / f"database-{source}", purpose="test", data_class="test")
 
     def run(value: Path | str) -> subprocess.CompletedProcess[str]:
         if source == "flag":
-            return _cv(
-                "--workspace", str(workspace.root), "--db", str(value), "init"
-            )
+            return _cv("--workspace", str(workspace.root), "--db", str(value), "init")
         return _cv(
-            "--workspace", str(workspace.root), "init",
+            "--workspace",
+            str(workspace.root),
+            "init",
             env={"CV_DATABASE": str(value)},
         )
 

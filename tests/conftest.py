@@ -30,7 +30,13 @@ from cv_engine.infrastructure.knowledge import (
 from cv_engine.infrastructure.persistence import Repository, connect
 from cv_engine.domain.drafts import build_draft
 from cv_engine.domain.facts import FactStore
-from cv_engine.infrastructure.migration import create_snapshot, dry_run_migration, migrate_legacy_state, verify_snapshot
+from cv_engine.infrastructure.migration import (
+    _seal_report as seal_report,
+    create_snapshot,
+    dry_run_migration,
+    migrate_legacy_state,
+    verify_snapshot,
+)
 from cv_engine.domain.models import (
     Emphasis,
     JobAnalysis,
@@ -52,10 +58,11 @@ from cv_engine.runtime.workspace import (
 from cv_engine.domain.selection import EmphasisPolicyStore
 from cv_engine.infrastructure.rendering import render_pdf, validate_rendered
 from cv_engine.runtime.composition import Services, build_services
-from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB, seal_report
+from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB
 
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
+
 
 # The v1 worktree ships an editable install of this package, whose finder
 # resolves any cv_engine submodule missing here to the v1 tree. Checking the
@@ -75,7 +82,9 @@ _IMPORTED_FROM = Path(cv_engine.__file__).resolve().parent.parent
 assert _IMPORTED_FROM == SOURCE_ROOT, (
     f"tests import cv_engine from {_IMPORTED_FROM}, not the worktree under test ({SOURCE_ROOT})"
 )
-assert not _foreign_modules(), f"cv_engine modules loaded from another worktree: {_foreign_modules()}"
+assert not _foreign_modules(), (
+    f"cv_engine modules loaded from another worktree: {_foreign_modules()}"
+)
 
 # Only acceptance tests that validate real layout/PDF behavior use this fixture.
 # Integrity tests create the same artifact/version graph with a deterministic
@@ -264,15 +273,19 @@ def analyzed_application(services: Services):
         role: str = "Account Manager",
         job_text: str = ACCOUNT_MANAGER_JOB,
     ) -> WorkflowSetup:
-        ingested = services.applications.ingest(IngestCommand(
-            company=company,
-            target_role=role,
-            job_text=job_text,
-        ))
-        analysed = services.analysis.analyze(AnalyzeCommand(
-            application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
-        ))
+        ingested = services.applications.ingest(
+            IngestCommand(
+                company=company,
+                target_role=role,
+                job_text=job_text,
+            )
+        )
+        analysed = services.analysis.analyze(
+            AnalyzeCommand(
+                application_id=ingested.application_id,
+                job_snapshot_id=ingested.job_snapshot_id,
+            )
+        )
         return WorkflowSetup(
             services=services,
             application_id=ingested.application_id,
@@ -294,11 +307,13 @@ def drafted_application(analyzed_application):
         setup = analyzed_application(company, role, job_text)
         assert setup.analysis_id is not None
         assert setup.selection_plan_id is not None
-        drafted = setup.services.drafts.draft(DraftCommand(
-            application_id=setup.application_id,
-            job_analysis_id=setup.analysis_id,
-            selection_plan_id=setup.selection_plan_id,
-        ))
+        drafted = setup.services.drafts.draft(
+            DraftCommand(
+                application_id=setup.application_id,
+                job_analysis_id=setup.analysis_id,
+                selection_plan_id=setup.selection_plan_id,
+            )
+        )
         paths = setup.services.artifacts.working_paths(setup.application_id)
         return replace(
             setup,
@@ -326,7 +341,9 @@ def approved_application(drafted_application):
 
 @pytest.fixture
 def ready_application(approved_application, monkeypatch: pytest.MonkeyPatch):
-    def render_without_browser(html_path: Path, pdf_path: Path, screenshot_path: Path) -> dict[str, Any]:
+    def render_without_browser(
+        html_path: Path, pdf_path: Path, screenshot_path: Path
+    ) -> dict[str, Any]:
         pdf_path.write_bytes(b"%PDF-1.4\n% deterministic integrity-test artifact\n")
         screenshot_path.write_bytes(b"deterministic integrity-test visual evidence\n")
         html = html_path.read_text(encoding="utf-8")
@@ -351,11 +368,13 @@ def ready_application(approved_application, monkeypatch: pytest.MonkeyPatch):
         candidate,
         delivered_pdf_filename=None,
     ) -> RenderEvidence:
-        extracted_text = "\n".join([
-            draft.headline.text,
-            *(claim.text for claim in draft.contacts),
-            *(claim.text for section in draft.sections for claim in section.claims),
-        ])
+        extracted_text = "\n".join(
+            [
+                draft.headline.text,
+                *(claim.text for claim in draft.contacts),
+                *(claim.text for section in draft.sections for claim in section.claims),
+            ]
+        )
         links = [
             href
             for claim in draft.contacts
@@ -408,7 +427,10 @@ def ready_application(approved_application, monkeypatch: pytest.MonkeyPatch):
         )
         pdf = setup.services.artifacts.resolve(pdf_record["path"])
         assert rendered.validation.passed, rendered.validation.model_dump()
-        assert setup.services.repository.get_application(setup.application_id)["current_status"] == "ready"
+        assert (
+            setup.services.repository.get_application(setup.application_id)["current_status"]
+            == "ready"
+        )
         return replace(setup, pdf=pdf, ready_report=rendered.validation)
 
     return build
@@ -460,16 +482,18 @@ def classification_proposal():
     """
 
     def build(**overrides) -> JobClassificationProposal:
-        return JobClassificationProposal(**{
-            "track": Track.SALES,
-            "profile": ProfileName.ACCOUNT_MANAGER,
-            "emphasis": Emphasis.ACCOUNT_GROWTH,
-            "confidence": 0.99,
-            "rationale": "provider rationale",
-            "gaps": [],
-            "keywords": ["provider-keyword"],
-            **overrides,
-        })
+        return JobClassificationProposal(
+            **{
+                "track": Track.SALES,
+                "profile": ProfileName.ACCOUNT_MANAGER,
+                "emphasis": Emphasis.ACCOUNT_GROWTH,
+                "confidence": 0.99,
+                "rationale": "provider rationale",
+                "gaps": [],
+                "keywords": ["provider-keyword"],
+                **overrides,
+            }
+        )
 
     return build
 
@@ -500,24 +524,30 @@ def provider_analysis(services: Services, monkeypatch):
                 captured.update(payload)
                 return response, None
 
-        monkeypatch.setattr("cv_engine.infrastructure.providers.OpenAIResponsesProvider", _StubProvider)
-        ingested = services.applications.ingest(IngestCommand(
-            company=company,
-            target_role=role,
-            job_text=job_text,
-        ))
-        analysed = services.analysis.analyze(AnalyzeCommand(
-            application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
-            track_override=analyze_kwargs.pop("track", None),
-            profile_override=analyze_kwargs.pop("profile", None),
-            emphasis_override=analyze_kwargs.pop("emphasis", None),
-            language_override=analyze_kwargs.pop("language", None),
-            accept_low_fit=analyze_kwargs.pop("accept_low_fit", False),
-            provider="openai",
-            model="gpt-test",
-            **analyze_kwargs,
-        ))
+        monkeypatch.setattr(
+            "cv_engine.infrastructure.providers.OpenAIResponsesProvider", _StubProvider
+        )
+        ingested = services.applications.ingest(
+            IngestCommand(
+                company=company,
+                target_role=role,
+                job_text=job_text,
+            )
+        )
+        analysed = services.analysis.analyze(
+            AnalyzeCommand(
+                application_id=ingested.application_id,
+                job_snapshot_id=ingested.job_snapshot_id,
+                track_override=analyze_kwargs.pop("track", None),
+                profile_override=analyze_kwargs.pop("profile", None),
+                emphasis_override=analyze_kwargs.pop("emphasis", None),
+                language_override=analyze_kwargs.pop("language", None),
+                accept_low_fit=analyze_kwargs.pop("accept_low_fit", False),
+                provider="openai",
+                model="gpt-test",
+                **analyze_kwargs,
+            )
+        )
         return ProposalSetup(
             services=services,
             application_id=ingested.application_id,
@@ -542,14 +572,36 @@ def render_validator():
 def _populate_legacy_repo(root: Path) -> None:
     (root / "jobs").mkdir(parents=True)
     (root / "docs").mkdir()
-    shutil.copy2(SOURCE_ROOT / "docs/v1-migration-restore.md", root / "docs/v1-migration-restore.md")
+    shutil.copy2(
+        SOURCE_ROOT / "docs/v1-migration-restore.md", root / "docs/v1-migration-restore.md"
+    )
     rows = [
-        ["alpha", "account-manager", "", "outputs/alpha/cv-pdf/account-manager/Matan Malka - Account Manager.pdf", "draft", "2026-01-01", "", ""],
-        ["beta", "developer", "https://example.test/job", "outputs/beta/cv-pdf/developer/Matan Malka - Full Stack Developer.pdf", "sent", "2026-01-02", "2026-01-03", "submitted"],
+        [
+            "alpha",
+            "account-manager",
+            "",
+            "outputs/alpha/cv-pdf/account-manager/Matan Malka - Account Manager.pdf",
+            "draft",
+            "2026-01-01",
+            "",
+            "",
+        ],
+        [
+            "beta",
+            "developer",
+            "https://example.test/job",
+            "outputs/beta/cv-pdf/developer/Matan Malka - Full Stack Developer.pdf",
+            "sent",
+            "2026-01-02",
+            "2026-01-03",
+            "submitted",
+        ],
     ]
     with (root / "jobs/status.csv").open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
-        writer.writerow(["company", "role", "url", "cv_file", "status", "date_created", "date_sent", "notes"])
+        writer.writerow(
+            ["company", "role", "url", "cv_file", "status", "date_created", "date_sent", "notes"]
+        )
         writer.writerows(rows)
     for company, role, *_rest in rows:
         paths = [
@@ -575,14 +627,16 @@ def _populate_legacy_repo(root: Path) -> None:
 def _write_passing_migration_test_report(root: Path) -> Path:
     target = root / "data/migration/migration-tests.json"
     target.parent.mkdir(parents=True, exist_ok=True)
-    report = seal_report({
-        "passed": True,
-        "command": ["python", "-m", "pytest", "tests/test_migration.py", "-q"],
-        "returncode": 0,
-        "stdout": "migration fixture passed",
-        "stderr": "",
-        "created_at": "2026-01-01T00:00:00+00:00",
-    })
+    report = seal_report(
+        {
+            "passed": True,
+            "command": ["python", "-m", "pytest", "tests/test_migration.py", "-q"],
+            "returncode": 0,
+            "stdout": "migration fixture passed",
+            "stderr": "",
+            "created_at": "2026-01-01T00:00:00+00:00",
+        }
+    )
     target.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     return target
 

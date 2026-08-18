@@ -64,7 +64,9 @@ class PresentationStore:
             raise PresentationError("duplicate presentation rule identity")
         for rule in self.rules:
             support = [facts.get(fact_id, canonical_only=True) for fact_id in rule.fact_ids]
-            invalid = sorted({fact.resume_style for fact in support if fact.resume_style != rule.style})
+            invalid = sorted(
+                {fact.resume_style for fact in support if fact.resume_style != rule.style}
+            )
             if invalid:
                 raise PresentationError(
                     f"presentation {rule.rule_id} style {rule.style!r} does not match facts: {invalid}"
@@ -145,7 +147,8 @@ class PresentationStore:
     ) -> list[PresentedClaim]:
         allowed = next(spec for spec in profile.sections if spec.name_en == section)
         matching = [
-            rule for rule in self.rules
+            rule
+            for rule in self.rules
             if rule.profile is profile.profile
             and rule.section == section
             and (not rule.emphases or emphasis in rule.emphases)
@@ -187,26 +190,30 @@ class PresentationStore:
                     raise PresentationError(
                         f"presentation {rule.rule_id} overlaps already-consumed facts: {sorted(overlap)}"
                     )
-                result.append(PresentedClaim(
-                    style=rule.style,
-                    text=self.render_rule(
-                        rule.rule_id,
-                        rule.version,
-                        rule.fact_ids,
-                        language,
-                        rule.style,
-                    ),
-                    fact_ids=tuple(rule.fact_ids),
-                    rule_id=rule.rule_id,
-                    rule_version=rule.version,
-                ))
+                result.append(
+                    PresentedClaim(
+                        style=rule.style,
+                        text=self.render_rule(
+                            rule.rule_id,
+                            rule.version,
+                            rule.fact_ids,
+                            language,
+                            rule.style,
+                        ),
+                        fact_ids=tuple(rule.fact_ids),
+                        rule_id=rule.rule_id,
+                        rule_version=rule.version,
+                    )
+                )
                 consumed.update(rule.fact_ids)
                 continue
             fact = facts.get(fact_id, canonical_only=True)
-            result.append(PresentedClaim(
-                style=fact.resume_style,
-                text=facts.rendering(fact_id, language),
-                fact_ids=(fact_id,),
-            ))
+            result.append(
+                PresentedClaim(
+                    style=fact.resume_style,
+                    text=facts.rendering(fact_id, language),
+                    fact_ids=(fact_id,),
+                )
+            )
             consumed.add(fact_id)
         return result

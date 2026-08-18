@@ -65,9 +65,9 @@ def test_context_resolves_identity_filename_and_track_contact_policy(candidate_c
     assert contact_href(candidate_context, "common.contact.phone", "+972-50-668-8386") == (
         "tel:+972506688386"
     )
-    assert contact_href(candidate_context, "common.contact.linkedin", "linkedin.com/in/matanmalka1") == (
-        "https://www.linkedin.com/in/matanmalka1"
-    )
+    assert contact_href(
+        candidate_context, "common.contact.linkedin", "linkedin.com/in/matanmalka1"
+    ) == ("https://www.linkedin.com/in/matanmalka1")
 
 
 def test_filename_override_and_dependency_hash_follow_canonical_context(
@@ -83,7 +83,9 @@ def test_filename_override_and_dependency_hash_follow_canonical_context(
     before = context.version_hash
     common = v1_repo / "base/common.md"
     text = common.read_text(encoding="utf-8")
-    common.write_text(text.replace("linkedin.com/in/matanmalka1", "linkedin.com/in/other"), encoding="utf-8")
+    common.write_text(
+        text.replace("linkedin.com/in/matanmalka1", "linkedin.com/in/other"), encoding="utf-8"
+    )
     after = load_candidate_context(v1_repo, load_fact_store(v1_repo / "base")).version_hash
     assert after != before
 
@@ -132,9 +134,11 @@ def test_no_module_carries_a_candidate_literal_except_declared_evidence() -> Non
     offenders = {
         relative: [literal for literal in CANDIDATE_LITERALS if literal in source]
         for path in sorted(ENGINE_DIR.rglob("*.py"))
-        if (relative := path.relative_to(ENGINE_DIR).as_posix())
-        not in CANDIDATE_EVIDENCE_MODULES
-        and any(literal in (source := path.read_text(encoding="utf-8")) for literal in CANDIDATE_LITERALS)
+        if (relative := path.relative_to(ENGINE_DIR).as_posix()) not in CANDIDATE_EVIDENCE_MODULES
+        and any(
+            literal in (source := path.read_text(encoding="utf-8"))
+            for literal in CANDIDATE_LITERALS
+        )
     }
     assert not offenders, offenders
     # The exemptions must stay real, or the rule has quietly become decoration.

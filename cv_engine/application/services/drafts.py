@@ -1,100 +1,42 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any, Generic, TypeVar
 
 from ... import __version__
 from ...domain.analysis.approval import unresolved_approval_reasons
 from ...domain.draft_markdown import serialize_markdown, synchronize_markdown_claims
 from ...domain.drafts import apply_claim_edit, build_draft, seal_draft
-from ...domain.facts import FactStore, FactStoreError
 from ...domain.knowledge import Knowledge
 from ...domain.models import (
     ApplicationStatus,
-    CandidateContext,
     DraftDocument,
-    Fact,
-    FactStatus,
-    JobAnalysis,
     ValidationReport,
     ValidationRunLineage,
     WorkingDraft,
 )
-from ...domain.profiles import ProfileStore
-from ...domain.selection import EmphasisPolicyStore
 from ...domain.validation import validate_draft
 from ...util import canonical_json, sha256_text, utc_now
-from ..chain import ChainError, check_draft_chain, decision_record_analysis_id
 from ..commands import (
-    AnalyzeCommand,
-    AnalysisResult,
-    ApplicationMutationResult,
     ApprovalResult,
     DraftCommand,
     DraftResult,
     EditResult,
-    FactAttachmentResult,
-    FactDetailResult,
-    FactHistoryResult,
-    FactListItem,
-    FactListResult,
-    FactMutationResult,
-    FactReconciliationResult,
-    IngestCommand,
-    IngestedApplication,
-    KnowledgeVersionsResult,
-    NextActionCommand,
-    RecruitmentStatusCommand,
-    RenderResult,
-    SubmissionResult,
-    fact_event_view,
 )
 from ..errors import (
     # Re-exported: the v1 CLI and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
-    ApplicationError,
-    DependencyUnavailable,
     InfrastructureFailure,
-    KnowledgeRejected,
     LineageBroken,
     PreconditionFailed,
     StateConflict,
     UnknownRecord,
     ValidationBlocked,
-    WorkflowError,
 )
 from ..ports import (
-    ApplicationStore,
-    ArtifactStore,
-    ClassificationProvider,
     DraftRepository,
-    KnowledgeAuditRepository,
-    KnowledgeStore,
-    PreparationRepository,
-    QueryRepository,
-    ReadinessRepository,
-    Renderer,
-    TrackingRepository,
 )
-from ..queries import (
-    ApplicationDetailView,
-    ApplicationListView,
-    ArtifactVersionsView,
-    DecisionRecordView,
-    analysis_view,
-    application_view,
-    artifact_version_view,
-    decision_view,
-    snapshot_view,
-)
-from ..ready import verify_ready_integrity
-
-
-RepoT = TypeVar("RepoT")
-
-
-
 from .base import ServiceBase
+
 
 class DraftService(ServiceBase[DraftRepository]):
     """The working draft: generation, manual edits, validation, approval."""
@@ -144,13 +86,8 @@ class DraftService(ServiceBase[DraftRepository]):
         try:
             plan = self.repo.selection_plan(command.selection_plan_id)
         except KeyError as exc:
-            raise UnknownRecord(
-                f"unknown selection plan: {command.selection_plan_id}"
-            ) from exc
-        if (
-            plan.application_id != command.application_id
-            or plan.job_analysis_id != analysis_id
-        ):
+            raise UnknownRecord(f"unknown selection plan: {command.selection_plan_id}") from exc
+        if plan.application_id != command.application_id or plan.job_analysis_id != analysis_id:
             raise LineageBroken(
                 f"selection plan {plan.id} does not belong to application "
                 f"{command.application_id} and analysis {analysis_id}"
@@ -189,9 +126,7 @@ class DraftService(ServiceBase[DraftRepository]):
         try:
             latest_snapshot = self.repo.latest_snapshot(command.application_id)
         except KeyError as exc:
-            raise UnknownRecord(
-                f"unknown application: {command.application_id}"
-            ) from exc
+            raise UnknownRecord(f"unknown application: {command.application_id}") from exc
         if record["job_snapshot_id"] != latest_snapshot["id"]:
             raise StateConflict(
                 f"job snapshot {latest_snapshot['id']} is newer than the analysis in hand; "
@@ -236,23 +171,26 @@ class DraftService(ServiceBase[DraftRepository]):
             report,
             lineage=self._lineage(working, knowledge),
         )
-        self.repo.record_generation_run({
-            "application_id": command.application_id,
-            "engine_version": __version__,
-            "profile_version": profiles.version,
-            "rendering_rules_version": (
-                f"1.0.0+presentations.{presentation_rules.version[:12]}"
-                if presentation_rules is not None else "1.0.0"
-            ),
-            "facts_version": facts.version,
-            "ai_provider": "deterministic",
-            "ai_model": "rules-v1",
-            "task_contract_version": "1.0.0",
-            "prompt_version": "system-v1",
-            "job_analysis_version": analysis.analysis_version,
-            "instruction_overrides": analysis.user_override,
-            "status": "completed" if report.passed else "validation-failed",
-        })
+        self.repo.record_generation_run(
+            {
+                "application_id": command.application_id,
+                "engine_version": __version__,
+                "profile_version": profiles.version,
+                "rendering_rules_version": (
+                    f"1.0.0+presentations.{presentation_rules.version[:12]}"
+                    if presentation_rules is not None
+                    else "1.0.0"
+                ),
+                "facts_version": facts.version,
+                "ai_provider": "deterministic",
+                "ai_model": "rules-v1",
+                "task_contract_version": "1.0.0",
+                "prompt_version": "system-v1",
+                "job_analysis_version": analysis.analysis_version,
+                "instruction_overrides": analysis.user_override,
+                "status": "completed" if report.passed else "validation-failed",
+            }
+        )
         return DraftResult(
             application_id=command.application_id,
             job_analysis_id=analysis_id,
@@ -360,7 +298,9 @@ class DraftService(ServiceBase[DraftRepository]):
             validation=report,
         )
 
-    def link_claim(self, application_id: str, claim_id: str, text: str, fact_ids: list[str]) -> EditResult:
+    def link_claim(
+        self, application_id: str, claim_id: str, text: str, fact_ids: list[str]
+    ) -> EditResult:
         return self.edit_claim(application_id, claim_id, fact_ids, text=text)
 
     def sync_working_claims(self, application_id: str) -> EditResult:
@@ -371,7 +311,7 @@ class DraftService(ServiceBase[DraftRepository]):
         _, analysis = self._bound_analysis(application_id, draft, profiles, facts)
         try:
             updated = synchronize_markdown_claims(
-            draft, self.working_markdown(application_id), facts
+                draft, self.working_markdown(application_id), facts
             )
         except ValueError as exc:
             raise PreconditionFailed(f"working draft synchronization rejected: {exc}") from exc
@@ -430,10 +370,9 @@ class DraftService(ServiceBase[DraftRepository]):
             raise StateConflict(str(exc)) from exc
         except (OSError, ValueError) as exc:
             raise InfrastructureFailure(f"could not publish approved revision: {exc}") from exc
-        if (
-            published.structured.sha256 != sha256_text(structured_json)
-            or published.markdown.sha256 != sha256_text(markdown)
-        ):
+        if published.structured.sha256 != sha256_text(
+            structured_json
+        ) or published.markdown.sha256 != sha256_text(markdown):
             raise InfrastructureFailure("approved revision payload hash verification failed")
 
         now = utc_now()
@@ -454,8 +393,10 @@ class DraftService(ServiceBase[DraftRepository]):
             "selected_fact_ids": draft.selected_fact_ids,
             "omitted_facts": draft.omitted_facts,
             "derived_statements": [
-                claim.model_dump(mode="json") for section in draft.sections
-                for claim in section.claims if claim.claim_type in {"composite", "derived"}
+                claim.model_dump(mode="json")
+                for section in draft.sections
+                for claim in section.claims
+                if claim.claim_type in {"composite", "derived"}
             ],
             "accepted_warnings_or_gaps": analysis.user_override,
             "user_overrides": analysis.user_override,

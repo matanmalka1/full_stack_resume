@@ -47,7 +47,9 @@ def build_candidate_context(
         for fact_id in referenced:
             facts.get(fact_id, canonical_only=True)
     except FactStoreError as exc:
-        raise CandidateContextError(f"candidate context references an unusable fact: {exc}") from exc
+        raise CandidateContextError(
+            f"candidate context references an unusable fact: {exc}"
+        ) from exc
 
     unknown = sorted(set(context.link_schemes) - set(referenced))
     if unknown:
@@ -79,25 +81,31 @@ def build_candidate_context(
             f"candidate fact {context.name_fact_id} has no {context.filename_language!r} "
             "rendering for the recruiter-facing filename"
         )
-    return context.model_copy(update={
-        "names": names,
-        "link_targets": link_targets,
-        "resolved_filename_name": filename_name,
-        # The hash covers the declared context and the exact facts it resolved
-        # to, so a changed name, contact rendering, or link target is a changed
-        # context.
-        "version_hash": sha256_text(canonical_json({
-            "context": payload,
+    return context.model_copy(
+        update={
             "names": names,
-            "contacts": {
-                fact_id: {
-                    "renderings": facts.get(fact_id).renderings,
-                    "link_target": facts.get(fact_id).link_target,
-                }
-                for fact_id in sorted(set(referenced))
-            },
-        })),
-    })
+            "link_targets": link_targets,
+            "resolved_filename_name": filename_name,
+            # The hash covers the declared context and the exact facts it resolved
+            # to, so a changed name, contact rendering, or link target is a changed
+            # context.
+            "version_hash": sha256_text(
+                canonical_json(
+                    {
+                        "context": payload,
+                        "names": names,
+                        "contacts": {
+                            fact_id: {
+                                "renderings": facts.get(fact_id).renderings,
+                                "link_target": facts.get(fact_id).link_target,
+                            }
+                            for fact_id in sorted(set(referenced))
+                        },
+                    }
+                )
+            ),
+        }
+    )
 
 
 def contact_href(context: CandidateContext, fact_id: str, text: str) -> str | None:

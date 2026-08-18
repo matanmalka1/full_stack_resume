@@ -1,95 +1,33 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any, Generic, TypeVar
 
-from ... import __version__
-from ...domain.facts import FactStore, FactStoreError
-from ...domain.knowledge import Knowledge
 from ...domain.models import (
     ApplicationStatus,
-    CandidateContext,
-    DraftDocument,
-    Fact,
-    FactStatus,
-    JobAnalysis,
     ValidationReport,
 )
-from ...domain.profiles import ProfileStore
-from ...domain.selection import EmphasisPolicyStore
 from ...domain.validation import validate_draft
-from ...util import sha256_file, utc_now
-from ..chain import ChainError, check_draft_chain, decision_record_analysis_id
+from ...util import sha256_file
+from ..chain import decision_record_analysis_id
 from ..commands import (
-    AnalyzeCommand,
-    AnalysisResult,
-    ApplicationMutationResult,
-    ApprovalResult,
-    DraftCommand,
-    DraftResult,
-    EditResult,
-    FactAttachmentResult,
-    FactDetailResult,
-    FactHistoryResult,
-    FactListItem,
-    FactListResult,
-    FactMutationResult,
-    FactReconciliationResult,
-    IngestCommand,
-    IngestedApplication,
-    KnowledgeVersionsResult,
-    NextActionCommand,
-    RecruitmentStatusCommand,
     RenderResult,
-    SubmissionResult,
-    fact_event_view,
 )
 from ..errors import (
     # Re-exported: the v1 CLI and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     ApplicationError,
-    DependencyUnavailable,
     InfrastructureFailure,
-    KnowledgeRejected,
     LineageBroken,
-    PreconditionFailed,
     StateConflict,
     UnknownRecord,
     ValidationBlocked,
-    WorkflowError,
 )
 from ..ports import (
-    ApplicationStore,
-    ArtifactStore,
-    ClassificationProvider,
-    DraftRepository,
-    KnowledgeAuditRepository,
-    KnowledgeStore,
-    PreparationRepository,
-    QueryRepository,
     ReadinessRepository,
-    Renderer,
-    TrackingRepository,
-)
-from ..queries import (
-    ApplicationDetailView,
-    ApplicationListView,
-    ArtifactVersionsView,
-    DecisionRecordView,
-    analysis_view,
-    application_view,
-    artifact_version_view,
-    decision_view,
-    snapshot_view,
 )
 from ..ready import verify_ready_integrity
-
-
-RepoT = TypeVar("RepoT")
-
-
-
 from .base import ServiceBase
+
 
 class RenderingService(ServiceBase[ReadinessRepository]):
     """Rendering an approved revision and reporting ready state."""
@@ -102,15 +40,11 @@ class RenderingService(ServiceBase[ReadinessRepository]):
                 application_id, "claim_manifest", "approved"
             )
         except KeyError as exc:
-            raise UnknownRecord(
-                f"no approved revision for application: {application_id}"
-            ) from exc
+            raise UnknownRecord(f"no approved revision for application: {application_id}") from exc
         try:
             manifest_path = self.artifacts.resolve(manifest_record["path"])
         except (OSError, ValueError) as exc:
-            raise InfrastructureFailure(
-                f"could not resolve approved revision: {exc}"
-            ) from exc
+            raise InfrastructureFailure(f"could not resolve approved revision: {exc}") from exc
         draft = self.stored_draft(manifest_path)
         revision_id = manifest_record.get("revision_id")
         profile = profiles.get(draft.profile)
@@ -138,13 +72,9 @@ class RenderingService(ServiceBase[ReadinessRepository]):
             )
         candidate = knowledge.candidate
         artifact_ids = [str(uuid.uuid4()) for _ in range(3)]
-        recruiter_pdf_filename = self.renderer.filename_for(
-            profile.normalized_role, candidate
-        )
+        recruiter_pdf_filename = self.renderer.filename_for(profile.normalized_role, candidate)
         if revision_id is None:
-            raise LineageBroken(
-                "rendering requires an approved revision-bound claim manifest"
-            )
+            raise LineageBroken("rendering requires an approved revision-bound claim manifest")
         targets = self.revision_payloads.render_targets(
             application_id,
             revision_id,
@@ -205,13 +135,17 @@ class RenderingService(ServiceBase[ReadinessRepository]):
                 )
         self.repo.record_validation(application_id, "post-render", report, artifact_ids[1])
         if report.passed:
-            integrity = verify_ready_integrity(self.artifacts, self._knowledge, self.repo, application_id)
+            integrity = verify_ready_integrity(
+                self.artifacts, self._knowledge, self.repo, application_id
+            )
             if not integrity.passed:
                 raise ValidationBlocked(
                     "render succeeded but fresh ready integrity verification failed: "
                     f"{[issue.code for issue in integrity.issues]}"
                 )
-            self.repo.set_ready(application_id, artifact_ids[1], "all ready validation groups passed")
+            self.repo.set_ready(
+                application_id, artifact_ids[1], "all ready validation groups passed"
+            )
         return RenderResult(
             application_id=application_id,
             pdf_artifact_version_id=artifact_ids[1],

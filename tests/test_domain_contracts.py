@@ -97,7 +97,9 @@ def test_a_reported_warning_still_passes() -> None:
     report = ValidationReport(
         passed=True,
         groups={"profile": True},
-        issues=[ValidationIssue(group="profile", code="emphasis-coverage-low", message="x", hard=False)],
+        issues=[
+            ValidationIssue(group="profile", code="emphasis-coverage-low", message="x", hard=False)
+        ],
     )
     assert report.passed
 
@@ -217,7 +219,9 @@ def test_preparation_records_preserve_exact_domain_lineage(draft_factory) -> Non
 
 def test_an_emphasis_policy_refuses_a_negative_coverage_expectation() -> None:
     with pytest.raises(ValidationError):
-        EmphasisPolicy(emphasis=Emphasis.NEW_BUSINESS, tag_weights={"sales": 3}, minimum_coverage=-1)
+        EmphasisPolicy(
+            emphasis=Emphasis.NEW_BUSINESS, tag_weights={"sales": 3}, minimum_coverage=-1
+        )
 
 
 def test_an_analysis_refuses_an_override_it_cannot_act_on(draft_factory) -> None:

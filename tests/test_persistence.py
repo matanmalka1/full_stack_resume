@@ -47,11 +47,11 @@ from cv_engine.util import normalized_text, sha256_text
 # list looks exactly like a table that does not exist.
 MUTABLE_TABLES = frozenset(
     {
-        "applications",      # the current recruitment projection and tracking fields
-        "working_drafts",    # the one mutable resume document (product invariant 3)
-        "schema_meta",       # bookkeeping
-        "schema_migrations", # bookkeeping
-        "sqlite_sequence",   # SQLite's own AUTOINCREMENT bookkeeping
+        "applications",  # the current recruitment projection and tracking fields
+        "working_drafts",  # the one mutable resume document (product invariant 3)
+        "schema_meta",  # bookkeeping
+        "schema_migrations",  # bookkeeping
+        "sqlite_sequence",  # SQLite's own AUTOINCREMENT bookkeeping
     }
 )
 
@@ -103,17 +103,21 @@ def test_numbered_migration_application_reapplication_and_version_gates(
     repository = Repository(path)
     assert current_schema_version(path) == HEAD_VERSION
     with connect(path) as connection:
-        assert connection.execute(
-            "SELECT value FROM schema_meta WHERE key='schema_version'"
-        ).fetchone()[0] == "2"
+        assert (
+            connection.execute(
+                "SELECT value FROM schema_meta WHERE key='schema_version'"
+            ).fetchone()[0]
+            == "2"
+        )
         first = connection.execute(
             "SELECT version, name, checksum FROM schema_migrations"
         ).fetchall()
     apply_migrations(path)
     with connect(path) as connection:
-        assert connection.execute(
-            "SELECT version, name, checksum FROM schema_migrations"
-        ).fetchall() == first
+        assert (
+            connection.execute("SELECT version, name, checksum FROM schema_migrations").fetchall()
+            == first
+        )
 
         connection.execute("UPDATE schema_migrations SET checksum='changed'")
         connection.commit()
@@ -122,9 +126,7 @@ def test_numbered_migration_application_reapplication_and_version_gates(
 
     path = tmp_path / "lower.sqlite3"
     with connect(path) as connection:
-        connection.executescript(
-            (MIGRATIONS_DIR / "0001_baseline.sql").read_text(encoding="utf-8")
-        )
+        connection.executescript((MIGRATIONS_DIR / "0001_baseline.sql").read_text(encoding="utf-8"))
     with pytest.raises(SchemaVersionError, match="cv workspace upgrade"):
         Repository(path)
     assert current_schema_version(path) == "0001"
@@ -158,9 +160,7 @@ def test_verified_baseline_adoption_and_difference_reporting(tmp_path: Path) -> 
         Repository(adoptable)
     with connect(adoptable) as connection:
         assert sqlite_master_fingerprint(connection) == before == baseline_fingerprint()
-        assert connection.execute(
-            "SELECT version FROM schema_migrations"
-        ).fetchone()[0] == "0001"
+        assert connection.execute("SELECT version FROM schema_migrations").fetchone()[0] == "0001"
     additive = tmp_path / "additive-0002.sqlite3"
     with connect(additive) as connection:
         connection.executescript(sql)
@@ -195,9 +195,7 @@ def test_verified_baseline_adoption_and_difference_reporting(tmp_path: Path) -> 
         )
         revision_columns = {
             row["name"]: row["notnull"]
-            for row in upgraded_connection.execute(
-                "PRAGMA table_info(approved_revisions)"
-            )
+            for row in upgraded_connection.execute("PRAGMA table_info(approved_revisions)")
         }
         artifact_columns = {
             row["name"]: row["notnull"]
@@ -248,18 +246,14 @@ def test_connection_policy_unit_of_work_bind_and_foreign_keys(tmp_path: Path) ->
 
 def test_two_writers_honor_busy_wait_and_commit_serially(tmp_path: Path) -> None:
     repository = Repository(tmp_path / "state.sqlite3")
-    _create_application(
-        repository, company="Writer", target_role="Developer", text="Python"
-    )
+    _create_application(repository, company="Writer", target_role="Developer", text="Python")
     started = threading.Event()
     release = threading.Event()
     results: list[str] = []
 
     def first_writer() -> None:
         with repository.unit_of_work() as uow:
-            uow.connection.execute(
-                "UPDATE applications SET notes='first' WHERE company='Writer'"
-            )
+            uow.connection.execute("UPDATE applications SET notes='first' WHERE company='Writer'")
             started.set()
             release.wait(timeout=2)
             uow.commit()
@@ -267,9 +261,7 @@ def test_two_writers_honor_busy_wait_and_commit_serially(tmp_path: Path) -> None
     def second_writer() -> None:
         started.wait(timeout=2)
         with repository.unit_of_work() as uow:
-            uow.connection.execute(
-                "UPDATE applications SET notes='second' WHERE company='Writer'"
-            )
+            uow.connection.execute("UPDATE applications SET notes='second' WHERE company='Writer'")
             uow.commit()
             results.append("committed")
 
@@ -371,8 +363,7 @@ def test_identity_serialization_registry_and_typed_artifact_ports() -> None:
     ):
         parameters = inspect.signature(getattr(ArtifactRegistry, member)).parameters.values()
         assert all(
-            parameter.kind
-            not in (parameter.VAR_POSITIONAL, parameter.VAR_KEYWORD)
+            parameter.kind not in (parameter.VAR_POSITIONAL, parameter.VAR_KEYWORD)
             for parameter in parameters
         )
 
@@ -385,9 +376,7 @@ def test_analysis_and_ready_demotion_commit_atomically(
         repository, company="Atomic", target_role="Developer", text="Python developer"
     )
     with repository.transaction() as connection:
-        connection.execute(
-            "UPDATE applications SET current_status='ready' WHERE id=?", (app_id,)
-        )
+        connection.execute("UPDATE applications SET current_status='ready' WHERE id=?", (app_id,))
 
     def fail_demotion(*_args: object, **_kwargs: object) -> None:
         raise RuntimeError("injected demotion failure")
@@ -399,15 +388,22 @@ def test_analysis_and_ready_demotion_commit_atomically(
         )
 
     with connect(repository.path) as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM job_analyses WHERE application_id=?", (app_id,)
-        ).fetchone()[0] == 0
-        assert connection.execute(
-            "SELECT COUNT(*) FROM selection_plans WHERE application_id=?", (app_id,)
-        ).fetchone()[0] == 0
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM job_analyses WHERE application_id=?", (app_id,)
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM selection_plans WHERE application_id=?", (app_id,)
+            ).fetchone()[0]
+            == 0
+        )
         application = connection.execute(
             "SELECT current_status, language, track, profile, emphasis, fit_level "
-            "FROM applications WHERE id=?", (app_id,)
+            "FROM applications WHERE id=?",
+            (app_id,),
         ).fetchone()
     assert tuple(application) == ("ready", None, None, None, None, None)
 
@@ -606,6 +602,9 @@ def test_only_one_working_draft_per_application_can_be_active(tmp_path: Path) ->
         # Deactivating releases the slot, and the superseded row survives as history.
         connection.execute("UPDATE working_drafts SET active=0 WHERE id='first'")
         insert_draft(connection, "third", active=1)
-        assert connection.execute(
-            "SELECT COUNT(*) FROM working_drafts WHERE application_id='a'"
-        ).fetchone()[0] == 2
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM working_drafts WHERE application_id='a'"
+            ).fetchone()[0]
+            == 2
+        )

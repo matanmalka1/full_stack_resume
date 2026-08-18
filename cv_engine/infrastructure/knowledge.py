@@ -37,9 +37,9 @@ def load_fact_store(base_dir: Path) -> FactStore:
     missing = [name for name in FACT_SOURCE_NAMES if not (base_dir / name).is_file()]
     if missing:
         raise FactStoreError(f"missing canonical fact sources: {', '.join(missing)}")
-    return FactStore.from_sources({
-        name: read_fact_source(base_dir / name) for name in FACT_SOURCE_NAMES
-    })
+    return FactStore.from_sources(
+        {name: read_fact_source(base_dir / name) for name in FACT_SOURCE_NAMES}
+    )
 
 
 def load_profile_store(knowledge_root: Path, facts: FactStore) -> ProfileStore:
@@ -85,7 +85,9 @@ def load_candidate_context(knowledge_root: Path, facts: FactStore) -> CandidateC
     return build_candidate_context(payload, facts, origin=str(path))
 
 
-def create_fact(base_dir: Path, source_name: str, payload: dict, *, canonical: bool = False) -> Fact:
+def create_fact(
+    base_dir: Path, source_name: str, payload: dict, *, canonical: bool = False
+) -> Fact:
     """Persist a new fact into the canonical source file that will own it.
 
     The record is written to its final location immediately, so its identity

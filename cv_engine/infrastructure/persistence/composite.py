@@ -72,14 +72,10 @@ class Repository:
             applications = SqliteApplicationRepository(self.path)
             self._owners = {
                 "applications": applications,
-                "preparation": SqlitePreparationRepository(
-                    self.path, applications=applications
-                ),
+                "preparation": SqlitePreparationRepository(self.path, applications=applications),
                 "artifacts": SqliteArtifactRepository(self.path),
                 "drafts": SqliteDraftRepository(self.path),
-                "tracking": SqliteTrackingRepository(
-                    self.path, applications=applications
-                ),
+                "tracking": SqliteTrackingRepository(self.path, applications=applications),
                 "audit": SqliteAuditRepository(self.path),
             }
         else:
@@ -100,14 +96,10 @@ class Repository:
             self.path,
             _owners={
                 "applications": applications,
-                "preparation": SqlitePreparationRepository(
-                    self.path, uow.connection, applications
-                ),
+                "preparation": SqlitePreparationRepository(self.path, uow.connection, applications),
                 "artifacts": self._owners["artifacts"].bind(uow),
                 "drafts": self._owners["drafts"].bind(uow),
-                "tracking": SqliteTrackingRepository(
-                    self.path, uow.connection, applications
-                ),
+                "tracking": SqliteTrackingRepository(self.path, uow.connection, applications),
                 "audit": self._owners["audit"].bind(uow),
             },
         )

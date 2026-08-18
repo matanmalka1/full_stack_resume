@@ -10,14 +10,18 @@ class ProfileStoreError(ValueError):
 
 
 class ProfileStore:
-    def __init__(self, profiles: dict[ProfileName, Profile], sources: dict[ProfileName, str] | None = None):
+    def __init__(
+        self, profiles: dict[ProfileName, Profile], sources: dict[ProfileName, str] | None = None
+    ):
         self.profiles = profiles
         # Where each profile came from, as an opaque label for messages and
         # records. It is not a path this layer may resolve or open.
         self.sources = sources or {}
-        self.version = sha256_text(canonical_json([
-            profiles[key].model_dump(mode="json") for key in sorted(profiles, key=str)
-        ]))
+        self.version = sha256_text(
+            canonical_json(
+                [profiles[key].model_dump(mode="json") for key in sorted(profiles, key=str)]
+            )
+        )
 
     @classmethod
     def from_documents(cls, documents: dict[str, dict], facts: FactStore) -> "ProfileStore":
@@ -77,8 +81,7 @@ def attach_fact_to_section(
     a valid attachment is decided here and the writing happens outside.
     """
     matches = [
-        spec for spec in payload["sections"]
-        if section in {spec["name_en"], spec["name_he"]}
+        spec for spec in payload["sections"] if section in {spec["name_en"], spec["name_he"]}
     ]
     if len(matches) != 1:
         available = ", ".join(spec["name_en"] for spec in payload["sections"])

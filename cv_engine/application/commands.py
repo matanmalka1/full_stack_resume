@@ -179,7 +179,6 @@ class FactReconciliationResult(BoundaryDTO):
 
 def fact_event_view(record: dict[str, Any]) -> FactEventView:
     """Strip persistence-only payload columns from one audit row."""
-    return FactEventView.model_validate({
-        key: record.get(key)
-        for key in FactEventView.model_fields
-    })
+    return FactEventView.model_validate(
+        {key: record.get(key) for key in FactEventView.model_fields}
+    )

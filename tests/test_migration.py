@@ -36,7 +36,9 @@ def test_live_legacy_inventory_is_fully_accounted() -> None:
     assert inventory["unaccounted_output_files"] == []
 
 
-def test_snapshot_restore_and_migration_preserve_rows_and_artifacts(tmp_path: Path, legacy_repo: Path) -> None:
+def test_snapshot_restore_and_migration_preserve_rows_and_artifacts(
+    tmp_path: Path, legacy_repo: Path
+) -> None:
     source = legacy_repo
     inventory = build_inventory(source)
     assert inventory["problems"] == []
@@ -106,7 +108,9 @@ def test_migration_gate_binds_inventory_to_snapshot_manifest(migration_gate_repo
     assert "live inventory does not match the verified snapshot" in gate["problems"]
 
 
-def test_apply_rechecks_inventory_immediately_before_staging(migration_gate_repo, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_apply_rechecks_inventory_immediately_before_staging(
+    migration_gate_repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
     root, snapshot = migration_gate_repo
     original_build_inventory = migration.build_inventory
     root_calls = 0
@@ -122,11 +126,15 @@ def test_apply_rechecks_inventory_immediately_before_staging(migration_gate_repo
 
     monkeypatch.setattr(migration, "build_inventory", drift_before_second_live_inventory)
 
-    with pytest.raises(MigrationSafetyError, match="live inventory changed after the migration gate"):
+    with pytest.raises(
+        MigrationSafetyError, match="live inventory changed after the migration gate"
+    ):
         apply_migration(root, snapshot, migration_test_runner=_passing_test_runner)
 
 
-def test_retrospective_verification_reproduces_completed_migration(completed_migration_repo) -> None:
+def test_retrospective_verification_reproduces_completed_migration(
+    completed_migration_repo,
+) -> None:
     root, snapshot = completed_migration_repo
 
     report = retrospective_verify_migration(root, snapshot)
@@ -142,16 +150,21 @@ def test_retrospective_verification_reproduces_completed_migration(completed_mig
         assert connection.execute("SELECT COUNT(*) FROM selection_plans").fetchone()[0] == 0
         assert connection.execute("SELECT COUNT(*) FROM working_drafts").fetchone()[0] == 0
         assert connection.execute("SELECT COUNT(*) FROM approved_revisions").fetchone()[0] == 0
-        assert connection.execute(
-            "SELECT COUNT(*) FROM artifact_versions WHERE revision_id IS NOT NULL"
-        ).fetchone()[0] == 0
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM artifact_versions WHERE revision_id IS NOT NULL"
+            ).fetchone()[0]
+            == 0
+        )
     assert report["artifact_hashes_checked"] == 13
 
 
 def test_retrospective_verification_detects_live_database_drift(completed_migration_repo) -> None:
     root, snapshot = completed_migration_repo
     with connect(root / "data/applications.sqlite3") as connection:
-        connection.execute("UPDATE applications SET notes='changed after migration' WHERE company='alpha'")
+        connection.execute(
+            "UPDATE applications SET notes='changed after migration' WHERE company='alpha'"
+        )
         connection.commit()
 
     report = retrospective_verify_migration(root, snapshot)
@@ -160,7 +173,9 @@ def test_retrospective_verification_detects_live_database_drift(completed_migrat
     assert any("applications semantics differ" in problem for problem in report["problems"])
 
 
-def test_retrospective_verification_detects_fact_and_artifact_drift(completed_migration_repo) -> None:
+def test_retrospective_verification_detects_fact_and_artifact_drift(
+    completed_migration_repo,
+) -> None:
     root, snapshot = completed_migration_repo
     (root / "base/sales.md").write_text("changed canonical facts\n", encoding="utf-8")
     artifact = root / "outputs/alpha/cv-drafts/cv_alpha_account-manager.md"

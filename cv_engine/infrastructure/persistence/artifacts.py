@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 from ...domain.models import ValidationReport, ValidationRunLineage
@@ -16,9 +15,7 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
     def artifact_inventory(self) -> list[dict[str, Any]]:
         """Every recorded artifact version's path and hash, for reconciliation."""
         with self.read_connection() as connection:
-            rows = connection.execute(
-                "SELECT path, content_hash FROM artifact_versions"
-            ).fetchall()
+            rows = connection.execute("SELECT path, content_hash FROM artifact_versions").fetchall()
         return [dict(row) for row in rows]
 
     def register_artifact_version(
@@ -58,13 +55,8 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
                         "an artifact version cannot reference an approved revision "
                         "belonging to another application"
                     )
-                if (
-                    job_snapshot_id is not None
-                    and revision["job_snapshot_id"] != job_snapshot_id
-                ):
-                    raise ValueError(
-                        "an artifact version's revision and job snapshot must match"
-                    )
+                if job_snapshot_id is not None and revision["job_snapshot_id"] != job_snapshot_id:
+                    raise ValueError("an artifact version's revision and job snapshot must match")
             artifact = connection.execute(
                 "SELECT id FROM artifacts WHERE application_id IS ? "
                 "AND artifact_type=? AND logical_name=?",
@@ -127,9 +119,7 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
         with self.read_connection() as connection:
             row = connection.execute(query, params).fetchone()
         if row is None:
-            raise KeyError(
-                f"no {artifact_type} artifact for application {application_id}"
-            )
+            raise KeyError(f"no {artifact_type} artifact for application {application_id}")
         return dict(row)
 
     def artifact_versions(self, application_id: str) -> list[dict[str, Any]]:
@@ -163,9 +153,7 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
                     "a decision record cannot reference an artifact version belonging to "
                     "another application"
                 )
-            _require_owned_snapshot(
-                connection, application_id, job_snapshot_id, "decision record"
-            )
+            _require_owned_snapshot(connection, application_id, job_snapshot_id, "decision record")
             analysis = connection.execute(
                 "SELECT application_id, job_snapshot_id FROM job_analyses WHERE id=?",
                 (job_analysis_id,),
@@ -207,9 +195,7 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
             raise KeyError(f"no decision record for application {application_id}")
         return dict(row)
 
-    def decision_for_artifact_version(
-        self, artifact_version_id: str
-    ) -> dict[str, Any]:
+    def decision_for_artifact_version(self, artifact_version_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
             row = connection.execute(
                 "SELECT * FROM decision_records WHERE artifact_version_id=? "
@@ -217,9 +203,7 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
                 (artifact_version_id,),
             ).fetchone()
         if row is None:
-            raise KeyError(
-                f"no decision record for artifact version {artifact_version_id}"
-            )
+            raise KeyError(f"no decision record for artifact version {artifact_version_id}")
         return dict(row)
 
     def record_generation_run(self, values: dict[str, Any]) -> str:
@@ -325,9 +309,7 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
             validator_versions=json.loads(row["validator_versions_json"]),
         )
 
-    def latest_validation(
-        self, application_id: str, phase: str | None = None
-    ) -> ValidationReport:
+    def latest_validation(self, application_id: str, phase: str | None = None) -> ValidationReport:
         query = "SELECT report_json FROM validation_runs WHERE application_id=?"
         params: list[Any] = [application_id]
         if phase:
@@ -365,7 +347,5 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
             result, fk_rows = integrity_results(connection)
             if result != "ok":
                 problems.append(f"SQLite integrity_check: {result}")
-            problems.extend(
-                f"foreign key violation: {tuple(row)}" for row in fk_rows
-            )
+            problems.extend(f"foreign key violation: {tuple(row)}" for row in fk_rows)
         return problems

@@ -37,7 +37,12 @@ def test_emphasis_changes_the_selected_facts(draft_factory) -> None:
             profile_override="account-manager",
             emphasis_override=emphasis,
         ).draft
-        for emphasis in ("account-growth", "new-business", "balanced-sales", "tech-consultative-sales")
+        for emphasis in (
+            "account-growth",
+            "new-business",
+            "balanced-sales",
+            "tech-consultative-sales",
+        )
     }
 
     selections = {emphasis: tuple(draft.selected_fact_ids) for emphasis, draft in drafts.items()}
@@ -93,10 +98,12 @@ def test_a_required_tag_is_rescued_and_the_eviction_is_recorded(
     from cv_engine.domain.analysis.classification import classify_job
 
     base = profile_store.get("account-manager")
-    profile = Profile.model_validate({
-        **base.model_dump(mode="json"),
-        "required_tags": ["retention"],
-    })
+    profile = Profile.model_validate(
+        {
+            **base.model_dump(mode="json"),
+            "required_tags": ["retention"],
+        }
+    )
     analysis = classify_job(
         ACCOUNT_MANAGER_JOB, profile_override="account-manager", emphasis_override="new-business"
     )
@@ -113,7 +120,8 @@ def test_a_required_tag_is_rescued_and_the_eviction_is_recorded(
     outcomes = {candidate.fact_id: candidate for candidate in manifest.candidates}
     assert outcomes["sales.achievement.retention"].outcome == "rescued"
     evicted = [
-        candidate.fact_id for candidate in manifest.candidates
+        candidate.fact_id
+        for candidate in manifest.candidates
         if candidate.reason == "evicted_by_required_tag_rescue"
     ]
     assert evicted == ["sales.achievement.complex_deals"]
@@ -143,7 +151,9 @@ def test_structure_survives_every_profile_and_emphasis(
                 assert len(section.claims) <= (spec.max_claims or len(spec.fact_ids)), label
                 assert set(spec.pinned_fact_ids) <= set(linked), label
                 assert set(linked) <= set(spec.fact_ids), label
-                assert linked == [fact_id for fact_id in spec.fact_ids if fact_id in set(linked)], label
+                assert linked == [fact_id for fact_id in spec.fact_ids if fact_id in set(linked)], (
+                    label
+                )
 
                 supported = True
                 for claim in section.claims:
@@ -199,10 +209,7 @@ def test_every_role_block_reaches_its_floor(
                     track_override=profile.track.value,
                     emphasis_override=emphasis.value,
                 )
-                section = next(
-                    item for item in setup.draft.sections
-                    if item.name == spec.name_en
-                )
+                section = next(item for item in setup.draft.sections if item.name == spec.name_en)
                 pools = _pool_blocks(spec, fact_store)
                 for index, block in enumerate(_role_block_claims(section)):
                     label = f"{profile.profile.value}/{emphasis.value}/{spec.name_en}/block{index}"
@@ -251,7 +258,10 @@ def test_payme_tech_sales_selection_uses_job_evidence_and_business_presentations
     technology = sections["Technology Experience"].claims
     technology_text = " ".join(claim.text for claim in technology)
     assert "how software products are designed and delivered" in technology_text
-    assert "automated workflows, document generation, and operational status tracking" in technology_text
+    assert (
+        "automated workflows, document generation, and operational status tracking"
+        in technology_text
+    )
     assert "scheduled jobs" not in technology_text
     assert "retries" not in technology_text
     assert "state-driven business processes" not in technology_text

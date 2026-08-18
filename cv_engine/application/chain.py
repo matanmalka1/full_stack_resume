@@ -24,20 +24,26 @@ from .ports import DraftRepository
 # keywords, requirements, approval routing, user overrides -- either changes what
 # the document selects and says or changes a gate it had to pass, so a later
 # analysis that differs there supersedes the draft rather than re-describing it.
-IMMATERIAL_ANALYSIS_FIELDS = frozenset({
-    "rationale",
-    "confidence",
-    "deterministic_confidence",
-    "proposal_confidence",
-})
+IMMATERIAL_ANALYSIS_FIELDS = frozenset(
+    {
+        "rationale",
+        "confidence",
+        "deterministic_confidence",
+        "proposal_confidence",
+    }
+)
 
 
 def material_analysis_key(analysis: JobAnalysis) -> str:
-    return sha256_text(canonical_json({
-        key: value
-        for key, value in analysis.model_dump(mode="json").items()
-        if key not in IMMATERIAL_ANALYSIS_FIELDS
-    }))
+    return sha256_text(
+        canonical_json(
+            {
+                key: value
+                for key, value in analysis.model_dump(mode="json").items()
+                if key not in IMMATERIAL_ANALYSIS_FIELDS
+            }
+        )
+    )
 
 
 class ChainError(ValueError):
@@ -76,7 +82,9 @@ def decision_record_analysis_id(repo: DraftRepository, application_id: str) -> s
     is a real binding rather than a guess at which analysis was current.
     """
     try:
-        markdown_version = repo.latest_artifact_version(application_id, "resume_markdown", "approved")
+        markdown_version = repo.latest_artifact_version(
+            application_id, "resume_markdown", "approved"
+        )
         return repo.decision_for_artifact_version(markdown_version["id"])["job_analysis_id"]
     except KeyError:
         return None
@@ -100,24 +108,30 @@ def check_draft_chain(
     """
     problems: list[tuple[str, str]] = []
 
-    def unresolved(*, analysis_id: str | None = None, analysis: JobAnalysis | None = None) -> DraftChain:
+    def unresolved(
+        *, analysis_id: str | None = None, analysis: JobAnalysis | None = None
+    ) -> DraftChain:
         return DraftChain(application_id, draft.job_snapshot_id, analysis_id, analysis, problems)
 
     # Ownership first: every check below is about this application's records, so
     # a foreign draft must not be measured against them at all.
     if draft.application_id != application_id:
-        problems.append((
-            "draft-application-mismatch",
-            f"the draft belongs to application {draft.application_id}, not {application_id}",
-        ))
+        problems.append(
+            (
+                "draft-application-mismatch",
+                f"the draft belongs to application {draft.application_id}, not {application_id}",
+            )
+        )
         return unresolved()
 
     analysis_id = draft.job_analysis_id or recorded_analysis_id
     if analysis_id is None:
-        problems.append((
-            "unbound-draft-analysis",
-            "the draft names no job analysis and no decision record binds one; re-create the draft",
-        ))
+        problems.append(
+            (
+                "unbound-draft-analysis",
+                "the draft names no job analysis and no decision record binds one; re-create the draft",
+            )
+        )
         return unresolved()
 
     try:
@@ -129,16 +143,20 @@ def check_draft_chain(
     analysis: JobAnalysis = record["analysis"]
     owned = record["application_id"] == application_id
     if not owned:
-        problems.append((
-            "analysis-application-mismatch",
-            f"job analysis {analysis_id} belongs to application {record['application_id']}",
-        ))
+        problems.append(
+            (
+                "analysis-application-mismatch",
+                f"job analysis {analysis_id} belongs to application {record['application_id']}",
+            )
+        )
     if record["job_snapshot_id"] != draft.job_snapshot_id:
-        problems.append((
-            "analysis-snapshot-mismatch",
-            f"the bound analysis was made from job snapshot {record['job_snapshot_id']}, "
-            f"but the draft names {draft.job_snapshot_id}",
-        ))
+        problems.append(
+            (
+                "analysis-snapshot-mismatch",
+                f"the bound analysis was made from job snapshot {record['job_snapshot_id']}, "
+                f"but the draft names {draft.job_snapshot_id}",
+            )
+        )
 
     try:
         snapshot = repo.get_snapshot(draft.job_snapshot_id)
@@ -146,11 +164,13 @@ def check_draft_chain(
         problems.append(("unknown-job-snapshot", f"no job snapshot {draft.job_snapshot_id} exists"))
     else:
         if snapshot["application_id"] != application_id:
-            problems.append((
-                "snapshot-application-mismatch",
-                f"job snapshot {draft.job_snapshot_id} belongs to application "
-                f"{snapshot['application_id']}",
-            ))
+            problems.append(
+                (
+                    "snapshot-application-mismatch",
+                    f"job snapshot {draft.job_snapshot_id} belongs to application "
+                    f"{snapshot['application_id']}",
+                )
+            )
 
     drifted = [
         f"{name}: draft {left} vs analysis {right}"
@@ -167,21 +187,27 @@ def check_draft_chain(
 
     profile = profiles.get(draft.profile)
     if profile.track is not draft.track:
-        problems.append((
-            "track-profile-mismatch",
-            f"Profile {draft.profile.value} belongs to Track {profile.track.value}, "
-            f"not {draft.track.value}",
-        ))
+        problems.append(
+            (
+                "track-profile-mismatch",
+                f"Profile {draft.profile.value} belongs to Track {profile.track.value}, "
+                f"not {draft.track.value}",
+            )
+        )
     if draft.emphasis not in profile.allowed_emphases:
-        problems.append((
-            "emphasis-not-allowed",
-            f"{draft.emphasis.value} is not an allowed Emphasis for {draft.profile.value}",
-        ))
+        problems.append(
+            (
+                "emphasis-not-allowed",
+                f"{draft.emphasis.value} is not an allowed Emphasis for {draft.profile.value}",
+            )
+        )
     if draft.fact_store_version != facts.version:
-        problems.append((
-            "fact-store-version-mismatch",
-            "the draft was built from a different fact-store version",
-        ))
+        problems.append(
+            (
+                "fact-store-version-mismatch",
+                "the draft was built from a different fact-store version",
+            )
+        )
 
     if owned:
         problems.extend(_staleness(repo, application_id, record, analysis))
@@ -203,20 +229,25 @@ def _staleness(
     """
     problems: list[tuple[str, str]] = []
     if repo.latest_snapshot(application_id)["id"] != record["job_snapshot_id"]:
-        problems.append((
-            "new-snapshot-requires-analysis",
-            "a newer job snapshot exists; analyze it before drafting against it",
-        ))
+        problems.append(
+            (
+                "new-snapshot-requires-analysis",
+                "a newer job snapshot exists; analyze it before drafting against it",
+            )
+        )
     bound_key = material_analysis_key(analysis)
     superseding = [
-        row for row in repo.analyses(application_id)
+        row
+        for row in repo.analyses(application_id)
         if row["version_number"] > record["version_number"]
         and material_analysis_key(row["analysis"]) != bound_key
     ]
     if superseding:
-        problems.append((
-            "superseded-by-newer-analysis",
-            f"job analysis {superseding[-1]['id']} materially supersedes the analysis "
-            "this draft was built from",
-        ))
+        problems.append(
+            (
+                "superseded-by-newer-analysis",
+                f"job analysis {superseding[-1]['id']} materially supersedes the analysis "
+                "this draft was built from",
+            )
+        )
     return problems

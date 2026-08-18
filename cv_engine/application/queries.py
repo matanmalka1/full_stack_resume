@@ -104,33 +104,49 @@ def application_view(record: dict[str, Any]) -> ApplicationView:
 
 
 def snapshot_view(record: dict[str, Any], job_text: str) -> JobSnapshotView:
-    return JobSnapshotView.model_validate({
-        **{
-            key: record.get(key)
-            for key in JobSnapshotView.model_fields
-            if key not in {"source_metadata", "job_text"}
-        },
-        "job_text": job_text,
-        "source_metadata": json.loads(record.get("source_metadata_json") or "{}"),
-    })
+    return JobSnapshotView.model_validate(
+        {
+            **{
+                key: record.get(key)
+                for key in JobSnapshotView.model_fields
+                if key not in {"source_metadata", "job_text"}
+            },
+            "job_text": job_text,
+            "source_metadata": json.loads(record.get("source_metadata_json") or "{}"),
+        }
+    )
 
 
 def analysis_view(record: dict[str, Any]) -> JobAnalysisView:
-    return JobAnalysisView.model_validate({
-        **{key: record.get(key) for key in JobAnalysisView.model_fields if key != "analysis"},
-        "analysis": record["analysis"],
-    })
+    return JobAnalysisView.model_validate(
+        {
+            **{key: record.get(key) for key in JobAnalysisView.model_fields if key != "analysis"},
+            "analysis": record["analysis"],
+        }
+    )
 
 
 def artifact_version_view(record: dict[str, Any]) -> ArtifactVersionView:
-    return ArtifactVersionView.model_validate({
-        **{key: record.get(key) for key in ArtifactVersionView.model_fields if key != "metadata"},
-        "metadata": json.loads(record.get("metadata_json") or "{}"),
-    })
+    return ArtifactVersionView.model_validate(
+        {
+            **{
+                key: record.get(key)
+                for key in ArtifactVersionView.model_fields
+                if key != "metadata"
+            },
+            "metadata": json.loads(record.get("metadata_json") or "{}"),
+        }
+    )
 
 
 def decision_view(record: dict[str, Any]) -> DecisionRecordView:
-    return DecisionRecordView.model_validate({
-        **{key: record.get(key) for key in DecisionRecordView.model_fields if key != "structured"},
-        "structured": json.loads(record.get("structured_json") or "{}"),
-    })
+    return DecisionRecordView.model_validate(
+        {
+            **{
+                key: record.get(key)
+                for key in DecisionRecordView.model_fields
+                if key != "structured"
+            },
+            "structured": json.loads(record.get("structured_json") or "{}"),
+        }
+    )

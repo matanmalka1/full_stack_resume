@@ -31,7 +31,8 @@ APPROVAL_RESOLVING_OVERRIDES: dict[str, frozenset[str]] = {
 
 def unresolved_reasons(reasons: Sequence[str], overrides: dict[str, str]) -> list[str]:
     return [
-        reason for reason in reasons
+        reason
+        for reason in reasons
         if not (APPROVAL_RESOLVING_OVERRIDES.get(reason, frozenset()) & overrides.keys())
     ]
 

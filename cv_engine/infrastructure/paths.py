@@ -8,9 +8,7 @@ def resolve_within(root: Path, candidate: Path | str) -> Path:
     resolved_root = Path(root).resolve()
     unresolved = Path(candidate)
     resolved = (
-        unresolved.resolve()
-        if unresolved.is_absolute()
-        else (resolved_root / unresolved).resolve()
+        unresolved.resolve() if unresolved.is_absolute() else (resolved_root / unresolved).resolve()
     )
     if not resolved.is_relative_to(resolved_root):
         raise ValueError(f"path escapes configured root {resolved_root}: {candidate}")

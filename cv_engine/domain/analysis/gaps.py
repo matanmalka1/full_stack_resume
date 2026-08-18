@@ -41,62 +41,81 @@ def derive_gaps(lowered: str, track: Track) -> list[Gap]:
     gaps: list[Gap] = []
     hard_saas = bool(re.search(r"(?:direct|proven|must have|required).{0,40}saas sales", lowered))
     if hard_saas:
-        gaps.append(Gap(
-            requirement="Direct SaaS Sales",
-            severity="hard",
-            reason="Device Sales plus separate Development experience does not verify direct SaaS Sales.",
-            substitute_fact_ids=["sales.company.activity", "development.phdigital.role"],
-        ))
+        gaps.append(
+            Gap(
+                requirement="Direct SaaS Sales",
+                severity="hard",
+                reason="Device Sales plus separate Development experience does not verify direct SaaS Sales.",
+                substitute_fact_ids=["sales.company.activity", "development.phdigital.role"],
+            )
+        )
     elif "saas" in lowered:
-        gaps.append(Gap(
-            requirement="Direct SaaS Sales preference",
-            severity="warning",
-            reason=(
-                "Direct SaaS/software Sales is not verified; B2B Sales and separate "
-                "professional Development experience may be presented without merging them."
-            ),
-            substitute_fact_ids=["development.phdigital.role", "development.phdigital.fullstack"],
-        ))
-    if re.search(r"(?:using|use|experience|familiarity).{0,50}\bcrm\b|\bcrm\b.{0,30}(?:tool|system)", lowered):
-        gaps.append(Gap(
-            requirement="Sales CRM usage",
-            severity="warning",
-            reason=(
-                "Use of a named Sales CRM is not verified; canonical pipeline, Priority ERP, "
-                "and CRM-development experience may be shown instead."
-            ),
-            substitute_fact_ids=[
-                "sales.leadership.pipeline",
-                "sales.tool.priority",
-                "development.phdigital.crm",
-            ],
-        ))
-    if re.search(r"strategic partnerships?|distribution partners?|strategic b2b channels?", lowered):
-        gaps.append(Gap(
-            requirement="Strategic partnerships / channel Sales experience",
-            severity="warning",
-            reason=(
-                "Direct strategic-partnership or channel-Sales ownership is not verified; "
-                "new-business prospecting, complex deals, and strategic-customer work may be shown."
-            ),
-            substitute_fact_ids=[
-                "sales.cycle.prospecting",
-                "sales.achievement.complex_deals",
-                "sales.leadership.strategic_customers",
-            ],
-        ))
+        gaps.append(
+            Gap(
+                requirement="Direct SaaS Sales preference",
+                severity="warning",
+                reason=(
+                    "Direct SaaS/software Sales is not verified; B2B Sales and separate "
+                    "professional Development experience may be presented without merging them."
+                ),
+                substitute_fact_ids=[
+                    "development.phdigital.role",
+                    "development.phdigital.fullstack",
+                ],
+            )
+        )
+    if re.search(
+        r"(?:using|use|experience|familiarity).{0,50}\bcrm\b|\bcrm\b.{0,30}(?:tool|system)", lowered
+    ):
+        gaps.append(
+            Gap(
+                requirement="Sales CRM usage",
+                severity="warning",
+                reason=(
+                    "Use of a named Sales CRM is not verified; canonical pipeline, Priority ERP, "
+                    "and CRM-development experience may be shown instead."
+                ),
+                substitute_fact_ids=[
+                    "sales.leadership.pipeline",
+                    "sales.tool.priority",
+                    "development.phdigital.crm",
+                ],
+            )
+        )
+    if re.search(
+        r"strategic partnerships?|distribution partners?|strategic b2b channels?", lowered
+    ):
+        gaps.append(
+            Gap(
+                requirement="Strategic partnerships / channel Sales experience",
+                severity="warning",
+                reason=(
+                    "Direct strategic-partnership or channel-Sales ownership is not verified; "
+                    "new-business prospecting, complex deals, and strategic-customer work may be shown."
+                ),
+                substitute_fact_ids=[
+                    "sales.cycle.prospecting",
+                    "sales.achievement.complex_deals",
+                    "sales.leadership.strategic_customers",
+                ],
+            )
+        )
     if "salesforce" in lowered:
-        gaps.append(Gap(
-            requirement="Salesforce",
-            severity="warning",
-            reason="Salesforce is not verified; Priority ERP and pipeline experience may be presented instead.",
-            substitute_fact_ids=["sales.tool.priority", "sales.leadership.pipeline"],
-        ))
+        gaps.append(
+            Gap(
+                requirement="Salesforce",
+                severity="warning",
+                reason="Salesforce is not verified; Priority ERP and pipeline experience may be presented instead.",
+                substitute_fact_ids=["sales.tool.priority", "sales.leadership.pipeline"],
+            )
+        )
     years = [int(value) for value in re.findall(r"(\d+)\s*\+?\s*years?", lowered)]
     if years and max(years) >= 5 and track is Track.DEVELOPMENT:
-        gaps.append(Gap(
-            requirement=f"{max(years)}+ years of Development experience",
-            severity="hard",
-            reason="Canonical professional Development history does not meet this threshold.",
-        ))
+        gaps.append(
+            Gap(
+                requirement=f"{max(years)}+ years of Development experience",
+                severity="hard",
+                reason="Canonical professional Development history does not meet this threshold.",
+            )
+        )
     return gaps

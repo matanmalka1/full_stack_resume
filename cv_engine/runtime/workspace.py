@@ -74,9 +74,7 @@ class Workspace:
         resolved: dict[str, Path] = {}
         for name, candidate in default_roots(self.root).items():
             if name != "knowledge_root" and candidate.is_symlink():
-                raise WorkspaceError(
-                    f"Workspace root {name} may not be a symlink: {candidate}"
-                )
+                raise WorkspaceError(f"Workspace root {name} may not be a symlink: {candidate}")
             try:
                 resolved[name] = resolve_within(self.root, candidate)
             except ValueError as exc:
@@ -156,10 +154,7 @@ class Workspace:
             "data_class": self.data_class,
             "created_at": self.marker.created_at,
             "root": str(self.root),
-            "roots": {
-                name: str(getattr(self, name))
-                for name in ROOT_NAMES
-            },
+            "roots": {name: str(getattr(self, name)) for name in ROOT_NAMES},
         }
 
 

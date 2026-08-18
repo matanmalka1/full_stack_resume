@@ -60,13 +60,21 @@ class EmphasisPolicyStore:
     def __init__(self, policies: dict[Emphasis, EmphasisPolicy], policy_version: str):
         self.policies = policies
         self.policy_version = policy_version
-        self.version = sha256_text(canonical_json({
-            "policy_version": policy_version,
-            "emphases": [policies[key].model_dump(mode="json") for key in sorted(policies, key=str)],
-        }))
+        self.version = sha256_text(
+            canonical_json(
+                {
+                    "policy_version": policy_version,
+                    "emphases": [
+                        policies[key].model_dump(mode="json") for key in sorted(policies, key=str)
+                    ],
+                }
+            )
+        )
 
     @classmethod
-    def from_payload(cls, payload: dict, *, origin: str = "emphasis policy") -> "EmphasisPolicyStore":
+    def from_payload(
+        cls, payload: dict, *, origin: str = "emphasis policy"
+    ) -> "EmphasisPolicyStore":
         """Build the store from an already-read policy document.
 
         Locating and reading it belongs to the storage adapter; what a complete
@@ -266,9 +274,7 @@ def build_selection(
             )
         allowance = budget - len(held)
         line_of = {
-            fact_id: group[0]
-            for group in (line_groups or {}).get(section, [])
-            for fact_id in group
+            fact_id: group[0] for group in (line_groups or {}).get(section, []) for fact_id in group
         }
         floor_picks: list[_Scored] = []
         for block in _role_blocks(pool):
@@ -288,9 +294,7 @@ def build_selection(
         )
         floor_ids = {item.fact_id for item in floor_picks}
         block_of = {
-            item.fact_id: index
-            for index, block in enumerate(_role_blocks(pool))
-            for item in block
+            item.fact_id: index for index, block in enumerate(_role_blocks(pool)) for item in block
         }
         # Lines already spoken for in each block: pinned evidence, then the
         # floor picks. Facts that share a presentation line share one entry.
@@ -409,11 +413,18 @@ def _rescue_required_tags(
     """
     for tag in profile.required_tags:
         selected = {fact_id for ids in chosen.values() for fact_id in ids}
-        if any(tag in item.tags for pool in scored.values() for item in pool if item.fact_id in selected):
+        if any(
+            tag in item.tags
+            for pool in scored.values()
+            for item in pool
+            if item.fact_id in selected
+        ):
             continue
         available = sorted(
             (
-                item for pool in scored.values() for item in pool
+                item
+                for pool in scored.values()
+                for item in pool
                 if tag in item.tags and outcomes.get(item.fact_id) == "omitted"
             ),
             key=lambda item: item.rank,
@@ -426,7 +437,8 @@ def _rescue_required_tags(
         winner = available[0]
         evictable = sorted(
             (
-                item for item in scored[winner.section]
+                item
+                for item in scored[winner.section]
                 if item.fact_id in chosen[winner.section]
                 and outcomes.get(item.fact_id) == "selected"
                 and item.fact_id not in protected

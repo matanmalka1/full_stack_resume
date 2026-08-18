@@ -31,17 +31,24 @@ class FactStore:
         self.facts = facts
         self.source_versions = source_versions
         canonical = [
-            facts[key] for key in sorted(facts)
-            if facts[key].status is FactStatus.CANONICAL
+            facts[key] for key in sorted(facts) if facts[key].status is FactStatus.CANONICAL
         ]
-        self.version = sha256_text(canonical_json({
-            "sources": source_versions,
-            "facts": [fact.model_dump(mode="json") for fact in canonical],
-        }))
-        self.lifecycle_version = sha256_text(canonical_json({
-            "sources": source_versions,
-            "facts": [facts[key].model_dump(mode="json") for key in sorted(facts)],
-        }))
+        self.version = sha256_text(
+            canonical_json(
+                {
+                    "sources": source_versions,
+                    "facts": [fact.model_dump(mode="json") for fact in canonical],
+                }
+            )
+        )
+        self.lifecycle_version = sha256_text(
+            canonical_json(
+                {
+                    "sources": source_versions,
+                    "facts": [facts[key].model_dump(mode="json") for key in sorted(facts)],
+                }
+            )
+        )
 
     @classmethod
     def from_sources(cls, sources: dict[str, FactSource]) -> "FactStore":
@@ -71,7 +78,8 @@ class FactStore:
     def by_status(self, status: FactStatus | str | None = None) -> list[Fact]:
         target = FactStatus(status) if status is not None else None
         return [
-            self.facts[key] for key in sorted(self.facts)
+            self.facts[key]
+            for key in sorted(self.facts)
             if target is None or self.facts[key].status is target
         ]
 
@@ -172,12 +180,16 @@ def build_new_fact(store: FactStore, source_name: str, payload: dict, *, canonic
             f"fact already exists: {fact_id} in {existing.source_file} ({existing.status})"
         )
     status = FactStatus.CANONICAL if canonical else FactStatus.PENDING
-    return Fact.model_validate({
-        **{key: value for key, value in payload.items() if key not in {"status", "source_file"}},
-        "status": status.value,
-        "confirmed_at": payload.get("confirmed_at") or (utc_now()[:10] if canonical else None),
-        "source_file": "",
-    })
+    return Fact.model_validate(
+        {
+            **{
+                key: value for key, value in payload.items() if key not in {"status", "source_file"}
+            },
+            "status": status.value,
+            "confirmed_at": payload.get("confirmed_at") or (utc_now()[:10] if canonical else None),
+            "source_file": "",
+        }
+    )
 
 
 def with_new_fact(source: FactSource, record: Fact, *, canonical: bool) -> FactSource:
@@ -196,13 +208,15 @@ def with_promoted_fact(
     """The source file's next content with one fact's status advanced."""
     facts = [
         fact.model_copy(update={"status": status, "confirmed_at": confirmed_at})
-        if fact.fact_id == fact_id else fact
+        if fact.fact_id == fact_id
+        else fact
         for fact in source.facts
     ]
     if all(fact.status is not status or fact.fact_id != fact_id for fact in facts):
         raise FactStoreError(f"fact {fact_id} is not present in this source")
     version = (
         _next_source_version(source.source_version)
-        if status is FactStatus.CANONICAL else source.source_version
+        if status is FactStatus.CANONICAL
+        else source.source_version
     )
     return FactSource(source_version=version, facts=facts)

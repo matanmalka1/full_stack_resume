@@ -11,7 +11,9 @@ from helpers import PAYME_TECH_SALES_JOB, claim_by_id, store_draft
 
 
 def test_generated_draft_has_exact_canonical_claim_links(draft_factory) -> None:
-    facts, profile, analysis, draft, markdown = draft_factory("Account Manager retention portfolio customer relationships", write=True)
+    facts, profile, analysis, draft, markdown = draft_factory(
+        "Account Manager retention portfolio customer relationships", write=True
+    )
     report = validate_draft(draft, markdown.read_text(encoding="utf-8"), facts, profile, analysis)
     assert report.passed, report.model_dump()
     assert report.evidence["claim_count"] > 10
@@ -48,15 +50,24 @@ def test_unsafe_headline_fails_only_the_draft_side_headline_group(
 
 
 def test_manual_unlinked_change_blocks_approval(draft_factory) -> None:
-    facts, profile, analysis, draft, markdown = draft_factory("Python backend developer API React", write=True)
-    markdown.write_text(markdown.read_text(encoding="utf-8").replace("Python/FastAPI", "Python/FastAPI and Kubernetes", 1), encoding="utf-8")
+    facts, profile, analysis, draft, markdown = draft_factory(
+        "Python backend developer API React", write=True
+    )
+    markdown.write_text(
+        markdown.read_text(encoding="utf-8").replace(
+            "Python/FastAPI", "Python/FastAPI and Kubernetes", 1
+        ),
+        encoding="utf-8",
+    )
     report = validate_draft(draft, markdown.read_text(encoding="utf-8"), facts, profile, analysis)
     assert not report.passed
     assert any(issue.code == "draft-manifest-mismatch" for issue in report.issues)
 
 
 def test_stale_sales_claim_is_blocked(draft_factory) -> None:
-    facts, profile, analysis, draft, markdown = draft_factory("Sales Manager team leader coaching forecast", write=True)
+    facts, profile, analysis, draft, markdown = draft_factory(
+        "Sales Manager team leader coaching forecast", write=True
+    )
     text = markdown.read_text(encoding="utf-8") + "\n- Grew revenue 30% YoY.\n"
     markdown.write_text(text, encoding="utf-8")
     report = validate_draft(draft, markdown.read_text(encoding="utf-8"), facts, profile, analysis)
@@ -64,12 +75,16 @@ def test_stale_sales_claim_is_blocked(draft_factory) -> None:
     assert any(issue.code == "stale-annual-growth" for issue in report.issues)
 
 
-def test_negative_saas_boundary_cannot_be_inverted_into_derived_claim(v1_repo: Path, draft_factory) -> None:
+def test_negative_saas_boundary_cannot_be_inverted_into_derived_claim(
+    v1_repo: Path, draft_factory
+) -> None:
     facts, profile, _analysis, draft, _markdown = draft_factory(
         "Tech Sales SaaS consultative software solutions",
         write=True,
     )
-    claim = next(claim for section in draft.sections for claim in section.claims if claim.style == "bullet")
+    claim = next(
+        claim for section in draft.sections for claim in section.claims if claim.style == "bullet"
+    )
     updated = register_linked_claim(
         draft,
         claim.claim_id,
@@ -80,7 +95,9 @@ def test_negative_saas_boundary_cannot_be_inverted_into_derived_claim(v1_repo: P
     edited = claim_by_id(updated, claim.claim_id)
     assert edited.claim_type == "pending"
     markdown, _text = store_draft(v1_repo, updated)
-    report = validate_draft(updated, markdown.read_text(encoding="utf-8"), facts, profile, _analysis)
+    report = validate_draft(
+        updated, markdown.read_text(encoding="utf-8"), facts, profile, _analysis
+    )
     assert not report.passed
     assert any(issue.code == "pending-claim" for issue in report.issues)
 
@@ -90,15 +107,19 @@ def test_forged_derived_claim_manifest_blocks_approval(v1_repo: Path, draft_fact
         "Account Manager retention portfolio customer relationships",
         write=True,
     )
-    claim = next(claim for section in draft.sections for claim in section.claims if claim.style == "bullet")
-    forged = claim.model_copy(update={
-        "text": "Closed 999 billion dollars of direct SaaS sales.",
-        "claim_type": "derived",
-        "fact_ids": ["sales.metric.performance"],
-        "text_hash": sha256_text("Closed 999 billion dollars of direct SaaS sales."),
-        "derivation_id": "extractive-clauses",
-        "derivation_version": "1.0.0",
-    })
+    claim = next(
+        claim for section in draft.sections for claim in section.claims if claim.style == "bullet"
+    )
+    forged = claim.model_copy(
+        update={
+            "text": "Closed 999 billion dollars of direct SaaS sales.",
+            "claim_type": "derived",
+            "fact_ids": ["sales.metric.performance"],
+            "text_hash": sha256_text("Closed 999 billion dollars of direct SaaS sales."),
+            "derivation_id": "extractive-clauses",
+            "derivation_version": "1.0.0",
+        }
+    )
     for section in draft.sections:
         for index, item in enumerate(section.claims):
             if item.claim_id == claim.claim_id:
@@ -125,7 +146,9 @@ def test_profile_presentation_wording_is_recomputed_during_validation(
         write=True,
     )
     summary = next(
-        claim for section in draft.sections if section.name == "Professional Summary"
+        claim
+        for section in draft.sections
+        if section.name == "Professional Summary"
         for claim in section.claims
     )
     summary.text = "Sold SaaS through strategic channel partnerships."
@@ -146,7 +169,7 @@ def test_profile_presentation_wording_is_recomputed_during_validation(
     assert any(issue.code == "composite-wording-mismatch" for issue in report.issues)
 
 
-FABRICATED_HEADLINE_CLAIM = 'Closed a NIS 4.2M SaaS enterprise deal.'
+FABRICATED_HEADLINE_CLAIM = "Closed a NIS 4.2M SaaS enterprise deal."
 
 
 def _inject_headline_typed_claim(draft, text: str = FABRICATED_HEADLINE_CLAIM) -> ClaimLine:
@@ -174,7 +197,9 @@ def test_headline_claim_type_outside_the_headline_is_blocked(v1_repo: Path, draf
     tampered = draft.model_copy(update={"content_hash": sha256_text(serialize_markdown(draft))})
     markdown, _text = store_draft(v1_repo, tampered)
 
-    report = validate_draft(tampered, markdown.read_text(encoding="utf-8"), facts, profile, analysis)
+    report = validate_draft(
+        tampered, markdown.read_text(encoding="utf-8"), facts, profile, analysis
+    )
 
     assert not report.passed
     assert any(issue.code == "misplaced-headline-claim" for issue in report.issues)

@@ -38,9 +38,10 @@ def test_approved_payload_layouts(payload_store: PayloadStore) -> None:
     )
     assert payload_store.revision_path("app", "revision", format="md").name == "resume.md"
     for suffix in ("html", ".pdf", "png"):
-        assert payload_store.output_path(
-            "app", "revision", "artifact", suffix=suffix
-        ).suffix == f".{suffix.lstrip('.')}"
+        assert (
+            payload_store.output_path("app", "revision", "artifact", suffix=suffix).suffix
+            == f".{suffix.lstrip('.')}"
+        )
     targets = payload_store.render_targets(
         "app", "revision", "html-id", "pdf-id", "screenshot-id", "Recruiter CV.pdf"
     )
