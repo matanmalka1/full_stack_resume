@@ -272,3 +272,48 @@ def test_cli_workspace_surface_guards_normal_and_legacy_roots(
     assert result.returncode == 0, result.stderr
     assert "--repo is deprecated" in result.stderr
     assert json.loads(result.stdout)["root"] == str(v1_repo)
+
+
+def test_cli_normal_and_historical_verification_commands_fail_closed_without_writes(
+    tmp_path: Path, legacy_source_root: Path
+) -> None:
+    plain = tmp_path / "plain-cli-root"
+    plain.mkdir()
+
+    unknown = create_workspace(tmp_path / "unknown-version")
+    unknown_marker = unknown.root / MARKER_NAME
+    unknown_payload = json.loads(unknown_marker.read_text(encoding="utf-8"))
+    unknown_payload["workspace_version"] = 999
+    unknown_marker.write_text(json.dumps(unknown_payload), encoding="utf-8")
+
+    unsafe = create_workspace(tmp_path / "unsafe-live", purpose="live", data_class="live")
+    unsafe_marker = unsafe.root / MARKER_NAME
+    unsafe_payload = json.loads(unsafe_marker.read_text(encoding="utf-8"))
+    unsafe_payload["purpose"] = "development"
+    unsafe_marker.write_text(json.dumps(unsafe_payload), encoding="utf-8")
+
+    roots = [
+        (plain, "no v2 Workspace marker"),
+        (legacy_source_root, "read-only migration source adapter"),
+        (unknown.root, "unsupported Workspace version 999"),
+        (unsafe.root, "may not open live data"),
+    ]
+    commands = [
+        ("list",),
+        ("migrate", "verify-snapshot", "--snapshot", str(tmp_path / "missing-snapshot")),
+        ("migrate", "verify-live", "--snapshot", str(tmp_path / "missing-snapshot")),
+    ]
+    for root, expected_error in roots:
+        before = _tree(root)
+        for command in commands:
+            result = _cv("--workspace", str(root), *command)
+            assert result.returncode == 2, result.stdout + result.stderr
+            assert expected_error in result.stderr
+            assert _tree(root) == before
+
+
+def test_cli_retired_in_place_migration_commands_are_not_exposed(v1_repo: Path) -> None:
+    for command in ("inventory", "snapshot", "test", "dry-run", "apply", "reconcile"):
+        result = _cv("--workspace", str(v1_repo), "migrate", command)
+        assert result.returncode == 2
+        assert "invalid choice" in result.stderr

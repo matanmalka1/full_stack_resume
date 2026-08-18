@@ -16,14 +16,8 @@ from .runtime.config import resolve_config
 from .runtime.workspace import Workspace, WorkspaceError, create_workspace, load_workspace
 from .infrastructure.migration import (
     MigrationSafetyError,
-    apply_migration,
-    create_snapshot,
-    dry_run_migration,
-    reconcile_migration,
     retrospective_verify_migration,
-    run_migration_tests,
     verify_snapshot,
-    write_inventory,
 )
 from .domain.facts import FACT_SOURCE_NAMES
 from .domain.models import ApplicationStatus, FactStatus
@@ -233,20 +227,12 @@ def build_parser() -> argparse.ArgumentParser:
     fact_history = fact_sub.add_parser("history", help="read the immutable fact lifecycle trail")
     fact_history.add_argument("fact_id", nargs="?")
 
-    migrate = sub.add_parser("migrate", help="guarded one-time legacy migration")
+    migrate = sub.add_parser("migrate", help="read-only verification of the completed v1 migration")
     migrate_sub = migrate.add_subparsers(dest="migration_command", required=True)
-    migrate_sub.add_parser("inventory")
-    migrate_sub.add_parser("snapshot")
     verify = migrate_sub.add_parser("verify-snapshot")
     verify.add_argument("--snapshot", type=Path, required=True)
-    migrate_sub.add_parser("test")
-    dry_run = migrate_sub.add_parser("dry-run")
-    dry_run.add_argument("--snapshot", type=Path, required=True)
-    apply = migrate_sub.add_parser("apply")
-    apply.add_argument("--snapshot", type=Path, required=True)
     verify_live = migrate_sub.add_parser("verify-live", help="read-only semantic verification of the completed migration")
     verify_live.add_argument("--snapshot", type=Path, required=True)
-    migrate_sub.add_parser("reconcile")
     return parser
 
 
@@ -441,39 +427,17 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "workspace":
             return workspace_command(root, config, args)
-        if args.command == "migrate":
-            if args.migration_command == "inventory":
-                path = write_inventory(root)
-                _print({"inventory": str(path), "passed": True})
-            elif args.migration_command == "snapshot":
-                path = create_snapshot(root)
-                _print({"snapshot": str(path), "passed": True})
-            elif args.migration_command == "verify-snapshot":
-                report = verify_snapshot(args.snapshot.resolve())
-                _print(report)
-                return 0 if report["passed"] else 1
-            elif args.migration_command == "test":
-                path = run_migration_tests(root)
-                _print(json.loads(path.read_text(encoding="utf-8")))
-            elif args.migration_command == "dry-run":
-                path = dry_run_migration(root, args.snapshot.resolve())
-                _print(json.loads(path.read_text(encoding="utf-8")))
-            elif args.migration_command == "apply":
-                path = apply_migration(root, args.snapshot.resolve())
-                _print(json.loads(path.read_text(encoding="utf-8")))
-            elif args.migration_command == "verify-live":
-                report = retrospective_verify_migration(root, args.snapshot.resolve())
-                _print(report)
-                return 0 if report["passed"] else 1
-            elif args.migration_command == "reconcile":
-                report = reconcile_migration(root)
-                _print(report)
-                return 0 if report["passed"] else 1
-            return 0
 
         # Every remaining command is a normal v2 command, so it opens the
         # Workspace fail-closed before it touches state.
         workspace = load_workspace(root)
+        if args.command == "migrate":
+            if args.migration_command == "verify-snapshot":
+                report = verify_snapshot(args.snapshot.resolve())
+            else:
+                report = retrospective_verify_migration(root, args.snapshot.resolve())
+            _print(report)
+            return 0 if report["passed"] else 1
         db_path = Path(db_override).resolve() if db_override else workspace.database_path
         if args.command == "init":
             initialize(db_path)

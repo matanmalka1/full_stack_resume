@@ -196,41 +196,25 @@ export OPENAI_API_KEY='...'
 Provider output is Pydantic-validated and deterministic hard gaps remain authoritative.
 The adapter uses strict Structured Outputs through the Responses API.
 
-## Guarded migration
+## Historical migration verification
 
-Run these commands in order. `apply` refuses to run unless the exact inventory,
-snapshot, restored-copy verification, migration test report, and dry-run report all
-agree.
+The pre-v1 to v1 migration is complete. Its frozen result is recorded in
+[`docs/v1-retrospective-migration-verification.json`](docs/v1-retrospective-migration-verification.json),
+with restore instructions in
+[`docs/v1-migration-restore.md`](docs/v1-migration-restore.md). The CLI retains only
+read-only verification commands for that historical evidence, and both require a valid
+marked v2 Workspace:
 
 ```bash
-./.venv/bin/cv migrate inventory
-./.venv/bin/cv migrate test
-./.venv/bin/cv migrate snapshot
 ./.venv/bin/cv migrate verify-snapshot --snapshot data/snapshots/<timestamp>
-./.venv/bin/cv migrate dry-run --snapshot data/snapshots/<timestamp>
-./.venv/bin/cv migrate apply --snapshot data/snapshots/<timestamp>
-./.venv/bin/cv migrate reconcile
-```
-
-For a migration that was completed before the hardened gate existed, reproduce the
-current migration against the pre-migration snapshot in a temporary directory and
-compare its database semantics, migrated facts, and historical artifact hashes to the
-live state without modifying it:
-
-```bash
 ./.venv/bin/cv migrate verify-live --snapshot data/snapshots/<timestamp>
 ```
 
-Every fact the migration produced must still exist unchanged in the same canonical
-source file; facts added afterwards through the fact lifecycle are reported under
-`post_migration_facts` and are not drift.
-
-The tracked result for the completed v1 migration is
-[`docs/v1-retrospective-migration-verification.json`](docs/v1-retrospective-migration-verification.json).
-
-Restore instructions are in
-[`docs/v1-migration-restore.md`](docs/v1-migration-restore.md). Never extract a snapshot
-over the live repository.
+The v1 to v2 migration workflow is implemented in M2/M6 according to
+[`docs/v2-migration-plan.md`](docs/v2-migration-plan.md) §7 stages A–G. Its sole path
+into an unmarked v1 source is `LegacyV1Source`, which inventories and reads the source
+without writing a marker, inventory report, snapshot, temporary file, or migrated state
+there. Never extract a snapshot over a live repository.
 
 ## Tests
 
