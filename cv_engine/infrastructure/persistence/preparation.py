@@ -1,0 +1,291 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from ...domain.models import ApplicationStatus, JobAnalysis
+from ...util import canonical_json, sha256_text, utc_now
+from .applications import SqliteApplicationRepository
+from .base import SqliteRepositoryBase
+from .connection import SqliteUnitOfWork
+from .primitives import new_id
+
+
+def _require_owned_snapshot(
+    connection: Any,
+    application_id: str | None,
+    snapshot_id: str,
+    subject: str,
+) -> None:
+    """Refuse to link a record to a job snapshot another application owns."""
+    row = connection.execute(
+        "SELECT application_id FROM job_snapshots WHERE id=?", (snapshot_id,)
+    ).fetchone()
+    if row is None:
+        raise ValueError(
+            f"a {subject} cannot reference an unknown job snapshot: {snapshot_id}"
+        )
+    if row["application_id"] != application_id:
+        raise ValueError(
+            f"a {subject} cannot reference a job snapshot belonging to another application"
+        )
+
+
+class SqlitePreparationRepository(SqliteRepositoryBase):
+    def __init__(
+        self,
+        path: Path,
+        connection: Any | None = None,
+        applications: SqliteApplicationRepository | None = None,
+    ):
+        super().__init__(path, connection)
+        self.applications = applications or SqliteApplicationRepository(path, connection)
+
+    def bind(self, uow: SqliteUnitOfWork) -> "SqlitePreparationRepository":
+        if uow.connection is None:
+            raise RuntimeError("UnitOfWork is not active")
+        if uow.path.resolve() != self.path.resolve():
+            raise ValueError("UnitOfWork belongs to another database")
+        return type(self)(
+            self.path,
+            uow.connection,
+            self.applications.bind(uow),
+        )
+
+    def create_application(
+        self,
+        *,
+        company: str,
+        target_role: str,
+        original_job_text: str,
+        source_url: str | None = None,
+        source: str = "manual",
+        notes: str = "",
+        application_id: str | None = None,
+        snapshot_id: str | None = None,
+        captured_at: str | None = None,
+        source_metadata: dict[str, Any] | None = None,
+    ) -> tuple[str, str]:
+        if not company.strip() or not target_role.strip() or not original_job_text.strip():
+            raise ValueError("company, target role, and full job text are required")
+        app_id = application_id or new_id()
+        snap_id = snapshot_id or new_id()
+        now = captured_at or utc_now()
+
+        if self._bound_connection is None:
+            with SqliteUnitOfWork(self.path) as uow:
+                bound = self.bind(uow)
+                bound._create_application_records(
+                    app_id,
+                    snap_id,
+                    company,
+                    target_role,
+                    original_job_text,
+                    source_url,
+                    source,
+                    notes,
+                    now,
+                    source_metadata,
+                )
+                uow.commit()
+        else:
+            self._create_application_records(
+                app_id,
+                snap_id,
+                company,
+                target_role,
+                original_job_text,
+                source_url,
+                source,
+                notes,
+                now,
+                source_metadata,
+            )
+        return app_id, snap_id
+
+    def _create_application_records(
+        self,
+        app_id: str,
+        snap_id: str,
+        company: str,
+        target_role: str,
+        original_job_text: str,
+        source_url: str | None,
+        source: str,
+        notes: str,
+        now: str,
+        source_metadata: dict[str, Any] | None,
+    ) -> None:
+        self.applications._insert_application(
+            application_id=app_id,
+            company=company,
+            target_role=target_role,
+            source_url=source_url,
+            notes=notes,
+            source=source,
+            created_at=now,
+        )
+        with self.transaction() as connection:
+            connection.execute(
+                "INSERT INTO job_snapshots(id, application_id, version_number, original_text, source_url, captured_at, source_metadata_json, content_hash, prior_snapshot_id) "
+                "VALUES(?, ?, 1, ?, ?, ?, ?, ?, NULL)",
+                (
+                    snap_id,
+                    app_id,
+                    original_job_text,
+                    source_url,
+                    now,
+                    canonical_json(source_metadata or {}),
+                    sha256_text(original_job_text),
+                ),
+            )
+
+    def add_job_snapshot(
+        self,
+        application_id: str,
+        original_text: str,
+        source_url: str | None = None,
+        source_metadata: dict[str, Any] | None = None,
+    ) -> str:
+        with self.transaction() as connection:
+            prior = connection.execute(
+                "SELECT id, version_number FROM job_snapshots WHERE application_id=? "
+                "ORDER BY version_number DESC LIMIT 1",
+                (application_id,),
+            ).fetchone()
+            if prior is None:
+                raise KeyError(application_id)
+            snapshot_id = new_id()
+            connection.execute(
+                "INSERT INTO job_snapshots(id, application_id, version_number, original_text, source_url, captured_at, source_metadata_json, content_hash, prior_snapshot_id) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    snapshot_id,
+                    application_id,
+                    prior["version_number"] + 1,
+                    original_text,
+                    source_url,
+                    utc_now(),
+                    canonical_json(source_metadata or {}),
+                    sha256_text(original_text),
+                    prior["id"],
+                ),
+            )
+        return snapshot_id
+
+    def latest_snapshot(self, application_id: str) -> dict[str, Any]:
+        with self.read_connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM job_snapshots WHERE application_id=? "
+                "ORDER BY version_number DESC LIMIT 1",
+                (application_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"no snapshot for application {application_id}")
+        return dict(row)
+
+    def get_snapshot(self, snapshot_id: str) -> dict[str, Any]:
+        with self.read_connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM job_snapshots WHERE id=?", (snapshot_id,)
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"no job snapshot {snapshot_id}")
+        return dict(row)
+
+    def save_analysis(
+        self,
+        application_id: str,
+        snapshot_id: str,
+        analysis: JobAnalysis,
+        *,
+        provider: str = "deterministic",
+        model: str = "rules-v1",
+    ) -> str:
+        analysis_id = new_id()
+        now = utc_now()
+        with self.transaction() as connection:
+            row = connection.execute(
+                "SELECT COALESCE(MAX(version_number), 0) + 1 AS version "
+                "FROM job_analyses WHERE application_id=?",
+                (application_id,),
+            ).fetchone()
+            connection.execute(
+                "INSERT INTO job_analyses(id, application_id, job_snapshot_id, version_number, structured_json, provider, model, created_at) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    analysis_id,
+                    application_id,
+                    snapshot_id,
+                    row["version"],
+                    analysis.model_dump_json(),
+                    provider,
+                    model,
+                    now,
+                ),
+            )
+            connection.execute(
+                "UPDATE applications SET language=?, track=?, profile=?, emphasis=?, "
+                "classification_confidence=?, fit_level=?, updated_at=? WHERE id=?",
+                (
+                    analysis.language,
+                    analysis.track.value,
+                    analysis.profile.value,
+                    analysis.emphasis.value,
+                    analysis.confidence,
+                    analysis.fit.value,
+                    now,
+                    application_id,
+                ),
+            )
+        current = ApplicationStatus(
+            self.applications.get_application(application_id)["current_status"]
+        )
+        if current is ApplicationStatus.SAVED:
+            self.applications.transition_status(
+                application_id, ApplicationStatus.PREPARING, "analysis created"
+            )
+        elif current is ApplicationStatus.READY:
+            self.applications.transition_status(
+                application_id,
+                ApplicationStatus.PREPARING,
+                "new analysis invalidated the prior ready version",
+            )
+        return analysis_id
+
+    @staticmethod
+    def _analysis_record(row: Any) -> dict[str, Any]:
+        record = dict(row)
+        record["analysis"] = JobAnalysis.model_validate_json(
+            record.pop("structured_json")
+        )
+        return record
+
+    def get_analysis(self, analysis_id: str) -> dict[str, Any]:
+        with self.read_connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM job_analyses WHERE id=?", (analysis_id,)
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"no job analysis {analysis_id}")
+        return self._analysis_record(row)
+
+    def analyses(self, application_id: str) -> list[dict[str, Any]]:
+        with self.read_connection() as connection:
+            rows = connection.execute(
+                "SELECT * FROM job_analyses WHERE application_id=? "
+                "ORDER BY version_number",
+                (application_id,),
+            ).fetchall()
+        return [self._analysis_record(row) for row in rows]
+
+    def latest_analysis(self, application_id: str) -> tuple[str, JobAnalysis]:
+        with self.read_connection() as connection:
+            row = connection.execute(
+                "SELECT id, structured_json FROM job_analyses WHERE application_id=? "
+                "ORDER BY version_number DESC LIMIT 1",
+                (application_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"no analysis for application {application_id}")
+        return row["id"], JobAnalysis.model_validate_json(row["structured_json"])

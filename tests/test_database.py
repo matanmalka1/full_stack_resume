@@ -17,7 +17,10 @@ def _sqlite_master_fingerprint(path: Path) -> list[tuple[str, str, str, str]]:
     with sqlite3.connect(path) as connection:
         rows = connection.execute(
             "SELECT type, name, tbl_name, sql FROM sqlite_master "
-            "WHERE sql IS NOT NULL ORDER BY type, name"
+            # schema_migrations is runner bookkeeping, not part of the M1
+            # product schema whose fixture bytes are intentionally frozen.
+            "WHERE sql IS NOT NULL AND name != 'schema_migrations' "
+            "ORDER BY type, name"
         ).fetchall()
     return [
         (kind, name, table, " ".join(ddl.split()))
@@ -32,8 +35,16 @@ def test_status_history_and_transition_contract(application_repo) -> None:
     assert repo.get_application(app_id)["current_status"] == "preparing"
     with pytest.raises(ValueError, match="engine-owned"):
         repo.transition_status(app_id, ApplicationStatus.READY)
-    with pytest.raises(ValueError, match="submission-owned"):
+    with pytest.raises(ValueError) as applied_refusal:
         repo.transition_status(app_id, ApplicationStatus.APPLIED)
+    assert str(applied_refusal.value) == (
+        "applied is submission-owned; it can only be reached through "
+        "Engine.submit(), which performs fresh ready integrity verification "
+        "and binds the submission to the exact validated PDF artifact version. "
+        "The generic status transition never accepts applied, even with a real "
+        "rendered PDF artifact version id, because it cannot perform that "
+        "verification itself."
+    )
     with connect(repo.path) as connection:
         history = connection.execute("SELECT from_status, to_status FROM status_history WHERE application_id=? ORDER BY id", (app_id,)).fetchall()
     assert [tuple(row) for row in history] == [(None, "saved"), ("saved", "preparing")]
