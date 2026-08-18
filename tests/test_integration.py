@@ -11,7 +11,7 @@ import cv_engine.application.services.drafts as draft_service_module
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
 from cv_engine.application.errors import WorkflowError
 from cv_engine.domain.models import ValidationIssue, ValidationReport
-from cv_engine.infrastructure.db import connect
+from cv_engine.infrastructure.persistence import connect
 from helpers import ACCOUNT_MANAGER_JOB, working_claim as _working_claim
 
 

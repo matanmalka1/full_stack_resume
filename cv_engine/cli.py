@@ -10,7 +10,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from .infrastructure.db import Repository, initialize
+from .infrastructure.persistence import Repository, initialize
 from .infrastructure.legacy_source import LegacySourceError, LegacyV1Source
 from .runtime.config import resolve_config
 from .runtime.workspace import Workspace, WorkspaceError, create_workspace, load_workspace

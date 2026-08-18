@@ -20,7 +20,7 @@ from ..application.services.projections import ApplicationQueryService
 from ..application.services.rendering import RenderingService
 from ..application.services.tracking import TrackingService
 from ..infrastructure.artifacts import FilesystemArtifactStore
-from ..infrastructure.db import Repository
+from ..infrastructure.persistence import Repository
 from ..infrastructure.knowledge import FileKnowledge
 from ..infrastructure.providers import OpenAIClassificationProvider
 from ..infrastructure.rendering import PlaywrightRenderer

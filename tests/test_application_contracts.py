@@ -47,7 +47,7 @@ from cv_engine.application.ports import (
 )
 from cv_engine.application.services.rendering import RenderingService
 from cv_engine.compat import resolve_job_analysis_id, resolve_job_snapshot_id
-from cv_engine.infrastructure.db import Repository
+from cv_engine.infrastructure.persistence import Repository
 from helpers import ACCOUNT_MANAGER_JOB, working_claim
 
 

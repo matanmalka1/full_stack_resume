@@ -156,7 +156,7 @@ def test_new_revision_snapshot_or_analysis_stales_prior_ready(ready_application)
 def test_submission_binds_current_pdf_and_remains_immutable_after_later_versions(
     ready_application
 ) -> None:
-    from cv_engine.infrastructure.db import connect
+    from cv_engine.infrastructure.persistence import connect
 
     services, app_id = ready_application("Two Cycles")
     first_pdf = services.repository.latest_artifact_version(app_id, "resume_pdf", "rendered")

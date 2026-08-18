@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from .canonical_data import write_canonical_sources
-from .db import Repository, connect
+from .persistence import Repository, connect
 from ..domain.facts import FactStoreError
 from .knowledge import read_fact_source
 from .paths import resolve_within

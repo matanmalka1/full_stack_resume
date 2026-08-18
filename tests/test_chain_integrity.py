@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
-from cv_engine.infrastructure.db import connect
+from cv_engine.infrastructure.persistence import connect
 from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.application.ready import verify_ready_integrity
 from cv_engine.runtime.workspace import Workspace

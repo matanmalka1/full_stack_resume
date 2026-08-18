@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from cv_engine.application.commands import IngestCommand, NextActionCommand
-from cv_engine.infrastructure.db import connect
+from cv_engine.infrastructure.persistence import connect
 from cv_engine.domain.models import ApplicationStatus, ValidationReport
 
 

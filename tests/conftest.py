@@ -27,7 +27,7 @@ from cv_engine.infrastructure.knowledge import (
     load_presentations,
     load_profile_store,
 )
-from cv_engine.infrastructure.db import Repository, connect
+from cv_engine.infrastructure.persistence import Repository, connect
 from cv_engine.domain.drafts import build_draft
 from cv_engine.domain.facts import FactStore
 from cv_engine.infrastructure.migration import create_snapshot, dry_run_migration, migrate_legacy_state, verify_snapshot

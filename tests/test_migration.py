@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from cv_engine.infrastructure import migration
-from cv_engine.infrastructure.db import connect
+from cv_engine.infrastructure.persistence import connect
 from cv_engine.infrastructure.migration import (
     MigrationSafetyError,
     apply_migration,

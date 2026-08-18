@@ -8,7 +8,7 @@ import pytest
 from cv_engine.application.commands import DraftCommand
 from cv_engine.application.errors import KnowledgeRejected
 from cv_engine.runtime.composition import Services
-from cv_engine.infrastructure.db import connect
+from cv_engine.infrastructure.persistence import connect
 from cv_engine.domain.facts import FactStore
 from cv_engine.infrastructure.knowledge import load_fact_store, FactStoreError
 from cv_engine.domain.models import FactStatus

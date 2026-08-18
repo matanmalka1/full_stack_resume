@@ -26,14 +26,9 @@ ALLOWED_INTERNAL = {
 # Known boundary debt from docs/v2-architecture-audit.md. New entries are not
 # permitted. Stages remove entries as they move the owning policy inward.
 ARCHITECTURE_DEBT_ALLOWLIST = {
-    "cli.py: imports infrastructure.db",
     "infrastructure/migration.py: imports subprocess",
 }
 
-# Wave 0 installs the destination rules before Wave 1 moves this module. It is
-# the one temporary move source; once its SQL is replaced by re-exports the
-# exception becomes inert, and Wave 2 deletes the file.
-PERSISTENCE_MOVE_SOURCE = "db.py"
 PERSISTENCE_KNOWN_OFFENDERS = {"migration.py", "legacy_source.py"}
 SQL_STATEMENT = re.compile(
     r"\b(?:SELECT\b[\s\S]*\bFROM|INSERT\s+INTO|UPDATE\b[\s\S]*\bSET|DELETE\s+FROM|CREATE\s+(?:TABLE|INDEX|TRIGGER)|"
@@ -265,7 +260,7 @@ def test_sqlite_and_sql_are_owned_by_persistence() -> None:
         relative = path.relative_to(ENGINE / "infrastructure").as_posix()
         if relative.startswith("persistence/"):
             continue
-        if relative in PERSISTENCE_KNOWN_OFFENDERS or relative == PERSISTENCE_MOVE_SOURCE:
+        if relative in PERSISTENCE_KNOWN_OFFENDERS:
             continue
         if any(name == "sqlite3" for name, _line in _imports(path)):
             offenders.append(f"{relative}: imports sqlite3")
