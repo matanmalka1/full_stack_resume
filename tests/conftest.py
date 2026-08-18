@@ -127,6 +127,7 @@ class WorkflowSetup:
     application_id: str
     snapshot_id: str
     analysis_id: str | None = None
+    selection_plan_id: str | None = None
     markdown: Path | None = None
     manifest: Path | None = None
     draft_report: Any = None
@@ -276,6 +277,7 @@ def analyzed_application(services: Services):
             application_id=ingested.application_id,
             snapshot_id=ingested.job_snapshot_id,
             analysis_id=analysed.analysis_id,
+            selection_plan_id=analysed.selection_plan_id,
         )
 
     return build
@@ -290,9 +292,11 @@ def drafted_application(analyzed_application):
     ) -> WorkflowSetup:
         setup = analyzed_application(company, role, job_text)
         assert setup.analysis_id is not None
+        assert setup.selection_plan_id is not None
         drafted = setup.services.drafts.draft(DraftCommand(
             application_id=setup.application_id,
             job_analysis_id=setup.analysis_id,
+            selection_plan_id=setup.selection_plan_id,
         ))
         paths = setup.services.artifacts.working_paths(setup.application_id)
         return replace(

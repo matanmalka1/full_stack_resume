@@ -6,11 +6,27 @@ from pathlib import Path
 import pytest
 
 from cv_engine.application.commands import IngestCommand, NextActionCommand
-from cv_engine.infrastructure.persistence import connect
+from cv_engine.infrastructure.persistence import connect, current_schema_version
+from cv_engine.infrastructure.persistence.schema import (
+    MIGRATIONS_DIR,
+    registered_migration_names,
+)
 from cv_engine.domain.models import ApplicationStatus, ValidationReport
+from cv_engine.util import normalized_text, sha256_text
 
 
 SCHEMA_FIXTURE = Path(__file__).parent / "fixtures/m1_sqlite_master.tsv"
+
+
+def _create(repo, *, company: str, target_role: str, text: str):
+    digest = sha256_text(text)
+    return repo.create_application(
+        company=company,
+        target_role=target_role,
+        payload_path=f"artifacts/snapshots/{company}/snapshot.txt",
+        source_hash=digest,
+        normalized_hash=sha256_text(normalized_text(text)),
+    )
 
 
 def _sqlite_master_fingerprint(path: Path) -> list[tuple[str, str, str, str]]:
@@ -30,7 +46,7 @@ def _sqlite_master_fingerprint(path: Path) -> list[tuple[str, str, str, str]]:
 
 def test_status_history_and_transition_contract(application_repo) -> None:
     repo = application_repo
-    app_id, _ = repo.create_application(company="Acme", target_role="Developer", original_job_text="Python developer role")
+    app_id, _ = _create(repo, company="Acme", target_role="Developer", text="Python developer role")
     repo.transition_status(app_id, ApplicationStatus.PREPARING, "analysis")
     assert repo.get_application(app_id)["current_status"] == "preparing"
     with pytest.raises(ValueError, match="engine-owned"):
@@ -52,33 +68,44 @@ def test_status_history_and_transition_contract(application_repo) -> None:
 
 def test_immutable_job_snapshot_trigger(application_repo) -> None:
     repo = application_repo
-    _, snapshot_id = repo.create_application(company="Acme", target_role="Developer", original_job_text="Original exact text")
+    _, snapshot_id = _create(repo, company="Acme", target_role="Developer", text="Original exact text")
     with pytest.raises(sqlite3.IntegrityError, match="immutable record"):
         with repo.transaction() as connection:
-            connection.execute("UPDATE job_snapshots SET original_text='changed' WHERE id=?", (snapshot_id,))
+            connection.execute("UPDATE job_snapshots SET source_hash='changed' WHERE id=?", (snapshot_id,))
 
 
 def test_next_action_is_not_a_status(application_repo) -> None:
     repo = application_repo
-    app_id, _ = repo.create_application(company="Acme", target_role="Sales", original_job_text="Sales role")
+    app_id, _ = _create(repo, company="Acme", target_role="Sales", text="Sales role")
     repo.set_next_action(app_id, "Follow up", "2026-08-20")
     row = repo.get_application(app_id)
     assert row["current_status"] == "saved"
     assert row["next_action"] == "Follow up"
 
 
-def test_m1_sqlite_master_fingerprint_is_frozen(application_repo) -> None:
+def test_m1_sqlite_master_fingerprint_is_frozen(tmp_path: Path) -> None:
+    baseline_path = tmp_path / "m1-baseline.sqlite3"
+    with connect(baseline_path) as connection:
+        connection.executescript(
+            (MIGRATIONS_DIR / "0001_baseline.sql").read_text(encoding="utf-8")
+        )
     expected = [
         tuple(line.split("\t", 3))
         for line in SCHEMA_FIXTURE.read_text(encoding="utf-8").splitlines()
     ]
-    assert _sqlite_master_fingerprint(application_repo.path) == expected
+    assert _sqlite_master_fingerprint(baseline_path) == expected
+
+
+def test_database_is_at_registered_head_schema(application_repo) -> None:
+    # The frozen fingerprint proves 0001 parity; head is allowed to evolve independently.
+    registered_head = registered_migration_names()[-1].split("_", 1)[0]
+    assert current_schema_version(application_repo.path) == registered_head
 
 
 def test_ready_submission_and_artifact_registry_preconditions(application_repo) -> None:
     repo = application_repo
-    refused_app, refused_snapshot = repo.create_application(
-        company="Move Guard", target_role="Developer", original_job_text="Python role"
+    refused_app, refused_snapshot = _create(
+        repo, company="Move Guard", target_role="Developer", text="Python role"
     )
     repo.transition_status(refused_app, ApplicationStatus.PREPARING, "analysis")
     with pytest.raises(ValueError, match="rendered resume PDF"):
@@ -96,9 +123,9 @@ def test_ready_submission_and_artifact_registry_preconditions(application_repo) 
     with pytest.raises(ValueError, match="passing post-render validation"):
         repo.set_ready(refused_app, refused_pdf)
 
-    app_id, snapshot_id = repo.create_application(
-        company="Move Guard Success", target_role="Developer",
-        original_job_text="Another Python role",
+    app_id, snapshot_id = _create(
+        repo, company="Move Guard Success", target_role="Developer",
+        text="Another Python role",
     )
     repo.transition_status(app_id, ApplicationStatus.PREPARING, "analysis")
     pdf_id = repo.register_artifact_version(

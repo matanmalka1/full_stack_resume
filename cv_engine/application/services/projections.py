@@ -106,7 +106,14 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
     def application_detail(self, application_id: str) -> ApplicationDetailView:
         try:
             application = application_view(self.repo.get_application(application_id))
-            snapshot = snapshot_view(self.repo.latest_snapshot(application_id))
+            snapshot_record = self.repo.latest_snapshot(application_id)
+            snapshot = snapshot_view(
+                snapshot_record,
+                self.snapshot_payloads.read_snapshot(
+                    snapshot_record["payload_path"],
+                    snapshot_record["source_hash"],
+                ),
+            )
             analyses = self.repo.analyses(application_id)
             latest = analysis_view(analyses[-1]) if analyses else None
         except KeyError as exc:

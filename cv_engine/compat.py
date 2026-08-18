@@ -18,7 +18,13 @@ def resolve_job_analysis_id(repository: Any, application_id: str) -> str:
     return repository.latest_analysis(application_id)[0]
 
 
+def resolve_selection_plan_id(repository: Any, application_id: str) -> str:
+    """The immutable plan a legacy caller meant when it named none."""
+    return repository.latest_selection_plan(application_id).id
+
+
 __all__ = [
     "resolve_job_analysis_id",
     "resolve_job_snapshot_id",
+    "resolve_selection_plan_id",
 ]

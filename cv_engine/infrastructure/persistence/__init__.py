@@ -1,5 +1,6 @@
 from .composite import Repository
 from .connection import SqliteUnitOfWork, connect
+from .drafts import SqliteDraftRepository
 from .schema import (
     MigrationChecksumError,
     SchemaError,
@@ -18,6 +19,7 @@ __all__ = [
     "SchemaFingerprintError",
     "SchemaVersionError",
     "SqliteUnitOfWork",
+    "SqliteDraftRepository",
     "apply_migrations",
     "connect",
     "current_schema_version",

@@ -66,7 +66,12 @@ def validate_draft(
     derived from arguments that are always present.
     """
     issues: list[ValidationIssue] = []
-    groups = {"content": True, "profile": True, "structure": True, "filename": True}
+    groups = {
+        "content": True,
+        "profile": True,
+        "structure": True,
+        "headline_safety": True,
+    }
     expected = serialize_markdown(draft)
     actual = markdown
     if actual != expected or sha256_text(actual) != draft.content_hash:
@@ -314,8 +319,12 @@ def validate_draft(
         groups["structure"] = False
         issues.append(ValidationIssue(group="structure", code="historical-title-placement", message="Historical titles must remain exact headings."))
     if draft.headline.text not in profile.safe_headlines:
-        groups["filename"] = False
-        issues.append(ValidationIssue(group="filename", code="unsafe-headline", message=draft.headline.text))
+        groups["headline_safety"] = False
+        issues.append(ValidationIssue(
+            group="headline_safety",
+            code="unsafe-headline",
+            message=draft.headline.text,
+        ))
 
     return ValidationReport.from_findings(
         groups=groups,

@@ -18,7 +18,8 @@ from .persistence import Repository, connect
 from ..domain.facts import FactStoreError
 from .knowledge import read_fact_source
 from .paths import resolve_within
-from ..util import canonical_json, sha256_file, sha256_text, utc_now, verify_payload
+from .payloads import PayloadStore
+from ..util import canonical_json, normalized_text, sha256_file, sha256_text, utc_now, verify_payload
 
 
 MIGRATION_NAMESPACE = uuid.UUID("7650f234-c480-4a9e-9c21-9d5142899a63")
@@ -326,18 +327,22 @@ def migrate_legacy_state(source_root: Path, target_root: Path, *, dry_run: bool)
         raise MigrationSafetyError("refusing to overwrite existing modular fact sources")
     write_canonical_sources(target_root / "base")
     repository = Repository(db_path)
+    payloads = PayloadStore.for_workspace_root(target_root)
     rows = read_legacy_rows(source_root)
     migrated_artifacts = 0
     for row in rows:
         company, role = row["company"], row["role"]
         paths = legacy_artifact_paths(source_root, row)
-        snapshot_text = paths["job_snapshot"].read_text(encoding="utf-8")
+        snapshot_text = paths["job_snapshot"].read_bytes().decode("utf-8")
         app_id = _deterministic_id("application", company, role)
         snap_id = _deterministic_id("snapshot", company, role)
+        payload = payloads.commit_snapshot(app_id, snap_id, snapshot_text)
         repository.create_application(
             company=company,
             target_role=role,
-            original_job_text=snapshot_text,
+            payload_path=payload.reference,
+            source_hash=payload.sha256,
+            normalized_hash=sha256_text(normalized_text(snapshot_text)),
             source_url=row["url"] or None,
             source="legacy-csv",
             notes=row["notes"],
@@ -606,8 +611,9 @@ def apply_migration(
         staged_report = staging / "live-migration.json"
         staged_report.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         sources = [staging / "base" / path.name for path in final_facts]
+        sources.append(staging / "artifacts" / "snapshots")
         sources.extend([staged_db, staged_report])
-        destinations = [*final_facts, final_db, final_report]
+        destinations = [*final_facts, root / "artifacts" / "snapshots", final_db, final_report]
         for source, destination in zip(sources, destinations, strict=True):
             destination.parent.mkdir(parents=True, exist_ok=True)
             source.replace(destination)
@@ -649,8 +655,9 @@ def _semantic_migration_state(database: Path) -> dict[str, list[dict[str, Any]]]
             FROM applications WHERE source='legacy-csv' ORDER BY id
         """),
         "job_snapshots": _read_only_rows(database, """
-            SELECT js.id, js.application_id, js.version_number, js.original_text, js.source_url,
-                   js.captured_at, js.source_metadata_json, js.content_hash, js.prior_snapshot_id
+            SELECT js.id, js.application_id, js.version_number, js.payload_path, js.source_hash,
+                   js.normalized_hash, js.source_url, js.captured_at, js.source_metadata_json,
+                   js.content_hash, js.prior_snapshot_id
             FROM job_snapshots js JOIN applications a ON a.id=js.application_id
             WHERE a.source='legacy-csv' ORDER BY js.id
         """),

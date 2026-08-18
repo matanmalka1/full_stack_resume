@@ -427,6 +427,22 @@ class SelectionManifest(StrictModel):
     superseded_by_manual_edit: bool = False
 
 
+class SelectionPlan(StrictModel):
+    """One immutable, versioned fact-selection decision for an analysis."""
+
+    id: str
+    application_id: str
+    job_analysis_id: str
+    version_number: int
+    plan: SelectionManifest
+    candidate_context_version: str
+    candidate_context_hash: str
+    profile_version: str
+    selection_policy_version: str
+    track_emphasis_dependencies: dict[str, str]
+    created_at: str
+
+
 class DraftDocument(StrictModel):
     """A draft and the exact chain position it was built from.
 
@@ -480,6 +496,40 @@ class DraftDocument(StrictModel):
         return self
 
 
+class WorkingDraft(StrictModel):
+    """The one mutable resume record for an Application.
+
+    The caller supplies the content hash alongside the structured source, just as it
+    does for ``DraftDocument``. Persistence owns optimistic version checks and the
+    one-active-draft constraint; the domain record stays storage-neutral.
+    """
+
+    id: str
+    application_id: str
+    job_analysis_id: str
+    selection_plan_id: str
+    parent_revision_id: str | None = None
+    source: DraftDocument
+    edit_version: int
+    content_hash: str
+    active: bool
+    created_at: str
+    updated_at: str
+
+
+class ValidationRunLineage(StrictModel):
+    """Exact mutable-draft and frozen-context inputs validated by one run."""
+
+    working_draft_id: str
+    edit_version: int
+    content_hash: str
+    job_snapshot_id: str
+    job_analysis_id: str
+    selection_plan_id: str
+    knowledge_context_hash: str
+    validator_versions: dict[str, str]
+
+
 class ValidationIssue(StrictModel):
     group: str
     code: str
@@ -488,6 +538,10 @@ class ValidationIssue(StrictModel):
 
 
 class ValidationReport(StrictModel):
+    report_schema_version: str | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
     passed: bool
     groups: dict[str, bool]
     issues: list[ValidationIssue] = []
@@ -503,6 +557,7 @@ class ValidationReport(StrictModel):
     ) -> Self:
         """Build a report whose pass result is derived from its findings."""
         return cls(
+            report_schema_version="2.0",
             passed=all(groups.values()) and not any(issue.hard for issue in issues),
             groups=groups,
             issues=issues,

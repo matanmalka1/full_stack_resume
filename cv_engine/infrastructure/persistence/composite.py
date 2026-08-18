@@ -8,6 +8,7 @@ from .applications import SqliteApplicationRepository
 from .artifacts import SqliteArtifactRepository
 from .audit import SqliteAuditRepository
 from .connection import SqliteUnitOfWork
+from .drafts import SqliteDraftRepository
 from .preparation import SqlitePreparationRepository
 from .schema import ensure_current_schema
 from .tracking import SqliteTrackingRepository
@@ -25,6 +26,9 @@ class Repository:
         "get_analysis": "preparation",
         "analyses": "preparation",
         "latest_analysis": "preparation",
+        "create_selection_plan": "preparation",
+        "selection_plan": "preparation",
+        "latest_selection_plan": "preparation",
         "get_application": "applications",
         "list_applications": "applications",
         "transition_status": "applications",
@@ -42,7 +46,13 @@ class Repository:
         "record_validation": "artifacts",
         "latest_validation": "artifacts",
         "validation_for_artifact": "artifacts",
+        "validation_lineage": "artifacts",
         "integrity_check": "artifacts",
+        "create_working_draft": "drafts",
+        "replace_active_working_draft": "drafts",
+        "working_draft": "drafts",
+        "active_working_draft": "drafts",
+        "update_working_draft": "drafts",
         "set_ready": "tracking",
         "record_submission": "tracking",
         "_set_ready": "tracking",
@@ -63,6 +73,7 @@ class Repository:
                     self.path, applications=applications
                 ),
                 "artifacts": SqliteArtifactRepository(self.path),
+                "drafts": SqliteDraftRepository(self.path),
                 "tracking": SqliteTrackingRepository(
                     self.path, applications=applications
                 ),
@@ -90,6 +101,7 @@ class Repository:
                     self.path, uow.connection, applications
                 ),
                 "artifacts": self._owners["artifacts"].bind(uow),
+                "drafts": self._owners["drafts"].bind(uow),
                 "tracking": SqliteTrackingRepository(
                     self.path, uow.connection, applications
                 ),

@@ -10,7 +10,11 @@ from ..domain.models import (
     DraftDocument,
     JobClassificationProposal,
     Profile,
+    SelectionManifest,
+    SelectionPlan,
     ValidationReport,
+    ValidationRunLineage,
+    WorkingDraft,
 )
 
 
@@ -32,6 +36,15 @@ class StoredDraft:
 
     paths: DraftPaths
     markdown: str
+
+
+@dataclass(frozen=True)
+class SnapshotPayload:
+    """Storage-neutral metadata for one immutable JobSnapshot payload."""
+
+    reference: str
+    sha256: str
+    size: int
 
 
 @dataclass(frozen=True)
@@ -75,6 +88,17 @@ class ArtifactStore(Protocol):
     def resolve(self, stored_path: str) -> Path: ...
 
     def relative(self, path: Path) -> str: ...
+
+
+class SnapshotPayloadStore(Protocol):
+    def commit_snapshot(
+        self,
+        application_id: str,
+        snapshot_id: str,
+        text: str,
+    ) -> SnapshotPayload: ...
+
+    def read_snapshot(self, reference: str, expected_hash: str) -> str: ...
 
 
 class KnowledgeStore(Protocol):
@@ -162,7 +186,16 @@ class ApplicationStore(Protocol):
     """Applications themselves: identity, status, and tracking fields."""
 
     def create_application(
-        self, *, company: str, target_role: str, original_job_text: str, source_url: str | None
+        self,
+        *,
+        company: str,
+        target_role: str,
+        payload_path: str,
+        source_hash: str,
+        normalized_hash: str,
+        source_url: str | None,
+        application_id: str | None = None,
+        snapshot_id: str | None = None,
     ) -> tuple[str, str]: ...
 
     def get_application(self, application_id: str) -> dict[str, Any]: ...
@@ -196,14 +229,45 @@ class JobStore(Protocol):
     def get_snapshot(self, snapshot_id: str) -> dict[str, Any]: ...
 
     def save_analysis(
-        self, application_id: str, snapshot_id: str, analysis: Any, *, provider: str, model: str
-    ) -> str: ...
+        self,
+        application_id: str,
+        snapshot_id: str,
+        analysis: Any,
+        plan: SelectionManifest,
+        *,
+        provider: str,
+        model: str,
+        candidate_context_version: str,
+        candidate_context_hash: str,
+        profile_version: str,
+        selection_policy_version: str,
+        track_emphasis_dependencies: dict[str, str],
+    ) -> tuple[str, SelectionPlan]: ...
 
     def get_analysis(self, analysis_id: str) -> dict[str, Any]: ...
 
     def analyses(self, application_id: str) -> list[dict[str, Any]]: ...
 
     def latest_analysis(self, application_id: str) -> tuple[str, Any]: ...
+
+    def create_selection_plan(
+        self,
+        application_id: str,
+        job_analysis_id: str,
+        plan: SelectionManifest,
+        *,
+        candidate_context_version: str,
+        candidate_context_hash: str,
+        profile_version: str,
+        selection_policy_version: str,
+        track_emphasis_dependencies: dict[str, str],
+        plan_id: str | None = None,
+        created_at: str | None = None,
+    ) -> SelectionPlan: ...
+
+    def selection_plan(self, selection_plan_id: str) -> SelectionPlan: ...
+
+    def latest_selection_plan(self, application_id: str) -> SelectionPlan: ...
 
 
 class ArtifactRegistry(Protocol):
@@ -259,11 +323,15 @@ class ArtifactRegistry(Protocol):
         phase: str,
         report: ValidationReport,
         artifact_version_id: str | None = None,
+        *,
+        lineage: ValidationRunLineage | None = None,
     ) -> str: ...
 
     def validation_for_artifact(
         self, application_id: str, phase: str, artifact_version_id: str
     ) -> ValidationReport: ...
+
+    def validation_lineage(self, validation_id: str) -> ValidationRunLineage: ...
 
 
 class FactAudit(Protocol):
@@ -282,6 +350,42 @@ class PreparationRepository(ApplicationStore, JobStore, Protocol):
 
 class DraftRepository(ApplicationStore, JobStore, ArtifactRegistry, Protocol):
     """The records needed to validate, approve, render, and qualify a draft."""
+
+    def create_working_draft(
+        self,
+        application_id: str,
+        job_analysis_id: str,
+        selection_plan_id: str,
+        source: DraftDocument,
+        *,
+        parent_revision_id: str | None = None,
+        working_draft_id: str | None = None,
+        created_at: str | None = None,
+    ) -> WorkingDraft: ...
+
+    def working_draft(self, working_draft_id: str) -> WorkingDraft: ...
+
+    def replace_active_working_draft(
+        self,
+        application_id: str,
+        job_analysis_id: str,
+        selection_plan_id: str,
+        source: DraftDocument,
+        *,
+        parent_revision_id: str | None = None,
+        updated_at: str | None = None,
+    ) -> WorkingDraft: ...
+
+    def active_working_draft(self, application_id: str) -> WorkingDraft: ...
+
+    def update_working_draft(
+        self,
+        working_draft_id: str,
+        expected_version: int,
+        source: DraftDocument,
+        *,
+        updated_at: str | None = None,
+    ) -> WorkingDraft: ...
 
 
 class KnowledgeAuditRepository(FactAudit, Protocol):

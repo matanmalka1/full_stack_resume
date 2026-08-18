@@ -10,8 +10,11 @@ import pytest
 import cv_engine.application.services.drafts as draft_service_module
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
 from cv_engine.application.errors import WorkflowError
+from cv_engine.domain.draft_markdown import parse_draft, serialize_markdown
 from cv_engine.domain.models import ValidationIssue, ValidationReport
+from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.infrastructure.persistence import connect
+from cv_engine.runtime.workspace import Workspace
 from helpers import ACCOUNT_MANAGER_JOB, working_claim as _working_claim
 
 
@@ -29,6 +32,7 @@ def test_default_flow_stops_for_review_then_reaches_ready(services) -> None:
     drafted = services.drafts.draft(DraftCommand(
         application_id=ingested.application_id,
         job_analysis_id=analysed.analysis_id,
+        selection_plan_id=analysed.selection_plan_id,
     ))
     app_id = ingested.application_id
     paths = services.artifacts.working_paths(app_id)
@@ -79,6 +83,35 @@ def test_csv_export_declares_its_schema_version(services, tmp_path: Path) -> Non
     assert "current_status" in metadata["columns"]
 
 
+def test_filesystem_working_draft_unconditionally_overwrites_the_projection(
+    workspace: Workspace,
+    draft_factory,
+) -> None:
+    application_id = "overwrite-projection"
+    first = draft_factory(
+        ACCOUNT_MANAGER_JOB,
+        application_id=application_id,
+    ).draft
+    replacement = draft_factory(
+        "Python backend developer API React",
+        application_id=application_id,
+    ).draft
+    store = FilesystemArtifactStore(workspace)
+
+    first_stored = store.write_working_draft(first)
+    first_markdown = first_stored.paths.markdown.read_text(encoding="utf-8")
+    replacement_stored = store.write_working_draft(replacement)
+
+    assert replacement_stored.paths == first_stored.paths
+    assert replacement_stored.paths.markdown.read_text(encoding="utf-8") == (
+        serialize_markdown(replacement)
+    )
+    assert parse_draft(
+        replacement_stored.paths.manifest.read_text(encoding="utf-8")
+    ).profile == replacement.profile
+    assert first_markdown != replacement_stored.markdown
+
+
 def test_validate_extracts_safe_manual_markdown_wording(drafted_application) -> None:
     setup = drafted_application("Manual Edit")
     services, app_id = setup
@@ -92,6 +125,9 @@ def test_validate_extracts_safe_manual_markdown_wording(drafted_application) -> 
     report = services.drafts.validate_working(app_id)
 
     assert report.passed, report.model_dump()
+    assert _working_claim(services, app_id, "sales.metric.performance").claim_type == "canonical"
+    synced = services.drafts.sync_working_claims(app_id)
+    assert synced.validation.passed, synced.validation.model_dump()
     assert _working_claim(services, app_id, "sales.metric.performance").claim_type == "derived"
 
 
@@ -111,8 +147,10 @@ def test_validate_preserves_unsupported_manual_markdown_as_pending(drafted_appli
 
     report = services.drafts.validate_working(app_id)
 
-    assert not report.passed
-    assert any(issue.code == "pending-claim" for issue in report.issues)
+    assert report.passed
+    synced = services.drafts.sync_working_claims(app_id)
+    assert not synced.validation.passed
+    assert any(issue.code == "pending-claim" for issue in synced.validation.issues)
     assert _working_claim(services, app_id, "sales.metric.performance").claim_type == "pending"
 
 
@@ -186,7 +224,9 @@ def test_fast_orchestration_preserves_call_order_and_gate_messages(
             )
         )),
         analysis=SimpleNamespace(analyze=lambda _command: (
-            calls.append("analyze") or SimpleNamespace(analysis_id="analysis-1")
+            calls.append("analyze") or SimpleNamespace(
+                analysis_id="analysis-1", selection_plan_id="selection-plan-1"
+            )
         )),
         drafts=SimpleNamespace(
             draft=lambda _command: (

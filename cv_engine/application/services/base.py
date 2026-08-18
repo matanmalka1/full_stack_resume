@@ -13,6 +13,7 @@ from ...domain.models import (
     FactStatus,
     JobAnalysis,
     ValidationReport,
+    WorkingDraft,
 )
 from ...domain.profiles import ProfileStore
 from ...domain.selection import EmphasisPolicyStore
@@ -68,6 +69,7 @@ from ..ports import (
     QueryRepository,
     ReadinessRepository,
     Renderer,
+    SnapshotPayloadStore,
     TrackingRepository,
 )
 from ..queries import (
@@ -103,12 +105,14 @@ class ServiceBase(Generic[RepoT]):
         artifacts: ArtifactStore,
         renderer: Renderer | None = None,
         provider: ClassificationProvider | None = None,
+        snapshots: SnapshotPayloadStore | None = None,
     ):
         self.repo = repository
         self.artifacts = artifacts
         self._knowledge = knowledge
         self._renderer = renderer
         self._provider = provider
+        self._snapshots = snapshots
 
     def load_knowledge(self) -> Knowledge:
         try:
@@ -133,13 +137,22 @@ class ServiceBase(Generic[RepoT]):
         except ValueError as exc:
             raise KnowledgeRejected(str(exc)) from exc
 
-    def working_draft(self, application_id: str) -> DraftDocument:
+    @property
+    def snapshot_payloads(self) -> SnapshotPayloadStore:
+        if self._snapshots is None:
+            raise DependencyUnavailable(
+                "this command needs the snapshot payload store and none was configured"
+            )
+        return self._snapshots
+
+    def working_draft_record(self, application_id: str) -> WorkingDraft:
         try:
-            return self.artifacts.load_working_draft(application_id)
-        except FileNotFoundError as exc:
+            return self.repo.active_working_draft(application_id)
+        except KeyError as exc:
             raise UnknownRecord(f"no working draft for application: {application_id}") from exc
-        except OSError as exc:
-            raise InfrastructureFailure(f"could not load working draft: {exc}") from exc
+
+    def working_draft(self, application_id: str) -> DraftDocument:
+        return self.working_draft_record(application_id).source
 
     def store_working_draft(self, draft: DraftDocument) -> Any:
         try:

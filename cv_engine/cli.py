@@ -32,7 +32,11 @@ from .application.commands import (
     RecruitmentStatusCommand,
 )
 from .application.queries import ApplicationListView
-from .compat import resolve_job_analysis_id, resolve_job_snapshot_id
+from .compat import (
+    resolve_job_analysis_id,
+    resolve_job_snapshot_id,
+    resolve_selection_plan_id,
+)
 from .runtime.composition import Services, build_services
 
 
@@ -91,6 +95,7 @@ def _fast(
     drafted = services.drafts.draft(DraftCommand(
         application_id=ingested.application_id,
         job_analysis_id=analysed.analysis_id,
+        selection_plan_id=analysed.selection_plan_id,
     ))
     if not drafted.validation.passed:
         raise WorkflowError("fast mode blocked by pre-render validation")
@@ -206,6 +211,7 @@ def build_parser() -> argparse.ArgumentParser:
     draft = sub.add_parser("draft", help="create or update the active working draft")
     draft.add_argument("application_id")
     draft.add_argument("--job-analysis", dest="job_analysis", default=None)
+    draft.add_argument("--selection-plan", dest="selection_plan", default=None)
 
     for name, help_text in [
         ("validate", "run pre-render validation"),
@@ -556,6 +562,7 @@ def main(argv: list[str] | None = None) -> int:
             ))
             _print({
                 "analysis_id": analysed.analysis_id,
+                "selection_plan_id": analysed.selection_plan_id,
                 "analysis": analysed.analysis.model_dump(mode="json"),
             })
         elif args.command == "draft":
@@ -564,6 +571,10 @@ def main(argv: list[str] | None = None) -> int:
                 job_analysis_id=(
                     args.job_analysis
                     or resolve_job_analysis_id(repository, args.application_id)
+                ),
+                selection_plan_id=(
+                    args.selection_plan
+                    or resolve_selection_plan_id(repository, args.application_id)
                 ),
             ))
             paths = services.artifacts.working_paths(args.application_id)

@@ -40,6 +40,7 @@ class AnalyzeCommand(BoundaryDTO):
 class DraftCommand(BoundaryDTO):
     application_id: str
     job_analysis_id: str
+    selection_plan_id: str
 
 
 class RecruitmentStatusCommand(BoundaryDTO):
@@ -63,17 +64,23 @@ class AnalysisResult(BoundaryDTO):
     application_id: str
     job_snapshot_id: str
     analysis_id: str
+    selection_plan_id: str
     analysis: JobAnalysis
 
 
 class DraftResult(BoundaryDTO):
     application_id: str
     job_analysis_id: str
+    selection_plan_id: str
+    working_draft_id: str
+    edit_version: int
     validation: ValidationReport
 
 
 class EditResult(BoundaryDTO):
     application_id: str
+    working_draft_id: str
+    edit_version: int
     validation: ValidationReport
 
 

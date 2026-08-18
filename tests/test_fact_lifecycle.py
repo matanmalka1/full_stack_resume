@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from cv_engine.application.commands import DraftCommand
+from cv_engine.application.commands import AnalyzeCommand, DraftCommand
 from cv_engine.application.errors import KnowledgeRejected
 from cv_engine.runtime.composition import Services
 from cv_engine.infrastructure.persistence import connect
@@ -180,6 +180,7 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
     rebuilt_draft = services.drafts.draft(DraftCommand(
         application_id=app_id,
         job_analysis_id=setup.analysis_id,
+        selection_plan_id=setup.selection_plan_id,
     ))
     assert rebuilt_draft.validation.passed, rebuilt_draft.validation.model_dump()
     rebuilt = _working_claim(services, app_id, "sales.cycle.account_management")
@@ -193,9 +194,14 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
     services.knowledge_lifecycle.attach_fact(
         "sales.leadership.pipeline_review", "account-manager", "Work Experience", pin=True
     )
+    refreshed = services.analysis.analyze(AnalyzeCommand(
+        application_id=app_id,
+        job_snapshot_id=setup.snapshot_id,
+    ))
     attached_draft = services.drafts.draft(DraftCommand(
         application_id=app_id,
-        job_analysis_id=setup.analysis_id,
+        job_analysis_id=refreshed.analysis_id,
+        selection_plan_id=refreshed.selection_plan_id,
     ))
 
     assert attached_draft.validation.passed, attached_draft.validation.model_dump()

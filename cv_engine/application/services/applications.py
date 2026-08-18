@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import Any, Generic, TypeVar
 
 from ... import __version__
@@ -17,7 +18,7 @@ from ...domain.models import (
 from ...domain.profiles import ProfileStore
 from ...domain.selection import EmphasisPolicyStore
 from ...domain.validation import validate_draft
-from ...util import sha256_file, utc_now
+from ...util import normalized_text, sha256_file, sha256_text, utc_now
 from ..chain import ChainError, check_draft_chain, decision_record_analysis_id
 from ..commands import (
     AnalyzeCommand,
@@ -95,11 +96,22 @@ class ApplicationService(ServiceBase[ApplicationStore]):
 
     def ingest(self, command: IngestCommand) -> IngestedApplication:
         try:
+            application_id = str(uuid.uuid4())
+            snapshot_id = str(uuid.uuid4())
+            payload = self.snapshot_payloads.commit_snapshot(
+                application_id,
+                snapshot_id,
+                command.job_text,
+            )
             application_id, snapshot_id = self.repo.create_application(
                 company=command.company,
                 target_role=command.target_role,
-                original_job_text=command.job_text,
+                payload_path=payload.reference,
+                source_hash=payload.sha256,
+                normalized_hash=sha256_text(normalized_text(command.job_text)),
                 source_url=command.source_url,
+                application_id=application_id,
+                snapshot_id=snapshot_id,
             )
         except ValueError as exc:
             raise PreconditionFailed(str(exc)) from exc

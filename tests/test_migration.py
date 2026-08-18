@@ -17,7 +17,7 @@ from cv_engine.infrastructure.migration import (
     retrospective_verify_migration,
     verify_snapshot,
 )
-from cv_engine.util import canonical_json, sha256_text
+from cv_engine.util import canonical_json, sha256_file, sha256_text
 from cv_engine.runtime.composition import build_services
 from cv_engine.runtime.workspace import load_workspace
 from helpers import passing_migration_test_runner as _passing_test_runner
@@ -53,8 +53,16 @@ def test_snapshot_restore_and_migration_preserve_rows_and_artifacts(tmp_path: Pa
     with connect(target / "data/applications.sqlite3") as connection:
         statuses = dict(connection.execute("SELECT company, current_status FROM applications"))
         paths = connection.execute("SELECT path, content_hash FROM artifact_versions").fetchall()
+        snapshots = connection.execute(
+            "SELECT payload_path, source_hash, source_metadata_json FROM job_snapshots"
+        ).fetchall()
     assert statuses == {"alpha": "preparing", "beta": "applied"}
     assert len(paths) == 13
+    for snapshot_row in snapshots:
+        payload_path = target / snapshot_row["payload_path"]
+        metadata = json.loads(snapshot_row["source_metadata_json"])
+        assert payload_path.read_bytes() == (source / metadata["original_path"]).read_bytes()
+        assert sha256_file(payload_path) == snapshot_row["source_hash"]
     assert (target / "base/sales.md").is_file()
     sales = (target / "base/sales.md").read_text(encoding="utf-8")
     assert "a team of 2-3 sales representatives" in sales
@@ -130,6 +138,9 @@ def test_retrospective_verification_reproduces_completed_migration(completed_mig
         "status_history": 4,
         "artifact_versions": 13,
     }
+    with connect(root / "data/applications.sqlite3") as connection:
+        assert connection.execute("SELECT COUNT(*) FROM selection_plans").fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM working_drafts").fetchone()[0] == 0
     assert report["artifact_hashes_checked"] == 13
 
 

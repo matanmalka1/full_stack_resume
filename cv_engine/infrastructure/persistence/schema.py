@@ -9,7 +9,11 @@ from .connection import connect, memory_connection
 
 
 MIGRATIONS_DIR = Path(__file__).with_name("migrations")
-REGISTERED_MIGRATIONS = ("0001_baseline.sql",)
+REGISTERED_MIGRATIONS = (
+    "0001_baseline.sql",
+    "0002_preparation_records.sql",
+    "0003_snapshot_payload_cutover.sql",
+)
 SCHEMA_VERSION = "2"
 
 

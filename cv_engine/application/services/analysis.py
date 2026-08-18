@@ -17,7 +17,7 @@ from ...domain.models import (
     ValidationReport,
 )
 from ...domain.profiles import ProfileStore
-from ...domain.selection import EmphasisPolicyStore
+from ...domain.selection import EmphasisPolicyStore, build_selection
 from ...domain.validation import validate_draft
 from ...util import sha256_file, utc_now
 from ..chain import ChainError, check_draft_chain, decision_record_analysis_id
@@ -116,8 +116,15 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                 f"{command.application_id}"
             )
         try:
+            job_text = self.snapshot_payloads.read_snapshot(
+                snapshot["payload_path"],
+                snapshot["source_hash"],
+            )
+        except (OSError, ValueError) as exc:
+            raise InfrastructureFailure(f"could not read job snapshot payload: {exc}") from exc
+        try:
             deterministic = classify_job(
-                snapshot["original_text"],
+                job_text,
                 track_override=command.track_override,
                 profile_override=command.profile_override,
                 emphasis_override=command.emphasis_override,
@@ -127,7 +134,8 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             raise PreconditionFailed(f"invalid analysis request: {exc}") from exc
         result = deterministic
         used_provider, used_model = "deterministic", "rules-v1"
-        _, profiles, _ = self.knowledge()
+        knowledge = self.load_knowledge()
+        profiles = knowledge.profiles
         if command.provider == "openai":
             if self._provider is None:
                 raise DependencyUnavailable("AI classification was requested but no provider is configured")
@@ -136,7 +144,7 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             # what survives.
             proposal = self._provider.classify_job(
                 {
-                    "job_text": snapshot["original_text"],
+                    "job_text": job_text,
                     "deterministic_classification": {
                         "track": deterministic.track.value,
                         "profile": deterministic.profile.value,
@@ -182,17 +190,43 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                 f"{result.profile.value}"
             )
 
-        analysis_id = self.repo.save_analysis(
+        try:
+            _, plan_manifest = build_selection(
+                analysis=result,
+                profile=selected_profile,
+                policy=knowledge.policies.get(result.emphasis),
+                policy_store_version=knowledge.policies.version,
+                facts=knowledge.facts,
+                line_groups=(
+                    knowledge.presentations.line_groups(selected_profile, result.emphasis)
+                    if knowledge.presentations is not None
+                    else None
+                ),
+            )
+        except ValueError as exc:
+            raise PreconditionFailed(f"selection plan could not be built: {exc}") from exc
+
+        analysis_id, selection_plan = self.repo.save_analysis(
             command.application_id,
             snapshot["id"],
             result,
+            plan_manifest,
             provider=used_provider,
             model=used_model,
+            candidate_context_version=knowledge.candidate.context_version,
+            candidate_context_hash=knowledge.candidate.version_hash,
+            profile_version=profiles.version,
+            selection_policy_version=plan_manifest.policy_version,
+            track_emphasis_dependencies={
+                "track": result.track.value,
+                "emphasis": result.emphasis.value,
+            },
         )
         self.repo.set_normalized_role(command.application_id, selected_profile.normalized_role)
         return AnalysisResult(
             application_id=command.application_id,
             job_snapshot_id=command.job_snapshot_id,
             analysis_id=analysis_id,
+            selection_plan_id=selection_plan.id,
             analysis=result,
         )

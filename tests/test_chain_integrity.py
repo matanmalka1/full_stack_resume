@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import uuid
 from pathlib import Path
 
 import pytest
@@ -20,12 +21,15 @@ from cv_engine.application.ready import verify_ready_integrity
 from cv_engine.runtime.workspace import Workspace
 from cv_engine.runtime.composition import Services
 from cv_engine.application.errors import WorkflowError
+from cv_engine.util import normalized_text, sha256_text
 from helpers import ACCOUNT_MANAGER_JOB
 
 
 PERSISTED_TABLES = (
     "job_snapshots",
     "job_analyses",
+    "selection_plans",
+    "working_drafts",
     "status_history",
     "application_events",
     "decision_records",
@@ -65,6 +69,7 @@ def _draft(services: Services, application_id: str, analysis_id: str):
     return services.drafts.draft(DraftCommand(
         application_id=application_id,
         job_analysis_id=analysis_id,
+        selection_plan_id=services.repository.latest_selection_plan(application_id).id,
     ))
 
 
@@ -76,8 +81,15 @@ def test_new_snapshot_requires_a_new_analysis_before_drafting(
 ) -> None:
     services, app_id = analyzed_application("Snapshot Race")
     stale_analysis_id, _ = services.repository.latest_analysis(app_id)
-    new_snapshot_id = services.repository.add_job_snapshot(
-        app_id, ACCOUNT_MANAGER_JOB + " The role also covers quarterly portfolio reviews."
+    new_text = ACCOUNT_MANAGER_JOB + " The role also covers quarterly portfolio reviews."
+    new_snapshot_id = str(uuid.uuid4())
+    payload = services.payloads.commit_snapshot(app_id, new_snapshot_id, new_text)
+    services.repository.add_job_snapshot(
+        app_id,
+        payload.reference,
+        payload.sha256,
+        sha256_text(normalized_text(new_text)),
+        snapshot_id=new_snapshot_id,
     )
     before = _persisted(services, app_id)
 
@@ -148,7 +160,7 @@ def test_approval_binds_the_draft_analysis_not_the_latest(drafted_application) -
 # --- 3. records may not cross application ownership boundaries -------------
 
 
-def test_foreign_working_draft_cannot_be_approved(v1_repo: Path, drafted_application) -> None:
+def test_foreign_working_projection_cannot_replace_the_sqlite_source(v1_repo: Path, drafted_application) -> None:
     target = drafted_application("Target Co")
     other = drafted_application("Other Co", role="Key Account Manager")
     services = target.services
@@ -158,13 +170,13 @@ def test_foreign_working_draft_cannot_be_approved(v1_repo: Path, drafted_applica
     before_target = _persisted(services, target.application_id)
     before_other = _persisted(services, other.application_id)
 
-    with pytest.raises(WorkflowError, match="application"):
-        services.drafts.approve(target.application_id)
+    approved = services.drafts.approve(target.application_id)
 
-    assert not (v1_repo / "artifacts" / target.application_id).exists()
-    assert _persisted(services, target.application_id) == before_target
+    assert approved.application_id == target.application_id
+    assert _persisted(services, target.application_id) != before_target
     assert _persisted(services, other.application_id) == before_other
-    assert _rows(services, "SELECT 1 FROM decision_records") == []
+    restored = services.artifacts.load_working_draft(target.application_id)
+    assert restored.application_id == target.application_id
 
 
 def test_decision_and_artifact_records_cannot_cross_applications(drafted_application) -> None:
@@ -239,14 +251,14 @@ def test_invalid_classifications_are_rejected_before_any_persistence(services: S
 # --- the chain is validated as one unit ------------------------------------
 
 
-def test_working_draft_must_match_every_bound_analysis_dimension(
+def test_projection_manifest_changes_do_not_mutate_the_working_draft_record(
     v1_repo: Path, drafted_application
 ) -> None:
     setup = drafted_application("Tampered Chain")
     services, app_id = setup.services, setup.application_id
     manifest = v1_repo / "artifacts/working" / app_id / "resume.claims.json"
     original = manifest.read_text(encoding="utf-8")
-    before = _persisted(services, app_id)
+    authoritative = services.repository.active_working_draft(app_id)
     cases = [
         ("track", "development"),
         ("emphasis", "balanced-sales"),
@@ -258,10 +270,9 @@ def test_working_draft_must_match_every_bound_analysis_dimension(
         payload = json.loads(original)
         payload[field] = value
         manifest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-        with pytest.raises(WorkflowError):
-            services.drafts.approve(app_id)
+        assert services.drafts.validate_working(app_id).passed
         assert not (v1_repo / "artifacts" / app_id).exists()
-        assert _persisted(services, app_id) == before
+        assert services.repository.active_working_draft(app_id) == authoritative
     manifest.write_text(original, encoding="utf-8")
 
 

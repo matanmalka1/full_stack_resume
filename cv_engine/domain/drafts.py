@@ -118,6 +118,7 @@ def build_draft(
     policies: EmphasisPolicyStore,
     candidate: CandidateContext,
     presentations: PresentationStore | None = None,
+    selection: SelectionManifest | None = None,
 ) -> DraftDocument:
     if analysis.profile is not profile.profile or analysis.track is not profile.track:
         raise ValueError("analysis and profile do not match")
@@ -131,18 +132,27 @@ def build_draft(
         for fact_id in contact_ids
     ]
 
-    selected_by_section, selection = build_selection(
-        analysis=analysis,
-        profile=profile,
-        policy=policies.get(analysis.emphasis),
-        policy_store_version=policies.version,
-        facts=facts,
-        line_groups=(
-            presentations.line_groups(profile, analysis.emphasis)
-            if presentations is not None
-            else None
-        ),
-    )
+    if selection is None:
+        selected_by_section, selection = build_selection(
+            analysis=analysis,
+            profile=profile,
+            policy=policies.get(analysis.emphasis),
+            policy_store_version=policies.version,
+            facts=facts,
+            line_groups=(
+                presentations.line_groups(profile, analysis.emphasis)
+                if presentations is not None
+                else None
+            ),
+        )
+    else:
+        if selection.emphasis is not analysis.emphasis:
+            raise ValueError("selection plan emphasis does not match analysis")
+        selected = set(selection.selected_fact_ids)
+        selected_by_section = {
+            spec.name_en: [fact_id for fact_id in spec.fact_ids if fact_id in selected]
+            for spec in profile.sections
+        }
 
     # The headline is supported by the historical titles that actually reached
     # the document, not by every title the Profile could have shown.

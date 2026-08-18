@@ -16,11 +16,13 @@ from ...domain.models import (
     FactStatus,
     JobAnalysis,
     ValidationReport,
+    ValidationRunLineage,
+    WorkingDraft,
 )
 from ...domain.profiles import ProfileStore
 from ...domain.selection import EmphasisPolicyStore
 from ...domain.validation import validate_draft
-from ...util import sha256_file, utc_now
+from ...util import canonical_json, sha256_file, sha256_text, utc_now
 from ..chain import ChainError, check_draft_chain, decision_record_analysis_id
 from ..commands import (
     AnalyzeCommand,
@@ -96,6 +98,30 @@ from .base import ServiceBase
 class DraftService(ServiceBase[DraftRepository]):
     """The working draft: generation, manual edits, validation, approval."""
 
+    @staticmethod
+    def _lineage(working: WorkingDraft, knowledge: Knowledge) -> ValidationRunLineage:
+        return ValidationRunLineage(
+            working_draft_id=working.id,
+            edit_version=working.edit_version,
+            content_hash=working.content_hash,
+            job_snapshot_id=working.source.job_snapshot_id,
+            job_analysis_id=working.job_analysis_id,
+            selection_plan_id=working.selection_plan_id,
+            knowledge_context_hash=sha256_text(canonical_json(knowledge.versions())),
+            validator_versions={"draft": "2.0"},
+        )
+
+    def _commit_edit(self, working: WorkingDraft, source: DraftDocument) -> WorkingDraft:
+        try:
+            changed = self.repo.update_working_draft(
+                working.id,
+                working.edit_version,
+                source,
+            )
+        except ValueError as exc:
+            raise StateConflict(str(exc)) from exc
+        return changed
+
     def draft(self, command: DraftCommand) -> DraftResult:
         """Build the working draft from one exact analysis.
 
@@ -113,6 +139,20 @@ class DraftService(ServiceBase[DraftRepository]):
         if record["application_id"] != command.application_id:
             raise LineageBroken(
                 f"analysis {analysis_id} does not belong to application {command.application_id}"
+            )
+        try:
+            plan = self.repo.selection_plan(command.selection_plan_id)
+        except KeyError as exc:
+            raise UnknownRecord(
+                f"unknown selection plan: {command.selection_plan_id}"
+            ) from exc
+        if (
+            plan.application_id != command.application_id
+            or plan.job_analysis_id != analysis_id
+        ):
+            raise LineageBroken(
+                f"selection plan {plan.id} does not belong to application "
+                f"{command.application_id} and analysis {analysis_id}"
             )
         analysis = record["analysis"]
         if analysis.fit.value == "low" and analysis.user_override.get("fit") != "accepted-low-fit":
@@ -151,12 +191,19 @@ class DraftService(ServiceBase[DraftRepository]):
                 policies=policies,
                 candidate=knowledge.candidate,
                 presentations=presentation_rules,
+                selection=plan.plan,
             )
         except ValueError as exc:
             raise PreconditionFailed(f"draft could not be built: {exc}") from exc
-        stored = self.store_working_draft(draft)
-        report = validate_draft(
+        working = self.repo.replace_active_working_draft(
+            command.application_id,
+            analysis_id,
+            plan.id,
             draft,
+        )
+        stored = self.store_working_draft(working.source)
+        report = validate_draft(
+            working.source,
             stored.markdown,
             facts,
             profile,
@@ -164,7 +211,12 @@ class DraftService(ServiceBase[DraftRepository]):
             policies=policies,
             presentations=presentation_rules,
         )
-        self.repo.record_validation(command.application_id, "pre-render", report)
+        self.repo.record_validation(
+            command.application_id,
+            "pre-render",
+            report,
+            lineage=self._lineage(working, knowledge),
+        )
         self.repo.record_generation_run({
             "application_id": command.application_id,
             "engine_version": __version__,
@@ -185,22 +237,19 @@ class DraftService(ServiceBase[DraftRepository]):
         return DraftResult(
             application_id=command.application_id,
             job_analysis_id=analysis_id,
+            selection_plan_id=plan.id,
+            working_draft_id=working.id,
+            edit_version=working.edit_version,
             validation=report,
         )
 
     def validate_working(self, application_id: str) -> ValidationReport:
         knowledge = self.load_knowledge()
         facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
-        draft = self.working_draft(application_id)
+        working = self.working_draft_record(application_id)
+        draft = working.source
         _, analysis = self._bound_analysis(application_id, draft, profiles, facts)
-        markdown = self.working_markdown(application_id)
-        if markdown != serialize_markdown(draft):
-            try:
-                draft = synchronize_markdown_claims(draft, markdown, facts)
-            except ValueError:
-                pass
-            else:
-                markdown = self.store_working_draft(draft).markdown
+        markdown = serialize_markdown(draft)
         report = validate_draft(
             draft,
             markdown,
@@ -210,7 +259,12 @@ class DraftService(ServiceBase[DraftRepository]):
             policies=policies,
             presentations=knowledge.presentations,
         )
-        self.repo.record_validation(application_id, "pre-render", report)
+        self.repo.record_validation(
+            application_id,
+            "pre-render",
+            report,
+            lineage=self._lineage(working, knowledge),
+        )
         return report
 
     def edit_claim(
@@ -225,7 +279,8 @@ class DraftService(ServiceBase[DraftRepository]):
     ) -> EditResult:
         knowledge = self.load_knowledge()
         facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
-        draft = self.working_draft(application_id)
+        working = self.working_draft_record(application_id)
+        draft = working.source
         _, analysis = self._bound_analysis(application_id, draft, profiles, facts)
         try:
             updated = apply_claim_edit(
@@ -241,9 +296,10 @@ class DraftService(ServiceBase[DraftRepository]):
             raise UnknownRecord(f"unknown claim in the working draft: {claim_id}") from exc
         except ValueError as exc:
             raise PreconditionFailed(f"claim edit rejected: {exc}") from exc
-        stored = self.store_working_draft(updated)
+        changed = self._commit_edit(working, updated)
+        stored = self.store_working_draft(changed.source)
         report = validate_draft(
-            updated,
+            changed.source,
             stored.markdown,
             facts,
             profiles.get(updated.profile),
@@ -251,8 +307,18 @@ class DraftService(ServiceBase[DraftRepository]):
             policies=policies,
             presentations=knowledge.presentations,
         )
-        self.repo.record_validation(application_id, "manual-claim-edit", report)
-        return EditResult(application_id=application_id, validation=report)
+        self.repo.record_validation(
+            application_id,
+            "manual-claim-edit",
+            report,
+            lineage=self._lineage(changed, knowledge),
+        )
+        return EditResult(
+            application_id=application_id,
+            working_draft_id=changed.id,
+            edit_version=changed.edit_version,
+            validation=report,
+        )
 
     def link_claim(self, application_id: str, claim_id: str, text: str, fact_ids: list[str]) -> EditResult:
         return self.edit_claim(application_id, claim_id, fact_ids, text=text)
@@ -260,7 +326,8 @@ class DraftService(ServiceBase[DraftRepository]):
     def sync_working_claims(self, application_id: str) -> EditResult:
         knowledge = self.load_knowledge()
         facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
-        draft = self.working_draft(application_id)
+        working = self.working_draft_record(application_id)
+        draft = working.source
         _, analysis = self._bound_analysis(application_id, draft, profiles, facts)
         try:
             updated = synchronize_markdown_claims(
@@ -268,9 +335,10 @@ class DraftService(ServiceBase[DraftRepository]):
             )
         except ValueError as exc:
             raise PreconditionFailed(f"working draft synchronization rejected: {exc}") from exc
-        stored = self.store_working_draft(updated)
+        changed = self._commit_edit(working, updated)
+        stored = self.store_working_draft(changed.source)
         report = validate_draft(
-            updated,
+            changed.source,
             stored.markdown,
             facts,
             profiles.get(updated.profile),
@@ -278,15 +346,29 @@ class DraftService(ServiceBase[DraftRepository]):
             policies=policies,
             presentations=knowledge.presentations,
         )
-        self.repo.record_validation(application_id, "manual-markdown-sync", report)
-        return EditResult(application_id=application_id, validation=report)
+        self.repo.record_validation(
+            application_id,
+            "manual-markdown-sync",
+            report,
+            lineage=self._lineage(changed, knowledge),
+        )
+        return EditResult(
+            application_id=application_id,
+            working_draft_id=changed.id,
+            edit_version=changed.edit_version,
+            validation=report,
+        )
 
     def approve(self, application_id: str) -> ApprovalResult:
         report = self.validate_working(application_id)
         if not report.passed:
             raise ValidationBlocked("approval blocked by pre-render validation", report)
         facts, profiles, _ = self.knowledge()
-        draft = self.working_draft(application_id)
+        working = self.working_draft_record(application_id)
+        draft = working.source
+        # SQLite is authoritative. Rebuild both projections immediately before
+        # publishing so an unsynchronised manual file edit cannot be approved.
+        self.store_working_draft(draft)
         # The decision record explains the draft being approved, so it is bound to
         # that draft's own analysis. A newer analysis does not get to describe an
         # older document.

@@ -35,7 +35,7 @@ class JobSnapshotView(BoundaryDTO):
     id: str
     application_id: str
     version_number: int
-    original_text: str
+    job_text: str
     source_url: str | None = None
     captured_at: str
     source_metadata: dict[str, Any]
@@ -102,9 +102,14 @@ def application_view(record: dict[str, Any]) -> ApplicationView:
     return ApplicationView.model_validate(record)
 
 
-def snapshot_view(record: dict[str, Any]) -> JobSnapshotView:
+def snapshot_view(record: dict[str, Any], job_text: str) -> JobSnapshotView:
     return JobSnapshotView.model_validate({
-        **{key: record.get(key) for key in JobSnapshotView.model_fields if key != "source_metadata"},
+        **{
+            key: record.get(key)
+            for key in JobSnapshotView.model_fields
+            if key not in {"source_metadata", "job_text"}
+        },
+        "job_text": job_text,
         "source_metadata": json.loads(record.get("source_metadata_json") or "{}"),
     })
 
