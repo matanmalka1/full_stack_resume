@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from enum import StrEnum
 from typing import Any, Literal
 
@@ -116,6 +117,17 @@ class FactSource(StrictModel):
     source_version: str
     facts: list[Fact]
 
+    @model_validator(mode="after")
+    def require_unique_fact_ids(self) -> "FactSource":
+        duplicates = sorted(
+            fact_id
+            for fact_id, count in Counter(fact.fact_id for fact in self.facts).items()
+            if count > 1
+        )
+        if duplicates:
+            raise ValueError(f"fact source repeats fact IDs: {duplicates}")
+        return self
+
 
 class ResumeSectionSpec(StrictModel):
     """A section's candidate pool, not its output.
@@ -184,7 +196,7 @@ class EmphasisPolicy(StrictModel):
     emphasis: Emphasis
     tag_weights: dict[str, int]
     preferred_tags: list[str] = []
-    minimum_coverage: int = 0
+    minimum_coverage: int = Field(default=0, ge=0)
 
     @model_validator(mode="after")
     def validate_coverage(self) -> "EmphasisPolicy":
@@ -288,6 +300,9 @@ class Gap(StrictModel):
     substitute_fact_ids: list[str] = []
 
 
+OverrideKey = Literal["track", "profile", "emphasis", "language", "fit"]
+
+
 class JobClassificationProposal(StrictModel):
     """What an AI provider is allowed to propose for `classify_job`.
 
@@ -324,7 +339,7 @@ class JobAnalysis(StrictModel):
     language: Literal["en", "he"]
     classification_requires_approval: bool = False
     approval_reasons: list[str] = []
-    user_override: dict[str, str] = {}
+    user_override: dict[OverrideKey, str] = {}
 
 
 class ClaimLine(StrictModel):
@@ -421,6 +436,9 @@ class DraftDocument(StrictModel):
     approval, the decision record, and every rendered artifact all inherit their
     provenance from these three fields.
 
+    The schema and fact-store versions are also immutable provenance. The
+    content hash remains assignable because controlled edit paths reseal it.
+
     `job_analysis_id` is absent only on `schema_version` "1.0" manifests, which
     were written before the binding existed. Those are still readable — approved
     versions are immutable and must stay loadable — but their analysis is
@@ -428,7 +446,7 @@ class DraftDocument(StrictModel):
     analysis happens to be latest.
     """
 
-    schema_version: str = "1.1"
+    schema_version: str = Field(default="1.1", frozen=True)
     application_id: str = Field(frozen=True)
     job_snapshot_id: str = Field(frozen=True)
     job_analysis_id: str | None = Field(default=None, frozen=True)
@@ -443,7 +461,7 @@ class DraftDocument(StrictModel):
     selected_fact_ids: list[str]
     omitted_facts: dict[str, OmissionReason] = {}
     selection: SelectionManifest | None = None
-    fact_store_version: str
+    fact_store_version: str = Field(frozen=True)
     content_hash: str = ""
 
     @model_validator(mode="after")
@@ -474,6 +492,22 @@ class ValidationReport(StrictModel):
     groups: dict[str, bool]
     issues: list[ValidationIssue] = []
     evidence: dict[str, Any] = {}
+
+    @model_validator(mode="after")
+    def passed_agrees_with_findings(self) -> "ValidationReport":
+        if not self.passed:
+            return self
+        failed_groups = sorted(group for group, passed in self.groups.items() if not passed)
+        if failed_groups:
+            raise ValueError(
+                f"report claims to have passed with failed groups: {failed_groups}"
+            )
+        hard_issues = sorted({issue.code for issue in self.issues if issue.hard})
+        if hard_issues:
+            raise ValueError(
+                f"report claims to have passed with hard failures: {hard_issues}"
+            )
+        return self
 
 
 class ProviderContext(StrictModel):

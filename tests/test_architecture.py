@@ -24,7 +24,13 @@ ALLOWED_INTERNAL = {
 
 
 def _modules(package: str) -> list[Path]:
-    return sorted((ENGINE / package).glob("*.py"))
+    """Every module in the layer, subpackages included.
+
+    Recursive because a layer may group its modules into packages; a rule that
+    only saw the top level would quietly stop covering code the moment it moved
+    one directory down.
+    """
+    return sorted((ENGINE / package).rglob("*.py"))
 
 
 def _imports(path: Path) -> list[tuple[str, int]]:
@@ -110,22 +116,22 @@ def test_domain_and_application_dependencies_point_inward() -> None:
         allowed = ALLOWED_INTERNAL[layer] | {"__own_package__"}
         for path in _modules(layer):
             offenders.extend(
-                f"{path.name}:{line} imports forbidden {name}"
+                f"{path.relative_to(ENGINE)}:{line} imports forbidden {name}"
                 for name, line in _imports(path)
                 if name in FORBIDDEN_EXTERNAL[layer]
                 or (name in internal_layers and name not in allowed)
             )
             offenders.extend(
-                f"{path.name}:{number} touches filesystem: {line.strip()}"
+                f"{path.relative_to(ENGINE)}:{number} touches filesystem: {line.strip()}"
                 for number, line in _code_lines(path)
                 if any(call in line for call in FILESYSTEM_CALLS)
             )
             offenders.extend(
-                f"{path.name}:{line} composes storage layout"
+                f"{path.relative_to(ENGINE)}:{line} composes storage layout"
                 for line in _joined_path_literals(path)
             )
             offenders.extend(
-                f"{path.name}:{number} names storage layout: {line.strip()}"
+                f"{path.relative_to(ENGINE)}:{number} names storage layout: {line.strip()}"
                 for number, line in _code_lines(path)
                 if "artifacts_root" in line or "knowledge_root" in line or "base_dir" in line
             )
