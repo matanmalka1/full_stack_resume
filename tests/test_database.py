@@ -5,8 +5,9 @@ from pathlib import Path
 
 import pytest
 
+from cv_engine.application.commands import IngestCommand, NextActionCommand
 from cv_engine.infrastructure.db import connect
-from cv_engine.domain.models import ApplicationStatus
+from cv_engine.domain.models import ApplicationStatus, ValidationReport
 
 
 SCHEMA_FIXTURE = Path(__file__).parent / "fixtures/m1_sqlite_master.tsv"
@@ -29,6 +30,8 @@ def test_status_history_and_transition_contract(application_repo) -> None:
     app_id, _ = repo.create_application(company="Acme", target_role="Developer", original_job_text="Python developer role")
     repo.transition_status(app_id, ApplicationStatus.PREPARING, "analysis")
     assert repo.get_application(app_id)["current_status"] == "preparing"
+    with pytest.raises(ValueError, match="engine-owned"):
+        repo.transition_status(app_id, ApplicationStatus.READY)
     with pytest.raises(ValueError, match="submission-owned"):
         repo.transition_status(app_id, ApplicationStatus.APPLIED)
     with connect(repo.path) as connection:
@@ -60,3 +63,74 @@ def test_m1_sqlite_master_fingerprint_is_frozen(application_repo) -> None:
     ]
     assert _sqlite_master_fingerprint(application_repo.path) == expected
 
+
+def test_ready_submission_and_artifact_registry_preconditions(application_repo) -> None:
+    repo = application_repo
+    refused_app, refused_snapshot = repo.create_application(
+        company="Move Guard", target_role="Developer", original_job_text="Python role"
+    )
+    repo.transition_status(refused_app, ApplicationStatus.PREPARING, "analysis")
+    with pytest.raises(ValueError, match="rendered resume PDF"):
+        repo.set_ready(refused_app, "missing")
+    refused_pdf = repo.register_artifact_version(
+        refused_app, "resume_pdf", "resume", "artifacts/refused/v001/resume.pdf",
+        "a" * 64, "rendered", job_snapshot_id=refused_snapshot,
+    )
+    with pytest.raises(ValueError, match="post-render validation"):
+        repo.set_ready(refused_app, refused_pdf)
+    repo.record_validation(
+        refused_app, "post-render",
+        ValidationReport.from_findings({"render": False}, []), refused_pdf,
+    )
+    with pytest.raises(ValueError, match="passing post-render validation"):
+        repo.set_ready(refused_app, refused_pdf)
+
+    app_id, snapshot_id = repo.create_application(
+        company="Move Guard Success", target_role="Developer",
+        original_job_text="Another Python role",
+    )
+    repo.transition_status(app_id, ApplicationStatus.PREPARING, "analysis")
+    pdf_id = repo.register_artifact_version(
+        app_id, "resume_pdf", "resume", "artifacts/success/v001/resume.pdf",
+        "c" * 64, "rendered", job_snapshot_id=snapshot_id,
+    )
+    repo.record_validation(
+        app_id, "post-render",
+        ValidationReport.from_findings({"render": True}, []), pdf_id,
+    )
+    repo.set_ready(app_id, pdf_id)
+    with pytest.raises(ValueError, match="rendered resume PDF"):
+        repo.record_submission(app_id, "missing")
+    assert repo.record_submission(app_id, pdf_id)
+    assert repo.get_application(app_id)["current_status"] == "applied"
+
+    second_id = repo.register_artifact_version(
+        app_id, "resume_pdf", "resume", "artifacts/success/v002/resume.pdf",
+        "b" * 64, "rendered", job_snapshot_id=snapshot_id,
+    )
+    versions = repo.artifact_versions(app_id)
+    assert [(row["id"], row["version_number"]) for row in versions] == [
+        (pdf_id, 1), (second_id, 2),
+    ]
+    inventory = repo.artifact_inventory()
+    assert len(inventory) == 3
+    assert {(row["path"], row["content_hash"]) for row in versions}.issubset(
+        {(row["path"], row["content_hash"]) for row in inventory}
+    )
+    assert repo.integrity_check() == []
+
+
+def test_tracking_service_sets_next_action_without_changing_status(services) -> None:
+    ingested = services.applications.ingest(
+        IngestCommand(company="Service Action", target_role="Sales", job_text="Sales role")
+    )
+    result = services.tracking.set_next_action(
+        NextActionCommand(
+            application_id=ingested.application_id,
+            next_action="Follow up",
+            next_action_date="2026-08-20",
+        )
+    )
+    assert result.current_status == "saved"
+    assert result.next_action == "Follow up"
+    assert result.next_action_date == "2026-08-20"
