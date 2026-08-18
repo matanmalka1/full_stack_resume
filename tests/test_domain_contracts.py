@@ -15,14 +15,19 @@ import pytest
 from pydantic import ValidationError
 
 from cv_engine.domain.models import (
+    DraftDocument,
     EmphasisPolicy,
     Emphasis,
     Fact,
     FactSource,
     FactStatus,
     JobAnalysis,
+    SelectionManifest,
+    SelectionPlan,
     ValidationIssue,
     ValidationReport,
+    ValidationRunLineage,
+    WorkingDraft,
 )
 
 
@@ -136,7 +141,78 @@ def test_legacy_validation_report_json_round_trips_without_a_shape_change() -> N
     report = ValidationReport.model_validate_json(json.dumps(legacy))
 
     assert report.model_dump(mode="json") == legacy
+    assert report.report_schema_version is None
     assert "report_schema_version" not in report.model_dump(mode="json")
+
+
+def test_new_validation_reports_carry_the_stage_7b_schema_version() -> None:
+    report = ValidationReport.from_findings(
+        groups={"headline_safety": True},
+        issues=[],
+    )
+
+    assert report.report_schema_version == "2.0"
+    assert report.model_dump(mode="json")["report_schema_version"] == "2.0"
+
+
+def test_preparation_records_preserve_exact_domain_lineage(draft_factory) -> None:
+    draft: DraftDocument = draft_factory("Python backend developer API React").draft
+    manifest = draft.selection
+    assert isinstance(manifest, SelectionManifest)
+
+    plan = SelectionPlan(
+        id="plan-1",
+        application_id=draft.application_id,
+        job_analysis_id=draft.job_analysis_id or "",
+        version_number=1,
+        plan=manifest,
+        candidate_context_version="candidate-v1",
+        candidate_context_hash="candidate-hash",
+        profile_version="profile-v1",
+        selection_policy_version="selection-v1",
+        track_emphasis_dependencies={
+            "track": "track-v1",
+            "emphasis": "emphasis-v1",
+        },
+        created_at="2026-08-18T00:00:00Z",
+    )
+    working = WorkingDraft(
+        id="draft-1",
+        application_id=draft.application_id,
+        job_analysis_id=plan.job_analysis_id,
+        selection_plan_id=plan.id,
+        source=draft,
+        edit_version=3,
+        content_hash="caller-supplied-hash",
+        active=True,
+        created_at="2026-08-18T00:00:00Z",
+        updated_at="2026-08-18T00:01:00Z",
+    )
+    lineage = ValidationRunLineage(
+        working_draft_id=working.id,
+        edit_version=working.edit_version,
+        content_hash=working.content_hash,
+        job_snapshot_id=draft.job_snapshot_id,
+        job_analysis_id=working.job_analysis_id,
+        selection_plan_id=working.selection_plan_id,
+        knowledge_context_hash="knowledge-hash",
+        validator_versions={"draft": "2.0"},
+    )
+
+    assert plan.plan is manifest
+    assert working.source is draft
+    assert working.parent_revision_id is None
+    assert working.content_hash == "caller-supplied-hash"
+    assert lineage.model_dump() == {
+        "working_draft_id": "draft-1",
+        "edit_version": 3,
+        "content_hash": "caller-supplied-hash",
+        "job_snapshot_id": draft.job_snapshot_id,
+        "job_analysis_id": plan.job_analysis_id,
+        "selection_plan_id": "plan-1",
+        "knowledge_context_hash": "knowledge-hash",
+        "validator_versions": {"draft": "2.0"},
+    }
 
 
 def test_an_emphasis_policy_refuses_a_negative_coverage_expectation() -> None:

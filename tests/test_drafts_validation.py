@@ -15,6 +15,36 @@ def test_generated_draft_has_exact_canonical_claim_links(draft_factory) -> None:
     report = validate_draft(draft, markdown.read_text(encoding="utf-8"), facts, profile, analysis)
     assert report.passed, report.model_dump()
     assert report.evidence["claim_count"] > 10
+    assert report.report_schema_version == "2.0"
+    assert set(report.groups) == {"content", "profile", "structure", "headline_safety"}
+
+
+def test_unsafe_headline_fails_only_the_draft_side_headline_group(
+    v1_repo: Path,
+    draft_factory,
+) -> None:
+    facts, profile, analysis, draft, _markdown = draft_factory(
+        "Python backend developer API React",
+        write=True,
+    )
+    draft.headline.text = "Invented Executive Seniority"
+    draft.headline.text_hash = sha256_text(draft.headline.text)
+    draft.content_hash = sha256_text(serialize_markdown(draft))
+    markdown, _text = store_draft(v1_repo, draft)
+
+    report = validate_draft(
+        draft,
+        markdown.read_text(encoding="utf-8"),
+        facts,
+        profile,
+        analysis,
+    )
+
+    assert not report.passed
+    assert not report.groups["headline_safety"]
+    assert "filename" not in report.groups
+    issue = next(issue for issue in report.issues if issue.code == "unsafe-headline")
+    assert issue.group == "headline_safety"
 
 
 def test_manual_unlinked_change_blocks_approval(draft_factory) -> None:
