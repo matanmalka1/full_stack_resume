@@ -1,11 +1,27 @@
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 
 import pytest
 
 from cv_engine.infrastructure.db import connect
 from cv_engine.domain.models import ApplicationStatus
+
+
+SCHEMA_FIXTURE = Path(__file__).parent / "fixtures/m1_sqlite_master.tsv"
+
+
+def _sqlite_master_fingerprint(path: Path) -> list[tuple[str, str, str, str]]:
+    with sqlite3.connect(path) as connection:
+        rows = connection.execute(
+            "SELECT type, name, tbl_name, sql FROM sqlite_master "
+            "WHERE sql IS NOT NULL ORDER BY type, name"
+        ).fetchall()
+    return [
+        (kind, name, table, " ".join(ddl.split()))
+        for kind, name, table, ddl in rows
+    ]
 
 
 def test_status_history_and_transition_contract(application_repo) -> None:
@@ -35,3 +51,12 @@ def test_next_action_is_not_a_status(application_repo) -> None:
     row = repo.get_application(app_id)
     assert row["current_status"] == "saved"
     assert row["next_action"] == "Follow up"
+
+
+def test_m1_sqlite_master_fingerprint_is_frozen(application_repo) -> None:
+    expected = [
+        tuple(line.split("\t", 3))
+        for line in SCHEMA_FIXTURE.read_text(encoding="utf-8").splitlines()
+    ]
+    assert _sqlite_master_fingerprint(application_repo.path) == expected
+
