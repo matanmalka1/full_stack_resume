@@ -35,9 +35,9 @@ Carried forward:
 
 - [ ] `cv fact attach` requires a re-analysis before a plan can select the new fact.
       `confirm_and_use_fact` (§4.5) is the proper command.
-- [ ] `selection_plans.selection_policy_version` freezes the manifest's own policy version while
-      the store reports a content hash, so the column cannot be compared against current state.
-      §4.3 needs one comparable value before `POLICY_CHANGED` can rely on it.
+- [x] `selection_plans.selection_policy_version` now freezes the store's content hash rather than
+      the declared label, and drafting compares it alongside the profile version, at `c5105b8`.
+      §4.3 replaces both refusals with a stale reason.
 
 ## B. 2b — remainder of §4.2
 
