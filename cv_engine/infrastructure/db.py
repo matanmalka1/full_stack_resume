@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from ..domain.models import ApplicationStatus, JobAnalysis, ValidationReport
+from ..domain.recruitment import transition_allowed
 from ..util import canonical_json, sha256_text, utc_now
 
 
@@ -206,23 +207,6 @@ CREATE INDEX IF NOT EXISTS idx_status_application ON status_history(application_
 CREATE INDEX IF NOT EXISTS idx_artifacts_application ON artifacts(application_id);
 CREATE INDEX IF NOT EXISTS idx_versions_artifact ON artifact_versions(artifact_id);
 """
-
-
-ALLOWED_TRANSITIONS: dict[ApplicationStatus, set[ApplicationStatus]] = {
-    ApplicationStatus.SAVED: {ApplicationStatus.PREPARING, ApplicationStatus.WITHDRAWN, ApplicationStatus.CLOSED},
-    ApplicationStatus.PREPARING: {ApplicationStatus.READY, ApplicationStatus.WITHDRAWN, ApplicationStatus.CLOSED},
-    ApplicationStatus.READY: {ApplicationStatus.PREPARING, ApplicationStatus.APPLIED, ApplicationStatus.WITHDRAWN, ApplicationStatus.CLOSED},
-    ApplicationStatus.APPLIED: {ApplicationStatus.RECRUITER_SCREEN, ApplicationStatus.INTERVIEW, ApplicationStatus.REJECTED, ApplicationStatus.WITHDRAWN, ApplicationStatus.CLOSED},
-    ApplicationStatus.RECRUITER_SCREEN: {ApplicationStatus.INTERVIEW, ApplicationStatus.ASSIGNMENT, ApplicationStatus.REJECTED, ApplicationStatus.WITHDRAWN, ApplicationStatus.CLOSED},
-    ApplicationStatus.INTERVIEW: {ApplicationStatus.ASSIGNMENT, ApplicationStatus.FINAL_STAGE, ApplicationStatus.OFFER, ApplicationStatus.REJECTED, ApplicationStatus.WITHDRAWN, ApplicationStatus.CLOSED},
-    ApplicationStatus.ASSIGNMENT: {ApplicationStatus.INTERVIEW, ApplicationStatus.FINAL_STAGE, ApplicationStatus.OFFER, ApplicationStatus.REJECTED, ApplicationStatus.WITHDRAWN, ApplicationStatus.CLOSED},
-    ApplicationStatus.FINAL_STAGE: {ApplicationStatus.OFFER, ApplicationStatus.REJECTED, ApplicationStatus.WITHDRAWN, ApplicationStatus.CLOSED},
-    ApplicationStatus.OFFER: {ApplicationStatus.ACCEPTED, ApplicationStatus.REJECTED, ApplicationStatus.WITHDRAWN, ApplicationStatus.CLOSED},
-    ApplicationStatus.ACCEPTED: {ApplicationStatus.CLOSED},
-    ApplicationStatus.REJECTED: {ApplicationStatus.CLOSED},
-    ApplicationStatus.WITHDRAWN: {ApplicationStatus.CLOSED},
-    ApplicationStatus.CLOSED: set(),
-}
 
 
 def connect(path: Path) -> sqlite3.Connection:
@@ -526,7 +510,7 @@ class Repository:
             current = ApplicationStatus(row["current_status"])
             if target_status is current:
                 return
-            if target_status not in ALLOWED_TRANSITIONS[current]:
+            if not transition_allowed(current, target_status):
                 raise ValueError(f"invalid status transition: {current.value} -> {target_status.value}")
             connection.execute(
                 "UPDATE applications SET current_status=?, updated_at=? WHERE id=?",
