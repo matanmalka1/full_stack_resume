@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
+from cv_engine.application.errors import StateConflict
 from cv_engine.infrastructure.persistence import connect
 from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.application.ready import verify_ready_integrity
@@ -170,13 +171,25 @@ def test_foreign_working_projection_cannot_replace_the_sqlite_source(v1_repo: Pa
     before_target = _persisted(services, target.application_id)
     before_other = _persisted(services, other.application_id)
 
-    approved = services.drafts.approve(target.application_id)
+    # SQLite is authoritative, so the foreign projection cannot become the
+    # approved content. It does not silently lose either: approval refuses while
+    # the projection disagrees with the stored draft, so a corrupted or
+    # hand-copied working file cannot reach a revision at all.
+    with pytest.raises(StateConflict, match="differs from the stored draft"):
+        services.drafts.approve(target.application_id)
 
-    assert approved.application_id == target.application_id
-    assert _persisted(services, target.application_id) != before_target
+    assert _persisted(services, target.application_id) == before_target
     assert _persisted(services, other.application_id) == before_other
+    # Regenerating rewrites the projection from SQLite, and approval proceeds.
+    services.drafts.draft(DraftCommand(
+        application_id=target.application_id,
+        job_analysis_id=target.analysis_id,
+        selection_plan_id=target.selection_plan_id,
+    ))
     restored = services.artifacts.load_working_draft(target.application_id)
     assert restored.application_id == target.application_id
+    approved = services.drafts.approve(target.application_id)
+    assert approved.application_id == target.application_id
 
 
 def test_decision_and_artifact_records_cannot_cross_applications(drafted_application) -> None:

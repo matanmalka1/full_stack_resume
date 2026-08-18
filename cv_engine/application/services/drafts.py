@@ -154,6 +154,17 @@ class DraftService(ServiceBase[DraftRepository]):
                 f"selection plan {plan.id} does not belong to application "
                 f"{command.application_id} and analysis {analysis_id}"
             )
+        # The plan froze the knowledge it selected under. Re-using it against a
+        # changed Profile or selection policy would re-derive the sectioning from
+        # knowledge the plan never saw, so the draft would not be the plan's
+        # decision. Section 4.3 replaces this refusal with a stale reason; until
+        # then it fails closed.
+        if plan.profile_version != profiles.version:
+            raise StateConflict(
+                f"selection plan {plan.id} froze profile version {plan.profile_version}, "
+                f"but knowledge now reports {profiles.version}; analyze again to obtain a "
+                "plan for the current Profile"
+            )
         analysis = record["analysis"]
         if analysis.fit.value == "low" and analysis.user_override.get("fit") != "accepted-low-fit":
             raise StateConflict("low fit blocks CV generation until --accept-low-fit is recorded")
@@ -242,6 +253,23 @@ class DraftService(ServiceBase[DraftRepository]):
             edit_version=working.edit_version,
             validation=report,
         )
+
+    def _require_synced_projection(self, application_id: str, draft: DraftDocument) -> None:
+        """Refuse to approve while the projection holds edits SQLite has not imported.
+
+        SQLite is authoritative from boundary 2a, and approval rebuilds the
+        projection from it, so an unimported file edit would be destroyed without
+        a word. `validate` deliberately reports on the stored draft instead of
+        refusing, because that report is true; approval is the trust boundary and
+        the point of loss, so the refusal belongs here. The edit is never touched:
+        the user imports it with `cv sync-draft` or discards it by regenerating.
+        """
+        stored = self.working_markdown(application_id)
+        if stored and stored != serialize_markdown(draft):
+            raise StateConflict(
+                "the working Markdown projection differs from the stored draft; "
+                "import it with 'cv sync-draft' or regenerate the draft to discard it"
+            )
 
     def validate_working(self, application_id: str) -> ValidationReport:
         knowledge = self.load_knowledge()
@@ -360,6 +388,9 @@ class DraftService(ServiceBase[DraftRepository]):
         )
 
     def approve(self, application_id: str) -> ApprovalResult:
+        self._require_synced_projection(
+            application_id, self.working_draft_record(application_id).source
+        )
         report = self.validate_working(application_id)
         if not report.passed:
             raise ValidationBlocked("approval blocked by pre-render validation", report)
