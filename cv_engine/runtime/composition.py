@@ -10,6 +10,7 @@ from ..application.ports import (
     ClassificationProvider,
     KnowledgeStore,
     Renderer,
+    SnapshotPayloadStore,
     UnitOfWork,
 )
 from ..application.services.analysis import AnalysisService
@@ -21,6 +22,7 @@ from ..application.services.rendering import RenderingService
 from ..application.services.tracking import TrackingService
 from ..infrastructure.artifacts import FilesystemArtifactStore
 from ..infrastructure.persistence import Repository
+from ..infrastructure.payloads import PayloadStore
 from ..infrastructure.knowledge import FileKnowledge
 from ..infrastructure.providers import OpenAIClassificationProvider
 from ..infrastructure.rendering import PlaywrightRenderer
@@ -35,6 +37,7 @@ class Services:
     repository: ApplicationRepository
     knowledge: KnowledgeStore
     artifacts: ArtifactStore
+    payloads: SnapshotPayloadStore
     unit_of_work: Callable[[], UnitOfWork]
     applications: ApplicationService
     queries: ApplicationQueryService
@@ -52,6 +55,7 @@ def build_services(
     repository: ApplicationRepository | None = None,
     knowledge: KnowledgeStore | None = None,
     artifacts: ArtifactStore | None = None,
+    payloads: SnapshotPayloadStore | None = None,
     renderer: Renderer | None = None,
     provider: ClassificationProvider | None = None,
 ) -> Services:
@@ -64,6 +68,7 @@ def build_services(
     resolved_repository = repository or Repository(database_path or workspace.database_path)
     resolved_knowledge = knowledge or FileKnowledge(workspace.knowledge_root)
     resolved_artifacts = artifacts or FilesystemArtifactStore(workspace)
+    resolved_payloads = payloads or PayloadStore(workspace)
     resolved_renderer = renderer or PlaywrightRenderer(workspace.knowledge_root)
     resolved_provider = provider or OpenAIClassificationProvider(
         workspace.knowledge_root / "ai" / "prompts" / "system-v1.md"
@@ -74,12 +79,14 @@ def build_services(
         "artifacts": resolved_artifacts,
         "renderer": resolved_renderer,
         "provider": resolved_provider,
+        "snapshots": resolved_payloads,
     }
     return Services(
         workspace=workspace,
         repository=resolved_repository,
         knowledge=resolved_knowledge,
         artifacts=resolved_artifacts,
+        payloads=resolved_payloads,
         unit_of_work=resolved_repository.unit_of_work,
         applications=ApplicationService(**shared),
         queries=ApplicationQueryService(**shared),

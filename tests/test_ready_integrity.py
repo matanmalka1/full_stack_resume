@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+import uuid
 
 import pytest
 
 from cv_engine.application.commands import AnalyzeCommand
 import cv_engine.infrastructure.rendering as rendering_module
 from cv_engine.infrastructure.rendering import validate_rendered as real_validate_rendered
-from cv_engine.util import sha256_file, verify_payload
+from cv_engine.util import normalized_text, sha256_file, sha256_text, verify_payload
 from cv_engine.application.errors import WorkflowError
 from helpers import ACCOUNT_MANAGER_JOB, artifact_version_and_path
 
@@ -159,7 +160,16 @@ def test_new_revision_snapshot_or_analysis_stales_prior_ready(ready_application)
         services.rendering.ready_report(app_id)
 
     services, app_id = ready_application("New Snapshot")
-    services.repository.add_job_snapshot(app_id, ACCOUNT_MANAGER_JOB + " Updated requirements.")
+    new_text = ACCOUNT_MANAGER_JOB + " Updated requirements."
+    snapshot_id = str(uuid.uuid4())
+    payload = services.payloads.commit_snapshot(app_id, snapshot_id, new_text)
+    services.repository.add_job_snapshot(
+        app_id,
+        payload.reference,
+        payload.sha256,
+        sha256_text(normalized_text(new_text)),
+        snapshot_id=snapshot_id,
+    )
     report = services.rendering.ready_report(app_id)
     assert any(issue.code == "new-job-snapshot-since-approval" for issue in report.issues)
 

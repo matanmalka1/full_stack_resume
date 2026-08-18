@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from ..application.ports import SnapshotPayload
 from ..util import sha256_file
 from .paths import relative_within, resolve_within
 
@@ -38,6 +39,13 @@ class TempOrphan:
     size: int
 
 
+@dataclass(frozen=True)
+class _PayloadRoots:
+    root: Path
+    artifacts_root: Path
+    temp_root: Path
+
+
 class PayloadStore:
     """Immutable v2 payload storage, independent of SQLite registration."""
 
@@ -50,6 +58,15 @@ class PayloadStore:
             self._workspace_root, workspace.artifacts_root
         )
         self._temp_root = resolve_within(self._workspace_root, workspace.temp_root)
+
+    @classmethod
+    def for_workspace_root(cls, root: Path) -> "PayloadStore":
+        resolved = Path(root).resolve()
+        return cls(_PayloadRoots(
+            root=resolved,
+            artifacts_root=resolved / "artifacts",
+            temp_root=resolved / "tmp",
+        ))
 
     @staticmethod
     def _component(value: str, *, name: str) -> str:
@@ -209,6 +226,38 @@ class PayloadStore:
             sha256=digest,
             size=size,
         )
+
+    def commit_snapshot(
+        self,
+        application_id: str,
+        snapshot_id: str,
+        text: str,
+    ) -> SnapshotPayload:
+        stored = self.commit(
+            self.snapshot_path(application_id, snapshot_id),
+            write=lambda path: path.write_bytes(text.encode("utf-8")),
+            validate=lambda path: path.is_file(),
+        )
+        return SnapshotPayload(
+            reference=stored.workspace_relative,
+            sha256=stored.sha256,
+            size=stored.size,
+        )
+
+    def read_snapshot(self, reference: str, expected_hash: str) -> str:
+        candidate = resolve_within(self._workspace_root, reference)
+        approved = self._approved_destination(candidate)
+        relative = relative_within(self._artifacts_root, approved)
+        if len(relative.parts) != 3 or relative.parts[0] != "snapshots":
+            raise ValueError(f"payload is not a JobSnapshot: {reference}")
+        if not approved.is_file():
+            raise FileNotFoundError(f"snapshot payload does not exist: {reference}")
+        actual_hash = sha256_file(approved)
+        if actual_hash != expected_hash:
+            raise ValueError(
+                f"snapshot payload hash mismatch: expected {expected_hash}, got {actual_hash}"
+            )
+        return approved.read_bytes().decode("utf-8")
 
     def temp_orphans(self, *, now: float | None = None) -> list[TempOrphan]:
         """Report store-owned temp files for reconciliation without deleting them."""

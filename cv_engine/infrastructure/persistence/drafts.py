@@ -102,6 +102,70 @@ class SqliteDraftRepository(SqliteRepositoryBase):
             ).fetchone()
         return self._record(row)
 
+    def replace_active_working_draft(
+        self,
+        application_id: str,
+        job_analysis_id: str,
+        selection_plan_id: str,
+        source: DraftDocument,
+        *,
+        parent_revision_id: str | None = None,
+        updated_at: str | None = None,
+    ) -> WorkingDraft:
+        """Create the active record or replace its source as a new edit."""
+        now = updated_at or utc_now()
+        with self.transaction() as connection:
+            self._require_lineage(
+                connection,
+                application_id,
+                job_analysis_id,
+                selection_plan_id,
+                source,
+            )
+            current = connection.execute(
+                "SELECT * FROM working_drafts WHERE application_id=? AND active=1",
+                (application_id,),
+            ).fetchone()
+            if current is None:
+                draft_id = new_id()
+                connection.execute(
+                    "INSERT INTO working_drafts(id, application_id, job_analysis_id, "
+                    "selection_plan_id, parent_revision_id, source_json, edit_version, "
+                    "content_hash, active, created_at, updated_at) "
+                    "VALUES(?, ?, ?, ?, ?, ?, 1, ?, 1, ?, ?)",
+                    (
+                        draft_id,
+                        application_id,
+                        job_analysis_id,
+                        selection_plan_id,
+                        parent_revision_id,
+                        canonical_json(source.model_dump(mode="json")),
+                        source.content_hash,
+                        now,
+                        now,
+                    ),
+                )
+            else:
+                draft_id = current["id"]
+                connection.execute(
+                    "UPDATE working_drafts SET job_analysis_id=?, selection_plan_id=?, "
+                    "parent_revision_id=?, source_json=?, edit_version=edit_version+1, "
+                    "content_hash=?, updated_at=? WHERE id=? AND active=1",
+                    (
+                        job_analysis_id,
+                        selection_plan_id,
+                        parent_revision_id,
+                        canonical_json(source.model_dump(mode="json")),
+                        source.content_hash,
+                        now,
+                        draft_id,
+                    ),
+                )
+            row = connection.execute(
+                "SELECT * FROM working_drafts WHERE id=?", (draft_id,)
+            ).fetchone()
+        return self._record(row)
+
     def working_draft(self, working_draft_id: str) -> WorkingDraft:
         with self.read_connection() as connection:
             row = connection.execute(

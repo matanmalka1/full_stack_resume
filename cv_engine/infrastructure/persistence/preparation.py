@@ -10,16 +10,16 @@ from ...domain.models import (
     SelectionManifest,
     SelectionPlan,
 )
-from ...util import canonical_json, sha256_text, utc_now
+from ...util import canonical_json, utc_now
 from .applications import SqliteApplicationRepository
 from .base import SqliteRepositoryBase
 from .connection import SqliteUnitOfWork
 from .primitives import new_id
 
 
-_LEGACY_SNAPSHOT_COLUMNS = (
-    "id, application_id, version_number, original_text, source_url, captured_at, "
-    "source_metadata_json, content_hash, prior_snapshot_id"
+_SNAPSHOT_COLUMNS = (
+    "id, application_id, version_number, payload_path, source_hash, normalized_hash, "
+    "source_url, captured_at, source_metadata_json, content_hash, prior_snapshot_id"
 )
 
 
@@ -69,7 +69,9 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
         *,
         company: str,
         target_role: str,
-        original_job_text: str,
+        payload_path: str,
+        source_hash: str,
+        normalized_hash: str,
         source_url: str | None = None,
         source: str = "manual",
         notes: str = "",
@@ -78,8 +80,10 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
         captured_at: str | None = None,
         source_metadata: dict[str, Any] | None = None,
     ) -> tuple[str, str]:
-        if not company.strip() or not target_role.strip() or not original_job_text.strip():
-            raise ValueError("company, target role, and full job text are required")
+        if not company.strip() or not target_role.strip():
+            raise ValueError("company and target role are required")
+        if not payload_path or not source_hash or not normalized_hash:
+            raise ValueError("snapshot payload path and hashes are required")
         app_id = application_id or new_id()
         snap_id = snapshot_id or new_id()
         now = captured_at or utc_now()
@@ -92,7 +96,9 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
                     snap_id,
                     company,
                     target_role,
-                    original_job_text,
+                    payload_path,
+                    source_hash,
+                    normalized_hash,
                     source_url,
                     source,
                     notes,
@@ -106,7 +112,9 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
                 snap_id,
                 company,
                 target_role,
-                original_job_text,
+                payload_path,
+                source_hash,
+                normalized_hash,
                 source_url,
                 source,
                 notes,
@@ -121,7 +129,9 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
         snap_id: str,
         company: str,
         target_role: str,
-        original_job_text: str,
+        payload_path: str,
+        source_hash: str,
+        normalized_hash: str,
         source_url: str | None,
         source: str,
         notes: str,
@@ -139,25 +149,30 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
         )
         with self.transaction() as connection:
             connection.execute(
-                "INSERT INTO job_snapshots(id, application_id, version_number, original_text, source_url, captured_at, source_metadata_json, content_hash, prior_snapshot_id) "
-                "VALUES(?, ?, 1, ?, ?, ?, ?, ?, NULL)",
+                "INSERT INTO job_snapshots(id, application_id, version_number, payload_path, source_hash, normalized_hash, source_url, captured_at, source_metadata_json, content_hash, prior_snapshot_id) "
+                "VALUES(?, ?, 1, ?, ?, ?, ?, ?, ?, ?, NULL)",
                 (
                     snap_id,
                     app_id,
-                    original_job_text,
+                    payload_path,
+                    source_hash,
+                    normalized_hash,
                     source_url,
                     now,
                     canonical_json(source_metadata or {}),
-                    sha256_text(original_job_text),
+                    source_hash,
                 ),
             )
 
     def add_job_snapshot(
         self,
         application_id: str,
-        original_text: str,
+        payload_path: str,
+        source_hash: str,
+        normalized_hash: str,
         source_url: str | None = None,
         source_metadata: dict[str, Any] | None = None,
+        snapshot_id: str | None = None,
     ) -> str:
         with self.transaction() as connection:
             prior = connection.execute(
@@ -167,28 +182,30 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
             ).fetchone()
             if prior is None:
                 raise KeyError(application_id)
-            snapshot_id = new_id()
+            resolved_snapshot_id = snapshot_id or new_id()
             connection.execute(
-                "INSERT INTO job_snapshots(id, application_id, version_number, original_text, source_url, captured_at, source_metadata_json, content_hash, prior_snapshot_id) "
-                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO job_snapshots(id, application_id, version_number, payload_path, source_hash, normalized_hash, source_url, captured_at, source_metadata_json, content_hash, prior_snapshot_id) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    snapshot_id,
+                    resolved_snapshot_id,
                     application_id,
                     prior["version_number"] + 1,
-                    original_text,
+                    payload_path,
+                    source_hash,
+                    normalized_hash,
                     source_url,
                     utc_now(),
                     canonical_json(source_metadata or {}),
-                    sha256_text(original_text),
+                    source_hash,
                     prior["id"],
                 ),
             )
-        return snapshot_id
+        return resolved_snapshot_id
 
     def latest_snapshot(self, application_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
             row = connection.execute(
-                f"SELECT {_LEGACY_SNAPSHOT_COLUMNS} FROM job_snapshots WHERE application_id=? "
+                f"SELECT {_SNAPSHOT_COLUMNS} FROM job_snapshots WHERE application_id=? "
                 "ORDER BY version_number DESC LIMIT 1",
                 (application_id,),
             ).fetchone()
@@ -199,7 +216,7 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
     def get_snapshot(self, snapshot_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
             row = connection.execute(
-                f"SELECT {_LEGACY_SNAPSHOT_COLUMNS} FROM job_snapshots WHERE id=?",
+                f"SELECT {_SNAPSHOT_COLUMNS} FROM job_snapshots WHERE id=?",
                 (snapshot_id,),
             ).fetchone()
         if row is None:
@@ -211,11 +228,18 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
         application_id: str,
         snapshot_id: str,
         analysis: JobAnalysis,
+        plan: SelectionManifest,
         *,
         provider: str = "deterministic",
         model: str = "rules-v1",
-    ) -> str:
+        candidate_context_version: str,
+        candidate_context_hash: str,
+        profile_version: str,
+        selection_policy_version: str,
+        track_emphasis_dependencies: dict[str, str],
+    ) -> tuple[str, SelectionPlan]:
         analysis_id = new_id()
+        selection_plan_id = new_id()
         now = utc_now()
         with self.transaction() as connection:
             row = connection.execute(
@@ -236,6 +260,19 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
                     model,
                     now,
                 ),
+            )
+            self._insert_selection_plan(
+                connection,
+                selection_plan_id,
+                application_id,
+                analysis_id,
+                plan,
+                candidate_context_version,
+                candidate_context_hash,
+                profile_version,
+                selection_policy_version,
+                track_emphasis_dependencies,
+                now,
             )
             connection.execute(
                 "UPDATE applications SET language=?, track=?, profile=?, emphasis=?, "
@@ -270,7 +307,10 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
                     reason,
                     now,
                 )
-        return analysis_id
+            plan_row = connection.execute(
+                "SELECT * FROM selection_plans WHERE id=?", (selection_plan_id,)
+            ).fetchone()
+        return analysis_id, self._selection_plan_record(plan_row)
 
     def create_selection_plan(
         self,

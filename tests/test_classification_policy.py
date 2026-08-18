@@ -39,6 +39,7 @@ def test_provider_cannot_relax_approval_confidence_or_language(
         services.drafts.draft(DraftCommand(
             application_id=application_id,
             job_analysis_id=setup.analysis_id,
+            selection_plan_id=setup.services.repository.latest_selection_plan(application_id).id,
         ))
 
     _, stored = services.repository.latest_analysis(application_id)

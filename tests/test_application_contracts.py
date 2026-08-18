@@ -22,6 +22,7 @@ from cv_engine.application.commands import (
     ApprovalResult,
     DraftCommand,
     DraftResult,
+    EditResult,
     FactDetailResult,
     FactListResult,
     FactReconciliationResult,
@@ -36,6 +37,7 @@ from cv_engine.application.queries import (
     ApplicationListView,
     ArtifactVersionView,
     DecisionRecordView,
+    JobSnapshotView,
 )
 from cv_engine.application.ports import (
     ApplicationRepository,
@@ -43,11 +45,13 @@ from cv_engine.application.ports import (
     ArtifactRegistry,
     FactAudit,
     JobStore,
+    SnapshotPayload,
     UnitOfWork,
 )
 from cv_engine.application.services.rendering import RenderingService
 from cv_engine.compat import resolve_job_analysis_id, resolve_job_snapshot_id
 from cv_engine.infrastructure.persistence import Repository
+from cv_engine.util import sha256_file, sha256_text
 from helpers import ACCOUNT_MANAGER_JOB, working_claim
 
 
@@ -73,6 +77,7 @@ def test_commands_answer_with_named_results(services) -> None:
     drafted = services.drafts.draft(DraftCommand(
         application_id=ingested.application_id,
         job_analysis_id=analysed.analysis_id,
+        selection_plan_id=analysed.selection_plan_id,
     ))
     assert isinstance(drafted, DraftResult)
     assert drafted.validation.passed, drafted.validation.model_dump()
@@ -82,10 +87,45 @@ def test_commands_answer_with_named_results(services) -> None:
     assert approved.version == 1
 
 
+def test_ingest_commits_exact_snapshot_payload_before_registration(
+    services, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    received = "Line one\r\nLine two\n"
+    original_create = services.repository.create_application
+
+    def assert_payload_exists_first(**values):
+        payload = services.workspace.root / values["payload_path"]
+        assert payload.read_bytes() == received.encode("utf-8")
+        assert sha256_text(received) == values["source_hash"]
+        return original_create(**values)
+
+    monkeypatch.setattr(services.repository, "create_application", assert_payload_exists_first)
+    ingested = services.applications.ingest(IngestCommand(
+        company="Payload Order",
+        target_role="Developer",
+        job_text=received,
+    ))
+    snapshot = services.repository.get_snapshot(ingested.job_snapshot_id)
+    assert sha256_file(services.workspace.root / snapshot["payload_path"]) == snapshot["source_hash"]
+
+
 def test_application_dtos_do_not_expose_filesystem_locations(services) -> None:
-    for model in (DraftResult, ApprovalResult, RenderResult, ArtifactVersionView):
+    for model in (
+        AnalysisResult,
+        DraftResult,
+        EditResult,
+        ApprovalResult,
+        RenderResult,
+        JobSnapshotView,
+        ArtifactVersionView,
+    ):
         assert "path" not in model.model_fields
         assert all("Path" not in str(field.annotation) for field in model.model_fields.values())
+    assert "path" not in SnapshotPayload.__dataclass_fields__
+    assert all(
+        "Path" not in str(field.type)
+        for field in SnapshotPayload.__dataclass_fields__.values()
+    )
 
     ingested = services.applications.ingest(IngestCommand(
         company="Projection Co",
@@ -99,6 +139,7 @@ def test_application_dtos_do_not_expose_filesystem_locations(services) -> None:
     services.drafts.draft(DraftCommand(
         application_id=ingested.application_id,
         job_analysis_id=analysed.analysis_id,
+        selection_plan_id=analysed.selection_plan_id,
     ))
     services.drafts.approve(ingested.application_id)
 
@@ -221,6 +262,7 @@ def test_expected_boundary_refusals_do_not_leak_adapter_or_domain_errors(service
         services.drafts.draft(DraftCommand(
             application_id="missing-application",
             job_analysis_id="missing-analysis",
+            selection_plan_id="missing-selection-plan",
         ))
 
 
@@ -228,7 +270,14 @@ def test_a_blocked_validation_carries_its_report(drafted_application) -> None:
     setup = drafted_application("Blocked Co")
     services, application_id = setup
     markdown = setup.markdown
-    markdown.write_text(markdown.read_text(encoding="utf-8") + "\n- Grew revenue 30% YoY.\n", encoding="utf-8")
+    claim = working_claim(services, application_id, "sales.metric.performance")
+    markdown.write_text(
+        markdown.read_text(encoding="utf-8").replace(
+            claim.text, "Delivered 30% improvement in direct SaaS Sales.", 1
+        ),
+        encoding="utf-8",
+    )
+    services.drafts.sync_working_claims(application_id)
 
     with pytest.raises(errors.ValidationBlocked) as raised:
         services.drafts.approve(application_id)
@@ -313,6 +362,7 @@ def test_commands_require_owned_explicit_sources_and_compat_resolves_latest(serv
         services.drafts.draft(DraftCommand(
             application_id=mine.application_id,
             job_analysis_id=analysed.analysis_id,
+            selection_plan_id=analysed.selection_plan_id,
         ))
     ingested = services.applications.ingest(IngestCommand(
         company="Legacy Co", target_role="Account Manager", job_text=ACCOUNT_MANAGER_JOB

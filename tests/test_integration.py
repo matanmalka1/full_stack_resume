@@ -32,6 +32,7 @@ def test_default_flow_stops_for_review_then_reaches_ready(services) -> None:
     drafted = services.drafts.draft(DraftCommand(
         application_id=ingested.application_id,
         job_analysis_id=analysed.analysis_id,
+        selection_plan_id=analysed.selection_plan_id,
     ))
     app_id = ingested.application_id
     paths = services.artifacts.working_paths(app_id)
@@ -124,6 +125,9 @@ def test_validate_extracts_safe_manual_markdown_wording(drafted_application) -> 
     report = services.drafts.validate_working(app_id)
 
     assert report.passed, report.model_dump()
+    assert _working_claim(services, app_id, "sales.metric.performance").claim_type == "canonical"
+    synced = services.drafts.sync_working_claims(app_id)
+    assert synced.validation.passed, synced.validation.model_dump()
     assert _working_claim(services, app_id, "sales.metric.performance").claim_type == "derived"
 
 
@@ -143,8 +147,10 @@ def test_validate_preserves_unsupported_manual_markdown_as_pending(drafted_appli
 
     report = services.drafts.validate_working(app_id)
 
-    assert not report.passed
-    assert any(issue.code == "pending-claim" for issue in report.issues)
+    assert report.passed
+    synced = services.drafts.sync_working_claims(app_id)
+    assert not synced.validation.passed
+    assert any(issue.code == "pending-claim" for issue in synced.validation.issues)
     assert _working_claim(services, app_id, "sales.metric.performance").claim_type == "pending"
 
 
@@ -218,7 +224,9 @@ def test_fast_orchestration_preserves_call_order_and_gate_messages(
             )
         )),
         analysis=SimpleNamespace(analyze=lambda _command: (
-            calls.append("analyze") or SimpleNamespace(analysis_id="analysis-1")
+            calls.append("analyze") or SimpleNamespace(
+                analysis_id="analysis-1", selection_plan_id="selection-plan-1"
+            )
         )),
         drafts=SimpleNamespace(
             draft=lambda _command: (

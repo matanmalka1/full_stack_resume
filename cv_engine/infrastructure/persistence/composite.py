@@ -49,6 +49,7 @@ class Repository:
         "validation_lineage": "artifacts",
         "integrity_check": "artifacts",
         "create_working_draft": "drafts",
+        "replace_active_working_draft": "drafts",
         "working_draft": "drafts",
         "active_working_draft": "drafts",
         "update_working_draft": "drafts",
