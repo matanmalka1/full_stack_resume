@@ -18,7 +18,7 @@ from .persistence import Repository, connect
 from ..domain.facts import FactStoreError
 from .knowledge import read_fact_source
 from .paths import resolve_within
-from ..util import canonical_json, sha256_file, sha256_text, utc_now
+from ..util import canonical_json, sha256_file, sha256_text, utc_now, verify_payload
 
 
 MIGRATION_NAMESPACE = uuid.UUID("7650f234-c480-4a9e-9c21-9d5142899a63")
@@ -756,9 +756,10 @@ def retrospective_verify_migration(root: Path, snapshot_dir: Path) -> dict[str, 
         artifact_hashes_checked = 0
         for artifact in expected_artifacts:
             path = root / artifact["path"]
-            if not path.is_file():
+            verification = verify_payload(path, artifact["content_hash"])
+            if verification == "missing":
                 problems.append(f"live historical artifact is missing: {artifact['path']}")
-            elif sha256_file(path) != artifact["content_hash"]:
+            elif verification == "tampered":
                 problems.append(f"live historical artifact hash mismatch: {artifact['path']}")
             else:
                 artifact_hashes_checked += 1
@@ -817,9 +818,10 @@ def reconcile_migration(root: Path) -> dict[str, Any]:
         migration_runs = connection.execute("SELECT COUNT(*) FROM migration_runs").fetchone()[0]
     for row in versions:
         path = root / row["path"]
-        if not path.is_file():
+        verification = verify_payload(path, row["content_hash"])
+        if verification == "missing":
             problems.append(f"missing artifact: {row['path']}")
-        elif sha256_file(path) != row["content_hash"]:
+        elif verification == "tampered":
             problems.append(f"artifact hash mismatch: {row['path']}")
     expected_versions = inventory["legacy_application_artifact_count"] + inventory["base_artifact_count"]
     if applications != inventory["legacy_row_count"]:

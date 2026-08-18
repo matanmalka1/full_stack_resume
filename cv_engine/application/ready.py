@@ -6,7 +6,7 @@ from typing import Any
 from .chain import check_draft_chain, decision_record_analysis_id, material_analysis_key
 from .ports import ArtifactStore, KnowledgeStore, ReadinessRepository
 from ..domain.models import ValidationIssue, ValidationReport
-from ..util import sha256_file
+from ..util import verify_payload
 from ..domain.validation import validate_draft
 
 
@@ -64,13 +64,19 @@ def verify_ready_integrity(
             "the latest approved markdown and claim manifest are not the same approved version",
         )
 
-    if not markdown_path.is_file():
+    markdown_verification = verify_payload(
+        markdown_path, markdown_version["content_hash"]
+    )
+    if markdown_verification == "missing":
         fail("approved_source", "approved-markdown-missing", str(markdown_path))
-    elif sha256_file(markdown_path) != markdown_version["content_hash"]:
+    elif markdown_verification == "tampered":
         fail("approved_source", "approved-markdown-tampered", str(markdown_path))
-    if not manifest_path.is_file():
+    manifest_verification = verify_payload(
+        manifest_path, manifest_version["content_hash"]
+    )
+    if manifest_verification == "missing":
         fail("approved_source", "approved-manifest-missing", str(manifest_path))
-    elif sha256_file(manifest_path) != manifest_version["content_hash"]:
+    elif manifest_verification == "tampered":
         fail("approved_source", "approved-manifest-tampered", str(manifest_path))
 
     draft = None
@@ -142,9 +148,10 @@ def verify_ready_integrity(
                 "the latest approved version is not the version behind the last successful render",
             )
         pdf_path = artifacts.resolve(pdf_version["path"])
-        if not pdf_path.is_file():
+        pdf_verification = verify_payload(pdf_path, pdf_version["content_hash"])
+        if pdf_verification == "missing":
             fail("rendered_artifacts", "pdf-missing", str(pdf_path))
-        elif sha256_file(pdf_path) != pdf_version["content_hash"]:
+        elif pdf_verification == "tampered":
             fail("rendered_artifacts", "pdf-tampered", str(pdf_path))
 
         for artifact_type, label in (("resume_html", "html"), ("visual_evidence", "visual")):
@@ -160,10 +167,12 @@ def verify_ready_integrity(
                     f"{label}-version-mismatch",
                     f"rendered {label} artifact is not from the same version as the ready PDF",
                 )
-            elif not path.is_file():
-                fail("rendered_artifacts", f"{label}-missing", str(path))
-            elif sha256_file(path) != version["content_hash"]:
-                fail("rendered_artifacts", f"{label}-tampered", str(path))
+            else:
+                verification = verify_payload(path, version["content_hash"])
+                if verification == "missing":
+                    fail("rendered_artifacts", f"{label}-missing", str(path))
+                elif verification == "tampered":
+                    fail("rendered_artifacts", f"{label}-tampered", str(path))
 
         try:
             post_render = repo.validation_for_artifact(application_id, "post-render", pdf_version["id"])

@@ -5,7 +5,7 @@ import json
 import re
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 
 def utc_now() -> str:
@@ -26,6 +26,17 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def verify_payload(
+    path: Path, expected_hash: str
+) -> Literal["ok", "missing", "tampered"]:
+    """Classify one immutable payload without imposing caller-specific messages."""
+    if not path.is_file():
+        return "missing"
+    if sha256_file(path) != expected_hash:
+        return "tampered"
+    return "ok"
 
 
 def canonical_json(value: Any) -> str:

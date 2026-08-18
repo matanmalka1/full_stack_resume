@@ -22,7 +22,7 @@ from .infrastructure.migration import (
 )
 from .domain.facts import FACT_SOURCE_NAMES
 from .domain.models import ApplicationStatus, FactStatus
-from .util import sha256_file, utc_now
+from .util import utc_now, verify_payload
 from .application.errors import WorkflowError
 from .application.commands import (
     AnalyzeCommand,
@@ -426,9 +426,10 @@ def generic_reconcile(workspace: Workspace, repository: Repository) -> dict[str,
     for row in repository.artifact_inventory():
         checked += 1
         path = workspace.root / row["path"]
-        if not path.is_file():
+        verification = verify_payload(path, row["content_hash"])
+        if verification == "missing":
             problems.append(f"missing artifact: {row['path']}")
-        elif sha256_file(path) != row["content_hash"]:
+        elif verification == "tampered":
             problems.append(f"artifact hash mismatch: {row['path']}")
     return {"passed": not problems, "artifact_versions_checked": checked, "problems": problems}
 

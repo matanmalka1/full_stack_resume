@@ -7,7 +7,7 @@ import pytest
 from cv_engine.application.commands import AnalyzeCommand
 import cv_engine.infrastructure.rendering as rendering_module
 from cv_engine.infrastructure.rendering import validate_rendered as real_validate_rendered
-from cv_engine.util import sha256_file
+from cv_engine.util import sha256_file, verify_payload
 from cv_engine.application.errors import WorkflowError
 from helpers import ACCOUNT_MANAGER_JOB, artifact_version_and_path
 
@@ -17,6 +17,16 @@ def _reanalyze(services, application_id: str):
         application_id=application_id,
         job_snapshot_id=services.repository.latest_snapshot(application_id)["id"],
     ))
+
+
+def test_payload_verification_classifies_ok_missing_and_tampered(tmp_path: Path) -> None:
+    path = tmp_path / "payload"
+    assert verify_payload(path, "unused") == "missing"
+    path.write_bytes(b"original")
+    expected = sha256_file(path)
+    assert verify_payload(path, expected) == "ok"
+    path.write_bytes(b"tampered")
+    assert verify_payload(path, expected) == "tampered"
 
 
 # --- READY ownership ---------------------------------------------------
