@@ -53,10 +53,13 @@ Carried forward:
       `domain/render_validation.py` behind typed `RenderEvidence`/`RenderGeometry` DTOs; the
       infrastructure adapter only collects evidence, and the test double supplies evidence
       instead of a fabricated passing report (`c02b8bf`).
-- [ ] `ready_qualified` as a computed projection, replacing stored READY.
-- [ ] **A2 residue** — the `_set_ready`, `_record_submission`, and `record_decision` rules leave
-      the repository.
-- [ ] **A5** — typed decision record.
+- [x] `ready_qualified` is a context-independent computed projection over an exact
+      ApprovedRevision, its immutable source/render artifacts, approval validation lineage, and
+      exact PDF post-render validation; rendering no longer stores READY (`0f9eb94`).
+- [x] **A2 residue** — `_set_ready`, `_record_submission`, and `record_decision` left the
+      repository. Submission and approval rules now live in application services; persistence
+      exposes storage-only inserts (`0f9eb94`).
+- [x] **A5** — approval passes a typed `DecisionRecord` into persistence (`0f9eb94`).
 - [ ] v2 submissions bound to a revision and its exact PDF artifact, plus
       `record_external_submission`.
 - [ ] Recruitment events with corrections (`corrects_event_id`, mandatory reason) and
@@ -114,20 +117,6 @@ Stage 7b landed in 2a and does not recur.
 - [ ] Journal crash windows recover or quarantine explicitly.
 - [ ] Backup restores to an independently openable and reconcilable Workspace.
 - [ ] No M2 code points to live v1 paths.
-
-## H. Open audit findings and housekeeping
-
-The register of what was found is `docs/v2-architecture-audit.md`. What is still *open* is here.
-
-- [ ] **A3** — default emphasis resolved from the Profile store instead of the hardcoded map (§4.2/§4.3).
-- [ ] **A6** — confirm/promote mapping and the `--confirm` refusal leave `cli.py` (§4.5).
-- [ ] **A24** — the `subprocess` pytest call; the only architecture-debt allowlist entry (§4.6).
-- [ ] **A28** — `--knowledge-from` bound to an inventory (§4.6).
-- [x] Guard sets derived instead of listed (`d37cc13`). Immutability, chain-integrity counts, and
-      candidate literals now discover their subject and carry small exception lists, so no list
-      grows with a new table or module. Found and fixed a real omission: `artifacts` had no
-      immutability triggers since M1, added in migration `0004`.
-- [ ] Delete the boundary 1 lane branches `m2-boundary1-persistence` and `m2-boundary1-payloads`.
 
 ## Dependency order
 

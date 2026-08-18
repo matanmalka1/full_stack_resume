@@ -10,8 +10,8 @@ or weaken an existing acceptance gate.
       browser-complete gate.
 - [ ] **TODO 3:** evaluate pytest-xdist isolation and add it only after explicit
       dependency-baseline approval.
-- [ ] **TODO 4:** convert redundant CLI subprocess tests to in-process `cli.main(...)`
-      calls while retaining one or two real process-boundary tests.
+- [x] **TODO 4 — completed (`c712aca`):** converted redundant CLI subprocess tests to
+      in-process `cli.main(...)` calls while retaining the real process-boundary coverage.
 - [ ] **TODO 5:** split `cli.main()` into a command-handler registry without changing
       CLI signatures, output, or errors.
 - [ ] **TODO 6:** extract `validate_draft` into an ordered registry of focused validation
@@ -21,8 +21,8 @@ or weaken an existing acceptance gate.
 - [ ] **TODO 8:** retire `persistence/primitives.py` without duplicating UUID policy.
 - [ ] **TODO 9:** retire `persistence/serialization.py` while preserving the
       serialization-version contract.
-- [ ] **TODO 10:** retire `compat.py` by moving explicit-source compatibility resolution
-      to the CLI boundary.
+- [x] **TODO 10 — completed (`73bb020`):** retired `compat.py`; omitted-source compatibility
+      resolution now lives at the CLI boundary.
 - [ ] **TODO 11:** slim `ServiceBase` by moving single-consumer helpers to their owning
       services.
 - [ ] **TODO 12:** enforce the existing ports with a type checker or propose a
