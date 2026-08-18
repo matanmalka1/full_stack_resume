@@ -45,12 +45,14 @@ Carried forward:
       through the payload store (`3f030ad`).
 - [x] Artifact metadata rows keyed to the revision: approval artifacts plus rendered HTML, PDF,
       and screenshot (`3f030ad`). Provenance export remains under its open item below.
-- [ ] Relocate rendered HTML/PDF/screenshot bytes to
-      `outputs/{application_id}/{revision_id}/`; rows are revision-bound now, but physical
-      relocation still spans the renderer, recruiter filename, and browser suite.
-- [ ] **A4** — the eight render groups into `domain/render_validation.py` behind a typed
-      `RenderEvidence` DTO. Breaks both `monkeypatch.setattr` targets in `tests/conftest.py` and
-      the duplicated group-name set there.
+- [x] Rendered HTML/PDF/screenshot bytes for new writes live at
+      `outputs/{application_id}/{revision_id}/{artifact_version_id}.{ext}`; the recruiter PDF
+      filename remains presentation metadata (`4c1005b`). Existing immutable payloads were not
+      moved, rewritten, or deleted.
+- [x] **A4** — the eight render groups and filename/ATS rules live in
+      `domain/render_validation.py` behind typed `RenderEvidence`/`RenderGeometry` DTOs; the
+      infrastructure adapter only collects evidence, and the test double supplies evidence
+      instead of a fabricated passing report (`c02b8bf`).
 - [ ] `ready_qualified` as a computed projection, replacing stored READY.
 - [ ] **A2 residue** — the `_set_ready`, `_record_submission`, and `record_decision` rules leave
       the repository.
