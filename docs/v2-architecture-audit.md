@@ -438,10 +438,15 @@ into the seven repositories named in §3.3.
 
 ## 6. Verification contract for the staged work
 
+- The canonical interpreter is the dedicated v2-worktree environment at
+  `/Users/matanmalka/Projects/resume_python-v2/.venv/bin/python`. Bootstrap it from this
+  worktree with `python3 -m venv .venv`, `./.venv/bin/python -m pip install -e '.[test]'`,
+  and `./.venv/bin/playwright install chromium`. Evidence from another worktree's
+  editable environment is not accepted even when import-order guards prove that v2 won.
 - After each of stages 1–6: the stage's own test subset first, then
   `./.venv/bin/python -m pytest -q` clean.
 - At the end of the mechanical stages:
-  `CV_REQUIRE_BROWSER=1 ./.venv/bin/python -m pytest -q`.
+  `env CV_REQUIRE_BROWSER=1 ./.venv/bin/python -m pytest -q`.
 - `tests/test_architecture.py` must pass with its widened scope, and its allowlist must
   shrink — never grow — across stages.
 - `tests/test_golden.py` is the semantic-parity check required by
@@ -477,8 +482,33 @@ Integration removed every temporary re-export and repointed callers to the ownin
 modules. After each merge, the lane subset and the full 113-test suite passed. The
 combined Wave 2 boundary subset passed 54 tests. Final verification passed:
 
-- `CV_REQUIRE_BROWSER=1 ... -m pytest -q`: 113 passed, including the real browser,
-  rendering, PDF, ATS, and golden parity coverage.
+- The original Waves 0–2 lane and lead runs used
+  `/Users/matanmalka/Projects/resume_python/.venv/bin/python`. Lane commands and the
+  final quoted command reached it through temporary `./.venv` symlinks; merge,
+  integration, and CLI runs invoked the same interpreter by absolute path. The v1
+  editable finder therefore made those runs import-order-dependent, although
+  `tests/conftest.py` verified that every loaded `cv_engine.*` module came from this v2
+  worktree. This is accepted historical evidence with a hygiene defect, not the
+  canonical command for future evidence.
+
+  | Original run | Actual interpreter |
+  | --- | --- |
+  | Wave 0 Stages 1–2 | `/Users/matanmalka/Projects/resume_python/.venv/bin/python`, invoked by absolute path |
+  | Lane A / Stage 3 | The same v1-worktree interpreter through `/Users/matanmalka/Projects/resume_python-v2-wave1-a/.venv` |
+  | Lane B / Stages 4 and 6 | The same v1-worktree interpreter through `/Users/matanmalka/Projects/resume_python-v2-wave1-b/.venv` |
+  | Lane C / Stage 5 | The same v1-worktree interpreter through `/Users/matanmalka/Projects/resume_python-v2-wave1-c/.venv` |
+  | Lead post-merge A, B, and C gates | The same v1-worktree interpreter, invoked by absolute path |
+  | Wave 2 focused and first browser-complete verification | The same v1-worktree interpreter, invoked by absolute path |
+  | Offline CLI Workspace lifecycle | The same v1-worktree interpreter, invoked by absolute path with `OPENAI_API_KEY` unset |
+  | Previously quoted final `./.venv` run | A temporary v2-root `.venv` symlink to the same v1-worktree interpreter |
+
+  Every temporary symlink in that table was removed after its run.
+- A dedicated v2 environment was then created at this worktree's `.venv`, installed
+  with `pip install -e '.[test]'`, and provisioned with Playwright Chromium. Its editable
+  finder maps `cv_engine` directly to this v2 worktree and `pip check` passes.
+- `env CV_REQUIRE_BROWSER=1 ./.venv/bin/python -m pytest -q`: 113 passed using that
+  dedicated v2 interpreter, including the real browser, rendering, PDF, ATS, and golden
+  parity coverage.
 - `tests/test_golden.py`: no semantic difference in selected facts, rendered claims,
   validation outcomes, Ready eligibility, or decision behavior.
 - Fresh isolated Workspace (`purpose=development`, `data_class=copy`) with no AI key:
@@ -495,10 +525,17 @@ signature, stored report shape, artifact path policy, or fact semantic changed.
   construction, group naming, and stored report-shape decisions remain exactly as they
   were at the audit baseline.
 - **Stage 8 remains deferred to M2 and was not started.** This includes render/Ready
-  policy extraction, the remaining READY-demotion and persistence orchestration from
-  A2, decision-record typing, CLI policy removal, artifact-integrity consolidation,
-  compatibility-façade retirement, Profile-backed default emphasis, path-containment
-  unification, and removal of the migration-time pytest subprocess.
+  policy extraction, decision-record typing, CLI policy removal, artifact-integrity
+  consolidation, compatibility-façade retirement, Profile-backed default emphasis,
+  path-containment unification, and removal of the migration-time pytest subprocess.
+- **A2 is partly addressed, not closed.** Stage 6 moved the transition graph into the
+  domain and removed its architecture-allowlist entry. The duplicated READY-demotion
+  rule in `Repository.save_analysis` and `DraftService.approve`, plus
+  `save_analysis` performing its demotion after its own transaction has closed, remain
+  unchanged and are deferred to Stage 8.
+- **A6 remains open.** `cli.py` still imports `infrastructure.db`, and the
+  confirm/promote mapping plus `--confirm` refusal still live in the CLI. Both remain
+  Stage 8 work.
 - The Stage 1 allowlist shrank from three entries to two. The removed entry is the
   infrastructure-owned `ApplicationStatus` transition table resolved by Stage 6. The
   two explicit residual entries are `cli.py` importing `infrastructure.db` (A6) and
