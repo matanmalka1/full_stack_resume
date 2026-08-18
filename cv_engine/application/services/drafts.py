@@ -165,6 +165,13 @@ class DraftService(ServiceBase[DraftRepository]):
                 f"but knowledge now reports {profiles.version}; analyze again to obtain a "
                 "plan for the current Profile"
             )
+        if plan.selection_policy_version != policies.version:
+            raise StateConflict(
+                f"selection plan {plan.id} froze selection policy version "
+                f"{plan.selection_policy_version}, but knowledge now reports "
+                f"{policies.version}; analyze again to obtain a plan for the current "
+                "selection policy"
+            )
         analysis = record["analysis"]
         if analysis.fit.value == "low" and analysis.user_override.get("fit") != "accepted-low-fit":
             raise StateConflict("low fit blocks CV generation until --accept-low-fit is recorded")

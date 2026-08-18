@@ -75,10 +75,10 @@ def _draft(services: Services, application_id: str, analysis_id: str):
     ))
 
 
-# --- 1. a new job snapshot requires a new analysis before drafting ---------
+# --- 1. a plan may only be drafted from while its context still holds ------
 
 
-def test_new_snapshot_requires_a_new_analysis_before_drafting(
+def test_moved_snapshot_or_moved_knowledge_requires_a_new_analysis_before_drafting(
     v1_repo: Path, analyzed_application
 ) -> None:
     services, app_id = analyzed_application("Snapshot Race")
@@ -111,6 +111,39 @@ def test_new_snapshot_requires_a_new_analysis_before_drafting(
     draft = parse_draft(manifest.read_text(encoding="utf-8"))
     assert draft.job_analysis_id == analysed.analysis_id
     assert draft.job_snapshot_id == new_snapshot_id
+
+    # The plan also freezes the knowledge it selected under, and a frozen
+    # version only guards anything if editing that knowledge moves it. The
+    # emphasis policy version stored here is therefore the store's content hash
+    # rather than the "1.0.0" label the policy files declare and the manifest
+    # carries, which no policy edit touches.
+    versions = services.knowledge_lifecycle.knowledge_versions()
+    plan = services.repository.latest_selection_plan(app_id)
+    assert plan.profile_version == versions.profiles
+    assert plan.selection_policy_version == versions.emphasis_policies
+    assert plan.selection_policy_version != plan.plan.policy_version
+
+    # Editing a policy without touching its declared label is exactly the change
+    # the column exists to detect: the plan's section assignment was decided
+    # under weights that no longer hold, so drafting from it refuses.
+    policy_file = v1_repo / "config" / "emphasis.json"
+    original_policy = policy_file.read_text(encoding="utf-8")
+    policy = json.loads(original_policy)
+    policy["emphases"]["development-balanced"]["tag_weights"]["testing"] += 1
+    policy_file.write_text(json.dumps(policy, ensure_ascii=False), encoding="utf-8")
+    before_policy_edit = _persisted(services)
+
+    with pytest.raises(StateConflict, match="selection policy"):
+        _draft(services, app_id, analysed.analysis_id)
+
+    assert _persisted(services) == before_policy_edit
+    # Analyzing again freezes the edited policy, and drafting proceeds.
+    reanalysed = _analyze(services, app_id)
+    replanned = services.repository.latest_selection_plan(app_id)
+    assert replanned.selection_policy_version != plan.selection_policy_version
+    assert replanned.plan.policy_version == plan.plan.policy_version
+    assert _draft(services, app_id, reanalysed.analysis_id).validation.passed
+    policy_file.write_text(original_policy, encoding="utf-8")
 
 
 # --- 2. a newer material analysis invalidates an older working draft -------

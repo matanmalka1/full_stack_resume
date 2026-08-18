@@ -216,7 +216,11 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             candidate_context_version=knowledge.candidate.context_version,
             candidate_context_hash=knowledge.candidate.version_hash,
             profile_version=profiles.version,
-            selection_policy_version=plan_manifest.policy_version,
+            # The manifest's own `policy_version` is the label the policy files
+            # declare; editing a policy does not move it. The store's `version`
+            # hashes the policy content, so it is the value a later change can
+            # actually be compared against.
+            selection_policy_version=knowledge.policies.version,
             track_emphasis_dependencies={
                 "track": result.track.value,
                 "emphasis": result.emphasis.value,
