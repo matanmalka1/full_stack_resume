@@ -22,6 +22,14 @@ ALLOWED_INTERNAL = {
     "application": {"domain", "application", "util"},
 }
 
+# Known boundary debt from docs/v2-architecture-audit.md. New entries are not
+# permitted. Stages remove entries as they move the owning policy inward.
+ARCHITECTURE_DEBT_ALLOWLIST = {
+    "cli.py: imports infrastructure.db",
+    "infrastructure/db.py: defines an ApplicationStatus transition table",
+    "infrastructure/migration.py: imports subprocess",
+}
+
 
 def _modules(package: str) -> list[Path]:
     """Every module in the layer, subpackages included.
@@ -107,6 +115,32 @@ def _joined_path_literals(path: Path) -> list[int]:
     return found
 
 
+def _defines_application_status_transition_table(path: Path) -> bool:
+    """Whether a module assigns a mapping whose policy values name ApplicationStatus."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)) or node.value is None:
+            continue
+        if not isinstance(node.value, ast.Dict):
+            continue
+        if any(
+            isinstance(child, ast.Name) and child.id == "ApplicationStatus"
+            for child in ast.walk(node.value)
+        ):
+            return True
+    return False
+
+
+def _imports_relative_module(path: Path, module: str) -> bool:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return any(
+        isinstance(node, ast.ImportFrom)
+        and node.level == 1
+        and node.module == module
+        for node in ast.walk(tree)
+    )
+
+
 def test_domain_and_application_dependencies_point_inward() -> None:
     """Report every dependency and storage-boundary violation in one contract."""
     offenders: list[str] = []
@@ -137,3 +171,29 @@ def test_domain_and_application_dependencies_point_inward() -> None:
             )
 
     assert not offenders, offenders
+
+
+def test_known_outer_layer_policy_debt_does_not_grow() -> None:
+    """Cover CLI, infrastructure, runtime, and compat policy boundaries.
+
+    The allowlist is deliberately explicit: it records A2, A6, and A24 while
+    making any new instance fail. As staged work removes an offender, its entry
+    is removed from the allowlist; entries may never be added.
+    """
+    offenders: set[str] = set()
+    cli = ENGINE / "cli.py"
+    if _imports_relative_module(cli, "infrastructure.db"):
+        offenders.add("cli.py: imports infrastructure.db")
+
+    for path in sorted(ENGINE.rglob("*.py")):
+        relative = path.relative_to(ENGINE).as_posix()
+        if any(name == "subprocess" for name, _line in _imports(path)):
+            offenders.add(f"{relative}: imports subprocess")
+        if (
+            not relative.startswith("domain/")
+            and _defines_application_status_transition_table(path)
+        ):
+            offenders.add(f"{relative}: defines an ApplicationStatus transition table")
+
+    unexpected = offenders - ARCHITECTURE_DEBT_ALLOWLIST
+    assert not unexpected, sorted(unexpected)

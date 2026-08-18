@@ -18,14 +18,25 @@ from cv_engine.application import errors
 from cv_engine.application.commands import (
     AnalyzeCommand,
     AnalysisResult,
+    ApplicationMutationResult,
     ApprovalResult,
     DraftCommand,
     DraftResult,
+    FactDetailResult,
+    FactListResult,
+    FactReconciliationResult,
     IngestCommand,
     IngestedApplication,
+    KnowledgeVersionsResult,
+    NextActionCommand,
+    RecruitmentStatusCommand,
     RenderResult,
 )
-from cv_engine.application.queries import ArtifactVersionView
+from cv_engine.application.queries import (
+    ApplicationListView,
+    ArtifactVersionView,
+    DecisionRecordView,
+)
 from cv_engine.application.ports import (
     ApplicationRepository,
     ApplicationStore,
@@ -37,7 +48,7 @@ from cv_engine.application.ports import (
 from cv_engine.application.services import RenderingService
 from cv_engine.compat import resolve_job_analysis_id, resolve_job_snapshot_id
 from cv_engine.infrastructure.db import Repository
-from helpers import ACCOUNT_MANAGER_JOB
+from helpers import ACCOUNT_MANAGER_JOB, working_claim
 
 
 # --- results are typed, not positional --------------------------------------
@@ -97,6 +108,74 @@ def test_application_dtos_do_not_expose_filesystem_locations(engine) -> None:
     serialized = projection.model_dump(mode="json")
     assert serialized["items"]
     assert all("path" not in item and "metadata_json" not in item for item in serialized["items"])
+
+
+def test_knowledge_query_and_reconciliation_services_return_typed_results(engine) -> None:
+    knowledge = engine.services.knowledge_lifecycle
+
+    versions = knowledge.knowledge_versions()
+    assert isinstance(versions, KnowledgeVersionsResult)
+    assert all(versions.model_dump().values())
+
+    facts = knowledge.list_facts("canonical")
+    assert isinstance(facts, FactListResult)
+    assert facts.items
+    assert all(item.fact.status.value == "canonical" for item in facts.items)
+
+    detail = knowledge.show_fact(facts.items[0].fact.fact_id)
+    assert isinstance(detail, FactDetailResult)
+    assert detail.fact == facts.items[0].fact
+
+    reconciliation = knowledge.reconcile_facts()
+    assert isinstance(reconciliation, FactReconciliationResult)
+    assert reconciliation.passed, reconciliation.problems
+
+
+def test_draft_link_and_markdown_sync_services_preserve_validation(drafted_application) -> None:
+    setup = drafted_application("Editing Boundary Co")
+    claim = working_claim(setup.engine, setup.application_id, "common.language.hebrew")
+
+    linked = setup.engine.services.drafts.link_claim(
+        setup.application_id,
+        claim.claim_id,
+        claim.text,
+        claim.fact_ids,
+    )
+    assert linked.validation.passed, linked.validation.model_dump()
+
+    synchronized = setup.engine.services.drafts.sync_working_claims(setup.application_id)
+    assert synchronized.validation.passed, synchronized.validation.model_dump()
+
+
+def test_query_and_tracking_services_expose_the_application_boundary(approved_application) -> None:
+    setup = approved_application("Query Boundary Co")
+    services = setup.engine.services
+
+    applications = services.queries.list_applications()
+    assert isinstance(applications, ApplicationListView)
+    assert setup.application_id in {item.id for item in applications.items}
+
+    decision = services.queries.latest_decision(setup.application_id)
+    assert isinstance(decision, DecisionRecordView)
+    assert decision.id == setup.approved["decision_record_id"]
+
+    transitioned = services.tracking.transition_status(RecruitmentStatusCommand(
+        application_id=setup.application_id,
+        target_status="withdrawn",
+        reason="boundary contract test",
+    ))
+    assert isinstance(transitioned, ApplicationMutationResult)
+    assert transitioned.current_status == "withdrawn"
+
+    next_action = services.tracking.set_next_action(NextActionCommand(
+        application_id=setup.application_id,
+        next_action="Archive evidence",
+        next_action_date="2026-08-20",
+    ))
+    assert isinstance(next_action, ApplicationMutationResult)
+    assert next_action.current_status == "withdrawn"
+    assert next_action.next_action == "Archive evidence"
+    assert next_action.next_action_date == "2026-08-20"
 
 
 # --- refusals are typed -----------------------------------------------------

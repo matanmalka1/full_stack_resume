@@ -4,8 +4,8 @@ from pathlib import Path
 
 from cv_engine.domain.drafts import parse_draft
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
+from cv_engine.infrastructure.migration import _seal_report as seal_report
 from cv_engine.runtime.workspace import load_workspace
-from cv_engine.util import canonical_json, sha256_text
 from cv_engine.compat import Engine
 
 
@@ -87,13 +87,6 @@ def artifact_version_and_path(
 ):
     version = engine.repo.latest_artifact_version(application_id, artifact_type, lifecycle_status)
     return version, root / version["path"]
-
-
-def seal_report(report: dict) -> dict:
-    sealed = dict(report)
-    sealed.pop("report_hash", None)
-    sealed["report_hash"] = sha256_text(canonical_json(sealed))
-    return sealed
 
 
 def passing_migration_test_runner(root: Path) -> Path:
