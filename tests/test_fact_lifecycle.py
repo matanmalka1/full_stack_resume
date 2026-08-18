@@ -83,8 +83,10 @@ def test_promotion_requires_explicit_confirmation_and_a_legal_transition(
     assert _reload(services).get("situational.sqlite").status is FactStatus.PENDING
 
 
-def test_lifecycle_survives_process_boundaries_through_the_cli(cli_runner, v1_repo: Path) -> None:
-    added = cli_runner(
+def test_lifecycle_survives_process_boundaries_through_the_cli(
+    cli_subprocess, v1_repo: Path
+) -> None:
+    added = cli_subprocess(
         "fact",
         "add",
         "--source",
@@ -107,14 +109,14 @@ def test_lifecycle_survives_process_boundaries_through_the_cli(cli_runner, v1_re
     assert added.returncode == 0, added.stdout + added.stderr
     assert json.loads(added.stdout)["fact"]["status"] == "pending"
 
-    unconfirmed = cli_runner("fact", "confirm", "situational.sqlite")
+    unconfirmed = cli_subprocess("fact", "confirm", "situational.sqlite")
     assert unconfirmed.returncode == 2
     assert "requires explicit --confirm" in unconfirmed.stderr
 
-    assert cli_runner("fact", "confirm", "situational.sqlite", "--confirm").returncode == 0
-    assert cli_runner("fact", "promote", "situational.sqlite", "--confirm").returncode == 0
+    assert cli_subprocess("fact", "confirm", "situational.sqlite", "--confirm").returncode == 0
+    assert cli_subprocess("fact", "promote", "situational.sqlite", "--confirm").returncode == 0
 
-    listed = cli_runner("fact", "list", "--status", "canonical")
+    listed = cli_subprocess("fact", "list", "--status", "canonical")
     assert listed.returncode == 0
     ids = [fact["fact_id"] for fact in json.loads(listed.stdout)]
     assert "situational.sqlite" in ids
@@ -122,7 +124,7 @@ def test_lifecycle_survives_process_boundaries_through_the_cli(cli_runner, v1_re
         load_fact_store(v1_repo / "base").get("situational.sqlite").status is FactStatus.CANONICAL
     )
 
-    history = json.loads(cli_runner("fact", "history", "situational.sqlite").stdout)
+    history = json.loads(cli_subprocess("fact", "history", "situational.sqlite").stdout)
     assert [(event["from_status"], event["to_status"]) for event in history] == [
         (None, "pending"),
         ("pending", "confirmed"),

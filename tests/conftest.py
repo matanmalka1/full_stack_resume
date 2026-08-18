@@ -58,7 +58,7 @@ from cv_engine.runtime.workspace import (
 from cv_engine.domain.selection import EmphasisPolicyStore
 from cv_engine.infrastructure.rendering import render_pdf, validate_rendered
 from cv_engine.runtime.composition import Services, build_services
-from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB
+from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB, CliRun, run_cli
 
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
@@ -255,6 +255,18 @@ def application_repo(tmp_path: Path) -> Repository:
 
 @pytest.fixture
 def cli_runner(v1_repo: Path):
+    """The CLI against the test Workspace, run in this process."""
+
+    def run(*args: str) -> CliRun:
+        return run_cli("--repo", str(v1_repo), *args)
+
+    return run
+
+
+@pytest.fixture
+def cli_subprocess(v1_repo: Path):
+    """The CLI as a real process, for tests whose subject is that boundary."""
+
     def run(*args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [sys.executable, "-m", "cv_engine.cli", "--repo", str(v1_repo), *args],

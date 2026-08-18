@@ -8,7 +8,6 @@ safety property means anything.
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -24,6 +23,7 @@ from cv_engine.runtime.workspace import (
     create_workspace,
     load_workspace,
 )
+from helpers import CliRun, run_cli
 
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
@@ -238,15 +238,31 @@ def test_legacy_database_connection_cannot_write(tmp_path: Path) -> None:
 # --- CLI surface ------------------------------------------------------------
 
 
-def _cv(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, "-m", "cv_engine.cli", *args],
+def _cv(*args: str, env: dict[str, str] | None = None) -> CliRun:
+    return run_cli(*args, env=env)
+
+
+def test_cli_module_entry_point_reports_the_failure_exit_code(tmp_path: Path) -> None:
+    """The one guard the in-process runner cannot give: a real process.
+
+    Every other CLI test here calls `main()` directly, which proves the exit
+    code the function returns, not the status a shell sees. This runs the
+    module entry point for real, so a broken `__main__` block or a swallowed
+    exit code fails somewhere.
+    """
+    plain = tmp_path / "unmarked-process"
+    plain.mkdir()
+
+    result = subprocess.run(
+        [sys.executable, "-m", "cv_engine.cli", "--workspace", str(plain), "list"],
         text=True,
         capture_output=True,
         check=False,
         cwd=SOURCE_ROOT,
-        env={**os.environ, **(env or {})},
     )
+
+    assert result.returncode == 2
+    assert "no v2 Workspace marker" in result.stderr
 
 
 def test_cli_workspace_surface_guards_normal_and_legacy_roots(
@@ -358,7 +374,7 @@ def test_symlinked_default_child_roots_are_refused(tmp_path: Path, child: str) -
 def test_database_override_is_contained_inside_state_root(tmp_path: Path, source: str) -> None:
     workspace = create_workspace(tmp_path / f"database-{source}", purpose="test", data_class="test")
 
-    def run(value: Path | str) -> subprocess.CompletedProcess[str]:
+    def run(value: Path | str) -> CliRun:
         if source == "flag":
             return _cv("--workspace", str(workspace.root), "--db", str(value), "init")
         return _cv(

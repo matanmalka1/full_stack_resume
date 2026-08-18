@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import io
+import os
+from contextlib import redirect_stderr, redirect_stdout
+from dataclasses import dataclass
 from pathlib import Path
+from unittest.mock import patch
 
+from cv_engine.cli import main as cli_main
 from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.runtime.composition import Services
@@ -88,3 +94,39 @@ def artifact_version_and_path(
 
 def passing_migration_test_runner(root: Path) -> Path:
     return root / "data/migration/migration-tests.json"
+
+
+@dataclass(frozen=True)
+class CliRun:
+    """What a CLI invocation produced: the same three fields a process yields."""
+
+    returncode: int
+    stdout: str
+    stderr: str
+
+
+def run_cli(*args: str, env: dict[str, str] | None = None) -> CliRun:
+    """Run the CLI in this process with the argv `python -m cv_engine.cli` takes.
+
+    The CLI has two exit paths — a returned exit code, and argparse raising
+    SystemExit on a parser error — and a real process collapses both into one
+    status. This collapses them the same way, so a test reads one result
+    whether the failure came from a command or from the parser.
+
+    Use this for CLI behavior. A test whose subject is the process boundary
+    itself — state surviving between runs, the module entry point — runs the
+    real process instead.
+    """
+    out, err = io.StringIO(), io.StringIO()
+    with patch.dict(os.environ, env or {}):
+        with redirect_stdout(out), redirect_stderr(err):
+            try:
+                code = cli_main(list(args))
+            except SystemExit as exc:
+                if exc.code is None:
+                    code = 0
+                elif isinstance(exc.code, int):
+                    code = exc.code
+                else:
+                    code = 1
+    return CliRun(code, out.getvalue(), err.getvalue())
