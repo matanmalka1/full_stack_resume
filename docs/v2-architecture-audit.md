@@ -605,3 +605,41 @@ signature, stored report shape, artifact path policy, or fact semantic changed.
   `--knowledge-from` (A28), and marker-before-config ordering (A29) remain M2 work at
   the homes stated above. They are outside M1 criterion 5's selected-marker and
   inventory guarantee.
+
+### M2 boundary 1 closure (2026-08-18, `4796744`)
+
+`docs/v2-m2-schema-and-repositories.md` is the design and evidence record for this boundary.
+It changes the state of the findings above as follows:
+
+- **A23 closed.** `cv_engine/infrastructure/paths.py` is now the single symlink-aware
+  containment implementation; `runtime/workspace.py`, `infrastructure/legacy_source.py`, and
+  `infrastructure/migration.py` all resolve through it, and an architecture test forbids a
+  second implementation anywhere in `cv_engine/`.
+- **A26 closed.** `--db` / `CV_DATABASE` must resolve inside `state_root`; relative, absolute,
+  outside-root, and symlink-escape forms are covered for both the flag and the environment
+  variable.
+- **A27 closed.** All four default child roots are resolved and containment-checked before any
+  write, and a symlinked default child is refused.
+- **A29 closed.** Workspace marker validation now precedes any Workspace config read.
+- **A7 closed.** Payload integrity is classified once, as `ok` / `missing` / `tampered`, behind
+  the four former copies; every caller keeps its own message strings and issue codes.
+- **A2 partly closed.** The READY-demotion rule has one owner, the demotion is atomic with the
+  analysis insert and classification update in a single UnitOfWork, and `Repository.save_analysis`
+  no longer re-reads status after its own transaction has closed. Both protected reason strings
+  are preserved byte-for-byte and asserted. The residue — relocating the `_set_ready`,
+  `_record_submission`, and `record_decision` rules — moves to M2 §4.3, where the
+  `PreparationState` and `ready_qualified` projections replace those rules outright.
+- **A16 partly addressed.** `register_artifact_version`, `record_decision`, `record_validation`,
+  and `latest_artifact_version` are typed; the rest of the port narrowing waits for §4.2.
+- **A24 remains the only allowlist entry.** `infrastructure/migration.py` still imports
+  `subprocess`; it belongs to M2 §4.6 with the migration gate report contract. The allowlist
+  shrank from two entries to one and `cli.py` no longer imports the persistence adapter.
+- **A28 remains open** at its §4.6 home, unchanged by this boundary.
+- **A4, A5, A6, A3 remain open** as Stage 8 items at the homes recorded in the boundary 1
+  design brief §1.
+
+`infrastructure/db.py` no longer exists. Structured state is created and upgraded only through
+numbered SQL migrations, with verified adoption of an existing v1-shaped database and an
+explicit version gate. Independent verification, including the browser-required gate at
+154 passed and the baseline-adoption drill on a copy of the development Workspace, is recorded
+in `docs/v2-m2-schema-and-repositories.md` §13.

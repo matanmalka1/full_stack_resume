@@ -1,6 +1,6 @@
 # M2 Boundary 1 — Schema and Repositories (design and execution brief)
 
-Status: **Designed 2026-08-18; not implemented.** Base commit: `d835ca9`.
+Status: **Implemented and independently verified 2026-08-18.** Designed at `d835ca9`; implementation closed at `4796744`. Evidence in §13.
 
 Scope: `docs/v2-implementation-plan.md` §4.1 (schema, numbered migrations, connection policy,
 repositories by transactional ownership, UnitOfWork, filesystem payload stores, ID/timestamp/
@@ -346,5 +346,74 @@ Four items to close, none of them blocking wave 1:
 
 ## 13. Evidence
 
-Empty until execution. Filled at boundary close with per-wave commits, quoted command output,
-the test-count delta and its explanation, and the §4.7 items this boundary can honestly tick.
+Boundary 1 implementation closed at `4796744` on 2026-08-18. Waves 0–2 landed; no wave 3 work
+was required. Commits, in order: `2e7b06f`, `4660f28`, `97c9cf4`, `0cc4b63` (wave 0);
+`abbda75`, `44d1289`, `22548d7`, `368e471` (wave 1 and its A → B integration); `b326ced`,
+`2f09c76`, `5e85eaf`, `eda7364`, `4796744` (wave 2). `f51ff07` committed this brief's §3 and
+§12 amendments.
+
+### Independent verification (Claude, 2026-08-18, `4796744`)
+
+Reproduced under this worktree's `./.venv/bin/python`, the canonical interpreter:
+
+| Gate | Result |
+| --- | --- |
+| `./.venv/bin/python -m pytest -q` | 154 passed |
+| `env CV_REQUIRE_BROWSER=1 ./.venv/bin/python -m pytest -q` | **154 passed, exit 0** — the gate the executing session could not recover |
+| `-m browser` selection under `CV_REQUIRE_BROWSER=1` | 4 passed, 150 deselected — real rendering/PDF/ATS coverage executed, not merely collected |
+| `tests/test_golden.py` | 1 passed; no semantic difference in selected facts, rendered claims, validation outcomes, Ready eligibility, or decision behaviour |
+| Test-count accounting | 124 → 154. 25 new test functions, **zero removed** (`git grep` of test function names at `d835ca9` versus `4796744` diffs empty in the removal direction); the +30 collected delta is those 25 plus parameterisation |
+| Debt allowlist | shrank from two entries to one (`infrastructure/migration.py: imports subprocess`, A24, deferred to §4.6) |
+| Frozen fingerprint fixture | byte-for-byte unchanged since `97c9cf4`; `schema_migrations` excluded by name with the reason in a comment |
+| `0001_baseline.sql` | 14 declared tables, 22 triggers, 6 indexes; `status_history.id` keeps `AUTOINCREMENT`; `sqlite_sequence` not declared |
+| Guard live-ness | `persistence/migrations/0001_baseline.sql` and `persistence/composite.py` both exist, so neither previously-inert guard is vacuous |
+| Lane isolation | `infrastructure/payloads.py` imports only `..util` and `.paths` — nothing from `persistence`, no `sqlite3` |
+| Old import path | `infrastructure/db.py` deleted; no production module or test imports it; only the guard's own detector strings name it |
+
+Guards were **negative-tested**, not merely observed passing. An injected SQL string in
+`cli.py` and an injected `PRAGMA` in `runtime/composition.py` both failed
+`test_sqlite_and_sql_are_owned_by_persistence` (proving the wave-2 widening reaches beyond
+`infrastructure/`); an injected SQL string and an injected containment predicate in
+`infrastructure/artifacts.py` failed their respective guards during wave 0. Every probe was
+reverted and the worktree confirmed clean.
+
+### Baseline-adoption drill, reproduced independently
+
+On a scratch copy of `.workspace/dev` (the original was never opened):
+
+- `cv workspace status` → `purpose=development`, `data_class=copy`;
+- `cv reconcile` → `passed: true`, 5 artifact versions checked, no problems, fact lifecycle
+  `passed: true`;
+- application, job-snapshot, job-analysis, artifact-version, and status-history counts
+  identical before and after (1 / 1 / 1 / 5 / 3);
+- all five registered artifact hashes byte-identical before and after;
+- `sqlite_master` table count 15 → 16, the single addition being `schema_migrations`, stamped
+  `('0001', '0001_baseline.sql')`.
+
+Live v1 data at `/Users/matanmalka/Projects/resume_python` was not opened at any point.
+
+### §4.7 status — deliberately not ticked
+
+No `docs/v2-implementation-plan.md` §4.7 checkbox is claimed by this boundary. Item 1
+(repositories/UoW under real SQLite) and item 2 (immutable entities reject bypasses) are
+covered *for the M1 table set only*; the v2 entities they will finally be judged against arrive
+in §4.2. Item 7 (no M2 code points to live v1 paths) holds so far but is a standing constraint
+rather than a boundary deliverable. Ticking partial coverage would misreport the milestone.
+
+### Follow-up for boundary 3 (§4.3)
+
+Cross-owner atomicity inside the persistence package is implemented by private reach-ins
+(`applications._insert_application`, `._transition_status`, `._set_status` called from
+`preparation.py` and `tracking.py`) rather than the `bind(uow)` composition D7 describes, which
+does exist on `SqliteRepositoryBase`. Behaviour is unchanged and every call site is
+same-package, so this is not a defect. What it costs is defence in depth: the public
+`transition_status` refuses READY and APPLIED, but `_transition_status` does not, and
+`_set_status` performs no `transition_allowed` check at all, so those invariants now rest on
+convention. §4.3 replaces these rules with the `PreparationState` / `ready_qualified`
+projections; when it does, either give the internal primitives their own invariant or route
+cross-owner writes through `bind(uow)`.
+
+`cv workspace status` reports `schema_version: null` until the database has been created or
+adopted, and `"0001"` afterwards. That is correct — status must not create or adopt a database
+as a side effect — but the null is worth keeping in mind when reading a fresh Workspace's
+status output.
