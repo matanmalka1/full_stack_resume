@@ -41,6 +41,13 @@ def test_approved_payload_layouts(payload_store: PayloadStore) -> None:
         assert payload_store.output_path(
             "app", "revision", "artifact", suffix=suffix
         ).suffix == f".{suffix.lstrip('.')}"
+    targets = payload_store.render_targets(
+        "app", "revision", "html-id", "pdf-id", "screenshot-id", "Recruiter CV.pdf"
+    )
+    assert targets.html.parts[-4:] == ("outputs", "app", "revision", "html-id.html")
+    assert targets.pdf.name == "pdf-id.pdf"
+    assert targets.screenshot.name == "screenshot-id.png"
+    assert targets.recruiter_pdf_filename == "Recruiter CV.pdf"
     assert payload_store.provider_path("app", "operation", "artifact").parts[-4:] == (
         "provider",
         "app",

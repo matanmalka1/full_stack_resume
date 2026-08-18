@@ -39,8 +39,9 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
         metadata: dict[str, Any] | None = None,
         approved_at: str | None = None,
         submitted_at: str | None = None,
+        artifact_version_id: str | None = None,
     ) -> str:
-        version_id = new_id()
+        version_id = artifact_version_id or new_id()
         now = utc_now()
         with self.transaction() as connection:
             if job_snapshot_id is not None:

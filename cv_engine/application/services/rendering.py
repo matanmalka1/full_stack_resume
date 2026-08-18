@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import Any, Generic, TypeVar
 
 from ... import __version__
@@ -136,15 +137,35 @@ class RenderingService(ServiceBase[ReadinessRepository]):
                 source_report,
             )
         candidate = knowledge.candidate
-        targets = self.artifacts.render_targets(
-            manifest_path, self.renderer.filename_for(profile.normalized_role, candidate)
+        artifact_ids = [str(uuid.uuid4()) for _ in range(3)]
+        recruiter_pdf_filename = self.renderer.filename_for(
+            profile.normalized_role, candidate
+        )
+        if revision_id is None:
+            raise LineageBroken(
+                "rendering requires an approved revision-bound claim manifest"
+            )
+        targets = self.revision_payloads.render_targets(
+            application_id,
+            revision_id,
+            artifact_ids[0],
+            artifact_ids[1],
+            artifact_ids[2],
+            recruiter_pdf_filename,
         )
         html_path, pdf_path, screenshot_path = targets.html, targets.pdf, targets.screenshot
         try:
             self.renderer.render_html(draft, html_path, candidate)
             geometry = self.renderer.render_pdf(html_path, pdf_path, screenshot_path)
             report = self.renderer.validate_rendered(
-                draft, profile, html_path, pdf_path, screenshot_path, geometry, candidate
+                draft,
+                profile,
+                html_path,
+                pdf_path,
+                screenshot_path,
+                geometry,
+                candidate,
+                targets.recruiter_pdf_filename,
             )
         except FileExistsError as exc:
             raise StateConflict(str(exc)) from exc
@@ -153,13 +174,15 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         except (OSError, RuntimeError) as exc:
             raise InfrastructureFailure(f"rendering failed: {exc}") from exc
         lifecycle = "rendered" if report.passed else "rendered-invalid"
-        artifact_ids = []
-        for artifact_type, logical_name, path in [
-            ("resume_html", "resume", html_path),
-            ("resume_pdf", "resume", pdf_path),
-            ("visual_evidence", "resume", screenshot_path),
+        for artifact_version_id, artifact_type, logical_name, path in [
+            (artifact_ids[0], "resume_html", "resume", html_path),
+            (artifact_ids[1], "resume_pdf", "resume", pdf_path),
+            (artifact_ids[2], "visual_evidence", "resume", screenshot_path),
         ]:
-            artifact_ids.append(self.repo.register_artifact_version(
+            metadata = {"validation_passed": report.passed}
+            if artifact_type == "resume_pdf":
+                metadata["recruiter_filename"] = targets.recruiter_pdf_filename
+            registered_id = self.repo.register_artifact_version(
                 application_id,
                 artifact_type,
                 logical_name,
@@ -173,8 +196,13 @@ class RenderingService(ServiceBase[ReadinessRepository]):
                 emphasis=draft.emphasis.value,
                 facts_version=facts.version,
                 approved_at=manifest_record["approved_at"],
-                metadata={"validation_passed": report.passed},
-            ))
+                metadata=metadata,
+                artifact_version_id=artifact_version_id,
+            )
+            if registered_id != artifact_version_id:
+                raise InfrastructureFailure(
+                    "artifact registry did not preserve the reserved output identity"
+                )
         self.repo.record_validation(application_id, "post-render", report, artifact_ids[1])
         if report.passed:
             integrity = verify_ready_integrity(self.artifacts, self._knowledge, self.repo, application_id)

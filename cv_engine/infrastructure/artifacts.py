@@ -3,7 +3,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from ..application.ports import DraftPaths, RenderTargets, StoredDraft
+from ..application.ports import DraftPaths, StoredDraft
 from ..domain.draft_markdown import parse_draft
 from ..domain.drafts import seal_draft
 from ..domain.models import DraftDocument
@@ -13,16 +13,13 @@ from ..runtime.workspace import Workspace
 class FilesystemArtifactStore:
     """The Workspace's artifact layout, in one place.
 
-    Every directory and file name the product uses for drafts, approved
-    versions, and rendered output is decided here, so relocating storage is a
-    change to this adapter rather than to the services that ask it for a
-    location.
+    This compatibility adapter owns mutable working-draft paths and reads
+    registered immutable payloads. New snapshot, revision, and rendered-output
+    writes go through PayloadStore's approved layouts.
     """
 
     MARKDOWN = "resume.md"
     MANIFEST = "resume.claims.json"
-    HTML = "resume.html"
-    SCREENSHOT = "visual.png"
 
     def __init__(self, workspace: Workspace):
         self._workspace = workspace
@@ -85,19 +82,6 @@ class FilesystemArtifactStore:
         shutil.copy2(working.markdown, published.markdown)
         shutil.copy2(working.manifest, published.manifest)
         return published
-
-    def render_targets(self, manifest_path: Path, pdf_filename: str) -> RenderTargets:
-        """Where the rendered outputs of the version behind `manifest_path` go.
-
-        They live beside the approved document they were rendered from, which
-        is what makes "the PDF belongs to this exact version" checkable.
-        """
-        directory = manifest_path.parent
-        return RenderTargets(
-            html=directory / self.HTML,
-            pdf=directory / pdf_filename,
-            screenshot=directory / self.SCREENSHOT,
-        )
 
     def resolve(self, stored_path: str) -> Path:
         return self._workspace.root / stored_path

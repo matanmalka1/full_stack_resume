@@ -106,6 +106,7 @@ def _fast(
     pdf_record = services.repository.latest_artifact_version(
         ingested.application_id, "resume_pdf"
     )
+    pdf_metadata = json.loads(pdf_record.get("metadata_json") or "{}")
     return {
         "application_id": ingested.application_id,
         "approval": {
@@ -119,6 +120,7 @@ def _fast(
             "decision_record_id": approved.decision_record_id,
         },
         "pdf": str(services.artifacts.resolve(pdf_record["path"])),
+        "filename": pdf_metadata.get("recruiter_filename"),
         "ready": True,
     }
 
@@ -606,8 +608,10 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "render":
             rendered = services.rendering.render(args.application_id)
             pdf_record = repository.latest_artifact_version(args.application_id, "resume_pdf")
+            pdf_metadata = json.loads(pdf_record.get("metadata_json") or "{}")
             _print({
                 "pdf": str(services.artifacts.resolve(pdf_record["path"])),
+                "filename": pdf_metadata.get("recruiter_filename"),
                 "ready_validation": rendered.validation.model_dump(mode="json"),
             })
             return 0 if rendered.validation.passed else 1

@@ -437,14 +437,8 @@ class DraftService(ServiceBase[DraftRepository]):
             raise InfrastructureFailure("approved revision payload hash verification failed")
 
         now = utc_now()
-        manifest_path = self.artifacts.resolve(published.structured.reference)
-        # The decision record names where rendering will put its outputs, so it
-        # asks the artifact store the same question the renderer will.
-        expected = self.artifacts.render_targets(
-            manifest_path,
-            self.renderer.filename_for(
-                profiles.get(draft.profile).normalized_role, self.candidate(facts)
-            ),
+        recruiter_pdf_filename = self.renderer.filename_for(
+            profiles.get(draft.profile).normalized_role, self.candidate(facts)
         )
         application = self.repo.get_application(application_id)
         structured = {
@@ -470,9 +464,8 @@ class DraftService(ServiceBase[DraftRepository]):
             "job_analysis_id": analysis_id,
             "artifact_paths": {
                 "markdown": published.markdown.reference,
-                "html": self.artifacts.relative(expected.html),
-                "pdf": self.artifacts.relative(expected.pdf),
             },
+            "recruiter_pdf_filename": recruiter_pdf_filename,
         }
         decision_summary = (
             f"Approved {draft.profile.value} / {draft.emphasis.value} CV for "

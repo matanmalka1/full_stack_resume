@@ -47,7 +47,12 @@ def test_default_flow_stops_for_review_then_reaches_ready(services) -> None:
     pdf_record = services.repository.latest_artifact_version(app_id, "resume_pdf")
     pdf = services.artifacts.resolve(pdf_record["path"])
     assert rendered.validation.passed, rendered.validation.model_dump()
-    assert pdf.name == "Matan Malka - Account Manager - CV.pdf"
+    assert pdf.parts[-4:-1] == ("outputs", app_id, approved.revision_id)
+    assert pdf.name == f"{pdf_record['id']}.pdf"
+    assert json.loads(pdf_record["metadata_json"])["recruiter_filename"] == (
+        "Matan Malka - Account Manager - CV.pdf"
+    )
+    assert rendered.validation.groups["filename"] is True
     assert services.repository.get_application(app_id)["current_status"] == "ready"
     assert services.rendering.ready_report(app_id).passed
     decision = services.repository.latest_decision(app_id)

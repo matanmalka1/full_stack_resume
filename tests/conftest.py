@@ -342,7 +342,14 @@ def ready_application(approved_application, monkeypatch: pytest.MonkeyPatch):
         }
 
     def deterministic_render_evidence(
-        draft, _profile, html_path, pdf_path, screenshot_path, geometry, candidate
+        draft,
+        _profile,
+        html_path,
+        pdf_path,
+        screenshot_path,
+        geometry,
+        candidate,
+        delivered_pdf_filename=None,
     ) -> RenderEvidence:
         extracted_text = "\n".join([
             draft.headline.text,
@@ -361,7 +368,7 @@ def ready_application(approved_application, monkeypatch: pytest.MonkeyPatch):
             html_size=html_path.stat().st_size,
             html_text=html_path.read_text(encoding="utf-8"),
             pdf_path=str(pdf_path),
-            pdf_name=pdf_path.name,
+            pdf_name=delivered_pdf_filename or pdf_path.name,
             pdf_exists=True,
             pdf_size=pdf_path.stat().st_size,
             pdf_error=None,

@@ -63,6 +63,7 @@ class RenderTargets:
     html: Path
     pdf: Path
     screenshot: Path
+    recruiter_pdf_filename: str
 
 
 class ArtifactStore(Protocol):
@@ -92,8 +93,6 @@ class ArtifactStore(Protocol):
 
     def publish_working_draft(self, application_id: str, version: int) -> DraftPaths: ...
 
-    def render_targets(self, manifest_path: Path, pdf_filename: str) -> RenderTargets: ...
-
     def resolve(self, stored_path: str) -> Path: ...
 
     def relative(self, path: Path) -> str: ...
@@ -118,6 +117,16 @@ class RevisionPayloadStore(SnapshotPayloadStore, Protocol):
         structured_json: str,
         markdown: str,
     ) -> RevisionPayloads: ...
+
+    def render_targets(
+        self,
+        application_id: str,
+        revision_id: str,
+        html_artifact_version_id: str,
+        pdf_artifact_version_id: str,
+        screenshot_artifact_version_id: str,
+        recruiter_pdf_filename: str,
+    ) -> RenderTargets: ...
 
 
 class KnowledgeStore(Protocol):
@@ -168,6 +177,7 @@ class Renderer(Protocol):
         screenshot_path: Path,
         geometry: dict[str, Any],
         candidate: CandidateContext,
+        delivered_pdf_filename: str | None = None,
     ) -> ValidationReport: ...
 
     def filename_for(self, normalized_role: str, candidate: CandidateContext) -> str: ...
@@ -310,6 +320,7 @@ class ArtifactRegistry(Protocol):
         metadata: dict[str, Any] | None = None,
         approved_at: str | None = None,
         submitted_at: str | None = None,
+        artifact_version_id: str | None = None,
     ) -> str: ...
 
     def latest_artifact_version(

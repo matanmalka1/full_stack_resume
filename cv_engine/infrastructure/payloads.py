@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from ..application.ports import RevisionPayloads, SnapshotPayload
+from ..application.ports import RenderTargets, RevisionPayloads, SnapshotPayload
 from ..util import sha256_file
 from .paths import relative_within, resolve_within
 
@@ -120,6 +120,28 @@ class PayloadStore:
             self._component(application_id, name="application_id"),
             self._component(revision_id, name="revision_id"),
             f"{self._component(artifact_id, name='artifact_id')}{normalized_suffix}",
+        )
+
+    def render_targets(
+        self,
+        application_id: str,
+        revision_id: str,
+        html_artifact_version_id: str,
+        pdf_artifact_version_id: str,
+        screenshot_artifact_version_id: str,
+        recruiter_pdf_filename: str,
+    ) -> RenderTargets:
+        return RenderTargets(
+            html=self.output_path(
+                application_id, revision_id, html_artifact_version_id, suffix="html"
+            ),
+            pdf=self.output_path(
+                application_id, revision_id, pdf_artifact_version_id, suffix="pdf"
+            ),
+            screenshot=self.output_path(
+                application_id, revision_id, screenshot_artifact_version_id, suffix="png"
+            ),
+            recruiter_pdf_filename=recruiter_pdf_filename,
         )
 
     def provider_path(

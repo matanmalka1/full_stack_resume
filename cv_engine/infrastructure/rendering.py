@@ -182,9 +182,17 @@ def validate_rendered(
     screenshot_path: Path,
     geometry: dict[str, Any],
     candidate: CandidateContext,
+    delivered_pdf_filename: str | None = None,
 ) -> ValidationReport:
     evidence = collect_render_evidence(
-        draft, profile, html_path, pdf_path, screenshot_path, geometry, candidate
+        draft,
+        profile,
+        html_path,
+        pdf_path,
+        screenshot_path,
+        geometry,
+        candidate,
+        delivered_pdf_filename,
     )
     return validate_render_evidence(draft, profile, evidence, candidate)
 
@@ -197,6 +205,7 @@ def collect_render_evidence(
     screenshot_path: Path,
     geometry: dict[str, Any],
     _candidate: CandidateContext,
+    delivered_pdf_filename: str | None = None,
 ) -> RenderEvidence:
     html_exists = html_path.is_file()
     html_size = html_path.stat().st_size if html_exists else 0
@@ -225,7 +234,7 @@ def collect_render_evidence(
         html_size=html_size,
         html_text=html_text,
         pdf_path=str(pdf_path),
-        pdf_name=pdf_path.name,
+        pdf_name=delivered_pdf_filename or pdf_path.name,
         pdf_exists=pdf_exists,
         pdf_size=pdf_size,
         pdf_error=pdf_error,
@@ -278,9 +287,17 @@ class PlaywrightRenderer:
         screenshot_path: Path,
         geometry: dict[str, Any],
         candidate: CandidateContext,
+        delivered_pdf_filename: str | None = None,
     ) -> ValidationReport:
         return validate_rendered(
-            draft, profile, html_path, pdf_path, screenshot_path, geometry, candidate
+            draft,
+            profile,
+            html_path,
+            pdf_path,
+            screenshot_path,
+            geometry,
+            candidate,
+            delivered_pdf_filename,
         )
 
     def filename_for(self, normalized_role: str, candidate: CandidateContext) -> str:
