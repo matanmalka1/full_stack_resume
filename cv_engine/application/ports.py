@@ -209,13 +209,43 @@ class JobStore(Protocol):
 class ArtifactRegistry(Protocol):
     """What was produced, what validated it, and what decided it."""
 
-    def register_artifact_version(self, *args: Any, **kwargs: Any) -> str: ...
+    def register_artifact_version(
+        self,
+        application_id: str | None,
+        artifact_type: str,
+        logical_name: str,
+        path: str,
+        content_hash: str,
+        lifecycle_status: str,
+        *,
+        job_snapshot_id: str | None = None,
+        track: str | None = None,
+        profile: str | None = None,
+        emphasis: str | None = None,
+        facts_version: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        approved_at: str | None = None,
+        submitted_at: str | None = None,
+    ) -> str: ...
 
-    def latest_artifact_version(self, *args: Any, **kwargs: Any) -> dict[str, Any]: ...
+    def latest_artifact_version(
+        self,
+        application_id: str,
+        artifact_type: str,
+        lifecycle_status: str | None = None,
+    ) -> dict[str, Any]: ...
 
     def artifact_versions(self, application_id: str) -> list[dict[str, Any]]: ...
 
-    def record_decision(self, *args: Any, **kwargs: Any) -> str: ...
+    def record_decision(
+        self,
+        application_id: str,
+        artifact_version_id: str,
+        job_snapshot_id: str,
+        job_analysis_id: str,
+        structured: dict[str, Any],
+        summary: str,
+    ) -> str: ...
 
     def latest_decision(self, application_id: str) -> dict[str, Any]: ...
 
@@ -223,7 +253,13 @@ class ArtifactRegistry(Protocol):
 
     def record_generation_run(self, values: dict[str, Any]) -> str: ...
 
-    def record_validation(self, *args: Any, **kwargs: Any) -> str: ...
+    def record_validation(
+        self,
+        application_id: str,
+        phase: str,
+        report: ValidationReport,
+        artifact_version_id: str | None = None,
+    ) -> str: ...
 
     def validation_for_artifact(
         self, application_id: str, phase: str, artifact_version_id: str
