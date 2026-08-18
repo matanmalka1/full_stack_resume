@@ -6,7 +6,7 @@ or weaken an existing acceptance gate.
 
 - [x] **TODO 1 — completed (`ab63ef6`):** added Ruff, defined the lint/format contract,
       removed dead/copied imports, and verified no behavioral change.
-- [ ] **TODO 2:** split the default fast non-browser pytest run from an explicit
+- [x] **TODO 2:** split the default fast non-browser pytest run from an explicit
       browser-complete gate.
 - [ ] **TODO 3:** evaluate pytest-xdist isolation and add it only after explicit
       dependency-baseline approval.

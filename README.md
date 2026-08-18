@@ -218,31 +218,35 @@ there. Never extract a snapshot over a live repository.
 
 ## Tests
 
+The default run is the fast, non-browser suite:
+
 ```bash
 ./.venv/bin/python -m pytest -q
 ```
 
-The suite covers unit contracts, default workflow, golden Development/English
-Sales/Hebrew Sales/Tech Sales cases, RTL/LTR rendering, PDF/ATS checks, migration,
-immutability, and targeted regressions.
+It covers unit contracts, the default workflow with deterministic renderer doubles,
+golden Development/English Sales/Hebrew Sales/Tech Sales cases, migration,
+immutability, and targeted regressions. Tests marked `browser` are deselected by the
+default `pyproject.toml` configuration.
 
-Thirty tests start a real headless Chromium/Chrome and are marked `browser`. Some
+Browser tests start a real headless Chromium/Chrome. Some
 sandboxed agent sessions (for example Codex under Seatbelt) block the browser's Mach
 port registration, so the browser cannot start there at all; Chrome's `--no-sandbox`
 flag does not help, because it only disables Chrome's own sandbox. Trusted Codex
 sessions load `.codex/rules/pytest.rules` at startup, allowing only the project pytest
 prefix to run outside Seatbelt. Restart Codex after first checking out the rule.
 
-When that rule is unavailable, run the subset that needs no browser:
+Run the explicit browser-complete gate in a normal terminal or in CI before `ready` or
+completion:
 
 ```bash
-./.venv/bin/python -m pytest -q -m "not browser"
+env CV_REQUIRE_BROWSER=1 ./.venv/bin/python -m pytest -q -m ""
 ```
 
-That is a reduced run, not a complete one. Rendering, PDF, and ATS checks are
-acceptance requirements, so the full suite must still run in a normal terminal or in
-CI before `ready` or completion. Set `CV_REQUIRE_BROWSER=1` there: the run then fails
-immediately if the browser tests were deselected.
+The empty marker expression overrides the default `not browser` selection, so this
+runs the entire suite, including rendering, PDF, and ATS acceptance checks.
+`CV_REQUIRE_BROWSER=1` makes the run fail immediately if browser tests are still
+deselected.
 
 ## Historical artifacts
 

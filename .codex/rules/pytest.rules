@@ -13,6 +13,6 @@ prefix_rule(
     decision = "allow",
     justification = "Run the complete acceptance suite with the dedicated v2-worktree virtualenv and mandatory browser coverage",
     match = [
-        "env CV_REQUIRE_BROWSER=1 ./.venv/bin/python -m pytest -q",
+        "env CV_REQUIRE_BROWSER=1 ./.venv/bin/python -m pytest -q -m \"\"",
     ],
 )
