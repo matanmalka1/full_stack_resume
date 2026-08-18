@@ -7,12 +7,13 @@ keywords and gaps could not change a single line of the document.
 
 from __future__ import annotations
 
+from helpers import PAYME_TECH_SALES_JOB
+
 from cv_engine.domain.draft_markdown import serialize_markdown
 from cv_engine.domain.models import Emphasis, Profile
 from cv_engine.domain.profiles import ProfileStore
-from cv_engine.infrastructure.rendering import normalized_role_filename
 from cv_engine.domain.selection import STRUCTURAL_STYLES, build_selection
-from helpers import PAYME_TECH_SALES_JOB
+from cv_engine.infrastructure.rendering import normalized_role_filename
 
 ACCOUNT_MANAGER_JOB = (
     "Account Manager for B2B customers: retention, portfolio growth, renewals, "

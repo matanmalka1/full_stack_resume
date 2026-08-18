@@ -7,7 +7,6 @@ from ..models import Emphasis, JobAnalysis, ProfileName, Track
 from .approval import CONFIDENCE_APPROVAL_THRESHOLD, unresolved_reasons
 from .gaps import derive_fit, derive_gaps
 
-
 HEBREW = re.compile(r"[\u0590-\u05ff]")
 
 PROFILE_TERMS: dict[ProfileName, tuple[str, ...]] = {

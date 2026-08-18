@@ -12,13 +12,12 @@ import pytest
 from cv_engine.application.ports import ArtifactRegistry
 from cv_engine.domain.analysis.classification import classify_job
 from cv_engine.domain.models import (
-    SelectionPlan,
     SelectionManifest,
+    SelectionPlan,
     ValidationReport,
     ValidationRunLineage,
     WorkingDraft,
 )
-from cv_engine.infrastructure.persistence.applications import SqliteApplicationRepository
 from cv_engine.infrastructure.persistence import (
     MigrationChecksumError,
     Repository,
@@ -28,6 +27,7 @@ from cv_engine.infrastructure.persistence import (
     connect,
     current_schema_version,
 )
+from cv_engine.infrastructure.persistence.applications import SqliteApplicationRepository
 from cv_engine.infrastructure.persistence.primitives import new_id
 from cv_engine.infrastructure.persistence.schema import (
     MIGRATIONS_DIR,
@@ -38,7 +38,6 @@ from cv_engine.infrastructure.persistence.schema import (
 )
 from cv_engine.infrastructure.persistence.serialization import serialization_version
 from cv_engine.util import normalized_text, sha256_text
-
 
 # Immutability is the default, so nothing has to be registered when an immutable
 # table is added. A table is exempt only by being named here, which means that

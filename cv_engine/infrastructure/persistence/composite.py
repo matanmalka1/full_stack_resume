@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from .applications import SqliteApplicationRepository
 from .artifacts import SqliteArtifactRepository
@@ -90,7 +91,7 @@ class Repository:
     def unit_of_work(self) -> SqliteUnitOfWork:
         return SqliteUnitOfWork(self.path)
 
-    def bind(self, uow: SqliteUnitOfWork) -> "Repository":
+    def bind(self, uow: SqliteUnitOfWork) -> Repository:
         applications = self._owners["applications"].bind(uow)
         return Repository(
             self.path,

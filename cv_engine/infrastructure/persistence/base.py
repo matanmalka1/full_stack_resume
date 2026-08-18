@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator, TypeVar
+from typing import Any, TypeVar
 
 from .connection import SqliteUnitOfWork, connect, transaction
-
 
 TRepository = TypeVar("TRepository", bound="SqliteRepositoryBase")
 

@@ -4,16 +4,15 @@ import json
 from pathlib import Path
 
 import pytest
+from helpers import working_claim as _working_claim
 
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand
 from cv_engine.application.errors import KnowledgeRejected
-from cv_engine.runtime.composition import Services
-from cv_engine.infrastructure.persistence import connect
 from cv_engine.domain.facts import FactStore
-from cv_engine.infrastructure.knowledge import load_fact_store, FactStoreError
 from cv_engine.domain.models import FactStatus
-from helpers import working_claim as _working_claim
-
+from cv_engine.infrastructure.knowledge import FactStoreError, load_fact_store
+from cv_engine.infrastructure.persistence import connect
+from cv_engine.runtime.composition import Services
 
 NEW_FACT = {
     "fact_id": "situational.sqlite",

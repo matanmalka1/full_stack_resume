@@ -21,9 +21,9 @@ from ..application.services.projections import ApplicationQueryService
 from ..application.services.rendering import RenderingService
 from ..application.services.tracking import TrackingService
 from ..infrastructure.artifacts import FilesystemArtifactStore
-from ..infrastructure.persistence import Repository
-from ..infrastructure.payloads import PayloadStore
 from ..infrastructure.knowledge import FileKnowledge
+from ..infrastructure.payloads import PayloadStore
+from ..infrastructure.persistence import Repository
 from ..infrastructure.providers import OpenAIClassificationProvider
 from ..infrastructure.rendering import PlaywrightRenderer
 from .workspace import Workspace

@@ -4,10 +4,9 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from ..util import normalized_text
 from .candidate import contact_href
 from .models import CandidateContext, DraftDocument, Profile, ValidationIssue, ValidationReport
-from ..util import normalized_text
-
 
 RENDER_VALIDATION_GROUPS = (
     "render",

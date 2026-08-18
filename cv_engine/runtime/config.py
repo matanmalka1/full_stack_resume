@@ -8,7 +8,6 @@ from typing import Any
 
 from .workspace import WorkspaceError
 
-
 CONFIG_NAME = "cv-workspace.config.json"
 
 

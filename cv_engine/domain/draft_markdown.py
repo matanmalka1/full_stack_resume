@@ -6,7 +6,6 @@ import re
 from .facts import FactStore
 from .models import ClaimLine, DraftDocument
 
-
 CLAIM_MARKER = re.compile(r"^<!-- claim:([^:]+):[0-9a-f]{64} -->$")
 
 

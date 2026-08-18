@@ -5,8 +5,9 @@ import re
 import uuid
 from dataclasses import dataclass
 
-from .facts import FactStore
+from ..util import canonical_json, sha256_text
 from .draft_markdown import serialize_markdown as _serialize_markdown
+from .facts import FactStore
 from .models import (
     CandidateContext,
     ClaimLine,
@@ -19,8 +20,6 @@ from .models import (
 )
 from .presentations import PresentationStore, PresentedClaim
 from .selection import EmphasisPolicyStore, build_selection
-from ..util import canonical_json, sha256_text
-
 
 CLAIM_NAMESPACE = uuid.UUID("e47cfc95-7f5c-4dd2-acd4-19be02c8f988")
 CANONICAL_JOIN_TEMPLATE = ("canonical-renderings", "1.0.0")

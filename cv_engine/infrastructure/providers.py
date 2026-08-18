@@ -13,7 +13,6 @@ from ..application.errors import InfrastructureFailure
 from ..domain.models import JobClassificationProposal, ProviderContext, ProviderTaskResult
 from ..util import canonical_json, sha256_text
 
-
 OutputT = TypeVar("OutputT", bound=BaseModel)
 
 

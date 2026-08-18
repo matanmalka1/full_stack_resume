@@ -7,8 +7,8 @@ from ...domain.models import (
 )
 from ...domain.selection import build_selection
 from ..commands import (
-    AnalyzeCommand,
     AnalysisResult,
+    AnalyzeCommand,
 )
 from ..errors import (
     # Re-exported: the v1 CLI and test suite catch WorkflowError from here, and

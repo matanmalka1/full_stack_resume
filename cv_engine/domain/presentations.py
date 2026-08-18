@@ -5,9 +5,9 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
+from ..util import canonical_json, sha256_text
 from .facts import FactStore
 from .models import Emphasis, Profile, ProfileName, StrictModel
-from ..util import canonical_json, sha256_text
 
 
 class PresentationError(ValueError):
@@ -32,7 +32,7 @@ class PresentationRule(StrictModel):
     renderings: dict[str, str]
 
     @model_validator(mode="after")
-    def validate_rule(self) -> "PresentationRule":
+    def validate_rule(self) -> PresentationRule:
         if len(set(self.fact_ids)) != len(self.fact_ids):
             raise ValueError(f"presentation {self.rule_id} repeats a fact ID")
         if not self.renderings.get("en"):
@@ -75,7 +75,7 @@ class PresentationStore:
     @classmethod
     def from_payload(
         cls, payload: dict, facts: FactStore, *, origin: str = "presentation rules"
-    ) -> "PresentationStore":
+    ) -> PresentationStore:
         """Build the store from an already-read rules document.
 
         Locating and reading it belongs to the storage adapter; whether a rule

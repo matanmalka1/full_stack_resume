@@ -10,20 +10,6 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from .infrastructure.paths import resolve_within
-from .infrastructure.persistence import Repository, current_schema_version, initialize
-from .infrastructure.legacy_source import LegacySourceError, LegacyV1Source
-from .runtime.config import resolve_config
-from .runtime.workspace import Workspace, WorkspaceError, create_workspace, load_workspace
-from .infrastructure.migration import (
-    MigrationSafetyError,
-    retrospective_verify_migration,
-    verify_snapshot,
-)
-from .domain.facts import FACT_SOURCE_NAMES
-from .domain.models import ApplicationStatus, FactStatus
-from .util import utc_now, verify_payload
-from .application.errors import WorkflowError
 from .application.commands import (
     AnalyzeCommand,
     DraftCommand,
@@ -31,13 +17,27 @@ from .application.commands import (
     NextActionCommand,
     RecruitmentStatusCommand,
 )
+from .application.errors import WorkflowError
 from .application.queries import ApplicationListView
 from .compat import (
     resolve_job_analysis_id,
     resolve_job_snapshot_id,
     resolve_selection_plan_id,
 )
+from .domain.facts import FACT_SOURCE_NAMES
+from .domain.models import ApplicationStatus, FactStatus
+from .infrastructure.legacy_source import LegacySourceError, LegacyV1Source
+from .infrastructure.migration import (
+    MigrationSafetyError,
+    retrospective_verify_migration,
+    verify_snapshot,
+)
+from .infrastructure.paths import resolve_within
+from .infrastructure.persistence import Repository, current_schema_version, initialize
 from .runtime.composition import Services, build_services
+from .runtime.config import resolve_config
+from .runtime.workspace import Workspace, WorkspaceError, create_workspace, load_workspace
+from .util import utc_now, verify_payload
 
 
 def _repo_root() -> Path:

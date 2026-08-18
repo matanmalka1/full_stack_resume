@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
-
+from typing import Any
 
 BUSY_TIMEOUT_MS = 5000
 
@@ -66,7 +66,7 @@ class SqliteUnitOfWork:
         self.connection: sqlite3.Connection | None = None
         self._commit_requested = False
 
-    def __enter__(self) -> "SqliteUnitOfWork":
+    def __enter__(self) -> SqliteUnitOfWork:
         if self.connection is not None:
             raise RuntimeError("UnitOfWork is already active")
         self.connection = connect(self.path)

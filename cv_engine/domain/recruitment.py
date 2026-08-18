@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from .models import ApplicationStatus
 
-
 ALLOWED_TRANSITIONS: dict[ApplicationStatus, set[ApplicationStatus]] = {
     ApplicationStatus.SAVED: {
         ApplicationStatus.PREPARING,

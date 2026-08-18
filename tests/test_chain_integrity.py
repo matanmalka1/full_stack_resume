@@ -14,18 +14,17 @@ import uuid
 from pathlib import Path
 
 import pytest
+from helpers import ACCOUNT_MANAGER_JOB
 
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
-from cv_engine.application.errors import StateConflict
+from cv_engine.application.errors import StateConflict, WorkflowError
+from cv_engine.application.ready import verify_ready_integrity
+from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.infrastructure.persistence import connect
 from cv_engine.infrastructure.persistence.drafts import SqliteDraftRepository
-from cv_engine.domain.draft_markdown import parse_draft
-from cv_engine.application.ready import verify_ready_integrity
-from cv_engine.runtime.workspace import Workspace
 from cv_engine.runtime.composition import Services
-from cv_engine.application.errors import WorkflowError
+from cv_engine.runtime.workspace import Workspace
 from cv_engine.util import normalized_text, sha256_file, sha256_text
-from helpers import ACCOUNT_MANAGER_JOB
 
 
 def _rows(services: Services, sql: str, *params) -> list[dict]:

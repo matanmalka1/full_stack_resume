@@ -59,7 +59,7 @@ class PayloadStore:
         self._temp_root = resolve_within(self._workspace_root, workspace.temp_root)
 
     @classmethod
-    def for_workspace_root(cls, root: Path) -> "PayloadStore":
+    def for_workspace_root(cls, root: Path) -> PayloadStore:
         resolved = Path(root).resolve()
         return cls(
             _PayloadRoots(

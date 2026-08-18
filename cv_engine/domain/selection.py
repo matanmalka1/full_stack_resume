@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..util import canonical_json, sha256_text
 from .facts import FactStore
 from .models import (
     Emphasis,
@@ -34,8 +35,6 @@ from .models import (
     SelectionManifest,
     SelectionOutcome,
 )
-from ..util import canonical_json, sha256_text
-
 
 SELECTION_POLICY_VERSION = "1.0.0"
 
@@ -72,9 +71,7 @@ class EmphasisPolicyStore:
         )
 
     @classmethod
-    def from_payload(
-        cls, payload: dict, *, origin: str = "emphasis policy"
-    ) -> "EmphasisPolicyStore":
+    def from_payload(cls, payload: dict, *, origin: str = "emphasis policy") -> EmphasisPolicyStore:
         """Build the store from an already-read policy document.
 
         Locating and reading it belongs to the storage adapter; what a complete

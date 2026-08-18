@@ -11,21 +11,22 @@ from pypdf import PdfReader
 
 from ..application.errors import InfrastructureFailure
 from ..domain.candidate import contact_href
-from ..domain.render_validation import (
-    RenderEvidence,
-    RenderGeometry,
-    _claim_recoverable as _claim_recoverable,
-    normalized_role_filename,
-    validate_render_evidence,
-)
 from ..domain.models import (
     CandidateContext,
     DraftDocument,
     Profile,
     ValidationReport,
 )
+from ..domain.render_validation import (
+    RenderEvidence,
+    RenderGeometry,
+    normalized_role_filename,
+    validate_render_evidence,
+)
+from ..domain.render_validation import (
+    _claim_recoverable as _claim_recoverable,
+)
 from ..util import sha256_file
-
 
 MIXED_LTR = re.compile(
     r"(?:https?://\S+|[\w.+-]+@[\w.-]+|\+?\d[\d() .-]{5,}|\b(?:B2B|CRM|ERP|KPIs?|SaaS|Full-Stack|"

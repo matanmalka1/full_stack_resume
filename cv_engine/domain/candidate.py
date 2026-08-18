@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+from ..util import canonical_json, sha256_text
 from .facts import FactStore, FactStoreError
 from .models import CandidateContext
-from ..util import canonical_json, sha256_text
-
 
 CANDIDATE_FILE = "candidate.json"
 

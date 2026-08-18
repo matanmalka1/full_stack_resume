@@ -8,7 +8,6 @@ from ..runtime.workspace import MARKER_NAME
 from ..util import canonical_json, sha256_bytes, sha256_text, utc_now
 from .paths import resolve_within
 
-
 SKIP_DIRECTORIES = frozenset({".git", ".venv", "__pycache__", "node_modules", ".pytest_cache"})
 
 

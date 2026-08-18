@@ -9,14 +9,14 @@ deterministic warning gaps. These tests pin the policy that replaced it.
 from __future__ import annotations
 
 import pytest
+from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB
 
 from cv_engine.application.commands import DraftCommand
+from cv_engine.application.errors import WorkflowError
 from cv_engine.domain.analysis.approval import merge_classification
 from cv_engine.domain.analysis.classification import classify_job
 from cv_engine.domain.models import Emphasis, FitLevel, Gap, ProfileName, Track
 from cv_engine.domain.profiles import ProfileStore
-from cv_engine.application.errors import WorkflowError
-from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB
 
 
 def test_provider_cannot_relax_approval_confidence_or_language(

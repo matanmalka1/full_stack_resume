@@ -13,18 +13,17 @@ import sys
 from pathlib import Path
 
 import pytest
+from helpers import CliRun, run_cli
 
 from cv_engine.infrastructure.legacy_source import LegacySourceError, LegacyV1Source
-from cv_engine.runtime.config import CONFIG_NAME, resolve_config
 from cv_engine.runtime.composition import build_services
+from cv_engine.runtime.config import CONFIG_NAME, resolve_config
 from cv_engine.runtime.workspace import (
     MARKER_NAME,
     WorkspaceError,
     create_workspace,
     load_workspace,
 )
-from helpers import CliRun, run_cli
-
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
 

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..domain.models import ValidationIssue, ValidationReport
+from ..domain.validation import validate_draft
+from ..util import verify_payload
 from .chain import check_draft_chain, decision_record_analysis_id, material_analysis_key
 from .ports import ArtifactStore, KnowledgeStore, ReadinessRepository
-from ..domain.models import ValidationIssue, ValidationReport
-from ..util import verify_payload
-from ..domain.validation import validate_draft
 
 
 def verify_ready_integrity(

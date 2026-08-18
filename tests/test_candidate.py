@@ -14,7 +14,6 @@ from cv_engine.domain.facts import FactStore
 from cv_engine.infrastructure.knowledge import load_candidate_context, load_fact_store
 from cv_engine.infrastructure.rendering import normalized_role_filename
 
-
 ENGINE_DIR = Path(__file__).resolve().parent.parent / "cv_engine"
 
 # Every module is policy unless it is one of these two, which quote v1 evidence

@@ -53,7 +53,7 @@ def unresolved_approval_reasons(analysis: JobAnalysis) -> list[str]:
 def merge_classification(
     deterministic: JobAnalysis,
     proposal: JobClassificationProposal,
-    profiles: "ProfileStore",
+    profiles: ProfileStore,
 ) -> JobAnalysis:
     """Fold an AI classification proposal into deterministic policy.
 

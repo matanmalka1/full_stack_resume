@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from helpers import PAYME_TECH_SALES_JOB, claim_by_id, store_draft
+
 from cv_engine.domain.draft_markdown import serialize_markdown
 from cv_engine.domain.drafts import register_linked_claim
 from cv_engine.domain.models import ClaimLine
-from cv_engine.util import sha256_text
 from cv_engine.domain.validation import validate_draft
-from helpers import PAYME_TECH_SALES_JOB, claim_by_id, store_draft
+from cv_engine.util import sha256_text
 
 
 def test_generated_draft_has_exact_canonical_claim_links(draft_factory) -> None:

@@ -10,7 +10,6 @@ from ..domain.models import StrictModel
 from ..infrastructure.paths import relative_within, resolve_within
 from ..util import utc_now
 
-
 MARKER_NAME = ".cv-workspace.json"
 WORKSPACE_VERSION = 2
 KNOWLEDGE_DIRS = ("base", "profiles", "rendering", "config", "ai")

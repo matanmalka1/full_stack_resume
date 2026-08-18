@@ -1,7 +1,8 @@
+from helpers import PAYME_TECH_SALES_JOB
+
 from cv_engine.domain.analysis.classification import classify_job
 from cv_engine.domain.analysis.gaps import derive_gaps
 from cv_engine.domain.models import Track
-from helpers import PAYME_TECH_SALES_JOB
 
 
 def test_development_classification() -> None:

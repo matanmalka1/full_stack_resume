@@ -22,7 +22,7 @@ class SqliteTrackingRepository(SqliteRepositoryBase):
         super().__init__(path, connection)
         self.applications = applications or SqliteApplicationRepository(path, connection)
 
-    def bind(self, uow: SqliteUnitOfWork) -> "SqliteTrackingRepository":
+    def bind(self, uow: SqliteUnitOfWork) -> SqliteTrackingRepository:
         if uow.connection is None:
             raise RuntimeError("UnitOfWork is not active")
         if uow.path.resolve() != self.path.resolve():

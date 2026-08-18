@@ -16,8 +16,8 @@ from pydantic import ValidationError
 
 from cv_engine.domain.models import (
     DraftDocument,
-    EmphasisPolicy,
     Emphasis,
+    EmphasisPolicy,
     Fact,
     FactSource,
     FactStatus,

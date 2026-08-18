@@ -30,7 +30,6 @@ from ..ports import (
     RevisionPayloadStore,
 )
 
-
 RepoT = TypeVar("RepoT")
 
 
@@ -71,7 +70,7 @@ class ServiceBase(Generic[RepoT]):
         loaded = self.load_knowledge()
         return loaded.facts, loaded.profiles, loaded.policies
 
-    def candidate(self, facts: FactStore | None = None) -> CandidateContext:
+    def candidate(self) -> CandidateContext:
         return self.load_knowledge().candidate
 
     def fact_store(self) -> FactStore:

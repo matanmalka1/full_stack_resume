@@ -16,7 +16,6 @@ from .base import SqliteRepositoryBase
 from .connection import SqliteUnitOfWork
 from .primitives import new_id
 
-
 _SNAPSHOT_COLUMNS = (
     "id, application_id, version_number, payload_path, source_hash, normalized_hash, "
     "source_url, captured_at, source_metadata_json, content_hash, prior_snapshot_id"
@@ -51,7 +50,7 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
         super().__init__(path, connection)
         self.applications = applications or SqliteApplicationRepository(path, connection)
 
-    def bind(self, uow: SqliteUnitOfWork) -> "SqlitePreparationRepository":
+    def bind(self, uow: SqliteUnitOfWork) -> SqlitePreparationRepository:
         if uow.connection is None:
             raise RuntimeError("UnitOfWork is not active")
         if uow.path.resolve() != self.path.resolve():

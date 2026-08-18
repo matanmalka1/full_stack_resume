@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 
+from ..util import sha256_text
 from .analysis.approval import unresolved_approval_reasons
 from .draft_markdown import serialize_markdown
 from .drafts import render_composite_claim, validate_derived_wording
@@ -9,8 +10,6 @@ from .facts import FactStore, FactStoreError
 from .models import DraftDocument, JobAnalysis, Profile, ValidationIssue, ValidationReport
 from .presentations import PresentationStore
 from .selection import STRUCTURAL_STYLES, EmphasisPolicyStore
-from ..util import sha256_text
-
 
 STALE_OR_UNSUPPORTED = {
     r"\b3\s*[–-]\s*4\s+sales representatives\b": "stale-team-size",

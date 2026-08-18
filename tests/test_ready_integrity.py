@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from pathlib import Path
 import uuid
+from pathlib import Path
 
 import pytest
+from helpers import ACCOUNT_MANAGER_JOB, artifact_version_and_path
 
-from cv_engine.application.commands import AnalyzeCommand, DraftCommand
 import cv_engine.infrastructure.rendering as rendering_module
+from cv_engine.application.commands import AnalyzeCommand, DraftCommand
+from cv_engine.application.errors import WorkflowError
 from cv_engine.infrastructure.rendering import validate_rendered as real_validate_rendered
 from cv_engine.util import normalized_text, sha256_file, sha256_text, verify_payload
-from cv_engine.application.errors import WorkflowError
-from helpers import ACCOUNT_MANAGER_JOB, artifact_version_and_path
 
 
 def _reanalyze(services, application_id: str):

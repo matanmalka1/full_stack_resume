@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .commands import BoundaryDTO
 from ..domain.models import JobAnalysis
+from .commands import BoundaryDTO
 
 
 class ApplicationView(BoundaryDTO):

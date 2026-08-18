@@ -377,7 +377,7 @@ class DraftService(ServiceBase[DraftRepository]):
 
         now = utc_now()
         recruiter_pdf_filename = self.renderer.filename_for(
-            profiles.get(draft.profile).normalized_role, self.candidate(facts)
+            profiles.get(draft.profile).normalized_role, self.candidate()
         )
         application = self.repo.get_application(application_id)
         structured = {

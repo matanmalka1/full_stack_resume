@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import re
-from types import SimpleNamespace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from helpers import ACCOUNT_MANAGER_JOB
+from helpers import working_claim as _working_claim
 
 import cv_engine.application.services.drafts as draft_service_module
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
@@ -15,7 +17,6 @@ from cv_engine.domain.models import ValidationIssue, ValidationReport
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.infrastructure.persistence import connect
 from cv_engine.runtime.workspace import Workspace
-from helpers import ACCOUNT_MANAGER_JOB, working_claim as _working_claim
 
 
 @pytest.mark.browser

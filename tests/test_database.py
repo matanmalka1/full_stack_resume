@@ -6,14 +6,13 @@ from pathlib import Path
 import pytest
 
 from cv_engine.application.commands import IngestCommand, NextActionCommand
+from cv_engine.domain.models import ApplicationStatus, ValidationReport
 from cv_engine.infrastructure.persistence import connect, current_schema_version
 from cv_engine.infrastructure.persistence.schema import (
     MIGRATIONS_DIR,
     registered_migration_names,
 )
-from cv_engine.domain.models import ApplicationStatus, ValidationReport
 from cv_engine.util import normalized_text, sha256_text
-
 
 SCHEMA_FIXTURE = Path(__file__).parent / "fixtures/m1_sqlite_master.tsv"
 

@@ -3,9 +3,8 @@ from __future__ import annotations
 import json
 import re
 
-from .models import Fact, FactSource, FactStatus
 from ..util import canonical_json, sha256_text, utc_now
-
+from .models import Fact, FactSource, FactStatus
 
 FACT_BLOCK = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
 FACT_SOURCE_NAMES = ("common.md", "sales.md", "development.md", "situational_skills.md")
@@ -51,7 +50,7 @@ class FactStore:
         )
 
     @classmethod
-    def from_sources(cls, sources: dict[str, FactSource]) -> "FactStore":
+    def from_sources(cls, sources: dict[str, FactSource]) -> FactStore:
         """Build the store from already-parsed sources, keyed by file name.
 
         Reading those files is the storage adapter's job. This stays a pure

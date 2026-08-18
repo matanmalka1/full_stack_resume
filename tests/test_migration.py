@@ -4,24 +4,23 @@ import json
 from pathlib import Path
 
 import pytest
+from helpers import passing_migration_test_runner as _passing_test_runner
 
 from cv_engine.infrastructure import migration
-from cv_engine.infrastructure.persistence import connect
 from cv_engine.infrastructure.migration import (
     MigrationSafetyError,
     apply_migration,
     build_inventory,
     create_snapshot,
-    migration_gate,
     migrate_legacy_state,
+    migration_gate,
     retrospective_verify_migration,
     verify_snapshot,
 )
-from cv_engine.util import canonical_json, sha256_file, sha256_text
+from cv_engine.infrastructure.persistence import connect
 from cv_engine.runtime.composition import build_services
 from cv_engine.runtime.workspace import load_workspace
-from helpers import passing_migration_test_runner as _passing_test_runner
-
+from cv_engine.util import canonical_json, sha256_file, sha256_text
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
 

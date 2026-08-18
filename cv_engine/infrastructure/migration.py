@@ -13,12 +13,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from .canonical_data import write_canonical_sources
-from .persistence import Repository, connect
 from ..domain.facts import FactStoreError
-from .knowledge import read_fact_source
-from .paths import resolve_within
-from .payloads import PayloadStore
 from ..util import (
     canonical_json,
     normalized_text,
@@ -27,7 +22,11 @@ from ..util import (
     utc_now,
     verify_payload,
 )
-
+from .canonical_data import write_canonical_sources
+from .knowledge import read_fact_source
+from .paths import resolve_within
+from .payloads import PayloadStore
+from .persistence import Repository, connect
 
 MIGRATION_NAMESPACE = uuid.UUID("7650f234-c480-4a9e-9c21-9d5142899a63")
 EXCLUDED_PARTS = {"__pycache__", ".pytest_cache", ".venv", "tmp"}

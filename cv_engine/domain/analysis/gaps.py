@@ -5,7 +5,6 @@ from collections.abc import Sequence
 
 from ..models import FitLevel, Gap, Track
 
-
 FIT_SEVERITY = {FitLevel.HIGH: 0, FitLevel.MEDIUM: 1, FitLevel.LOW: 2}
 
 

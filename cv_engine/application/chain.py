@@ -18,7 +18,6 @@ from ..domain.profiles import ProfileStore
 from ..util import canonical_json, sha256_text
 from .ports import DraftRepository
 
-
 # What a re-analysis may change without invalidating a draft built from an
 # earlier one. Everything else -- Track, Profile, Emphasis, language, Fit, gaps,
 # keywords, requirements, approval routing, user overrides -- either changes what

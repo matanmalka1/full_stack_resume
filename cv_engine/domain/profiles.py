@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from ..util import canonical_json, sha256_text
 from .facts import FactStore
 from .models import Profile, ProfileName, Track
-from ..util import canonical_json, sha256_text
 
 
 class ProfileStoreError(ValueError):
@@ -24,7 +24,7 @@ class ProfileStore:
         )
 
     @classmethod
-    def from_documents(cls, documents: dict[str, dict], facts: FactStore) -> "ProfileStore":
+    def from_documents(cls, documents: dict[str, dict], facts: FactStore) -> ProfileStore:
         """Build the store from already-read profile documents, keyed by origin.
 
         Finding and reading those documents is the storage adapter's job. What

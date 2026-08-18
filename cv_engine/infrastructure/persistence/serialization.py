@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from types import MappingProxyType
 
-
 SERIALIZATION_VERSIONS = MappingProxyType(
     {
         "payload_manifest": "1",

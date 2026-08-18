@@ -12,12 +12,13 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+from helpers import ACCOUNT_MANAGER_JOB, working_claim
 from pydantic import BaseModel
 
 from cv_engine.application import errors
 from cv_engine.application.commands import (
-    AnalyzeCommand,
     AnalysisResult,
+    AnalyzeCommand,
     ApplicationMutationResult,
     ApprovalResult,
     DraftCommand,
@@ -33,12 +34,6 @@ from cv_engine.application.commands import (
     RecruitmentStatusCommand,
     RenderResult,
 )
-from cv_engine.application.queries import (
-    ApplicationListView,
-    ArtifactVersionView,
-    DecisionRecordView,
-    JobSnapshotView,
-)
 from cv_engine.application.ports import (
     ApplicationRepository,
     ApplicationStore,
@@ -48,12 +43,16 @@ from cv_engine.application.ports import (
     SnapshotPayload,
     UnitOfWork,
 )
+from cv_engine.application.queries import (
+    ApplicationListView,
+    ArtifactVersionView,
+    DecisionRecordView,
+    JobSnapshotView,
+)
 from cv_engine.application.services.rendering import RenderingService
 from cv_engine.compat import resolve_job_analysis_id, resolve_job_snapshot_id
 from cv_engine.infrastructure.persistence import Repository
 from cv_engine.util import sha256_file, sha256_text
-from helpers import ACCOUNT_MANAGER_JOB, working_claim
-
 
 # --- results are typed, not positional --------------------------------------
 
@@ -260,7 +259,7 @@ def test_refusals_share_one_taxonomy_and_report_missing_dependencies(services) -
         renderer=None,
     )
     with pytest.raises(errors.DependencyUnavailable, match="renderer"):
-        rendering.renderer
+        _ = rendering.renderer
 
 
 def test_expected_boundary_refusals_do_not_leak_adapter_or_domain_errors(services) -> None:

@@ -89,13 +89,13 @@ class Fact(StrictModel):
     link_target: str | None = None
 
     @model_validator(mode="after")
-    def require_english_rendering(self) -> "Fact":
+    def require_english_rendering(self) -> Fact:
         if not self.renderings.get("en"):
             raise ValueError("every fact requires an English rendering")
         return self
 
     @model_validator(mode="after")
-    def link_target_carries_the_rendering(self) -> "Fact":
+    def link_target_carries_the_rendering(self) -> Fact:
         """A declared address must still be the one the fact displays.
 
         Without this the two halves of the same fact can drift apart and the
@@ -118,7 +118,7 @@ class FactSource(StrictModel):
     facts: list[Fact]
 
     @model_validator(mode="after")
-    def require_unique_fact_ids(self) -> "FactSource":
+    def require_unique_fact_ids(self) -> FactSource:
         duplicates = sorted(
             fact_id
             for fact_id, count in Counter(fact.fact_id for fact in self.facts).items()
@@ -159,7 +159,7 @@ class ResumeSectionSpec(StrictModel):
     optional: bool = False
 
     @model_validator(mode="after")
-    def validate_pool(self) -> "ResumeSectionSpec":
+    def validate_pool(self) -> ResumeSectionSpec:
         if len(set(self.fact_ids)) != len(self.fact_ids):
             raise ValueError(f"section {self.name_en!r} repeats a candidate fact")
         if self.min_claims_per_role < 0 or self.min_quantitative_per_role < 0:
@@ -197,7 +197,7 @@ class EmphasisPolicy(StrictModel):
     minimum_coverage: int = Field(default=0, ge=0)
 
     @model_validator(mode="after")
-    def validate_coverage(self) -> "EmphasisPolicy":
+    def validate_coverage(self) -> EmphasisPolicy:
         if any(weight < 0 for weight in self.tag_weights.values()):
             raise ValueError(f"emphasis {self.emphasis} has a negative tag weight")
         if self.minimum_coverage > len(self.preferred_tags):
@@ -227,7 +227,7 @@ class Profile(StrictModel):
     allow_two_pages: bool = False
 
     @model_validator(mode="after")
-    def validate_default_emphasis(self) -> "Profile":
+    def validate_default_emphasis(self) -> Profile:
         if self.default_emphasis not in self.allowed_emphases:
             raise ValueError("default emphasis must be allowed")
         if self.headline is not None and self.headline not in self.safe_headlines:
@@ -355,7 +355,7 @@ class ClaimLine(StrictModel):
     pending_reason: str | None = None
 
     @model_validator(mode="after")
-    def validate_template_identity(self) -> "ClaimLine":
+    def validate_template_identity(self) -> ClaimLine:
         has_template = self.template_id is not None or self.template_version is not None
         if self.claim_type == "composite" and not (self.template_id and self.template_version):
             raise ValueError("composite claims require a template ID and version")
@@ -480,13 +480,13 @@ class DraftDocument(StrictModel):
     content_hash: str = ""
 
     @model_validator(mode="after")
-    def validate_analysis_binding(self) -> "DraftDocument":
+    def validate_analysis_binding(self) -> DraftDocument:
         if self.schema_version != "1.0" and not self.job_analysis_id:
             raise ValueError("a draft must name the exact job analysis it was built from")
         return self
 
     @model_validator(mode="after")
-    def validate_headline_placement(self) -> "DraftDocument":
+    def validate_headline_placement(self) -> DraftDocument:
         body = [*self.contacts, *(claim for section in self.sections for claim in section.claims)]
         if any(claim.claim_type == "headline" or claim.style == "headline" for claim in body):
             raise ValueError("only the document headline may use the headline claim type or style")
@@ -595,7 +595,7 @@ class ValidationReport(StrictModel):
         )
 
     @model_validator(mode="after")
-    def passed_agrees_with_findings(self) -> "ValidationReport":
+    def passed_agrees_with_findings(self) -> ValidationReport:
         if not self.passed:
             return self
         failed_groups = sorted(group for group, passed in self.groups.items() if not passed)

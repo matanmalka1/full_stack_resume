@@ -7,7 +7,6 @@ from typing import Any
 from ...util import sha256_text, utc_now
 from .connection import connect, memory_connection
 
-
 MIGRATIONS_DIR = Path(__file__).with_name("migrations")
 REGISTERED_MIGRATIONS = (
     "0001_baseline.sql",

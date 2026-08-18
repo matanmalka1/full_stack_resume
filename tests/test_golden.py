@@ -7,7 +7,6 @@ from cv_engine.domain.draft_markdown import serialize_markdown
 from cv_engine.infrastructure.rendering import normalized_role_filename, render_html
 from cv_engine.util import sha256_text
 
-
 GOLDEN_DIR = Path(__file__).parent / "golden"
 
 
@@ -133,7 +132,9 @@ def test_persisted_plan_reproduces_the_computed_selection(
             differences.append(f"{fixture.name}: Markdown differs")
         if computed.draft.selected_fact_ids != rebuilt.selected_fact_ids:
             differences.append(f"{fixture.name}: selected fact IDs differ")
-        for original, replayed in zip(computed.draft.sections, rebuilt.sections):
+        if len(computed.draft.sections) != len(rebuilt.sections):
+            differences.append(f"{fixture.name}: section count differs")
+        for original, replayed in zip(computed.draft.sections, rebuilt.sections, strict=False):
             if [claim.fact_ids for claim in original.claims] != [
                 claim.fact_ids for claim in replayed.claims
             ]:

@@ -12,11 +12,29 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB, CliRun, run_cli
 
 import cv_engine
-from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
-from cv_engine.application.commands import ApprovalResult
+from cv_engine.application.commands import (
+    AnalyzeCommand,
+    ApprovalResult,
+    DraftCommand,
+    IngestCommand,
+)
 from cv_engine.domain.analysis.classification import classify_job
+from cv_engine.domain.candidate import contact_href
+from cv_engine.domain.drafts import build_draft
+from cv_engine.domain.facts import FactStore
+from cv_engine.domain.models import (
+    Emphasis,
+    JobAnalysis,
+    JobClassificationProposal,
+    ProfileName,
+    Track,
+)
+from cv_engine.domain.profiles import ProfileStore
+from cv_engine.domain.render_validation import RenderEvidence, RenderGeometry
+from cv_engine.domain.selection import EmphasisPolicyStore
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.infrastructure.canonical_data import V2_IDENTITY_FACT, write_canonical_sources
 from cv_engine.infrastructure.knowledge import (
@@ -27,26 +45,18 @@ from cv_engine.infrastructure.knowledge import (
     load_presentations,
     load_profile_store,
 )
-from cv_engine.infrastructure.persistence import Repository, connect
-from cv_engine.domain.drafts import build_draft
-from cv_engine.domain.facts import FactStore
 from cv_engine.infrastructure.migration import (
     _seal_report as seal_report,
+)
+from cv_engine.infrastructure.migration import (
     create_snapshot,
     dry_run_migration,
     migrate_legacy_state,
     verify_snapshot,
 )
-from cv_engine.domain.models import (
-    Emphasis,
-    JobAnalysis,
-    JobClassificationProposal,
-    ProfileName,
-    Track,
-)
-from cv_engine.domain.profiles import ProfileStore
-from cv_engine.domain.candidate import contact_href
-from cv_engine.domain.render_validation import RenderEvidence, RenderGeometry
+from cv_engine.infrastructure.persistence import Repository, connect
+from cv_engine.infrastructure.rendering import render_pdf, validate_rendered
+from cv_engine.runtime.composition import Services, build_services
 from cv_engine.runtime.workspace import (
     MARKER_NAME,
     WORKSPACE_VERSION,
@@ -55,11 +65,6 @@ from cv_engine.runtime.workspace import (
     create_workspace,
     load_workspace,
 )
-from cv_engine.domain.selection import EmphasisPolicyStore
-from cv_engine.infrastructure.rendering import render_pdf, validate_rendered
-from cv_engine.runtime.composition import Services, build_services
-from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB, CliRun, run_cli
-
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
 
