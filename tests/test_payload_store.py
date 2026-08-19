@@ -132,8 +132,18 @@ def test_existing_immutable_payload_is_never_overwritten(
             write=lambda path: path.write_bytes(b"replacement"),
             validate=lambda _path: True,
         )
-
     assert destination.read_bytes() == b"original"
+
+
+def test_revision_commit_reuses_only_exact_recovery_orphans(payload_store: PayloadStore) -> None:
+    first = payload_store.commit_revision("app", "revision", '{"value":1}', "markdown")
+    recovered = payload_store.commit_revision(
+        "app", "revision", '{"value":1}', "markdown"
+    )
+    assert recovered == first
+
+    with pytest.raises(FileExistsError, match="different content"):
+        payload_store.commit_revision("app", "revision", '{"value":2}', "markdown")
 
 
 def test_traversal_and_unapproved_destinations_are_refused(

@@ -107,7 +107,7 @@ def _fast(
             source_url=url,
         )
     )
-    analysed = services.analysis.analyze(
+    analysis_operation = services.operations.submit_analysis(
         AnalyzeCommand(
             application_id=ingested.application_id,
             job_snapshot_id=ingested.job_snapshot_id,
@@ -116,27 +116,69 @@ def _fast(
             emphasis_override=emphasis,
             language_override=language,
             accept_low_fit=accept_low_fit,
-        )
+        ),
+        idempotency_key=new_id(),
+        analysis_service=services.analysis,
     )
-    drafted = services.drafts.draft(
+    analysed = services.foreground_operations.execute(analysis_operation.id)
+    if analysed.status.value != "succeeded":
+        detail = analysed.safe_failure_detail or "analysis Operation did not complete"
+        code = analysed.failure_code.value if analysed.failure_code is not None else "UNKNOWN"
+        raise WorkflowError(f"{code}: {detail}")
+    analysis_outputs = {output.output_type: output.output_id for output in analysed.outputs}
+
+    draft_operation = services.operations.submit_draft(
         DraftCommand(
             application_id=ingested.application_id,
-            job_analysis_id=analysed.analysis_id,
-            selection_plan_id=analysed.selection_plan_id,
-        )
+            job_analysis_id=analysis_outputs["job_analysis"],
+            selection_plan_id=analysis_outputs["selection_plan"],
+        ),
+        idempotency_key=new_id(),
+        draft_service=services.drafts,
     )
-    if not drafted.validation.passed:
+    drafted = services.foreground_operations.execute(draft_operation.id)
+    if drafted.status.value != "succeeded":
+        detail = drafted.safe_failure_detail or "draft Operation did not complete"
+        code = drafted.failure_code.value if drafted.failure_code is not None else "UNKNOWN"
+        raise WorkflowError(f"{code}: {detail}")
+    draft_outputs = {output.output_type: output.output_id for output in drafted.outputs}
+    draft_validation = services.repository.latest_validation_for_working_draft(
+        draft_outputs["working_draft"]
+    )
+    if draft_validation is None:
+        raise WorkflowError("draft Operation completed without a ValidationRun")
+    if not draft_validation["report"].passed:
         raise WorkflowError("fast mode blocked by pre-render validation")
-    approved = services.drafts.approve(ingested.application_id)
-    rendered = services.rendering.render(ingested.application_id)
-    if not rendered.validation.passed:
+    approved = services.operations.approve_idempotent(
+        ingested.application_id,
+        idempotency_key=new_id(),
+        draft_service=services.drafts,
+    )
+    render_operation = services.operations.submit_render(
+        RenderCommand(
+            application_id=ingested.application_id,
+            approved_revision_id=approved.revision_id,
+        ),
+        idempotency_key=new_id(),
+        rendering_service=services.rendering,
+    )
+    rendered = services.foreground_operations.execute(render_operation.id)
+    render_outputs = {output.output_type: output.output_id for output in rendered.outputs}
+    if "resume_pdf" not in render_outputs:
+        detail = rendered.safe_failure_detail or "render Operation produced no PDF"
+        code = rendered.failure_code.value if rendered.failure_code is not None else "UNKNOWN"
+        raise WorkflowError(f"{code}: {detail}")
+    pdf_record = services.repository.artifact_version(render_outputs["resume_pdf"])
+    render_validation = services.repository.validation_for_artifact(
+        ingested.application_id, "post-render", render_outputs["resume_pdf"]
+    )
+    if rendered.status.value != "succeeded" or not render_validation.passed:
         raise WorkflowError("fast mode blocked by post-render validation")
     qualification = services.rendering.ready_qualification(
         ingested.application_id,
         approved.revision_id,
-        rendered.pdf_artifact_version_id,
+        render_outputs["resume_pdf"],
     )
-    pdf_record = services.repository.latest_artifact_version(ingested.application_id, "resume_pdf")
     pdf_metadata = json.loads(pdf_record.get("metadata_json") or "{}")
     return {
         "application_id": ingested.application_id,
@@ -268,12 +310,22 @@ def build_parser() -> argparse.ArgumentParser:
     ]:
         command = sub.add_parser(name, help=help_text)
         command.add_argument("application_id")
-        if name == "render":
+        if name in {"approve", "render"}:
             command.add_argument("--idempotency-key")
 
     fast = sub.add_parser("fast", help="explicit no-pause flow; validation remains mandatory")
     _add_job_input(fast)
     _add_overrides(fast)
+
+    operation = sub.add_parser("operation", help="inspect, cancel, or retry durable work")
+    operation_sub = operation.add_subparsers(dest="operation_command", required=True)
+    operation_show = operation_sub.add_parser("show")
+    operation_show.add_argument("operation_id")
+    operation_cancel = operation_sub.add_parser("cancel")
+    operation_cancel.add_argument("operation_id")
+    operation_retry = operation_sub.add_parser("retry")
+    operation_retry.add_argument("operation_id")
+    operation_retry.add_argument("--idempotency-key", required=True)
 
     sub.add_parser("list", help="list applications")
     status = sub.add_parser("status", help="transition application status with immutable history")
@@ -835,7 +887,11 @@ def _validate(context: CommandContext) -> int:
 @_command("approve")
 def _approve(context: CommandContext) -> int:
     services = context.built_services
-    approved = services.drafts.approve(context.args.application_id)
+    approved = services.operations.approve_idempotent(
+        context.args.application_id,
+        idempotency_key=context.args.idempotency_key or new_id(),
+        draft_service=services.drafts,
+    )
     _print(
         {
             "version": approved.version,
@@ -893,6 +949,26 @@ def _ready(context: CommandContext) -> int:
     report = context.built_services.rendering.ready_report(context.args.application_id)
     _print(report.model_dump(mode="json"))
     return 0 if report.passed else 1
+
+
+@_command("operation")
+def _operation(context: CommandContext) -> int:
+    args = context.args
+    services = context.built_services
+    if args.operation_command == "show":
+        result = services.operations.get(args.operation_id)
+    elif args.operation_command == "cancel":
+        result = services.operations.cancel(args.operation_id)
+    else:
+        queued = services.operations.retry(
+            args.operation_id,
+            idempotency_key=args.idempotency_key,
+        )
+        result = services.foreground_operations.execute(queued.id)
+    _print(result)
+    if args.operation_command == "retry" and result.status.value != "succeeded":
+        return 1
+    return 0
 
 
 @_command("fast")

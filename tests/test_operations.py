@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
-from threading import Barrier
+from threading import Barrier, Event, Thread
 
 import pytest
 from helpers import ACCOUNT_MANAGER_JOB, run_cli
@@ -15,7 +15,13 @@ from cv_engine.application.commands import (
     IngestCommand,
     RenderCommand,
 )
-from cv_engine.application.errors import StateConflict
+from cv_engine.application.errors import InfrastructureFailure, StateConflict
+from cv_engine.application.operation_runner import (
+    OperationExecutionError,
+    OperationRunner,
+    PreparedOperation,
+    SourceChanged,
+)
 from cv_engine.application.operations import (
     CreateOperation,
     OperationContractError,
@@ -28,14 +34,9 @@ from cv_engine.application.operations import (
     is_terminal_operation,
     require_operation_transition,
 )
-from cv_engine.application.operation_runner import (
-    OperationExecutionError,
-    OperationRunner,
-    PreparedOperation,
-    SourceChanged,
-)
-from cv_engine.infrastructure.persistence import Repository
 from cv_engine.domain.models import ValidationIssue, ValidationReport
+from cv_engine.infrastructure.persistence import Repository
+from cv_engine.runtime.operations import OperationWorker
 from cv_engine.util import new_id, sha256_text
 
 
@@ -262,6 +263,31 @@ def test_application_and_global_render_leases_queue_contending_work(services) ->
     assert services.repository.operation(render_two.id).phase.value == "waiting_for_render_slot"
 
 
+def test_ai_resource_allows_two_operations_and_queues_the_third(services) -> None:
+    operations = []
+    for number in range(3):
+        ingested = services.applications.ingest(
+            IngestCommand(
+                company=f"AI Lease {number}",
+                target_role="Developer",
+                job_text="Python role",
+            )
+        )
+        request = _stored_request(ingested.application_id, f"ai-{number}").model_copy(
+            update={"provider": "openai", "model": "test-model"}
+        )
+        operations.append(
+            services.repository.create_operation(
+                request, installation_id=services.workspace.installation_id()
+            )
+        )
+
+    assert services.repository.claim_operation(operations[0].id, runner_id="ai-a")
+    assert services.repository.claim_operation(operations[1].id, runner_id="ai-b")
+    assert services.repository.claim_operation(operations[2].id, runner_id="ai-c") is None
+    assert services.repository.operation(operations[2].id).phase.value == "waiting_for_ai_slot"
+
+
 def test_heartbeat_prevents_interruption_until_extended_lease_expires(services) -> None:
     ingested = services.applications.ingest(
         IngestCommand(company="Heartbeat Co", target_role="Developer", job_text="Python role")
@@ -294,6 +320,27 @@ def test_heartbeat_prevents_interruption_until_extended_lease_expires(services) 
         now="2026-08-19T08:00:51+00:00"
     ) == [created.id]
     assert services.repository.operation(created.id).status is OperationStatus.INTERRUPTED
+
+
+def test_startup_interrupts_a_queued_operation_with_an_expired_runner_lease(services) -> None:
+    operation = _operation_for_runner(services, "Expired Queued Co")
+    with services.repository.transaction() as connection:
+        connection.execute(
+            "UPDATE operations SET lease_owner='dead-runner', heartbeat_at=?, lease_expires_at=? "
+            "WHERE id=?",
+            (
+                "2026-08-19T07:59:00+00:00",
+                "2026-08-19T07:59:30+00:00",
+                operation.id,
+            ),
+        )
+
+    interrupted = services.repository.interrupt_expired_operations(
+        now="2026-08-19T08:00:00+00:00"
+    )
+
+    assert interrupted == [operation.id]
+    assert services.repository.operation(operation.id).status is OperationStatus.INTERRUPTED
 
 
 class _Handler:
@@ -355,10 +402,10 @@ def test_source_changed_is_checked_before_execution_and_again_before_activation(
         operation = _operation_for_runner(services, f"Source Check {fail_on_check}")
         checks = 0
 
-        def check(_operation, _repository):
+        def check(_operation, _repository, target=fail_on_check):
             nonlocal checks
             checks += 1
-            if checks == fail_on_check:
+            if checks == target:
                 raise SourceChanged()
 
         result = OperationRunner(
@@ -432,7 +479,7 @@ def test_runner_retries_one_transient_failure_and_keeps_technical_detail_out_of_
             )
         },
         runner_id="runner-failure",
-        technical_logger=lambda error: "logs/operation-failure.jsonl",
+        technical_logger=lambda _error: "logs/operation-failure.jsonl",
     ).run(failed_operation.id)
     assert failed.status is OperationStatus.FAILED
     assert failed.safe_failure_detail == "Operation execution failed."
@@ -484,6 +531,46 @@ def test_analysis_operation_matches_direct_service_and_reuses_idempotency_key(se
         )
     )
     assert stored["analysis"] == direct_result.analysis
+
+
+def test_analysis_handler_classifies_timeout_and_uses_its_single_retry(
+    services, monkeypatch
+) -> None:
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company="Provider Retry Co",
+            target_role="Account Manager",
+            job_text=ACCOUNT_MANAGER_JOB,
+        )
+    )
+    command = AnalyzeCommand(
+        application_id=ingested.application_id,
+        job_snapshot_id=ingested.job_snapshot_id,
+        provider="openai",
+        model="test-model",
+    )
+    original_prepare = services.analysis.prepare
+    attempts = 0
+
+    def prepare_with_timeout(_command):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise InfrastructureFailure("provider request timed out")
+        return original_prepare(_command.model_copy(update={"provider": "deterministic"}))
+
+    monkeypatch.setattr(services.analysis, "prepare", prepare_with_timeout)
+    operation = services.operations.submit_analysis(
+        command,
+        idempotency_key="classified-timeout",
+        analysis_service=services.analysis,
+    )
+
+    completed = services.foreground_operations.execute(operation.id)
+
+    assert completed.status is OperationStatus.SUCCEEDED
+    assert completed.attempts_completed == 2
+    assert attempts == 2
 
 
 def test_analysis_operation_fails_source_changed_when_a_new_snapshot_becomes_active(
@@ -734,6 +821,8 @@ def test_failed_render_operation_preserves_registered_outputs_as_inactive(
 
     assert failed.status is OperationStatus.FAILED
     assert failed.failure_code is OperationFailureCode.RENDER_FAILED
+    assert failed.technical_log_reference == "logs/operations.jsonl"
+    assert (setup.services.workspace.root / failed.technical_log_reference).is_file()
     assert len(failed.outputs) == 3
     assert all(not output.active for output in failed.outputs)
     for output in failed.outputs:
@@ -757,3 +846,139 @@ def test_cancel_and_manual_retry_keep_the_old_operation_immutable(services) -> N
     )
     assert reused_old_key.id == operation.id
     assert services.repository.operation(operation.id) == cancelled
+
+
+def test_cli_operation_show_cancel_and_failed_retry_return_truthful_status(services) -> None:
+    operation = _operation_for_runner(services, "CLI Lifecycle Co")
+    prefix = ("--workspace", str(services.workspace.root), "operation")
+
+    shown = run_cli(*prefix, "show", operation.id)
+    cancelled = run_cli(*prefix, "cancel", operation.id)
+    retried = run_cli(
+        *prefix,
+        "retry",
+        operation.id,
+        "--idempotency-key",
+        "cli-lifecycle-retry",
+    )
+
+    assert shown.returncode == 0
+    assert json.loads(shown.stdout)["status"] == "queued"
+    assert cancelled.returncode == 0
+    assert json.loads(cancelled.stdout)["status"] == "cancelled"
+    assert retried.returncode == 1
+    retry_payload = json.loads(retried.stdout)
+    assert retry_payload["status"] == "failed"
+    assert retry_payload["failure_code"] == "SOURCE_CHANGED"
+    assert retry_payload["retry_of_operation_id"] == operation.id
+
+
+def test_approval_idempotency_returns_the_exact_original_revision(drafted_application) -> None:
+    setup = drafted_application("Idempotent Approval Co")
+
+    first = setup.services.operations.approve_idempotent(
+        setup.application_id,
+        idempotency_key="approval-key",
+        draft_service=setup.services.drafts,
+    )
+    repeated = setup.services.operations.approve_idempotent(
+        setup.application_id,
+        idempotency_key="approval-key",
+        draft_service=setup.services.drafts,
+    )
+
+    assert repeated == first
+    assert [revision.id for revision in setup.services.repository.approved_revisions(
+        setup.application_id
+    )] == [first.revision_id]
+    receipt = setup.services.repository.idempotency_receipt(
+        "approve_draft",
+        "approval-key",
+        installation_id=setup.services.workspace.installation_id(),
+    )
+    assert receipt["status"] == "completed"
+    assert receipt["result"]["revision_id"] == first.revision_id
+
+
+def test_approval_idempotency_key_cannot_cross_applications(drafted_application) -> None:
+    first = drafted_application("Approval Key Owner")
+    second = drafted_application("Approval Key Intruder")
+    first.services.operations.approve_idempotent(
+        first.application_id,
+        idempotency_key="application-bound-approval",
+        draft_service=first.services.drafts,
+    )
+
+    with pytest.raises(StateConflict, match="IDEMPOTENCY_KEY_REUSED"):
+        second.services.operations.approve_idempotent(
+            second.application_id,
+            idempotency_key="application-bound-approval",
+            draft_service=second.services.drafts,
+        )
+
+
+def test_pending_approval_receipt_recovers_a_committed_revision(drafted_application) -> None:
+    setup = drafted_application("Approval Recovery Co")
+    working = setup.services.repository.active_working_draft(setup.application_id)
+    reserved_revision = new_id()
+    receipt = setup.services.repository.claim_idempotency_receipt(
+        "approve_draft",
+        "approval-recovery",
+        {
+            "application_id": setup.application_id,
+            "working_draft_id": working.id,
+            "edit_version": working.edit_version,
+            "content_hash": working.content_hash,
+        },
+        installation_id=setup.services.workspace.installation_id(),
+        reserved_entity_id=reserved_revision,
+    )
+    committed = setup.services.drafts.approve(
+        setup.application_id, revision_id=reserved_revision
+    )
+    assert receipt["status"] == "pending"
+
+    recovered = setup.services.operations.approve_idempotent(
+        setup.application_id,
+        idempotency_key="approval-recovery",
+        draft_service=setup.services.drafts,
+    )
+
+    assert recovered == committed
+    completed = setup.services.repository.idempotency_receipt(
+        "approve_draft",
+        "approval-recovery",
+        installation_id=setup.services.workspace.installation_id(),
+    )
+    assert completed["status"] == "completed"
+
+
+def test_worker_shutdown_requests_cancellation_and_prevents_activation(services) -> None:
+    operation = _operation_for_runner(services, "Worker Shutdown Co")
+    started = Event()
+
+    def execute(_operation, cancellation_requested):
+        started.set()
+        while not cancellation_requested():
+            Event().wait(0.01)
+        return PreparedOperation()
+
+    runner = OperationRunner(
+        services.repository,
+        {OperationType.ANALYZE_JOB: _Handler(execute=execute)},
+        runner_id="shutdown-worker",
+        heartbeat_interval_seconds=0.02,
+    )
+    worker = OperationWorker(
+        services.repository, runner, concurrency=1, poll_interval_seconds=0.01
+    )
+    stop = Event()
+    thread = Thread(target=worker.serve, args=(stop,))
+    thread.start()
+    assert started.wait(timeout=2)
+
+    stop.set()
+    thread.join(timeout=2)
+
+    assert not thread.is_alive()
+    assert services.repository.operation(operation.id).status is OperationStatus.CANCELLED

@@ -2,9 +2,16 @@ from __future__ import annotations
 
 from typing import cast
 
-from ...util import canonical_json, sha256_file, sha256_text
-from ..commands import AnalyzeCommand, DraftCommand, RenderCommand
-from ..errors import InfrastructureFailure, LineageBroken, StateConflict, UnknownRecord
+from ...util import canonical_json, new_id, sha256_file, sha256_text
+from ..commands import AnalyzeCommand, ApprovalResult, DraftCommand, RenderCommand
+from ..errors import (
+    ApplicationError,
+    DependencyUnavailable,
+    InfrastructureFailure,
+    LineageBroken,
+    StateConflict,
+    UnknownRecord,
+)
 from ..operation_runner import OperationExecutionError, PreparedOperation, SourceChanged
 from ..operations import (
     CreateOperation,
@@ -71,7 +78,28 @@ class AnalysisOperationHandler:
     def execute(self, operation, cancellation_requested) -> PreparedOperation:
         if cancellation_requested():
             return PreparedOperation()
-        return PreparedOperation(value=self.service.prepare(self._command(operation)))
+        try:
+            return PreparedOperation(value=self.service.prepare(self._command(operation)))
+        except DependencyUnavailable as exc:
+            raise OperationExecutionError(
+                OperationFailureCode.PROVIDER_REFUSED,
+                "The requested provider is not configured.",
+            ) from exc
+        except InfrastructureFailure as exc:
+            message = str(exc).casefold()
+            if operation.provider in (None, "deterministic"):
+                code = OperationFailureCode.VALIDATION_EXECUTION_FAILED
+            elif "429" in message or "rate limit" in message:
+                code = OperationFailureCode.PROVIDER_RATE_LIMITED
+            elif "timeout" in message or "timed out" in message:
+                code = OperationFailureCode.PROVIDER_TIMEOUT
+            elif "http 5" in message or "request failed" in message:
+                code = OperationFailureCode.PROVIDER_UNAVAILABLE
+            elif "invalid provider structured output" in message:
+                code = OperationFailureCode.INVALID_OUTPUT
+            else:
+                code = OperationFailureCode.PROVIDER_REFUSED
+            raise OperationExecutionError(code, "Analysis provider failed.") from exc
 
     def activate(self, operation, prepared, repository):
         if not isinstance(prepared.value, PreparedAnalysis):
@@ -245,6 +273,7 @@ class RenderOperationHandler:
         )
 
     def activate(self, operation, prepared, repository):
+        del operation
         if not isinstance(prepared.value, ExecutedRender):
             raise TypeError("render handler received an invalid executed value")
         self.service.activate(
@@ -377,6 +406,97 @@ class OperationService(ServiceBase[OperationRepository]):
 
     def cancel(self, operation_id: str) -> PersistedOperation:
         return self.repo.request_operation_cancellation(operation_id)
+
+    def _approval_result(self, revision_id: str) -> ApprovalResult | None:
+        drafts = cast(DraftRepository, self.repo)
+        try:
+            revision = drafts.approved_revision(revision_id)
+            markdown = drafts.artifact_version_for_revision(
+                revision_id, "resume_markdown", "approved"
+            )
+            manifest = drafts.artifact_version_for_revision(
+                revision_id, "claim_manifest", "approved"
+            )
+            decision = drafts.decision_for_revision(revision_id)
+        except KeyError:
+            return None
+        return ApprovalResult(
+            application_id=revision.application_id,
+            revision_id=revision.id,
+            version=revision.version_number,
+            markdown_artifact_version_id=markdown["id"],
+            manifest_artifact_version_id=manifest["id"],
+            decision_record_id=decision["id"],
+        )
+
+    def approve_idempotent(
+        self,
+        application_id: str,
+        *,
+        idempotency_key: str,
+        draft_service: DraftService,
+    ) -> ApprovalResult:
+        command_type = "approve_draft"
+        existing = self.repo.idempotency_receipt(
+            command_type,
+            idempotency_key,
+            installation_id=self.installation_id,
+        )
+        if existing is not None:
+            if existing["payload"].get("application_id") != application_id:
+                raise StateConflict("IDEMPOTENCY_KEY_REUSED")
+            completed = self._approval_result(existing["reserved_entity_id"])
+            if completed is not None:
+                if existing["status"] == "pending":
+                    self.repo.complete_idempotency_receipt(
+                        existing["id"], completed.model_dump(mode="json")
+                    )
+                return completed
+            payload = existing["payload"]
+            try:
+                working = cast(DraftRepository, self.repo).active_working_draft(application_id)
+            except KeyError as exc:
+                raise StateConflict("pending approval has no recoverable WorkingDraft") from exc
+            if payload != {
+                "application_id": application_id,
+                "working_draft_id": working.id,
+                "edit_version": working.edit_version,
+                "content_hash": working.content_hash,
+            }:
+                raise StateConflict("IDEMPOTENCY_KEY_REUSED")
+            receipt = existing
+        else:
+            try:
+                working = cast(DraftRepository, self.repo).active_working_draft(application_id)
+            except KeyError as exc:
+                raise UnknownRecord(f"no working draft for application: {application_id}") from exc
+            payload = {
+                "application_id": application_id,
+                "working_draft_id": working.id,
+                "edit_version": working.edit_version,
+                "content_hash": working.content_hash,
+            }
+            receipt = self.repo.claim_idempotency_receipt(
+                command_type,
+                idempotency_key,
+                payload,
+                installation_id=self.installation_id,
+                reserved_entity_id=new_id(),
+            )
+        try:
+            result = draft_service.approve(
+                application_id,
+                revision_id=receipt["reserved_entity_id"],
+            )
+        except ApplicationError:
+            recovered = self._approval_result(receipt["reserved_entity_id"])
+            if recovered is None:
+                raise
+            result = recovered
+        self.repo.complete_idempotency_receipt(
+            receipt["id"], result.model_dump(mode="json")
+        )
+        return result
 
     def retry(self, operation_id: str, *, idempotency_key: str) -> PersistedOperation:
         original = self.repo.operation(operation_id)

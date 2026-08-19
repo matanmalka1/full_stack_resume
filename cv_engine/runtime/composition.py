@@ -4,6 +4,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..application.operation_runner import OperationRunner
+from ..application.operations import OperationType
 from ..application.ports import (
     ApplicationRepository,
     ArtifactStore,
@@ -28,12 +30,11 @@ from ..application.services.rendering import RenderingService
 from ..application.services.tracking import TrackingService
 from ..infrastructure.artifacts import FilesystemArtifactStore
 from ..infrastructure.knowledge import FileKnowledge
+from ..infrastructure.operation_logging import OperationFailureLogger
 from ..infrastructure.payloads import PayloadStore
 from ..infrastructure.persistence import Repository
 from ..infrastructure.providers import OpenAIClassificationProvider
 from ..infrastructure.rendering import PlaywrightRenderer
-from ..application.operation_runner import OperationRunner
-from ..application.operations import OperationType
 from ..util import new_id
 from .operations import ForegroundOperationExecutor, OperationWorker
 from .workspace import Workspace
@@ -100,6 +101,7 @@ def build_services(
     operation_service = OperationService(**shared)
     draft_service = DraftService(**shared)
     rendering_service = RenderingService(**shared)
+    failure_logger = OperationFailureLogger(workspace.root, workspace.logs_root)
     runner = OperationRunner(
         resolved_repository,
         {
@@ -108,6 +110,7 @@ def build_services(
             OperationType.RENDER_REVISION: RenderOperationHandler(rendering_service),
         },
         runner_id=f"local-{new_id()}",
+        technical_logger=failure_logger.record,
     )
     foreground = ForegroundOperationExecutor(resolved_repository, runner)
     worker = OperationWorker(resolved_repository, runner)

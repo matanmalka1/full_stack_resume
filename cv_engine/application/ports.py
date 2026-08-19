@@ -366,6 +366,10 @@ class ArtifactRegistry(Protocol):
 
     def validation_lineage(self, validation_id: str) -> ValidationRunLineage: ...
 
+    def latest_validation_for_working_draft(
+        self, working_draft_id: str
+    ) -> dict[str, Any] | None: ...
+
 
 class FactAudit(Protocol):
     """The fact lifecycle's trail, which lives beside the files it describes."""
@@ -580,6 +584,29 @@ class OperationRepository(Protocol):
         now: str | None = None,
     ) -> PersistedOperation: ...
 
+    def claim_idempotency_receipt(
+        self,
+        command_type: str,
+        idempotency_key: str,
+        payload: dict[str, Any],
+        *,
+        installation_id: str,
+        reserved_entity_id: str,
+        created_at: str | None = None,
+    ) -> dict[str, Any]: ...
+
+    def idempotency_receipt(
+        self, command_type: str, idempotency_key: str, *, installation_id: str
+    ) -> dict[str, Any] | None: ...
+
+    def complete_idempotency_receipt(
+        self,
+        receipt_id: str,
+        result: dict[str, Any],
+        *,
+        completed_at: str | None = None,
+    ) -> None: ...
+
 
 class QueryRepository(
     ApplicationStore, JobStore, ArtifactRegistry, WorkingDraftReader, OperationRepository, Protocol
@@ -595,11 +622,6 @@ class QueryRepository(
     def decision_for_revision(self, revision_id: str) -> dict[str, Any]: ...
 
     def integrity_check(self) -> list[str]: ...
-
-    def latest_validation_for_working_draft(
-        self, working_draft_id: str
-    ) -> dict[str, Any] | None: ...
-
 
 class ReadinessRepository(DraftRepository, Protocol):
     """Draft lineage plus the database integrity proof required for Ready."""

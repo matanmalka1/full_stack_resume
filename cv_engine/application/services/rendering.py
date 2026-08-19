@@ -7,10 +7,10 @@ from ...domain.knowledge import Knowledge
 from ...domain.models import (
     DraftDocument,
     JobAnalysis,
+    Profile,
     ReadyQualification,
     ValidationReport,
 )
-from ...domain.models import Profile
 from ...domain.validation import validate_draft
 from ...util import new_id, sha256_file
 from ..commands import (
@@ -118,7 +118,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
                 source_report,
             )
         candidate = knowledge.candidate
-        artifact_ids = tuple(new_id() for _ in range(3))
+        artifact_ids = (new_id(), new_id(), new_id())
         recruiter_pdf_filename = self.renderer.filename_for(profile.normalized_role, candidate)
         targets = self.revision_payloads.render_targets(
             command.application_id,

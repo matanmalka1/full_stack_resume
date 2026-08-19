@@ -375,7 +375,9 @@ class DraftService(ServiceBase[DraftRepository]):
             validation=report,
         )
 
-    def approve(self, application_id: str) -> ApprovalResult:
+    def approve(
+        self, application_id: str, *, revision_id: str | None = None
+    ) -> ApprovalResult:
         self._require_synced_projection(
             application_id, working_draft_record(self.repo, application_id).source
         )
@@ -394,7 +396,7 @@ class DraftService(ServiceBase[DraftRepository]):
         # that draft's own analysis. A newer analysis does not get to describe an
         # older document.
         analysis_id, analysis = bound_analysis(self.repo, application_id, draft, profiles, facts)
-        revision_id = new_id()
+        revision_id = revision_id or new_id()
         try:
             published = self.revision_payloads.commit_revision(
                 application_id,

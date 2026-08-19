@@ -304,15 +304,39 @@ class PayloadStore:
         SQLite registration is deliberately left to the caller. If either
         registration later fails, these files are safe reconciliation orphans.
         """
-        structured = self.commit(
+        def commit_or_reuse(
+            destination: Path, content: bytes, validator: PayloadValidator
+        ) -> StoredPayload:
+            if destination.exists():
+                if not destination.is_file() or destination.read_bytes() != content:
+                    raise FileExistsError(
+                        f"immutable payload already exists with different content: {destination}"
+                    )
+                if validator(destination) is False:
+                    raise ValueError(f"existing immutable payload failed validation: {destination}")
+                return StoredPayload(
+                    path=destination,
+                    workspace_relative=relative_within(
+                        self._workspace_root, destination
+                    ).as_posix(),
+                    sha256=sha256_file(destination),
+                    size=destination.stat().st_size,
+                )
+            return self.commit(
+                destination,
+                write=lambda path: path.write_bytes(content),
+                validate=validator,
+            )
+
+        structured = commit_or_reuse(
             self.revision_path(application_id, revision_id, format="json"),
-            write=lambda path: path.write_bytes(structured_json.encode("utf-8")),
-            validate=self._valid_json,
+            structured_json.encode("utf-8"),
+            self._valid_json,
         )
-        rendered = self.commit(
+        rendered = commit_or_reuse(
             self.revision_path(application_id, revision_id, format="md"),
-            write=lambda path: path.write_bytes(markdown.encode("utf-8")),
-            validate=lambda path: path.is_file(),
+            markdown.encode("utf-8"),
+            lambda path: path.is_file(),
         )
         for stored in (structured, rendered):
             actual = sha256_file(stored.path)

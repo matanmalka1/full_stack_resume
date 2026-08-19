@@ -262,6 +262,29 @@ def test_fast_orchestration_preserves_call_order_and_gate_messages(
         )
         return ValidationReport.from_findings(groups={"content": passed}, issues=issues)
 
+    operation_results = {
+        "analysis-operation": SimpleNamespace(
+            status=SimpleNamespace(value="succeeded"),
+            safe_failure_detail=None,
+            failure_code=None,
+            outputs=[
+                SimpleNamespace(output_type="job_analysis", output_id="analysis-1"),
+                SimpleNamespace(output_type="selection_plan", output_id="selection-plan-1"),
+            ],
+        ),
+        "draft-operation": SimpleNamespace(
+            status=SimpleNamespace(value="succeeded"),
+            safe_failure_detail=None,
+            failure_code=None,
+            outputs=[SimpleNamespace(output_type="working_draft", output_id="draft-1")],
+        ),
+        "render-operation": SimpleNamespace(
+            status=SimpleNamespace(value="succeeded"),
+            safe_failure_detail=None,
+            failure_code=None,
+            outputs=[SimpleNamespace(output_type="resume_pdf", output_id="pdf-1")],
+        ),
+    }
     fake_services = SimpleNamespace(
         applications=SimpleNamespace(
             ingest=lambda _command: (
@@ -269,25 +292,37 @@ def test_fast_orchestration_preserves_call_order_and_gate_messages(
                 or SimpleNamespace(application_id="application-1", job_snapshot_id="snapshot-1")
             )
         ),
-        analysis=SimpleNamespace(
-            analyze=lambda _command: (
-                calls.append("analyze")
-                or SimpleNamespace(analysis_id="analysis-1", selection_plan_id="selection-plan-1")
-            )
-        ),
-        drafts=SimpleNamespace(
-            draft=lambda _command: (
-                calls.append("draft") or SimpleNamespace(validation=report("pre-render"))
+        analysis=SimpleNamespace(),
+        drafts=SimpleNamespace(),
+        rendering=SimpleNamespace(),
+        operations=SimpleNamespace(
+            submit_analysis=lambda _command, **_kwargs: (
+                calls.append("analyze") or SimpleNamespace(id="analysis-operation")
             ),
-            approve=lambda _application_id: (
+            submit_draft=lambda _command, **_kwargs: (
+                calls.append("draft") or SimpleNamespace(id="draft-operation")
+            ),
+            approve_idempotent=lambda _application_id, **_kwargs: (
                 calls.append("approve")
-                or SimpleNamespace(version=1, decision_record_id="decision-1")
+                or SimpleNamespace(
+                    version=1,
+                    revision_id="revision-1",
+                    decision_record_id="decision-1",
+                )
+            ),
+            submit_render=lambda _command, **_kwargs: (
+                calls.append("render") or SimpleNamespace(id="render-operation")
             ),
         ),
-        rendering=SimpleNamespace(
-            render=lambda _application_id: (
-                calls.append("render") or SimpleNamespace(validation=report("post-render"))
-            )
+        foreground_operations=SimpleNamespace(
+            execute=lambda operation_id: operation_results[operation_id]
+        ),
+        repository=SimpleNamespace(
+            latest_validation_for_working_draft=lambda _draft_id: {
+                "report": report("pre-render")
+            },
+            artifact_version=lambda _artifact_id: {"metadata_json": "{}"},
+            validation_for_artifact=lambda *_args: report("post-render"),
         ),
     )
 

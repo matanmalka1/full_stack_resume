@@ -75,8 +75,8 @@ Stage 7b landed in 2a and does not recur.
 reasons, warnings, both state axes, Ready compatibility, milestone visibility, and the
 available/blocked/recommended actions from a typed `ProjectionContext`. Application Detail and
 list projections use the same policy, with their SQLite inputs read through one transaction and
-small repository queries rather than a combined SQL read model. `active_operation` remains
-nullable until §4.4 supplies Operations.
+small repository queries rather than a combined SQL read model. §4.4 now supplies the nullable
+`active_operation` value when queued or running work exists.
 
 Inherited checks resolved before this section starts:
 
@@ -90,8 +90,21 @@ Inherited checks resolved before this section starts:
 
 ## D. §4.4 Operations — the largest remaining package
 
-Not started. Scope is the six bullets of the plan §4.4. It touches different tables from
-§4.3 and can run alongside it.
+**Implementation complete; closure gates pending.** The durable runner foundation landed at
+`7400870`, and analyze/draft/render CLI integration landed at `d0e54f1`. The final boundary diff
+adds approval receipts and crash recovery, structured technical failure logging, graceful worker
+cancellation, provider-failure classification, CLI operation inspection/cancel/retry, and routes
+`cv fast` through the same foreground runner.
+
+- [x] Operation schema, atomic claims, bounded resource leases, heartbeat, phases,
+      cancellation, manual retry, safe failure metadata, and inactive outputs.
+- [x] Idempotent Operation creation and idempotent approval with a durable reserved revision ID.
+- [x] Low-concurrency worker and the shared foreground CLI executor.
+- [x] Startup interruption for expired queued/running work and graceful cancellation on shutdown.
+- [x] Optimistic pre-execution and pre-activation checks with `SOURCE_CHANGED`.
+- [x] One classified automatic retry for transient provider/browser failures.
+- [ ] Run the Class C closing gate, record its exact results, then commit and mark this boundary
+      Closed. No live v1 path is permitted in the rehearsal.
 
 ## E. §4.5 Knowledge consistency — the highest correctness risk
 
@@ -119,7 +132,7 @@ State of the plan's seven §4.7 checkboxes; the criteria themselves live there.
 | 1 — repositories/UoW under real SQLite | Partial: boundary 1, M1 table set only |
 | 2 — immutable entities reject bypasses | Partial: eleven tables covered at boundary 1 |
 | 3 — projection/action policy under concurrency | Closed at `fe1e92c`; includes two-connection SQLite snapshot consistency |
-| 4 — ETag, idempotency, leases, cancellation, retry, `SOURCE_CHANGED` | Open, follows D |
+| 4 — ETag, idempotency, leases, cancellation, retry, `SOURCE_CHANGED` | Implementation complete; awaiting D's final Class C gate |
 | 5 — journal crash windows | Open, follows E |
 | 6 — backup restore to an openable Workspace | Open, follows F |
 | 7 — no M2 code points to live v1 paths | Holds so far; a standing constraint, not a deliverable |
@@ -129,5 +142,6 @@ No §4.7 checkbox is ticked yet. Boundary 1 deliberately claimed none — see
 
 ## Dependency order
 
-A → B → C are closed. D is now independent; E follows the closed state-policy boundary; F remains
-required before anything that touches real data. G closes incrementally rather than as a phase.
+A → B → C are closed. D awaits its final gate; E follows the closed state-policy boundary; F
+remains required before anything that touches real data. G closes incrementally rather than as a
+phase.

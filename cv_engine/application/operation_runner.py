@@ -187,6 +187,14 @@ class OperationRunner:
                     )
                 break
             except OperationExecutionError as error:
+                if error.technical_log_reference is None:
+                    error = OperationExecutionError(
+                        error.code,
+                        error.safe_detail,
+                        technical_log_reference=self.technical_logger(
+                            error.__cause__ or error
+                        ),
+                    )
                 current = self.repository.operation(operation_id)
                 attempts_after_failure = current.attempts_completed + 1
                 if allows_automatic_retry(error.code, attempts_after_failure):
@@ -254,14 +262,18 @@ class OperationRunner:
                             active=True,
                         )
                 if prepared.terminal_failure is not None:
+                    terminal_failure = prepared.terminal_failure
+                    reference = terminal_failure.technical_log_reference
+                    if reference is None:
+                        reference = self.technical_logger(
+                            terminal_failure.__cause__ or terminal_failure
+                        )
                     result = bound.fail_operation(
                         operation_id,
-                        prepared.terminal_failure.code,
-                        prepared.terminal_failure.safe_detail,
+                        terminal_failure.code,
+                        terminal_failure.safe_detail,
                         runner_id=self.runner_id,
-                        technical_log_reference=(
-                            prepared.terminal_failure.technical_log_reference
-                        ),
+                        technical_log_reference=reference,
                     )
                 else:
                     result = bound.complete_operation(

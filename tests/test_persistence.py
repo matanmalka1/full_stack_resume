@@ -49,6 +49,7 @@ MUTABLE_TABLES = frozenset(
         "operations",  # mutable only until a terminal status; terminal rows have a trigger
         "operation_resource_leases",  # ephemeral claim/heartbeat coordination
         "operation_outputs",  # permits exactly one inactive-to-active transition
+        "idempotency_receipts",  # permits exactly one pending-to-completed transition
         "schema_meta",  # bookkeeping
         "schema_migrations",  # bookkeeping
         "sqlite_sequence",  # SQLite's own AUTOINCREMENT bookkeeping

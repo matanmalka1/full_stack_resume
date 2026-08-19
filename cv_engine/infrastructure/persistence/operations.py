@@ -8,8 +8,8 @@ from typing import Any
 from ...application.errors import StateConflict
 from ...application.operations import (
     CreateOperation,
-    OperationOutputReference,
     OperationFailureCode,
+    OperationOutputReference,
     OperationPhase,
     OperationSources,
     OperationStatus,
@@ -17,7 +17,7 @@ from ...application.operations import (
     PersistedOperation,
     required_operation_resources,
 )
-from ...util import canonical_json, new_id, utc_now
+from ...util import canonical_json, new_id, sha256_text, utc_now
 from .base import SqliteRepositoryBase
 
 
@@ -544,3 +544,96 @@ class SqliteOperationRepository(SqliteRepositoryBase):
                 "SELECT * FROM operations WHERE id=?", (operation_id,)
             ).fetchone()
             return self._operation_record(current, self._outputs(connection, operation_id))
+
+    def claim_idempotency_receipt(
+        self,
+        command_type: str,
+        idempotency_key: str,
+        payload: dict[str, Any],
+        *,
+        installation_id: str,
+        reserved_entity_id: str,
+        created_at: str | None = None,
+    ) -> dict[str, Any]:
+        payload_json = canonical_json(payload)
+        payload_hash = sha256_text(payload_json)
+        timestamp = created_at or utc_now()
+        with self.transaction() as connection:
+            existing = connection.execute(
+                "SELECT * FROM idempotency_receipts WHERE installation_id=? "
+                "AND command_type=? AND idempotency_key=?",
+                (installation_id, command_type, idempotency_key),
+            ).fetchone()
+            if existing is not None:
+                if existing["payload_hash"] != payload_hash:
+                    raise StateConflict("IDEMPOTENCY_KEY_REUSED")
+                record = dict(existing)
+                record["payload"] = json.loads(record.pop("payload_json"))
+                result_json = record.pop("result_json")
+                record["result"] = json.loads(result_json) if result_json is not None else None
+                return record
+            identifier = new_id()
+            connection.execute(
+                "INSERT INTO idempotency_receipts("
+                "id, installation_id, command_type, idempotency_key, payload_json, "
+                "payload_hash, reserved_entity_id, status, created_at"
+                ") VALUES(?, ?, ?, ?, ?, ?, ?, 'pending', ?)",
+                (
+                    identifier,
+                    installation_id,
+                    command_type,
+                    idempotency_key,
+                    payload_json,
+                    payload_hash,
+                    reserved_entity_id,
+                    timestamp,
+                ),
+            )
+            return {
+                "id": identifier,
+                "installation_id": installation_id,
+                "command_type": command_type,
+                "idempotency_key": idempotency_key,
+                "payload": payload,
+                "payload_hash": payload_hash,
+                "reserved_entity_id": reserved_entity_id,
+                "status": "pending",
+                "result": None,
+                "created_at": timestamp,
+                "completed_at": None,
+            }
+
+    def idempotency_receipt(
+        self, command_type: str, idempotency_key: str, *, installation_id: str
+    ) -> dict[str, Any] | None:
+        with self.read_connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM idempotency_receipts WHERE installation_id=? "
+                "AND command_type=? AND idempotency_key=?",
+                (installation_id, command_type, idempotency_key),
+            ).fetchone()
+        if row is None:
+            return None
+        record = dict(row)
+        record["payload"] = json.loads(record.pop("payload_json"))
+        result_json = record.pop("result_json")
+        record["result"] = json.loads(result_json) if result_json is not None else None
+        return record
+
+    def complete_idempotency_receipt(
+        self, receipt_id: str, result: dict[str, Any], *, completed_at: str | None = None
+    ) -> None:
+        timestamp = completed_at or utc_now()
+        with self.transaction() as connection:
+            changed = connection.execute(
+                "UPDATE idempotency_receipts SET status='completed', result_json=?, "
+                "completed_at=? WHERE id=? AND status='pending'",
+                (canonical_json(result), timestamp, receipt_id),
+            ).rowcount
+            if changed != 1:
+                row = connection.execute(
+                    "SELECT result_json FROM idempotency_receipts WHERE id=? AND status='completed'",
+                    (receipt_id,),
+                ).fetchone()
+                if row is None or json.loads(row["result_json"]) != result:
+                    raise StateConflict("idempotency receipt cannot be completed")

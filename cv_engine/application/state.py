@@ -15,6 +15,7 @@ from ..domain.drafts import render_composite_claim, validate_derived_wording
 from ..domain.facts import FactStoreError
 from ..domain.knowledge import Knowledge
 from ..domain.models import ApprovedRevision, FactStatus, JobAnalysis, SelectionPlan, WorkingDraft
+from .operations import OperationView
 from .queries import (
     ApplicationStateView,
     BlockedActionView,
@@ -23,7 +24,6 @@ from .queries import (
     WarningView,
     WorkingDraftState,
 )
-from .operations import OperationView
 
 STALE_PRECEDENCE = (
     "JOB_SNAPSHOT_CHANGED",
