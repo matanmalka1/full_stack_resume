@@ -40,6 +40,58 @@ def test_new_fact_is_persisted_as_pending_and_cannot_reach_a_cv(services: Servic
         _reload(services).get("situational.sqlite", canonical_only=True)
 
 
+def test_knowledge_file_mutation_is_validated_staged_activated_and_restored(
+    services: Services,
+) -> None:
+    source = services.workspace.knowledge_root / "base" / "situational_skills.md"
+    before = source.read_bytes()
+
+    staged, fact = services.knowledge.stage_create_fact(
+        "staged-create",
+        "situational_skills.md",
+        dict(NEW_FACT),
+    )
+    assert fact.status is FactStatus.PENDING
+    assert source.read_bytes() == before
+    assert staged.source_reference == "base/situational_skills.md"
+    assert staged.staged_reference == "tmp/knowledge/staged-create/new"
+
+    services.knowledge.activate_staged(staged)
+    assert _reload(services).get("situational.sqlite").status is FactStatus.PENDING
+    services.knowledge.restore_staged(staged)
+    assert source.read_bytes() == before
+    services.knowledge.discard_staged(staged)
+    assert not (services.workspace.temp_root / "knowledge" / "staged-create").exists()
+
+
+def test_knowledge_file_activation_refuses_source_or_staged_hash_changes(
+    services: Services,
+) -> None:
+    source = services.workspace.knowledge_root / "base" / "situational_skills.md"
+    staged, _fact = services.knowledge.stage_create_fact(
+        "source-change",
+        "situational_skills.md",
+        dict(NEW_FACT),
+    )
+    original = source.read_text(encoding="utf-8")
+    source.write_text(original + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="source changed"):
+        services.knowledge.activate_staged(staged)
+    source.write_text(original, encoding="utf-8")
+    services.knowledge.discard_staged(staged)
+
+    staged, _fact = services.knowledge.stage_create_fact(
+        "stage-change",
+        "situational_skills.md",
+        dict(NEW_FACT),
+    )
+    staged_path = services.workspace.root / staged.staged_reference
+    staged_path.write_text("tampered", encoding="utf-8")
+    with pytest.raises(ValueError, match="staged Knowledge file hash mismatch"):
+        services.knowledge.activate_staged(staged)
+    services.knowledge.discard_staged(staged)
+
+
 def test_pending_fact_does_not_invalidate_drafts_built_from_canonical_facts(
     services: Services,
 ) -> None:

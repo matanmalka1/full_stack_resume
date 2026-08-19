@@ -12,6 +12,17 @@ class KnowledgeMutationState(StrEnum):
 
 
 @dataclass(frozen=True)
+class StagedKnowledgeFile:
+    """Opaque Workspace references and hashes for one validated file replacement."""
+
+    mutation_id: str
+    source_reference: str
+    staged_reference: str
+    old_sha256: str
+    new_sha256: str
+
+
+@dataclass(frozen=True)
 class PrepareKnowledgeMutation:
     """Durable inputs required to decide a cross-store mutation after a crash."""
 

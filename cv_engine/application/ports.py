@@ -20,7 +20,11 @@ from ..domain.models import (
     ValidationRunLineage,
     WorkingDraft,
 )
-from .knowledge_mutations import KnowledgeMutation, PrepareKnowledgeMutation
+from .knowledge_mutations import (
+    KnowledgeMutation,
+    PrepareKnowledgeMutation,
+    StagedKnowledgeFile,
+)
 from .operations import (
     CreateOperation,
     OperationFailureCode,
@@ -161,6 +165,40 @@ class KnowledgeStore(Protocol):
     def attach_fact(
         self, profile: str, fact_id: str, section: str, *, pin: bool = False
     ) -> tuple[Profile, str]: ...
+
+    def stage_create_fact(
+        self,
+        mutation_id: str,
+        source_name: str,
+        payload: dict[str, Any],
+        *,
+        canonical: bool = False,
+    ) -> tuple[StagedKnowledgeFile, Any]: ...
+
+    def stage_promote_fact(
+        self,
+        mutation_id: str,
+        fact_id: str,
+        target: Any,
+        *,
+        explicitly_confirmed: bool,
+    ) -> tuple[StagedKnowledgeFile, Any, Any]: ...
+
+    def stage_attach_fact(
+        self,
+        mutation_id: str,
+        profile: str,
+        fact_id: str,
+        section: str,
+        *,
+        pin: bool = False,
+    ) -> tuple[StagedKnowledgeFile, Profile, str]: ...
+
+    def activate_staged(self, staged: StagedKnowledgeFile) -> None: ...
+
+    def restore_staged(self, staged: StagedKnowledgeFile) -> None: ...
+
+    def discard_staged(self, staged: StagedKnowledgeFile) -> None: ...
 
 
 class Renderer(Protocol):

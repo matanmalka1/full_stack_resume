@@ -81,7 +81,11 @@ def build_services(
     and the AI provider without the application layer knowing either exists.
     """
     resolved_repository = repository or Repository(database_path or workspace.database_path)
-    resolved_knowledge = knowledge or FileKnowledge(workspace.knowledge_root)
+    resolved_knowledge = knowledge or FileKnowledge(
+        workspace.knowledge_root,
+        workspace_root=workspace.root,
+        temp_root=workspace.temp_root,
+    )
     resolved_artifacts = artifacts or FilesystemArtifactStore(workspace)
     resolved_payloads = payloads or PayloadStore(workspace)
     resolved_renderer = renderer or PlaywrightRenderer(workspace.knowledge_root)
