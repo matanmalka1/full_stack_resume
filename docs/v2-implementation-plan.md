@@ -128,7 +128,8 @@ them inside endpoints later.
 - Implement repositories by transactional ownership and UnitOfWork.
 - Implement filesystem stores for snapshots, revisions, outputs, provider responses,
   temp files, and manifests.
-- Implement UUIDv4 IDs, UTC timestamps, SHA-256 hashes, and serialization versions.
+- Implement UUIDv4 IDs, UTC timestamps, and SHA-256 hashes. Introduce a serialization
+  version only with a concrete versioned payload reader and writer.
 
 ### 4.2 Domain records
 

@@ -38,7 +38,7 @@ In scope:
    short transactions, `SqliteUnitOfWork`.
 3. Five SQLite repositories split by transactional ownership plus a delegation-only composite.
 4. The §6.2 immutable payload store and the §7.1 commit protocol.
-5. UUIDv4 IDs, UTC timestamps, SHA-256 hashes, and a serialization-version registry.
+5. UUIDv4 IDs, UTC timestamps, and SHA-256 hashes.
 6. One path-containment policy; A26, A27, A29 closed.
 7. A2 (narrowed, see §8) and A7.
 
@@ -76,9 +76,10 @@ version refuses outright. No command silently migrates.
 fingerprint. A mismatch is a hard refusal naming the difference.
 
 **D5 — no stored-shape change.** `schema_meta.schema_version` keeps its current `"2"` value;
-`schema_migrations` becomes the authority. The serialization-version registry is applied only
-to payloads this boundary itself writes (payload-store manifests). `structured_json`,
-`report_json`, and decision payloads are untouched, and no historical row is rewritten.
+`schema_migrations` becomes the authority. A serialization version is introduced only with a
+concrete payload schema and its reader/writer; path allocation alone does not create a versioned
+payload contract. `structured_json`, `report_json`, and decision payloads are untouched, and no
+historical row is rewritten.
 
 **D6 — naming.** Concrete classes are `Sqlite*Repository` under
 `infrastructure/persistence/`; the composed object handed to the composition root keeps the

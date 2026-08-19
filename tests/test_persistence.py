@@ -35,7 +35,6 @@ from cv_engine.infrastructure.persistence.schema import (
     registered_migration_names,
     sqlite_master_fingerprint,
 )
-from cv_engine.infrastructure.persistence.serialization import serialization_version
 from cv_engine.util import new_id, normalized_text, sha256_text
 
 # Immutability is the default, so nothing has to be registered when an immutable
@@ -345,13 +344,10 @@ def test_immutability_triggers_refuse_real_repository_writes(tmp_path: Path) -> 
                     connection.execute(statement)
 
 
-def test_identity_serialization_registry_and_typed_artifact_ports() -> None:
+def test_identity_and_typed_artifact_ports() -> None:
     values = [new_id() for _ in range(20)]
     assert len(set(values)) == len(values)
     assert all(uuid.UUID(value).version == 4 for value in values)
-    assert serialization_version("payload_manifest") == "1"
-    with pytest.raises(ValueError, match="unregistered"):
-        serialization_version("historical_report")
 
     for member in (
         "register_artifact_version",
