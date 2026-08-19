@@ -28,12 +28,6 @@ from .application.ports import ApplicationRepository, ApplicationStore
 from .application.queries import ApplicationListView
 from .domain.facts import FACT_SOURCE_NAMES
 from .domain.models import ApplicationStatus, FactStatus
-from .infrastructure.legacy_source import LegacySourceError, LegacyV1Source
-from .infrastructure.migration import (
-    MigrationSafetyError,
-    retrospective_verify_migration,
-    verify_source,
-)
 from .infrastructure.paths import resolve_within
 from .infrastructure.persistence import current_schema_version, initialize
 from .runtime.composition import Services, build_services
@@ -273,11 +267,6 @@ def build_parser() -> argparse.ArgumentParser:
     workspace_sub.add_parser(
         "status", help="show Workspace identity, roots, and resolved configuration"
     )
-    workspace_inventory = workspace_sub.add_parser(
-        "inventory-legacy",
-        help="read-only inventory of an unmarked legacy v1 source",
-    )
-    workspace_inventory.add_argument("--source", type=Path, required=True)
 
     sub.add_parser("init", help="initialize the v1 SQLite schema")
     ingest = sub.add_parser("ingest", help="create an application and immutable job snapshot")
@@ -437,14 +426,6 @@ def build_parser() -> argparse.ArgumentParser:
     fact_history = fact_sub.add_parser("history", help="read the immutable fact lifecycle trail")
     fact_history.add_argument("fact_id", nargs="?")
 
-    migrate = sub.add_parser("migrate", help="read-only verification of the completed v1 migration")
-    migrate_sub = migrate.add_subparsers(dest="migration_command", required=True)
-    migrate_sub.add_parser(
-        "verify-source", help="re-derive the frozen v1 source from Git and its database backup"
-    )
-    migrate_sub.add_parser(
-        "verify-live", help="read-only semantic verification of the completed migration"
-    )
     return parser
 
 
@@ -646,10 +627,7 @@ def workspace_command(
             }
         )
         return 0
-    source = LegacyV1Source(args.source.resolve())
-    inventory = source.inventory()
-    _print({**inventory.describe(), "read_only": True, "marker_written": False})
-    return 0
+    raise ValueError(f"unknown workspace command: {args.workspace_command}")
 
 
 @dataclass
@@ -657,10 +635,10 @@ class CommandContext:
     """What one command was given, opened as far as that command needs.
 
     A command's stage is what it may touch: `workspace init` runs before a
-    Workspace exists, `migrate` verifies one without opening its database,
-    `init` creates the schema the services would otherwise expect, and every
-    other command gets built services. Building only up to the stage keeps
-    each command's fail-closed order the same as before the split.
+    Workspace exists, `init` creates the schema the services would otherwise
+    expect, and every other command gets built services. Building only up to
+    the stage keeps each command's fail-closed order the same as before the
+    split.
     """
 
     args: argparse.Namespace
@@ -721,8 +699,6 @@ def _build_context(args: argparse.Namespace, root: Path, config: Any, needs: str
     # Workspace fail-closed before it touches state.
     context.workspace = load_workspace(root)
     context.config = _workspace_config(args, context.workspace)
-    if needs == "workspace":
-        return context
     db_override = context.config.get("database")
     context.database_path = (
         resolve_within(context.workspace.state_root, db_override)
@@ -744,17 +720,6 @@ def _workspace(context: CommandContext) -> int:
     return workspace_command(
         context.root, _workspace_config(args, workspace), args, opened=workspace
     )
-
-
-@_command("migrate", needs="workspace")
-def _migrate(context: CommandContext) -> int:
-    args = context.args
-    if args.migration_command == "verify-source":
-        report = verify_source(context.root)
-    else:
-        report = retrospective_verify_migration(context.root)
-    _print(report)
-    return 0 if report["passed"] else 1
 
 
 @_command("init", needs="database")
@@ -1197,9 +1162,7 @@ def main(argv: list[str] | None = None) -> int:
         KeyError,
         FileNotFoundError,
         WorkflowError,
-        MigrationSafetyError,
         WorkspaceError,
-        LegacySourceError,
     ) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

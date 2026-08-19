@@ -23,7 +23,7 @@ def test_generated_draft_has_exact_canonical_claim_links(draft_factory) -> None:
 
 
 def test_unsafe_headline_fails_only_the_draft_side_headline_group(
-    v1_repo: Path,
+    workspace_root: Path,
     draft_factory,
 ) -> None:
     facts, profile, analysis, draft, _markdown = draft_factory(
@@ -33,7 +33,7 @@ def test_unsafe_headline_fails_only_the_draft_side_headline_group(
     draft.headline.text = "Invented Executive Seniority"
     draft.headline.text_hash = sha256_text(draft.headline.text)
     draft.content_hash = sha256_text(serialize_markdown(draft))
-    markdown, _text = store_draft(v1_repo, draft)
+    markdown, _text = store_draft(workspace_root, draft)
 
     report = validate_draft(
         draft,
@@ -77,7 +77,7 @@ def test_stale_sales_claim_is_blocked(draft_factory) -> None:
 
 
 def test_negative_saas_boundary_cannot_be_inverted_into_derived_claim(
-    v1_repo: Path, draft_factory
+    workspace_root: Path, draft_factory
 ) -> None:
     facts, profile, _analysis, draft, _markdown = draft_factory(
         "Tech Sales SaaS consultative software solutions",
@@ -95,7 +95,7 @@ def test_negative_saas_boundary_cannot_be_inverted_into_derived_claim(
     )
     edited = claim_by_id(updated, claim.claim_id)
     assert edited.claim_type == "pending"
-    markdown, _text = store_draft(v1_repo, updated)
+    markdown, _text = store_draft(workspace_root, updated)
     report = validate_draft(
         updated, markdown.read_text(encoding="utf-8"), facts, profile, _analysis
     )
@@ -103,7 +103,7 @@ def test_negative_saas_boundary_cannot_be_inverted_into_derived_claim(
     assert any(issue.code == "pending-claim" for issue in report.issues)
 
 
-def test_forged_derived_claim_manifest_blocks_approval(v1_repo: Path, draft_factory) -> None:
+def test_forged_derived_claim_manifest_blocks_approval(workspace_root: Path, draft_factory) -> None:
     facts, profile, analysis, draft, _markdown = draft_factory(
         "Account Manager retention portfolio customer relationships",
         write=True,
@@ -126,7 +126,7 @@ def test_forged_derived_claim_manifest_blocks_approval(v1_repo: Path, draft_fact
             if item.claim_id == claim.claim_id:
                 section.claims[index] = forged
     draft.content_hash = sha256_text(serialize_markdown(draft))
-    markdown, _text = store_draft(v1_repo, draft)
+    markdown, _text = store_draft(workspace_root, draft)
 
     report = validate_draft(draft, markdown.read_text(encoding="utf-8"), facts, profile, analysis)
 
@@ -135,7 +135,7 @@ def test_forged_derived_claim_manifest_blocks_approval(v1_repo: Path, draft_fact
 
 
 def test_profile_presentation_wording_is_recomputed_during_validation(
-    v1_repo: Path,
+    workspace_root: Path,
     draft_factory,
     presentation_store,
 ) -> None:
@@ -155,7 +155,7 @@ def test_profile_presentation_wording_is_recomputed_during_validation(
     summary.text = "Sold SaaS through strategic channel partnerships."
     summary.text_hash = sha256_text(summary.text)
     draft.content_hash = sha256_text(serialize_markdown(draft))
-    markdown, _text = store_draft(v1_repo, draft)
+    markdown, _text = store_draft(workspace_root, draft)
 
     report = validate_draft(
         draft,
@@ -187,7 +187,7 @@ def _inject_headline_typed_claim(draft, text: str = FABRICATED_HEADLINE_CLAIM) -
     return injected
 
 
-def test_headline_claim_type_outside_the_headline_is_blocked(v1_repo: Path, draft_factory) -> None:
+def test_headline_claim_type_outside_the_headline_is_blocked(workspace_root: Path, draft_factory) -> None:
     facts, profile, analysis, draft, _markdown = draft_factory(
         "Account Manager retention portfolio customer relationships",
         write=True,
@@ -196,7 +196,7 @@ def test_headline_claim_type_outside_the_headline_is_blocked(v1_repo: Path, draf
     # deterministic validator blocks the injection on its own.
     _inject_headline_typed_claim(draft)
     tampered = draft.model_copy(update={"content_hash": sha256_text(serialize_markdown(draft))})
-    markdown, _text = store_draft(v1_repo, tampered)
+    markdown, _text = store_draft(workspace_root, tampered)
 
     report = validate_draft(
         tampered, markdown.read_text(encoding="utf-8"), facts, profile, analysis

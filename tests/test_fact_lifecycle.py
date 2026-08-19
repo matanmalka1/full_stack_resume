@@ -388,7 +388,7 @@ def test_promotion_requires_explicit_confirmation_and_a_legal_transition(
 
 
 def test_lifecycle_survives_process_boundaries_through_the_cli(
-    cli_subprocess, v1_repo: Path
+    cli_subprocess, workspace_root: Path
 ) -> None:
     added = cli_subprocess(
         "fact",
@@ -425,7 +425,7 @@ def test_lifecycle_survives_process_boundaries_through_the_cli(
     ids = [fact["fact_id"] for fact in json.loads(listed.stdout)]
     assert "situational.sqlite" in ids
     assert (
-        load_fact_store(v1_repo / "base").get("situational.sqlite").status is FactStatus.CANONICAL
+        load_fact_store(workspace_root / "base").get("situational.sqlite").status is FactStatus.CANONICAL
     )
 
     history = json.loads(cli_subprocess("fact", "history", "situational.sqlite").stdout)

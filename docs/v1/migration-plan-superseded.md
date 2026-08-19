@@ -1,6 +1,17 @@
-# v1 to v2 Migration Plan
+# v1 to v2 Migration Plan — SUPERSEDED
 
-Status: **Approved for v2.0 implementation (2026-08-17)**
+Status: **Superseded and non-binding (2026-08-19).** The user reviewed what v1
+actually holds — 22 applications, all `draft`, none sent, no source URLs, every
+payload already tracked in Git — and decided v1 is a frozen archive rather than
+data to migrate. There will be no v1 to v2 migration. v2 starts with an empty
+database.
+
+This file is kept unchanged below as the record of what was planned and why, so
+a future reader can see the reasoning that was retired rather than only its
+absence. Nothing in it is binding. The v1 payloads it protects are recoverable
+the way they always were: `git worktree add <dir> <frozen-v1-commit>`.
+
+Original status: **Approved for v2.0 implementation (2026-08-17)**
 
 Product authority: `docs/v2/spec/product-spec.md`
 

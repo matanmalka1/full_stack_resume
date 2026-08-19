@@ -66,8 +66,9 @@ Carried forward (the `cv fact attach` item moved to section E, its §4.5 home):
       `record_external_submission` (`682985d`).
 - [x] Recruitment events with corrections (`corrects_event_id`, mandatory reason) and
       `terminal_outcome` (`682985d`).
-- [x] Retire `preparing` and `ready` from the recruitment axis; legacy history becomes migration
-      events per `docs/v2/spec/migration-plan.md` §6.2 (`682985d`).
+- [x] Retire `preparing` and `ready` from the recruitment axis; legacy history became migration
+      events per the then-current migration plan, §6.2 (`682985d`). That plan is now
+      `docs/v1/migration-plan-superseded.md` and the migration-event carrier is being removed.
 - [x] Audit records and `export_decision_markdown` (`682985d`).
 
 Stage 7b landed in 2a and does not recur.
@@ -167,13 +168,29 @@ During E1–E5, only focused checks ran. At E6 the user independently ran the br
 including the parameterized crash-window coverage, isolated offline lifecycle, browser suite,
 and migration-to-head checks. Every gate passed, closing §4.7 item 5.
 
-## F. §4.6 Backup and migration scaffolding
+## F. §4.6 Workspace backup and restore
 
-Not started. Scope is the three bullets of the plan §4.6, plus:
+Rescoped on 2026-08-19. v1 is a frozen archive and there will be no migration into v2,
+so two of §4.6's three parts have no subject left. What remains protects v2's own data —
+approved revisions, submitted artifacts, job snapshots of postings that later vanish —
+which is forward-looking, not historical.
 
-- [ ] **A24** — remove the `subprocess` pytest call from `infrastructure/migration.py`.
-      This is the only remaining architecture-test allowlist entry.
-- [ ] **A28** — `--knowledge-from` bound to an inventory.
+- [ ] **Backup and restore.** `sqlite3 .backup` for the database, a copy of the artifact
+      roots Git does not track, and the marker. `restore --into <new directory>`, never
+      over a live Workspace. The proof is opening the restored Workspace and running
+      `reconcile` plus the existing `integrity_check()`. No separate manifest: the
+      artifact hashes are already in `artifact_versions`, and a second hash list beside
+      them can only drift.
+- [ ] **A28 rescoped** — `--knowledge-from` refuses a source that lacks the expected
+      subdirectories, and the marker records the source path and content hash. Binding it
+      to a verified v1 inventory answered a question that no longer exists: the copy runs
+      only at `workspace init` into a fresh Workspace, over regenerable seed knowledge.
+
+Dropped with the migration: the v1 inventory and mapping, the fixture-based migration
+engine and its `source = migrated + explicitly_excluded, unexplained = 0` invariant.
+
+- [x] **A24** — closed by deleting `infrastructure/migration.py`; the architecture debt
+      allowlist and the persistence-offender set are both empty.
 
 ## G. §4.7 acceptance
 
@@ -187,11 +204,29 @@ State of the plan's seven §4.7 checkboxes; the criteria themselves live there.
 | 4 — ETag, idempotency, leases, cancellation, retry, `SOURCE_CHANGED` | Closed at `bfbd64d`; evidence in `m2-operations.md` |
 | 5 — journal crash windows | Closed at `122b957`; evidence in `m2-knowledge-consistency.md` |
 | 6 — backup restore to an openable Workspace | Open, follows F |
-| 7 — no M2 code points to live v1 paths | Holds so far; a standing constraint, not a deliverable |
+| 7 — no M2 code points to live v1 paths | Closed by construction: no code reads v1 at all. The `looks_legacy` guard stays so no v2 command can open or mark the archive |
 
 §4.7 items 4 and 5 are closed. The remaining acceptance items close with their owning boundaries.
 
 ## Dependency order
 
-A → B → C → D are closed. E follows the closed state-policy boundary; F remains required before
-anything that touches real data. G closes incrementally rather than as a phase.
+A → B → C → D → E are closed. F is now Workspace backup and restore only, and remains
+required before anything that touches real data. G closes incrementally rather than as a
+phase.
+
+## Retiring v1
+
+Recorded here because it changes what several boundaries mean. On 2026-08-19 the user
+reviewed what v1 holds — 22 applications, all `draft`, none sent, no source URLs, every
+payload already tracked in Git — and decided it is a frozen archive, not data to migrate.
+v2 starts with an empty database. The reasoning that was retired is preserved in
+`docs/v1/migration-plan-superseded.md`.
+
+- [x] Delete `infrastructure/migration.py`, `infrastructure/legacy_source.py`,
+      `tests/test_migration.py`, the migration fixtures, and the `migrate` and
+      `inventory-legacy` CLI commands. Both architecture allowlists emptied.
+- [ ] Squash migrations `0001`–`0010` into one baseline, dropping `migration_runs`, the
+      `legacy_*` recruitment-event columns, `actor_type = 'migration'`, and
+      `MIGRATED_HISTORICAL`. Safe only while no v2 database exists.
+- [ ] Collapse Class C in `CLAUDE.md`: the migration-safety section and the `0001`-only
+      upgrade gate lose their subject.

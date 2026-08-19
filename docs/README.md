@@ -9,7 +9,9 @@ Three kinds of document live here, and the kind decides how it is treated.
 | **State** — what is done, what remains, what is blocked | `v2/m2-remaining.md` | The only file that tracks state |
 
 `v2/process/` holds working protocol rather than product content. `v1/` is the legacy
-record: evidence, not an active workflow.
+record: evidence, not an active workflow. As of 2026-08-19 it is a frozen archive —
+v2 starts with an empty database and there is no migration from v1.
+`v1/migration-plan-superseded.md` records the migration that was planned and retired.
 
 ## v2 specifications — `v2/spec/`
 
@@ -19,7 +21,6 @@ record: evidence, not an active workflow.
 | `state-and-use-cases.md` | Lifecycle, commands, queries, permissions, HTTP mapping |
 | `architecture.md` | Layer boundaries, filesystem layout, schema shape, dependency baseline |
 | `implementation-plan.md` | Milestones M0–M6, their stages and gates |
-| `migration-plan.md` | Migration of the v1 historical record |
 | `test-and-acceptance-plan.md` | Test layers, golden matrix, release gates |
 
 ## Records — `v2/records/`

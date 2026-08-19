@@ -333,7 +333,7 @@ def test_fast_orchestration_preserves_call_order_and_gate_messages(
 
 
 def test_cli_fast_mode_refuses_pre_render_validation_failure(
-    v1_repo: Path,
+    workspace_root: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -362,7 +362,7 @@ def test_cli_fast_mode_refuses_pre_render_validation_failure(
     result = main(
         [
             "--workspace",
-            str(v1_repo),
+            str(workspace_root),
             "fast",
             "--company",
             "CLI Refusal",

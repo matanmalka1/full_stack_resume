@@ -16,16 +16,11 @@ from cv_engine.infrastructure.rendering import normalized_role_filename
 
 ENGINE_DIR = Path(__file__).resolve().parent.parent / "cv_engine"
 
-# Every module is policy unless it is one of these two, which quote v1 evidence
-# on purpose: the canonical source writer and the legacy migration mapping. An
-# inclusion list had to be extended for each new module and silently stopped
-# covering anything nobody remembered to add.
-CANDIDATE_EVIDENCE_MODULES = frozenset(
-    {
-        "infrastructure/canonical_data.py",
-        "infrastructure/migration.py",
-    }
-)
+# Every module is policy unless it is the canonical source writer, which quotes
+# the candidate's identity on purpose because it seeds it. An inclusion list had
+# to be extended for each new module and silently stopped covering anything
+# nobody remembered to add, so this stays an exception list.
+CANDIDATE_EVIDENCE_MODULES = frozenset({"infrastructure/canonical_data.py"})
 CANDIDATE_LITERALS = ("Matan Malka", "מתן מלכה", "matanmalka1", "matan1391")
 
 
@@ -70,22 +65,22 @@ def test_context_resolves_identity_filename_and_track_contact_policy(candidate_c
 
 
 def test_filename_override_and_dependency_hash_follow_canonical_context(
-    v1_repo: Path, fact_store: FactStore
+    workspace_root: Path, fact_store: FactStore
 ) -> None:
-    payload = _payload(v1_repo)
+    payload = _payload(workspace_root)
     payload["filename_name"] = "M. Malka"
-    _write(v1_repo, payload)
-    context = load_candidate_context(v1_repo, fact_store)
+    _write(workspace_root, payload)
+    context = load_candidate_context(workspace_root, fact_store)
     assert context.resolved_filename_name == "M. Malka"
     assert context.display_name("en") == "Matan Malka"
 
     before = context.version_hash
-    common = v1_repo / "base/common.md"
+    common = workspace_root / "base/common.md"
     text = common.read_text(encoding="utf-8")
     common.write_text(
         text.replace("linkedin.com/in/matanmalka1", "linkedin.com/in/other"), encoding="utf-8"
     )
-    after = load_candidate_context(v1_repo, load_fact_store(v1_repo / "base")).version_hash
+    after = load_candidate_context(workspace_root, load_fact_store(workspace_root / "base")).version_hash
     assert after != before
 
 
@@ -106,17 +101,17 @@ def test_a_drafted_document_takes_its_identity_from_the_context(drafted_applicat
 
 
 def test_candidate_context_rejects_missing_or_unusable_identity(
-    v1_repo: Path, fact_store: FactStore
+    workspace_root: Path, fact_store: FactStore
 ) -> None:
-    original = _payload(v1_repo)
-    _candidate_file(v1_repo).unlink()
+    original = _payload(workspace_root)
+    _candidate_file(workspace_root).unlink()
     with pytest.raises(CandidateContextError, match="no candidate context"):
-        load_candidate_context(v1_repo, fact_store)
+        load_candidate_context(workspace_root, fact_store)
     payload = dict(original)
     payload["name_fact_id"] = "00000000-0000-4000-8000-000000000000"
-    _write(v1_repo, payload)
+    _write(workspace_root, payload)
     with pytest.raises(CandidateContextError, match="unusable fact"):
-        load_candidate_context(v1_repo, fact_store)
+        load_candidate_context(workspace_root, fact_store)
 
 
 # --- no candidate literals in policy code -----------------------------------

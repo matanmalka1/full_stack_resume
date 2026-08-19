@@ -24,12 +24,14 @@ ALLOWED_INTERNAL = {
 }
 
 # Known boundary debt from docs/v2/records/architecture-audit.md. New entries are not
-# permitted. Stages remove entries as they move the owning policy inward.
-ARCHITECTURE_DEBT_ALLOWLIST = {
-    "infrastructure/migration.py: imports subprocess",
-}
+# permitted. Stages remove entries as they move the owning policy inward. A2, A6, and
+# A24 are all closed; the set stays so a regression fails instead of quietly seeding a
+# new allowlist.
+ARCHITECTURE_DEBT_ALLOWLIST: set[str] = set()
 
-PERSISTENCE_KNOWN_OFFENDERS = {"migration.py", "legacy_source.py"}
+# Every non-persistence module that may still touch SQLite. Deleting the v1 migration
+# adapters emptied it, so any new SQLite access outside persistence now fails.
+PERSISTENCE_KNOWN_OFFENDERS: set[str] = set()
 SQL_STATEMENT = re.compile(
     r"\b(?:SELECT\b[\s\S]*\bFROM|INSERT\s+INTO|UPDATE\b[\s\S]*\bSET|DELETE\s+FROM|CREATE\s+(?:TABLE|INDEX|TRIGGER)|"
     r"ALTER\s+TABLE|DROP\s+(?:TABLE|INDEX|TRIGGER))\b",
@@ -226,9 +228,9 @@ def test_domain_and_application_dependencies_point_inward() -> None:
 def test_known_outer_layer_policy_debt_does_not_grow() -> None:
     """Cover CLI, infrastructure, runtime, and compat policy boundaries.
 
-    The allowlist is deliberately explicit: it records A2, A6, and A24 while
-    making any new instance fail. As staged work removes an offender, its entry
-    is removed from the allowlist; entries may never be added.
+    The allowlist is now empty: A2, A6, and A24 are closed. It stays as an
+    empty set rather than being deleted, so a re-introduced offender fails
+    here instead of arriving with a fresh allowlist of its own.
     """
     offenders: set[str] = set()
     cli = ENGINE / "cli.py"
@@ -249,7 +251,7 @@ def test_known_outer_layer_policy_debt_does_not_grow() -> None:
 
 
 def test_sqlite_and_sql_are_owned_by_persistence() -> None:
-    """New SQLite access lands in persistence; only audited legacy adapters remain."""
+    """All SQLite access lands in persistence; there are no remaining exceptions."""
     offenders: list[str] = []
     for path in sorted(ENGINE.rglob("*.py")):
         relative = path.relative_to(ENGINE).as_posix()

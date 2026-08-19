@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import csv
-import json
 import os
 import shutil
 import subprocess
 import sys
-import uuid
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -45,23 +42,10 @@ from cv_engine.infrastructure.knowledge import (
     load_profile_store,
     seed_fact_before_workspace,
 )
-from cv_engine.infrastructure.migration import (
-    dry_run_migration,
-    freeze_source,
-    migrate_legacy_state,
-    verify_source,
-)
-from cv_engine.infrastructure.persistence import Repository, connect
+from cv_engine.infrastructure.persistence import Repository
 from cv_engine.infrastructure.rendering import render_pdf, validate_rendered
 from cv_engine.runtime.composition import Services, build_services
-from cv_engine.runtime.workspace import (
-    MARKER_NAME,
-    WORKSPACE_VERSION,
-    Workspace,
-    WorkspaceMarker,
-    create_workspace,
-    load_workspace,
-)
+from cv_engine.runtime.workspace import Workspace, create_workspace, load_workspace
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
 
@@ -183,16 +167,8 @@ class ProposalSetup:
         yield self.analysis
 
 
-@dataclass(frozen=True)
-class MigrationSetup:
-    root: Path
-
-    def __iter__(self):
-        yield self.root
-
-
 @pytest.fixture
-def v1_repo(tmp_path: Path) -> Path:
+def workspace_root(tmp_path: Path) -> Path:
     """A marked, isolated test Workspace holding a full knowledge copy.
 
     The marker is part of the fixture because every normal command now opens
@@ -202,9 +178,9 @@ def v1_repo(tmp_path: Path) -> Path:
     root = tmp_path / "repo"
     root.mkdir()
     write_canonical_sources(root / "base")
-    # The identity fact and candidate context are v2 additions to the knowledge
-    # store, so the fixture adds them the way the product does rather than
-    # baking them into the frozen v1 migration baseline.
+    # The identity fact and candidate context are added the way the product
+    # adds them, rather than baked into the seed sources, so the fixture
+    # exercises the real lifecycle instead of a shortcut around it.
     seed_fact_before_workspace(
         root / "base", "common.md", dict(V2_IDENTITY_FACT), canonical=True
     )
@@ -216,33 +192,33 @@ def v1_repo(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def workspace(v1_repo: Path) -> Workspace:
-    return load_workspace(v1_repo)
+def workspace(workspace_root: Path) -> Workspace:
+    return load_workspace(workspace_root)
 
 
 @pytest.fixture
-def fact_store(v1_repo: Path) -> FactStore:
-    return load_fact_store(v1_repo / "base")
+def fact_store(workspace_root: Path) -> FactStore:
+    return load_fact_store(workspace_root / "base")
 
 
 @pytest.fixture
-def profile_store(v1_repo: Path, fact_store: FactStore) -> ProfileStore:
-    return load_profile_store(v1_repo, fact_store)
+def profile_store(workspace_root: Path, fact_store: FactStore) -> ProfileStore:
+    return load_profile_store(workspace_root, fact_store)
 
 
 @pytest.fixture
-def policy_store(v1_repo: Path) -> EmphasisPolicyStore:
-    return load_emphasis_policies(v1_repo)
+def policy_store(workspace_root: Path) -> EmphasisPolicyStore:
+    return load_emphasis_policies(workspace_root)
 
 
 @pytest.fixture
-def presentation_store(v1_repo: Path, fact_store: FactStore):
-    return load_presentations(v1_repo, fact_store)
+def presentation_store(workspace_root: Path, fact_store: FactStore):
+    return load_presentations(workspace_root, fact_store)
 
 
 @pytest.fixture
-def candidate_context(v1_repo: Path, fact_store: FactStore):
-    return load_candidate_context(v1_repo, fact_store)
+def candidate_context(workspace_root: Path, fact_store: FactStore):
+    return load_candidate_context(workspace_root, fact_store)
 
 
 @pytest.fixture
@@ -256,22 +232,22 @@ def application_repo(tmp_path: Path) -> Repository:
 
 
 @pytest.fixture
-def cli_runner(v1_repo: Path):
+def cli_runner(workspace_root: Path):
     """The CLI against the test Workspace, run in this process."""
 
     def run(*args: str) -> CliRun:
-        return run_cli("--repo", str(v1_repo), *args)
+        return run_cli("--repo", str(workspace_root), *args)
 
     return run
 
 
 @pytest.fixture
-def cli_subprocess(v1_repo: Path):
+def cli_subprocess(workspace_root: Path):
     """The CLI as a real process, for tests whose subject is that boundary."""
 
     def run(*args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [sys.executable, "-m", "cv_engine.cli", "--repo", str(v1_repo), *args],
+            [sys.executable, "-m", "cv_engine.cli", "--repo", str(workspace_root), *args],
             text=True,
             capture_output=True,
             check=False,
@@ -453,7 +429,7 @@ def ready_application(approved_application, monkeypatch: pytest.MonkeyPatch):
 
 @pytest.fixture
 def draft_factory(
-    v1_repo: Path,
+    workspace_root: Path,
     fact_store: FactStore,
     profile_store: ProfileStore,
     policy_store: EmphasisPolicyStore,
@@ -479,9 +455,9 @@ def draft_factory(
             facts=fact_store,
             policies=policy_store,
             candidate=candidate_context,
-            presentations=load_presentations(v1_repo, fact_store),
+            presentations=load_presentations(workspace_root, fact_store),
         )
-        store = FilesystemArtifactStore(load_workspace(v1_repo))
+        store = FilesystemArtifactStore(load_workspace(workspace_root))
         markdown = store.write_working_draft(draft).paths.markdown if write else None
         return DraftSetup(fact_store, profile, analysis, draft, markdown, candidate_context)
 
@@ -582,156 +558,3 @@ def render_validator():
         return geometry, report
 
     return validate
-
-
-def _populate_legacy_repo(root: Path) -> None:
-    (root / "jobs").mkdir(parents=True)
-    rows = [
-        [
-            "alpha",
-            "account-manager",
-            "",
-            "outputs/alpha/cv-pdf/account-manager/Matan Malka - Account Manager.pdf",
-            "draft",
-            "2026-01-01",
-            "",
-            "",
-        ],
-        [
-            "beta",
-            "developer",
-            "https://example.test/job",
-            "outputs/beta/cv-pdf/developer/Matan Malka - Full Stack Developer.pdf",
-            "sent",
-            "2026-01-02",
-            "2026-01-03",
-            "submitted",
-        ],
-    ]
-    with (root / "jobs/status.csv").open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.writer(handle)
-        writer.writerow(
-            ["company", "role", "url", "cv_file", "status", "date_created", "date_sent", "notes"]
-        )
-        writer.writerows(rows)
-    for company, role, *_rest in rows:
-        paths = [
-            root / f"outputs/{company}/job-description/{company}_{role}.md",
-            root / f"outputs/{company}/cv-drafts/cv_{company}_{role}.md",
-            root / f"outputs/{company}/cv-drafts/cv_{company}_{role}.notes.md",
-            root / f"outputs/{company}/cv-html/cv_{company}_{role}.html",
-            root / rows[[row[0] for row in rows].index(company)][3],
-        ]
-        for path in paths:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes((f"historical {company} {role} {path.suffix}\n").encode())
-    base_paths = [
-        root / "outputs/base/cv-drafts/cv_base_full-stack-developer.md",
-        root / "outputs/base/cv-html/cv_base_full-stack-developer.html",
-        root / "outputs/base/cv-pdf/full-stack-developer/Matan Malka - Full Stack Developer.pdf",
-    ]
-    for path in base_paths:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(b"historical base\n")
-
-
-def _write_passing_migration_test_report(root: Path) -> Path:
-    target = root / "data/migration/migration-tests.json"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    report = {
-        "passed": True,
-        "command": ["python", "-m", "pytest", "tests/test_migration.py", "-q"],
-        "returncode": 0,
-        "stdout": "migration fixture passed",
-        "stderr": "",
-        "created_at": "2026-01-01T00:00:00+00:00",
-    }
-    target.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    return target
-
-
-def _commit_legacy_repo(root: Path) -> None:
-    """The real v1 source is a Git repository, and migration reads it through Git.
-
-    The fixture is a Git repository for the same reason: a fixture that only
-    mimics the directory layout proves the code matches the fixture, not the
-    source.
-    """
-    environment = {
-        **os.environ,
-        "GIT_AUTHOR_NAME": "migration-fixture",
-        "GIT_AUTHOR_EMAIL": "fixture@example.invalid",
-        "GIT_COMMITTER_NAME": "migration-fixture",
-        "GIT_COMMITTER_EMAIL": "fixture@example.invalid",
-    }
-    for command in (
-        ["init", "--quiet", "--initial-branch=main"],
-        ["add", "--all"],
-        ["commit", "--quiet", "--message", "legacy fixture"],
-    ):
-        subprocess.run(
-            ["git", "-C", str(root), *command],
-            check=True,
-            capture_output=True,
-            env=environment,
-        )
-
-
-def _mark_migrated_root(root: Path) -> None:
-    marker = WorkspaceMarker(
-        workspace_id=str(uuid.uuid4()),
-        workspace_version=WORKSPACE_VERSION,
-        purpose="test",
-        data_class="test",
-        created_at="2026-01-01T00:00:00+00:00",
-    )
-    (root / MARKER_NAME).write_text(
-        json.dumps(marker.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-
-
-@pytest.fixture
-def legacy_repo(tmp_path: Path) -> Path:
-    root = tmp_path / "legacy"
-    root.mkdir()
-    _populate_legacy_repo(root)
-    (root / ".gitignore").write_text("data/applications.sqlite3*\ndata/migration/\n", encoding="utf-8")
-    _commit_legacy_repo(root)
-    return root
-
-
-@pytest.fixture
-def migration_gate_repo(legacy_repo: Path) -> MigrationSetup:
-    freeze_source(legacy_repo)
-    dry_run_migration(legacy_repo)
-    _write_passing_migration_test_report(legacy_repo)
-    return MigrationSetup(legacy_repo)
-
-
-@pytest.fixture
-def completed_migration_repo(legacy_repo: Path) -> MigrationSetup:
-    freeze_source(legacy_repo)
-    source = verify_source(legacy_repo)
-    report = migrate_legacy_state(legacy_repo, legacy_repo, dry_run=False)
-    with connect(legacy_repo / "data/applications.sqlite3") as connection:
-        connection.execute(
-            "INSERT INTO migration_runs(id, source_commit, source_tree_hash, "
-            "row_count, artifact_count, report_json, created_at) VALUES(?, ?, ?, ?, ?, ?, ?)",
-            (
-                "fixture-migration-run",
-                source["commit"],
-                source["tree_hash"],
-                report["application_count"],
-                report["artifact_version_count"],
-                "{}",
-                "2026-01-01T00:00:00+00:00",
-            ),
-        )
-        connection.commit()
-    # The legacy in-place migration converts this root into the working root,
-    # so it is a Workspace from here on rather than a migration source. The
-    # marker is written here, by the test, because production code has no
-    # override that would mark a legacy root.
-    _mark_migrated_root(legacy_repo)
-    return MigrationSetup(legacy_repo)

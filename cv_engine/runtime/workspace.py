@@ -180,10 +180,9 @@ def create_workspace(
 ) -> Workspace:
     """Create an isolated Workspace and its marker.
 
-    A directory that carries v1 tracking data is refused outright. The migration
-    source is read through `LegacyV1Source` and copied into a separate target,
-    so no v2 command ever writes a marker — or anything else — into v1 data.
-    There is no override: the copy-based migration never needs one.
+    A directory that carries v1 tracking data is refused outright. v1 is a
+    frozen archive, not a migration source: no v2 command writes a marker — or
+    anything else — into it. There is no override.
     """
     root = Path(root).resolve()
     _check_combination(purpose, data_class)
@@ -192,7 +191,7 @@ def create_workspace(
     if looks_legacy(root):
         raise WorkspaceError(
             f"refusing to mark a legacy v1 root as a v2 Workspace: {root}. "
-            "Create the Workspace elsewhere and migrate through the read-only source adapter."
+            "v1 is a frozen archive; create the Workspace in a separate directory."
         )
     root.mkdir(parents=True, exist_ok=True)
     marker = WorkspaceMarker(
@@ -245,7 +244,7 @@ def load_workspace(root: Path) -> Workspace:
         if looks_legacy(root):
             raise WorkspaceError(
                 f"{root} is a legacy v1 root with no v2 Workspace marker. "
-                "It may only be read through the read-only migration source adapter."
+                "v1 is a frozen archive and is never opened as a Workspace."
             )
         raise WorkspaceError(
             f"no v2 Workspace marker at {root}. Create one with 'cv workspace init'."

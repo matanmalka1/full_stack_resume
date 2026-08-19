@@ -1,4 +1,4 @@
-"""Workspace identity, fail-closed guards, config precedence, and legacy reads.
+"""Workspace identity, fail-closed guards, and config precedence.
 
 These are the M1 foundations every later v2 command depends on: if a directory
 can be opened without a marker, or a legacy v1 root can be written to, no later
@@ -16,7 +16,6 @@ from pathlib import Path
 import pytest
 from helpers import CliRun, run_cli
 
-from cv_engine.infrastructure.legacy_source import LegacySourceError, LegacyV1Source
 from cv_engine.runtime.composition import build_services
 from cv_engine.runtime.config import CONFIG_NAME, resolve_config
 from cv_engine.runtime.workspace import (
@@ -90,7 +89,7 @@ def test_workspace_markers_fail_closed_for_plain_legacy_invalid_and_reused_roots
     (legacy / "jobs").mkdir(parents=True)
     (legacy / "jobs/status.csv").write_text("company,role\n", encoding="utf-8")
 
-    with pytest.raises(WorkspaceError, match="read-only migration source adapter"):
+    with pytest.raises(WorkspaceError, match="is a legacy v1 root"):
         load_workspace(legacy)
     with pytest.raises(WorkspaceError, match="refusing to mark a legacy v1 root"):
         create_workspace(legacy)
@@ -158,83 +157,6 @@ def test_config_precedence_is_cli_then_env_then_workspace_then_default(tmp_path:
         resolve_config(cli={}, env={}, workspace_root=workspace.root)
 
 
-# --- read-only legacy source adapter ---------------------------------------
-
-
-@pytest.fixture
-def legacy_source_root(tmp_path: Path) -> Path:
-    root = tmp_path / "legacy-source"
-    (root / "jobs").mkdir(parents=True)
-    (root / "jobs/status.csv").write_text("company,role\nalpha,dev\n", encoding="utf-8")
-    (root / "base").mkdir()
-    (root / "base/cv_base.md").write_text("# legacy base\n", encoding="utf-8")
-    return root
-
-
-def _tree(root: Path) -> dict[str, bytes]:
-    return {
-        path.relative_to(root).as_posix(): path.read_bytes()
-        for path in sorted(root.rglob("*"))
-        if path.is_file()
-    }
-
-
-def test_inventory_reads_a_legacy_root_without_writing_to_it(legacy_source_root: Path) -> None:
-    before = _tree(legacy_source_root)
-    source = LegacyV1Source(legacy_source_root)
-    with pytest.raises(LegacySourceError, match="take an inventory"):
-        source.read_text("jobs/status.csv")
-    inventory = source.inventory()
-
-    assert set(inventory.files) == {"jobs/status.csv", "base/cv_base.md"}
-    assert inventory.inventory_hash
-    assert _tree(legacy_source_root) == before
-    assert not (legacy_source_root / MARKER_NAME).exists()
-    assert source.inventory().inventory_hash == inventory.inventory_hash
-    assert source.read_text("base/cv_base.md") == "# legacy base\n"
-    (legacy_source_root / "base/cv_base.md").write_text("# tampered\n", encoding="utf-8")
-    with pytest.raises(LegacySourceError, match="changed during the run"):
-        source.read_text("base/cv_base.md")
-    with pytest.raises(LegacySourceError, match="base/cv_base.md"):
-        source.verify_unchanged()
-
-
-def test_legacy_reads_refuse_traversal_unknown_files_and_v2_workspaces(
-    legacy_source_root: Path, tmp_path: Path
-) -> None:
-    source = LegacyV1Source(legacy_source_root)
-    source.inventory()
-    with pytest.raises(LegacySourceError, match="escapes the legacy source"):
-        source.read_bytes("../secrets.txt")
-    with pytest.raises(LegacySourceError, match="source-relative"):
-        source.read_bytes(legacy_source_root / "jobs/status.csv")
-    with pytest.raises(LegacySourceError, match="not part of the bound inventory"):
-        source.read_bytes("jobs/missing.csv")
-    workspace = create_workspace(tmp_path / "ws")
-    with pytest.raises(LegacySourceError, match="v2 Workspace marker"):
-        LegacyV1Source(workspace.root)
-
-
-def test_legacy_database_connection_cannot_write(tmp_path: Path) -> None:
-    import sqlite3
-
-    root = tmp_path / "legacy-db"
-    (root / "data").mkdir(parents=True)
-    database = root / "data/applications.sqlite3"
-    with sqlite3.connect(database) as seed:
-        seed.execute("CREATE TABLE applications(id TEXT PRIMARY KEY)")
-        seed.execute("INSERT INTO applications VALUES('alpha')")
-        seed.commit()
-
-    source = LegacyV1Source(root)
-    source.inventory()
-    connection = source.open_database("data/applications.sqlite3")
-    assert [row["id"] for row in connection.execute("SELECT id FROM applications")] == ["alpha"]
-    with pytest.raises(sqlite3.OperationalError):
-        connection.execute("INSERT INTO applications VALUES('beta')")
-    connection.close()
-
-
 # --- CLI surface ------------------------------------------------------------
 
 
@@ -283,8 +205,31 @@ def test_cli_module_entry_point_reports_the_failure_exit_code(tmp_path: Path) ->
     assert "no v2 Workspace marker" in result.stderr
 
 
-def test_cli_workspace_surface_guards_normal_and_legacy_roots(
-    tmp_path: Path, legacy_source_root: Path, v1_repo: Path
+@pytest.fixture
+def legacy_root(tmp_path: Path) -> Path:
+    """A v1 root as the guards see one: tracking data, no v2 marker.
+
+    v1 is a frozen archive. The guards exist so no v2 command ever opens or
+    writes into it, which is the only reason the archive stays trustworthy.
+    """
+    root = tmp_path / "legacy-source"
+    (root / "jobs").mkdir(parents=True)
+    (root / "jobs/status.csv").write_text("company,role\nalpha,dev\n", encoding="utf-8")
+    (root / "base").mkdir()
+    (root / "base/cv_base.md").write_text("# legacy base\n", encoding="utf-8")
+    return root
+
+
+def _tree(root: Path) -> dict[str, bytes]:
+    return {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
+
+
+def test_cli_workspace_surface_guards_normal_and_unmarked_roots(
+    tmp_path: Path, workspace_root: Path
 ) -> None:
     root = tmp_path / "cli-ws"
     created = _cv(
@@ -306,21 +251,13 @@ def test_cli_workspace_surface_guards_normal_and_legacy_roots(
     result = _cv("--workspace", str(plain), "list")
     assert result.returncode == 2
     assert "no v2 Workspace marker" in result.stderr
-    result = _cv("workspace", "inventory-legacy", "--source", str(legacy_source_root))
-    assert result.returncode == 0, result.stderr
-    report = json.loads(result.stdout)
-    assert report["file_count"] == 2
-    assert report["marker_written"] is False
-    assert not (legacy_source_root / MARKER_NAME).exists()
-    result = _cv("--repo", str(v1_repo), "workspace", "status")
+    result = _cv("--repo", str(workspace_root), "workspace", "status")
     assert result.returncode == 0, result.stderr
     assert "--repo is deprecated" in result.stderr
-    assert json.loads(result.stdout)["root"] == str(v1_repo)
+    assert json.loads(result.stdout)["root"] == str(workspace_root)
 
 
-def test_cli_normal_and_historical_verification_commands_fail_closed_without_writes(
-    tmp_path: Path, legacy_source_root: Path
-) -> None:
+def test_cli_commands_fail_closed_without_writes(tmp_path: Path, legacy_root: Path) -> None:
     plain = tmp_path / "plain-cli-root"
     plain.mkdir()
 
@@ -338,15 +275,11 @@ def test_cli_normal_and_historical_verification_commands_fail_closed_without_wri
 
     roots = [
         (plain, "no v2 Workspace marker"),
-        (legacy_source_root, "read-only migration source adapter"),
+        (legacy_root, "is a legacy v1 root"),
         (unknown.root, "unsupported Workspace version 999"),
         (unsafe.root, "may not open live data"),
     ]
-    commands = [
-        ("list",),
-        ("migrate", "verify-source"),
-        ("migrate", "verify-live"),
-    ]
+    commands = [("list",)]
     for root, expected_error in roots:
         before = _tree(root)
         for command in commands:
@@ -356,9 +289,14 @@ def test_cli_normal_and_historical_verification_commands_fail_closed_without_wri
             assert _tree(root) == before
 
 
-def test_cli_retired_in_place_migration_commands_are_not_exposed(v1_repo: Path) -> None:
-    for command in ("inventory", "snapshot", "test", "dry-run", "apply", "reconcile"):
-        result = _cv("--workspace", str(v1_repo), "migrate", command)
+def test_cli_exposes_no_migration_command(workspace_root: Path) -> None:
+    """v1 is an archive, so the engine offers no way to migrate it in.
+
+    Asserted at the CLI surface rather than by absence of a module, so a
+    future re-added migration path has to be a deliberate decision.
+    """
+    for command in ("migrate", "inventory-legacy"):
+        result = _cv("--workspace", str(workspace_root), command)
         assert result.returncode == 2
         assert "invalid choice" in result.stderr
 

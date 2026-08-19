@@ -33,7 +33,6 @@ Read the one that owns the subject you are changing:
 | Product scope, invariants, non-goals | `docs/v2/spec/product-spec.md` |
 | Lifecycle, commands, queries, permissions | `docs/v2/spec/state-and-use-cases.md` |
 | Layer boundaries, filesystem layout, schema shape | `docs/v2/spec/architecture.md` |
-| Migration of v1 data | `docs/v2/spec/migration-plan.md` |
 | Milestone stages and gates | `docs/v2/spec/implementation-plan.md` |
 | What v1 did and why | `docs/v1/upgrade-handoff.md` |
 
