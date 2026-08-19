@@ -27,13 +27,15 @@ design and integration, which are lead-only.
 
 ## 2. Waves
 
-A wave does not begin until the previous one is fully green.
+A wave does not begin until the previous one is green under its own gate. "Green" means
+the focused tests for what changed — not a full-suite run per step. The full suite runs
+once, when the boundary closes.
 
 | Wave | Who | Content |
 | --- | --- | --- |
 | 0 | lead, alone | Guardrails first, then any dead-code removal |
 | 1 | executors, parallel | One work package per lane |
-| 2 | lead, alone | Integration: remove temporary compatibility shims, repoint real call sites, full verification |
+| 2 | lead, alone | Integration: remove temporary compatibility shims, repoint real call sites, then one full verification at the end |
 | 3 | lead, with the user | Anything approval-gated. Never folded into wave 2 |
 
 Wave 0 is serial and first for a specific reason: it lands the enforcement that every lane
@@ -82,8 +84,8 @@ Workspaces apply unchanged to every lane. What multi-agent work adds:
 - Create lane worktrees fresh per milestone. A stale lane worktree silently builds on the
   wrong baseline.
 - Executors never rebase, squash, force-push, or run interactive git.
-- The lead merges in a fixed, declared order, running that lane's subset plus the full suite
-  after each merge.
+- The lead merges in a fixed, declared order, running that lane's subset after each merge
+  and the full suite once, after the last one.
 
 ## 6. Definition of done
 
@@ -92,7 +94,8 @@ Workspaces apply unchanged to every lane. What multi-agent work adds:
 A lane reports done only when all of these hold, with command output quoted:
 
 1. Its own declared test subset passes.
-2. The full suite passes.
+2. The tests covering anything its files are imported by pass. A lane runs the full suite
+   only if it cannot name that set — the boundary's own full-suite run is what covers it.
 3. The architecture test passes and its allowlist has **not** grown.
 4. `git diff --stat` lists only files the lane owns.
 5. An explicit statement of what did **not** change — for behaviour-preserving work: no
@@ -106,10 +109,11 @@ Reporting follows `CLAUDE.md`: passed / failed / remaining, with command evidenc
 
 ### Lead integration
 
-1. Merge in the declared order, testing after each merge.
+1. Merge in the declared order, running the merged lane's subset after each merge.
 2. Delete every temporary shim and repoint the real call sites.
 3. Prove no module still imports a moved symbol from its old home (grep the old paths).
-4. Full verification, including the browser-complete suite and the semantic-parity check.
+4. One full verification at boundary close: the non-browser suite, the semantic-parity
+   check, and the browser suite only if the boundary touched a rendering or browser path.
 5. Update the milestone's state record with what landed and what remains.
 6. Report per package, with command evidence.
 

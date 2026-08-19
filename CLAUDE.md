@@ -59,7 +59,9 @@ immutable payloads live, or anything touching the v1 historical record.
 Gates: Class B, plus the browser suite, a `0001`-only database upgrading cleanly to
 head, and — for v1 data — the migration-safety rules below.
 
-Do not run the browser suite for changes that cannot affect rendering.
+Gates are per boundary, not per commit. While iterating, run only the focused tests for
+what changed; run the class's full gate once, when the work closes. Do not run the browser
+suite for changes that cannot affect a rendering or browser path.
 
 ## What actually catches defects
 
