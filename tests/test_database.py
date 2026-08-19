@@ -14,7 +14,7 @@ from cv_engine.infrastructure.persistence.schema import (
 )
 from cv_engine.util import normalized_text, sha256_text
 
-SCHEMA_FIXTURE = Path(__file__).parent / "fixtures/m1_sqlite_master.tsv"
+SCHEMA_FIXTURE = Path(__file__).parent / "fixtures/schema_sqlite_master.tsv"
 
 
 def _create(repo, *, company: str, target_role: str, text: str):
@@ -32,8 +32,8 @@ def _sqlite_master_fingerprint(path: Path) -> list[tuple[str, str, str, str]]:
     with sqlite3.connect(path) as connection:
         rows = connection.execute(
             "SELECT type, name, tbl_name, sql FROM sqlite_master "
-            # schema_migrations is runner bookkeeping, not part of the M1
-            # product schema whose fixture bytes are intentionally frozen.
+            # schema_migrations is runner bookkeeping, not part of the product
+            # schema whose fixture bytes are intentionally frozen.
             "WHERE sql IS NOT NULL AND name != 'schema_migrations' "
             "ORDER BY type, name"
         ).fetchall()
@@ -91,8 +91,17 @@ def test_next_action_is_not_a_status(application_repo) -> None:
     assert repo.recruitment_event(event_id)["event_type"] == "next_action"
 
 
-def test_m1_sqlite_master_fingerprint_is_frozen(tmp_path: Path) -> None:
-    baseline_path = tmp_path / "m1-baseline.sqlite3"
+def test_sqlite_master_fingerprint_matches_the_recorded_schema(tmp_path: Path) -> None:
+    """Every table, index, and trigger the baseline creates, recorded verbatim.
+
+    This froze the M1 baseline while later migrations added to it, so that a
+    database created at M1 could still be upgraded. Squashing the chain retired
+    that job: with one migration there is no earlier shape to stay compatible
+    with. What it still catches is a schema change nobody meant to make —
+    dropping a trigger while editing the table above it moves this fixture, and
+    moving it has to be deliberate.
+    """
+    baseline_path = tmp_path / "baseline.sqlite3"
     with connect(baseline_path) as connection:
         connection.executescript((MIGRATIONS_DIR / "0001_baseline.sql").read_text(encoding="utf-8"))
     expected = [
@@ -103,7 +112,9 @@ def test_m1_sqlite_master_fingerprint_is_frozen(tmp_path: Path) -> None:
 
 
 def test_database_is_at_registered_head_schema(application_repo) -> None:
-    # The frozen fingerprint proves 0001 parity; head is allowed to evolve independently.
+    # The fingerprint proves what the baseline creates; this proves the runner
+    # actually recorded it, so a database that silently skipped the migration
+    # fails here rather than at the first query that needs a missing table.
     registered_head = registered_migration_names()[-1].split("_", 1)[0]
     assert current_schema_version(application_repo.path) == registered_head
 
