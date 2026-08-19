@@ -23,6 +23,7 @@ from .queries import (
     WarningView,
     WorkingDraftState,
 )
+from .operations import OperationView
 
 STALE_PRECEDENCE = (
     "JOB_SNAPSHOT_CHANGED",
@@ -66,6 +67,7 @@ class ProjectionContext:
     ready_revision_ids: frozenset[str]
     knowledge: Knowledge
     today: date
+    active_operation: OperationView | None = None
 
 
 def _reason(
@@ -513,7 +515,11 @@ def project_application_state(context: ProjectionContext) -> ApplicationStateVie
         stale_reasons=stale,
         primary_stale_reason=stale[0].code if stale else None,
         warnings=derive_warnings(context, latest_ready),
-        active_operation=None,
+        active_operation=(
+            context.active_operation.model_dump(mode="json")
+            if context.active_operation is not None
+            else None
+        ),
         active_job_snapshot_id=context.active_job_snapshot_id,
         active_analysis_id=context.active_analysis_id,
         active_selection_plan_id=(

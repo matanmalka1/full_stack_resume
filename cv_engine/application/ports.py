@@ -20,6 +20,13 @@ from ..domain.models import (
     ValidationRunLineage,
     WorkingDraft,
 )
+from .operations import (
+    CreateOperation,
+    OperationFailureCode,
+    OperationPhase,
+    OperationView,
+    PersistedOperation,
+)
 
 
 @dataclass(frozen=True)
@@ -468,8 +475,114 @@ class KnowledgeAuditRepository(FactAudit, WorkingDraftReader, Protocol):
     """
 
 
+class OperationRepository(Protocol):
+    """Durable Operations shared by foreground and background runners."""
+
+    def create_operation(
+        self,
+        request: CreateOperation,
+        *,
+        installation_id: str,
+        operation_id: str | None = None,
+        created_at: str | None = None,
+    ) -> PersistedOperation: ...
+
+    def operation(self, operation_id: str) -> PersistedOperation: ...
+
+    def active_operation(self, application_id: str) -> OperationView | None: ...
+
+    def claim_operation(
+        self,
+        operation_id: str,
+        *,
+        runner_id: str,
+        lease_seconds: int = 30,
+        now: str | None = None,
+    ) -> PersistedOperation | None: ...
+
+    def claim_next_operation(
+        self,
+        *,
+        runner_id: str,
+        lease_seconds: int = 30,
+        now: str | None = None,
+    ) -> PersistedOperation | None: ...
+
+    def heartbeat_operation(
+        self,
+        operation_id: str,
+        *,
+        runner_id: str,
+        lease_seconds: int = 30,
+        now: str | None = None,
+    ) -> None: ...
+
+    def interrupt_expired_operations(self, *, now: str | None = None) -> list[str]: ...
+
+    def set_operation_phase(
+        self,
+        operation_id: str,
+        phase: OperationPhase,
+        *,
+        runner_id: str,
+        message: str = "",
+    ) -> None: ...
+
+    def cancellation_requested(self, operation_id: str) -> bool: ...
+
+    def request_operation_cancellation(
+        self, operation_id: str, *, now: str | None = None
+    ) -> PersistedOperation: ...
+
+    def record_operation_output(
+        self,
+        operation_id: str,
+        output_type: str,
+        output_id: str,
+        *,
+        active: bool = False,
+        created_at: str | None = None,
+    ) -> str: ...
+
+    def activate_operation_output(
+        self,
+        operation_id: str,
+        output_type: str,
+        output_id: str,
+        *,
+        now: str | None = None,
+    ) -> None: ...
+
+    def record_operation_attempt(
+        self,
+        operation_id: str,
+        *,
+        runner_id: str,
+        retry_at: str | None = None,
+    ) -> int: ...
+
+    def complete_operation(
+        self,
+        operation_id: str,
+        *,
+        runner_id: str,
+        now: str | None = None,
+    ) -> PersistedOperation: ...
+
+    def fail_operation(
+        self,
+        operation_id: str,
+        code: OperationFailureCode,
+        safe_detail: str,
+        *,
+        runner_id: str,
+        technical_log_reference: str | None = None,
+        now: str | None = None,
+    ) -> PersistedOperation: ...
+
+
 class QueryRepository(
-    ApplicationStore, JobStore, ArtifactRegistry, WorkingDraftReader, Protocol
+    ApplicationStore, JobStore, ArtifactRegistry, WorkingDraftReader, OperationRepository, Protocol
 ):
     """Read sources used to build storage-neutral query projections."""
 
@@ -566,6 +679,7 @@ class TrackingRepository(ReadinessRepository, Protocol):
 class ApplicationRepository(
     TrackingRepository,
     KnowledgeAuditRepository,
+    OperationRepository,
     Protocol,
 ):
     """Composition-root view of the adapter; services use focused ports above."""

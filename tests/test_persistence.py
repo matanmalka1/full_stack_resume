@@ -46,6 +46,9 @@ MUTABLE_TABLES = frozenset(
     {
         "applications",  # the current recruitment projection and tracking fields
         "working_drafts",  # the one mutable resume document (product invariant 3)
+        "operations",  # mutable only until a terminal status; terminal rows have a trigger
+        "operation_resource_leases",  # ephemeral claim/heartbeat coordination
+        "operation_outputs",  # permits exactly one inactive-to-active transition
         "schema_meta",  # bookkeeping
         "schema_migrations",  # bookkeeping
         "sqlite_sequence",  # SQLite's own AUTOINCREMENT bookkeeping
