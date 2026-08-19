@@ -7,7 +7,7 @@ from typing import Literal
 
 from ..domain.models import StrictModel
 from ..infrastructure.paths import relative_within, resolve_within
-from ..util import new_id, utc_now
+from ..util import new_id, sha256_file, sha256_text, utc_now
 
 MARKER_NAME = ".cv-workspace.json"
 WORKSPACE_VERSION = 2
@@ -40,6 +40,13 @@ class WorkspaceMarker(StrictModel):
     data_class: DataClass
     created_at: str
     roots: dict[str, str] = {}
+    # Where `--knowledge-from` copied the seed knowledge, and what it hashed to
+    # at the time. Recorded rather than enforced: the copy happens once, into a
+    # fresh Workspace, over knowledge that can be regenerated, so the cost of a
+    # wrong source is one `workspace init`. What is expensive is not being able
+    # to tell later which source a Workspace was seeded from.
+    knowledge_source: str | None = None
+    knowledge_source_hash: str | None = None
 
 
 def default_roots(root: Path) -> dict[str, Path]:
@@ -194,6 +201,12 @@ def create_workspace(
             "v1 is a frozen archive; create the Workspace in a separate directory."
         )
     root.mkdir(parents=True, exist_ok=True)
+    source = Path(knowledge_source).resolve() if knowledge_source is not None else None
+    if source is not None:
+        # Checked before the marker is built, not inside the copy: hashing an
+        # incomplete source would record a hash for knowledge that was never
+        # there, and an empty directory hashes just as happily as a full one.
+        _require_complete_knowledge(source)
     marker = WorkspaceMarker(
         workspace_id=new_id(),
         workspace_version=WORKSPACE_VERSION,
@@ -201,10 +214,12 @@ def create_workspace(
         data_class=data_class,
         created_at=utc_now(),
         roots=roots or {},
+        knowledge_source=str(source) if source else None,
+        knowledge_source_hash=knowledge_source_hash(source) if source else None,
     )
     workspace = Workspace(root, marker)
-    if knowledge_source is not None:
-        _copy_knowledge(Path(knowledge_source).resolve(), workspace.knowledge_root)
+    if source is not None:
+        _copy_knowledge(source, workspace.knowledge_root)
     for directory in (
         workspace.knowledge_root,
         workspace.state_root,
@@ -217,18 +232,37 @@ def create_workspace(
     return workspace
 
 
-def _copy_knowledge(source: Path, knowledge_root: Path) -> None:
-    if source == knowledge_root:
-        return
+def _require_complete_knowledge(source: Path) -> None:
     missing = [name for name in KNOWLEDGE_DIRS if not (source / name).is_dir()]
     if missing:
         raise WorkspaceError(f"knowledge source is incomplete: missing {', '.join(missing)}")
+
+
+def _copy_knowledge(source: Path, knowledge_root: Path) -> None:
+    if source == knowledge_root:
+        return
+    _require_complete_knowledge(source)
     knowledge_root.mkdir(parents=True, exist_ok=True)
     for name in KNOWLEDGE_DIRS:
         target = knowledge_root / name
         if target.exists():
             raise WorkspaceError(f"refusing to overwrite existing knowledge directory: {target}")
         shutil.copytree(source / name, target)
+
+
+def knowledge_source_hash(source: Path) -> str:
+    """Hash the seed knowledge as copied: relative path and content, in order.
+
+    Paths are part of the hash because two sources holding the same bytes under
+    different names are different seeds, and a hash that could not tell them
+    apart would be recording less than the directory listing already does.
+    """
+    digest = []
+    for name in KNOWLEDGE_DIRS:
+        directory = source / name
+        for path in sorted(p for p in directory.rglob("*") if p.is_file()):
+            digest.append(f"{path.relative_to(source).as_posix()}:{sha256_file(path)}")
+    return sha256_text("\n".join(digest))
 
 
 def load_workspace(root: Path) -> Workspace:

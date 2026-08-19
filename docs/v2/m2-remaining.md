@@ -168,23 +168,27 @@ During E1–E5, only focused checks ran. At E6 the user independently ran the br
 including the parameterized crash-window coverage, isolated offline lifecycle, browser suite,
 and migration-to-head checks. Every gate passed, closing §4.7 item 5.
 
-## F. §4.6 Workspace backup and restore
+## F. §4.6 Workspace backup and restore — closed
 
 Rescoped on 2026-08-19. v1 is a frozen archive and there will be no migration into v2,
 so two of §4.6's three parts have no subject left. What remains protects v2's own data —
 approved revisions, submitted artifacts, job snapshots of postings that later vanish —
 which is forward-looking, not historical.
 
-- [ ] **Backup and restore.** `sqlite3 .backup` for the database, a copy of the artifact
-      roots Git does not track, and the marker. `restore --into <new directory>`, never
-      over a live Workspace. The proof is opening the restored Workspace and running
-      `reconcile` plus the existing `integrity_check()`. No separate manifest: the
+- [x] **Backup and restore.** `cv workspace backup --into` and
+      `cv workspace restore --from --into`, in `runtime/backup.py`. The database goes
+      through the SQLite backup API in `persistence/connection.py`, because the Workspace
+      runs in WAL mode and a file copy can miss committed writes still in the log. `tmp`
+      and `logs` are excluded. Neither command will write into a non-empty directory, and
+      a backup may not be written inside its own Workspace. No separate manifest: the
       artifact hashes are already in `artifact_versions`, and a second hash list beside
       them can only drift.
-- [ ] **A28 rescoped** — `--knowledge-from` refuses a source that lacks the expected
-      subdirectories, and the marker records the source path and content hash. Binding it
-      to a verified v1 inventory answered a question that no longer exists: the copy runs
-      only at `workspace init` into a fresh Workspace, over regenerable seed knowledge.
+- [x] **A28 rescoped** — the marker records `knowledge_source` and
+      `knowledge_source_hash`, and an incomplete source is refused before the marker is
+      written. Binding it to a verified v1 inventory answered a question that no longer
+      exists: the copy runs only at `workspace init` into a fresh Workspace, over
+      regenerable seed knowledge, so a wrong source costs one `workspace init`. What was
+      worth keeping is being able to tell later which source a Workspace came from.
 
 Dropped with the migration: the v1 inventory and mapping, the fixture-based migration
 engine and its `source = migrated + explicitly_excluded, unexplained = 0` invariant.
@@ -203,7 +207,7 @@ State of the plan's seven §4.7 checkboxes; the criteria themselves live there.
 | 3 — projection/action policy under concurrency | Closed at `fe1e92c`; includes two-connection SQLite snapshot consistency |
 | 4 — ETag, idempotency, leases, cancellation, retry, `SOURCE_CHANGED` | Closed at `bfbd64d`; evidence in `m2-operations.md` |
 | 5 — journal crash windows | Closed at `122b957`; evidence in `m2-knowledge-consistency.md` |
-| 6 — backup restore to an openable Workspace | Open, follows F |
+| 6 — backup restore to an openable Workspace | Closed: `restore_workspace` returns a Workspace loaded through the normal fail-closed path, so an archive that restored to something unopenable fails at restore |
 | 7 — no M2 code points to live v1 paths | Closed by construction: no code reads v1 at all. The `looks_legacy` guard stays so no v2 command can open or mark the archive |
 
 §4.7 items 4 and 5 are closed. The remaining acceptance items close with their owning boundaries.

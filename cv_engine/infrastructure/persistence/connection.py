@@ -34,6 +34,31 @@ def memory_connection() -> sqlite3.Connection:
     return connection
 
 
+def backup_database(source: Path, target: Path) -> None:
+    """Copy a database through SQLite's own backup API.
+
+    Not `shutil.copy`: the database runs in WAL mode, so a file copy can catch
+    a committed transaction that still lives in the write-ahead log and produce
+    an archive that opens but is missing its most recent writes. The backup API
+    reads a consistent snapshot and folds the WAL in, which is the whole reason
+    a restored copy can be trusted.
+    """
+    source = Path(source)
+    if not source.is_file():
+        raise FileNotFoundError(f"no database to back up at {source}")
+    target = Path(target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    origin = connect(source)
+    try:
+        destination = sqlite3.connect(target)
+        try:
+            origin.backup(destination)
+        finally:
+            destination.close()
+    finally:
+        origin.close()
+
+
 def integrity_results(connection: sqlite3.Connection) -> tuple[str, list[sqlite3.Row]]:
     """Run SQLite's own integrity and foreign-key diagnostics."""
     integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]

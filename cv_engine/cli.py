@@ -30,6 +30,7 @@ from .domain.facts import FACT_SOURCE_NAMES
 from .domain.models import ApplicationStatus, FactStatus
 from .infrastructure.paths import resolve_within
 from .infrastructure.persistence import current_schema_version, initialize
+from .runtime.backup import BackupError, backup_workspace, restore_workspace
 from .runtime.composition import Services, build_services
 from .runtime.config import resolve_config
 from .runtime.workspace import Workspace, WorkspaceError, create_workspace, load_workspace
@@ -267,8 +268,17 @@ def build_parser() -> argparse.ArgumentParser:
     workspace_sub.add_parser(
         "status", help="show Workspace identity, roots, and resolved configuration"
     )
+    workspace_backup = workspace_sub.add_parser(
+        "backup", help="copy this Workspace's durable state into a new directory"
+    )
+    workspace_backup.add_argument("--into", type=Path, required=True)
+    workspace_restore = workspace_sub.add_parser(
+        "restore", help="restore a backup into a new directory and open it"
+    )
+    workspace_restore.add_argument("--from", dest="backup_from", type=Path, required=True)
+    workspace_restore.add_argument("--into", type=Path, required=True)
 
-    sub.add_parser("init", help="initialize the v1 SQLite schema")
+    sub.add_parser("init", help="initialize the SQLite schema")
     ingest = sub.add_parser("ingest", help="create an application and immutable job snapshot")
     _add_job_input(ingest)
 
@@ -624,6 +634,23 @@ def workspace_command(
                 "database": str(opened.database_path),
                 "schema_version": current_schema_version(opened.database_path),
                 "configuration": config.describe(),
+            }
+        )
+        return 0
+    if args.workspace_command == "backup":
+        opened = opened or load_workspace(root)
+        _print(backup_workspace(opened, args.into.resolve()).describe())
+        return 0
+    if args.workspace_command == "restore":
+        # Restore runs before the restored Workspace exists, so it opens the
+        # backup rather than the selected root. Reporting the schema version
+        # proves the archive is an openable database and not just files.
+        restored = restore_workspace(args.backup_from.resolve(), args.into.resolve())
+        _print(
+            {
+                **restored.describe(),
+                "restored_from": str(args.backup_from.resolve()),
+                "schema_version": current_schema_version(restored.database_path),
             }
         )
         return 0
@@ -1163,6 +1190,7 @@ def main(argv: list[str] | None = None) -> int:
         FileNotFoundError,
         WorkflowError,
         WorkspaceError,
+        BackupError,
     ) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

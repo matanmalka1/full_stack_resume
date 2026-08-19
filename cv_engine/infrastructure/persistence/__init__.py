@@ -1,4 +1,4 @@
-from .connection import SqliteUnitOfWork, connect
+from .connection import SqliteUnitOfWork, backup_database, connect
 from .drafts import SqliteDraftRepository
 from .repository import Repository
 from .schema import (
@@ -21,6 +21,7 @@ __all__ = [
     "SqliteUnitOfWork",
     "SqliteDraftRepository",
     "apply_migrations",
+    "backup_database",
     "connect",
     "current_schema_version",
     "initialize",
