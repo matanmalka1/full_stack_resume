@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from concurrent.futures import Future, ThreadPoolExecutor
-from threading import Event
+from threading import Event, Lock
 from time import sleep
 
 from ..application.operation_runner import OperationRunner
@@ -57,6 +57,8 @@ class OperationWorker:
         self.runner = runner
         self.concurrency = concurrency
         self.poll_interval_seconds = poll_interval_seconds
+        self._active_ids: set[str] = set()
+        self._active_lock = Lock()
 
     def recover_startup(self) -> list[str]:
         return self.repository.interrupt_expired_operations()
@@ -68,7 +70,13 @@ class OperationWorker:
         )
         if claimed is None:
             return None
-        return self.runner.run_claimed(claimed)
+        with self._active_lock:
+            self._active_ids.add(claimed.id)
+        try:
+            return self.runner.run_claimed(claimed)
+        finally:
+            with self._active_lock:
+                self._active_ids.discard(claimed.id)
 
     def serve(self, stop: Event) -> None:
         self.recover_startup()
@@ -89,3 +97,7 @@ class OperationWorker:
                     if future.done() and future.result() is None:
                         break
                 stop.wait(self.poll_interval_seconds)
+            with self._active_lock:
+                active = tuple(self._active_ids)
+            for operation_id in active:
+                self.repository.request_operation_cancellation(operation_id)

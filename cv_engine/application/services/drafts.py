@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from ... import __version__
 from ...domain.analysis.approval import unresolved_approval_reasons
 from ...domain.draft_markdown import serialize_markdown, synchronize_markdown_claims
@@ -9,6 +11,7 @@ from ...domain.models import (
     AuditRecord,
     DecisionRecord,
     DraftDocument,
+    JobAnalysis,
     ValidationReport,
     ValidationRunLineage,
     WorkingDraft,
@@ -36,6 +39,14 @@ from ..ports import (
     DraftRepository,
 )
 from .base import ServiceBase, bound_analysis, working_draft_record
+
+
+@dataclass(frozen=True)
+class PreparedDraft:
+    source: DraftDocument
+    analysis: JobAnalysis
+    plan_id: str
+    knowledge: Knowledge
 
 
 class DraftService(ServiceBase[DraftRepository]):
@@ -72,6 +83,11 @@ class DraftService(ServiceBase[DraftRepository]):
         in `analyze`: a command that resolves `latest` itself can draft from an
         analysis the caller never saw.
         """
+        prepared = self.prepare(command)
+        return self.activate(command, prepared)
+
+    def prepare(self, command: DraftCommand) -> PreparedDraft:
+        """Build and validate the inputs for a draft without changing durable state."""
         knowledge = self.load_knowledge()
         facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
         analysis_id = command.job_analysis_id
@@ -149,11 +165,31 @@ class DraftService(ServiceBase[DraftRepository]):
             )
         except ValueError as exc:
             raise PreconditionFailed(f"draft could not be built: {exc}") from exc
-        working = self.repo.replace_active_working_draft(
+        return PreparedDraft(
+            source=draft,
+            analysis=analysis,
+            plan_id=plan.id,
+            knowledge=knowledge,
+        )
+
+    def activate(
+        self,
+        command: DraftCommand,
+        prepared: PreparedDraft,
+        repository: DraftRepository | None = None,
+    ) -> DraftResult:
+        """Commit a prepared WorkingDraft after the final optimistic check."""
+        repo = repository or self.repo
+        knowledge = prepared.knowledge
+        facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
+        analysis = prepared.analysis
+        profile = profiles.get(analysis.profile)
+        presentation_rules = knowledge.presentations
+        working = repo.replace_active_working_draft(
             command.application_id,
-            analysis_id,
-            plan.id,
-            draft,
+            command.job_analysis_id,
+            prepared.plan_id,
+            prepared.source,
         )
         stored = self.store_working_draft(working.source)
         report = validate_draft(
@@ -165,13 +201,13 @@ class DraftService(ServiceBase[DraftRepository]):
             policies=policies,
             presentations=presentation_rules,
         )
-        self.repo.record_validation(
+        repo.record_validation(
             command.application_id,
             "pre-render",
             report,
             lineage=self._lineage(working, knowledge),
         )
-        self.repo.record_generation_run(
+        repo.record_generation_run(
             {
                 "application_id": command.application_id,
                 "engine_version": __version__,
@@ -193,8 +229,8 @@ class DraftService(ServiceBase[DraftRepository]):
         )
         return DraftResult(
             application_id=command.application_id,
-            job_analysis_id=analysis_id,
-            selection_plan_id=plan.id,
+            job_analysis_id=command.job_analysis_id,
+            selection_plan_id=prepared.plan_id,
             working_draft_id=working.id,
             edit_version=working.edit_version,
             validation=report,

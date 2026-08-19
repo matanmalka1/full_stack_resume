@@ -20,6 +20,7 @@ from .application.commands import (
     NextActionCommand,
     RecruitmentCorrectionCommand,
     RecruitmentStatusCommand,
+    RenderCommand,
     SubmissionCommand,
 )
 from .application.errors import WorkflowError
@@ -38,7 +39,7 @@ from .infrastructure.persistence import current_schema_version, initialize
 from .runtime.composition import Services, build_services
 from .runtime.config import resolve_config
 from .runtime.workspace import Workspace, WorkspaceError, create_workspace, load_workspace
-from .util import utc_now, verify_payload
+from .util import new_id, utc_now, verify_payload
 
 
 def _repo_root() -> Path:
@@ -245,6 +246,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_overrides(analyze)
     analyze.add_argument("--provider", choices=["deterministic", "openai"], default="deterministic")
     analyze.add_argument("--model", default="gpt-5.6")
+    analyze.add_argument("--idempotency-key")
     # v2 commands take an explicit source ID. The legacy signature omits it,
     # so the CLI-boundary resolver fills it in when the flag is absent.
     analyze.add_argument("--job-snapshot", dest="job_snapshot", default=None)
@@ -253,6 +255,7 @@ def build_parser() -> argparse.ArgumentParser:
     draft.add_argument("application_id")
     draft.add_argument("--job-analysis", dest="job_analysis", default=None)
     draft.add_argument("--selection-plan", dest="selection_plan", default=None)
+    draft.add_argument("--idempotency-key")
 
     for name, help_text in [
         ("validate", "run pre-render validation"),
@@ -265,6 +268,8 @@ def build_parser() -> argparse.ArgumentParser:
     ]:
         command = sub.add_parser(name, help=help_text)
         command.add_argument("application_id")
+        if name == "render":
+            command.add_argument("--idempotency-key")
 
     fast = sub.add_parser("fast", help="explicit no-pause flow; validation remains mandatory")
     _add_job_input(fast)
@@ -738,27 +743,39 @@ def _ingest(context: CommandContext) -> int:
 @_command("analyze")
 def _analyze(context: CommandContext) -> int:
     args = context.args
-    analysed = context.built_services.analysis.analyze(
-        AnalyzeCommand(
-            application_id=args.application_id,
-            job_snapshot_id=(
-                args.job_snapshot
-                or _latest_job_snapshot_id(context.repository, args.application_id)
-            ),
-            track_override=args.track,
-            profile_override=args.profile,
-            emphasis_override=args.emphasis,
-            language_override=args.language,
-            accept_low_fit=args.accept_low_fit,
-            provider=args.provider,
-            model=args.model,
-        )
+    services = context.built_services
+    command = AnalyzeCommand(
+        application_id=args.application_id,
+        job_snapshot_id=(
+            args.job_snapshot
+            or _latest_job_snapshot_id(context.repository, args.application_id)
+        ),
+        track_override=args.track,
+        profile_override=args.profile,
+        emphasis_override=args.emphasis,
+        language_override=args.language,
+        accept_low_fit=args.accept_low_fit,
+        provider=args.provider,
+        model=args.model,
     )
+    operation = services.operations.submit_analysis(
+        command,
+        idempotency_key=args.idempotency_key or new_id(),
+        analysis_service=services.analysis,
+    )
+    completed = services.foreground_operations.execute(operation.id)
+    if completed.status.value != "succeeded":
+        detail = completed.safe_failure_detail or "analysis Operation did not complete"
+        code = completed.failure_code.value if completed.failure_code is not None else "UNKNOWN"
+        raise WorkflowError(f"{code}: {detail}")
+    output_ids = {output.output_type: output.output_id for output in completed.outputs}
+    analysed = context.repository.get_analysis(output_ids["job_analysis"])
     _print(
         {
-            "analysis_id": analysed.analysis_id,
-            "selection_plan_id": analysed.selection_plan_id,
-            "analysis": analysed.analysis.model_dump(mode="json"),
+            "operation_id": completed.id,
+            "analysis_id": output_ids["job_analysis"],
+            "selection_plan_id": output_ids["selection_plan"],
+            "analysis": analysed["analysis"].model_dump(mode="json"),
         }
     )
     return 0
@@ -768,25 +785,40 @@ def _analyze(context: CommandContext) -> int:
 def _draft(context: CommandContext) -> int:
     args = context.args
     services = context.built_services
-    drafted = services.drafts.draft(
-        DraftCommand(
-            application_id=args.application_id,
-            job_analysis_id=(
-                args.job_analysis
-                or _latest_job_analysis_id(context.repository, args.application_id)
-            ),
-            selection_plan_id=(
-                args.selection_plan
-                or _latest_selection_plan_id(context.repository, args.application_id)
-            ),
-        )
+    command = DraftCommand(
+        application_id=args.application_id,
+        job_analysis_id=(
+            args.job_analysis
+            or _latest_job_analysis_id(context.repository, args.application_id)
+        ),
+        selection_plan_id=(
+            args.selection_plan
+            or _latest_selection_plan_id(context.repository, args.application_id)
+        ),
     )
+    operation = services.operations.submit_draft(
+        command,
+        idempotency_key=args.idempotency_key or new_id(),
+        draft_service=services.drafts,
+    )
+    completed = services.foreground_operations.execute(operation.id)
+    if completed.status.value != "succeeded":
+        detail = completed.safe_failure_detail or "draft Operation did not complete"
+        code = completed.failure_code.value if completed.failure_code is not None else "UNKNOWN"
+        raise WorkflowError(f"{code}: {detail}")
+    output_ids = {output.output_type: output.output_id for output in completed.outputs}
+    validation = context.repository.latest_validation_for_working_draft(
+        output_ids["working_draft"]
+    )
+    if validation is None:
+        raise WorkflowError("draft Operation completed without a ValidationRun")
     paths = services.artifacts.working_paths(args.application_id)
     _print(
         {
             "markdown": str(paths.markdown),
             "claim_manifest": str(paths.manifest),
-            "validation": drafted.validation.model_dump(mode="json"),
+            "operation_id": completed.id,
+            "validation": validation["report"].model_dump(mode="json"),
             "review_required": True,
         }
     )
@@ -825,17 +857,35 @@ def _approve(context: CommandContext) -> int:
 def _render(context: CommandContext) -> int:
     services = context.built_services
     application_id = context.args.application_id
-    rendered = services.rendering.render(application_id)
-    pdf_record = context.repository.latest_artifact_version(application_id, "resume_pdf")
+    revision_id = context.repository.latest_approved_revision(application_id).id
+    operation = services.operations.submit_render(
+        RenderCommand(
+            application_id=application_id,
+            approved_revision_id=revision_id,
+        ),
+        idempotency_key=context.args.idempotency_key or new_id(),
+        rendering_service=services.rendering,
+    )
+    completed = services.foreground_operations.execute(operation.id)
+    output_ids = {output.output_type: output.output_id for output in completed.outputs}
+    if "resume_pdf" not in output_ids:
+        detail = completed.safe_failure_detail or "render Operation produced no PDF"
+        code = completed.failure_code.value if completed.failure_code is not None else "UNKNOWN"
+        raise WorkflowError(f"{code}: {detail}")
+    pdf_record = context.repository.artifact_version(output_ids["resume_pdf"])
     pdf_metadata = json.loads(pdf_record.get("metadata_json") or "{}")
+    report = context.repository.validation_for_artifact(
+        application_id, "post-render", output_ids["resume_pdf"]
+    )
     _print(
         {
+            "operation_id": completed.id,
             "pdf": str(services.artifacts.resolve(pdf_record["path"])),
             "filename": pdf_metadata.get("recruiter_filename"),
-            "ready_validation": rendered.validation.model_dump(mode="json"),
+            "ready_validation": report.model_dump(mode="json"),
         }
     )
-    return 0 if rendered.validation.passed else 1
+    return 0 if completed.status.value == "succeeded" and report.passed else 1
 
 
 @_command("ready")

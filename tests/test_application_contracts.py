@@ -423,6 +423,8 @@ def test_commands_require_owned_explicit_sources_and_cli_resolves_latest(service
     )
     from cv_engine.application.services.drafts import DraftService
 
-    source = inspect.getsource(DraftService.draft)
+    # Operation execution split generation into prepare/activate; source
+    # resolution remains in the preparation half of the same application service.
+    source = inspect.getsource(DraftService.prepare)
     assert "latest_analysis" not in source
     assert source.count("latest_snapshot(") == 1

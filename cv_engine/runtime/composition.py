@@ -17,6 +17,12 @@ from ..application.services.analysis import AnalysisService
 from ..application.services.applications import ApplicationService
 from ..application.services.drafts import DraftService
 from ..application.services.knowledge import KnowledgeService
+from ..application.services.operations import (
+    AnalysisOperationHandler,
+    DraftOperationHandler,
+    OperationService,
+    RenderOperationHandler,
+)
 from ..application.services.projections import ApplicationQueryService
 from ..application.services.rendering import RenderingService
 from ..application.services.tracking import TrackingService
@@ -26,6 +32,10 @@ from ..infrastructure.payloads import PayloadStore
 from ..infrastructure.persistence import Repository
 from ..infrastructure.providers import OpenAIClassificationProvider
 from ..infrastructure.rendering import PlaywrightRenderer
+from ..application.operation_runner import OperationRunner
+from ..application.operations import OperationType
+from ..util import new_id
+from .operations import ForegroundOperationExecutor, OperationWorker
 from .workspace import Workspace
 
 
@@ -46,6 +56,10 @@ class Services:
     rendering: RenderingService
     tracking: TrackingService
     knowledge_lifecycle: KnowledgeService
+    operations: OperationService
+    operation_runner: OperationRunner
+    foreground_operations: ForegroundOperationExecutor
+    operation_worker: OperationWorker
 
 
 def build_services(
@@ -82,6 +96,21 @@ def build_services(
         "snapshots": resolved_payloads,
         "installation_id": workspace.installation_id(),
     }
+    analysis_service = AnalysisService(**shared)
+    operation_service = OperationService(**shared)
+    draft_service = DraftService(**shared)
+    rendering_service = RenderingService(**shared)
+    runner = OperationRunner(
+        resolved_repository,
+        {
+            OperationType.ANALYZE_JOB: AnalysisOperationHandler(analysis_service),
+            OperationType.CREATE_DRAFT: DraftOperationHandler(draft_service),
+            OperationType.RENDER_REVISION: RenderOperationHandler(rendering_service),
+        },
+        runner_id=f"local-{new_id()}",
+    )
+    foreground = ForegroundOperationExecutor(resolved_repository, runner)
+    worker = OperationWorker(resolved_repository, runner)
     return Services(
         workspace=workspace,
         repository=resolved_repository,
@@ -91,9 +120,13 @@ def build_services(
         unit_of_work=resolved_repository.unit_of_work,
         applications=ApplicationService(**shared),
         queries=ApplicationQueryService(**shared),
-        analysis=AnalysisService(**shared),
-        drafts=DraftService(**shared),
-        rendering=RenderingService(**shared),
+        analysis=analysis_service,
+        drafts=draft_service,
+        rendering=rendering_service,
         tracking=TrackingService(**shared),
         knowledge_lifecycle=KnowledgeService(**shared),
+        operations=operation_service,
+        operation_runner=runner,
+        foreground_operations=foreground,
+        operation_worker=worker,
     )

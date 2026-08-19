@@ -1,13 +1,20 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
 import pytest
+from helpers import ACCOUNT_MANAGER_JOB, run_cli
 from pydantic import ValidationError
 
-from cv_engine.application.commands import IngestCommand
+from cv_engine.application.commands import (
+    AnalyzeCommand,
+    DraftCommand,
+    IngestCommand,
+    RenderCommand,
+)
 from cv_engine.application.errors import StateConflict
 from cv_engine.application.operations import (
     CreateOperation,
@@ -28,6 +35,8 @@ from cv_engine.application.operation_runner import (
     SourceChanged,
 )
 from cv_engine.infrastructure.persistence import Repository
+from cv_engine.domain.models import ValidationIssue, ValidationReport
+from cv_engine.util import new_id, sha256_text
 
 
 @pytest.mark.parametrize(
@@ -429,3 +438,322 @@ def test_runner_retries_one_transient_failure_and_keeps_technical_detail_out_of_
     assert failed.safe_failure_detail == "Operation execution failed."
     assert "secret traceback" not in failed.safe_failure_detail
     assert failed.technical_log_reference == "logs/operation-failure.jsonl"
+
+
+def test_analysis_operation_matches_direct_service_and_reuses_idempotency_key(services) -> None:
+    operated = services.applications.ingest(
+        IngestCommand(
+            company="Operated Analysis Co",
+            target_role="Account Manager",
+            job_text=ACCOUNT_MANAGER_JOB,
+        )
+    )
+    command = AnalyzeCommand(
+        application_id=operated.application_id,
+        job_snapshot_id=operated.job_snapshot_id,
+    )
+    operation = services.operations.submit_analysis(
+        command,
+        idempotency_key="analysis-parity",
+        analysis_service=services.analysis,
+    )
+    repeated = services.operations.submit_analysis(
+        command,
+        idempotency_key="analysis-parity",
+        analysis_service=services.analysis,
+    )
+    assert repeated.id == operation.id
+
+    completed = services.foreground_operations.execute(operation.id)
+    assert completed.status is OperationStatus.SUCCEEDED
+    output_ids = {output.output_type: output.output_id for output in completed.outputs}
+    stored = services.repository.get_analysis(output_ids["job_analysis"])
+    assert services.repository.selection_plan(output_ids["selection_plan"])
+
+    direct = services.applications.ingest(
+        IngestCommand(
+            company="Direct Analysis Co",
+            target_role="Account Manager",
+            job_text=ACCOUNT_MANAGER_JOB,
+        )
+    )
+    direct_result = services.analysis.analyze(
+        AnalyzeCommand(
+            application_id=direct.application_id,
+            job_snapshot_id=direct.job_snapshot_id,
+        )
+    )
+    assert stored["analysis"] == direct_result.analysis
+
+
+def test_analysis_operation_fails_source_changed_when_a_new_snapshot_becomes_active(
+    services,
+) -> None:
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company="Snapshot Race Co",
+            target_role="Account Manager",
+            job_text=ACCOUNT_MANAGER_JOB,
+        )
+    )
+    operation = services.operations.submit_analysis(
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+        ),
+        idempotency_key="snapshot-race",
+        analysis_service=services.analysis,
+    )
+    replacement_id = new_id()
+    replacement_text = ACCOUNT_MANAGER_JOB + "\nNew territory ownership."
+    payload = services.payloads.commit_snapshot(
+        ingested.application_id, replacement_id, replacement_text
+    )
+    services.repository.add_job_snapshot(
+        ingested.application_id,
+        payload.reference,
+        payload.sha256,
+        sha256_text(replacement_text.casefold()),
+        snapshot_id=replacement_id,
+    )
+
+    failed = services.foreground_operations.execute(operation.id)
+
+    assert failed.status is OperationStatus.FAILED
+    assert failed.failure_code is OperationFailureCode.SOURCE_CHANGED
+    assert services.repository.analyses(ingested.application_id) == []
+
+
+def test_cli_analyze_uses_foreground_operation_and_reuses_explicit_key(services) -> None:
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company="CLI Operation Co",
+            target_role="Account Manager",
+            job_text=ACCOUNT_MANAGER_JOB,
+        )
+    )
+    arguments = (
+        "--workspace",
+        str(services.workspace.root),
+        "analyze",
+        ingested.application_id,
+        "--job-snapshot",
+        ingested.job_snapshot_id,
+        "--idempotency-key",
+        "cli-analysis-key",
+    )
+
+    first = run_cli(*arguments)
+    second = run_cli(*arguments)
+
+    assert first.returncode == second.returncode == 0
+    first_payload = json.loads(first.stdout)
+    second_payload = json.loads(second.stdout)
+    assert first_payload == second_payload
+    assert services.repository.operation(first_payload["operation_id"]).status is (
+        OperationStatus.SUCCEEDED
+    )
+
+
+def test_draft_operation_activates_one_validated_working_draft(services) -> None:
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company="Draft Operation Co",
+            target_role="Account Manager",
+            job_text=ACCOUNT_MANAGER_JOB,
+        )
+    )
+    analysis = services.analysis.analyze(
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+        )
+    )
+    operation = services.operations.submit_draft(
+        DraftCommand(
+            application_id=ingested.application_id,
+            job_analysis_id=analysis.analysis_id,
+            selection_plan_id=analysis.selection_plan_id,
+        ),
+        idempotency_key="draft-operation",
+        draft_service=services.drafts,
+    )
+
+    completed = services.foreground_operations.execute(operation.id)
+
+    assert completed.status is OperationStatus.SUCCEEDED
+    working_id = completed.outputs[0].output_id
+    assert services.repository.active_working_draft(ingested.application_id).id == working_id
+    validation = services.repository.latest_validation_for_working_draft(working_id)
+    assert validation is not None and validation["report"].passed
+
+
+def test_draft_operation_refuses_a_replaced_selection_plan(services) -> None:
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company="Draft Plan Race Co",
+            target_role="Account Manager",
+            job_text=ACCOUNT_MANAGER_JOB,
+        )
+    )
+    analysis = services.analysis.analyze(
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+        )
+    )
+    command = DraftCommand(
+        application_id=ingested.application_id,
+        job_analysis_id=analysis.analysis_id,
+        selection_plan_id=analysis.selection_plan_id,
+    )
+    operation = services.operations.submit_draft(
+        command,
+        idempotency_key="draft-plan-race",
+        draft_service=services.drafts,
+    )
+    old_plan = services.repository.selection_plan(analysis.selection_plan_id)
+    services.repository.create_selection_plan(
+        ingested.application_id,
+        analysis.analysis_id,
+        old_plan.plan,
+        candidate_context_version=old_plan.candidate_context_version,
+        candidate_context_hash=old_plan.candidate_context_hash,
+        profile_version=old_plan.profile_version,
+        selection_policy_version=old_plan.selection_policy_version,
+        track_emphasis_dependencies=old_plan.track_emphasis_dependencies,
+    )
+
+    failed = services.foreground_operations.execute(operation.id)
+
+    assert failed.status is OperationStatus.FAILED
+    assert failed.failure_code is OperationFailureCode.SOURCE_CHANGED
+    with pytest.raises(KeyError):
+        services.repository.active_working_draft(ingested.application_id)
+
+
+def test_cli_draft_uses_foreground_operation(services) -> None:
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company="CLI Draft Co",
+            target_role="Account Manager",
+            job_text=ACCOUNT_MANAGER_JOB,
+        )
+    )
+    analysis_run = run_cli(
+        "--workspace",
+        str(services.workspace.root),
+        "analyze",
+        ingested.application_id,
+        "--job-snapshot",
+        ingested.job_snapshot_id,
+        "--idempotency-key",
+        "cli-draft-analysis",
+    )
+    analysis_payload = json.loads(analysis_run.stdout)
+
+    drafted = run_cli(
+        "--workspace",
+        str(services.workspace.root),
+        "draft",
+        ingested.application_id,
+        "--job-analysis",
+        analysis_payload["analysis_id"],
+        "--selection-plan",
+        analysis_payload["selection_plan_id"],
+        "--idempotency-key",
+        "cli-draft-key",
+    )
+
+    assert drafted.returncode == 0, drafted.stderr
+    payload = json.loads(drafted.stdout)
+    assert payload["validation"]["passed"] is True
+    assert services.repository.operation(payload["operation_id"]).status is (
+        OperationStatus.SUCCEEDED
+    )
+
+
+def test_render_operation_registers_and_activates_exact_revision_outputs(
+    ready_application,
+) -> None:
+    setup = ready_application("Render Operation Co")
+    operation = setup.services.operations.submit_render(
+        RenderCommand(
+            application_id=setup.application_id,
+            approved_revision_id=setup.approved.revision_id,
+        ),
+        idempotency_key="render-operation",
+        rendering_service=setup.services.rendering,
+    )
+
+    completed = setup.services.foreground_operations.execute(operation.id)
+
+    assert completed.status is OperationStatus.SUCCEEDED
+    assert {output.output_type for output in completed.outputs} == {
+        "resume_html",
+        "resume_pdf",
+        "visual_evidence",
+    }
+    assert all(output.active for output in completed.outputs)
+    pdf = next(output for output in completed.outputs if output.output_type == "resume_pdf")
+    assert setup.services.repository.artifact_version(pdf.output_id)["revision_id"] == (
+        setup.approved.revision_id
+    )
+
+
+def test_failed_render_operation_preserves_registered_outputs_as_inactive(
+    ready_application,
+    monkeypatch,
+) -> None:
+    setup = ready_application("Invalid Render Operation Co")
+    failed_report = ValidationReport.from_findings(
+        groups={"render": False},
+        issues=[
+            ValidationIssue(
+                group="render",
+                code="injected-render-failure",
+                message="injected failure",
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        setup.services.rendering.renderer,
+        "validate_rendered",
+        lambda *_args, **_kwargs: failed_report,
+    )
+    operation = setup.services.operations.submit_render(
+        RenderCommand(
+            application_id=setup.application_id,
+            approved_revision_id=setup.approved.revision_id,
+        ),
+        idempotency_key="invalid-render-operation",
+        rendering_service=setup.services.rendering,
+    )
+
+    failed = setup.services.foreground_operations.execute(operation.id)
+
+    assert failed.status is OperationStatus.FAILED
+    assert failed.failure_code is OperationFailureCode.RENDER_FAILED
+    assert len(failed.outputs) == 3
+    assert all(not output.active for output in failed.outputs)
+    for output in failed.outputs:
+        assert setup.services.repository.artifact_version(output.output_id)[
+            "lifecycle_status"
+        ] == "rendered-invalid"
+
+
+def test_cancel_and_manual_retry_keep_the_old_operation_immutable(services) -> None:
+    operation = _operation_for_runner(services, "Manual Retry Co")
+    cancelled = services.operations.cancel(operation.id)
+    assert cancelled.status is OperationStatus.CANCELLED
+
+    retried = services.operations.retry(operation.id, idempotency_key="manual-retry-new")
+    assert retried.id != operation.id
+    assert retried.retry_of_operation_id == operation.id
+    assert retried.status is OperationStatus.QUEUED
+
+    reused_old_key = services.operations.retry(
+        operation.id, idempotency_key=operation.idempotency_key
+    )
+    assert reused_old_key.id == operation.id
+    assert services.repository.operation(operation.id) == cancelled

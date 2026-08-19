@@ -1,15 +1,20 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
+from ...domain.knowledge import Knowledge
 from ...domain.models import (
+    DraftDocument,
+    JobAnalysis,
     ReadyQualification,
     ValidationReport,
 )
+from ...domain.models import Profile
 from ...domain.validation import validate_draft
 from ...util import new_id, sha256_file
-from ..chain import decision_record_analysis_id
 from ..commands import (
+    RenderCommand,
     RenderResult,
 )
 from ..errors import (
@@ -24,37 +29,76 @@ from ..errors import (
 )
 from ..ports import (
     ReadinessRepository,
+    RenderTargets,
 )
 from ..ready import qualify_ready_revision
 from .base import ServiceBase, bound_analysis
+
+
+@dataclass(frozen=True)
+class PreparedRender:
+    command: RenderCommand
+    knowledge: Knowledge
+    draft: DraftDocument
+    profile: Profile
+    analysis: JobAnalysis
+    source_report: ValidationReport
+    manifest_record: dict[str, Any]
+    artifact_ids: tuple[str, str, str]
+    targets: RenderTargets
+
+
+@dataclass(frozen=True)
+class ExecutedRender:
+    prepared: PreparedRender
+    report: ValidationReport
 
 
 class RenderingService(ServiceBase[ReadinessRepository]):
     """Rendering an approved revision and reporting ready state."""
 
     def render(self, application_id: str) -> RenderResult:
+        try:
+            revision_id = self.repo.latest_approved_revision(application_id).id
+        except KeyError as exc:
+            raise UnknownRecord(f"no approved revision for application: {application_id}") from exc
+        command = RenderCommand(
+            application_id=application_id,
+            approved_revision_id=revision_id,
+        )
+        prepared = self.prepare(command)
+        executed = self.execute(prepared)
+        return self.activate(executed)
+
+    def prepare(self, command: RenderCommand) -> PreparedRender:
         knowledge = self.load_knowledge()
         facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
         try:
-            manifest_record = self.repo.latest_artifact_version(
-                application_id, "claim_manifest", "approved"
+            revision = self.repo.approved_revision(command.approved_revision_id)
+            manifest_record = self.repo.artifact_version_for_revision(
+                command.approved_revision_id, "claim_manifest", "approved"
             )
         except KeyError as exc:
-            raise UnknownRecord(f"no approved revision for application: {application_id}") from exc
+            raise UnknownRecord(
+                f"unknown approved revision: {command.approved_revision_id}"
+            ) from exc
+        if revision.application_id != command.application_id:
+            raise LineageBroken("approved revision does not belong to the named Application")
         try:
             manifest_path = self.artifacts.resolve(manifest_record["path"])
         except (OSError, ValueError) as exc:
             raise InfrastructureFailure(f"could not resolve approved revision: {exc}") from exc
         draft = self.stored_draft(manifest_path)
-        revision_id = manifest_record.get("revision_id")
         profile = profiles.get(draft.profile)
         _, analysis = bound_analysis(
             self.repo,
-            application_id,
+            command.application_id,
             draft,
             profiles,
             facts,
-            recorded_analysis_id=decision_record_analysis_id(self.repo, application_id),
+            recorded_analysis_id=self.repo.decision_for_revision(
+                command.approved_revision_id
+            )["job_analysis_id"],
         )
         source_report = validate_draft(
             draft,
@@ -65,32 +109,48 @@ class RenderingService(ServiceBase[ReadinessRepository]):
             policies=policies,
             presentations=knowledge.presentations,
         )
-        self.repo.record_validation(application_id, "approved-source-pre-render", source_report)
+        self.repo.record_validation(
+            command.application_id, "approved-source-pre-render", source_report
+        )
         if not source_report.passed:
             raise ValidationBlocked(
                 "render blocked because the approved Markdown no longer matches its validated claims",
                 source_report,
             )
         candidate = knowledge.candidate
-        artifact_ids = [new_id() for _ in range(3)]
+        artifact_ids = tuple(new_id() for _ in range(3))
         recruiter_pdf_filename = self.renderer.filename_for(profile.normalized_role, candidate)
-        if revision_id is None:
-            raise LineageBroken("rendering requires an approved revision-bound claim manifest")
         targets = self.revision_payloads.render_targets(
-            application_id,
-            revision_id,
+            command.application_id,
+            command.approved_revision_id,
             artifact_ids[0],
             artifact_ids[1],
             artifact_ids[2],
             recruiter_pdf_filename,
         )
+        return PreparedRender(
+            command=command,
+            knowledge=knowledge,
+            draft=draft,
+            profile=profile,
+            analysis=analysis,
+            source_report=source_report,
+            manifest_record=manifest_record,
+            artifact_ids=artifact_ids,
+            targets=targets,
+        )
+
+    def execute(self, prepared: PreparedRender) -> ExecutedRender:
+        draft = prepared.draft
+        candidate = prepared.knowledge.candidate
+        targets = prepared.targets
         html_path, pdf_path, screenshot_path = targets.html, targets.pdf, targets.screenshot
         try:
             self.renderer.render_html(draft, html_path, candidate)
             geometry = self.renderer.render_pdf(html_path, pdf_path, screenshot_path)
             report = self.renderer.validate_rendered(
                 draft,
-                profile,
+                prepared.profile,
                 html_path,
                 pdf_path,
                 screenshot_path,
@@ -104,6 +164,22 @@ class RenderingService(ServiceBase[ReadinessRepository]):
             raise
         except (OSError, RuntimeError) as exc:
             raise InfrastructureFailure(f"rendering failed: {exc}") from exc
+        return ExecutedRender(prepared=prepared, report=report)
+
+    def activate(
+        self,
+        executed: ExecutedRender,
+        repository: ReadinessRepository | None = None,
+    ) -> RenderResult:
+        repo = repository or self.repo
+        prepared = executed.prepared
+        command = prepared.command
+        report = executed.report
+        draft = prepared.draft
+        facts = prepared.knowledge.facts
+        artifact_ids = prepared.artifact_ids
+        targets = prepared.targets
+        html_path, pdf_path, screenshot_path = targets.html, targets.pdf, targets.screenshot
         lifecycle = "rendered" if report.passed else "rendered-invalid"
         for artifact_version_id, artifact_type, logical_name, path in [
             (artifact_ids[0], "resume_html", "resume", html_path),
@@ -113,20 +189,20 @@ class RenderingService(ServiceBase[ReadinessRepository]):
             metadata: dict[str, Any] = {"validation_passed": report.passed}
             if artifact_type == "resume_pdf":
                 metadata["recruiter_filename"] = targets.recruiter_pdf_filename
-            registered_id = self.repo.register_artifact_version(
-                application_id,
+            registered_id = repo.register_artifact_version(
+                command.application_id,
                 artifact_type,
                 logical_name,
                 self.artifacts.relative(path),
                 sha256_file(path),
                 lifecycle,
-                revision_id=revision_id,
+                revision_id=command.approved_revision_id,
                 job_snapshot_id=draft.job_snapshot_id,
                 track=draft.track.value,
                 profile=draft.profile.value,
                 emphasis=draft.emphasis.value,
                 facts_version=facts.version,
-                approved_at=manifest_record["approved_at"],
+                approved_at=prepared.manifest_record["approved_at"],
                 metadata=metadata,
                 artifact_version_id=artifact_version_id,
             )
@@ -134,13 +210,15 @@ class RenderingService(ServiceBase[ReadinessRepository]):
                 raise InfrastructureFailure(
                     "artifact registry did not preserve the reserved output identity"
                 )
-        self.repo.record_validation(application_id, "post-render", report, artifact_ids[1])
+        repo.record_validation(
+            command.application_id, "post-render", report, artifact_ids[1]
+        )
         if report.passed:
             qualification = qualify_ready_revision(
                 self.artifacts,
-                self.repo,
-                application_id,
-                revision_id,
+                repo,
+                command.application_id,
+                command.approved_revision_id,
                 artifact_ids[1],
             )
             if not qualification.ready_qualified:
@@ -149,7 +227,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
                     f"{[issue.code for issue in qualification.validation.issues]}"
                 )
         return RenderResult(
-            application_id=application_id,
+            application_id=command.application_id,
             pdf_artifact_version_id=artifact_ids[1],
             validation=report,
         )

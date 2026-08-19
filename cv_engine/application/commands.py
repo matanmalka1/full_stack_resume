@@ -43,6 +43,11 @@ class DraftCommand(BoundaryDTO):
     selection_plan_id: str
 
 
+class RenderCommand(BoundaryDTO):
+    application_id: str
+    approved_revision_id: str
+
+
 class RecruitmentStatusCommand(BoundaryDTO):
     application_id: str
     target_status: str

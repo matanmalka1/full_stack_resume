@@ -46,6 +46,8 @@ class SourceChanged(OperationExecutionError):
 class PreparedOperation:
     value: Any = None
     outputs: tuple[OperationOutputReference, ...] = ()
+    activate_outputs: bool = True
+    terminal_failure: OperationExecutionError | None = None
 
 
 class OperationHandler(Protocol):
@@ -238,10 +240,11 @@ class OperationRunner:
                 )
                 activated = handler.activate(operation, prepared, bound)
                 known = {(item.output_type, item.output_id) for item in prepared.outputs}
-                for output in prepared.outputs:
-                    bound.activate_operation_output(
-                        operation_id, output.output_type, output.output_id
-                    )
+                if prepared.activate_outputs:
+                    for output in prepared.outputs:
+                        bound.activate_operation_output(
+                            operation_id, output.output_type, output.output_id
+                        )
                 for output in activated:
                     if (output.output_type, output.output_id) not in known:
                         bound.record_operation_output(
@@ -250,9 +253,20 @@ class OperationRunner:
                             output.output_id,
                             active=True,
                         )
-                result = bound.complete_operation(
-                    operation_id, runner_id=self.runner_id
-                )
+                if prepared.terminal_failure is not None:
+                    result = bound.fail_operation(
+                        operation_id,
+                        prepared.terminal_failure.code,
+                        prepared.terminal_failure.safe_detail,
+                        runner_id=self.runner_id,
+                        technical_log_reference=(
+                            prepared.terminal_failure.technical_log_reference
+                        ),
+                    )
+                else:
+                    result = bound.complete_operation(
+                        operation_id, runner_id=self.runner_id
+                    )
                 uow.commit()
                 return result
         except OperationExecutionError as error:
