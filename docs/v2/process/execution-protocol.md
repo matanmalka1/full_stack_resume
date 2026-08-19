@@ -17,7 +17,7 @@ is the honest answer — see section 7.
 
 | Role | Owns | Never does |
 | --- | --- | --- |
-| **Lead agent** | Sequencing, any declared lead-only files, integration, final verification, every judgment call and stop-condition decision | Delegate a judgment call to an executor |
+| **Lead agent** | Sequencing, any declared lead-only files, integration, final verification, every judgment call, and deciding that a stop condition has triggered | Delegate a judgment call to an executor; decide a deviation the user owns |
 | **Executor** | One lane's exclusive file set, mechanically | Touch another lane's files; decide behaviour; coordinate with another executor |
 | **Reviewer** (optional) | Read-only audit of acceptance criteria; reports findings | Write anything; own any file |
 
@@ -29,8 +29,8 @@ are not mandatory phases for every package.
 ## 2. Waves
 
 A wave does not begin until the previous one is green under its own gate. "Green" means
-the focused tests for what changed — not a full-suite run per step. The full suite runs
-once, when the boundary closes.
+the focused tests for what changed — not a full-suite run per step. The change class's
+gate runs once, when the boundary closes, over the merged tree.
 
 | Wave | Who | Content |
 | --- | --- | --- |
@@ -46,8 +46,10 @@ When existing guards already cover the change and no prerequisite deletion exist
 wave 1. Do not invent a guardrail phase to make mechanical work look staged.
 
 Widened architecture rules land with an **explicit allowlist of known offenders**, so the
-file records the debt and blocks new instances. Entries may be removed as debt is paid;
-entries may never be added.
+file records the debt and blocks new instances. The allowlist is populated once, when the
+guard is created or widened, from the offenders that already exist. From then on entries
+may only be removed as debt is paid: a new violation is a stop condition, never a new
+entry.
 
 ## 3. Exclusive file ownership
 
@@ -67,6 +69,20 @@ work resumes; two lanes never own the file at once.
 
 Lanes are derived from the coupling graph, not from a target headcount. If the work is
 sequentially dependent, say so and run it serially.
+
+### Runtime isolation
+
+A separate git worktree separates the *files*. It does not separate what the tests touch,
+and that is what `CLAUDE.md`'s concurrency rule is actually about: two lanes writing the
+same SQLite database or the same rendered output race the test runner, and the numbers
+they report become meaningless without either lane failing. So a lane also gets its own:
+
+- Workspace root and its marker, SQLite database, and payload/artifact tree;
+- temp roots and test output directories;
+- any bound port, when a lane runs the API or a browser.
+
+Anything a lane cannot isolate is shared state, and shared state means the lanes are not
+disjoint. Say so and run those packages serially.
 
 ## 4. The interface contract that makes wave 1 parallel
 
@@ -112,7 +128,10 @@ A lane reports done only when all of these hold, with command output quoted:
 1. Its own declared test subset passes. When section 4's shim strategy is used, importer
    coverage is the lead's after merge, where the surface actually moves. When the lane owns
    all affected importers and updates them directly, its subset includes those importers.
-2. The architecture test passes and its allowlist has **not** grown.
+2. The architecture test passes and its allowlist has **not** grown. This one check is
+   per lane rather than per boundary, because it is what enforces exclusive ownership
+   while lanes are still separate; the rest of the change class's gate belongs to the
+   boundary.
 3. `git diff --stat` lists only files the lane owns.
 4. An explicit statement of what did **not** change — for behaviour-preserving work: no
    threshold, contracted message string, exception type, validation group name, status,
@@ -131,12 +150,18 @@ Reporting follows `CLAUDE.md`: passed / failed / remaining, with command evidenc
 2. Delete every temporary shim and repoint the real call sites; where no shim was used,
    reconcile only the cross-lane call sites left to integration.
 3. Prove no module still imports a moved symbol from its old home (grep the old paths).
-4. One full verification at boundary close: the non-browser suite, the semantic-parity
-   check, and the browser suite only if the boundary touched a rendering or browser path.
+4. One verification at boundary close: the gate for the boundary's highest change class
+   under `CLAUDE.md`, run over the merged tree, plus the semantic-parity check. For a
+   Class B boundary that is golden hashes, the architecture test, and an offline CLI run
+   on top of the non-browser suite; for Class C it adds the browser suite and a
+   `0001`-only database upgrading cleanly to head. The browser suite is skipped only when
+   the boundary cannot affect a rendering or browser path.
    This is not the re-run section 9 warns against — no lane produces a full-suite run, and
    the merged tree is not the tree any lane tested. It is the boundary's only full run, and
    the first one over the code as it will actually ship.
-5. Update the milestone's state record with what landed and what remains.
+5. Update `docs/v2/m2-remaining.md` with what landed and what remains. It is the only
+   record of state; a document under `docs/v2/records/` is frozen evidence for a closed
+   boundary and is never updated with later state.
 6. Report per package, with command evidence.
 
 ## 7. When not to use this
@@ -146,8 +171,9 @@ wrong shape when:
 
 - the work converges on one shared file (M1's second round converged on
   `tests/conftest.py`, so it ran with a single executor);
-- the packages are sequentially dependent (M2's boundaries are schema → records →
-  projections → operations);
+- the packages are sequentially dependent (M2's schema boundary had to land before
+  records, and records before projections — while §4.4 Operations touches different
+  tables and runs alongside §4.3; `docs/v2/m2-remaining.md` holds the current order);
 - the change is small enough that the coordination costs more than the work.
 
 Saying "this does not need three lanes" is a valid and expected outcome of planning.
@@ -183,9 +209,13 @@ The accepting side checks the four things a report cannot establish about itself
    a symbol moved is not the symbol having moved.
 3. **The test count against a pre-change baseline.** A bare pass count cannot distinguish
    added tests from lost ones.
-4. **The environment the numbers came from.** The canonical interpreter is recorded in
-   `docs/v2/records/architecture-audit.md` section 6; evidence produced under another
-   worktree's environment is not accepted.
+4. **The environment the numbers came from.** The canonical interpreter is this
+   worktree's dedicated environment, `./.venv/bin/python`, bootstrapped with
+   `python3 -m venv .venv`, `./.venv/bin/python -m pip install -e '.[test]'`, and
+   `./.venv/bin/playwright install chromium`. Evidence produced under another worktree's
+   editable environment is not accepted, even when import-order guards prove that v2 won.
+   (`docs/v2/records/architecture-audit.md` section 6 records where this rule came from;
+   it is frozen at M1 close and is not the live authority.)
 
 Re-run a gate only when one of those checks fails, when the report leaves a gate
 unproduced, or when the environment of the original run is itself in doubt — which is

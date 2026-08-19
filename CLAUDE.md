@@ -46,11 +46,13 @@ sources and artifacts are evidence, not an active workflow.
 The class follows from what the change touches, not from how it feels.
 
 **Class A — local.** Does not touch `migrations/`, an artifact path, a public callable
-signature, or an error message a test matches on.
+signature, or a contracted message string. A message is contracted when a
+specification, public interface, golden or snapshot, or deliberate test assertion makes
+it one — not merely because some test happens to match on it.
 Gates: the focused tests, then the non-browser suite once.
 
 **Class B — contract.** Changes a stored value's meaning, a signature, a projection
-field, or a matched message.
+field, or a contracted message.
 Gates: Class A, plus golden hashes, the architecture test, and an offline CLI run.
 The reasoning goes in the commit message.
 
@@ -147,8 +149,11 @@ are the one place where full ceremony is warranted.
   statuses, migration behavior, or artifact lifecycle.
 - Work only in the v2 branch/worktree against an explicitly marked, isolated Workspace.
   Never point any command at live v1 data.
-- Preserve unrelated user changes in a dirty worktree. One agent at a time: concurrent
-  edits race the test runner and make every measurement meaningless.
+- Preserve unrelated user changes in a dirty worktree. One agent at a time per worktree
+  and isolated Workspace: concurrent edits race the test runner and make every
+  measurement meaningless. Parallel agents are permitted only under
+  `docs/v2/process/execution-protocol.md`, with separate git worktrees, disjoint file
+  ownership, and isolated runtime and test resources.
 - Small, intentional commits. Do not mix unrelated changes in one commit.
 - Never use destructive Git or filesystem operations to simplify migration or cleanup.
 
