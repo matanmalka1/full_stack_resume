@@ -74,13 +74,15 @@ Stage 7b landed in 2a and does not recur.
 Not started. Scope is the five bullets of the plan §4.3; none is open to interpretation
 here, so they are not restated.
 
-Inherited into this section:
+Inherited checks resolved before this section starts:
 
-- [ ] The A2 residue — relocating the `_set_ready` / `_record_submission` /
-      `record_decision` rules — which §4.3 replaces with the `PreparationState` and
-      `ready_qualified` projections rather than moving as-is.
-- [ ] The boundary-1 follow-up on private cross-owner reach-ins in the persistence
-      package (`docs/v2/records/m2-schema-and-repositories.md`, "Follow-up for boundary 3").
+- [x] The A2 residue is closed: `_set_ready`, repository `_record_submission`, and
+      `record_decision` are gone; submission rules are application-owned and readiness is the
+      `ready_qualified` projection (`0f9eb94`, `682985d`).
+- [x] The boundary-1 cross-owner follow-up is closed: the unchecked status primitives are gone.
+      The sole remaining internal creation primitive hard-codes the valid initial `saved` state
+      and its recruitment event, and preparation invokes it through a repository bound to the
+      same UnitOfWork, satisfying D7 (`682985d`).
 
 ## D. §4.4 Operations — the largest remaining package
 
