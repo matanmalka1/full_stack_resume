@@ -1,6 +1,6 @@
 # v2 Execution Protocol — lead agent and parallel executors
 
-Status: **Active working protocol (2026-08-18)**
+Status: **Active working protocol (2026-08-19)**
 
 Scope: how multi-agent implementation work is organized in this repository. This document
 describes the *process*; it grants no authorization and overrides no product document.
@@ -17,13 +17,14 @@ is the honest answer — see section 7.
 
 | Role | Owns | Never does |
 | --- | --- | --- |
-| **Lead agent** | Sequencing, the shared/lead-only file set, integration, final verification, every judgment call and stop-condition decision | Delegate a judgment call to an executor |
+| **Lead agent** | Sequencing, any declared lead-only files, integration, final verification, every judgment call and stop-condition decision | Delegate a judgment call to an executor |
 | **Executor** | One lane's exclusive file set, mechanically | Touch another lane's files; decide behaviour; coordinate with another executor |
 | **Reviewer** (optional) | Read-only audit of acceptance criteria; reports findings | Write anything; own any file |
 
 Model allocation: strongest reasoning model as lead, mid-tier for executors, and the
 reviewer sized to the audit's difficulty. The reasoning burden concentrates in guardrail
-design and integration, which are lead-only.
+design and integration. Those activities are lead-owned when the package needs them; they
+are not mandatory phases for every package.
 
 ## 2. Waves
 
@@ -33,14 +34,16 @@ once, when the boundary closes.
 
 | Wave | Who | Content |
 | --- | --- | --- |
-| 0 | lead, alone | Guardrails first, then any dead-code removal |
+| 0 (when owed) | lead, alone | New, widened, or newly non-vacuous guardrails; dead-code removal that must precede lane work |
 | 1 | executors, parallel | One work package per lane |
-| 2 | lead, alone | Integration: remove temporary compatibility shims, repoint real call sites, then one full verification at the end |
+| 2 | lead, alone | Integration: reconcile cross-lane call sites, remove any temporary compatibility shims, then one full verification at the end |
 | 3 | lead, with the user | Anything approval-gated. Never folded into wave 2 |
 
-Wave 0 is serial and first for a specific reason: it lands the enforcement that every lane
-is then required to keep green, and it deletes symbols a lane might otherwise start using.
-Guardrails written after the moves cannot fail on the moves.
+Wave 0 is used only when a package owes a guardrail under section 9, or when a deletion must
+land before lanes start so they cannot depend on dead code. In that case it is serial and
+first: the enforcement every lane must keep green has to exist before the moves it guards.
+When existing guards already cover the change and no prerequisite deletion exists, start at
+wave 1. Do not invent a guardrail phase to make mechanical work look staged.
 
 Widened architecture rules land with an **explicit allowlist of known offenders**, so the
 file records the debt and blocks new instances. Entries may be removed as debt is paid;
@@ -49,30 +52,39 @@ entries may never be added.
 ## 3. Exclusive file ownership
 
 Each lane is defined by the paths it **owns**, the paths it may **read**, and the paths it
-**must not touch**. Touching another lane's path is a protocol violation, not a merge
-conflict to resolve later.
+**must not touch without reassignment**. Uncoordinated cross-lane edits are a protocol
+violation, not a merge conflict to resolve later.
 
-A **lead-only set** is declared up front and edited by nobody in wave 1. It is what makes
-the parallelism safe, and it is derived from actual coupling rather than convenience —
-typically the composition root, the CLI, shared test fixtures, and any hub module that every
-lane would otherwise have to edit.
+A **lead-only set**, if one is needed, is declared up front and edited by nobody else in wave
+1. It is derived from actual cross-lane coupling rather than file category: a composition
+root, CLI module, shared fixture, or hub is not automatically lead-only. A trivial edit may
+be assigned to one lane when that keeps ownership disjoint.
+
+If a lane discovers that it needs a file outside its ownership, it pauses that edit and
+escalates to the lead. The lead may transfer that file's ownership, move the edit into wave
+2, or stop the package if neither preserves disjointness. The transfer is recorded before
+work resumes; two lanes never own the file at once.
 
 Lanes are derived from the coupling graph, not from a target headcount. If the work is
 sequentially dependent, say so and run it serially.
 
 ## 4. The interface contract that makes wave 1 parallel
 
-Every lane **preserves its module's existing public import surface for the whole of wave
-1**, using an explicit temporary re-export in the module that used to hold the symbol,
-marked so it cannot be mistaken for permanent:
+When a move has importers outside the lane, the lane **preserves its module's existing public
+import surface for the whole of wave 1** using an explicit temporary re-export in the module
+that used to hold the symbol, marked so it cannot be mistaken for permanent:
 
 ```python
 from .new_owner import moved_symbol  # temporary re-export: removed in Wave 2
 ```
 
-Consequence: each lane's diff is confined to its own files, every lane branch is
-independently green, and all cross-lane import churn happens exactly once — in wave 2, by
-the lead. The shims are removed there; they never survive into the final state.
+This keeps each lane's diff confined to its own files and moves cross-lane import churn to
+wave 2. The shims are removed there; they never survive into the final state.
+
+The re-export is not required when all importers are in the same lane, or when one lane owns
+the move and every affected importer without creating overlapping edits. In that case update
+the importers once and prove the old import path is unused. The lane declaration states
+which strategy it uses so integration does not assume a shim exists.
 
 ## 5. Git protocol
 
@@ -81,11 +93,15 @@ Workspaces apply unchanged to every lane. What multi-agent work adds:
 
 - One git worktree per lane, all based on the same commit. No executor commits to the
   long-lived branch.
-- Create lane worktrees fresh per milestone. A stale lane worktree silently builds on the
-  wrong baseline.
+- A clean existing lane worktree may be reused when its baseline is the declared common
+  commit and it contains no untracked or uncommitted residue. Otherwise create it fresh. The
+  lead verifies both conditions before assigning work; convenience is not evidence of a
+  valid baseline.
 - Executors never rebase, squash, force-push, or run interactive git.
-- The lead merges in a fixed, declared order, running that lane's subset after each merge
-  and the full suite once, after the last one.
+- The lead merges in a fixed, declared order. After each merge, run a smoke/import check plus
+  any focused check justified by actual coupling introduced at that merge. Run the full
+  relevant suite once, after the last merge. Re-run a lane's whole subset only when the merge
+  changes something that subset exercised or section 9's evidence checks fail.
 
 ## 6. Definition of done
 
@@ -93,16 +109,17 @@ Workspaces apply unchanged to every lane. What multi-agent work adds:
 
 A lane reports done only when all of these hold, with command output quoted:
 
-1. Its own declared test subset passes. Not the importers' tests: section 4's shim keeps
-   the public import surface fixed for the whole of wave 1, so a lane cannot break its
-   importers without first breaking that surface. Importer coverage is the lead's, after
-   the merge, where the surface actually moves.
+1. Its own declared test subset passes. When section 4's shim strategy is used, importer
+   coverage is the lead's after merge, where the surface actually moves. When the lane owns
+   all affected importers and updates them directly, its subset includes those importers.
 2. The architecture test passes and its allowlist has **not** grown.
 3. `git diff --stat` lists only files the lane owns.
 4. An explicit statement of what did **not** change — for behaviour-preserving work: no
-   threshold, message string, exception type, validation group name, status, callable
-   signature, stored shape, artifact-path policy, or fact semantic. Message text is checked
-   byte-for-byte, because tests match on it.
+   threshold, contracted message string, exception type, validation group name, status,
+   callable signature, stored shape, artifact-path policy, or fact semantic. Message text is
+   preserved byte-for-byte only when a specification, public interface, snapshot/golden, or
+   deliberate test assertion makes it a contract. Incidental prose is not promoted to an API
+   merely because it appears in the diff.
 5. Anything not achievable mechanically is reported as a finding, **not** worked around. A
    lane that discovers it needs to change behaviour stops and reports.
 
@@ -110,8 +127,9 @@ Reporting follows `CLAUDE.md`: passed / failed / remaining, with command evidenc
 
 ### Lead integration
 
-1. Merge in the declared order, running the merged lane's subset after each merge.
-2. Delete every temporary shim and repoint the real call sites.
+1. Merge in the declared order, running the risk-based post-merge checks from section 5.
+2. Delete every temporary shim and repoint the real call sites; where no shim was used,
+   reconcile only the cross-lane call sites left to integration.
 3. Prove no module still imports a moved symbol from its old home (grep the old paths).
 4. One full verification at boundary close: the non-browser suite, the semantic-parity
    check, and the browser suite only if the boundary touched a rendering or browser path.
@@ -142,7 +160,8 @@ which are specific to moving code under exclusive ownership:
 - a move cannot be made without changing behaviour, or a test asserts on something the
   change would alter;
 - the architecture allowlist would need a **new** entry;
-- a lane needs a file it does not own;
+- a requested ownership transfer cannot preserve exclusive ownership or would invalidate
+  another lane's in-flight work;
 - the semantic-parity comparison reports any difference;
 - an acceptance criterion cannot be honestly ticked.
 
