@@ -14,8 +14,9 @@ or weaken an existing acceptance gate.
       command-handler registry; CLI signatures, output, and errors unchanged.
 - [x] **TODO 6 — completed (`9e82131`):** extracted `validate_draft` into ordered
       document and per-claim rule registries without changing validation behavior.
-- [ ] **TODO 7:** remove the transitional composite repository while preserving the
-      approved repository boundaries and UnitOfWork behavior.
+- [x] **TODO 7 — completed (`29d053b`):** removed the transitional composite repository;
+      `Repository` now inherits the five ownership repositories, with boundaries and
+      UnitOfWork behavior unchanged.
 - [x] **TODO 8 — completed (`0b5a2c4`):** retired `persistence/primitives.py`; all random
       v2 identities now use the shared UUIDv4 policy in `util.new_id()`.
 - [ ] **TODO 9:** retire `persistence/serialization.py` while preserving the
