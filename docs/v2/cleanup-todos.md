@@ -33,18 +33,38 @@ or weaken an existing acceptance gate.
 - [x] **TODO 13:** measured 178/201 MB dedicated virtualenvs and one shared 554 MB
       Playwright browser cache; with a warm `uv` cache, a 173 MB logical environment added
       about 2 MB physically while keeping independent editable environments and Workspace state.
-- [ ] **TODO 14:** reassess architecture-test ceremony and replace manual checks with
-      derived guards where possible without weakening the no-growth allowlist rule.
-      Cheaper now than when it was written: three exception lists emptied on 2026-08-19
-      (`ARCHITECTURE_DEBT_ALLOWLIST`, `PERSISTENCE_KNOWN_OFFENDERS`,
-      `CANDIDATE_EVIDENCE_MODULES`), so the rules they qualified are now unconditional.
+- [x] **TODO 14 — completed (`8429aa5`).** Every rule in `tests/test_architecture.py` was
+      classified by what it actually proves. Two were hand-maintained and are now derived;
+      the rest already read their answer out of the code and were left alone. Nothing was
+      removed: no rule turned out to guard something that had gone away.
 
-- [ ] **TODO 16:** split `cli.py` (1,200 lines). It holds the argparse tree (~200 lines),
-      25 command handlers, output formatting, `export_csv`, and `fact_command`. Same
-      shape as the `ports` split: a package whose `__init__` keeps the public surface, so
-      no importer or command name changes. Verify by extracting exact source segments and
-      diffing unparsed ASTs before and after, which is what caught a silently dropped
-      decorator during the ports split.
+      The one that mattered was latent. The rule forbidding `domain`/`application` from
+      naming a Workspace root checked `artifacts_root`, `knowledge_root`, and `base_dir` —
+      while `runtime/workspace.py` defines five roots. `state_root`, `temp_root`, and
+      `logs_root` were never covered. It now reads `ROOT_NAMES` from the module that owns
+      them. Nothing violated the gap, which is exactly why nobody found it: a hand-kept
+      list fails only when someone happens to trip the part that was written down.
+
+      The two empty exception sets were deliberately kept rather than collapsed to a bare
+      assertion, matching `CANDIDATE_EVIDENCE_MODULES` in `tests/test_candidate.py`. A
+      re-introduced offender should fail at the designated place rather than arrive with
+      an ad hoc exemption somewhere else.
+
+- [x] **TODO 16 — completed (`bcd0fe4`).** `cli.py` (1,200 lines) is now `cv_engine/cli/`:
+      eleven modules, largest 255 lines, plus `__main__.py` because a package needs one
+      where a module got `python -m` for free. `__init__` re-exports the public surface,
+      so no importer and no command name changed.
+
+      A pure copy would have shipped a real bug. `_repo_root` computed
+      `Path(__file__).resolve().parent.parent`, correct while `cli.py` sat directly in
+      `cv_engine/`; one directory deeper it lands on `cv_engine/` instead of the repo
+      root. The AST diff surfaced it as the only changed body, which is what that check
+      is for — the ports split caught a dropped decorator the same way.
+
+      Verified independently of the agent's report: 49 top-level names before and after
+      with no unintended body change, and the full parser surface — 209 actions, flags,
+      defaults, and `choices` — dumped from the old module loaded out of Git and diffed
+      against the new one. Identical.
 
 - [x] **TODO 17 — completed, but not as written.** The item assumed all four
       `operations.py` modules were misnamed. Checking each against its own package's
