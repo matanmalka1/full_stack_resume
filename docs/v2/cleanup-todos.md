@@ -35,6 +35,36 @@ or weaken an existing acceptance gate.
       about 2 MB physically while keeping independent editable environments and Workspace state.
 - [ ] **TODO 14:** reassess architecture-test ceremony and replace manual checks with
       derived guards where possible without weakening the no-growth allowlist rule.
+      Cheaper now than when it was written: three exception lists emptied on 2026-08-19
+      (`ARCHITECTURE_DEBT_ALLOWLIST`, `PERSISTENCE_KNOWN_OFFENDERS`,
+      `CANDIDATE_EVIDENCE_MODULES`), so the rules they qualified are now unconditional.
+
+- [ ] **TODO 16:** split `cli.py` (1,200 lines). It holds the argparse tree (~200 lines),
+      25 command handlers, output formatting, `export_csv`, and `fact_command`. Same
+      shape as the `ports` split: a package whose `__init__` keeps the public surface, so
+      no importer or command name changes. Verify by extracting exact source segments and
+      diffing unparsed ASTs before and after, which is what caught a silently dropped
+      decorator during the ports split.
+
+- [ ] **TODO 17:** the four `operations.py` modules — `application/operations.py` (288),
+      `application/services/operations.py` (518), `infrastructure/persistence/operations.py`
+      (639), `runtime/operations.py` (103). The layering is correct; the repeated name is
+      not, and it makes every traceback and import ambiguous at a glance. Rename by role,
+      not by layer.
+
+- [ ] **TODO 18:** the remaining files over 500 lines, in descending order:
+      `application/services/knowledge.py` (723, grew in §4.5), `domain/models.py` (676),
+      `application/services/drafts.py` (646), `infrastructure/persistence/operations.py`
+      (639), `application/state.py` (528), `domain/drafts.py` (524),
+      `application/services/operations.py` (518). Take them one at a time and only where
+      a file holds more than one subject; size alone is not a defect.
+
+- [ ] **TODO 19 — open question, not a task.** The port hierarchy was left unflattened
+      during the `ports` split. `DraftRepository -> ReadinessRepository ->
+      TrackingRepository -> ApplicationRepository` is linear and each level adds its own
+      methods, so flattening means duplicating them. The MRO breakage that prompted the
+      split came from base order inside one class, not from depth. Decide deliberately
+      whether the chain earns its keep; do not refactor it as cleanup.
 - [x] **TODO 15 — completed:** restored `UNIQUE` on `submissions.artifact_version_id`.
       The `0006` rebuild had dropped it, so the same artifact could be recorded as
       submitted twice in a table with no-update and no-delete triggers — a permanent

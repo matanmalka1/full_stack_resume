@@ -210,13 +210,35 @@ State of the plan's seven §4.7 checkboxes; the criteria themselves live there.
 | 6 — backup restore to an openable Workspace | Closed: `restore_workspace` returns a Workspace loaded through the normal fail-closed path, so an archive that restored to something unopenable fails at restore |
 | 7 — no M2 code points to live v1 paths | Closed by construction: no code reads v1 at all. The `looks_legacy` guard stays so no v2 command can open or mark the archive |
 
-§4.7 items 4 and 5 are closed. The remaining acceptance items close with their owning boundaries.
+Items 3 through 7 are closed. Items 1 and 2 are the only acceptance work left in M2, and
+they close together.
+
+### H. Items 1 and 2 — derive the coverage from the schema
+
+Both are partial for the same reason: they were written against the M1 table set and
+never grew with it. The schema now has 24 tables and 40 triggers; the guards cover
+eleven. Every boundary since added tables — operations, approved revisions, the
+knowledge journal, tracking — and each one had to remember to extend a hand-kept list.
+Nothing failed when one did not.
+
+- [ ] **H1 — immutable entities (item 2).** Ask `sqlite_master` which tables carry
+      `no_update_*` / `no_delete_*` triggers and assert every one of them rejects an
+      UPDATE and a DELETE. Then invert it: every table is expected to be guarded unless
+      it appears in a small list of deliberate exceptions, so a new mutable table has to
+      be argued for rather than merely forgotten. That inversion is what found a table
+      unguarded since M1, per the note in `CLAUDE.md`.
+- [ ] **H2 — repositories and UnitOfWork (item 1).** Extend the real-SQLite coverage to
+      the tables added after boundary 1, driven by the same schema read rather than a
+      second list. A repository that writes a table no test opens is the gap.
+
+This is the last irreversibility guard in the product: immutable records are the one
+thing `CLAUDE.md` still names as not regenerable. Everything else outstanding is
+cleanup, and lives in `cleanup-todos.md`.
 
 ## Dependency order
 
-A → B → C → D → E are closed. F is now Workspace backup and restore only, and remains
-required before anything that touches real data. G closes incrementally rather than as a
-phase.
+A → B → C → D → E → F are closed. G closes incrementally; H is what remains of it, and
+nothing depends on H, so it can be taken whenever.
 
 ## Retiring v1
 
