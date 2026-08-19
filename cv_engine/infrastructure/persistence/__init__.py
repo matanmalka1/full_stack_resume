@@ -1,6 +1,6 @@
-from .composite import Repository
 from .connection import SqliteUnitOfWork, connect
 from .drafts import SqliteDraftRepository
+from .repository import Repository
 from .schema import (
     MigrationChecksumError,
     SchemaError,

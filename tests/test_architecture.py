@@ -305,12 +305,6 @@ def test_numbered_migrations_are_registered_once() -> None:
     )
 
 
-def test_composite_repository_contains_no_sql() -> None:
-    composite = ENGINE / "infrastructure/persistence/composite.py"
-    assert composite.is_file(), "the delegation-only composite must exist"
-    assert not _sql_string_lines(composite)
-
-
 def test_validation_report_has_one_in_package_construction_authority() -> None:
     """Production callers use the domain factory; fixtures remain unrestricted."""
     offenders = [

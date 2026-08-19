@@ -156,7 +156,7 @@ surface for `cv workspace status`.
 | `SqliteArtifactRepository` | `artifacts`, `artifact_versions`, `decision_records`, `generation_runs`, `validation_runs` | plus `artifact_inventory()` and `integrity_check()` |
 | `SqliteTrackingRepository` | `submissions` | `set_ready` / `record_submission` compose the application repository under one UnitOfWork (D7) |
 | `SqliteAuditRepository` | `fact_events` | fact lifecycle trail |
-| `Repository` (`composite.py`) | nothing | delegation only; an architecture test asserts it contains no SQL |
+| `Repository` (`repository.py`) | nothing | inherits the five owners; holds no SQL and registers no method names, so an owner's new method is reachable without being listed anywhere |
 
 `DraftRepository` (§4.2) and `OperationRepository` (§4.4) are created with their tables, not
 now. The READY/APPLIED refusals in the generic transition stay in the repository as
