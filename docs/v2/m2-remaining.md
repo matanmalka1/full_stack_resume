@@ -90,11 +90,9 @@ Inherited checks resolved before this section starts:
 
 ## D. §4.4 Operations — the largest remaining package
 
-**Implementation complete; closure gates pending.** The durable runner foundation landed at
-`7400870`, and analyze/draft/render CLI integration landed at `d0e54f1`. The final boundary diff
-adds approval receipts and crash recovery, structured technical failure logging, graceful worker
-cancellation, provider-failure classification, CLI operation inspection/cancel/retry, and routes
-`cv fast` through the same foreground runner.
+**Closed.** The durable runner foundation landed at `7400870`, analyze/draft/render CLI
+integration at `d0e54f1`, and recovery plus the completed Class C gate at `bfbd64d`. The frozen
+close-out record is `docs/v2/records/m2-operations.md`.
 
 - [x] Operation schema, atomic claims, bounded resource leases, heartbeat, phases,
       cancellation, manual retry, safe failure metadata, and inactive outputs.
@@ -103,8 +101,8 @@ cancellation, provider-failure classification, CLI operation inspection/cancel/r
 - [x] Startup interruption for expired queued/running work and graceful cancellation on shutdown.
 - [x] Optimistic pre-execution and pre-activation checks with `SOURCE_CHANGED`.
 - [x] One classified automatic retry for transient provider/browser failures.
-- [ ] Run the Class C closing gate, record its exact results, then commit and mark this boundary
-      Closed. No live v1 path is permitted in the rehearsal.
+- [x] The Class C closing gate passed against an isolated test Workspace; no live v1 path was
+      opened.
 
 ## E. §4.5 Knowledge consistency — the highest correctness risk
 
@@ -132,16 +130,14 @@ State of the plan's seven §4.7 checkboxes; the criteria themselves live there.
 | 1 — repositories/UoW under real SQLite | Partial: boundary 1, M1 table set only |
 | 2 — immutable entities reject bypasses | Partial: eleven tables covered at boundary 1 |
 | 3 — projection/action policy under concurrency | Closed at `fe1e92c`; includes two-connection SQLite snapshot consistency |
-| 4 — ETag, idempotency, leases, cancellation, retry, `SOURCE_CHANGED` | Implementation complete; awaiting D's final Class C gate |
+| 4 — ETag, idempotency, leases, cancellation, retry, `SOURCE_CHANGED` | Closed at `bfbd64d`; evidence in `m2-operations.md` |
 | 5 — journal crash windows | Open, follows E |
 | 6 — backup restore to an openable Workspace | Open, follows F |
 | 7 — no M2 code points to live v1 paths | Holds so far; a standing constraint, not a deliverable |
 
-No §4.7 checkbox is ticked yet. Boundary 1 deliberately claimed none — see
-`docs/v2/records/m2-schema-and-repositories.md`, "§4.7 status".
+§4.7 item 4 is closed. The remaining acceptance items close with their owning boundaries.
 
 ## Dependency order
 
-A → B → C are closed. D awaits its final gate; E follows the closed state-policy boundary; F
-remains required before anything that touches real data. G closes incrementally rather than as a
-phase.
+A → B → C → D are closed. E follows the closed state-policy boundary; F remains required before
+anything that touches real data. G closes incrementally rather than as a phase.
