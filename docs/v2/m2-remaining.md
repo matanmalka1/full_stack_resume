@@ -22,6 +22,9 @@ close-out section; the numbers live there.
 Closed: **§4.1 schema and repositories** (boundary 1, `4796744`, record in
 `docs/v2/records/m2-schema-and-repositories.md`).
 
+Closed: **§4.5 Knowledge consistency** (`122b957`, record in
+`docs/v2/records/m2-knowledge-consistency.md`).
+
 ## A. 2a — preparation records
 
 **Closed.** Implementation merged at `a9cc63a`; close-out record in
@@ -106,10 +109,10 @@ close-out record is `docs/v2/records/m2-operations.md`.
 
 ## E. §4.5 Knowledge consistency — the highest correctness risk
 
-**Ready to start.** This boundary is sequential: the journal schema owns the durable record
-consumed by file staging, recovery, the lifecycle commands, and finally the contextual
-SelectionPlan command. Those packages converge on the Knowledge port/service, repository, and
-composition root, so parallel lanes would not have honest exclusive ownership.
+**Closed.** The durable journal landed at `e30b2f4`, validated file staging at `c77ea44`,
+the coordinator and lifecycle commands at `9aaa855`, and removal of direct runtime writers at
+`707c53d`. The verification handoff was finalized at `122b957`; the frozen close-out record is
+`docs/v2/records/m2-knowledge-consistency.md`.
 
 Execution packages:
 
@@ -157,14 +160,12 @@ Execution packages:
       offline CLI lifecycle in a fresh isolated `development`/`copy` Workspace with
       `OPENAI_API_KEY` unset; browser-complete suite; and a fresh `0001`-only database upgrading
       cleanly to head. The sheet must include all setup, fixture/input, Workspace, and explicit-ID
-      steps rather than describing the flow in prose. The implementation is **awaiting user
-      verification**, not closed; the command sheet was supplied at handoff.
+      steps rather than describing the flow in prose. The user ran the complete sheet successfully;
+      the results and test-count reconciliation are frozen in the close-out record.
 
-During E1–E5, do not run the full suite, golden suite, browser suite, or offline lifecycle. A
-failure in a focused check is fixed before moving forward. E6 does not run those broad checks
-either: it supplies their exact commands for the user to run independently. §4.7 item 5 closes
-only after the user reports that every crash window deterministically recovered or explicitly
-quarantined and the remaining handoff commands passed.
+During E1–E5, only focused checks ran. At E6 the user independently ran the broad closing gate,
+including the parameterized crash-window coverage, isolated offline lifecycle, browser suite,
+and migration-to-head checks. Every gate passed, closing §4.7 item 5.
 
 ## F. §4.6 Backup and migration scaffolding
 
@@ -184,11 +185,11 @@ State of the plan's seven §4.7 checkboxes; the criteria themselves live there.
 | 2 — immutable entities reject bypasses | Partial: eleven tables covered at boundary 1 |
 | 3 — projection/action policy under concurrency | Closed at `fe1e92c`; includes two-connection SQLite snapshot consistency |
 | 4 — ETag, idempotency, leases, cancellation, retry, `SOURCE_CHANGED` | Closed at `bfbd64d`; evidence in `m2-operations.md` |
-| 5 — journal crash windows | Awaiting user verification; implementation at `9aaa855`, handoff at `707c53d` |
+| 5 — journal crash windows | Closed at `122b957`; evidence in `m2-knowledge-consistency.md` |
 | 6 — backup restore to an openable Workspace | Open, follows F |
 | 7 — no M2 code points to live v1 paths | Holds so far; a standing constraint, not a deliverable |
 
-§4.7 item 4 is closed. The remaining acceptance items close with their owning boundaries.
+§4.7 items 4 and 5 are closed. The remaining acceptance items close with their owning boundaries.
 
 ## Dependency order
 

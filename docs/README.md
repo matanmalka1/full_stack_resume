@@ -32,6 +32,7 @@ record: evidence, not an active workflow.
 | `m2-domain-records.md` | M2 boundary 2 — domain records, including Stage 7b |
 | `m2-approved-revisions.md` | M2 boundary 2b-i — approved revisions and artifact binding |
 | `m2-operations.md` | M2 §4.4 — durable Operations, recovery, and Class C evidence |
+| `m2-knowledge-consistency.md` | M2 §4.5 — journaled Knowledge mutation and recovery evidence |
 | `stage7-validation-report-options.md` | The option analysis behind the `ValidationReport` decision |
 
 ## State and process
