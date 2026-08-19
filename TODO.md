@@ -16,7 +16,8 @@ or weaken an existing acceptance gate.
       document and per-claim rule registries without changing validation behavior.
 - [ ] **TODO 7:** remove the transitional composite repository while preserving the
       approved repository boundaries and UnitOfWork behavior.
-- [ ] **TODO 8:** retire `persistence/primitives.py` without duplicating UUID policy.
+- [x] **TODO 8 — completed (`0b5a2c4`):** retired `persistence/primitives.py`; all random
+      v2 identities now use the shared UUIDv4 policy in `util.new_id()`.
 - [ ] **TODO 9:** retire `persistence/serialization.py` while preserving the
       serialization-version contract.
 - [x] **TODO 10 — completed (`73bb020`):** retired `compat.py`; omitted-source compatibility
