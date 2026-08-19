@@ -16,6 +16,7 @@ from typing import Any
 from ..domain.facts import FactStoreError
 from ..util import (
     canonical_json,
+    new_id,
     normalized_text,
     sha256_file,
     sha256_text,
@@ -652,7 +653,7 @@ def apply_migration(
     if final_db.exists() or final_report.exists() or any(path.exists() for path in final_facts):
         raise MigrationSafetyError("live migration targets already exist; refusing to overwrite")
 
-    staging = root / "data" / "migration" / f"staging-{uuid.uuid4()}"
+    staging = root / "data" / "migration" / f"staging-{new_id()}"
     staging.mkdir(parents=True)
     moved: list[tuple[Path, Path]] = []
     try:
@@ -678,7 +679,7 @@ def apply_migration(
             connection.execute(
                 "INSERT INTO migration_runs(id, snapshot_id, manifest_hash, dry_run_report_hash, row_count, artifact_count, report_json, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    str(uuid.uuid4()),
+                    new_id(),
                     gate["snapshot_id"],
                     gate["manifest_hash"],
                     gate["dry_run_report_hash"],

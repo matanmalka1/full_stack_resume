@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import uuid
-
 from ... import __version__
 from ...domain.analysis.approval import unresolved_approval_reasons
 from ...domain.draft_markdown import serialize_markdown, synchronize_markdown_claims
@@ -16,7 +14,7 @@ from ...domain.models import (
     WorkingDraft,
 )
 from ...domain.validation import validate_draft
-from ...util import canonical_json, sha256_text, utc_now
+from ...util import canonical_json, new_id, sha256_text, utc_now
 from ..commands import (
     ApprovalResult,
     DraftCommand,
@@ -359,7 +357,7 @@ class DraftService(ServiceBase[DraftRepository]):
         # that draft's own analysis. A newer analysis does not get to describe an
         # older document.
         analysis_id, analysis = self._bound_analysis(application_id, draft, profiles, facts)
-        revision_id = str(uuid.uuid4())
+        revision_id = new_id()
         try:
             published = self.revision_payloads.commit_revision(
                 application_id,
@@ -465,7 +463,7 @@ class DraftService(ServiceBase[DraftRepository]):
                 approved_at=now,
             )
             decision = DecisionRecord(
-                id=str(uuid.uuid4()),
+                id=new_id(),
                 application_id=application_id,
                 artifact_version_id=markdown_version_id,
                 job_snapshot_id=draft.job_snapshot_id,

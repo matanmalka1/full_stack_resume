@@ -4,11 +4,10 @@ import json
 from typing import Any
 
 from ...domain.models import DecisionRecord, ValidationReport, ValidationRunLineage
-from ...util import canonical_json, utc_now
+from ...util import canonical_json, new_id, utc_now
 from .base import SqliteRepositoryBase
 from .connection import integrity_results
 from .preparation import _require_owned_snapshot
-from .primitives import new_id
 
 
 class SqliteArtifactRepository(SqliteRepositoryBase):

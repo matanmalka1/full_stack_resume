@@ -3,9 +3,15 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
+
+
+def new_id() -> str:
+    """Return one opaque UUIDv4 identity for a new v2 record."""
+    return str(uuid.uuid4())
 
 
 def utc_now() -> str:

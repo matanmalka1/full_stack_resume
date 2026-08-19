@@ -4,9 +4,8 @@ from typing import Any
 
 from ...domain.models import ApplicationStatus
 from ...domain.recruitment import transition_allowed
-from ...util import canonical_json, utc_now
+from ...util import canonical_json, new_id, utc_now
 from .base import SqliteRepositoryBase
-from .primitives import new_id
 
 
 class SqliteApplicationRepository(SqliteRepositoryBase):

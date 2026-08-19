@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import json
 import shutil
-import uuid
 from pathlib import Path
 from typing import Literal
 
 from ..domain.models import StrictModel
 from ..infrastructure.paths import relative_within, resolve_within
-from ..util import utc_now
+from ..util import new_id, utc_now
 
 MARKER_NAME = ".cv-workspace.json"
 WORKSPACE_VERSION = 2
@@ -141,7 +140,7 @@ class Workspace:
             except (json.JSONDecodeError, KeyError) as exc:
                 raise WorkspaceError(f"installation record is unreadable: {path}") from exc
         path.parent.mkdir(parents=True, exist_ok=True)
-        value = str(uuid.uuid4())
+        value = new_id()
         _write_json(path, {"installation_id": value, "created_at": utc_now()})
         return value
 
@@ -197,7 +196,7 @@ def create_workspace(
         )
     root.mkdir(parents=True, exist_ok=True)
     marker = WorkspaceMarker(
-        workspace_id=str(uuid.uuid4()),
+        workspace_id=new_id(),
         workspace_version=WORKSPACE_VERSION,
         purpose=purpose,
         data_class=data_class,

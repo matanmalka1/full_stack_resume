@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import uuid
-
-from ...util import normalized_text, sha256_text
+from ...util import new_id, normalized_text, sha256_text
 from ..commands import (
     IngestCommand,
     IngestedApplication,
@@ -24,8 +22,8 @@ class ApplicationService(ServiceBase[ApplicationStore]):
 
     def ingest(self, command: IngestCommand) -> IngestedApplication:
         try:
-            application_id = str(uuid.uuid4())
-            snapshot_id = str(uuid.uuid4())
+            application_id = new_id()
+            snapshot_id = new_id()
             payload = self.snapshot_payloads.commit_snapshot(
                 application_id,
                 snapshot_id,

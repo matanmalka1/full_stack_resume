@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import uuid
-
 from ...domain.models import (
     ApplicationStatus,
 )
-from ...util import utc_now
+from ...util import new_id, utc_now
 from ..commands import (
     ApplicationMutationResult,
     NextActionCommand,
@@ -90,7 +88,7 @@ class TrackingService(ServiceBase[TrackingRepository]):
             with self.repo.unit_of_work() as uow:
                 transaction = self.repo.bind(uow)
                 transaction.insert_submission(
-                    str(uuid.uuid4()),
+                    new_id(),
                     application_id,
                     pdf_artifact_version_id,
                     now,

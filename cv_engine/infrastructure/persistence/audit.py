@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from ...util import canonical_json, sha256_text, utc_now
+from ...util import canonical_json, new_id, sha256_text, utc_now
 from .base import SqliteRepositoryBase
-from .primitives import new_id
 
 
 class SqliteAuditRepository(SqliteRepositoryBase):

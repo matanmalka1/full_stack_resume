@@ -10,11 +10,10 @@ from ...domain.models import (
     SelectionManifest,
     SelectionPlan,
 )
-from ...util import canonical_json, utc_now
+from ...util import canonical_json, new_id, utc_now
 from .applications import SqliteApplicationRepository
 from .base import SqliteRepositoryBase
 from .connection import SqliteUnitOfWork
-from .primitives import new_id
 
 _SNAPSHOT_COLUMNS = (
     "id, application_id, version_number, payload_path, source_hash, normalized_hash, "

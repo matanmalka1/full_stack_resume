@@ -4,9 +4,8 @@ import json
 from typing import Any
 
 from ...domain.models import ApprovedRevision, DraftDocument, ValidationReport, WorkingDraft
-from ...util import canonical_json, utc_now
+from ...util import canonical_json, new_id, utc_now
 from .base import SqliteRepositoryBase
-from .primitives import new_id
 
 
 class SqliteDraftRepository(SqliteRepositoryBase):

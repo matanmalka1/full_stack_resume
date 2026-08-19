@@ -28,7 +28,6 @@ from cv_engine.infrastructure.persistence import (
     current_schema_version,
 )
 from cv_engine.infrastructure.persistence.applications import SqliteApplicationRepository
-from cv_engine.infrastructure.persistence.primitives import new_id
 from cv_engine.infrastructure.persistence.schema import (
     MIGRATIONS_DIR,
     baseline_fingerprint,
@@ -37,7 +36,7 @@ from cv_engine.infrastructure.persistence.schema import (
     sqlite_master_fingerprint,
 )
 from cv_engine.infrastructure.persistence.serialization import serialization_version
-from cv_engine.util import normalized_text, sha256_text
+from cv_engine.util import new_id, normalized_text, sha256_text
 
 # Immutability is the default, so nothing has to be registered when an immutable
 # table is added. A table is exempt only by being named here, which means that

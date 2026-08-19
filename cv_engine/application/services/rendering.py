@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import uuid
-
 from ...domain.models import (
     ReadyQualification,
     ValidationReport,
 )
 from ...domain.validation import validate_draft
-from ...util import sha256_file
+from ...util import new_id, sha256_file
 from ..chain import decision_record_analysis_id
 from ..commands import (
     RenderResult,
@@ -71,7 +69,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
                 source_report,
             )
         candidate = knowledge.candidate
-        artifact_ids = [str(uuid.uuid4()) for _ in range(3)]
+        artifact_ids = [new_id() for _ in range(3)]
         recruiter_pdf_filename = self.renderer.filename_for(profile.normalized_role, candidate)
         if revision_id is None:
             raise LineageBroken("rendering requires an approved revision-bound claim manifest")

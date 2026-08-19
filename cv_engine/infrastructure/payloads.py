@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Protocol
 
 from ..application.ports import RenderTargets, RevisionPayloads, SnapshotPayload
-from ..util import sha256_file
+from ..util import new_id, sha256_file
 from .paths import relative_within, resolve_within
 
 
@@ -218,7 +218,7 @@ class PayloadStore:
 
         temp_directory = resolve_within(self._temp_root, self._TEMP_DIRECTORY)
         temp_directory.mkdir(parents=True, exist_ok=True)
-        temporary = resolve_within(self._temp_root, temp_directory / f"{uuid.uuid4()}.tmp")
+        temporary = resolve_within(self._temp_root, temp_directory / f"{new_id()}.tmp")
 
         write(temporary)
         resolved_temporary = resolve_within(self._temp_root, temporary)
