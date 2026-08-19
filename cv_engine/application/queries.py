@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from enum import StrEnum
 from typing import Any
 
 from ..domain.models import JobAnalysis
@@ -55,14 +56,76 @@ class JobAnalysisView(BoundaryDTO):
     created_at: str
 
 
-class ApplicationDetailView(BoundaryDTO):
+class PreparationState(StrEnum):
+    NEEDS_ANALYSIS = "needs_analysis"
+    NEEDS_REVIEW = "needs_review"
+    READY_TO_DRAFT = "ready_to_draft"
+    DRAFT_IN_PROGRESS = "draft_in_progress"
+    READY_FOR_APPROVAL = "ready_for_approval"
+    APPROVED = "approved"
+    READY = "ready"
+
+
+class WorkingDraftState(StrEnum):
+    NONE = "none"
+    EDITING = "editing"
+    VALIDATION_FAILED = "validation_failed"
+    VALIDATED = "validated"
+    STALE = "stale"
+
+
+class ReasonView(BoundaryDTO):
+    code: str
+    message: str
+    entity_references: dict[str, str] = {}
+    allowed_resolution_actions: list[str] = []
+
+
+class WarningView(BoundaryDTO):
+    code: str
+    message: str
+    entity_references: dict[str, str] = {}
+
+
+class BlockedActionView(BoundaryDTO):
+    action: str
+    reasons: list[str]
+
+
+class ApplicationStateView(BoundaryDTO):
+    recruitment_status: str
+    terminal_outcome: str | None = None
+    preparation_state: PreparationState
+    working_draft_state: WorkingDraftState
+    review_reasons: list[ReasonView] = []
+    stale_reasons: list[ReasonView] = []
+    primary_stale_reason: str | None = None
+    warnings: list[WarningView] = []
+    active_operation: dict[str, Any] | None = None
+    active_job_snapshot_id: str
+    active_analysis_id: str | None = None
+    active_selection_plan_id: str | None = None
+    active_working_draft_id: str | None = None
+    latest_approved_revision_id: str | None = None
+    latest_ready_revision_id: str | None = None
+    newer_draft_in_progress: bool = False
+    available_actions: list[str] = []
+    blocked_actions: list[BlockedActionView] = []
+    recommended_action: str | None = None
+
+
+class ApplicationDetailView(ApplicationStateView):
     application: ApplicationView
     latest_snapshot: JobSnapshotView
     latest_analysis: JobAnalysisView | None = None
 
 
+class ApplicationListItemView(ApplicationView, ApplicationStateView):
+    """The shared state/action projection plus list-display Application fields."""
+
+
 class ApplicationListView(BoundaryDTO):
-    items: list[ApplicationView]
+    items: list[ApplicationListItemView]
 
 
 class ArtifactVersionView(BoundaryDTO):
@@ -102,6 +165,14 @@ class DecisionRecordView(BoundaryDTO):
 
 def application_view(record: dict[str, Any]) -> ApplicationView:
     return ApplicationView.model_validate(record)
+
+
+def application_list_item_view(
+    record: dict[str, Any], state: ApplicationStateView
+) -> ApplicationListItemView:
+    return ApplicationListItemView.model_validate(
+        {**record, **state.model_dump(mode="python")}
+    )
 
 
 def snapshot_view(record: dict[str, Any], job_text: str) -> JobSnapshotView:

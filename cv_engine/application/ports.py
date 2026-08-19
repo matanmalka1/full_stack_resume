@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, Self, runtime_checkable
@@ -467,8 +468,24 @@ class KnowledgeAuditRepository(FactAudit, WorkingDraftReader, Protocol):
     """
 
 
-class QueryRepository(ApplicationStore, JobStore, ArtifactRegistry, Protocol):
+class QueryRepository(
+    ApplicationStore, JobStore, ArtifactRegistry, WorkingDraftReader, Protocol
+):
     """Read sources used to build storage-neutral query projections."""
+
+    def read_transaction(self) -> AbstractContextManager[Self]: ...
+
+    def approved_revisions(self, application_id: str) -> list[ApprovedRevision]: ...
+
+    def approved_revision(self, revision_id: str) -> ApprovedRevision: ...
+
+    def decision_for_revision(self, revision_id: str) -> dict[str, Any]: ...
+
+    def integrity_check(self) -> list[str]: ...
+
+    def latest_validation_for_working_draft(
+        self, working_draft_id: str
+    ) -> dict[str, Any] | None: ...
 
 
 class ReadinessRepository(DraftRepository, Protocol):

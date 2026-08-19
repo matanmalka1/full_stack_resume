@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 from ..errors import (
     # Re-exported: the v1 CLI and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
@@ -15,43 +17,124 @@ from ..queries import (
     ArtifactVersionsView,
     DecisionRecordView,
     analysis_view,
+    application_list_item_view,
     application_view,
     artifact_version_view,
     decision_view,
     snapshot_view,
 )
+from ..ready import qualify_ready_revision
+from ..state import ProjectionContext, project_application_state
 from .base import ServiceBase
 
 
 class ApplicationQueryService(ServiceBase[QueryRepository]):
     """Storage-neutral read projections for CLI, API, and future UI clients."""
 
-    def list_applications(self) -> ApplicationListView:
+    def _state_inputs(self, transaction, application_record, knowledge):
+        application_id = application_record["id"]
+        snapshot_record = transaction.latest_snapshot(application_id)
+        analyses = transaction.analyses(application_id)
+        active_analysis_record = next(
+            (
+                record
+                for record in reversed(analyses)
+                if record["job_snapshot_id"] == snapshot_record["id"]
+            ),
+            None,
+        )
+        active_analysis_id = (
+            active_analysis_record["id"] if active_analysis_record is not None else None
+        )
         try:
-            return ApplicationListView(
-                items=[application_view(row) for row in self.repo.list_applications()]
+            latest_plan = transaction.latest_selection_plan(application_id)
+        except KeyError:
+            latest_plan = None
+        active_plan = (
+            latest_plan
+            if latest_plan is not None and latest_plan.job_analysis_id == active_analysis_id
+            else None
+        )
+        try:
+            working = transaction.active_working_draft(application_id)
+        except KeyError:
+            working = None
+        draft_plan = (
+            transaction.selection_plan(working.selection_plan_id) if working is not None else None
+        )
+        validation = (
+            transaction.latest_validation_for_working_draft(working.id)
+            if working is not None
+            else None
+        )
+        revisions = tuple(transaction.approved_revisions(application_id))
+        ready_ids = frozenset(
+            revision.id
+            for revision in revisions
+            if qualify_ready_revision(
+                self.artifacts,
+                transaction,
+                application_id,
+                approved_revision_id=revision.id,
+            ).ready_qualified
+        )
+        state = project_application_state(
+            ProjectionContext(
+                application=application_record,
+                active_job_snapshot_id=snapshot_record["id"],
+                active_analysis_id=active_analysis_id,
+                active_analysis=(
+                    active_analysis_record["analysis"]
+                    if active_analysis_record is not None
+                    else None
+                ),
+                active_selection_plan=active_plan,
+                draft_selection_plan=draft_plan,
+                active_working_draft=working,
+                latest_validation=validation,
+                approved_revisions=revisions,
+                ready_revision_ids=ready_ids,
+                knowledge=knowledge,
+                today=date.today(),
             )
+        )
+        return state, snapshot_record, analyses
+
+    def list_applications(self) -> ApplicationListView:
+        knowledge = self.load_knowledge()
+        try:
+            with self.repo.read_transaction() as transaction:
+                items = []
+                for row in transaction.list_applications():
+                    state, _, _ = self._state_inputs(transaction, row, knowledge)
+                    items.append(application_list_item_view(row, state))
+                return ApplicationListView(items=items)
         except (TypeError, ValueError) as exc:
             raise InfrastructureFailure(f"stored application projection is invalid: {exc}") from exc
 
     def application_detail(self, application_id: str) -> ApplicationDetailView:
+        knowledge = self.load_knowledge()
         try:
-            application = application_view(self.repo.get_application(application_id))
-            snapshot_record = self.repo.latest_snapshot(application_id)
-            snapshot = snapshot_view(
-                snapshot_record,
-                self.snapshot_payloads.read_snapshot(
-                    snapshot_record["payload_path"],
-                    snapshot_record["source_hash"],
-                ),
-            )
-            analyses = self.repo.analyses(application_id)
-            latest = analysis_view(analyses[-1]) if analyses else None
+            with self.repo.read_transaction() as transaction:
+                application_record = transaction.get_application(application_id)
+                application = application_view(application_record)
+                state, snapshot_record, analyses = self._state_inputs(
+                    transaction, application_record, knowledge
+                )
+                snapshot = snapshot_view(
+                    snapshot_record,
+                    self.snapshot_payloads.read_snapshot(
+                        snapshot_record["payload_path"],
+                        snapshot_record["source_hash"],
+                    ),
+                )
+                latest = analysis_view(analyses[-1]) if analyses else None
         except KeyError as exc:
             raise UnknownRecord(f"unknown application: {application_id}") from exc
         except (TypeError, ValueError) as exc:
             raise InfrastructureFailure(f"stored application detail is invalid: {exc}") from exc
         return ApplicationDetailView(
+            **state.model_dump(mode="python"),
             application=application,
             latest_snapshot=snapshot,
             latest_analysis=latest,

@@ -52,3 +52,17 @@ class SqliteRepositoryBase:
             yield connection
         finally:
             connection.close()
+
+    @contextmanager
+    def read_transaction(self) -> Iterator[Self]:
+        """Bind every query in one projection to the same SQLite snapshot."""
+        if self._bound_connection is not None:
+            yield self
+            return
+        connection = connect(self.path)
+        try:
+            connection.execute("BEGIN")
+            yield type(self)(self.path, connection)
+        finally:
+            connection.rollback()
+            connection.close()

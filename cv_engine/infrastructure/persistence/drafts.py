@@ -388,3 +388,12 @@ class SqliteDraftRepository(SqliteRepositoryBase):
         if row is None:
             raise KeyError(f"no approved revision for application {application_id}")
         return self._revision_record(row)
+
+    def approved_revisions(self, application_id: str) -> list[ApprovedRevision]:
+        with self.read_connection() as connection:
+            rows = connection.execute(
+                "SELECT * FROM approved_revisions WHERE application_id=? "
+                "ORDER BY version_number",
+                (application_id,),
+            ).fetchall()
+        return [self._revision_record(row) for row in rows]

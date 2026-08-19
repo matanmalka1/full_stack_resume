@@ -333,6 +333,22 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
             raise KeyError(f"no validation report for application {application_id}")
         return ValidationReport.model_validate_json(row["report_json"])
 
+    def latest_validation_for_working_draft(
+        self, working_draft_id: str
+    ) -> dict[str, Any] | None:
+        with self.read_connection() as connection:
+            row = connection.execute(
+                "SELECT id, edit_version, content_hash, job_snapshot_id, job_analysis_id, "
+                "selection_plan_id, report_json, created_at FROM validation_runs "
+                "WHERE working_draft_id=? ORDER BY created_at DESC, rowid DESC LIMIT 1",
+                (working_draft_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        record = dict(row)
+        record["report"] = ValidationReport.model_validate_json(record.pop("report_json"))
+        return record
+
     def validation_for_artifact(
         self,
         application_id: str,
