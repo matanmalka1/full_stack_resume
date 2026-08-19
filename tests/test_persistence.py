@@ -214,8 +214,12 @@ def test_tracking_migration_preserves_legacy_status_and_submission_evidence(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "pre-tracking.sqlite3"
+    # Named, not positional: this test is about 0006, and a later migration
+    # being added must not silently change which one it exercises.
+    tracking_migration = "0006_tracking_and_audit.sql"
+    preceding = registered_migration_names()[: registered_migration_names().index(tracking_migration)]
     with connect(path) as connection:
-        for name in registered_migration_names()[:-1]:
+        for name in preceding:
             connection.executescript((MIGRATIONS_DIR / name).read_text(encoding="utf-8"))
         connection.execute(
             "INSERT INTO applications(id, company, target_role, current_status, created_at, "
@@ -251,7 +255,7 @@ def test_tracking_migration_preserves_legacy_status_and_submission_evidence(
             "VALUES('submission', 'app', 'pdf', '2026-01-03')"
         )
         connection.executescript(
-            (MIGRATIONS_DIR / registered_migration_names()[-1]).read_text(encoding="utf-8")
+            (MIGRATIONS_DIR / tracking_migration).read_text(encoding="utf-8")
         )
 
         application = connection.execute(

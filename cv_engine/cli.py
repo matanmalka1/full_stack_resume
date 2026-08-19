@@ -31,7 +31,7 @@ from .infrastructure.legacy_source import LegacySourceError, LegacyV1Source
 from .infrastructure.migration import (
     MigrationSafetyError,
     retrospective_verify_migration,
-    verify_snapshot,
+    verify_source,
 )
 from .infrastructure.paths import resolve_within
 from .infrastructure.persistence import current_schema_version, initialize
@@ -382,12 +382,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     migrate = sub.add_parser("migrate", help="read-only verification of the completed v1 migration")
     migrate_sub = migrate.add_subparsers(dest="migration_command", required=True)
-    verify = migrate_sub.add_parser("verify-snapshot")
-    verify.add_argument("--snapshot", type=Path, required=True)
-    verify_live = migrate_sub.add_parser(
+    migrate_sub.add_parser(
+        "verify-source", help="re-derive the frozen v1 source from Git and its database backup"
+    )
+    migrate_sub.add_parser(
         "verify-live", help="read-only semantic verification of the completed migration"
     )
-    verify_live.add_argument("--snapshot", type=Path, required=True)
     return parser
 
 
@@ -699,10 +699,10 @@ def _workspace(context: CommandContext) -> int:
 @_command("migrate", needs="workspace")
 def _migrate(context: CommandContext) -> int:
     args = context.args
-    if args.migration_command == "verify-snapshot":
-        report = verify_snapshot(args.snapshot.resolve())
+    if args.migration_command == "verify-source":
+        report = verify_source(context.root)
     else:
-        report = retrospective_verify_migration(context.root, args.snapshot.resolve())
+        report = retrospective_verify_migration(context.root)
     _print(report)
     return 0 if report["passed"] else 1
 

@@ -11,16 +11,17 @@ from cv_engine.infrastructure.migration import (
     MigrationSafetyError,
     apply_migration,
     build_inventory,
-    create_snapshot,
+    freeze_source,
     migrate_legacy_state,
     migration_gate,
+    restore_source,
     retrospective_verify_migration,
-    verify_snapshot,
+    verify_source,
 )
 from cv_engine.infrastructure.persistence import connect
 from cv_engine.runtime.composition import build_services
 from cv_engine.runtime.workspace import load_workspace
-from cv_engine.util import canonical_json, sha256_file, sha256_text
+from cv_engine.util import sha256_file
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
 
@@ -35,14 +36,14 @@ def test_live_legacy_inventory_is_fully_accounted() -> None:
     assert inventory["unaccounted_output_files"] == []
 
 
-def test_snapshot_restore_and_migration_preserve_rows_and_artifacts(
+def test_source_restore_and_migration_preserve_rows_and_artifacts(
     tmp_path: Path, legacy_repo: Path
 ) -> None:
     source = legacy_repo
     inventory = build_inventory(source)
     assert inventory["problems"] == []
-    snapshot = create_snapshot(source)
-    verification = verify_snapshot(snapshot)
+    freeze_source(source)
+    verification = verify_source(source)
     assert verification["passed"], verification
 
     target = tmp_path / "migrated"
@@ -97,46 +98,100 @@ def test_migration_refuses_to_invent_a_missing_submission_date(legacy_repo: Path
 
 
 def test_migration_gate_recomputes_all_authoritative_evidence(migration_gate_repo) -> None:
-    root, snapshot = migration_gate_repo
+    (root,) = migration_gate_repo
 
-    gate = migration_gate(root, snapshot, migration_test_runner=_passing_test_runner)
+    gate = migration_gate(root, migration_test_runner=_passing_test_runner)
 
+    source = verify_source(root)
     assert gate["passed"], gate
-    assert gate["inventory_hash"] == verify_snapshot(snapshot)["inventory_hash"]
-    assert gate["migration_test_report_hash"]
+    assert gate["inventory_hash"] == source["inventory_hash"]
+    assert gate["source_commit"] == source["commit"]
+    assert gate["source_tree_hash"] == source["tree_hash"]
+
+
+def test_restored_source_matches_the_frozen_commit_byte_for_byte(
+    tmp_path: Path, legacy_repo: Path
+) -> None:
+    """Git is the archive, so the restore has to reproduce the tracked bytes.
+
+    This is the check the tar manifest used to make by hand, kept because it is
+    what proves the backup, not because the mechanism changed.
+    """
+    freeze_source(legacy_repo)
+
+    restored = restore_source(legacy_repo, tmp_path / "restored")
+
+    tracked = [
+        Path(name)
+        for name in migration._git(legacy_repo, "ls-tree", "-r", "--name-only", "HEAD").splitlines()
+    ]
+    assert tracked
+    for name in tracked:
+        assert sha256_file(restored / name) == sha256_file(legacy_repo / name), name
 
 
 def test_migration_gate_rejects_live_data_drift_after_dry_run(migration_gate_repo) -> None:
-    root, snapshot = migration_gate_repo
+    (root,) = migration_gate_repo
     artifact = root / "outputs/alpha/cv-drafts/cv_alpha_account-manager.md"
     artifact.write_text("changed after dry-run\n", encoding="utf-8")
 
-    gate = migration_gate(root, snapshot, migration_test_runner=_passing_test_runner)
+    gate = migration_gate(root, migration_test_runner=_passing_test_runner)
 
     assert not gate["passed"]
     assert "live inventory does not match the recorded inventory" in gate["problems"]
-    assert "live inventory does not match the verified snapshot" in gate["problems"]
+    assert "source has uncommitted tracked changes" in gate["problems"]
 
 
-def test_migration_gate_binds_inventory_to_snapshot_manifest(migration_gate_repo) -> None:
-    root, snapshot = migration_gate_repo
-    manifest_path = snapshot / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["inventory_hash"] = "0" * 64
-    manifest.pop("manifest_hash")
-    manifest["manifest_hash"] = sha256_text(canonical_json(manifest))
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+def test_migration_gate_rejects_a_source_that_moved_past_the_frozen_commit(
+    migration_gate_repo,
+) -> None:
+    """The frozen commit is the whole source identity, so it is re-derived.
 
-    gate = migration_gate(root, snapshot, migration_test_runner=_passing_test_runner)
+    A recorded commit that is merely read back would pass while the tree it
+    names no longer exists.
+    """
+    (root,) = migration_gate_repo
+    (root / "jobs/extra.txt").write_text("committed after freezing\n", encoding="utf-8")
+    migration._git(root, "add", "--all")
+    migration._git(
+        root,
+        "-c",
+        "user.name=drift",
+        "-c",
+        "user.email=drift@example.invalid",
+        "commit",
+        "--quiet",
+        "--message",
+        "drift",
+    )
+
+    gate = migration_gate(root, migration_test_runner=_passing_test_runner)
 
     assert not gate["passed"]
-    assert "live inventory does not match the verified snapshot" in gate["problems"]
+    assert any(problem.startswith("source moved:") for problem in gate["problems"])
+
+
+def test_migration_gate_rejects_a_tampered_source_database_backup(legacy_repo: Path) -> None:
+    """The database is the one payload Git does not hold, so its hash is checked."""
+    (legacy_repo / "data").mkdir(parents=True, exist_ok=True)
+    with connect(legacy_repo / "data/applications.sqlite3") as connection:
+        connection.execute("CREATE TABLE legacy_marker(id TEXT)")
+        connection.commit()
+    freeze_source(legacy_repo)
+    backup = legacy_repo / "data/migration/source-database.sqlite3"
+    assert backup.is_file()
+    backup.write_bytes(backup.read_bytes() + b"tampered")
+
+    source = verify_source(legacy_repo)
+
+    assert not source["passed"]
+    assert "source database backup does not match its recorded hash" in source["problems"]
 
 
 def test_apply_rechecks_inventory_immediately_before_staging(
     migration_gate_repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    root, snapshot = migration_gate_repo
+    (root,) = migration_gate_repo
     original_build_inventory = migration.build_inventory
     root_calls = 0
 
@@ -154,15 +209,15 @@ def test_apply_rechecks_inventory_immediately_before_staging(
     with pytest.raises(
         MigrationSafetyError, match="live inventory changed after the migration gate"
     ):
-        apply_migration(root, snapshot, migration_test_runner=_passing_test_runner)
+        apply_migration(root, migration_test_runner=_passing_test_runner)
 
 
 def test_retrospective_verification_reproduces_completed_migration(
     completed_migration_repo,
 ) -> None:
-    root, snapshot = completed_migration_repo
+    (root,) = completed_migration_repo
 
-    report = retrospective_verify_migration(root, snapshot)
+    report = retrospective_verify_migration(root)
 
     assert report["passed"], report
     assert report["semantic_counts"] == {
@@ -186,14 +241,14 @@ def test_retrospective_verification_reproduces_completed_migration(
 
 
 def test_retrospective_verification_detects_live_database_drift(completed_migration_repo) -> None:
-    root, snapshot = completed_migration_repo
+    (root,) = completed_migration_repo
     with connect(root / "data/applications.sqlite3") as connection:
         connection.execute(
             "UPDATE applications SET notes='changed after migration' WHERE company='alpha'"
         )
         connection.commit()
 
-    report = retrospective_verify_migration(root, snapshot)
+    report = retrospective_verify_migration(root)
 
     assert not report["passed"]
     assert any("applications semantics differ" in problem for problem in report["problems"])
@@ -202,12 +257,12 @@ def test_retrospective_verification_detects_live_database_drift(completed_migrat
 def test_retrospective_verification_detects_fact_and_artifact_drift(
     completed_migration_repo,
 ) -> None:
-    root, snapshot = completed_migration_repo
+    (root,) = completed_migration_repo
     (root / "base/sales.md").write_text("changed canonical facts\n", encoding="utf-8")
     artifact = root / "outputs/alpha/cv-drafts/cv_alpha_account-manager.md"
     artifact.write_text("changed historical artifact\n", encoding="utf-8")
 
-    report = retrospective_verify_migration(root, snapshot)
+    report = retrospective_verify_migration(root)
 
     assert not report["passed"]
     assert any("base/sales.md" in problem for problem in report["problems"])
@@ -223,7 +278,7 @@ def test_retrospective_verification_accepts_post_migration_lifecycle_facts(
     unchanged, not that the canonical sources are frozen: the pending ->
     confirmed -> canonical lifecycle writes to these files by design.
     """
-    root, snapshot = completed_migration_repo
+    (root,) = completed_migration_repo
     knowledge = build_services(load_workspace(root)).knowledge_lifecycle
     knowledge.add_fact(
         "situational_skills.md",
@@ -243,7 +298,7 @@ def test_retrospective_verification_accepts_post_migration_lifecycle_facts(
         "situational.post_migration_example", "canonical", explicitly_confirmed=True
     )
 
-    report = retrospective_verify_migration(root, snapshot)
+    report = retrospective_verify_migration(root)
 
     assert report["passed"], report["problems"]
     assert report["post_migration_facts"] == {

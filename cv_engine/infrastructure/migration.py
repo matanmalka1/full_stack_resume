@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import csv
+import io
 import json
-import os
 import shutil
 import sqlite3
 import subprocess
@@ -25,12 +25,10 @@ from ..util import (
 )
 from .canonical_data import write_canonical_sources
 from .knowledge import read_fact_source
-from .paths import resolve_within
 from .payloads import PayloadStore
 from .persistence import Repository, connect
 
 MIGRATION_NAMESPACE = uuid.UUID("7650f234-c480-4a9e-9c21-9d5142899a63")
-EXCLUDED_PARTS = {"__pycache__", ".pytest_cache", ".venv", "tmp"}
 EXPECTED_COLUMNS = [
     "company",
     "role",
@@ -68,16 +66,6 @@ def _inventory_hash(inventory: dict[str, Any]) -> str:
     )
 
 
-def _report_hash(report: dict[str, Any]) -> str:
-    return _content_hash(report, hash_field="report_hash")
-
-
-def _seal_report(report: dict[str, Any]) -> dict[str, Any]:
-    sealed = dict(report)
-    sealed["report_hash"] = _report_hash(sealed)
-    return sealed
-
-
 def _load_json(path: Path, label: str) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -86,38 +74,6 @@ def _load_json(path: Path, label: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise MigrationSafetyError(f"{label} must contain a JSON object")
     return value
-
-
-def _snapshot_files(root: Path) -> list[Path]:
-    result = []
-    for path in root.rglob("*"):
-        relative = path.relative_to(root)
-        if any(part in EXCLUDED_PARTS for part in relative.parts):
-            continue
-        if relative.parts[:2] == ("data", "snapshots"):
-            continue
-        if path.is_file() or path.is_symlink():
-            result.append(path)
-    return sorted(result, key=lambda item: item.relative_to(root).as_posix())
-
-
-def _manifest_entry(root: Path, path: Path) -> dict[str, Any]:
-    relative = path.relative_to(root).as_posix()
-    if path.is_symlink():
-        target = os.readlink(path)
-        return {
-            "path": relative,
-            "kind": "symlink",
-            "link_target": target,
-            "size": len(target.encode("utf-8")),
-            "sha256": sha256_text(target),
-        }
-    return {
-        "path": relative,
-        "kind": "file",
-        "size": path.stat().st_size,
-        "sha256": sha256_file(path),
-    }
 
 
 def read_legacy_rows(root: Path) -> list[dict[str, str]]:
@@ -234,98 +190,144 @@ def write_inventory(root: Path) -> Path:
         raise MigrationSafetyError("inventory failed; see data/migration/inventory.json")
     return target
 
+SOURCE_RECORD = "data/migration/source.json"
+SOURCE_DATABASE_BACKUP = "data/migration/source-database.sqlite3"
+LEGACY_DATABASE = "data/applications.sqlite3"
 
-def create_snapshot(root: Path) -> Path:
-    inventory_path = write_inventory(root)
-    inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
-    if inventory["problems"] or inventory["unaccounted_output_files"]:
-        raise MigrationSafetyError("cannot snapshot an incomplete inventory")
-    snapshot_id = utc_now().replace(":", "").replace("+00:00", "Z").replace("-", "")
-    target = root / "data" / "snapshots" / snapshot_id
+
+def _git(root: Path, *args: str) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(root), *args], text=True, capture_output=True, timeout=120
+    )
+    if completed.returncode != 0:
+        raise MigrationSafetyError(f"git {' '.join(args)} failed: {completed.stderr.strip()}")
+    return completed.stdout.rstrip("\n")
+
+
+def _backup_source_database(root: Path, target: Path) -> str | None:
+    """Copy the one payload Git does not track, transactionally.
+
+    `cp` can capture a database mid-write while WAL is active. The SQLite backup
+    API cannot, so it is the only supported way to take this copy.
+    """
+    database = root / LEGACY_DATABASE
+    if not database.is_file():
+        return None
+    target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists():
-        raise MigrationSafetyError(f"snapshot already exists: {target}")
-    files = _snapshot_files(root)
-    entries = [_manifest_entry(root, path) for path in files]
-    manifest = {
+        target.unlink()
+    source = sqlite3.connect(f"file:{database.resolve().as_posix()}?mode=ro", uri=True)
+    try:
+        destination = sqlite3.connect(target)
+        try:
+            source.backup(destination)
+        finally:
+            destination.close()
+    finally:
+        source.close()
+    return sha256_file(target)
+
+
+def freeze_source(root: Path) -> Path:
+    """Freeze the commit the migration reads from, and back up what Git ignores.
+
+    Git already stores every tracked payload content-addressed, hashes each blob,
+    and restores into a fresh directory, so it is the archive, the manifest, and
+    the restore proof. Only the ignored SQLite database needs a backup of its own.
+    """
+    inventory_path = write_inventory(root)
+    inventory = _load_json(inventory_path, "inventory report")
+    if inventory["problems"] or inventory["unaccounted_output_files"]:
+        raise MigrationSafetyError("cannot freeze an incomplete inventory")
+    dirty = _git(root, "status", "--porcelain", "--untracked-files=no")
+    if dirty:
+        raise MigrationSafetyError(f"source has uncommitted tracked changes:\n{dirty}")
+    tracked = _git(root, "ls-tree", "-r", "--name-only", "HEAD").splitlines()
+    record = {
         "schema_version": "1.0.0",
-        "snapshot_id": snapshot_id,
-        "created_at": utc_now(),
+        "commit": _git(root, "rev-parse", "HEAD"),
+        "tree_hash": _git(root, "rev-parse", "HEAD^{tree}"),
+        "tracked_file_count": len(tracked),
         "inventory_hash": inventory["inventory_hash"],
-        "file_count": len(entries),
-        "entries": entries,
+        "database_sha256": _backup_source_database(root, root / SOURCE_DATABASE_BACKUP),
+        "created_at": utc_now(),
     }
-    manifest["manifest_hash"] = sha256_text(canonical_json(manifest))
-    target.mkdir(parents=True)
-    (target / "manifest.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
-    shutil.copy2(root / "docs" / "v1-migration-restore.md", target / "RESTORE.md")
-    archive = target / "repository.tar.gz"
-    with tarfile.open(archive, "w:gz") as tar:
-        for path in files:
-            tar.add(path, arcname=path.relative_to(root), recursive=False)
-    verification = verify_snapshot(target)
-    (target / "verification.json").write_text(
-        json.dumps(verification, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
-    if not verification["passed"]:
-        raise MigrationSafetyError(f"snapshot verification failed: {target}")
+    target = root / SOURCE_RECORD
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return target
 
 
-def _safe_extract(tar: tarfile.TarFile, target: Path) -> None:
-    for member in tar.getmembers():
-        try:
-            resolve_within(target, member.name)
-        except ValueError as exc:
-            raise MigrationSafetyError(f"unsafe archive member: {member.name}") from exc
-        if member.issym() and (
-            Path(member.linkname).is_absolute() or ".." in Path(member.linkname).parts
-        ):
-            raise MigrationSafetyError(f"unsafe archive symlink: {member.name}")
-    tar.extractall(target, filter="data")
+def verify_source(root: Path) -> dict[str, Any]:
+    """Re-derive the frozen source from Git instead of trusting the record.
 
-
-def verify_snapshot(snapshot_dir: Path) -> dict[str, Any]:
-    manifest_path = snapshot_dir / "manifest.json"
-    archive_path = snapshot_dir / "repository.tar.gz"
-    restore_path = snapshot_dir / "RESTORE.md"
+    This proves the archive, not the working tree. Migration converts the root
+    into the v2 Workspace in place, so this also runs after the fact, when the
+    working tree is expected to have moved on and a database present is the
+    migrated target rather than the v1 source. Whether the working tree is still
+    clean and still sits on the frozen commit is a gate question, checked in
+    `migration_gate` where it is actually a fault.
+    """
+    path = root / SOURCE_RECORD
+    if not path.is_file():
+        return {"passed": False, "problems": ["source is not frozen; run migrate freeze first"]}
+    frozen = _load_json(path, "frozen source record")
+    commit = frozen.get("commit", "")
+    try:
+        tree = _git(root, "rev-parse", f"{commit}^{{tree}}")
+    except MigrationSafetyError as exc:
+        return {"passed": False, "problems": [f"frozen commit is unreachable: {exc}"]}
     problems = []
-    if not manifest_path.is_file() or not archive_path.is_file() or not restore_path.is_file():
-        return {
-            "passed": False,
-            "problems": ["snapshot is missing manifest, archive, or restore instructions"],
-        }
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    expected_hash = manifest.pop("manifest_hash")
-    actual_hash = sha256_text(canonical_json(manifest))
-    manifest["manifest_hash"] = expected_hash
-    if actual_hash != expected_hash:
-        problems.append("manifest hash mismatch")
-    with tempfile.TemporaryDirectory(prefix="cv-restore-") as directory:
-        restored = Path(directory)
-        with tarfile.open(archive_path, "r:gz") as tar:
-            _safe_extract(tar, restored)
-        for entry in manifest["entries"]:
-            path = restored / entry["path"]
-            if entry["kind"] == "symlink":
-                if not path.is_symlink() or os.readlink(path) != entry["link_target"]:
-                    problems.append(f"symlink mismatch: {entry['path']}")
-            elif not path.is_file():
-                problems.append(f"missing restored file: {entry['path']}")
-            elif path.stat().st_size != entry["size"] or sha256_file(path) != entry["sha256"]:
-                problems.append(f"restored file mismatch: {entry['path']}")
+    if tree != frozen.get("tree_hash"):
+        problems.append("frozen commit tree does not match the frozen record")
+    backup = root / SOURCE_DATABASE_BACKUP
+    expected = frozen.get("database_sha256")
+    if expected is None:
+        pass
+    elif not backup.is_file():
+        problems.append("source database backup is missing")
+    elif sha256_file(backup) != expected:
+        problems.append("source database backup does not match its recorded hash")
     return {
         "passed": not problems,
         "verified_at": utc_now(),
-        "snapshot_id": manifest["snapshot_id"],
-        "manifest_hash": expected_hash,
-        "inventory_hash": manifest.get("inventory_hash"),
-        "archive_sha256": sha256_file(archive_path),
-        "file_count": manifest["file_count"],
-        "restore_instructions": "RESTORE.md",
+        "commit": commit,
+        "tree_hash": frozen.get("tree_hash"),
+        "inventory_hash": frozen.get("inventory_hash"),
+        "database_sha256": expected,
+        "tracked_file_count": frozen.get("tracked_file_count"),
         "problems": problems,
     }
+
+
+def restore_source(root: Path, target: Path) -> Path:
+    """Materialise the frozen commit into a new directory.
+
+    `git archive` rather than `git worktree add`: a worktree registers itself
+    under `.git/worktrees` in the source repository, and the source stays
+    untouched. A human restoring by hand can still use `git worktree add`.
+    """
+    frozen = _load_json(root / SOURCE_RECORD, "frozen source record")
+    completed = subprocess.run(
+        ["git", "-C", str(root), "archive", "--format=tar", frozen["commit"]],
+        capture_output=True,
+        timeout=300,
+    )
+    if completed.returncode != 0:
+        raise MigrationSafetyError(
+            f"git archive failed: {completed.stderr.decode(errors='replace').strip()}"
+        )
+    target.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(fileobj=io.BytesIO(completed.stdout), mode="r:") as tar:
+        tar.extractall(target, filter="data")
+    backup = root / SOURCE_DATABASE_BACKUP
+    if frozen.get("database_sha256"):
+        if sha256_file(backup) != frozen["database_sha256"]:
+            raise MigrationSafetyError("source database backup does not match its recorded hash")
+        restored_database = target / LEGACY_DATABASE
+        restored_database.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(backup, restored_database)
+    return target
 
 
 def run_migration_tests(root: Path) -> Path:
@@ -339,16 +341,14 @@ def run_migration_tests(root: Path) -> Path:
         "-q",
     ]
     completed = subprocess.run(command, cwd=root, text=True, capture_output=True, timeout=180)
-    report = _seal_report(
-        {
-            "passed": completed.returncode == 0,
-            "command": command,
-            "returncode": completed.returncode,
-            "stdout": completed.stdout,
-            "stderr": completed.stderr,
-            "created_at": utc_now(),
-        }
-    )
+    report = {
+        "passed": completed.returncode == 0,
+        "command": command,
+        "returncode": completed.returncode,
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+        "created_at": utc_now(),
+    }
     target = root / "data/migration/migration-tests.json"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -514,43 +514,34 @@ DRY_RUN_EVIDENCE_FIELDS = (
     "inventory_hash",
     "database",
     "problems",
-    "snapshot_id",
-    "manifest_hash",
+    "commit",
+    "tree_hash",
 )
 
 
-def _execute_snapshot_dry_run(snapshot_dir: Path, verification: dict[str, Any]) -> dict[str, Any]:
+def _execute_dry_run(root: Path, source: dict[str, Any]) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="cv-migration-dry-run-") as directory:
-        restored = Path(directory) / "source"
-        restored.mkdir()
-        with tarfile.open(snapshot_dir / "repository.tar.gz", "r:gz") as tar:
-            _safe_extract(tar, restored)
+        restored = restore_source(root, Path(directory) / "source")
         target = Path(directory) / "target"
         shutil.copytree(restored, target, symlinks=True)
-        db = target / "data/applications.sqlite3"
-        if db.exists():
-            db.unlink()
-        for name in ("common.md", "sales.md", "development.md", "situational_skills.md"):
+        database = target / LEGACY_DATABASE
+        if database.exists():
+            database.unlink()
+        for name in FACT_SOURCE_NAMES:
             path = target / "base" / name
             if path.exists():
                 path.unlink()
         report = migrate_legacy_state(restored, target, dry_run=True)
-    report.update(
-        {
-            "snapshot_id": verification["snapshot_id"],
-            "manifest_hash": verification["manifest_hash"],
-        }
-    )
+    report.update({"commit": source["commit"], "tree_hash": source["tree_hash"]})
     return report
 
 
-def dry_run_migration(root: Path, snapshot_dir: Path) -> Path:
-    verification = verify_snapshot(snapshot_dir)
-    if not verification["passed"]:
-        raise MigrationSafetyError("cannot dry-run an unverified snapshot")
-    report = _execute_snapshot_dry_run(snapshot_dir, verification)
+def dry_run_migration(root: Path) -> Path:
+    source = verify_source(root)
+    if not source["passed"]:
+        raise MigrationSafetyError(f"cannot dry-run an unverified source: {source['problems']}")
+    report = _execute_dry_run(root, source)
     report["created_at"] = utc_now()
-    report = _seal_report(report)
     output = root / "data/migration/dry-run.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -559,20 +550,12 @@ def dry_run_migration(root: Path, snapshot_dir: Path) -> Path:
     return output
 
 
-def _report_integrity_problems(report: dict[str, Any], label: str) -> list[str]:
-    expected = report.get("report_hash")
-    if not isinstance(expected, str) or expected != _report_hash(report):
-        return [f"{label} report hash mismatch"]
-    return []
-
-
 def _dry_run_fingerprint(report: dict[str, Any]) -> dict[str, Any]:
     return {field: report.get(field) for field in DRY_RUN_EVIDENCE_FIELDS}
 
 
 def migration_gate(
     root: Path,
-    snapshot_dir: Path,
     *,
     migration_test_runner: MigrationTestRunner | None = None,
 ) -> dict[str, Any]:
@@ -586,24 +569,30 @@ def migration_gate(
     inventory = _load_json(inventory_path, "inventory report")
     tests = _load_json(tests_path, "migration-test report")
     dry_run = _load_json(dry_run_path, "dry-run report")
-    snapshot = verify_snapshot(snapshot_dir)
+    source = verify_source(root)
     problems = []
     if inventory.get("inventory_hash") != _inventory_hash(inventory):
         problems.append("inventory report hash mismatch")
     if inventory.get("problems") or inventory.get("unaccounted_output_files"):
         problems.append("inventory is incomplete")
-    problems.extend(_report_integrity_problems(tests, "migration-test"))
     if tests.get("passed") is not True or tests.get("returncode") != 0:
         problems.append("migration tests failed")
-    problems.extend(_report_integrity_problems(dry_run, "dry-run"))
     if dry_run.get("passed") is not True or dry_run.get("problems"):
         problems.append("dry-run migration failed")
-    if not snapshot.get("passed"):
-        problems.append("snapshot restore verification failed")
-    if dry_run.get("snapshot_id") != snapshot.get("snapshot_id") or dry_run.get(
-        "manifest_hash"
-    ) != snapshot.get("manifest_hash"):
-        problems.append("dry-run was not performed against this snapshot")
+    if not source.get("passed"):
+        problems.extend(source.get("problems", ["source verification failed"]))
+    else:
+        # A gate runs before migration, so the working tree must still be the
+        # frozen source. After migration the same is expected to be false.
+        head = _git(root, "rev-parse", "HEAD")
+        if head != source["commit"]:
+            problems.append(f"source moved: frozen={source['commit']}, head={head}")
+        if _git(root, "status", "--porcelain", "--untracked-files=no"):
+            problems.append("source has uncommitted tracked changes")
+    if dry_run.get("commit") != source.get("commit") or dry_run.get("tree_hash") != source.get(
+        "tree_hash"
+    ):
+        problems.append("dry-run was not performed against the frozen source")
     if dry_run.get("inventory_hash") != inventory.get("inventory_hash"):
         problems.append("inventory changed after dry-run")
 
@@ -617,8 +606,8 @@ def migration_gate(
             problems.append("live inventory is incomplete")
         if live_inventory.get("inventory_hash") != inventory.get("inventory_hash"):
             problems.append("live inventory does not match the recorded inventory")
-        if live_inventory.get("inventory_hash") != snapshot.get("inventory_hash"):
-            problems.append("live inventory does not match the verified snapshot")
+        if live_inventory.get("inventory_hash") != source.get("inventory_hash"):
+            problems.append("live inventory does not match the frozen source")
 
     fresh_tests: dict[str, Any] = {}
     try:
@@ -628,14 +617,13 @@ def migration_gate(
     except (OSError, subprocess.SubprocessError, MigrationSafetyError) as exc:
         problems.append(f"fresh migration tests could not run: {exc}")
     else:
-        problems.extend(_report_integrity_problems(fresh_tests, "fresh migration-test"))
         if fresh_tests.get("passed") is not True or fresh_tests.get("returncode") != 0:
             problems.append("fresh migration tests failed")
 
     fresh_dry_run: dict[str, Any] = {}
-    if snapshot.get("passed"):
+    if source.get("passed"):
         try:
-            fresh_dry_run = _execute_snapshot_dry_run(snapshot_dir, snapshot)
+            fresh_dry_run = _execute_dry_run(root, source)
         except (
             OSError,
             MigrationSafetyError,
@@ -644,19 +632,17 @@ def migration_gate(
             sqlite3.Error,
             tarfile.TarError,
         ) as exc:
-            problems.append(f"fresh snapshot dry-run failed: {exc}")
+            problems.append(f"fresh dry-run failed: {exc}")
         else:
             if not fresh_dry_run.get("passed") or fresh_dry_run.get("problems"):
-                problems.append("fresh snapshot dry-run did not pass")
+                problems.append("fresh dry-run did not pass")
             if _dry_run_fingerprint(fresh_dry_run) != _dry_run_fingerprint(dry_run):
-                problems.append("stored dry-run report does not match a fresh snapshot dry-run")
+                problems.append("stored dry-run report does not match a fresh dry-run")
     return {
         "passed": not problems,
-        "snapshot_id": snapshot.get("snapshot_id"),
-        "manifest_hash": snapshot.get("manifest_hash"),
+        "source_commit": source.get("commit"),
+        "source_tree_hash": source.get("tree_hash"),
         "inventory_hash": live_inventory.get("inventory_hash"),
-        "dry_run_report_hash": dry_run.get("report_hash"),
-        "migration_test_report_hash": fresh_tests.get("report_hash"),
         "legacy_row_count": live_inventory.get("legacy_row_count"),
         "expected_artifact_count": fresh_dry_run.get("expected_artifact_count"),
         "problems": problems,
@@ -665,11 +651,10 @@ def migration_gate(
 
 def apply_migration(
     root: Path,
-    snapshot_dir: Path,
     *,
     migration_test_runner: MigrationTestRunner | None = None,
 ) -> Path:
-    gate = migration_gate(root, snapshot_dir, migration_test_runner=migration_test_runner)
+    gate = migration_gate(root, migration_test_runner=migration_test_runner)
     if not gate["passed"]:
         raise MigrationSafetyError(f"migration gate failed: {gate['problems']}")
     final_db = root / "data/applications.sqlite3"
@@ -700,17 +685,15 @@ def apply_migration(
             raise MigrationSafetyError("live inventory changed during staged migration")
         report["gate"] = gate
         report["created_at"] = utc_now()
-        report = _seal_report(report)
         staged_db = staging / "data/applications.sqlite3"
         repository = Repository(staged_db)
         with repository.transaction() as connection:
             connection.execute(
-                "INSERT INTO migration_runs(id, snapshot_id, manifest_hash, dry_run_report_hash, row_count, artifact_count, report_json, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO migration_runs(id, source_commit, source_tree_hash, row_count, artifact_count, report_json, created_at) VALUES(?, ?, ?, ?, ?, ?, ?)",
                 (
                     new_id(),
-                    gate["snapshot_id"],
-                    gate["manifest_hash"],
-                    gate["dry_run_report_hash"],
+                    gate["source_commit"],
+                    gate["source_tree_hash"],
                     gate["legacy_row_count"],
                     gate["expected_artifact_count"],
                     canonical_json(report),
@@ -849,33 +832,28 @@ def _fact_source_baseline(
     return problems, sorted(set(live) - set(baseline))
 
 
-def retrospective_verify_migration(root: Path, snapshot_dir: Path) -> dict[str, Any]:
-    snapshot = verify_snapshot(snapshot_dir)
+def retrospective_verify_migration(root: Path) -> dict[str, Any]:
+    source = verify_source(root)
     problems: list[str] = []
-    live_database = root / "data/applications.sqlite3"
-    if not snapshot.get("passed"):
-        problems.append("pre-migration snapshot verification failed")
+    live_database = root / LEGACY_DATABASE
+    if not source.get("passed"):
+        problems.extend(source.get("problems", ["frozen source verification failed"]))
     if not live_database.is_file():
         problems.append("live migrated database is missing")
     for name in FACT_SOURCE_NAMES:
         if not (root / "base" / name).is_file():
             problems.append(f"live canonical fact source is missing: base/{name}")
     if problems:
-        return _seal_report(
-            {
-                "schema_version": "1.0.0",
-                "passed": False,
-                "snapshot_id": snapshot.get("snapshot_id"),
-                "problems": problems,
-            }
-        )
+        return {
+            "schema_version": "1.0.0",
+            "passed": False,
+            "source_commit": source.get("commit"),
+            "problems": problems,
+        }
 
     with tempfile.TemporaryDirectory(prefix="cv-retrospective-verification-") as directory:
         temporary = Path(directory)
-        restored = temporary / "restored"
-        restored.mkdir()
-        with tarfile.open(snapshot_dir / "repository.tar.gz", "r:gz") as tar:
-            _safe_extract(tar, restored)
+        restored = restore_source(root, temporary / "restored")
         expected = temporary / "expected"
         expected.mkdir()
         migration_report = migrate_legacy_state(restored, expected, dry_run=True)
@@ -930,19 +908,19 @@ def retrospective_verify_migration(root: Path, snapshot_dir: Path) -> dict[str, 
 
         matching_runs = _read_only_rows(
             live_database,
-            "SELECT snapshot_id, manifest_hash, row_count, artifact_count FROM migration_runs "
-            "WHERE snapshot_id=?",
-            (snapshot["snapshot_id"],),
+            "SELECT source_commit, source_tree_hash, row_count, artifact_count "
+            "FROM migration_runs WHERE source_commit=?",
+            (source["commit"],),
         )
         if len(matching_runs) != 1:
             problems.append(
-                f"expected one live migration run for snapshot, found {len(matching_runs)}"
+                f"expected one live migration run for the frozen source, found {len(matching_runs)}"
             )
         else:
             run = matching_runs[0]
-            if run["manifest_hash"] != snapshot.get("manifest_hash"):
+            if run["source_tree_hash"] != source.get("tree_hash"):
                 problems.append(
-                    "live migration run manifest hash does not match the verified snapshot"
+                    "live migration run tree hash does not match the frozen source"
                 )
             if run["row_count"] != migration_report["application_count"]:
                 problems.append(
@@ -953,22 +931,19 @@ def retrospective_verify_migration(root: Path, snapshot_dir: Path) -> dict[str, 
                     "live migration run artifact count differs from current migration output"
                 )
 
-    return _seal_report(
-        {
-            "schema_version": "1.0.0",
-            "passed": not problems,
-            "snapshot_id": snapshot.get("snapshot_id"),
-            "manifest_hash": snapshot.get("manifest_hash"),
-            "snapshot_archive_sha256": snapshot.get("archive_sha256"),
-            "semantic_counts": semantic_counts,
-            "semantic_hashes": semantic_hashes,
-            "canonical_fact_hashes": fact_hashes,
-            "post_migration_facts": post_migration_facts,
-            "artifact_hashes_checked": artifact_hashes_checked,
-            "live_database": live_database.relative_to(root).as_posix(),
-            "problems": problems,
-        }
-    )
+    return {
+        "schema_version": "1.0.0",
+        "passed": not problems,
+        "source_commit": source.get("commit"),
+        "source_tree_hash": source.get("tree_hash"),
+        "semantic_counts": semantic_counts,
+        "semantic_hashes": semantic_hashes,
+        "canonical_fact_hashes": fact_hashes,
+        "post_migration_facts": post_migration_facts,
+        "artifact_hashes_checked": artifact_hashes_checked,
+        "live_database": live_database.relative_to(root).as_posix(),
+        "problems": problems,
+    }
 
 
 def reconcile_migration(root: Path) -> dict[str, Any]:

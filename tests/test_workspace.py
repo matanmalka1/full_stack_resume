@@ -344,8 +344,8 @@ def test_cli_normal_and_historical_verification_commands_fail_closed_without_wri
     ]
     commands = [
         ("list",),
-        ("migrate", "verify-snapshot", "--snapshot", str(tmp_path / "missing-snapshot")),
-        ("migrate", "verify-live", "--snapshot", str(tmp_path / "missing-snapshot")),
+        ("migrate", "verify-source"),
+        ("migrate", "verify-live"),
     ]
     for root, expected_error in roots:
         before = _tree(root)

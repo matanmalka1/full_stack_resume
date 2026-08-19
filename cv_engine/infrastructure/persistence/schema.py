@@ -15,6 +15,7 @@ REGISTERED_MIGRATIONS = (
     "0004_artifact_identity_immutability.sql",
     "0005_approved_revisions.sql",
     "0006_tracking_and_audit.sql",
+    "0007_migration_run_source_identity.sql",
 )
 SCHEMA_VERSION = "2"
 

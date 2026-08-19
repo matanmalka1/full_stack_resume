@@ -46,13 +46,10 @@ from cv_engine.infrastructure.knowledge import (
     load_profile_store,
 )
 from cv_engine.infrastructure.migration import (
-    _seal_report as seal_report,
-)
-from cv_engine.infrastructure.migration import (
-    create_snapshot,
     dry_run_migration,
+    freeze_source,
     migrate_legacy_state,
-    verify_snapshot,
+    verify_source,
 )
 from cv_engine.infrastructure.persistence import Repository, connect
 from cv_engine.infrastructure.rendering import render_pdf, validate_rendered
@@ -189,11 +186,9 @@ class ProposalSetup:
 @dataclass(frozen=True)
 class MigrationSetup:
     root: Path
-    snapshot: Path
 
     def __iter__(self):
         yield self.root
-        yield self.snapshot
 
 
 @pytest.fixture
@@ -589,13 +584,6 @@ def render_validator():
 
 def _populate_legacy_repo(root: Path) -> None:
     (root / "jobs").mkdir(parents=True)
-    (root / "docs").mkdir()
-    shutil.copy2(
-        # Source is this worktree's v2 layout; the destination mimics the v1 repo
-        # layout that migration.py reads.
-        SOURCE_ROOT / "docs/v1/migration-restore.md",
-        root / "docs/v1-migration-restore.md",
-    )
     rows = [
         [
             "alpha",
@@ -648,18 +636,43 @@ def _populate_legacy_repo(root: Path) -> None:
 def _write_passing_migration_test_report(root: Path) -> Path:
     target = root / "data/migration/migration-tests.json"
     target.parent.mkdir(parents=True, exist_ok=True)
-    report = seal_report(
-        {
-            "passed": True,
-            "command": ["python", "-m", "pytest", "tests/test_migration.py", "-q"],
-            "returncode": 0,
-            "stdout": "migration fixture passed",
-            "stderr": "",
-            "created_at": "2026-01-01T00:00:00+00:00",
-        }
-    )
+    report = {
+        "passed": True,
+        "command": ["python", "-m", "pytest", "tests/test_migration.py", "-q"],
+        "returncode": 0,
+        "stdout": "migration fixture passed",
+        "stderr": "",
+        "created_at": "2026-01-01T00:00:00+00:00",
+    }
     target.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     return target
+
+
+def _commit_legacy_repo(root: Path) -> None:
+    """The real v1 source is a Git repository, and migration reads it through Git.
+
+    The fixture is a Git repository for the same reason: a fixture that only
+    mimics the directory layout proves the code matches the fixture, not the
+    source.
+    """
+    environment = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "migration-fixture",
+        "GIT_AUTHOR_EMAIL": "fixture@example.invalid",
+        "GIT_COMMITTER_NAME": "migration-fixture",
+        "GIT_COMMITTER_EMAIL": "fixture@example.invalid",
+    }
+    for command in (
+        ["init", "--quiet", "--initial-branch=main"],
+        ["add", "--all"],
+        ["commit", "--quiet", "--message", "legacy fixture"],
+    ):
+        subprocess.run(
+            ["git", "-C", str(root), *command],
+            check=True,
+            capture_output=True,
+            env=environment,
+        )
 
 
 def _mark_migrated_root(root: Path) -> None:
@@ -681,31 +694,32 @@ def legacy_repo(tmp_path: Path) -> Path:
     root = tmp_path / "legacy"
     root.mkdir()
     _populate_legacy_repo(root)
+    (root / ".gitignore").write_text("data/applications.sqlite3*\ndata/migration/\n", encoding="utf-8")
+    _commit_legacy_repo(root)
     return root
 
 
 @pytest.fixture
 def migration_gate_repo(legacy_repo: Path) -> MigrationSetup:
-    snapshot = create_snapshot(legacy_repo)
-    dry_run_migration(legacy_repo, snapshot)
+    freeze_source(legacy_repo)
+    dry_run_migration(legacy_repo)
     _write_passing_migration_test_report(legacy_repo)
-    return MigrationSetup(legacy_repo, snapshot)
+    return MigrationSetup(legacy_repo)
 
 
 @pytest.fixture
 def completed_migration_repo(legacy_repo: Path) -> MigrationSetup:
-    snapshot = create_snapshot(legacy_repo)
-    verification = verify_snapshot(snapshot)
+    freeze_source(legacy_repo)
+    source = verify_source(legacy_repo)
     report = migrate_legacy_state(legacy_repo, legacy_repo, dry_run=False)
     with connect(legacy_repo / "data/applications.sqlite3") as connection:
         connection.execute(
-            "INSERT INTO migration_runs(id, snapshot_id, manifest_hash, dry_run_report_hash, "
-            "row_count, artifact_count, report_json, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO migration_runs(id, source_commit, source_tree_hash, "
+            "row_count, artifact_count, report_json, created_at) VALUES(?, ?, ?, ?, ?, ?, ?)",
             (
                 "fixture-migration-run",
-                verification["snapshot_id"],
-                verification["manifest_hash"],
-                "fixture-dry-run-hash",
+                source["commit"],
+                source["tree_hash"],
                 report["application_count"],
                 report["artifact_version_count"],
                 "{}",
@@ -718,4 +732,4 @@ def completed_migration_repo(legacy_repo: Path) -> MigrationSetup:
     # marker is written here, by the test, because production code has no
     # override that would mark a legacy root.
     _mark_migrated_root(legacy_repo)
-    return MigrationSetup(legacy_repo, snapshot)
+    return MigrationSetup(legacy_repo)

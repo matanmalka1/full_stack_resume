@@ -35,3 +35,8 @@ or weaken an existing acceptance gate.
       about 2 MB physically while keeping independent editable environments and Workspace state.
 - [ ] **TODO 14:** reassess architecture-test ceremony and replace manual checks with
       derived guards where possible without weakening the no-growth allowlist rule.
+- [ ] **TODO 15:** restore the `UNIQUE` constraint on `submissions.artifact_version_id`.
+      `0001_baseline.sql` declared it `NOT NULL UNIQUE`; the `0006` rebuild dropped both,
+      so the same artifact can now be recorded as submitted twice in an immutable table.
+      Found while aligning migration with `migration-plan.md` §5; it is a `0006`
+      regression, not part of that alignment, so it needs its own migration and commit.
