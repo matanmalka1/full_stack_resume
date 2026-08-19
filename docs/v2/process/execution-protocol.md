@@ -93,16 +93,17 @@ Workspaces apply unchanged to every lane. What multi-agent work adds:
 
 A lane reports done only when all of these hold, with command output quoted:
 
-1. Its own declared test subset passes.
-2. The tests covering anything its files are imported by pass. A lane runs the full suite
-   only if it cannot name that set — the boundary's own full-suite run is what covers it.
-3. The architecture test passes and its allowlist has **not** grown.
-4. `git diff --stat` lists only files the lane owns.
-5. An explicit statement of what did **not** change — for behaviour-preserving work: no
+1. Its own declared test subset passes. Not the importers' tests: section 4's shim keeps
+   the public import surface fixed for the whole of wave 1, so a lane cannot break its
+   importers without first breaking that surface. Importer coverage is the lead's, after
+   the merge, where the surface actually moves.
+2. The architecture test passes and its allowlist has **not** grown.
+3. `git diff --stat` lists only files the lane owns.
+4. An explicit statement of what did **not** change — for behaviour-preserving work: no
    threshold, message string, exception type, validation group name, status, callable
    signature, stored shape, artifact-path policy, or fact semantic. Message text is checked
    byte-for-byte, because tests match on it.
-6. Anything not achievable mechanically is reported as a finding, **not** worked around. A
+5. Anything not achievable mechanically is reported as a finding, **not** worked around. A
    lane that discovers it needs to change behaviour stops and reports.
 
 Reporting follows `CLAUDE.md`: passed / failed / remaining, with command evidence.
@@ -114,6 +115,9 @@ Reporting follows `CLAUDE.md`: passed / failed / remaining, with command evidenc
 3. Prove no module still imports a moved symbol from its old home (grep the old paths).
 4. One full verification at boundary close: the non-browser suite, the semantic-parity
    check, and the browser suite only if the boundary touched a rendering or browser path.
+   This is not the re-run section 9 warns against — no lane produces a full-suite run, and
+   the merged tree is not the tree any lane tested. It is the boundary's only full run, and
+   the first one over the code as it will actually ship.
 5. Update the milestone's state record with what landed and what remains.
 6. Report per package, with command evidence.
 
@@ -145,17 +149,40 @@ which are specific to moving code under exclusive ownership:
 Stopping is cheaper than a silent workaround, and it is the expected behaviour rather than a
 failure. Three of M1's stops were substantive and two changed the plan.
 
-## 9. Verification is independent of the report
+## 9. Verification checks what a report cannot prove about itself
 
-An implementing agent's report is a claim; the accepting side reproduces it. At minimum:
-the commits exist and their diffs match the claimed scope; the suite reproduces under an
-interpreter that was verified to exist; the test count is compared against a pre-change
-baseline, because a bare pass count cannot distinguish added tests from lost ones; and the
-claimed structural change is present in the code.
+An implementing agent's report is a claim, and the accepting side checks it. Checking is
+not re-running everything that already passed: a green suite re-run under the same
+conditions produces no new information, and M1's evidence section is what excess looks
+like — a fresh environment re-ran the browser-complete suite, the golden test, and the CLI
+lifecycle, and an independent reviewer then reproduced the same runs a third time.
 
-The canonical interpreter for this repository is recorded in
-`docs/v2/records/architecture-audit.md` section 6. Evidence produced under another worktree's
-environment is not accepted.
+The accepting side checks the four things a report cannot establish about itself:
+
+1. **The commits exist and their diffs match the claimed scope.** Read the diff.
+2. **The claimed structural change is present in the code.** Grep for it; a report saying
+   a symbol moved is not the symbol having moved.
+3. **The test count against a pre-change baseline.** A bare pass count cannot distinguish
+   added tests from lost ones.
+4. **The environment the numbers came from.** The canonical interpreter is recorded in
+   `docs/v2/records/architecture-audit.md` section 6; evidence produced under another
+   worktree's environment is not accepted.
+
+Re-run a gate only when one of those checks fails, when the report leaves a gate
+unproduced, or when the environment of the original run is itself in doubt — which is
+exactly what happened at M1, and is why that re-run was right and repeating it by default
+is not.
+
+A guard is worth more attention than a re-run: prove it fails on an injected violation.
+A passing guard that cannot fail is the defect a second suite run will never find.
+
+Inject once per guard, not once per boundary. The probe is owed when the guard is new, when
+its scope changed, and when it stops being vacuous — a guard that early-returns while its
+target does not exist passes green forever, so the first boundary where the target exists is
+the only chance to catch it. Boundary 1 owed all three: the SQL guard was widened past
+`infrastructure/` in wave 2, and two guards were inert until their targets landed. A guard
+untouched since its own probe is owed nothing; re-injecting it is the ceremony this section
+otherwise argues against.
 
 If a blocker raised during verification turns out to be an over-scoped acceptance bar rather
 than a real defect, correct the bar and record that it was over-scoped. Do not widen a

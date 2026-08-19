@@ -61,7 +61,9 @@ head, and — for v1 data — the migration-safety rules below.
 
 Gates are per boundary, not per commit. While iterating, run only the focused tests for
 what changed; run the class's full gate once, when the work closes. Do not run the browser
-suite for changes that cannot affect a rendering or browser path.
+suite for changes that cannot affect a rendering or browser path. Re-running a gate that
+already passed under the same conditions is not evidence — check the diff, the test count
+against its baseline, and which interpreter produced the numbers.
 
 ## What actually catches defects
 
