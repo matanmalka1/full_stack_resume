@@ -42,7 +42,7 @@ LEGACY = "base/cv_base.md; migrated without strengthening"
 
 # Post-v1 addition, deliberately outside the generated sources below. Those
 # sources reproduce the v1 migrated state, whose per-file hashes are recorded in
-# docs/v1-retrospective-migration-verification.json; adding a v2 fact to them
+# docs/v1/retrospective-migration-verification.json; adding a v2 fact to them
 # would silently invalidate that evidence. This fact is created through the
 # normal lifecycle instead, exactly as any later canonical fact would be.
 V2_IDENTITY_FACT = {

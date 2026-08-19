@@ -64,7 +64,7 @@ required work remains. Historical artifacts were not overwritten.
 - Snapshot archive hash:
   `f2505e44695759f308e8fe0de5433d2c3e5f9f6c25cd565dab6fbcbae7e6236a`.
 - Restore extraction and every manifest hash passed; restore instructions are included
-  in the snapshot and `docs/v1-migration-restore.md`.
+  in the snapshot and `docs/v1/migration-restore.md`.
 - Migration-specific tests: 2 passed before apply.
 - Extracted-copy dry-run: 22 applications, 22 job snapshots, and 113 artifact versions;
   no problems. Report hash:

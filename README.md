@@ -3,9 +3,10 @@
 Fact-safe CV generation and application tracking for Development, Sales, and Tech
 Sales. The product is CLI-first; no Web UI is required.
 
-The binding specification is [`docs/v1-upgrade-handoff.md`](docs/v1-upgrade-handoff.md).
-Architecture, review evidence, and the staged plan are in `docs/v1-architecture.md`,
-`docs/v1-review.md`, and `docs/v1-implementation-plan.md`.
+The binding specification is [`docs/v1/upgrade-handoff.md`](docs/v1/upgrade-handoff.md).
+Architecture, review evidence, and the staged plan are in `docs/v1/architecture.md`,
+`docs/v1/review.md`, and `docs/v1/implementation-plan.md`. [`docs/README.md`](docs/README.md)
+maps every document, v1 and v2.
 
 ## Setup
 
@@ -207,9 +208,9 @@ The adapter uses strict Structured Outputs through the Responses API.
 ## Historical migration verification
 
 The pre-v1 to v1 migration is complete. Its frozen result is recorded in
-[`docs/v1-retrospective-migration-verification.json`](docs/v1-retrospective-migration-verification.json),
+[`docs/v1/retrospective-migration-verification.json`](docs/v1/retrospective-migration-verification.json),
 with restore instructions in
-[`docs/v1-migration-restore.md`](docs/v1-migration-restore.md). The CLI retains only
+[`docs/v1/migration-restore.md`](docs/v1/migration-restore.md). The CLI retains only
 read-only verification commands for that historical evidence, and both require a valid
 marked v2 Workspace:
 
@@ -219,7 +220,7 @@ marked v2 Workspace:
 ```
 
 The v1 to v2 migration workflow is implemented in M2/M6 according to
-[`docs/v2-migration-plan.md`](docs/v2-migration-plan.md) §7 stages A–G. Its sole path
+[`docs/v2/spec/migration-plan.md`](docs/v2/spec/migration-plan.md) §7 stages A–G. Its sole path
 into an unmarked v1 source is `LegacyV1Source`, which inventories and reads the source
 without writing a marker, inventory report, snapshot, temporary file, or migrated state
 there. Never extract a snapshot over a live repository.

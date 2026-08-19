@@ -2,11 +2,11 @@
 
 Status: **Approved for v2.0 implementation (2026-08-17)**
 
-Product authority: `docs/v2-product-spec.md`
+Product authority: `docs/v2/spec/product-spec.md`
 
-Architecture: `docs/v2-architecture.md`
+Architecture: `docs/v2/spec/architecture.md`
 
-State/use-cases: `docs/v2-state-and-use-cases.md`
+State/use-cases: `docs/v2/spec/state-and-use-cases.md`
 
 ## 1. Delivery rules
 
@@ -110,7 +110,7 @@ source-ID resolvers.
       passes; retaining every legacy test item is not required.
 
 M1's implementation boundary closed on 2026-08-18 at `67a80d5`. Command evidence and
-the exact scope of each criterion are recorded in `docs/v2-m1-acceptance.md`; the
+the exact scope of each criterion are recorded in `docs/v2/records/m1-acceptance.md`; the
 browser-required suite passed 124 tests in the dedicated v2 environment.
 
 Stable commit boundary: application seam complete and CLI green.

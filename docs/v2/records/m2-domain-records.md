@@ -2,17 +2,17 @@
 
 Status: **Designed 2026-08-18; not implemented.** Base commit: `856fc7c`.
 
-Scope: `docs/v2-implementation-plan.md` §4.2, plus the inherited items the boundary 1 brief
+Scope: `docs/v2/spec/implementation-plan.md` §4.2, plus the inherited items the boundary 1 brief
 assigned here: Stage 7b (ValidationRun report schema version and the draft-side group rename),
 A5 (typed decision record), A4 (render/Ready policy into the domain behind a typed evidence
 DTO), the A2 residue (`_set_ready` / `_record_submission` / `record_decision` rules), and
 per-service repository repointing with the rest of A16's port narrowing.
 
-Authority: `docs/v2-product-spec.md` §6 invariants 3–12 and 16–21, §8, §10, §11, §16;
-`docs/v2-state-and-use-cases.md` §2–§5, §12–§18; `docs/v2-architecture.md` §6.1, §6.2, §8;
-`docs/v2-migration-plan.md` §6.2, §6.3, §6.6, §6.7, §6.9; `docs/v2-execution-protocol.md`.
+Authority: `docs/v2/spec/product-spec.md` §6 invariants 3–12 and 16–21, §8, §10, §11, §16;
+`docs/v2/spec/state-and-use-cases.md` §2–§5, §12–§18; `docs/v2/spec/architecture.md` §6.1, §6.2, §8;
+`docs/v2/spec/migration-plan.md` §6.2, §6.3, §6.6, §6.7, §6.9; `docs/v2/process/execution-protocol.md`.
 
-Predecessor: `docs/v2-m2-schema-and-repositories.md` (boundary 1, closed at `4796744`).
+Predecessor: `docs/v2/records/m2-schema-and-repositories.md` (boundary 1, closed at `4796744`).
 
 ## 0. What the review established
 
@@ -66,9 +66,9 @@ records and the human-readable provenance export (A5).
 
 **D1 — records are additive; the read path moves per record, never duplicated.** Each record
 cuts over to exactly one home as its slice lands, with the CLI as the sole writer. Writing a v2
-record beside the v1 row it replaces would be a dual-write, which `docs/v2-implementation-plan.md`
+record beside the v1 row it replaces would be a dual-write, which `docs/v2/spec/implementation-plan.md`
 §11 lists as an unqualified stop condition; leaving the CLI on v1 records while a later API
-writes v2 ones would be the second workflow engine `docs/v2-architecture.md` §1 forbids.
+writes v2 ones would be the second workflow engine `docs/v2/spec/architecture.md` §1 forbids.
 
 **D2 — ports keep returning row mappings; new records get typed accessors.** Converting the
 existing `dict[str, Any]` port surface to typed records would break every service and test at
@@ -90,7 +90,7 @@ in existence are three development Workspaces holding one Application each, repr
 `cv workspace init` plus `cv fast`. They are disposable and recreated. Real v1 data never travels
 `0001 → 0002`; it lands once, at cutover, in whatever schema is then current, and writing its
 snapshot text to `snapshots/{application_id}/{snapshot_id}.txt` is already
-`docs/v2-migration-plan.md` §6.3's requirement on the v1→v2 mapping, so payload writing is
+`docs/v2/spec/migration-plan.md` §6.3's requirement on the v1→v2 mapping, so payload writing is
 implemented once, in `infrastructure/migration.py`.
 
 The removal itself is staged: **`0002` adds `payload_path`, `source_hash`, and `normalized_hash`
@@ -142,9 +142,9 @@ recreate the `no_update_`/`no_delete_` pair. `UNIQUE(application_id, version_num
 `UNIQUE(application_id, content_hash)` survive both migrations; D6 keeps the latter deliberately.
 
 The payload lives at `snapshots/{application_id}/{snapshot_id}.txt`, byte-exact, with no
-line-ending normalisation (`docs/v2-migration-plan.md` §6.3). `source_hash` is the hash over the
+line-ending normalisation (`docs/v2/spec/migration-plan.md` §6.3). `source_hash` is the hash over the
 exact received representation — today's `content_hash` value — and `normalized_hash` is the
-separate dedupe hash `docs/v2-product-spec.md` §8 requires. Writers follow §7.1: write the payload
+separate dedupe hash `docs/v2/spec/product-spec.md` §8 requires. Writers follow §7.1: write the payload
 through `PayloadStore.commit` first, register second, so a failed registration leaves a
 reconcilable orphan rather than a dangling row.
 
@@ -160,7 +160,7 @@ directly.
 `UNIQUE(application_id, version_number)` and a `no_update_` / `no_delete_` trigger pair.
 
 Every successful analysis creates its initial deterministic plan in the same transaction
-(`docs/v2-state-and-use-cases.md` §13), so `save_analysis` becomes one atomic
+(`docs/v2/spec/state-and-use-cases.md` §13), so `save_analysis` becomes one atomic
 analysis-plus-plan write. `create_draft` takes an explicit `selection_plan_id`; the CLI gains
 `--selection-plan` with a compatibility resolver for the omitted-argument case, matching the two
 sanctioned resolvers already in `compat.py`.
@@ -225,7 +225,7 @@ dependencies made the split unsound. The schema package could not reach the thre
 And the typed accessors were assigned to the schema package while the models they return were
 assigned to the domain package, so neither could be tested meaningfully alone. The dependency
 graph here is a **chain**, not a fan, and the parallel half was small — models plus one rename.
-Per `docs/v2-execution-protocol.md` §7, serial is the honest shape.
+Per `docs/v2/process/execution-protocol.md` §7, serial is the honest shape.
 
 One executor works three stages in order, on one branch, in one worktree. Every stage ends green
 before the next begins, which is the property the lane split destroyed.
@@ -296,7 +296,7 @@ projection replacing stored READY, with the A2 residue moving out of the reposit
 submissions bound to a revision and its exact PDF artifact, plus `record_external_submission`;
 recruitment events with `corrects_event_id` and a mandatory reason, `terminal_outcome`, and the
 mapping of legacy `preparing` / `ready` history to migration events per
-`docs/v2-migration-plan.md` §6.2; and `export_decision_markdown`.
+`docs/v2/spec/migration-plan.md` §6.2; and `export_decision_markdown`.
 
 ## 8. Stop conditions
 

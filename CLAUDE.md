@@ -21,19 +21,21 @@ Two things are not regenerable, and they are where care belongs:
 
 ## Specifications
 
-`docs/` holds the approved v2 specifications. They are binding on what the product
-does; they are not required reading before every task.
+`docs/v2/spec/` holds the approved v2 specifications. They are binding on what the
+product does; they are not required reading before every task. `docs/v2/records/` holds
+closed evidence, `docs/v2/process/` the multi-agent protocol, and `docs/v1/` the legacy
+record. `docs/README.md` is the map.
 
 Read the one that owns the subject you are changing:
 
 | Changing | Read |
 | --- | --- |
-| Product scope, invariants, non-goals | `docs/v2-product-spec.md` |
-| Lifecycle, commands, queries, permissions | `docs/v2-state-and-use-cases.md` |
-| Layer boundaries, filesystem layout, schema shape | `docs/v2-architecture.md` |
-| Migration of v1 data | `docs/v2-migration-plan.md` |
-| Milestone stages and gates | `docs/v2-implementation-plan.md` |
-| What v1 did and why | `docs/v1-upgrade-handoff.md` |
+| Product scope, invariants, non-goals | `docs/v2/spec/product-spec.md` |
+| Lifecycle, commands, queries, permissions | `docs/v2/spec/state-and-use-cases.md` |
+| Layer boundaries, filesystem layout, schema shape | `docs/v2/spec/architecture.md` |
+| Migration of v1 data | `docs/v2/spec/migration-plan.md` |
+| Milestone stages and gates | `docs/v2/spec/implementation-plan.md` |
+| What v1 did and why | `docs/v1/upgrade-handoff.md` |
 
 If a specification conflicts with existing behavior, stop and say so. Do not
 reinterpret a conflict silently. The pre-v1 generation workflow is retired; historical
@@ -116,7 +118,7 @@ are the one place where full ceremony is warranted.
 ## Scope
 
 - Implement only approved v2.0 scope and respect every non-goal in
-  `docs/v2-product-spec.md`.
+  `docs/v2/spec/product-spec.md`.
 - The local FastAPI + React Web UI is authorized in this worktree. Cloud deployment,
   authentication, PostgreSQL, multi-candidate support, and broad multi-provider support
   are not.
@@ -126,9 +128,9 @@ are the one place where full ceremony is warranted.
   with its central failure paths passing.
 - Do not perform unrelated refactors or cleanup.
 - Do not edit generated HTML by hand; fix the source, template, renderer, or rules.
-- The dependency baseline is `docs/v2-architecture.md` section 2. Add a dependency only
-  when it enforces contracts, reduces rendering risk, or gives a concrete portability
-  benefit within v2.0.
+- The dependency baseline is `docs/v2/spec/architecture.md` section 2. Add a dependency
+  only when it enforces contracts, reduces rendering risk, or gives a concrete
+  portability benefit within v2.0.
 
 ## Working rules
 
@@ -148,8 +150,10 @@ are the one place where full ceremony is warranted.
 
 ## Documentation
 
-`docs/v2-m2-remaining.md` is the single record of state — what is done, what remains,
-what is blocked. Nothing else records state.
+`docs/v2/m2-remaining.md` is the single record of state — what is done, what remains,
+what is blocked. Nothing else records state. A record under `docs/v2/records/` is frozen
+when its boundary closes: it keeps its own evidence and is not updated with later state.
+Non-milestone cleanup items live in `docs/v2/cleanup-todos.md`.
 
 Decisions and their reasoning go in the commit message. Write a separate design brief
 only for a Class C change whose reasoning will not fit there.

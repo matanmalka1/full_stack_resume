@@ -1,13 +1,14 @@
 # v2 Architecture Audit — responsibility boundaries in `cv_engine`
 
-Status: **M1 and Stages 1–7a implemented and verified; Stage 7b and remaining boundary
-work deferred to M2 (2026-08-18)**
+Status: **Frozen at M1 close (2026-08-18).** M1 and Stages 1–7a implemented and verified;
+Stage 7b and the remaining boundary work moved to M2. Later state is not written back
+here — see `docs/v2/m2-remaining.md` and the section "Where each finding was closed".
 
 Scope: `cv_engine` module and file responsibility boundaries at M1 close, before M2
 begins. Baseline commit: `a68bcec`.
 
-Authority: `docs/v2-architecture.md` (binding boundaries), `docs/v2-product-spec.md`,
-`docs/v2-state-and-use-cases.md`, `docs/v1-upgrade-handoff.md`, `CLAUDE.md`.
+Authority: `docs/v2/spec/architecture.md` (binding boundaries), `docs/v2/spec/product-spec.md`,
+`docs/v2/spec/state-and-use-cases.md`, `docs/v1/upgrade-handoff.md`, `CLAUDE.md`.
 
 This document records what was found, what the target organization is, what will be
 moved in which order, and — deliberately — what will **not** be split. It changes no
@@ -15,7 +16,7 @@ behaviour and authorizes no refactor by itself.
 
 ## 0. Constraints this audit works inside
 
-- `docs/v2-architecture.md` §3 fixes the top level as `domain/ application/
+- `docs/v2/spec/architecture.md` §3 fixes the top level as `domain/ application/
   infrastructure/ api/ cli/ runtime/` plus `frontend/`, and states: *"Subpackages are
   introduced only when the amount and cohesion of code justify them. There is no
   one-file-per-interface rule and no micro-packaging objective."*
@@ -23,7 +24,7 @@ behaviour and authorizes no refactor by itself.
   `DraftService`, `RenderingService`, `TrackingService`. A `use_cases/analyze_job.py`
   layout would replace an approved contract and is therefore out of scope. The code's
   seven service classes already map to the command families in
-  `docs/v2-state-and-use-cases.md` §12–§20.
+  `docs/v2/spec/state-and-use-cases.md` §12–§20.
 - §3.1 assigns the domain *"lifecycle rules, validation semantics, transition rules, …
   Ready qualification"*.
 - §3.3 names the M2 repository split, which is what will eventually justify an
@@ -66,7 +67,7 @@ formulas, and the `"filename"` group means two different things.**
   group set and a local `fail()` closure.
 
 `ValidationReport.passed` is the single gate on approval, `PreparationState=ready`, and
-submission (`docs/v1-upgrade-handoff.md` §14). Three authors means the soft/hard
+submission (`docs/v1/upgrade-handoff.md` §14). Three authors means the soft/hard
 distinction can diverge per site. Today `validate_rendered` pairs every issue with
 `groups[x] = False`, so the missing `hard` term is latent rather than live — but nothing
 detects the next issue added without that pairing.
@@ -95,7 +96,7 @@ outside its own transaction.**
 `cv_engine/domain/analysis.py:251-262` hardcodes a per-profile map, while
 `analysis.py:142,150` in the same file reads `profiles.get(profile).default_emphasis` and
 `.allowed_emphases` from the Profile store. The YAMLs are the declared source of truth
-(`docs/v1-upgrade-handoff.md` §4 principle 2: *"Facts → Profiles → Rendering Rules are
+(`docs/v1/upgrade-handoff.md` §4 principle 2: *"Facts → Profiles → Rendering Rules are
 separate layers"*).
 
 **Verified: the hardcoded map currently agrees with all ten `profiles/**.yaml`
@@ -111,7 +112,7 @@ different `0.9` token threshold in `_claim_recoverable:274-288`, expected-link
 derivation, the overflow tolerance (`+ 1` px, inside JavaScript injected at `:163-173`),
 RTL isolation, and the filename rule. Add `normalized_role_filename:31-37` — which
 carries a hardcoded `"B2B Sales"` fallback role — and `MIXED_LTR:24-28`.
-`docs/v2-architecture.md` §3.1 assigns Ready qualification to the domain, and
+`docs/v2/spec/architecture.md` §3.1 assigns Ready qualification to the domain, and
 `tests/test_candidate.py:32` already lists `"infrastructure/rendering.py"` in its
 `POLICY_MODULES`: the test suite classifies this file as policy.
 
@@ -123,7 +124,7 @@ record can name paths that do not exist yet (`:903-908`); a 22-key decision-reco
 payload assembled inline (`:910-936`), in which `accepted_warnings_or_gaps` and
 `user_overrides` carry the same value; a prose summary string (`:943`); a status
 transition (`:946-951`). The decision record is the reproducibility contract
-(`docs/v1-upgrade-handoff.md` §16 and §4 principle 13) and has no typed shape anywhere.
+(`docs/v1/upgrade-handoff.md` §16 and §4 principle 13) and has no typed shape anywhere.
 
 **A6 — product policy in `cli.py`, invisible to the architecture test.**
 
@@ -153,7 +154,7 @@ digging `__cause__` back out to re-raise the domain `FactStoreError` the service
 wrapped. `compat.py:64-65` reads `services.knowledge.base_dir`, which is not a member of
 the `KnowledgeStore` Protocol (`application/ports.py:80-100`). `tests/conftest.py:229-345`
 builds every workflow fixture (`analyzed_ → drafted_ → approved_ → ready_application`)
-through it — so the layer `docs/v2-architecture.md` §3.4 says to remove is what the suite
+through it — so the layer `docs/v2/spec/architecture.md` §3.4 says to remove is what the suite
 actually exercises.
 
 **M1 closure resolution:** commit `d34cf50` moved the exact fast-mode orchestration and
@@ -440,7 +441,7 @@ even that can wait for M2's provider work.
 
 **5.2 — `infrastructure/migration.py` (839 lines).** Cohesive around one bounded,
 one-time concern, read as a unit, and bound to a frozen evidence artifact
-(`docs/v1-retrospective-migration-verification.json`). Live cutover has not happened and
+(`docs/v1/retrospective-migration-verification.json`). Live cutover has not happened and
 `CLAUDE.md` forbids casual changes to migration safety. Fix only the two real defects
 (A9, A24); do not restructure it.
 
@@ -491,7 +492,7 @@ into the seven repositories named in §3.3.
 - `tests/test_architecture.py` must pass with its widened scope, and its allowlist must
   shrink — never grow — across stages.
 - `tests/test_golden.py` is the semantic-parity check required by
-  `docs/v2-test-and-acceptance-plan.md` §3 (selected facts, rendered claims, validation
+  `docs/v2/spec/test-and-acceptance-plan.md` §3 (selected facts, rendered claims, validation
   outcomes, Ready eligibility, decision behaviour). It must report **no** semantic
   difference after every stage; any difference means a move described as mechanical was
   not.
@@ -575,7 +576,10 @@ and browser-complete results and assessed the six M1 §3.4 criteria **6/6 PASS**
 No threshold, message string, exception type, validation-group name, status, public
 signature, stored report shape, artifact path policy, or fact semantic changed.
 
-### Remaining work and residual allowlist debt
+### Remaining work and residual allowlist debt, as of M1 close
+
+This section is a snapshot at M1 close and is not updated per boundary. Current state
+lives in `docs/v2/m2-remaining.md`.
 
 - **Stage 7a is complete; Stage 7b is deferred to M2.** The domain-owned factory and
   architecture enforcement close A1's multiple-construction/pass-rule defect. Group
@@ -606,40 +610,21 @@ signature, stored report shape, artifact path policy, or fact semantic changed.
   the homes stated above. They are outside M1 criterion 5's selected-marker and
   inventory guarantee.
 
-### M2 boundary 1 closure (2026-08-18, `4796744`)
+### Where each finding was closed
 
-`docs/v2-m2-schema-and-repositories.md` is the design and evidence record for this boundary.
-It changes the state of the findings above as follows:
+This audit is frozen at M1 close. What happened to each finding afterwards is recorded by
+the boundary that did the work, not restated here.
 
-- **A23 closed.** `cv_engine/infrastructure/paths.py` is now the single symlink-aware
-  containment implementation; `runtime/workspace.py`, `infrastructure/legacy_source.py`, and
-  `infrastructure/migration.py` all resolve through it, and an architecture test forbids a
-  second implementation anywhere in `cv_engine/`.
-- **A26 closed.** `--db` / `CV_DATABASE` must resolve inside `state_root`; relative, absolute,
-  outside-root, and symlink-escape forms are covered for both the flag and the environment
-  variable.
-- **A27 closed.** All four default child roots are resolved and containment-checked before any
-  write, and a symlinked default child is refused.
-- **A29 closed.** Workspace marker validation now precedes any Workspace config read.
-- **A7 closed.** Payload integrity is classified once, as `ok` / `missing` / `tampered`, behind
-  the four former copies; every caller keeps its own message strings and issue codes.
-- **A2 partly closed.** The READY-demotion rule has one owner, the demotion is atomic with the
-  analysis insert and classification update in a single UnitOfWork, and `Repository.save_analysis`
-  no longer re-reads status after its own transaction has closed. Both protected reason strings
-  are preserved byte-for-byte and asserted. The residue — relocating the `_set_ready`,
-  `_record_submission`, and `record_decision` rules — moves to M2 §4.3, where the
-  `PreparationState` and `ready_qualified` projections replace those rules outright.
-- **A16 partly addressed.** `register_artifact_version`, `record_decision`, `record_validation`,
-  and `latest_artifact_version` are typed; the rest of the port narrowing waits for §4.2.
-- **A24 remains the only allowlist entry.** `infrastructure/migration.py` still imports
-  `subprocess`; it belongs to M2 §4.6 with the migration gate report contract. The allowlist
-  shrank from two entries to one and `cli.py` no longer imports the persistence adapter.
-- **A28 remains open** at its §4.6 home, unchanged by this boundary.
-- **A4, A5, A6, A3 remain open** as Stage 8 items at the homes recorded in the boundary 1
-  design brief §1.
+| Finding | Closed / current home |
+| --- | --- |
+| A1 | Stage 7a factory; 7b landed with M2 boundary 2a — `docs/v2/records/stage7-validation-report-options.md` |
+| A7, A23, A26, A27, A29 | Closed at M2 boundary 1 — `docs/v2/records/m2-schema-and-repositories.md` |
+| A2 | Rule ownership and atomicity at boundary 1; the `_set_ready` / `_record_submission` / `record_decision` residue is §4.3 work — `docs/v2/m2-remaining.md` §C |
+| A4, A5 | Closed in M2 §4.2 (2b) — `docs/v2/m2-remaining.md` §B |
+| A16 | Partly typed at boundary 1; the rest narrows per service in §4.2 |
+| A6 | Open, §4.5 — `docs/v2/m2-remaining.md` §E |
+| A24, A28 | Open, §4.6 — `docs/v2/m2-remaining.md` §F |
 
-`infrastructure/db.py` no longer exists. Structured state is created and upgraded only through
-numbered SQL migrations, with verified adoption of an existing v1-shaped database and an
-explicit version gate. Independent verification, including the browser-required gate at
-154 passed and the baseline-adoption drill on a copy of the development Workspace, is recorded
-in `docs/v2-m2-schema-and-repositories.md` §13.
+`infrastructure/db.py` no longer exists: structured state is created and upgraded only
+through numbered SQL migrations, with verified adoption of an existing v1-shaped database
+and an explicit version gate.

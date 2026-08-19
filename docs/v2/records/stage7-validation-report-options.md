@@ -1,12 +1,14 @@
 # Stage 7 options memo — ValidationReport construction
 
-Status: **Decision taken (2026-08-18): Stage 7a landed; Stage 7b is deferred to M2**
+Status: **Closed.** Stage 7a landed 2026-08-18; Stage 7b landed with M2 boundary 2a
+(`docs/v2/records/m2-domain-records.md` D7, §3.4). This file is kept for the option
+analysis behind the decision, not as a state record.
 
-Authority: `docs/v2-product-spec.md`, `docs/v2-state-and-use-cases.md`,
-`docs/v2-architecture.md`, and finding A1 / Stage 7 in
-`docs/v2-architecture-audit.md`.
+Authority: `docs/v2/spec/product-spec.md`, `docs/v2/spec/state-and-use-cases.md`,
+`docs/v2/spec/architecture.md`, and finding A1 / Stage 7 in
+`docs/v2/records/architecture-audit.md`.
 
-## 1. Decision and sequencing
+## 1. What was being decided
 
 Stage 7 was defined to unify the three independent `ValidationReport` construction
 paths in:
@@ -15,25 +17,15 @@ paths in:
 - `infrastructure/rendering.py` for render/PDF/ATS validation; and
 - `application/ready.py` for current Ready-integrity verification.
 
-The decision splits the work so the pass-rule invariant does not force a premature
-persisted-shape transition immediately before M2's numbered-migration work:
+The work was split so the pass-rule invariant would not force a persisted-shape
+transition immediately before M2's numbered-migration work: 7a landed the domain-owned
+factory with no shape change, and 7b carried the group rename and the report schema
+version into M2's migrations. Sections 3–5 record the options; section 6 records what
+was accepted. The accepted target is stated once, in section 6.
 
-1. **Stage 7a (landed):** one domain-owned factory derives `passed` from groups and hard
-   issues. All five production construction sites use it, and an architecture test
-   prevents another direct in-package constructor. This changes no group name, report
-   field, stored JSON shape, or reader behavior.
-2. **Stage 7b (pre-approved in shape, deferred to M2):** adopt group-name Option B and
-   history Option 2 when the explicit v2 schema and numbered migrations are designed.
-   Rename the draft/content group to `"headline_safety"`, retain render's `"filename"`,
-   and carry `report_schema_version` inside new report JSON. An absent version means
-   legacy. Historical rows are never rewritten.
+## 2. Behavior and stored shape before Stage 7
 
-Historical Option 1 (back-fill) and Option 3 (dual aliases) are permanently rejected.
-Back-filling violates immutable evidence, while aliases would preserve the ambiguity.
-
-## 2. Current behavior and stored shape
-
-The constructors currently use these formulas:
+The three constructors used these formulas:
 
 | Producer | Current formula | Current `"filename"` meaning |
 | --- | --- | --- |
@@ -194,6 +186,5 @@ The distinct group names describe distinct findings, not independent policy inpu
 Stage 7a is behavior-preserving: no threshold, message, exception type, group name,
 status, public signature, stored report shape, artifact path, or fact semantic changed.
 
-Stage 7b remains deferred to M2 despite its pre-approved shape. No schema field, group
-rename, compatibility reader, historical-row mutation, or Stage 8 work was authorized
-or performed in 7a.
+No schema field, group rename, compatibility reader, historical-row mutation, or Stage 8
+work was performed in 7a; all of it landed later, in M2 boundary 2a.

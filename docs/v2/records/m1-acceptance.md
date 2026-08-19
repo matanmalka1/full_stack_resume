@@ -2,13 +2,13 @@
 
 Status: **M1 closed — all six acceptance criteria passed** (2026-08-18)
 
-Milestone: `docs/v2-implementation-plan.md` section 3 (M1 — Application foundation)
+Milestone: `docs/v2/spec/implementation-plan.md` section 3 (M1 — Application foundation)
 
 Baseline: `v1.0.0` / `2cc31c7`, 131 tests passing with `CV_REQUIRE_BROWSER=1`
 
 This file replaces both earlier records: the implementation report that declared M1
-`Passed` and the review report (`docs/v2-m1-acceptance-report.md`) that declared it
-`CHANGES REQUIRED`. The first was premature — it reported a suite result that the
+`Passed` and the review report that declared it `CHANGES REQUIRED`. The first was
+premature — it reported a suite result that the
 review then showed was not isolated from the v1 worktree, so its test evidence could
 not support the claim it made. Keeping two contradictory records would leave the
 milestone's status a matter of which file a reader opened first.
@@ -309,7 +309,7 @@ recommended withholding M1 closure despite reporting all six §3.4 criteria as p
 That conclusion used a broader proposed rule — that no CLI path may read or write any
 unmarked or outside path — rather than criterion 5's actual marker-and-inventory
 contract. The broader rule was withdrawn. The findings themselves are valid and are
-recorded as A26–A29 in `docs/v2-architecture-audit.md`, with explicit M2 homes. This
+recorded as A26–A29 in `docs/v2/records/architecture-audit.md`, with explicit M2 homes. This
 record therefore disagrees with the reviewer's overall stop recommendation while
 accepting its factual findings and its **6/6 PASS** assessment of the approved criteria.
 
@@ -487,7 +487,7 @@ behavior, `ValidationReport` construction, Ready integrity, rendering/PDF/ATS, g
 historical verification, `cv fast`, and the nine gap substitute identities.
 
 This consolidation follows the risk-based rules in
-`docs/v2-test-and-acceptance-plan.md`: required evidence is not a one-test-per-bullet
+`docs/v2/spec/test-and-acceptance-plan.md`: required evidence is not a one-test-per-bullet
 mandate, and individual legacy cases need not remain when a smaller test supplies the
 same failure signal. No product, validation, migration, or artifact-lifecycle behavior
 changed in this cleanup.
@@ -515,7 +515,7 @@ of the two would have raised `migrated fact changed in base/common.md`.
 Consequences to be aware of:
 
 - The `canonical_fact_hashes` recorded in
-  `docs/v1-retrospective-migration-verification.json` are a sealed record of a run at
+  `docs/v1/retrospective-migration-verification.json` are a sealed record of a run at
   commit `9c965b8`. The live `common.md` hash already differed from it before this
   change, because the identity fact was added afterwards through the fact lifecycle.
   That file is point-in-time evidence, not a live invariant, and no test asserts those

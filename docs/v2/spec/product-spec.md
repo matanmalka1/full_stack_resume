@@ -42,12 +42,12 @@ For v2.0, authority is ordered as follows:
 
 1. This product specification defines binding product semantics, scope, safety, and
    observable behavior after it is approved.
-2. `docs/v2-state-and-use-cases.md` defines the detailed state, command, query, and
+2. `docs/v2/spec/state-and-use-cases.md` defines the detailed state, command, query, and
    permission contracts consistent with this specification.
-3. `docs/v2-architecture.md` defines the technical architecture that implements those
+3. `docs/v2/spec/architecture.md` defines the technical architecture that implements those
    contracts.
 4. The implementation, test, and migration plans define execution and evidence.
-5. `docs/v1-upgrade-handoff.md` and v1 behavior remain binding evidence for every v1
+5. `docs/v1/upgrade-handoff.md` and v1 behavior remain binding evidence for every v1
    safety or factual invariant that this specification does not explicitly replace.
 6. Legacy code and data are current-state evidence, not permission to weaken a v2
    contract.

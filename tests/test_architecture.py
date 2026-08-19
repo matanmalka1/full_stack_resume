@@ -23,7 +23,7 @@ ALLOWED_INTERNAL = {
     "application": {"domain", "application", "util"},
 }
 
-# Known boundary debt from docs/v2-architecture-audit.md. New entries are not
+# Known boundary debt from docs/v2/records/architecture-audit.md. New entries are not
 # permitted. Stages remove entries as they move the owning policy inward.
 ARCHITECTURE_DEBT_ALLOWLIST = {
     "infrastructure/migration.py: imports subprocess",

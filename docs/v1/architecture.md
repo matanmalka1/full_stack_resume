@@ -1,6 +1,6 @@
 # v1 Architecture
 
-This architecture implements `docs/v1-upgrade-handoff.md` without changing its product
+This architecture implements `docs/v1/upgrade-handoff.md` without changing its product
 semantics.
 
 ## Boundaries

@@ -2,14 +2,14 @@
 
 Status: **Implemented and verified 2026-08-18.** Code/test commit: `3f030ad`.
 
-Scope: the first two items of `docs/v2-m2-remaining.md` section B only:
+Scope: the first two items of `docs/v2/m2-remaining.md` section B only:
 ApprovedRevision ownership of immutable revision content, and artifact-version metadata bound
 to that revision. Render-output relocation, Ready qualification, A2/A4/A5, submissions,
 recruitment events, and the remaining section-B items stay out of scope.
 
-Authority: `docs/v2-product-spec.md` §6/§11/§16,
-`docs/v2-state-and-use-cases.md` §15–§16, `docs/v2-architecture.md` §6.2/§7.1/§8,
-and `docs/v2-migration-plan.md` §6.7–§6.8.
+Authority: `docs/v2/spec/product-spec.md` §6/§11/§16,
+`docs/v2/spec/state-and-use-cases.md` §15–§16, `docs/v2/spec/architecture.md` §6.2/§7.1/§8,
+and `docs/v2/spec/migration-plan.md` §6.7–§6.8.
 
 ## 1. Decisions
 

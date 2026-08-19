@@ -2,16 +2,16 @@
 
 Status: **Implemented and independently verified 2026-08-18.** Designed at `d835ca9`; implementation closed at `4796744`. Evidence in §13.
 
-Scope: `docs/v2-implementation-plan.md` §4.1 (schema, numbered migrations, connection policy,
+Scope: `docs/v2/spec/implementation-plan.md` §4.1 (schema, numbered migrations, connection policy,
 repositories by transactional ownership, UnitOfWork, filesystem payload stores, ID/timestamp/
 hash/serialization primitives), plus the M2 §4.1 carry-forward the architecture audit parked
 here: A26, A27, A29, A23's containment duplication, and the two Stage 8 items that live inside
 `infrastructure/db.py` — A2 and A7.
 
-Authority: `docs/v2-product-spec.md` §6/§16, `docs/v2-state-and-use-cases.md` §2,
-`docs/v2-architecture.md` §3.3/§4/§6/§7, `docs/v2-implementation-plan.md` §4.1/§4.7,
-`docs/v2-test-and-acceptance-plan.md` §2.3, `docs/v2-migration-plan.md` §3/§10,
-`docs/v2-architecture-audit.md` §3/§4/§6, `docs/v2-execution-protocol.md` for process.
+Authority: `docs/v2/spec/product-spec.md` §6/§16, `docs/v2/spec/state-and-use-cases.md` §2,
+`docs/v2/spec/architecture.md` §3.3/§4/§6/§7, `docs/v2/spec/implementation-plan.md` §4.1/§4.7,
+`docs/v2/spec/test-and-acceptance-plan.md` §2.3, `docs/v2/spec/migration-plan.md` §3/§10,
+`docs/v2/records/architecture-audit.md` §3/§4/§6, `docs/v2/process/execution-protocol.md` for process.
 
 This document changes no behaviour by itself. It is the design the executing agents implement
 and the bar the verifying agent checks against.
@@ -395,7 +395,7 @@ Live v1 data at `/Users/matanmalka/Projects/resume_python` was not opened at any
 
 ### §4.7 status — deliberately not ticked
 
-No `docs/v2-implementation-plan.md` §4.7 checkbox is claimed by this boundary. Item 1
+No `docs/v2/spec/implementation-plan.md` §4.7 checkbox is claimed by this boundary. Item 1
 (repositories/UoW under real SQLite) and item 2 (immutable entities reject bypasses) are
 covered *for the M1 table set only*; the v2 entities they will finally be judged against arrive
 in §4.2. Item 7 (no M2 code points to live v1 paths) holds so far but is a standing constraint

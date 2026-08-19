@@ -2,7 +2,7 @@
 
 Status: **Approved for v2.0 implementation (2026-08-17)**
 
-Product authority: `docs/v2-product-spec.md`
+Product authority: `docs/v2/spec/product-spec.md`
 
 Baseline: `v1.0.0` / `2cc31c7`
 

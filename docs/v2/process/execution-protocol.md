@@ -4,11 +4,12 @@ Status: **Active working protocol (2026-08-18)**
 
 Scope: how multi-agent implementation work is organized in this repository. This document
 describes the *process*; it grants no authorization and overrides no product document.
-Authority order remains `CLAUDE.md` section "Authority".
+`CLAUDE.md` and the approved specifications remain authoritative, and every rule they
+state applies to every lane. Only the multi-agent additions are written here.
 
 It was derived from the M1 boundary refactor, which ran seven stages across three parallel
 lanes and one integration wave without a single cross-lane conflict
-(`docs/v2-architecture-audit.md` section 4 records what landed). Use it whenever
+(`docs/v2/records/architecture-audit.md` section 4 records what landed). Use it whenever
 implementation is split across more than one agent. Skip it when one agent working serially
 is the honest answer — see section 7.
 
@@ -73,17 +74,16 @@ the lead. The shims are removed there; they never survive into the final state.
 
 ## 5. Git protocol
 
+`CLAUDE.md`'s rules on small scoped commits, destructive operations, and isolated
+Workspaces apply unchanged to every lane. What multi-agent work adds:
+
 - One git worktree per lane, all based on the same commit. No executor commits to the
   long-lived branch.
 - Create lane worktrees fresh per milestone. A stale lane worktree silently builds on the
   wrong baseline.
-- One commit per work package, scoped to it, no mixing.
-- Executors never rebase, squash, force-push, run interactive git, or use any destructive
-  git or filesystem operation.
+- Executors never rebase, squash, force-push, or run interactive git.
 - The lead merges in a fixed, declared order, running that lane's subset plus the full suite
   after each merge.
-- Every lane worktree points only at an isolated development Workspace. No command in any
-  lane may open live v1 data.
 
 ## 6. Definition of done
 
@@ -102,15 +102,16 @@ A lane reports done only when all of these hold, with command output quoted:
 6. Anything not achievable mechanically is reported as a finding, **not** worked around. A
    lane that discovers it needs to change behaviour stops and reports.
 
+Reporting follows `CLAUDE.md`: passed / failed / remaining, with command evidence.
+
 ### Lead integration
 
 1. Merge in the declared order, testing after each merge.
 2. Delete every temporary shim and repoint the real call sites.
 3. Prove no module still imports a moved symbol from its old home (grep the old paths).
 4. Full verification, including the browser-complete suite and the semantic-parity check.
-5. Update the audit or milestone record with what landed and what remains.
-6. Report per package: passed / failed / remaining, with command evidence. Never
-   "implemented" alone. A hard failure is never relabelled as a warning.
+5. Update the milestone's state record with what landed and what remains.
+6. Report per package, with command evidence.
 
 ## 7. When not to use this
 
@@ -127,14 +128,14 @@ Saying "this does not need three lanes" is a valid and expected outcome of plann
 
 ## 8. Stop conditions
 
-Any agent, any wave. Stop and report rather than continue if:
+`CLAUDE.md`'s stop conditions hold for every agent in every wave. Lane work adds these,
+which are specific to moving code under exclusive ownership:
 
-- a move cannot be made without changing behaviour;
-- a test asserts on something the change would alter;
+- a move cannot be made without changing behaviour, or a test asserts on something the
+  change would alter;
 - the architecture allowlist would need a **new** entry;
 - a lane needs a file it does not own;
 - the semantic-parity comparison reports any difference;
-- the work reaches into an approval-gated or deferred item;
 - an acceptance criterion cannot be honestly ticked.
 
 Stopping is cheaper than a silent workaround, and it is the expected behaviour rather than a
@@ -149,7 +150,7 @@ baseline, because a bare pass count cannot distinguish added tests from lost one
 claimed structural change is present in the code.
 
 The canonical interpreter for this repository is recorded in
-`docs/v2-architecture-audit.md` section 6. Evidence produced under another worktree's
+`docs/v2/records/architecture-audit.md` section 6. Evidence produced under another worktree's
 environment is not accepted.
 
 If a blocker raised during verification turns out to be an over-scoped acceptance bar rather

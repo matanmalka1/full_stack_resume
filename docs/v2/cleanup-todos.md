@@ -1,4 +1,7 @@
-# Performance and architecture findings
+# Cleanup todos — performance and architecture findings
+
+Non-milestone cleanup items, tracked here so they do not compete with M2 scope in
+`docs/v2/m2-remaining.md`. Anything that becomes milestone work moves there.
 
 Execution rule: work serially. Complete and verify one item, then wait for explicit user
 approval before starting the next. These items do not silently expand product semantics

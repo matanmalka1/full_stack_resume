@@ -591,7 +591,10 @@ def _populate_legacy_repo(root: Path) -> None:
     (root / "jobs").mkdir(parents=True)
     (root / "docs").mkdir()
     shutil.copy2(
-        SOURCE_ROOT / "docs/v1-migration-restore.md", root / "docs/v1-migration-restore.md"
+        # Source is this worktree's v2 layout; the destination mimics the v1 repo
+        # layout that migration.py reads.
+        SOURCE_ROOT / "docs/v1/migration-restore.md",
+        root / "docs/v1-migration-restore.md",
     )
     rows = [
         [
