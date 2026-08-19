@@ -53,7 +53,7 @@ class RecruitmentStatusCommand(BoundaryDTO):
     target_status: str
     reason: str = ""
     occurred_at: str | None = None
-    actor_type: Literal["user", "system", "migration"] = "user"
+    actor_type: Literal["user", "system"] = "user"
     client: Literal["web", "cli", "worker"] = "cli"
 
 
@@ -63,7 +63,7 @@ class RecruitmentCorrectionCommand(BoundaryDTO):
     corrects_event_id: str
     reason: str = Field(min_length=1)
     occurred_at: str | None = None
-    actor_type: Literal["user", "system", "migration"] = "user"
+    actor_type: Literal["user", "system"] = "user"
     client: Literal["web", "cli", "worker"] = "cli"
 
 
@@ -73,7 +73,7 @@ class SubmissionCommand(BoundaryDTO):
     pdf_artifact_version_id: str
     submitted_at: str = Field(min_length=1)
     metadata: dict[str, Any] = {}
-    actor_type: Literal["user", "system", "migration"] = "user"
+    actor_type: Literal["user", "system"] = "user"
     client: Literal["web", "cli", "worker"] = "cli"
 
 
@@ -82,7 +82,7 @@ class ExternalSubmissionCommand(BoundaryDTO):
     submitted_at: str = Field(min_length=1)
     artifact_version_id: str | None = None
     metadata: dict[str, Any] = {}
-    actor_type: Literal["user", "system", "migration"] = "user"
+    actor_type: Literal["user", "system"] = "user"
     client: Literal["web", "cli", "worker"] = "cli"
 
 
@@ -91,7 +91,7 @@ class NextActionCommand(BoundaryDTO):
     next_action: str | None = None
     next_action_date: str | None = None
     occurred_at: str | None = None
-    actor_type: Literal["user", "system", "migration"] = "user"
+    actor_type: Literal["user", "system"] = "user"
     client: Literal["web", "cli", "worker"] = "cli"
 
 

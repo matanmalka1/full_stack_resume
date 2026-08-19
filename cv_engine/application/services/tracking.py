@@ -42,7 +42,7 @@ class TrackingService(ServiceBase[TrackingRepository]):
         action: str,
         entity_type: str,
         entity_id: str,
-        actor_type: Literal["user", "system", "migration"],
+        actor_type: Literal["user", "system"],
         client: Literal["web", "cli", "worker"],
         occurred_at: str,
         details: dict | None = None,
@@ -281,7 +281,7 @@ class TrackingService(ServiceBase[TrackingRepository]):
         artifact_version_id: str | None,
         submitted_at: str,
         metadata: dict,
-        actor_type: Literal["user", "system", "migration"],
+        actor_type: Literal["user", "system"],
         client: Literal["web", "cli", "worker"],
         warnings: list[str],
     ) -> SubmissionResult:
