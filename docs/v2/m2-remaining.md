@@ -221,15 +221,34 @@ eleven. Every boundary since added tables — operations, approved revisions, th
 knowledge journal, tracking — and each one had to remember to extend a hand-kept list.
 Nothing failed when one did not.
 
-- [ ] **H1 — immutable entities (item 2).** Ask `sqlite_master` which tables carry
-      `no_update_*` / `no_delete_*` triggers and assert every one of them rejects an
-      UPDATE and a DELETE. Then invert it: every table is expected to be guarded unless
-      it appears in a small list of deliberate exceptions, so a new mutable table has to
-      be argued for rather than merely forgotten. That inversion is what found a table
-      unguarded since M1, per the note in `CLAUDE.md`.
+- [x] **H1 — immutable entities (item 2).** Closed. The inversion this item asked for
+      already existed: `test_every_product_table_is_immutable_unless_explicitly_exempt`
+      discovers the tables and assumes immutability, so `MUTABLE_TABLES` is the only way
+      out. That test was never the gap.
+
+      The gap was the behavioural half, which named four tables by hand. A trigger only
+      runs when there is a row, so eleven of the fifteen immutable tables were guarded on
+      paper and unproven in fact — exactly the count recorded as partial.
+
+      `test_every_immutable_table_refuses_update_and_delete` now derives a probe row from
+      `PRAGMA table_info` for every immutable table, inside a savepoint that always rolls
+      back. Foreign keys and CHECK constraints are suspended: the row only has to exist
+      long enough to be refused, and satisfying every constraint would mean rebuilding the
+      schema's rules inside the test. The repository-backed test is kept rather than
+      replaced, because it proves the same triggers bite with those constraints on, over
+      rows the product itself wrote.
+
+      Checked by breaking it. Deleting `no_update_job_analyses` from the baseline failed
+      both tests with different messages — the structural one reporting a missing trigger
+      and its orphaned counterpart, the behavioural one reporting `job_analyses: update
+      was allowed on an immutable table`. The second is the evidence the first cannot
+      give.
 - [ ] **H2 — repositories and UnitOfWork (item 1).** Extend the real-SQLite coverage to
       the tables added after boundary 1, driven by the same schema read rather than a
       second list. A repository that writes a table no test opens is the gap.
+
+      Scope is `application_events`, `generation_runs`, and `validation_runs`: named by a
+      persistence module, exercised by no test.
 
 This is the last irreversibility guard in the product: immutable records are the one
 thing `CLAUDE.md` still names as not regenerable. Everything else outstanding is

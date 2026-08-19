@@ -61,7 +61,10 @@ MUTABLE_TABLES = frozenset(
     }
 )
 
-IMMUTABLE_ABORT = "RAISE(ABORT, 'immutable record')"
+# The message is the contract: the structural test looks for the RAISE in the
+# trigger's SQL, the behavioural ones look for the text in the raised error.
+IMMUTABLE_MESSAGE = "immutable record"
+IMMUTABLE_ABORT = f"RAISE(ABORT, '{IMMUTABLE_MESSAGE}')"
 
 # Derived, never written down: a new migration must not require editing a test.
 HEAD_VERSION = registered_migration_names()[-1].split("_", 1)[0]
@@ -390,12 +393,87 @@ def test_every_product_table_is_immutable_unless_explicitly_exempt(tmp_path: Pat
     assert tables - MUTABLE_TABLES
 
 
+def _placeholder(declared_type: str, index: int):
+    kind = (declared_type or "TEXT").upper()
+    if "INT" in kind:
+        return index + 1
+    if any(word in kind for word in ("REAL", "FLOA", "DOUB")):
+        return 1.0
+    return f"probe-{index}"
+
+
+def test_every_immutable_table_refuses_update_and_delete(tmp_path: Path) -> None:
+    """Every immutable table, not the handful a fixture happens to reach.
+
+    The structural test above proves the triggers exist. This proves each one
+    fires, on all of them: a trigger only runs when there is a row, so a table
+    the test suite never populates was guarded on paper and unproven in fact.
+    Eleven of the fifteen were in that state.
+
+    The row is derived from `PRAGMA table_info` — every NOT NULL and primary-key
+    column, filled by declared type — so a new immutable table is covered the
+    moment it exists, with nothing to register. Foreign keys and CHECK
+    constraints are suspended because the row only has to exist long enough for
+    a trigger to refuse it, and satisfying every constraint would mean
+    rebuilding the schema's rules in the test, which is the duplication this
+    avoids. It runs inside a savepoint that always rolls back.
+
+    Relaxing those constraints is exactly why the repository-backed test below
+    is kept rather than replaced: it proves the same guards bite under
+    production conditions, on rows the product itself wrote.
+    """
+    repository = Repository(tmp_path / "derived-immutability.sqlite3")
+    connection = connect(repository.path)
+    try:
+        connection.execute("PRAGMA foreign_keys = OFF")
+        connection.execute("PRAGMA ignore_check_constraints = ON")
+        tables = {
+            row[0]
+            for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        immutable = sorted(tables - MUTABLE_TABLES)
+
+        problems: list[str] = []
+        for table in immutable:
+            columns = connection.execute(f"PRAGMA table_info({table})").fetchall()
+            required = [column for column in columns if column["notnull"] or column["pk"]]
+            names = ", ".join(column["name"] for column in required)
+            marks = ", ".join("?" for _ in required)
+            values = [_placeholder(column["type"], i) for i, column in enumerate(required)]
+            connection.execute("SAVEPOINT probe")
+            try:
+                connection.execute(f"INSERT INTO {table} ({names}) VALUES ({marks})", values)
+                for statement, verb in (
+                    (f"UPDATE {table} SET rowid = rowid", "update"),
+                    (f"DELETE FROM {table}", "delete"),
+                ):
+                    try:
+                        connection.execute(statement)
+                        problems.append(f"{table}: {verb} was allowed on an immutable table")
+                    except sqlite3.IntegrityError as exc:
+                        if IMMUTABLE_MESSAGE not in str(exc):
+                            problems.append(f"{table}: {verb} raised {exc!r}, not the abort")
+            except sqlite3.Error as exc:
+                problems.append(f"{table}: could not seed a probe row: {exc}")
+            finally:
+                connection.execute("ROLLBACK TO probe")
+                connection.execute("RELEASE probe")
+
+        assert not problems, problems
+        # A guard that cannot be observed failing is not evidence. Floor rather
+        # than an exact count, so adding an immutable table does not edit a test.
+        assert len(immutable) >= 15, immutable
+    finally:
+        connection.close()
+
+
 def test_immutability_triggers_refuse_real_repository_writes(tmp_path: Path) -> None:
     """Behavioural evidence over records the repository actually wrote.
 
-    The structural test above proves every immutable table is guarded; this proves
-    the guards bite, using rows created through the repository rather than a
-    hand-maintained seeder that duplicated the schema's NOT NULLs and foreign keys.
+    The derived test above covers every immutable table, but with foreign keys
+    and CHECK constraints suspended. This one keeps them on and uses rows the
+    repository created, so the four tables it can reach cheaply are proven under
+    the conditions production actually runs in.
     """
     repository = Repository(tmp_path / "refusals.sqlite3")
     repository.create_application(
