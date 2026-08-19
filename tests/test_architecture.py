@@ -139,12 +139,53 @@ def _defines_application_status_transition_table(path: Path) -> bool:
     return False
 
 
-def _imports_relative_module(path: Path, module: str) -> bool:
+def _layer_modules(name: str) -> list[Path]:
+    """The modules that make up a top-level layer, whether it is one file or a package.
+
+    A layer that starts as a single module (`cli.py`) and later becomes a
+    package (`cli/`) must keep the same coverage without the check being
+    rewritten by hand for the new shape.
+    """
+    package = ENGINE / name
+    if package.is_dir():
+        return sorted(package.rglob("*.py"))
+    module = ENGINE / f"{name}.py"
+    return [module] if module.is_file() else []
+
+
+def _resolved_import_modules(path: Path) -> list[tuple[str, int]]:
+    """Every module this file imports, as a dotted path relative to `cv_engine`.
+
+    Absolute imports of `cv_engine...` are normalized by stripping the prefix.
+    Relative imports are resolved against the importing file's own package
+    position (mirroring Python's own relative-import rule: level 1 is the
+    file's containing package, each further level goes up one more), so a
+    check for a target module finds it however many directories separate the
+    importing file from the package root. That is what lets a layer move from
+    a single module to a package without the check silently losing coverage.
+    """
     tree = ast.parse(path.read_text(encoding="utf-8"))
-    return any(
-        isinstance(node, ast.ImportFrom) and node.level == 1 and node.module == module
-        for node in ast.walk(tree)
-    )
+    own_package = path.relative_to(ENGINE).with_suffix("").parts[:-1]
+    found: list[tuple[str, int]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                name = alias.name
+                if name == "cv_engine" or name.startswith("cv_engine."):
+                    name = name[len("cv_engine.") :]
+                found.append((name, node.lineno))
+        elif isinstance(node, ast.ImportFrom):
+            if node.level == 0:
+                module = node.module or ""
+                if module == "cv_engine" or module.startswith("cv_engine."):
+                    module = module[len("cv_engine.") :]
+                found.append((module, node.lineno))
+            else:
+                depth = max(len(own_package) - (node.level - 1), 0)
+                base = own_package[:depth]
+                target = ".".join((*base, node.module)) if node.module else ".".join(base)
+                found.append((target, node.lineno))
+    return found
 
 
 def _direct_validation_report_calls(path: Path) -> list[int]:
@@ -242,9 +283,13 @@ def test_known_outer_layer_policy_debt_does_not_grow() -> None:
     here instead of arriving with a fresh allowlist of its own.
     """
     offenders: set[str] = set()
-    cli = ENGINE / "cli.py"
-    if _imports_relative_module(cli, "infrastructure.db"):
-        offenders.add("cli.py: imports infrastructure.db")
+    for path in _layer_modules("cli"):
+        relative = path.relative_to(ENGINE).as_posix()
+        if any(
+            target == "infrastructure.db" or target.startswith("infrastructure.db.")
+            for target, _line in _resolved_import_modules(path)
+        ):
+            offenders.add(f"{relative}: imports infrastructure.db")
 
     for path in sorted(ENGINE.rglob("*.py")):
         relative = path.relative_to(ENGINE).as_posix()
