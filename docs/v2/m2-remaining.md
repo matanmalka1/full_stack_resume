@@ -247,9 +247,15 @@ v2 starts with an empty database. The reasoning that was retired is preserved in
       frozen records of what was true at their boundary and are left unedited. This line is
       the override. The guard itself is kept: it no longer proves compatibility with an
       earlier baseline, but it still catches a schema change nobody meant to make.
-- [ ] `docs/v2/spec/state-and-use-cases.md` §8 still lists `MIGRATED_HISTORICAL` as an
-      example historical warning. The code path is gone; the approved spec has not been
-      updated to match. Needs a decision, not a silent edit.
+- [x] Removed `MIGRATED_HISTORICAL` from the §8 example warnings in
+      `docs/v2/spec/state-and-use-cases.md`. It named a code path deleted with the
+      migration. Only the example list changed; the warning taxonomy above it is
+      normative and untouched.
+
+      Noted while checking: `FACT_KNOWN_INCORRECT` in that same list also has no
+      implementation. It is not stale — §8 describes it normatively as materially
+      stronger than supersession, so it is unbuilt scope rather than a leftover. Left
+      alone.
 - [x] Collapsed Class C in `CLAUDE.md`. Class C was "schema, artifact paths, or v1 data",
       gated on the browser suite, a `0001`-only upgrade to head, and the migration-safety
       rules. It is now "schema or artifact paths", gated on the browser suite and the

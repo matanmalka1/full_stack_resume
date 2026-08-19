@@ -16,11 +16,13 @@ from cv_engine.infrastructure.rendering import normalized_role_filename
 
 ENGINE_DIR = Path(__file__).resolve().parent.parent / "cv_engine"
 
-# Every module is policy unless it is the canonical source writer, which quotes
-# the candidate's identity on purpose because it seeds it. An inclusion list had
-# to be extended for each new module and silently stopped covering anything
-# nobody remembered to add, so this stays an exception list.
-CANDIDATE_EVIDENCE_MODULES = frozenset({"infrastructure/canonical_data.py"})
+# Every module is policy: no module in the engine may carry a candidate literal.
+# The one exemption was the canonical source writer, which has moved to
+# tests/seed.py, so the engine no longer names the candidate anywhere. Kept as an
+# empty set rather than deleted, so a re-introduced literal fails here instead of
+# arriving with an exemption of its own. An inclusion list had to be extended for
+# each new module and silently stopped covering anything nobody remembered to add.
+CANDIDATE_EVIDENCE_MODULES: frozenset[str] = frozenset()
 CANDIDATE_LITERALS = ("Matan Malka", "מתן מלכה", "matanmalka1", "matan1391")
 
 

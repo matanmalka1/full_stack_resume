@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import uuid
 
-from cv_engine.infrastructure.canonical_data import V2_IDENTITY_FACT
+from conftest import SOURCE_ROOT
+from seed import V2_IDENTITY_FACT, facts_in, source_texts
 
 
 def test_canonical_fact_store_has_unique_stable_ids(fact_store) -> None:
@@ -30,3 +31,39 @@ def test_all_required_profiles_reference_existing_facts(fact_store, profile_stor
     assert profiles.get("sales-management").default_emphasis.value == "leadership"
     assert profiles.get("sales-management").allow_two_pages is True
     assert profiles.get("account-manager").allow_two_pages is False
+
+
+def test_seed_and_repository_knowledge_hold_the_same_facts() -> None:
+    """The frozen test seed must not drift from the candidate's live facts.
+
+    The seed is a second copy of `base/*.md`, kept frozen so that editing a real
+    CV fact cannot silently change what 200-odd tests assert. A copy nobody
+    compares is the one that rots, so this compares it.
+
+    Serialization is excluded on purpose. `source_version` differs because the
+    live sources have moved on, `source_file` is filled in by the reader, and
+    an absent optional key is not a different value from an explicit null. What
+    is compared is what a fact says.
+    """
+    ignored = {"source_version", "source_file"}
+    problems: list[str] = []
+    for name, text in source_texts().items():
+        seeded = facts_in(text)
+        live = facts_in((SOURCE_ROOT / "base" / name).read_text(encoding="utf-8"))
+        # The identity fact is added through the lifecycle, so it is expected to
+        # be live-only; anything else missing from the seed is real drift.
+        live_only = set(live) - set(seeded) - {V2_IDENTITY_FACT["fact_id"]}
+        problems += [f"{name}: {fact_id} is in base/ but not the seed" for fact_id in sorted(live_only)]
+        problems += [
+            f"{name}: {fact_id} is in the seed but not base/"
+            for fact_id in sorted(set(seeded) - set(live))
+        ]
+        for fact_id in sorted(set(seeded) & set(live)):
+            differing = {
+                key
+                for key in (set(seeded[fact_id]) | set(live[fact_id])) - ignored
+                if seeded[fact_id].get(key) != live[fact_id].get(key)
+            }
+            if differing:
+                problems.append(f"{name}: {fact_id} differs in {sorted(differing)}")
+    assert not problems, problems

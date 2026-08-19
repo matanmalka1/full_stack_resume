@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB, CliRun, run_cli
+from seed import V2_IDENTITY_FACT, write_canonical_sources
 
 import cv_engine
 from cv_engine.application.commands import (
@@ -33,7 +34,6 @@ from cv_engine.domain.profiles import ProfileStore
 from cv_engine.domain.render_validation import RenderEvidence, RenderGeometry
 from cv_engine.domain.selection import EmphasisPolicyStore
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
-from cv_engine.infrastructure.canonical_data import V2_IDENTITY_FACT, write_canonical_sources
 from cv_engine.infrastructure.knowledge import (
     load_candidate_context,
     load_emphasis_policies,
