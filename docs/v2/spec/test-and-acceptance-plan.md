@@ -6,9 +6,8 @@ Product authority: `docs/v2/spec/product-spec.md`
 
 ## 1. Test strategy
 
-Release readiness is based on invariants, failure recovery, migration accounting, and
-complete user journeys. It is not based on a broad line-coverage percentage or raw test
-count. Raw count is nevertheless a useful review signal: rapid growth without new
+Release readiness is based on invariants, failure recovery, and complete user journeys.
+It is not based on a broad line-coverage percentage or raw test count. Raw count is nevertheless a useful review signal: rapid growth without new
 product risk usually indicates duplicated scenarios or tests coupled to implementation
 shape.
 
@@ -16,7 +15,7 @@ All applicable v1 safety invariants and material regression risks remain represe
 Individual v1 test items do not have to survive when one clearer scenario, table-driven
 matrix, or end-to-end journey detects the same failures. Refactoring may move, merge,
 or delete tests, but it may not silently remove coverage of factual safety,
-deterministic validation, rendering, ATS, artifact immutability, migration, or CLI
+deterministic validation, rendering, ATS, artifact immutability, or CLI
 behavior.
 
 The lists in this plan define required evidence, not a one-test-per-bullet structure.
@@ -131,10 +130,11 @@ Retain and expand v1 coverage for:
 
 Use focused visual screenshots where useful, not broad pixel-perfect PDF comparisons.
 
-### 2.8 Migration/backup tests
+### 2.8 Backup tests
 
-Cover fixtures in CI plus the full pre-cutover copy procedure defined in the migration
-plan. Archive creation alone is never a successful backup test.
+Archive creation alone is never a successful backup test. A backup is proven by
+restoring it into a new directory, opening the restored Workspace through the normal
+fail-closed path, and reconciling it.
 
 ## 3. Deterministic parity
 
@@ -357,9 +357,8 @@ variants, and redaction fields should normally be grouped:
 - sanitized raw provider artifact
 - prompt-injection fixtures
 - Workspace marker/live-data guard
-- every normal v2 command rejects an unmarked v1 root
-- migration source inventory reads an explicit unmarked v1 root without creating or
-  modifying any file in it, while the v2 marker exists only in the target copy
+- every normal v2 command rejects an unmarked v1 root, and `workspace init` refuses to
+  mark one, so nothing can open or write into the archive
 - foreign process on default port
 - same-instance health/identity detection
 
@@ -408,35 +407,30 @@ material regression requires explanation and remediation or explicit acceptance.
 
 The test must:
 
-1. create a complete backup containing SQLite, Knowledge, immutable payloads,
-   Workspace marker, restore-required config, and manifest
-2. verify every manifest/hash entry
-3. restore to a new temporary directory
-4. validate the restored Workspace marker and schema
-5. open the restored Workspace through the runtime/application layer
-6. run database integrity and full reconciliation
-7. compare expected entity/file counts and hashes
+1. create a complete backup containing SQLite, Knowledge, immutable payloads, the
+   Workspace marker, and restore-required config
+2. restore to a new temporary directory, never over an existing Workspace
+3. validate the restored Workspace marker and schema
+4. open the restored Workspace through the runtime/application layer
+5. run database integrity and full reconciliation
 
 Passing archive creation alone is a failure of the acceptance procedure.
 
-## 14. Migration acceptance
+There is no separate manifest to verify. Artifact hashes live in `artifact_versions` and
+the database checks itself, so a hash list beside them could only drift and would then
+have to be adjudicated against them. Reconciliation on the restored Workspace is the
+comparison, over the record the product actually keeps.
 
-CI uses representative fixtures. Release verification uses a fresh faithful copy of
-the real v1 Workspace and must record:
+## 14. Migration acceptance — withdrawn
 
-- source counts
-- target counts
-- mapped and preserved IDs
-- status mappings
-- raw `preparing`/`ready` history preserved as migration events without inserting
-  invalid values into v2 RecruitmentStatus columns
-- snapshot and artifact hashes
-- historical semantics
-- warnings/exceptions
-- unmapped records/files
+Withdrawn on 2026-08-19. v1 is a frozen archive in Git and is never migrated, so there is
+no source to account for and `unexplained = 0` has nothing to range over. v2 starts with
+an empty database.
 
-The required result is `unexplained = 0`. Existing files are not upgraded to approved
-or Ready solely because they exist.
+One rule from this section survives, because it was never really about migration:
+**a file is not evidence of a decision.** Nothing is treated as approved, submitted, or
+Ready because a file exists at a path; those states come from records, and a record that
+was never written stays absent rather than being inferred.
 
 ## 15. Tracking acceptance
 
@@ -452,7 +446,6 @@ Cover:
 - draft work after applied leaves recruitment state unchanged
 - one active next action, event history, and computed overdue warning
 - no hard delete through UI
-- migrated/historical records visible by default with accurate badges
 
 ## 16. CI and release gates
 
@@ -465,7 +458,6 @@ CI must include:
 - real SQLite/filesystem integration
 - Chromium Web E2E
 - rendering/PDF/ATS tests
-- migration fixture tests
 - security and failure-injection tests
 
 Release additionally requires:
@@ -474,7 +466,6 @@ Release additionally requires:
 - WebKit smoke
 - manual live OpenAI smoke
 - full backup/restore drill
-- migration/reconciliation on a fresh faithful v1 copy
 - performance review
 - completed acceptance report
 
@@ -493,9 +484,9 @@ The final report records for every product DoD item:
 - relevant versions/hashes
 - warnings accepted and why they are permitted
 - environment/platform/browser
-- migration/backup report references
+- backup and restore drill references
 - live-provider smoke metadata without secrets
 
 A hard failure cannot be relabeled as a warning. Release Ready is not declared with any
-unresolved invariant, unexplained migration item, restore failure, or approval safety
+unresolved invariant, restore failure, or approval safety
 gap.

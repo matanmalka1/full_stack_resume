@@ -33,8 +33,8 @@ AI מסווג ומציע ניסוח תחת חוזים מובנים. הוא אי�
 דטרמיניסטי מלא עד Ready PDF ממשיך לעבוד ללא API key.
 
 הפיתוח מתבצע ב-branch `v2-main` וב-worktree המבודד `../resume_python-v2`.
-פיתוח ומיגרציה משתמשים בעותקים בלבד. אין dual-write, ואין גישה ל-workspace החי של
-v1 עד cutover מפורש לאחר Release Ready מלא.
+הפיתוח משתמש בעותקים בלבד. אין dual-write. v1 הוא ארכיון קפוא ב-Git ואינו נפתח,
+נקרא או נכתב על ידי v2 — אין מיגרציה ואין cutover.
 
 ## 1. Authority and interpretation
 
@@ -46,7 +46,7 @@ For v2.0, authority is ordered as follows:
    permission contracts consistent with this specification.
 3. `docs/v2/spec/architecture.md` defines the technical architecture that implements those
    contracts.
-4. The implementation, test, and migration plans define execution and evidence.
+4. The implementation and test plans define execution and evidence.
 5. `docs/v1/upgrade-handoff.md` and v1 behavior remain binding evidence for every v1
    safety or factual invariant that this specification does not explicitly replace.
 6. Legacy code and data are current-state evidence, not permission to weaken a v2
@@ -129,7 +129,7 @@ v2.0 includes:
   internal and external submissions, status correction, and overdue warnings after the
   first vertical slice is complete.
 - Recruiter-facing PDF download and human-readable provenance/decision Markdown export.
-- Full backup, verification, restore, guarded v1 migration, and reconciliation commands.
+- Full backup, restore, and reconciliation commands.
 
 ## 5. Explicit non-goals
 
@@ -149,7 +149,7 @@ The following are not part of v2.0:
 - Mobile-first flows or a full internationalization framework.
 - Notifications, calendar integration, recurring reminders, or follow-up automation.
 - Charts, advanced analytics, or Web CSV export.
-- General CSV/data import beyond the guarded v1 migration.
+- General CSV or data import, including any import of the v1 archive.
 - WebSocket or SSE progress transport.
 - Hard deletion through the Web UI.
 - Automatic application or schema updates.
@@ -201,8 +201,8 @@ decision.
 16. Recruitment lifecycle and preparation lifecycle are independent.
 17. Recruitment history is append-only. Corrections add events and never rewrite past
     events.
-18. Submitted artifacts, ApprovedRevisions, and migrated historical evidence are never
-    overwritten or automatically deleted.
+18. Submitted artifacts and ApprovedRevisions are never overwritten or automatically
+    deleted.
 19. SQLite owns structured state and relationships; the filesystem owns immutable/heavy
     payloads; Knowledge files own canonical knowledge. No mutable content has two
     simultaneous sources of truth.
@@ -213,8 +213,8 @@ decision.
 22. Web and CLI concurrency must remain correct through optimistic versions, atomic
     SQLite claims, leases, idempotency where required, and commit-time precondition
     checks.
-23. No cutover is performed to discover whether v2 works. v2 must be proven on a
-    faithful copy first.
+23. v2 starts with an empty database. It is proven by running its own workflow, not by
+    being pointed at existing data to see what happens.
 
 ## 7. Candidate and Workspace behavior
 
@@ -476,7 +476,7 @@ There is no hard delete through Web. Applications created by mistake may move fr
 Audit actor identity is intentionally local and non-authenticated:
 
 ```text
-actor_type: user | system | migration
+actor_type: user | system
 client: web | cli | worker
 installation_id
 ```
@@ -550,7 +550,8 @@ Knowledge stays file-based and version-controlled. UI writes follow:
 
 The application never performs an automatic Git commit.
 
-New v2 facts receive UUIDv4 technical IDs. Migrated semantic fact IDs are preserved.
+v2 facts receive UUIDv4 technical IDs. Semantic fact IDs survive only in the seed
+knowledge carried over from v1, which keeps them; nothing creates new ones.
 The UI does not expose fact-ID creation. A system-generated human slug may exist but is
 not identity.
 
@@ -649,30 +650,24 @@ The existing CLI data export is reviewed for actual consumers during M1. A retai
 export uses a versioned v2 schema by default. `--legacy-format` is added only when a
 real existing consumer is identified; v2 does not create speculative compatibility.
 
-## 20. Migration, rollout, and release states
+## 20. Rollout and release states
 
-All development and migration rehearsal use isolated copies. There is no dual-write or
-bidirectional synchronization between v1 and v2.
+Rescoped on 2026-08-19. v1 is a frozen archive in Git; v2 starts with an empty database
+and never reads, migrates, or replaces it. There is no dual-write, no bidirectional
+synchronization, and no cutover event.
 
 Rollout stages are:
 
 1. Alpha on a test Workspace.
-2. Beta on a fresh faithful copy of the real v1 Workspace.
-3. Release Ready after full engineering, migration, backup/restore, and acceptance
-   evidence.
-4. User-approved cutover of the frozen live Workspace.
-5. Live after migration, reconciliation, acceptance, and activation succeed.
+2. Beta on a Workspace seeded from the candidate's own Knowledge, used for real work.
+3. Release Ready after full engineering, backup/restore, and acceptance evidence.
 
-`Engineering Complete`, `Release Ready`, `Cutover Complete`, and `Live` are distinct.
-The v2.0 software may be complete and Release Ready before the separate live cutover
-event.
+`Engineering Complete` and `Release Ready` are distinct; `Cutover Complete` and `Live`
+no longer exist as states, because nothing is cut over. Going live means starting to use
+v2 for the next application.
 
-Cutover follows:
-
-`freeze v1 writes -> backup -> verify -> migrate -> reconcile -> full acceptance -> activate v2`
-
-Rollback restores or reuses the frozen v1 snapshot and restarts v1. There is no v2
-database downgrade.
+Rollback is running v1 from the archive, which needs no preparation: it is a Git
+worktree of the frozen commit. There is no v2 database downgrade.
 
 ## 21. v2.0 Definition of Done
 
@@ -701,7 +696,6 @@ v2.0 is Release Ready only when all of the following are demonstrably true:
 - [ ] Hebrew UI, Hebrew/English CV preview, RTL/LTR behavior, Chrome, and Safari checks
       pass at their defined coverage levels.
 - [ ] Backup is verified, restored, opened, and reconciled.
-- [ ] v1 migration succeeds on a faithful copy with zero unexplained records/files.
 - [ ] Every applicable v1 safety invariant and material regression risk remains
       represented and passing. Individual legacy test cases need not be retained when
       a smaller scenario or matrix provides the same failure signal.

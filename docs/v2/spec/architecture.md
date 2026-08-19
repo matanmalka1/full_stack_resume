@@ -104,7 +104,7 @@ A small façade may compose them for convenience but contains no business logic.
 
 Infrastructure implements SQLite repositories, UnitOfWork, filesystem payload stores,
 KnowledgeRepository, OpenAI provider, rendering, operation claiming/execution, logging,
-backup, and migration adapters.
+and backup.
 
 Repository boundaries follow transactional ownership and use-cases rather than tables:
 
@@ -130,9 +130,8 @@ services. It does not call FastAPI. Legacy commands may use a compatibility reso
 with warnings; application contracts are not distorted to preserve an obsolete CLI
 signature.
 
-The v1 `Engine` is a temporary compatibility façade. It delegates to application
-services while the CLI migrates, is then deprecated, and is removed. It is not a v2
-architectural boundary.
+The v1 `Engine` compatibility façade was removed once the CLI called the application
+services directly. It was never a v2 architectural boundary, and no code refers to it.
 
 ### 3.5 Runtime and composition
 
@@ -175,10 +174,9 @@ legacy v1 root, unknown marker version, or unsafe development/live combination i
 opened as a normal v2 Workspace. Guards use metadata rather than folder-name
 heuristics.
 
-The dedicated migration source adapter is the sole exception: it may inventory an
-explicit unmarked v1 source path in read-only mode, bind it to an inventory hash, and
-copy from it into a separately marked v2 target. It never writes a marker or any other
-file into the v1 source. A v2 marker is created only in the target copy.
+There is no exception. The read-only v1 source adapter that once held one was deleted
+on 2026-08-19 with the migration it served, so a v1 root is refused outright rather than
+read under conditions.
 
 `installation_id` is durable runtime identity stored in state metadata and remains
 separate from `workspace_id`, even though v2.0 operates one Workspace at a time.
@@ -190,7 +188,8 @@ v1 worktree -> v1 Workspace
 v2 worktree -> isolated v2 Workspace
 ```
 
-Migration and development never point v2 at live v1 paths.
+Nothing points v2 at v1. The archive is read by a person with a text editor or
+`git worktree add`, never by this engine.
 
 ## 5. CandidateContext
 
@@ -550,7 +549,7 @@ not substitute for these surfaces.
 
 M1 introduces boundaries around the existing behavior before FastAPI/React. Current
 validators and deterministic generation remain authoritative while orchestration leaves
-`Engine`. The CLI migrates first to prove the application layer independently.
+`Engine`. The CLI moved first, to prove the application layer independently.
 
 M2 supplies storage, operations, projections, action policy, and recovery foundations.
 M3 exposes the vertical slice through thin HTTP endpoints. M4 builds UI on the proven

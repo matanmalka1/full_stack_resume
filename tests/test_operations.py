@@ -27,6 +27,7 @@ from cv_engine.application.operations import (
     OperationContractError,
     OperationFailureCode,
     OperationOutputReference,
+    OperationPhase,
     OperationSources,
     OperationStatus,
     OperationType,
@@ -982,3 +983,165 @@ def test_worker_shutdown_requests_cancellation_and_prevents_activation(services)
 
     assert not thread.is_alive()
     assert services.repository.operation(operation.id).status is OperationStatus.CANCELLED
+
+
+# --- repository methods against real SQLite ---------------------------------
+#
+# The tests above drive Operations through the runner and the services, which is
+# where the product's behaviour lives. These drive eight repository methods
+# directly, because their refusals are the branches a successful run never
+# takes: a lease claimed by someone else, an output activated after
+# cancellation, a receipt completed twice. Acceptance item 1 asks for the
+# repository under real SQLite, and a method whose only coverage is the happy
+# path is not covered.
+
+
+def _queued(services, company: str, key: str = "request-1", created_at: str | None = None):
+    ingested = services.applications.ingest(
+        IngestCommand(company=company, target_role="Developer", job_text="Python role")
+    )
+    return services.repository.create_operation(
+        _stored_request(ingested.application_id, key=key),
+        installation_id=services.workspace.installation_id(),
+        created_at=created_at,
+    )
+
+
+def test_claim_next_operation_takes_the_oldest_ready_operation_or_nothing(services) -> None:
+    """Ordering is by `created_at`, and only to the second.
+
+    `utc_now()` has one-second resolution, so two operations created in the same
+    second tie and the query falls through to `id`, which is a UUIDv4 — that is
+    arbitrary, not creation order. Timestamps are passed explicitly here so the
+    assertion tests the guarantee that exists rather than one that holds only
+    when the clock happens to tick between two calls.
+    """
+    repository = services.repository
+    first = _queued(services, "Queue One", key="queue-1", created_at="2026-08-19T07:00:00+00:00")
+    second = _queued(services, "Queue Two", key="queue-2", created_at="2026-08-19T07:00:01+00:00")
+
+    claimed = repository.claim_next_operation(runner_id="runner-a", now="2026-08-19T08:00:00+00:00")
+    assert claimed is not None
+    assert claimed.id == first.id, "the older queued operation is taken first"
+
+    # A retry that is not due yet is not ready, so the queue skips past it.
+    repository.record_operation_attempt(
+        first.id, runner_id="runner-a", retry_at="2026-08-19T09:00:00+00:00"
+    )
+    again = repository.claim_next_operation(runner_id="runner-b", now="2026-08-19T08:00:00+00:00")
+    assert again is not None
+    assert again.id == second.id
+
+    assert (
+        repository.claim_next_operation(runner_id="runner-c", now="2026-08-19T08:00:00+00:00")
+        is None
+    ), "an empty ready queue returns None rather than blocking or raising"
+
+
+def test_lease_owning_methods_refuse_a_runner_that_does_not_hold_the_lease(services) -> None:
+    """One contract, five entry points.
+
+    Each of these updates `WHERE status='running' AND lease_owner=?` and raises
+    when that matches nothing. Parameterised over the calls rather than written
+    five times, so a sixth lease-owning method is one line.
+    """
+    repository = services.repository
+    operation = _queued(services, "Lease Co")
+    repository.claim_operation(
+        operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00"
+    )
+
+    calls = {
+        "set_operation_phase": lambda runner: repository.set_operation_phase(
+            operation.id, OperationPhase.EXECUTING, runner_id=runner
+        ),
+        "record_operation_attempt": lambda runner: repository.record_operation_attempt(
+            operation.id, runner_id=runner
+        ),
+        "heartbeat_operation": lambda runner: repository.heartbeat_operation(
+            operation.id, runner_id=runner
+        ),
+        "fail_operation": lambda runner: repository.fail_operation(
+            operation.id,
+            OperationFailureCode.PROVIDER_UNAVAILABLE,
+            "provider down",
+            runner_id=runner,
+        ),
+        "complete_operation": lambda runner: repository.complete_operation(
+            operation.id, runner_id=runner
+        ),
+    }
+    for name, call in calls.items():
+        with pytest.raises(StateConflict, match="lease is not owned"):
+            call("impostor")
+        assert repository.operation(operation.id).status is OperationStatus.RUNNING, (
+            f"{name} must not change the operation when it refuses"
+        )
+
+    assert repository.record_operation_attempt(operation.id, runner_id="owner") == 1
+    assert repository.operation(operation.id).phase is OperationPhase.RETRY_WAIT
+
+
+def test_completing_a_cancelled_operation_records_cancellation_not_success(services) -> None:
+    repository = services.repository
+    operation = _queued(services, "Cancel Co")
+    repository.claim_operation(operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
+    repository.request_operation_cancellation(operation.id)
+
+    completed = repository.complete_operation(operation.id, runner_id="owner")
+    assert completed.status is OperationStatus.CANCELLED
+    assert completed.failure_code is OperationFailureCode.CANCELLED_BEFORE_ACTIVATION
+    assert completed.finished_at
+
+
+def test_outputs_cannot_be_activated_once_the_operation_stops_running(services) -> None:
+    repository = services.repository
+    operation = _queued(services, "Output Co")
+    repository.claim_operation(operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
+
+    repository.record_operation_output(operation.id, "analysis", "analysis-1")
+    repository.activate_operation_output(operation.id, "analysis", "analysis-1")
+    with pytest.raises(StateConflict, match="cannot be activated"):
+        repository.activate_operation_output(operation.id, "analysis", "analysis-1")
+    with pytest.raises(StateConflict, match="cannot be activated"):
+        repository.activate_operation_output(operation.id, "analysis", "never-recorded")
+
+    with pytest.raises(KeyError):
+        repository.record_operation_output("no-such-operation", "analysis", "analysis-2")
+
+    # Cancellation closes the window: an output may still be recorded, but not
+    # activated, which is what keeps a cancelled run from taking effect.
+    repository.request_operation_cancellation(operation.id)
+    repository.record_operation_output(operation.id, "analysis", "analysis-3")
+    with pytest.raises(StateConflict, match="cannot be activated"):
+        repository.record_operation_output(
+            operation.id, "analysis", "analysis-4", active=True
+        )
+
+
+def test_an_idempotency_receipt_completes_once_and_agrees_with_itself(services) -> None:
+    repository = services.repository
+    installation = services.workspace.installation_id()
+    receipt = repository.claim_idempotency_receipt(
+        "analyze_job",
+        "receipt-key",
+        {"application_id": "app-1"},
+        installation_id=installation,
+        reserved_entity_id="operation-1",
+    )
+    assert receipt["status"] == "pending"
+
+    result = {"operation_id": "operation-1"}
+    repository.complete_idempotency_receipt(receipt["id"], result)
+    stored = repository.idempotency_receipt(
+        "analyze_job", "receipt-key", installation_id=installation
+    )
+    assert stored is not None
+    assert stored["status"] == "completed"
+    assert stored["result"] == result
+
+    # Replaying the same completion is the retry case and must be accepted;
+    # completing it with a different result is a real conflict.
+    repository.complete_idempotency_receipt(receipt["id"], result)
+    with pytest.raises(StateConflict, match="cannot be completed"):
+        repository.complete_idempotency_receipt(receipt["id"], {"operation_id": "different"})

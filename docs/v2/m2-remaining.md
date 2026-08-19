@@ -202,18 +202,17 @@ State of the plan's seven §4.7 checkboxes; the criteria themselves live there.
 
 | Plan item | State |
 | --- | --- |
-| 1 — repositories/UoW under real SQLite | Partial: boundary 1, M1 table set only |
-| 2 — immutable entities reject bypasses | Partial: eleven tables covered at boundary 1 |
+| 1 — repositories/UoW under real SQLite | Closed at H2: the eight uncovered Operations methods now tested directly; `latest_validation` was dead and removed |
+| 2 — immutable entities reject bypasses | Closed at H1: every immutable table proven to refuse UPDATE and DELETE, derived from `PRAGMA table_info` |
 | 3 — projection/action policy under concurrency | Closed at `fe1e92c`; includes two-connection SQLite snapshot consistency |
 | 4 — ETag, idempotency, leases, cancellation, retry, `SOURCE_CHANGED` | Closed at `bfbd64d`; evidence in `m2-operations.md` |
 | 5 — journal crash windows | Closed at `122b957`; evidence in `m2-knowledge-consistency.md` |
 | 6 — backup restore to an openable Workspace | Closed: `restore_workspace` returns a Workspace loaded through the normal fail-closed path, so an archive that restored to something unopenable fails at restore |
 | 7 — no M2 code points to live v1 paths | Closed by construction: no code reads v1 at all. The `looks_legacy` guard stays so no v2 command can open or mark the archive |
 
-Items 3 through 7 are closed. Items 1 and 2 are the only acceptance work left in M2, and
-they close together.
+All seven are closed. Items 1 and 2 closed together as section H.
 
-### H. Items 1 and 2 — derive the coverage from the schema
+### H. Items 1 and 2 — closed
 
 Both are partial for the same reason: they were written against the M1 table set and
 never grew with it. The schema now has 24 tables and 40 triggers; the guards cover
@@ -243,12 +242,31 @@ Nothing failed when one did not.
       and its orphaned counterpart, the behavioural one reporting `job_analyses: update
       was allowed on an immutable table`. The second is the evidence the first cannot
       give.
-- [ ] **H2 — repositories and UnitOfWork (item 1).** Extend the real-SQLite coverage to
-      the tables added after boundary 1, driven by the same schema read rather than a
-      second list. A repository that writes a table no test opens is the gap.
+- [x] **H2 — repositories and UnitOfWork (item 1).** Closed.
 
-      Scope is `application_events`, `generation_runs`, and `validation_runs`: named by a
-      persistence module, exercised by no test.
+      "Tables no test names" turned out to be the wrong measure — a table can be well
+      covered through a service without a test ever naming it. Measured by method instead:
+      of 85 public repository methods, 24 are never called by name in a test. Most of
+      those 24 are exercised through the services that call them, which is real coverage,
+      just indirect.
+
+      Eight were not, and they are the ones that mattered:
+      `claim_next_operation`, `set_operation_phase`, `record_operation_attempt`,
+      `record_operation_output`, `activate_operation_output`, `complete_operation`,
+      `fail_operation`, `complete_idempotency_receipt`. Their refusals are branches a
+      successful run never takes — a lease held by another runner, an output activated
+      after cancellation, a receipt completed twice with a different result. Now covered
+      directly against real SQLite, with the five lease-owning methods parameterised over
+      one shared contract so a sixth is one line rather than a sixth test.
+
+      One method was dead: `latest_validation` had no caller anywhere and was not even
+      declared in `ports/`, which declares only the different
+      `latest_validation_for_working_draft`. Removed rather than covered.
+
+      Not done, and deliberately: a derived guard that fails when a repository method has
+      no coverage. Deriving "covered indirectly" needs real coverage data, which means
+      adding `pytest-cov`. That is a dependency decision under the `CLAUDE.md` baseline
+      rule, not a test change, so it is left for the user rather than assumed.
 
       A fourth, `status_history`, was found dead while closing H1 and dropped on the
       user's decision. `recruitment_events` had replaced it — same transitions plus actor,
@@ -273,8 +291,8 @@ cleanup, and lives in `cleanup-todos.md`.
 
 ## Dependency order
 
-A → B → C → D → E → F are closed. G closes incrementally; H is what remains of it, and
-nothing depends on H, so it can be taken whenever.
+A through H are closed. §4.7 has no open acceptance item left; what remains for M2 is
+whatever the milestone gate itself asks for, not this record.
 
 ## Retiring v1
 
@@ -314,6 +332,26 @@ v2 starts with an empty database. The reasoning that was retired is preserved in
       implementation. It is not stale — §8 describes it normatively as materially
       stronger than supersession, so it is unbuilt scope rather than a leftover. Left
       alone.
+- [x] Reconciled the approved specifications with the decision. Retiring v1 in code left
+      four specs describing work that will never happen, which is worse than the code
+      being wrong: a specification is what the next reader trusts.
+
+      `implementation-plan.md`: §4.6 rescoped to backup and restore, §4.7 ticked with the
+      evidence pointing at this file, §9 "Live cutover event" withdrawn, M6 retitled, and
+      the M1 criterion annotated where it accepted an adapter since deleted.
+      `product-spec.md`: §20 rewritten — `Cutover Complete` and `Live` are no longer
+      states — the v1-migration Definition-of-Done item removed, and
+      `actor_type` corrected to `user | system`.
+      `test-and-acceptance-plan.md`: §14 "Migration acceptance" withdrawn, keeping the one
+      rule that was never about migration — a file is not evidence of a decision; §13
+      loses the manifest step; §2.8 renamed to backup tests.
+      `architecture.md`: the read-only v1 source adapter removed as the sole guard
+      exception, and the `Engine` façade described as gone rather than temporary.
+
+      `actor_type` was the sharpest of these: the spec still listed `migration` as a valid
+      audit actor after the code had dropped it, so the two disagreed on a stored value's
+      permitted range.
+
 - [x] Collapsed Class C in `CLAUDE.md`. Class C was "schema, artifact paths, or v1 data",
       gated on the browser suite, a `0001`-only upgrade to head, and the migration-safety
       rules. It is now "schema or artifact paths", gated on the browser suite and the

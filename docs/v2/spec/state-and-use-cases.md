@@ -281,7 +281,7 @@ terminal outcome are updated transactionally while the original event remains.
 `closed` is archival. The last accepted/rejected/withdrawn outcome remains in
 `terminal_outcome` and history.
 
-Audit actors use `actor_type=user|system|migration`, `client=web|cli|worker`, and the
+Audit actors use `actor_type=user|system`, `client=web|cli|worker`, and the
 installation ID. There is no authenticated username in v2.0; the UI may label the local
 user as `You`.
 
@@ -571,7 +571,7 @@ required and records explicit provenance.
 ### `transition_recruitment_status`
 
 Applies only an allowed forward transition. Actor, timestamp, from/to and source
-Web/CLI/system/migration are mandatory; reason is optional for a normal transition.
+Web/CLI/system are mandatory; reason is optional for a normal transition.
 
 ### `correct_recruitment_status`
 

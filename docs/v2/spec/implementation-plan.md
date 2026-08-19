@@ -12,15 +12,15 @@ State/use-cases: `docs/v2/spec/state-and-use-cases.md`
 
 The implementation sequence is:
 
-`Review -> Architecture -> Plan -> Implement -> Test -> Migrate -> Verify`
+`Review -> Architecture -> Plan -> Implement -> Test -> Verify`
 
 Work occurs on long-lived branch `v2-main` in the isolated worktree
 `../resume_python-v2`. A single developer working sequentially uses small milestone
 commits rather than additional feature branches. A separate feature branch is justified
 only for genuinely parallel work.
 
-No v2 development process opens the live v1 Workspace. All development, migration
-tests, Alpha, and Beta use explicit test/copy Workspace markers.
+No v2 process opens the v1 Workspace, in development or otherwise. All development,
+Alpha, and Beta use explicit test/copy Workspace markers.
 
 The current repository authority files describe v1 and prohibit the Web UI as out of
 v1. After this document set is approved and before M1 implementation, update repository
@@ -63,9 +63,9 @@ introducing HTTP or React.
 - Add explicit Workspace path/config models and marker validation.
 - Add separate Workspace ID and installation ID.
 - Implement config precedence: CLI > environment > Workspace config > defaults.
-- Add fail-closed marker policy for all normal v2 commands. Add a distinct read-only v1
-  migration-source adapter that binds an explicit source path to an inventory hash and
-  never writes a marker into that source.
+- Add fail-closed marker policy for all normal v2 commands. The read-only v1
+  migration-source adapter this once required was deleted on 2026-08-19 with the
+  migration; a v1 root is now simply refused, which is stricter.
 - Add CandidateContext loader referencing canonical identity/contact facts.
 - Remove candidate literals from filename and rendering policy.
 - Add version/hash surfaces for CandidateContext and Knowledge dependencies.
@@ -106,6 +106,9 @@ source-ID resolvers.
 - [x] Candidate name is not hardcoded in core or renderer policy.
 - [x] Normal v2 commands reject every missing, legacy, unknown, or unsafe marker; only
       the dedicated migration adapter can inventory an explicit v1 source read-only.
+      That adapter was deleted on 2026-08-19 when v1 became an archive. The rejection
+      half of this criterion still holds and is still tested; nothing can read v1 now,
+      which is stricter than what was accepted here.
 - [x] All applicable v1 safety invariants remain covered and the consolidated suite
       passes; retaining every legacy test item is not required.
 
@@ -170,21 +173,35 @@ them inside endpoints later.
 - Implement contextual pending fact, confirmation/promotion, attachment, and
   SelectionPlan flows.
 
-### 4.6 Backup/migration scaffolding
+### 4.6 Workspace backup and restore
 
-- Add Workspace backup, manifest, hash verification, restore, and open/reconcile paths.
-- Add v1 inventory and mapping contracts early.
-- Build migration against fixtures/copies; do not run a live migration.
+Rescoped on 2026-08-19, when v1 became a frozen archive rather than data to migrate.
+Two of the three original bullets — a v1 inventory and mapping contract, and a migration
+engine built against fixtures and copies — lost their subject entirely and are withdrawn.
+What remains protects what v2 itself accumulates.
+
+- Add Workspace backup, restore into a new directory, and the open/reconcile path that
+  proves a restored Workspace works.
+
+No separate manifest or hash list. Artifact hashes already live in `artifact_versions`
+and the database verifies itself, so a second list beside them could only drift and would
+then have to be adjudicated against them. The proof a backup is good is that it opens.
 
 ### 4.7 M2 acceptance
 
-- [ ] Repositories/UoW pass real SQLite integration tests.
-- [ ] All immutable entities reject update/delete bypasses as required.
-- [ ] Projection/action policy is internally consistent under concurrency fixtures.
-- [ ] ETag, idempotency, leases, cancellation, retry, and SOURCE_CHANGED pass.
-- [ ] Journal crash windows recover or quarantine explicitly.
-- [ ] Backup restores to an independently openable/reconcilable Workspace.
-- [ ] No M2 code points to live v1 paths.
+- [x] Repositories/UoW pass real SQLite integration tests.
+- [x] All immutable entities reject update/delete bypasses as required.
+- [x] Projection/action policy is internally consistent under concurrency fixtures.
+- [x] ETag, idempotency, leases, cancellation, retry, and SOURCE_CHANGED pass.
+- [x] Journal crash windows recover or quarantine explicitly.
+- [x] Backup restores to an independently openable/reconcilable Workspace.
+- [x] No M2 code points to live v1 paths.
+
+Item 7 is met by construction rather than by a check: no code reads v1 at all. The
+`looks_legacy` guard remains so that no v2 command can open or mark the archive.
+
+Per-item commits and evidence are in `docs/v2/m2-remaining.md` §G, which is the record of
+state; they are not duplicated here.
 
 Stable commit boundaries may separate schema/repositories, state policy, Operations, and
 Knowledge journal when each boundary is green and intentionally scoped.
@@ -305,7 +322,7 @@ Stable commit boundary: first Web vertical slice complete and gate passed.
 Objective: add recruitment management only after the preparation workflow is stable.
 
 - Implement Dashboard table, search, filters, sorting, badges, active Operation, next
-  action/date, warnings, and migrated/historical markers.
+  action/date, and warnings.
 - Implement Application Detail header, current preparation, unified timeline,
   revisions/artifacts, submissions, and navigation to editor.
 - Implement allowed forward RecruitmentStatus transitions.
@@ -329,7 +346,7 @@ M5 acceptance:
 
 Stable commit boundary: v2.0 product scope complete before runtime/release hardening.
 
-## 8. M6 — Runtime, packaging, migration, and release
+## 8. M6 — Runtime, packaging, and release
 
 Objective: make the product locally operable and prove Release Ready without using live
 data as a test environment.
@@ -352,44 +369,32 @@ data as a test environment.
 - Run macOS runtime, Chrome, WebKit, and rendering verification.
 - Run manual OpenAI analysis/draft smoke and record execution metadata.
 - Verify performance regression budgets and investigate material regressions.
-- Verify backup, manifest, restore, open, and reconciliation.
-- Run v1 migration on a fresh faithful copy and produce a zero-unexplained report.
+- Verify backup, restore, open, and reconciliation.
 - Run the complete v2 Definition of Done and publish the acceptance report.
 
 ### 8.3 Release states
 
 Engineering Complete means all M0-M6 code/document/test work is done.
 
-Release Ready additionally means the acceptance report, copy migration, backup/restore,
-macOS verification, and manual provider smoke have passed.
+Release Ready additionally means the acceptance report, backup/restore, macOS
+verification, and manual provider smoke have passed.
 
-Live cutover is a later user-approved deployment/migration event. The software may be
-v2.0 Release Ready before that event.
+There is no cutover event. v2 starts with an empty database and v1 stays a frozen archive
+in Git, so Release Ready is the last gate rather than the one before a migration.
 
-## 9. Live cutover event
+## 9. Going live — withdrawn as an event
 
-Cutover is not ordinary implementation and is not implied by reaching Release Ready.
-It requires explicit user authorization at that time.
+Withdrawn on 2026-08-19. There is nothing to cut over: v1 is a frozen archive in Git and
+v2 starts with an empty database, so going live means creating the next application in
+v2 rather than migrating the previous ones into it.
 
-Sequence:
-
-```text
-freeze v1 writes
--> create complete backup
--> verify backup and restore
--> compatibility check
--> migrate
--> reconcile
--> full acceptance against migrated Workspace
--> activate v2
-```
-
-If any gate fails, do not partially continue. Rollback restores/uses the frozen v1
-snapshot and restarts v1. Never downgrade the v2 database.
+Rollback is running v1 from the archive. It needs no preparation — `git worktree add`
+against the frozen commit — and it is not a downgrade of anything, because the two
+systems never shared a database. Never downgrade the v2 database.
 
 ## 10. Commit and change discipline
 
-- Preserve the main v1 worktree and live data.
+- Never write into the v1 archive.
 - Keep every commit scoped to one stable boundary.
 - Do not combine architecture extraction with unrelated content changes.
 - Add targeted regression coverage for every material bug not already caught by an
@@ -398,7 +403,6 @@ snapshot and restarts v1. Never downgrade the v2 database.
 - Do not edit generated HTML/PDF or immutable artifacts by hand.
 - Do not add deferred features while implementing a milestone.
 - Do not begin M5 before the M4 vertical-slice gate.
-- Do not perform live migration before Release Ready and explicit cutover authorization.
 
 ## 11. Stop conditions
 

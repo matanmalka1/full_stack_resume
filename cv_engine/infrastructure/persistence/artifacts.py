@@ -320,19 +320,6 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
             validator_versions=json.loads(row["validator_versions_json"]),
         )
 
-    def latest_validation(self, application_id: str, phase: str | None = None) -> ValidationReport:
-        query = "SELECT report_json FROM validation_runs WHERE application_id=?"
-        params: list[Any] = [application_id]
-        if phase:
-            query += " AND phase=?"
-            params.append(phase)
-        query += " ORDER BY created_at DESC LIMIT 1"
-        with self.read_connection() as connection:
-            row = connection.execute(query, params).fetchone()
-        if row is None:
-            raise KeyError(f"no validation report for application {application_id}")
-        return ValidationReport.model_validate_json(row["report_json"])
-
     def latest_validation_for_working_draft(
         self, working_draft_id: str
     ) -> dict[str, Any] | None:
