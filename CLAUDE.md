@@ -6,18 +6,19 @@ working rule set. Reading them is the reading requirement.
 ## What this system is
 
 A single-candidate CV tailoring tool. One user, local only, not deployed, no auth, no
-cloud. The live v1 data is 25 applications and 192 artifact versions.
+cloud. v2 starts with an empty database; v1 is a frozen archive in Git and is never
+migrated, opened, or written to.
 
 Almost everything the engine produces is regenerable in seconds: drafts, selections,
 renders, projections. Getting one of them wrong costs a re-run. Calibrate effort to
 that, not to the size of the codebase.
 
-Two things are not regenerable, and they are where care belongs:
+One thing is not regenerable, and it is where care belongs:
 
-1. **The v1 historical record** — 25 applications, 192 artifacts, job snapshots of
-   postings that no longer exist, CVs that were actually sent. One-shot migration.
-2. **Immutable records already written** — approved revisions, submitted artifacts,
-   snapshots. Overwriting one destroys evidence.
+**Immutable records already written** — approved revisions, submitted artifacts, job
+snapshots of postings that later vanish from the web. Overwriting one destroys evidence
+that cannot be reproduced from anything else. This is forward-looking: it is about what
+v2 accumulates, not about history.
 
 ## Specifications
 
@@ -55,16 +56,18 @@ field, or a contracted message.
 Gates: Class A, plus golden hashes, the architecture test, and an offline CLI run.
 The reasoning goes in the commit message.
 
-**Class C — schema, artifact paths, or v1 data.** A new migration, a change to where
-immutable payloads live, or anything touching the v1 historical record.
-Gates: Class B, plus the browser suite, a `0001`-only database upgrading cleanly to
-head, and — for v1 data — the migration-safety rules below.
+**Class C — schema or artifact paths.** A change to the baseline schema, or to where
+immutable payloads live.
+Gates: Class B, plus the browser suite and the frozen schema fingerprint. A fingerprint
+that moves must be regenerated deliberately, with the entry-level diff stated.
 
-Gates are per boundary, not per commit. While iterating, run only the focused tests for
-what changed; run the class's full gate once, when the work closes. Do not run the browser
-suite for changes that cannot affect a rendering or browser path. Re-running a gate that
-already passed under the same conditions is not evidence — check the diff, the test count
-against its baseline, and which interpreter produced the numbers.
+Gates are per boundary, not per commit, and the user runs them. While iterating, hand
+over only the focused tests for what changed; hand over the class's full gate once, when
+the work closes. Do not ask for the browser suite for changes that cannot affect a
+rendering or browser path. A gate that already passed under the same conditions is not
+fresh evidence — check the diff, the test count against its baseline, and which
+interpreter produced the numbers. Predict the expected count and explain every
+difference from it; an unexplained delta is a finding, not noise.
 
 ## What actually catches defects
 
@@ -104,21 +107,15 @@ what remains. A hard failure is never relabelled as a warning.
 - Preserve canonical historical job titles, dates, metrics, uncertainty, and source
   provenance.
 
-## Migration safety
+## Immutable records
 
-These apply to the v1 historical record and to immutable records already written. They
-are the one place where full ceremony is warranted.
-
-- Historical and submitted CV, HTML, PDF, job snapshot, and application artifacts are
-  immutable. Never overwrite or relocate them.
-- Do not migrate live data until a complete snapshot exists and is verified, restore
-  instructions exist, migration tests pass, and every historical record and artifact is
-  accounted for.
-- Test migration against a copy or snapshot before live migration.
-- If any migration safety check fails, stop. Do not partially continue or guess.
-- Never invent an identity for a historical record that was never recorded. A field that
-  cannot be derived stays NULL.
-- Preserve historical data and output meaning, not the legacy architecture.
+- Approved and submitted CV, HTML, PDF, job snapshot, and application records are
+  immutable. Never overwrite or relocate one.
+- Never invent a value a record never carried. A field that cannot be derived stays
+  NULL.
+- Back up before anything that could destroy a written record: `cv workspace backup
+  --into <new directory>`, then restore it and open it. A backup nobody has restored is
+  not a backup.
 
 ## Scope
 
@@ -140,21 +137,25 @@ are the one place where full ceremony is warranted.
 ## Working rules
 
 - Proceed by default. Stop only for a blocker, an unresolved specification conflict, a
-  required semantic deviation, material data-loss risk, or a migration-safety failure.
-  Explain the issue and its consequences before asking for a decision.
+  required semantic deviation, or material data-loss risk. Explain the issue and its
+  consequences before asking for a decision.
 - Internal implementation details may change freely when observable behavior, safety,
   and product semantics stay the same.
 - Do not silently change workflow, validation behavior, fact semantics, application
-  statuses, migration behavior, or artifact lifecycle.
+  statuses, or artifact lifecycle.
 - Work only in the v2 branch/worktree against an explicitly marked, isolated Workspace.
-  Never point any command at live v1 data.
+  Never write into the v1 archive. The `looks_legacy` guard refuses to open or mark a v1
+  root; do not route around it.
 - Preserve unrelated user changes in a dirty worktree. One agent at a time per worktree
   and isolated Workspace: concurrent edits race the test runner and make every
   measurement meaningless. Parallel agents are permitted only under
   `docs/v2/process/execution-protocol.md`, with separate git worktrees, disjoint file
   ownership, and isolated runtime and test resources.
 - Small, intentional commits. Do not mix unrelated changes in one commit.
-- Never use destructive Git or filesystem operations to simplify migration or cleanup.
+- Never use destructive Git or filesystem operations to simplify cleanup.
+- Do not run tests. The user runs them. At the end of a boundary, hand over the ordered
+  commands with what each one proves and what a pass looks like, and state plainly
+  anything you could not verify because you did not run it.
 
 ## Documentation
 
@@ -175,3 +176,8 @@ treating every change as a release.
 The counterweight: when closing a milestone, name one control that was retired, or
 state that none was retirable and why. A guard that has never failed since it was added
 is a candidate for merging into a derived check.
+
+Retired 2026-08-19: the **Migration safety** section and the v1 arm of Class C. None of
+those rules ever fired — they guarded a migration that was then not performed. Replaced
+by three derived checks: the frozen schema fingerprint, `looks_legacy`, and
+`cv workspace backup`. Do not re-add them; see `docs/v2/m2-remaining.md`.

@@ -250,5 +250,23 @@ v2 starts with an empty database. The reasoning that was retired is preserved in
 - [ ] `docs/v2/spec/state-and-use-cases.md` §8 still lists `MIGRATED_HISTORICAL` as an
       example historical warning. The code path is gone; the approved spec has not been
       updated to match. Needs a decision, not a silent edit.
-- [ ] Collapse Class C in `CLAUDE.md`: the migration-safety section and the `0001`-only
-      upgrade gate lose their subject.
+- [x] Collapsed Class C in `CLAUDE.md`. Class C was "schema, artifact paths, or v1 data",
+      gated on the browser suite, a `0001`-only upgrade to head, and the migration-safety
+      rules. It is now "schema or artifact paths", gated on the browser suite and the
+      frozen schema fingerprint.
+
+      The **Migration safety** section is gone: six rules replaced by three under
+      **Immutable records**. Of the six, four had no subject left once there was no
+      migration (snapshot-before-migrate, rehearse-on-a-copy, stop-on-check-failure,
+      preserve-meaning-not-architecture). Two survive because they were never really
+      about migration: written records are immutable, and a field that cannot be derived
+      stays NULL.
+
+      This is the counterweight `CLAUDE.md` asks for at a boundary close. None of the six
+      ever fired. What carries the weight now is derived rather than declared: the frozen
+      schema fingerprint catches an unintended schema change, `looks_legacy` refuses to
+      open or mark the archive, and backup is a command that can be restored and opened
+      rather than a checklist someone confirms.
+
+      Also recorded there: agents do not run tests. The user runs them, and a boundary
+      closes by handing over the ordered commands with what each proves.
