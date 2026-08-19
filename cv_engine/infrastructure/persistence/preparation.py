@@ -322,6 +322,26 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
         selection_plan_id = plan_id or new_id()
         now = created_at or utc_now()
         with self.transaction() as connection:
+            existing = connection.execute(
+                "SELECT * FROM selection_plans WHERE id=?", (selection_plan_id,)
+            ).fetchone()
+            if existing is not None:
+                stored = self._selection_plan_record(existing)
+                expected = {
+                    "application_id": application_id,
+                    "job_analysis_id": job_analysis_id,
+                    "plan": plan,
+                    "candidate_context_version": candidate_context_version,
+                    "candidate_context_hash": candidate_context_hash,
+                    "profile_version": profile_version,
+                    "selection_policy_version": selection_policy_version,
+                    "track_emphasis_dependencies": track_emphasis_dependencies,
+                    "created_at": now,
+                }
+                actual = {key: getattr(stored, key) for key in expected}
+                if actual != expected:
+                    raise ValueError("selection plan identity already has different content")
+                return stored
             self._insert_selection_plan(
                 connection,
                 selection_plan_id,

@@ -2,9 +2,14 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Callable
 from pathlib import Path
 
-from ..application.knowledge_mutations import StagedKnowledgeFile
+from ..application.knowledge_mutations import (
+    KnowledgeFileState,
+    KnowledgeMutation,
+    StagedKnowledgeFile,
+)
 from ..domain.candidate import CANDIDATE_FILE, CandidateContextError, build_candidate_context
 from ..domain.facts import (
     FACT_SOURCE_NAMES,
@@ -141,10 +146,12 @@ class FileKnowledge:
         *,
         workspace_root: Path | None = None,
         temp_root: Path | None = None,
+        has_prepared_mutation: Callable[[], bool] | None = None,
     ):
         self.knowledge_root = Path(knowledge_root).resolve()
         self.workspace_root = Path(workspace_root or knowledge_root).resolve()
         self.temp_root = Path(temp_root or (self.workspace_root / "tmp")).resolve()
+        self._has_prepared_mutation = has_prepared_mutation
         resolve_within(self.workspace_root, self.knowledge_root)
         resolve_within(self.workspace_root, self.temp_root)
 
@@ -153,6 +160,8 @@ class FileKnowledge:
         return self.knowledge_root / "base"
 
     def facts(self) -> FactStore:
+        if self._has_prepared_mutation is not None and self._has_prepared_mutation():
+            raise FactStoreError("Knowledge has an uncommitted prepared mutation")
         return load_fact_store(self.base_dir)
 
     def load(self) -> Knowledge:
@@ -165,59 +174,48 @@ class FileKnowledge:
             presentations=load_presentations(self.knowledge_root, facts),
         )
 
-    def create_fact(self, source_name: str, payload: dict, *, canonical: bool = False) -> Fact:
-        return create_fact(self.base_dir, source_name, payload, canonical=canonical)
-
-    def promote_fact(
-        self, fact_id: str, target: FactStatus | str, *, explicitly_confirmed: bool
-    ) -> tuple[Fact, Fact]:
-        return promote_fact(
-            self.base_dir, fact_id, target, explicitly_confirmed=explicitly_confirmed
-        )
-
-    def attach_fact(
-        self, profile: str, fact_id: str, section: str, *, pin: bool = False
-    ) -> tuple[Profile, str]:
-        """Offer a canonical fact to one Profile section, and store the result.
-
-        Returns the updated Profile and the source it was written back to, so
-        the caller can report where the change landed without resolving paths.
-        """
-        facts = self.facts()
-        source = load_profile_store(self.knowledge_root, facts).source(profile)
-        path = Path(source)
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        updated, document = attach_fact_to_section(
-            payload, fact_id, section, origin=path.name, pin=pin
-        )
-        path.write_text(json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        return updated, source
-
-    def _validate_override(self, source: Path, proposed_text: str) -> None:
-        """Load the complete Knowledge graph with one proposed document substituted."""
+    def _validate_overrides(self, overrides: dict[Path, str]) -> Knowledge:
+        """Load the complete Knowledge graph with proposed documents substituted."""
+        normalized = {path.resolve(): text for path, text in overrides.items()}
         fact_sources: dict[str, FactSource] = {}
         for name in FACT_SOURCE_NAMES:
             path = self.base_dir / name
-            text = proposed_text if path.resolve() == source.resolve() else path.read_text("utf-8")
+            text = (
+                normalized[path.resolve()]
+                if path.resolve() in normalized
+                else path.read_text("utf-8")
+            )
             fact_sources[name] = parse_fact_source(text, origin=str(path))
         facts = FactStore.from_sources(fact_sources)
 
         documents: dict[str, dict] = {}
         for path in sorted((self.knowledge_root / "profiles").glob("**/*.yaml")):
-            text = proposed_text if path.resolve() == source.resolve() else path.read_text("utf-8")
+            text = (
+                normalized[path.resolve()]
+                if path.resolve() in normalized
+                else path.read_text("utf-8")
+            )
             documents[str(path)] = json.loads(text)
-        ProfileStore.from_documents(documents, facts)
-        load_emphasis_policies(self.knowledge_root)
-        load_candidate_context(self.knowledge_root, facts)
-        load_presentations(self.knowledge_root, facts)
+        return Knowledge(
+            facts=facts,
+            profiles=ProfileStore.from_documents(documents, facts),
+            policies=load_emphasis_policies(self.knowledge_root),
+            candidate=load_candidate_context(self.knowledge_root, facts),
+            presentations=load_presentations(self.knowledge_root, facts),
+        )
 
-    def _stage(self, mutation_id: str, source: Path, proposed_text: str) -> StagedKnowledgeFile:
+    def _stage_validated(
+        self,
+        mutation_id: str,
+        source: Path,
+        proposed_text: str,
+        proposed_versions: dict[str, str],
+    ) -> StagedKnowledgeFile:
         if not mutation_id or "/" in mutation_id or "\\" in mutation_id:
             raise ValueError("knowledge mutation ID is not a safe path component")
         source = resolve_within(self.knowledge_root, source)
         if source.is_symlink() or not source.is_file():
             raise ValueError(f"knowledge source is not a regular file: {source}")
-        self._validate_override(source, proposed_text)
 
         stage_dir = resolve_within(self.temp_root, self.temp_root / "knowledge" / mutation_id)
         stage_dir.mkdir(parents=True, exist_ok=False)
@@ -240,7 +238,32 @@ class FileKnowledge:
             staged_reference=relative_within(self.workspace_root, new_path).as_posix(),
             old_sha256=sha256_file(old_path),
             new_sha256=sha256_file(new_path),
+            proposed_versions=proposed_versions,
         )
+
+    def _stage(self, mutation_id: str, source: Path, proposed_text: str) -> StagedKnowledgeFile:
+        overrides = {source: proposed_text}
+        profile_paths = list((self.knowledge_root / "profiles").glob("**/*.yaml"))
+        if profile_paths:
+            versions = self._validate_overrides(overrides).versions()
+        else:
+            fact_sources = {
+                name: parse_fact_source(
+                    (
+                        proposed_text
+                        if (self.base_dir / name).resolve() == source.resolve()
+                        else (self.base_dir / name).read_text("utf-8")
+                    ),
+                    origin=str(self.base_dir / name),
+                )
+                for name in FACT_SOURCE_NAMES
+            }
+            facts = FactStore.from_sources(fact_sources)
+            versions = {
+                "facts": facts.version,
+                "facts_lifecycle": facts.lifecycle_version,
+            }
+        return self._stage_validated(mutation_id, source, proposed_text, versions)
 
     @staticmethod
     def _write_durable(path: Path, content: bytes) -> None:
@@ -325,6 +348,63 @@ class FileKnowledge:
         staged = self._stage(mutation_id, path, proposed)
         return staged, updated, relative_within(self.workspace_root, path).as_posix()
 
+    def stage_confirm_and_use_fact(
+        self,
+        mutation_id: str,
+        fact_id: str,
+        profile: str,
+        section: str,
+    ) -> tuple[list[StagedKnowledgeFile], Fact, Fact, Fact, Profile, str, Knowledge]:
+        store = self.facts()
+        before = store.get(fact_id)
+        confirmed = store.promote(
+            fact_id, FactStatus.CONFIRMED, explicitly_confirmed=True
+        ).model_copy(update={"confirmed_at": before.confirmed_at or utc_now()[:10]})
+        canonical = store.promote(
+            fact_id, FactStatus.CANONICAL, explicitly_confirmed=True
+        ).model_copy(update={"confirmed_at": confirmed.confirmed_at})
+
+        fact_path = resolve_within(self.base_dir, self.base_dir / source_name_of(before))
+        title, fact_source = parse_fact_source_document(
+            fact_path.read_text("utf-8"), origin=str(fact_path)
+        )
+        fact_text = render_fact_source(
+            title,
+            with_promoted_fact(
+                fact_source, fact_id, FactStatus.CANONICAL, canonical.confirmed_at or utc_now()[:10]
+            ),
+        )
+
+        profile_source = load_profile_store(self.knowledge_root, store).source(profile)
+        profile_path = resolve_within(self.knowledge_root, profile_source)
+        profile_payload = json.loads(profile_path.read_text("utf-8"))
+        updated, profile_document = attach_fact_to_section(
+            profile_payload, fact_id, section, origin=profile_path.name, pin=True
+        )
+        profile_text = json.dumps(profile_document, ensure_ascii=False, indent=2) + "\n"
+        proposed = self._validate_overrides(
+            {fact_path: fact_text, profile_path: profile_text}
+        )
+        primary = self._stage_validated(
+            mutation_id, fact_path, fact_text, proposed.versions()
+        )
+        try:
+            attachment = self._stage_validated(
+                f"{mutation_id}-profile", profile_path, profile_text, proposed.versions()
+            )
+        except Exception:
+            self.discard_staged(primary)
+            raise
+        return (
+            [primary, attachment],
+            before,
+            confirmed,
+            canonical,
+            updated,
+            relative_within(self.workspace_root, profile_path).as_posix(),
+            proposed,
+        )
+
     def activate_staged(self, staged: StagedKnowledgeFile) -> None:
         source, new_path, old_path = self._paths(staged)
         if sha256_file(source) != staged.old_sha256:
@@ -350,3 +430,25 @@ class FileKnowledge:
         new_path.unlink(missing_ok=True)
         old_path.unlink(missing_ok=True)
         new_path.parent.rmdir()
+
+    def staged_from_mutation(self, mutation: KnowledgeMutation) -> StagedKnowledgeFile:
+        return StagedKnowledgeFile(
+            mutation_id=mutation.id,
+            source_reference=mutation.source_reference,
+            staged_reference=mutation.staged_reference,
+            old_sha256=mutation.old_sha256,
+            new_sha256=mutation.new_sha256,
+            proposed_versions={},
+        )
+
+    def staged_file_state(self, staged: StagedKnowledgeFile) -> KnowledgeFileState:
+        source, new_path, old_path = self._paths(staged)
+
+        def digest(path: Path) -> str | None:
+            return sha256_file(path) if path.is_file() and not path.is_symlink() else None
+
+        return KnowledgeFileState(
+            current_sha256=digest(source),
+            staged_sha256=digest(new_path),
+            backup_sha256=digest(old_path),
+        )

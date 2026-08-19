@@ -6,8 +6,12 @@ from ...domain.facts import FactStoreError
 from ...domain.models import (
     Fact,
     FactStatus,
+    SelectionManifest,
 )
+from ...domain.selection import build_selection
+from ...util import new_id, utc_now
 from ..commands import (
+    ConfirmAndUseFactResult,
     FactAttachmentResult,
     FactDetailResult,
     FactHistoryResult,
@@ -25,6 +29,7 @@ from ..errors import (
     KnowledgeRejected,
     UnknownRecord,
 )
+from ..knowledge_mutations import KnowledgeMutation, PrepareKnowledgeMutation, StagedKnowledgeFile
 from ..ports import (
     KnowledgeAuditRepository,
 )
@@ -64,41 +69,205 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
             events=[fact_event_view(row) for row in self.repo.fact_events(fact_id)]
         )
 
-    def _record_fact_event(
+    def _ensure_mutations_allowed(self) -> None:
+        quarantined = self.repo.quarantined_knowledge_mutations()
+        if quarantined:
+            raise KnowledgeRejected(
+                f"Knowledge mutations are quarantined by mutation {quarantined[0].id}"
+            )
+
+    def _fact_event_action(
         self,
         fact: Fact,
         *,
         event_type: str,
         from_status: str | None,
         reason: str,
+        facts_version: str,
+        lifecycle_version: str,
         application_id: str | None = None,
         claim_id: str | None = None,
-    ) -> FactMutationResult:
-        """Persist the fact change's audit record against the reloaded store.
+    ) -> dict[str, Any]:
+        return {
+            "type": "fact_event",
+            "event_id": new_id(),
+            "created_at": utc_now(),
+            "fact_id": fact.fact_id,
+            "source_file": fact.source_file,
+            "event_type": event_type,
+            "from_status": from_status,
+            "to_status": fact.status.value,
+            "fact": fact.model_dump(mode="json"),
+            "facts_version": facts_version,
+            "lifecycle_version": lifecycle_version,
+            "reason": reason,
+            "application_id": application_id,
+            "claim_id": claim_id,
+        }
 
-        The store is reloaded from disk first, so the versions written into the
-        trail are the ones a later reader will actually find on disk rather than
-        the pre-write ones held in memory.
-        """
-        facts = self.fact_store()
-        event_id = self.repo.record_fact_event(
-            fact_id=fact.fact_id,
-            source_file=fact.source_file,
-            event_type=event_type,
-            from_status=from_status,
-            to_status=fact.status.value,
-            fact=fact.model_dump(mode="json"),
-            facts_version=facts.version,
-            lifecycle_version=facts.lifecycle_version,
-            reason=reason,
-            application_id=application_id,
-            claim_id=claim_id,
+    @staticmethod
+    def _apply_db_mutation(repository: KnowledgeAuditRepository, payload: dict[str, Any]) -> None:
+        for action in payload.get("actions", []):
+            if action.get("type") == "fact_event":
+                repository.record_fact_event(
+                    fact_id=action["fact_id"],
+                    source_file=action["source_file"],
+                    event_type=action["event_type"],
+                    from_status=action["from_status"],
+                    to_status=action["to_status"],
+                    fact=action["fact"],
+                    facts_version=action["facts_version"],
+                    lifecycle_version=action["lifecycle_version"],
+                    reason=action["reason"],
+                    application_id=action["application_id"],
+                    claim_id=action["claim_id"],
+                    event_id=action["event_id"],
+                    created_at=action["created_at"],
+                )
+            elif action.get("type") == "selection_plan":
+                repository.create_selection_plan(
+                    action["application_id"],
+                    action["job_analysis_id"],
+                    SelectionManifest.model_validate(action["plan"]),
+                    candidate_context_version=action["candidate_context_version"],
+                    candidate_context_hash=action["candidate_context_hash"],
+                    profile_version=action["profile_version"],
+                    selection_policy_version=action["selection_policy_version"],
+                    track_emphasis_dependencies=action["track_emphasis_dependencies"],
+                    plan_id=action["plan_id"],
+                    created_at=action["created_at"],
+                )
+            else:
+                raise ValueError(f"unknown Knowledge DB action: {action.get('type')}")
+
+    def _quarantine(self, mutation: KnowledgeMutation, reason: str) -> None:
+        try:
+            self.repo.quarantine_knowledge_mutation(mutation.id, reason)
+        except ValueError:
+            pass
+
+    def _staged_files(self, mutation: KnowledgeMutation) -> list[StagedKnowledgeFile]:
+        files = [self._knowledge.staged_from_mutation(mutation)]
+        for item in mutation.db_mutation.get("knowledge_files", []):
+            files.append(
+                StagedKnowledgeFile(
+                    mutation_id=item["mutation_id"],
+                    source_reference=item["source_reference"],
+                    staged_reference=item["staged_reference"],
+                    old_sha256=item["old_sha256"],
+                    new_sha256=item["new_sha256"],
+                    proposed_versions={},
+                )
+            )
+        return files
+
+    @staticmethod
+    def _stored_staged_file(staged: StagedKnowledgeFile) -> dict[str, str]:
+        return {
+            "mutation_id": staged.mutation_id,
+            "source_reference": staged.source_reference,
+            "staged_reference": staged.staged_reference,
+            "old_sha256": staged.old_sha256,
+            "new_sha256": staged.new_sha256,
+        }
+
+    def _complete_prepared(self, mutation: KnowledgeMutation) -> None:
+        staged_files = self._staged_files(mutation)
+        states = [self._knowledge.staged_file_state(staged) for staged in staged_files]
+        invalid = [
+            (staged, state)
+            for staged, state in zip(staged_files, states, strict=True)
+            if state.backup_sha256 != staged.old_sha256
+            or not (
+                (
+                    state.current_sha256 == staged.old_sha256
+                    and state.staged_sha256 == staged.new_sha256
+                )
+                or (
+                    state.current_sha256 == staged.new_sha256
+                    and state.staged_sha256 is None
+                )
+            )
+        ]
+        if invalid:
+            for staged, state in zip(staged_files, states, strict=True):
+                if (
+                    state.current_sha256 == staged.new_sha256
+                    and state.backup_sha256 == staged.old_sha256
+                ):
+                    self._knowledge.restore_staged(staged)
+            reason = "Knowledge mutation files do not match the prepared old/new hashes"
+            self._quarantine(mutation, reason)
+            raise KnowledgeRejected(reason)
+        for staged, state in zip(staged_files, states, strict=True):
+            if state.current_sha256 == staged.old_sha256:
+                self._knowledge.activate_staged(staged)
+
+        try:
+            with self.repo.unit_of_work() as uow:
+                transaction = self.repo.bind(uow)
+                self._apply_db_mutation(transaction, mutation.db_mutation)
+                uow.commit()
+        except Exception as exc:
+            for staged in staged_files:
+                state = self._knowledge.staged_file_state(staged)
+                if (
+                    state.current_sha256 == staged.new_sha256
+                    and state.backup_sha256 == staged.old_sha256
+                ):
+                    self._knowledge.restore_staged(staged)
+            reason = f"Knowledge DB mutation could not commit: {type(exc).__name__}: {exc}"
+            self._quarantine(mutation, reason)
+            raise KnowledgeRejected(reason) from exc
+
+        self.repo.commit_knowledge_mutation(mutation.id)
+        for staged in staged_files:
+            try:
+                self._knowledge.discard_staged(staged)
+            except OSError:
+                # The committed record and final source are authoritative. A leftover
+                # temp directory is a safe reconciliation orphan, not a partial mutation.
+                pass
+
+    def recover_knowledge_mutations(self) -> list[str]:
+        recovered: list[str] = []
+        for mutation in self.repo.prepared_knowledge_mutations():
+            try:
+                self._complete_prepared(mutation)
+            except KnowledgeRejected:
+                continue
+            recovered.append(mutation.id)
+        return recovered
+
+    def _run_fact_mutation(
+        self,
+        staged: StagedKnowledgeFile,
+        fact: Fact,
+        action: dict[str, Any],
+    ) -> FactMutationResult:
+        request = PrepareKnowledgeMutation(
+            mutation_id=staged.mutation_id,
+            mutation_type=action["event_type"],
+            source_reference=staged.source_reference,
+            staged_reference=staged.staged_reference,
+            old_sha256=staged.old_sha256,
+            new_sha256=staged.new_sha256,
+            db_mutation_type="fact_event",
+            db_mutation_id=action["event_id"],
+            db_mutation={"actions": [action]},
+            recovery_strategy="finish_or_restore",
         )
+        try:
+            mutation = self.repo.prepare_knowledge_mutation(request)
+        except Exception:
+            self._knowledge.discard_staged(staged)
+            raise
+        self._complete_prepared(mutation)
         return FactMutationResult(
             fact=fact,
-            event_id=event_id,
-            facts_version=facts.version,
-            lifecycle_version=facts.lifecycle_version,
+            event_id=action["event_id"],
+            facts_version=action["facts_version"],
+            lifecycle_version=action["lifecycle_version"],
         )
 
     def add_fact(
@@ -116,18 +285,45 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
         Without `canonical`, the fact lands as `pending` and cannot reach a CV:
         every rendering path resolves facts with `canonical_only=True`.
         """
+        self._ensure_mutations_allowed()
+        mutation_id = new_id()
         try:
-            fact = self._knowledge.create_fact(source, payload, canonical=canonical)
+            staged, fact = self._knowledge.stage_create_fact(
+                mutation_id, source, payload, canonical=canonical
+            )
         except OSError as exc:
             raise InfrastructureFailure(f"could not store fact: {exc}") from exc
         except (FactStoreError, ValueError) as exc:
             raise KnowledgeRejected(str(exc)) from exc
-        return self._record_fact_event(
+        action = self._fact_event_action(
             fact,
             event_type="fact_created",
             from_status=None,
             reason=reason
             or ("explicitly confirmed on creation" if canonical else "new pending fact"),
+            facts_version=staged.proposed_versions["facts"],
+            lifecycle_version=staged.proposed_versions["facts_lifecycle"],
+            application_id=application_id,
+            claim_id=claim_id,
+        )
+        return self._run_fact_mutation(staged, fact, action)
+
+    def create_pending_fact(
+        self,
+        source: str,
+        payload: dict[str, Any],
+        *,
+        reason: str = "",
+        application_id: str | None = None,
+        claim_id: str | None = None,
+    ) -> FactMutationResult:
+        if payload.get("fact_id"):
+            raise KnowledgeRejected("fact identity is generated and is not user-editable")
+        return self.add_fact(
+            source,
+            {**payload, "fact_id": new_id()},
+            canonical=False,
+            reason=reason,
             application_id=application_id,
             claim_id=claim_id,
         )
@@ -140,8 +336,11 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
         explicitly_confirmed: bool,
         reason: str = "",
     ) -> FactMutationResult:
+        self._ensure_mutations_allowed()
+        mutation_id = new_id()
         try:
-            before, after = self._knowledge.promote_fact(
+            staged, before, after = self._knowledge.stage_promote_fact(
+                mutation_id,
                 fact_id,
                 target,
                 explicitly_confirmed=explicitly_confirmed,
@@ -150,11 +349,38 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
             raise InfrastructureFailure(f"could not promote fact: {exc}") from exc
         except (FactStoreError, ValueError) as exc:
             raise KnowledgeRejected(str(exc)) from exc
-        return self._record_fact_event(
+        action = self._fact_event_action(
             after,
             event_type="fact_promoted",
             from_status=before.status.value,
             reason=reason or f"explicit promotion to {after.status.value}",
+            facts_version=staged.proposed_versions["facts"],
+            lifecycle_version=staged.proposed_versions["facts_lifecycle"],
+        )
+        return self._run_fact_mutation(staged, after, action)
+
+    def transition_fact(
+        self,
+        fact_id: str,
+        command: str,
+        *,
+        explicitly_confirmed: bool,
+        reason: str = "",
+    ) -> FactMutationResult:
+        targets = {"confirm": FactStatus.CONFIRMED, "promote": FactStatus.CANONICAL}
+        try:
+            target = targets[command]
+        except KeyError as exc:
+            raise KnowledgeRejected(f"unknown fact transition command: {command}") from exc
+        if not explicitly_confirmed:
+            raise KnowledgeRejected(
+                f"promotion to {target.value} requires explicit --confirm"
+            )
+        return self.promote_fact(
+            fact_id,
+            target.value,
+            explicitly_confirmed=True,
+            reason=reason,
         )
 
     def capture_claim_fact(
@@ -230,40 +456,221 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
             claim_id=claim_id,
         )
 
+    def create_fact_from_claim(
+        self,
+        application_id: str,
+        claim_id: str,
+        *,
+        source: str,
+        meaning: str,
+        tags: list[str],
+        english: str | None = None,
+        hebrew: str | None = None,
+        provenance: str | None = None,
+        effective_dates: str | None = None,
+        replaces: str | None = None,
+        reason: str = "",
+    ) -> FactMutationResult:
+        return self.capture_claim_fact(
+            application_id,
+            claim_id,
+            source=source,
+            fact_id=new_id(),
+            meaning=meaning,
+            tags=tags,
+            english=english,
+            hebrew=hebrew,
+            provenance=provenance,
+            effective_dates=effective_dates,
+            replaces=replaces,
+            canonical=False,
+            reason=reason,
+        )
+
     def attach_fact(
         self, fact_id: str, profile: str, section: str, *, pin: bool = False
     ) -> FactAttachmentResult:
         """Offer a canonical fact to one Profile section's candidate pool."""
-        facts, profiles, _ = self.knowledge()
+        self._ensure_mutations_allowed()
+        facts, _profiles, _ = self.knowledge()
         try:
             fact = facts.get(fact_id, canonical_only=True)
         except FactStoreError as exc:
             raise KnowledgeRejected(
                 f"only canonical facts may enter a Profile pool: {exc}"
             ) from exc
+        mutation_id = new_id()
         try:
-            updated, source = self._knowledge.attach_fact(profile, fact_id, section, pin=pin)
+            staged, updated, source = self._knowledge.stage_attach_fact(
+                mutation_id, profile, fact_id, section, pin=pin
+            )
         except OSError as exc:
             raise InfrastructureFailure(f"could not attach fact: {exc}") from exc
         except (FactStoreError, ValueError) as exc:
             raise KnowledgeRejected(str(exc)) from exc
-        # Reload so a Profile that no longer validates against the fact store
-        # fails here rather than at the next draft.
-        reloaded = self.load_knowledge().profiles
-        record = self._record_fact_event(
+        action = self._fact_event_action(
             fact,
             event_type="fact_attached_to_profile",
             from_status=fact.status.value,
             reason=f"attached to {updated.profile.value} / {section}"
             + (" (pinned)" if pin else ""),
+            facts_version=staged.proposed_versions["facts"],
+            lifecycle_version=staged.proposed_versions["facts_lifecycle"],
         )
+        record = self._run_fact_mutation(staged, fact, action)
         return FactAttachmentResult(
             **record.model_dump(),
             profile=updated.profile.value,
             section=section,
             pinned=pin,
             profile_source=source,
-            profile_store_version=reloaded.version,
+            profile_store_version=staged.proposed_versions["profiles"],
+        )
+
+    def confirm_and_use_fact(
+        self,
+        fact_id: str,
+        *,
+        application_id: str,
+        job_analysis_id: str,
+        profile: str,
+        section: str,
+        reason: str = "",
+    ) -> ConfirmAndUseFactResult:
+        """Promote, attach, and select one pending fact as one recoverable command."""
+        self._ensure_mutations_allowed()
+        try:
+            analysis_record = self.repo.get_analysis(job_analysis_id)
+        except KeyError as exc:
+            raise UnknownRecord(str(exc)) from exc
+        if analysis_record["application_id"] != application_id:
+            raise KnowledgeRejected("job analysis belongs to another application")
+        analysis = analysis_record["analysis"]
+        if analysis.profile.value != profile:
+            raise KnowledgeRejected(
+                f"analysis Profile {analysis.profile.value} does not match requested {profile}"
+            )
+
+        mutation_id = new_id()
+        try:
+            (
+                staged_files,
+                before,
+                confirmed,
+                canonical,
+                _updated_profile,
+                _profile_source,
+                proposed,
+            ) = self._knowledge.stage_confirm_and_use_fact(
+                mutation_id, fact_id, profile, section
+            )
+            selected_profile = proposed.profiles.get(profile)
+            _selected, manifest = build_selection(
+                analysis=analysis,
+                profile=selected_profile,
+                policy=proposed.policies.get(analysis.emphasis),
+                policy_store_version=proposed.policies.version,
+                facts=proposed.facts,
+                line_groups=(
+                    proposed.presentations.line_groups(selected_profile, analysis.emphasis)
+                    if proposed.presentations is not None
+                    else None
+                ),
+            )
+            if fact_id not in manifest.selected_fact_ids:
+                raise ValueError("confirmed fact was not selected by the replacement plan")
+        except OSError as exc:
+            raise InfrastructureFailure(f"could not prepare Knowledge mutation: {exc}") from exc
+        except (FactStoreError, ValueError) as exc:
+            if "staged_files" in locals():
+                for staged in staged_files:
+                    self._knowledge.discard_staged(staged)
+            raise KnowledgeRejected(str(exc)) from exc
+
+        facts_version = proposed.facts.version
+        lifecycle_version = proposed.facts.lifecycle_version
+        actions = [
+            self._fact_event_action(
+                confirmed,
+                event_type="fact_promoted",
+                from_status=before.status.value,
+                reason=reason or "explicit promotion to confirmed",
+                facts_version=facts_version,
+                lifecycle_version=lifecycle_version,
+                application_id=application_id,
+            ),
+            self._fact_event_action(
+                canonical,
+                event_type="fact_promoted",
+                from_status=confirmed.status.value,
+                reason=reason or "explicit promotion to canonical",
+                facts_version=facts_version,
+                lifecycle_version=lifecycle_version,
+                application_id=application_id,
+            ),
+            self._fact_event_action(
+                canonical,
+                event_type="fact_attached_to_profile",
+                from_status=canonical.status.value,
+                reason=f"attached to {profile} / {section} (pinned)",
+                facts_version=facts_version,
+                lifecycle_version=lifecycle_version,
+                application_id=application_id,
+            ),
+        ]
+        plan_id = new_id()
+        plan_created_at = utc_now()
+        actions.append(
+            {
+                "type": "selection_plan",
+                "plan_id": plan_id,
+                "application_id": application_id,
+                "job_analysis_id": job_analysis_id,
+                "plan": manifest.model_dump(mode="json"),
+                "candidate_context_version": proposed.candidate.context_version,
+                "candidate_context_hash": proposed.candidate.version_hash,
+                "profile_version": proposed.profiles.version,
+                "selection_policy_version": proposed.policies.version,
+                "track_emphasis_dependencies": {
+                    "track": analysis.track.value,
+                    "emphasis": analysis.emphasis.value,
+                },
+                "created_at": plan_created_at,
+            }
+        )
+        payload = {
+            "knowledge_files": [
+                self._stored_staged_file(staged) for staged in staged_files[1:]
+            ],
+            "actions": actions,
+        }
+        primary = staged_files[0]
+        request = PrepareKnowledgeMutation(
+            mutation_id=mutation_id,
+            mutation_type="confirm_and_use_fact",
+            source_reference=primary.source_reference,
+            staged_reference=primary.staged_reference,
+            old_sha256=primary.old_sha256,
+            new_sha256=primary.new_sha256,
+            db_mutation_type="selection_plan",
+            db_mutation_id=plan_id,
+            db_mutation=payload,
+            recovery_strategy="finish_or_restore",
+        )
+        try:
+            mutation = self.repo.prepare_knowledge_mutation(request)
+        except Exception:
+            for staged in staged_files:
+                self._knowledge.discard_staged(staged)
+            raise
+        self._complete_prepared(mutation)
+        return ConfirmAndUseFactResult(
+            fact=canonical,
+            event_ids=[action["event_id"] for action in actions if action["type"] == "fact_event"],
+            selection_plan=self.repo.selection_plan(plan_id),
+            facts_version=facts_version,
+            lifecycle_version=lifecycle_version,
+            profile_store_version=proposed.profiles.version,
         )
 
     def reconcile_facts(self) -> FactReconciliationResult:
@@ -293,6 +700,16 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
         problems.extend(
             f"non-canonical fact has no lifecycle event: {fact_id}" for fact_id in untracked
         )
+        prepared = self.repo.prepared_knowledge_mutations()
+        quarantined = self.repo.quarantined_knowledge_mutations()
+        problems.extend(
+            f"Knowledge mutation still requires recovery: {mutation.id}"
+            for mutation in prepared
+        )
+        problems.extend(
+            f"Knowledge mutation is quarantined: {mutation.id} ({mutation.quarantine_reason})"
+            for mutation in quarantined
+        )
         counts = {status.value: len(facts.by_status(status)) for status in FactStatus}
         return FactReconciliationResult(
             passed=not problems,
@@ -301,4 +718,6 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
             facts_version=facts.version,
             lifecycle_version=facts.lifecycle_version,
             problems=problems,
+            journal_prepared=len(prepared),
+            journal_quarantined=len(quarantined),
         )

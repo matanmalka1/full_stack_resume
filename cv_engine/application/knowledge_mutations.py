@@ -20,6 +20,14 @@ class StagedKnowledgeFile:
     staged_reference: str
     old_sha256: str
     new_sha256: str
+    proposed_versions: dict[str, str]
+
+
+@dataclass(frozen=True)
+class KnowledgeFileState:
+    current_sha256: str | None
+    staged_sha256: str | None
+    backup_sha256: str | None
 
 
 @dataclass(frozen=True)

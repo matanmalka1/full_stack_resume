@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..domain.models import Fact, JobAnalysis, ValidationReport
+from ..domain.models import Fact, JobAnalysis, SelectionPlan, ValidationReport
 
 
 class BoundaryDTO(BaseModel):
@@ -221,6 +221,15 @@ class FactAttachmentResult(FactMutationResult):
     profile_store_version: str
 
 
+class ConfirmAndUseFactResult(BoundaryDTO):
+    fact: Fact
+    event_ids: list[str]
+    selection_plan: SelectionPlan
+    facts_version: str
+    lifecycle_version: str
+    profile_store_version: str
+
+
 class FactReconciliationResult(BoundaryDTO):
     passed: bool
     fact_counts: dict[str, int]
@@ -228,6 +237,8 @@ class FactReconciliationResult(BoundaryDTO):
     facts_version: str
     lifecycle_version: str
     problems: list[str]
+    journal_prepared: int = 0
+    journal_quarantined: int = 0
 
 
 def fact_event_view(record: dict[str, Any]) -> FactEventView:

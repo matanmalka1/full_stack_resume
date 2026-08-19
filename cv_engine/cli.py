@@ -574,18 +574,11 @@ def fact_command(knowledge: Any, args: argparse.Namespace) -> int:
             )
         )
     elif args.fact_command in {"confirm", "promote"}:
-        target = FactStatus.CONFIRMED if args.fact_command == "confirm" else FactStatus.CANONICAL
-        if not args.confirm:
-            print(
-                f"ERROR: promotion to {target.value} requires explicit --confirm",
-                file=sys.stderr,
-            )
-            return 2
         _print(
-            knowledge.promote_fact(
+            knowledge.transition_fact(
                 args.fact_id,
-                target.value,
-                explicitly_confirmed=True,
+                args.fact_command,
+                explicitly_confirmed=args.confirm,
                 reason=args.reason,
             )
         )

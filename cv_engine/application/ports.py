@@ -21,6 +21,7 @@ from ..domain.models import (
     WorkingDraft,
 )
 from .knowledge_mutations import (
+    KnowledgeFileState,
     KnowledgeMutation,
     PrepareKnowledgeMutation,
     StagedKnowledgeFile,
@@ -147,24 +148,13 @@ class RevisionPayloadStore(SnapshotPayloadStore, Protocol):
 class KnowledgeStore(Protocol):
     """Where canonical knowledge comes from, without saying it is files.
 
-    Writes go through it too: creating, promoting, and attaching a fact all
-    rewrite a canonical source, and where that source lives is not something
-    the application layer is allowed to know.
+    Writes are prepared here but become visible only through the durable
+    Knowledge mutation journal.
     """
 
     def load(self) -> Knowledge: ...
 
     def facts(self) -> Any: ...
-
-    def create_fact(self, source_name: str, payload: dict, *, canonical: bool = False) -> Any: ...
-
-    def promote_fact(
-        self, fact_id: str, target: Any, *, explicitly_confirmed: bool
-    ) -> tuple[Any, Any]: ...
-
-    def attach_fact(
-        self, profile: str, fact_id: str, section: str, *, pin: bool = False
-    ) -> tuple[Profile, str]: ...
 
     def stage_create_fact(
         self,
@@ -194,11 +184,23 @@ class KnowledgeStore(Protocol):
         pin: bool = False,
     ) -> tuple[StagedKnowledgeFile, Profile, str]: ...
 
+    def stage_confirm_and_use_fact(
+        self,
+        mutation_id: str,
+        fact_id: str,
+        profile: str,
+        section: str,
+    ) -> tuple[list[StagedKnowledgeFile], Any, Any, Any, Profile, str, Knowledge]: ...
+
     def activate_staged(self, staged: StagedKnowledgeFile) -> None: ...
 
     def restore_staged(self, staged: StagedKnowledgeFile) -> None: ...
 
     def discard_staged(self, staged: StagedKnowledgeFile) -> None: ...
+
+    def staged_from_mutation(self, mutation: KnowledgeMutation) -> StagedKnowledgeFile: ...
+
+    def staged_file_state(self, staged: StagedKnowledgeFile) -> KnowledgeFileState: ...
 
 
 class Renderer(Protocol):
@@ -427,9 +429,13 @@ class FactAudit(Protocol):
         reason: str = ...,
         application_id: str | None = ...,
         claim_id: str | None = ...,
+        event_id: str | None = ...,
+        created_at: str | None = ...,
     ) -> str: ...
 
     def fact_events(self, fact_id: str | None = ...) -> list[dict[str, Any]]: ...
+
+    def fact_event(self, event_id: str) -> dict[str, Any] | None: ...
 
     def latest_fact_statuses(self) -> dict[str, str]: ...
 
@@ -508,8 +514,12 @@ class DraftRepository(ApplicationStore, JobStore, ArtifactRegistry, WorkingDraft
 
     def bind(self, uow: UnitOfWork) -> Self: ...
 
+    def quarantined_knowledge_mutations(self) -> list[KnowledgeMutation]: ...
+
 
 class KnowledgeMutationRepository(Protocol):
+    def unit_of_work(self) -> UnitOfWork: ...
+
     def prepare_knowledge_mutation(
         self, request: PrepareKnowledgeMutation, *, prepared_at: str | None = ...
     ) -> KnowledgeMutation: ...
@@ -540,6 +550,25 @@ class KnowledgeAuditRepository(
     so the port says so instead of relying on the adapter carrying more than
     the service declared.
     """
+
+    def get_analysis(self, analysis_id: str) -> dict[str, Any]: ...
+
+    def create_selection_plan(
+        self,
+        application_id: str,
+        job_analysis_id: str,
+        plan: SelectionManifest,
+        *,
+        candidate_context_version: str,
+        candidate_context_hash: str,
+        profile_version: str,
+        selection_policy_version: str,
+        track_emphasis_dependencies: dict[str, str],
+        plan_id: str | None = ...,
+        created_at: str | None = ...,
+    ) -> SelectionPlan: ...
+
+    def selection_plan(self, selection_plan_id: str) -> SelectionPlan: ...
 
 
 class OperationRepository(Protocol):

@@ -85,6 +85,9 @@ def build_services(
         workspace.knowledge_root,
         workspace_root=workspace.root,
         temp_root=workspace.temp_root,
+        has_prepared_mutation=lambda: bool(
+            resolved_repository.prepared_knowledge_mutations()
+        ),
     )
     resolved_artifacts = artifacts or FilesystemArtifactStore(workspace)
     resolved_payloads = payloads or PayloadStore(workspace)
@@ -118,6 +121,8 @@ def build_services(
     )
     foreground = ForegroundOperationExecutor(resolved_repository, runner)
     worker = OperationWorker(resolved_repository, runner)
+    knowledge_service = KnowledgeService(**shared)
+    knowledge_service.recover_knowledge_mutations()
     return Services(
         workspace=workspace,
         repository=resolved_repository,
@@ -131,7 +136,7 @@ def build_services(
         drafts=draft_service,
         rendering=rendering_service,
         tracking=TrackingService(**shared),
-        knowledge_lifecycle=KnowledgeService(**shared),
+        knowledge_lifecycle=knowledge_service,
         operations=operation_service,
         operation_runner=runner,
         foreground_operations=foreground,

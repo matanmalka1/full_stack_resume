@@ -378,6 +378,11 @@ class DraftService(ServiceBase[DraftRepository]):
     def approve(
         self, application_id: str, *, revision_id: str | None = None
     ) -> ApprovalResult:
+        quarantined = self.repo.quarantined_knowledge_mutations()
+        if quarantined:
+            raise PreconditionFailed(
+                f"approval blocked by quarantined Knowledge mutation {quarantined[0].id}"
+            )
         self._require_synced_projection(
             application_id, working_draft_record(self.repo, application_id).source
         )
