@@ -9,16 +9,24 @@ Architecture, review evidence, and the staged plan are in `docs/v1-architecture.
 
 ## Setup
 
+Install `uv`, then bootstrap a dedicated environment for this worktree:
+
 ```bash
-python3 -m venv .venv
-./.venv/bin/pip install -e '.[test]'
+./scripts/bootstrap-worktree.sh
 ```
 
-PDF generation uses Playwright. The engine will use local Google Chrome when present;
-otherwise install Playwright Chromium:
+Each worktree keeps its own editable environment, so imports cannot fall through to a
+different checkout. `uv` installs third-party packages from its global cache using
+copy-on-write clones on macOS, avoiding another physical copy of Playwright's 115 MB
+Node driver and the other shared dependencies.
+
+PDF generation uses Playwright-managed Chromium. Playwright's normal macOS browser
+cache is shared at `~/Library/Caches/ms-playwright`; the bootstrap refuses
+`PLAYWRIGHT_BROWSERS_PATH=0`, which would instead duplicate browser binaries inside
+each worktree. To install the browser again without replacing the environment:
 
 ```bash
-./.venv/bin/playwright install chromium
+./.venv/bin/python -m playwright install chromium
 ```
 
 ## Architecture

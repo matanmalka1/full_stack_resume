@@ -25,9 +25,10 @@ or weaken an existing acceptance gate.
       resolution now lives at the CLI boundary.
 - [ ] **TODO 11:** slim `ServiceBase` by moving single-consumer helpers to their owning
       services.
-- [ ] **TODO 12:** enforce the existing ports with a type checker or propose a
+- [x] **TODO 12:** enforce the existing ports with a type checker or propose a
       specification-compliant reduced port surface.
-- [ ] **TODO 13:** measure and reduce per-worktree virtualenv/Chromium duplication without
-      sharing mutable Workspace state.
+- [x] **TODO 13:** measured 178/201 MB dedicated virtualenvs and one shared 554 MB
+      Playwright browser cache; with a warm `uv` cache, a 173 MB logical environment added
+      about 2 MB physically while keeping independent editable environments and Workspace state.
 - [ ] **TODO 14:** reassess architecture-test ceremony and replace manual checks with
       derived guards where possible without weakening the no-growth allowlist rule.
