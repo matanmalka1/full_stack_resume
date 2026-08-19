@@ -7,7 +7,7 @@ from pydantic import Field, model_validator
 
 from ..util import canonical_json, sha256_text
 from .facts import FactStore
-from .models import Emphasis, Profile, ProfileName, StrictModel
+from .models import ClaimStyle, Emphasis, Profile, ProfileName, StrictModel
 
 
 class PresentationError(ValueError):
@@ -47,7 +47,7 @@ class PresentationRules(StrictModel):
 
 @dataclass(frozen=True)
 class PresentedClaim:
-    style: str
+    style: ClaimStyle
     text: str
     fact_ids: tuple[str, ...]
     rule_id: str | None = None

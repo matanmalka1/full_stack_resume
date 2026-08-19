@@ -67,7 +67,7 @@ def validate_render_evidence(
     evidence: RenderEvidence,
     candidate: CandidateContext,
 ) -> ValidationReport:
-    groups = dict.fromkeys(RENDER_VALIDATION_GROUPS, True)
+    groups: dict[str, bool] = dict.fromkeys(RENDER_VALIDATION_GROUPS, True)
     issues: list[ValidationIssue] = []
     if not evidence.html_exists or evidence.html_size == 0:
         groups["render"] = False

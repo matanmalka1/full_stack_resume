@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING
 
-from ..models import JobAnalysis, JobClassificationProposal
+from ..models import JobAnalysis, JobClassificationProposal, OverrideKey
 from .gaps import FIT_SEVERITY, derive_fit, merge_gaps
 
 if TYPE_CHECKING:
@@ -29,7 +29,7 @@ APPROVAL_RESOLVING_OVERRIDES: dict[str, frozenset[str]] = {
 }
 
 
-def unresolved_reasons(reasons: Sequence[str], overrides: dict[str, str]) -> list[str]:
+def unresolved_reasons(reasons: Sequence[str], overrides: Mapping[OverrideKey, str]) -> list[str]:
     return [
         reason
         for reason in reasons

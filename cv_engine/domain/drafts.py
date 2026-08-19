@@ -11,6 +11,8 @@ from .facts import FactStore
 from .models import (
     CandidateContext,
     ClaimLine,
+    ClaimStyle,
+    ClaimType,
     DraftDocument,
     JobAnalysis,
     OmissionReason,
@@ -35,7 +37,7 @@ class CompositeTemplate:
     output_styles: frozenset[str]
 
 
-COMPOSITE_TEMPLATES = {
+COMPOSITE_TEMPLATES: dict[tuple[str, str], CompositeTemplate] = {
     CANONICAL_JOIN_TEMPLATE: CompositeTemplate(
         template_id=CANONICAL_JOIN_TEMPLATE[0],
         version=CANONICAL_JOIN_TEMPLATE[1],
@@ -46,10 +48,10 @@ COMPOSITE_TEMPLATES = {
 
 
 def _claim(
-    style: str,
+    style: ClaimStyle,
     text: str,
     fact_ids: list[str],
-    claim_type: str = "canonical",
+    claim_type: ClaimType = "canonical",
     *,
     template_id: str | None = None,
     template_version: str | None = None,

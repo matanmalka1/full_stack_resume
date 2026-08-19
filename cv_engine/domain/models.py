@@ -300,6 +300,7 @@ class Gap(StrictModel):
 
 
 OverrideKey = Literal["track", "profile", "emphasis", "language", "fit"]
+Language = Literal["en", "he"]
 
 
 class JobClassificationProposal(StrictModel):
@@ -341,12 +342,16 @@ class JobAnalysis(StrictModel):
     user_override: dict[OverrideKey, str] = {}
 
 
+ClaimStyle = Literal["paragraph", "heading", "date", "bullet", "item", "contact", "headline"]
+ClaimType = Literal["canonical", "composite", "derived", "pending", "headline"]
+
+
 class ClaimLine(StrictModel):
     claim_id: str
-    style: Literal["paragraph", "heading", "date", "bullet", "item", "contact", "headline"]
+    style: ClaimStyle
     text: str
     fact_ids: list[str] = []
-    claim_type: Literal["canonical", "composite", "derived", "pending", "headline"]
+    claim_type: ClaimType
     text_hash: str
     template_id: str | None = None
     template_version: str | None = None

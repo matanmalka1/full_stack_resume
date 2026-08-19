@@ -15,12 +15,17 @@ from .paths import relative_within, resolve_within
 
 
 class PayloadWorkspace(Protocol):
-    root: Path
-    artifacts_root: Path
-    temp_root: Path
+    @property
+    def root(self) -> Path: ...
+
+    @property
+    def artifacts_root(self) -> Path: ...
+
+    @property
+    def temp_root(self) -> Path: ...
 
 
-PayloadWriter = Callable[[Path], None]
+PayloadWriter = Callable[[Path], object]
 PayloadValidator = Callable[[Path], bool | None]
 
 

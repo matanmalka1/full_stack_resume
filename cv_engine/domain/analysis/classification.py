@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from typing import cast
 
-from ..models import Emphasis, JobAnalysis, ProfileName, Track
+from ..models import Emphasis, JobAnalysis, Language, OverrideKey, ProfileName, Track
 from .approval import CONFIDENCE_APPROVAL_THRESHOLD, unresolved_reasons
 from .gaps import derive_fit, derive_gaps
 
@@ -87,7 +88,7 @@ SELECTION_CONCEPTS: dict[str, tuple[str, ...]] = {
 }
 
 
-def detect_language(text: str) -> str:
+def detect_language(text: str) -> Language:
     letters = [char for char in text if char.isalpha()]
     if not letters:
         return "en"
@@ -144,7 +145,7 @@ def classify_job(
                     not in {ProfileName.DEVELOPMENT, ProfileName.TECH_SALES, ProfileName.PRE_SALES}
                 }
                 profile = (
-                    max(sales_scores, key=sales_scores.get)
+                    max(sales_scores, key=lambda name: sales_scores[name])
                     if max(sales_scores.values(), default=0)
                     else ProfileName.ACCOUNT_MANAGER
                 )
@@ -183,15 +184,14 @@ def classify_job(
 
     gaps = derive_gaps(lowered, track)
     fit = derive_fit(gaps)
-    overrides = {
-        key: value
-        for key, value in {
-            "track": track_override,
-            "profile": profile_override,
-            "emphasis": emphasis_override,
-            "language": language_override,
-        }.items()
-        if value
+    candidate_overrides: dict[OverrideKey, str | None] = {
+        "track": track_override,
+        "profile": profile_override,
+        "emphasis": emphasis_override,
+        "language": language_override,
+    }
+    overrides: dict[OverrideKey, str] = {
+        key: value for key, value in candidate_overrides.items() if value
     }
     keywords = {term for terms in PROFILE_TERMS.values() for term in terms if term in lowered}
     keywords.update(
@@ -214,7 +214,7 @@ def classify_job(
         mandatory_requirements=[gap.requirement for gap in gaps if gap.severity == "hard"],
         preferred_requirements=[gap.requirement for gap in gaps if gap.severity == "warning"],
         keywords=sorted(keywords),
-        language=language_override or detect_language(text),
+        language=cast(Language, language_override) if language_override else detect_language(text),
         classification_requires_approval=bool(unresolved_reasons(reasons, overrides)),
         approval_reasons=reasons,
         user_override=overrides,
