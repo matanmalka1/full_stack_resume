@@ -59,13 +59,13 @@ Carried forward (the `cv fact attach` item moved to section E, its §4.5 home):
       repository. Submission and approval rules now live in application services; persistence
       exposes storage-only inserts (`0f9eb94`).
 - [x] **A5** — approval passes a typed `DecisionRecord` into persistence (`0f9eb94`).
-- [ ] v2 submissions bound to a revision and its exact PDF artifact, plus
-      `record_external_submission`.
-- [ ] Recruitment events with corrections (`corrects_event_id`, mandatory reason) and
-      `terminal_outcome`.
-- [ ] Retire `preparing` and `ready` from the recruitment axis; legacy history becomes migration
-      events per `docs/v2/spec/migration-plan.md` §6.2.
-- [ ] Audit records and `export_decision_markdown`.
+- [x] v2 submissions bound to a revision and its exact PDF artifact, plus
+      `record_external_submission` (`682985d`).
+- [x] Recruitment events with corrections (`corrects_event_id`, mandatory reason) and
+      `terminal_outcome` (`682985d`).
+- [x] Retire `preparing` and `ready` from the recruitment axis; legacy history becomes migration
+      events per `docs/v2/spec/migration-plan.md` §6.2 (`682985d`).
+- [x] Audit records and `export_decision_markdown` (`682985d`).
 
 Stage 7b landed in 2a and does not recur.
 
