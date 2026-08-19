@@ -8,6 +8,7 @@ from .artifacts import SqliteArtifactRepository
 from .audit import SqliteAuditRepository
 from .connection import SqliteUnitOfWork
 from .drafts import SqliteDraftRepository
+from .knowledge import SqliteKnowledgeMutationRepository
 from .operations import SqliteOperationRepository
 from .preparation import SqlitePreparationRepository
 from .schema import ensure_current_schema
@@ -22,6 +23,7 @@ class Repository(
     SqliteTrackingRepository,
     SqliteAuditRepository,
     SqliteOperationRepository,
+    SqliteKnowledgeMutationRepository,
 ):
     """The SQLite adapter, composed from the five ownership repositories.
 

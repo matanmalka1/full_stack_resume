@@ -18,6 +18,7 @@ REGISTERED_MIGRATIONS = (
     "0007_migration_run_source_identity.sql",
     "0008_operations.sql",
     "0009_idempotency_receipts.sql",
+    "0010_knowledge_mutation_journal.sql",
 )
 SCHEMA_VERSION = "2"
 

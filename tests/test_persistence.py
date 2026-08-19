@@ -9,6 +9,10 @@ from pathlib import Path
 
 import pytest
 
+from cv_engine.application.knowledge_mutations import (
+    KnowledgeMutationState,
+    PrepareKnowledgeMutation,
+)
 from cv_engine.application.ports import ArtifactRegistry
 from cv_engine.domain.analysis.classification import classify_job
 from cv_engine.domain.models import (
@@ -50,6 +54,7 @@ MUTABLE_TABLES = frozenset(
         "operation_resource_leases",  # ephemeral claim/heartbeat coordination
         "operation_outputs",  # permits exactly one inactive-to-active transition
         "idempotency_receipts",  # permits exactly one pending-to-completed transition
+        "knowledge_mutation_journal",  # permits one prepared-to-terminal transition
         "schema_meta",  # bookkeeping
         "schema_migrations",  # bookkeeping
         "sqlite_sequence",  # SQLite's own AUTOINCREMENT bookkeeping
@@ -343,6 +348,94 @@ def test_two_writers_honor_busy_wait_and_commit_serially(tmp_path: Path) -> None
     second.join(timeout=2)
     assert results == ["committed"]
     assert repository.list_applications()[0]["notes"] == "second"
+
+
+def test_knowledge_mutation_journal_has_one_guarded_terminal_transition(
+    tmp_path: Path,
+) -> None:
+    repository = Repository(tmp_path / "knowledge-journal.sqlite3")
+    request = PrepareKnowledgeMutation(
+        mutation_id="mutation-1",
+        mutation_type="promote_fact",
+        source_reference="base/sales.md",
+        staged_reference="temp/knowledge/mutation-1.json",
+        old_sha256="a" * 64,
+        new_sha256="b" * 64,
+        db_mutation_type="fact_event",
+        db_mutation_id="event-1",
+        db_mutation={"fact_id": "fact-1", "to_status": "canonical"},
+        recovery_strategy="finish_or_restore",
+    )
+
+    prepared = repository.prepare_knowledge_mutation(
+        request, prepared_at="2026-08-19T10:00:00+00:00"
+    )
+    assert prepared.state is KnowledgeMutationState.PREPARED
+    assert repository.prepared_knowledge_mutations() == [prepared]
+    assert prepared.db_mutation == {"fact_id": "fact-1", "to_status": "canonical"}
+
+    with repository.unit_of_work() as uow:
+        committed = repository.bind(uow).commit_knowledge_mutation(
+            prepared.id, committed_at="2026-08-19T10:01:00+00:00"
+        )
+        assert repository.bind(uow).knowledge_mutation(prepared.id) == committed
+        uow.commit()
+
+    assert committed.state is KnowledgeMutationState.COMMITTED
+    assert repository.prepared_knowledge_mutations() == []
+    with pytest.raises(ValueError, match="not prepared"):
+        repository.commit_knowledge_mutation(prepared.id)
+    with connect(repository.path) as connection:
+        with pytest.raises(sqlite3.IntegrityError, match="invalid knowledge mutation transition"):
+            connection.execute(
+                "UPDATE knowledge_mutation_journal SET mutation_type='attach_fact' WHERE id=?",
+                (prepared.id,),
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="immutable record"):
+            connection.execute(
+                "DELETE FROM knowledge_mutation_journal WHERE id=?", (prepared.id,)
+            )
+
+
+def test_knowledge_mutation_quarantine_requires_reason_and_unique_db_identity(
+    tmp_path: Path,
+) -> None:
+    repository = Repository(tmp_path / "knowledge-quarantine.sqlite3")
+    request = PrepareKnowledgeMutation(
+        mutation_id="mutation-1",
+        mutation_type="attach_fact",
+        source_reference="profiles/sales.json",
+        staged_reference="temp/knowledge/mutation-1.json",
+        old_sha256="a" * 64,
+        new_sha256="b" * 64,
+        db_mutation_type="fact_attachment",
+        db_mutation_id="attachment-1",
+        db_mutation={"fact_id": "fact-1"},
+        recovery_strategy="finish_or_restore",
+    )
+    repository.prepare_knowledge_mutation(request)
+
+    with pytest.raises(ValueError, match="requires a reason"):
+        repository.quarantine_knowledge_mutation(request.mutation_id, " ")
+    with pytest.raises(sqlite3.IntegrityError, match="UNIQUE constraint failed"):
+        repository.prepare_knowledge_mutation(
+            PrepareKnowledgeMutation(
+                **{
+                    **request.__dict__,
+                    "mutation_id": "mutation-2",
+                    "staged_reference": "temp/knowledge/mutation-2.json",
+                }
+            )
+        )
+
+    quarantined = repository.quarantine_knowledge_mutation(
+        request.mutation_id,
+        "staged bytes no longer match",
+        quarantined_at="2026-08-19T10:02:00+00:00",
+    )
+    assert quarantined.state is KnowledgeMutationState.QUARANTINED
+    assert quarantined.quarantine_reason == "staged bytes no longer match"
+    assert repository.quarantined_knowledge_mutations() == [quarantined]
 
 
 def test_every_product_table_is_immutable_unless_explicitly_exempt(tmp_path: Path) -> None:

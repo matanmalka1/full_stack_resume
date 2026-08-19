@@ -20,6 +20,7 @@ from ..domain.models import (
     ValidationRunLineage,
     WorkingDraft,
 )
+from .knowledge_mutations import KnowledgeMutation, PrepareKnowledgeMutation
 from .operations import (
     CreateOperation,
     OperationFailureCode,
@@ -470,7 +471,31 @@ class DraftRepository(ApplicationStore, JobStore, ArtifactRegistry, WorkingDraft
     def bind(self, uow: UnitOfWork) -> Self: ...
 
 
-class KnowledgeAuditRepository(FactAudit, WorkingDraftReader, Protocol):
+class KnowledgeMutationRepository(Protocol):
+    def prepare_knowledge_mutation(
+        self, request: PrepareKnowledgeMutation, *, prepared_at: str | None = ...
+    ) -> KnowledgeMutation: ...
+
+    def knowledge_mutation(self, mutation_id: str) -> KnowledgeMutation: ...
+
+    def prepared_knowledge_mutations(self) -> list[KnowledgeMutation]: ...
+
+    def quarantined_knowledge_mutations(self) -> list[KnowledgeMutation]: ...
+
+    def commit_knowledge_mutation(
+        self, mutation_id: str, *, committed_at: str | None = ...
+    ) -> KnowledgeMutation: ...
+
+    def quarantine_knowledge_mutation(
+        self, mutation_id: str, reason: str, *, quarantined_at: str | None = ...
+    ) -> KnowledgeMutation: ...
+
+    def bind(self, uow: UnitOfWork) -> Self: ...
+
+
+class KnowledgeAuditRepository(
+    FactAudit, WorkingDraftReader, KnowledgeMutationRepository, Protocol
+):
     """The SQLite audit side of the file-backed Knowledge lifecycle.
 
     Promoting a manual claim reads the working draft the claim was edited in,
