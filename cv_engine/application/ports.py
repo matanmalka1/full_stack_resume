@@ -7,6 +7,7 @@ from typing import Any, Protocol, Self, runtime_checkable
 from ..domain.knowledge import Knowledge
 from ..domain.models import (
     ApprovedRevision,
+    AuditRecord,
     CandidateContext,
     DecisionRecord,
     DraftDocument,
@@ -224,27 +225,16 @@ class ApplicationStore(Protocol):
         source_url: str | None,
         application_id: str | None = None,
         snapshot_id: str | None = None,
+        actor_type: str = ...,
+        client: str = ...,
+        installation_id: str = ...,
     ) -> tuple[str, str]: ...
 
     def get_application(self, application_id: str) -> dict[str, Any]: ...
 
     def list_applications(self) -> list[dict[str, Any]]: ...
 
-    def transition_status(self, application_id: str, target: Any, reason: str = ...) -> None: ...
-
-    def set_next_action(
-        self, application_id: str, action: str | None, action_date: str | None
-    ) -> None: ...
-
     def set_normalized_role(self, application_id: str, normalized_role: str) -> None: ...
-
-    def store_applied_transition(
-        self,
-        application_id: str,
-        expected_current: Any,
-        changed_at: str,
-        reason: str,
-    ) -> None: ...
 
     def record_event(
         self, application_id: str, event_type: str, payload: dict[str, Any]
@@ -459,6 +449,10 @@ class DraftRepository(ApplicationStore, JobStore, ArtifactRegistry, WorkingDraft
 
     def latest_approved_revision(self, application_id: str) -> ApprovedRevision: ...
 
+    def decision_for_revision(self, revision_id: str) -> dict[str, Any]: ...
+
+    def insert_audit(self, record: AuditRecord) -> None: ...
+
     def unit_of_work(self) -> UnitOfWork: ...
 
     def bind(self, uow: UnitOfWork) -> Self: ...
@@ -490,10 +484,66 @@ class TrackingRepository(ReadinessRepository, Protocol):
         self,
         submission_id: str,
         application_id: str,
-        artifact_version_id: str,
+        submission_type: str,
+        approved_revision_id: str | None,
+        artifact_version_id: str | None,
         submitted_at: str,
         metadata: dict[str, Any],
     ) -> None: ...
+
+    def insert_recruitment_event(
+        self,
+        *,
+        application_id: str,
+        expected_current_status: str,
+        target_status: str,
+        event_type: str,
+        reason: str,
+        actor_type: str,
+        client: str,
+        installation_id: str,
+        occurred_at: str,
+        terminal_outcome: str | None,
+        corrects_event_id: str | None = None,
+        payload: dict[str, Any] | None = None,
+        event_id: str | None = None,
+    ) -> str: ...
+
+    def insert_next_action_event(
+        self,
+        *,
+        application_id: str,
+        next_action: str | None,
+        next_action_date: str | None,
+        actor_type: str,
+        client: str,
+        installation_id: str,
+        occurred_at: str,
+    ) -> str: ...
+
+    def recruitment_event(self, event_id: str) -> dict[str, Any]: ...
+
+    def insert_legacy_recruitment_event(
+        self,
+        *,
+        application_id: str,
+        mapped_from_status: str | None,
+        mapped_to_status: str,
+        legacy_event_id: str | None,
+        legacy_from_status: str | None,
+        legacy_to_status: str,
+        occurred_at: str,
+        reason: str = "",
+        terminal_outcome: str | None = None,
+    ) -> str: ...
+
+    def recruitment_events(self, application_id: str) -> list[dict[str, Any]]: ...
+
+    def submissions(self, application_id: str) -> list[dict[str, Any]]: ...
+
+    def insert_audit(self, record: AuditRecord) -> None: ...
+
+    def audit_records(self, application_id: str) -> list[dict[str, Any]]: ...
 
 
 class ApplicationRepository(

@@ -38,6 +38,9 @@ class ApplicationService(ServiceBase[ApplicationStore]):
                 source_url=command.source_url,
                 application_id=application_id,
                 snapshot_id=snapshot_id,
+                actor_type="user",
+                client="cli",
+                installation_id=self.installation_id,
             )
         except ValueError as exc:
             raise PreconditionFailed(str(exc)) from exc

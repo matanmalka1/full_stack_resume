@@ -22,6 +22,7 @@ class ApplicationView(BoundaryDTO):
     classification_confidence: float | None = None
     fit_level: str | None = None
     current_status: str
+    terminal_outcome: str | None = None
     last_contact_date: str | None = None
     next_action: str | None = None
     next_action_date: str | None = None

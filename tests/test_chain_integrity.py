@@ -247,6 +247,7 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
         "actor_type": "user",
         "client": "cli",
         "command": "approve_draft",
+        "installation_id": services.workspace.installation_id(),
     }
     assert revision.resume_json_reference == (
         f"artifacts/revisions/{app_id}/{revision.id}/resume.json"

@@ -52,6 +52,7 @@ class ServiceBase(Generic[RepoT]):
         renderer: Renderer | None = None,
         provider: ClassificationProvider | None = None,
         snapshots: RevisionPayloadStore | None = None,
+        installation_id: str = "unconfigured-test-installation",
     ):
         self.repo = repository
         self.artifacts = artifacts
@@ -59,6 +60,7 @@ class ServiceBase(Generic[RepoT]):
         self._renderer = renderer
         self._provider = provider
         self._snapshots = snapshots
+        self.installation_id = installation_id
 
     def load_knowledge(self) -> Knowledge:
         try:

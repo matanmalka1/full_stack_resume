@@ -7,10 +7,28 @@ import pytest
 from helpers import ACCOUNT_MANAGER_JOB, artifact_version_and_path
 
 import cv_engine.infrastructure.rendering as rendering_module
-from cv_engine.application.commands import AnalyzeCommand, DraftCommand
+from cv_engine.application.commands import (
+    AnalyzeCommand,
+    DraftCommand,
+    ExternalSubmissionCommand,
+    RecruitmentCorrectionCommand,
+    RecruitmentStatusCommand,
+    SubmissionCommand,
+)
 from cv_engine.application.errors import WorkflowError
 from cv_engine.infrastructure.rendering import validate_rendered as real_validate_rendered
 from cv_engine.util import normalized_text, sha256_file, sha256_text, verify_payload
+
+
+def _submission_command(services, application_id: str) -> SubmissionCommand:
+    revision = services.repository.latest_approved_revision(application_id)
+    pdf = services.repository.artifact_version_for_revision(revision.id, "resume_pdf", "rendered")
+    return SubmissionCommand(
+        application_id=application_id,
+        approved_revision_id=revision.id,
+        pdf_artifact_version_id=pdf["id"],
+        submitted_at="2026-08-19T10:00:00+00:00",
+    )
 
 
 def _reanalyze(services, application_id: str):
@@ -49,9 +67,12 @@ def test_payload_verification_classifies_ok_missing_and_tampered(tmp_path: Path)
 
 def test_repository_cannot_manually_set_ready(analyzed_application) -> None:
     services, app_id = analyzed_application("Repo Ready")
-    with pytest.raises(ValueError, match="engine-owned"):
-        services.repository.transition_status(app_id, "ready", "manual bypass attempt")
-    assert services.repository.get_application(app_id)["current_status"] == "preparing"
+    assert not hasattr(services.repository, "transition_status")
+    with pytest.raises(WorkflowError):
+        services.tracking.transition_status(
+            RecruitmentStatusCommand(application_id=app_id, target_status="ready")
+        )
+    assert services.repository.get_application(app_id)["current_status"] == "saved"
 
 
 @pytest.mark.browser
@@ -72,7 +93,7 @@ def test_failed_post_render_validation_does_not_set_ready(
     monkeypatch.setattr(rendering_module, "validate_rendered", failing_validate_rendered)
     rendered = services.rendering.render(app_id)
     assert not rendered.validation.passed
-    assert services.repository.get_application(app_id)["current_status"] == "preparing"
+    assert services.repository.get_application(app_id)["current_status"] == "saved"
     assert not services.rendering.ready_qualification(app_id).ready_qualified
 
 
@@ -106,7 +127,7 @@ def test_no_repository_primitive_can_assert_ready_for_unlinked_pdf(
     assert any(
         issue.code == "no-post-render-validation" for issue in qualification.validation.issues
     )
-    assert services.repository.get_application(app_id)["current_status"] == "preparing"
+    assert services.repository.get_application(app_id)["current_status"] == "saved"
 
 
 def test_public_workflow_cannot_restore_ready_after_tamper_without_fresh_render(
@@ -117,10 +138,10 @@ def test_public_workflow_cannot_restore_ready_after_tamper_without_fresh_render(
     pdf_version, path = artifact_version_and_path(services, app_id, "resume_pdf", "rendered")
     path.write_bytes(path.read_bytes() + b"tampered")
 
-    assert services.repository.get_application(app_id)["current_status"] == "preparing"
+    assert services.repository.get_application(app_id)["current_status"] == "saved"
     assert not services.rendering.ready_qualification(app_id).ready_qualified
-    with pytest.raises(WorkflowError, match="tampered ready state"):
-        services.tracking.submit(app_id)
+    with pytest.raises(WorkflowError, match="tampered Ready evidence"):
+        services.tracking.submit_application(_submission_command(services, app_id))
     # A new revision and render create new immutable evidence; the old PDF is
     # never reused or relinked.
     _start_new_draft(services, app_id)
@@ -197,6 +218,19 @@ def test_ready_qualification_is_independent_of_active_context(ready_application)
         app_id, old_revision.id, old_pdf["id"]
     ).ready_qualified
     assert services.repository.latest_approved_revision(app_id).id == new_revision.revision_id
+    submitted = services.tracking.submit_application(
+        SubmissionCommand(
+            application_id=app_id,
+            approved_revision_id=old_revision.id,
+            pdf_artifact_version_id=old_pdf["id"],
+            submitted_at="2026-08-19T10:00:00+00:00",
+        )
+    )
+    assert submitted.current_status == "applied"
+    assert submitted.warnings == [
+        "READY_REVISION_FOR_OLDER_SNAPSHOT",
+        "READY_REVISION_FOR_OLDER_ANALYSIS",
+    ]
 
 
 # --- APPLIED binding ------------------------------------------------------
@@ -215,7 +249,15 @@ def test_submission_binds_current_pdf_and_remains_immutable_after_later_versions
     assert second_render.validation.passed, second_render.validation.model_dump()
     second_pdf = services.repository.latest_artifact_version(app_id, "resume_pdf", "rendered")
     assert second_pdf["id"] != first_pdf["id"]
-    result = services.tracking.submit(app_id)
+    revision = services.repository.latest_approved_revision(app_id)
+    result = services.tracking.submit_application(
+        SubmissionCommand(
+            application_id=app_id,
+            approved_revision_id=revision.id,
+            pdf_artifact_version_id=second_pdf["id"],
+            submitted_at="2026-08-19T10:00:00+00:00",
+        )
+    )
     assert result.pdf_artifact_version_id == second_pdf["id"]
     submitted_pdf_id = result.pdf_artifact_version_id
     with connect(services.repository.path) as connection:
@@ -238,23 +280,23 @@ def test_submission_and_applied_transition_roll_back_together(
     ready_application, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from cv_engine.infrastructure.persistence import connect
-    from cv_engine.infrastructure.persistence.applications import SqliteApplicationRepository
+    from cv_engine.infrastructure.persistence.tracking import SqliteTrackingRepository
 
     services, app_id = ready_application("Atomic Submission")
 
     def fail_status_write(*_args, **_kwargs) -> None:
         raise RuntimeError("injected status failure")
 
-    monkeypatch.setattr(SqliteApplicationRepository, "_set_status", fail_status_write)
+    monkeypatch.setattr(SqliteTrackingRepository, "insert_recruitment_event", fail_status_write)
     with pytest.raises(RuntimeError, match="injected status failure"):
-        services.tracking.submit(app_id)
+        services.tracking.submit_application(_submission_command(services, app_id))
 
     with connect(services.repository.path) as connection:
         count = connection.execute(
             "SELECT COUNT(*) FROM submissions WHERE application_id=?", (app_id,)
         ).fetchone()[0]
     assert count == 0
-    assert services.repository.get_application(app_id)["current_status"] == "preparing"
+    assert services.repository.get_application(app_id)["current_status"] == "saved"
 
 
 def test_generic_status_transition_to_applied_is_always_blocked(ready_application) -> None:
@@ -264,17 +306,103 @@ def test_generic_status_transition_to_applied_is_always_blocked(ready_applicatio
     verification that TrackingService.submit() does. There is no parameter that can
     talk it into treating a caller-supplied id as trustworthy."""
     services, app_id = ready_application("Direct Applied With PDF")
-    pdf_version = services.repository.latest_artifact_version(app_id, "resume_pdf", "rendered")
-    with pytest.raises(ValueError, match="submission-owned"):
-        services.repository.transition_status(app_id, "applied", "direct bypass attempt")
-    assert services.repository.get_application(app_id)["current_status"] == "preparing"
-
-    # No caller-supplied proof can turn the generic transition into submission.
-    with pytest.raises(TypeError):
-        services.repository.transition_status(
-            app_id,
-            "applied",
-            "direct bypass attempt",
-            verified_pdf_artifact_version_id=pdf_version["id"],
+    with pytest.raises(WorkflowError, match="submission-owned"):
+        services.tracking.transition_status(
+            RecruitmentStatusCommand(
+                application_id=app_id,
+                target_status="applied",
+                reason="direct bypass attempt",
+            )
         )
-    assert services.repository.get_application(app_id)["current_status"] == "preparing"
+    assert services.repository.get_application(app_id)["current_status"] == "saved"
+
+
+def test_external_submission_never_fabricates_revision_or_artifact(analyzed_application) -> None:
+    services, app_id = analyzed_application("External Submission")
+    first = services.tracking.record_external_submission(
+        ExternalSubmissionCommand(
+            application_id=app_id,
+            submitted_at="2026-08-19T10:00:00+00:00",
+            metadata={"source": "email confirmation"},
+        )
+    )
+    second = services.tracking.record_external_submission(
+        ExternalSubmissionCommand(
+            application_id=app_id,
+            submitted_at="2026-08-19T11:00:00+00:00",
+        )
+    )
+    assert first.current_status == second.current_status == "applied"
+    submissions = services.repository.submissions(app_id)
+    assert len(submissions) == 2
+    assert all(row["submission_type"] == "external" for row in submissions)
+    assert all(row["approved_revision_id"] is None for row in submissions)
+    assert all(row["artifact_version_id"] is None for row in submissions)
+    applied_events = [
+        row
+        for row in services.repository.recruitment_events(app_id)
+        if row["to_status"] == "applied"
+    ]
+    assert len(applied_events) == 1
+
+
+def test_correction_is_append_only_and_terminal_outcome_survives_closed(
+    analyzed_application,
+) -> None:
+    services, app_id = analyzed_application("Correction History")
+    withdrawn = services.tracking.transition_status(
+        RecruitmentStatusCommand(
+            application_id=app_id,
+            target_status="withdrawn",
+            reason="mistaken entry",
+            occurred_at="2026-08-19T10:00:00+00:00",
+        )
+    )
+    assert withdrawn.terminal_outcome == "withdrawn"
+    with pytest.raises(WorkflowError, match="reason is required"):
+        services.tracking.correct_recruitment_status(
+            RecruitmentCorrectionCommand(
+                application_id=app_id,
+                target_status="interview",
+                corrects_event_id=withdrawn.event_id or "",
+                reason=" ",
+            )
+        )
+    corrected = services.tracking.correct_recruitment_status(
+        RecruitmentCorrectionCommand(
+            application_id=app_id,
+            target_status="interview",
+            corrects_event_id=withdrawn.event_id or "",
+            reason="status was entered on the wrong application",
+            occurred_at="2026-08-19T10:05:00+00:00",
+        )
+    )
+    assert corrected.current_status == "interview"
+    assert corrected.terminal_outcome is None
+    events = services.repository.recruitment_events(app_id)
+    original = next(row for row in events if row["id"] == withdrawn.event_id)
+    correction = next(row for row in events if row["id"] == corrected.event_id)
+    assert original["to_status"] == "withdrawn"
+    assert correction["corrects_event_id"] == original["id"]
+    assert correction["reason"] == "status was entered on the wrong application"
+
+    for target in ("offer", "accepted", "closed"):
+        closed = services.tracking.transition_status(
+            RecruitmentStatusCommand(application_id=app_id, target_status=target)
+        )
+    assert closed.current_status == "closed"
+    assert closed.terminal_outcome == "accepted"
+
+
+def test_approval_audit_and_decision_markdown_are_exact(approved_application) -> None:
+    setup = approved_application("Decision Export")
+    revision_id = setup.approved.revision_id
+    exported = setup.services.drafts.export_decision_markdown(setup.application_id, revision_id)
+    assert exported.approved_revision_id == revision_id
+    assert f"`{revision_id}`" in exported.content
+    assert "## Exact lineage" in exported.content
+    assert sha256_text(exported.content) == exported.content_hash
+    audits = setup.services.repository.audit_records(setup.application_id)
+    approval = next(row for row in audits if row["action"] == "approve_draft")
+    assert approval["entity_id"] == revision_id
+    assert approval["installation_id"] == setup.services.workspace.installation_id()

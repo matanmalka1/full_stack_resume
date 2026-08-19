@@ -2,11 +2,40 @@ from __future__ import annotations
 
 from typing import Any
 
+from ...domain.models import AuditRecord
 from ...util import canonical_json, new_id, sha256_text, utc_now
 from .base import SqliteRepositoryBase
 
 
 class SqliteAuditRepository(SqliteRepositoryBase):
+    def insert_audit(self, record: AuditRecord) -> None:
+        with self.transaction() as connection:
+            connection.execute(
+                "INSERT INTO audit_records(id, application_id, action, entity_type, entity_id, "
+                "actor_type, client, installation_id, occurred_at, details_json) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    record.id,
+                    record.application_id,
+                    record.action,
+                    record.entity_type,
+                    record.entity_id,
+                    record.actor_type,
+                    record.client,
+                    record.installation_id,
+                    record.occurred_at,
+                    canonical_json(record.details),
+                ),
+            )
+
+    def audit_records(self, application_id: str) -> list[dict[str, Any]]:
+        with self.read_connection() as connection:
+            rows = connection.execute(
+                "SELECT * FROM audit_records WHERE application_id=? ORDER BY occurred_at, rowid",
+                (application_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def record_fact_event(
         self,
         *,

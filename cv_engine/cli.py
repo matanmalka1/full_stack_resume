@@ -15,9 +15,12 @@ from pydantic import BaseModel
 from .application.commands import (
     AnalyzeCommand,
     DraftCommand,
+    ExternalSubmissionCommand,
     IngestCommand,
     NextActionCommand,
+    RecruitmentCorrectionCommand,
     RecruitmentStatusCommand,
+    SubmissionCommand,
 )
 from .application.errors import WorkflowError
 from .application.ports import ApplicationRepository, ApplicationStore
@@ -272,10 +275,39 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument("application_id")
     status.add_argument(
         "status",
-        choices=[item.value for item in ApplicationStatus if item is not ApplicationStatus.READY],
-        help="ready is engine-owned and cannot be set manually; it is reached only via the render pipeline",
+        choices=[item.value for item in ApplicationStatus if item is not ApplicationStatus.APPLIED],
+        help="applied is submission-owned; use submit or external-submit",
     )
     status.add_argument("--reason", default="manual CLI transition")
+    correction = sub.add_parser(
+        "correct-status", help="append a reasoned correction to recruitment history"
+    )
+    correction.add_argument("application_id")
+    correction.add_argument("status", choices=[item.value for item in ApplicationStatus])
+    correction.add_argument("--corrects-event", required=True)
+    correction.add_argument("--reason", required=True)
+    correction.add_argument("--occurred-at")
+    submit = sub.add_parser(
+        "submit", help="record an internal submission for one exact qualified revision and PDF"
+    )
+    submit.add_argument("application_id")
+    submit.add_argument("--revision", required=True)
+    submit.add_argument("--pdf-artifact", required=True)
+    submit.add_argument("--submitted-at", required=True)
+    submit.add_argument("--note")
+    external_submit = sub.add_parser(
+        "external-submit", help="record a submission without inventing a revision or artifact"
+    )
+    external_submit.add_argument("application_id")
+    external_submit.add_argument("--submitted-at", required=True)
+    external_submit.add_argument("--artifact")
+    external_submit.add_argument("--note")
+    decision_markdown = sub.add_parser(
+        "decision-markdown", help="export human-readable provenance for one approved revision"
+    )
+    decision_markdown.add_argument("application_id")
+    decision_markdown.add_argument("--revision", required=True)
+    decision_markdown.add_argument("--output", type=Path)
     action = sub.add_parser("action", help="set or clear the next action")
     action.add_argument("application_id")
     action.add_argument("--next-action")
@@ -860,21 +892,8 @@ def _decision(context: CommandContext) -> int:
 @_command("status")
 def _status(context: CommandContext) -> int:
     args = context.args
-    tracking = context.built_services.tracking
-    if args.status == ApplicationStatus.APPLIED.value:
-        submitted = tracking.submit(args.application_id, args.reason)
-        _print(
-            {
-                "application_id": submitted.application_id,
-                "pdf_artifact_version_id": submitted.pdf_artifact_version_id,
-                "current_status": submitted.current_status,
-                "next_action": submitted.next_action,
-                "next_action_date": submitted.next_action_date,
-            }
-        )
-        return 0
     _print(
-        tracking.transition_status(
+        context.built_services.tracking.transition_status(
             RecruitmentStatusCommand(
                 application_id=args.application_id,
                 target_status=args.status,
@@ -882,6 +901,77 @@ def _status(context: CommandContext) -> int:
             )
         )
     )
+    return 0
+
+
+@_command("correct-status")
+def _correct_status(context: CommandContext) -> int:
+    args = context.args
+    _print(
+        context.built_services.tracking.correct_recruitment_status(
+            RecruitmentCorrectionCommand(
+                application_id=args.application_id,
+                target_status=args.status,
+                corrects_event_id=args.corrects_event,
+                reason=args.reason,
+                occurred_at=args.occurred_at,
+            )
+        )
+    )
+    return 0
+
+
+@_command("submit")
+def _submit(context: CommandContext) -> int:
+    args = context.args
+    _print(
+        context.built_services.tracking.submit_application(
+            SubmissionCommand(
+                application_id=args.application_id,
+                approved_revision_id=args.revision,
+                pdf_artifact_version_id=args.pdf_artifact,
+                submitted_at=args.submitted_at,
+                metadata={"note": args.note} if args.note else {},
+            )
+        )
+    )
+    return 0
+
+
+@_command("external-submit")
+def _external_submit(context: CommandContext) -> int:
+    args = context.args
+    _print(
+        context.built_services.tracking.record_external_submission(
+            ExternalSubmissionCommand(
+                application_id=args.application_id,
+                artifact_version_id=args.artifact,
+                submitted_at=args.submitted_at,
+                metadata={"note": args.note} if args.note else {},
+            )
+        )
+    )
+    return 0
+
+
+@_command("decision-markdown")
+def _decision_markdown(context: CommandContext) -> int:
+    args = context.args
+    exported = context.built_services.drafts.export_decision_markdown(
+        args.application_id, args.revision
+    )
+    if args.output is None:
+        sys.stdout.write(exported.content)
+    else:
+        args.output.write_text(exported.content, encoding="utf-8")
+        _print(
+            {
+                "application_id": exported.application_id,
+                "approved_revision_id": exported.approved_revision_id,
+                "output": str(args.output),
+                "content_hash": exported.content_hash,
+            }
+        )
     return 0
 
 

@@ -80,6 +80,7 @@ def build_services(
         "renderer": resolved_renderer,
         "provider": resolved_provider,
         "snapshots": resolved_payloads,
+        "installation_id": workspace.installation_id(),
     }
     return Services(
         workspace=workspace,

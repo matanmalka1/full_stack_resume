@@ -12,6 +12,7 @@ import pytest
 from cv_engine.application.ports import ArtifactRegistry
 from cv_engine.domain.analysis.classification import classify_job
 from cv_engine.domain.models import (
+    AuditRecord,
     SelectionManifest,
     SelectionPlan,
     ValidationReport,
@@ -27,7 +28,6 @@ from cv_engine.infrastructure.persistence import (
     connect,
     current_schema_version,
 )
-from cv_engine.infrastructure.persistence.applications import SqliteApplicationRepository
 from cv_engine.infrastructure.persistence.schema import (
     MIGRATIONS_DIR,
     baseline_fingerprint,
@@ -210,6 +210,69 @@ def test_verified_baseline_adoption_and_difference_reporting(tmp_path: Path) -> 
         Repository(mismatch)
 
 
+def test_tracking_migration_preserves_legacy_status_and_submission_evidence(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "pre-tracking.sqlite3"
+    with connect(path) as connection:
+        for name in registered_migration_names()[:-1]:
+            connection.executescript((MIGRATIONS_DIR / name).read_text(encoding="utf-8"))
+        connection.execute(
+            "INSERT INTO applications(id, company, target_role, current_status, created_at, "
+            "updated_at) VALUES('app', 'Co', 'Role', 'ready', '2026-01-01', '2026-01-03')"
+        )
+        connection.execute(
+            "INSERT INTO job_snapshots(id, application_id, version_number, payload_path, "
+            "source_hash, normalized_hash, captured_at, source_metadata_json, content_hash) "
+            "VALUES('snapshot', 'app', 1, 'artifacts/snapshots/app/snapshot.txt', 'source', "
+            "'normalized', '2026-01-01', '{}', 'source')"
+        )
+        for from_status, to_status, changed_at in (
+            (None, "saved", "2026-01-01"),
+            ("saved", "preparing", "2026-01-02"),
+            ("preparing", "ready", "2026-01-03"),
+        ):
+            connection.execute(
+                "INSERT INTO status_history(application_id, from_status, to_status, changed_at) "
+                "VALUES('app', ?, ?, ?)",
+                (from_status, to_status, changed_at),
+            )
+        connection.execute(
+            "INSERT INTO artifacts(id, application_id, artifact_type, logical_name, created_at) "
+            "VALUES('artifact', 'app', 'resume_pdf', 'legacy-resume', '2026-01-03')"
+        )
+        connection.execute(
+            "INSERT INTO artifact_versions(id, artifact_id, version_number, lifecycle_status, "
+            "path, content_hash, created_at, job_snapshot_id) VALUES('pdf', 'artifact', 1, "
+            "'migrated-historical', 'legacy/resume.pdf', 'hash', '2026-01-03', 'snapshot')"
+        )
+        connection.execute(
+            "INSERT INTO submissions(id, application_id, artifact_version_id, submitted_at) "
+            "VALUES('submission', 'app', 'pdf', '2026-01-03')"
+        )
+        connection.executescript(
+            (MIGRATIONS_DIR / registered_migration_names()[-1]).read_text(encoding="utf-8")
+        )
+
+        application = connection.execute(
+            "SELECT current_status, terminal_outcome FROM applications WHERE id='app'"
+        ).fetchone()
+        events = connection.execute(
+            "SELECT id, event_type, from_status, to_status, legacy_from_status, "
+            "legacy_to_status FROM recruitment_events ORDER BY CAST(id AS INTEGER)"
+        ).fetchall()
+        submission = connection.execute(
+            "SELECT id, submission_type, approved_revision_id, artifact_version_id FROM submissions"
+        ).fetchone()
+    assert tuple(application) == ("saved", None)
+    assert [tuple(row) for row in events] == [
+        ("1", "status_transition", None, "saved", None, None),
+        ("2", "migration", "saved", "saved", "saved", "preparing"),
+        ("3", "migration", "saved", "saved", "preparing", "ready"),
+    ]
+    assert tuple(submission) == ("submission", "external", None, "pdf")
+
+
 def test_connection_policy_unit_of_work_bind_and_foreign_keys(tmp_path: Path) -> None:
     repository = Repository(tmp_path / "state.sqlite3")
     with connect(repository.path) as connection:
@@ -336,8 +399,31 @@ def test_immutability_triggers_refuse_real_repository_writes(tmp_path: Path) -> 
         source_hash="s" * 64,
         normalized_hash="n" * 64,
     )
+    application_id = repository.list_applications()[0]["id"]
+    repository.insert_submission(
+        "external-submission",
+        application_id,
+        "external",
+        None,
+        None,
+        "2026-08-19T10:00:00+00:00",
+        {},
+    )
+    repository.insert_audit(
+        AuditRecord(
+            id="audit-record",
+            application_id=application_id,
+            action="record_external_submission",
+            entity_type="submission",
+            entity_id="external-submission",
+            actor_type="user",
+            client="cli",
+            installation_id="test-installation",
+            occurred_at="2026-08-19T10:00:00+00:00",
+        )
+    )
 
-    for table in ("job_snapshots", "status_history"):
+    for table in ("job_snapshots", "recruitment_events", "submissions", "audit_records"):
         for statement in (f"UPDATE {table} SET rowid=rowid", f"DELETE FROM {table}"):
             with pytest.raises(sqlite3.IntegrityError, match="immutable record"):
                 with repository.transaction() as connection:
@@ -362,44 +448,33 @@ def test_identity_and_typed_artifact_ports() -> None:
         )
 
 
-def test_analysis_and_ready_demotion_commit_atomically(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_analysis_does_not_change_recruitment_status(tmp_path: Path) -> None:
     repository = Repository(tmp_path / "atomic-analysis.sqlite3")
     app_id, snapshot_id = _create_application(
         repository, company="Atomic", target_role="Developer", text="Python developer"
     )
-    with repository.transaction() as connection:
-        connection.execute("UPDATE applications SET current_status='ready' WHERE id=?", (app_id,))
-
-    def fail_demotion(*_args: object, **_kwargs: object) -> None:
-        raise RuntimeError("injected demotion failure")
-
-    monkeypatch.setattr(SqliteApplicationRepository, "_set_status", fail_demotion)
-    with pytest.raises(RuntimeError, match="injected demotion failure"):
-        _save_analysis(
-            repository, app_id, snapshot_id, classify_job("Python backend developer role")
-        )
+    _save_analysis(repository, app_id, snapshot_id, classify_job("Python backend developer role"))
 
     with connect(repository.path) as connection:
         assert (
             connection.execute(
                 "SELECT COUNT(*) FROM job_analyses WHERE application_id=?", (app_id,)
             ).fetchone()[0]
-            == 0
+            == 1
         )
         assert (
             connection.execute(
                 "SELECT COUNT(*) FROM selection_plans WHERE application_id=?", (app_id,)
             ).fetchone()[0]
-            == 0
+            == 1
         )
         application = connection.execute(
             "SELECT current_status, language, track, profile, emphasis, fit_level "
             "FROM applications WHERE id=?",
             (app_id,),
         ).fetchone()
-    assert tuple(application) == ("ready", None, None, None, None, None)
+    assert application["current_status"] == "saved"
+    assert all(application[field] is not None for field in tuple(application.keys())[1:])
 
 
 def test_typed_preparation_records_round_trip_and_refuse_stale_edits(

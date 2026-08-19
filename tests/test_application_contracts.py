@@ -336,7 +336,7 @@ def test_unit_of_work_commits_success_and_rolls_back_failure(tmp_path: Path) -> 
         unit.connection.execute(
             "INSERT INTO applications (id, company, target_role, normalized_role, language, "
             "current_status, created_at, updated_at) "
-            "VALUES ('a', 'Co', 'Role', 'Role', 'en', 'draft', '2026-01-01', '2026-01-01')"
+            "VALUES ('a', 'Co', 'Role', 'Role', 'en', 'saved', '2026-01-01', '2026-01-01')"
         )
         unit.commit()
 
@@ -346,7 +346,7 @@ def test_unit_of_work_commits_success_and_rolls_back_failure(tmp_path: Path) -> 
             unit.connection.execute(
                 "INSERT INTO applications (id, company, target_role, normalized_role, language, "
                 "current_status, created_at, updated_at) "
-                "VALUES ('b', 'Co', 'Role', 'Role', 'en', 'draft', '2026-01-01', '2026-01-01')"
+                "VALUES ('b', 'Co', 'Role', 'Role', 'en', 'saved', '2026-01-01', '2026-01-01')"
             )
             raise RuntimeError("command refused after writing")
 
@@ -357,7 +357,7 @@ def test_unit_of_work_commits_success_and_rolls_back_failure(tmp_path: Path) -> 
         unit.connection.execute(
             "INSERT INTO applications (id, company, target_role, normalized_role, language, "
             "current_status, created_at, updated_at) "
-            "VALUES ('c', 'Co', 'Role', 'Role', 'en', 'draft', '2026-01-01', '2026-01-01')"
+            "VALUES ('c', 'Co', 'Role', 'Role', 'en', 'saved', '2026-01-01', '2026-01-01')"
         )
     with pytest.raises((KeyError, sqlite3.Error)):
         repository.get_application("c")

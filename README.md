@@ -183,14 +183,20 @@ draft with `cv draft <application-id>` afterwards.
 ./.venv/bin/cv show <application-id>
 ./.venv/bin/cv versions <application-id>
 ./.venv/bin/cv decision <application-id>
-./.venv/bin/cv status <application-id> applied --reason 'Submitted to employer'
+./.venv/bin/cv decision-markdown <application-id> --revision <revision-id> --output decision.md
+./.venv/bin/cv submit <application-id> --revision <revision-id> \
+  --pdf-artifact <pdf-artifact-version-id> --submitted-at 2026-08-19T10:00:00+00:00
+./.venv/bin/cv external-submit <application-id> --submitted-at 2026-08-19T10:00:00+00:00
+./.venv/bin/cv correct-status <application-id> interview \
+  --corrects-event <event-id> --reason 'Status was entered on the wrong application'
 ./.venv/bin/cv action <application-id> --next-action 'Follow up' --date 2026-08-20
 ./.venv/bin/cv export data/applications.csv
 ./.venv/bin/cv reconcile
 ```
 
-Marking an application `applied` records the exact validated PDF version as the
-submission. Status history and submission records are append-only.
+An internal submission requires the exact qualified ApprovedRevision and PDF artifact IDs.
+An external submission records what is known without creating either identity. Recruitment
+history, corrections, audit records, and submissions are append-only.
 
 ## Optional AI provider
 

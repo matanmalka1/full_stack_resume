@@ -4,17 +4,6 @@ from .models import ApplicationStatus
 
 ALLOWED_TRANSITIONS: dict[ApplicationStatus, set[ApplicationStatus]] = {
     ApplicationStatus.SAVED: {
-        ApplicationStatus.PREPARING,
-        ApplicationStatus.WITHDRAWN,
-        ApplicationStatus.CLOSED,
-    },
-    ApplicationStatus.PREPARING: {
-        ApplicationStatus.READY,
-        ApplicationStatus.WITHDRAWN,
-        ApplicationStatus.CLOSED,
-    },
-    ApplicationStatus.READY: {
-        ApplicationStatus.PREPARING,
         ApplicationStatus.APPLIED,
         ApplicationStatus.WITHDRAWN,
         ApplicationStatus.CLOSED,
@@ -70,3 +59,19 @@ ALLOWED_TRANSITIONS: dict[ApplicationStatus, set[ApplicationStatus]] = {
 
 def transition_allowed(current: ApplicationStatus, target: ApplicationStatus) -> bool:
     return target in ALLOWED_TRANSITIONS[current]
+
+
+def terminal_outcome_after(
+    current_outcome: str | None,
+    target: ApplicationStatus,
+) -> str | None:
+    """Project the durable outcome independently from archival ``closed``."""
+    if target in {
+        ApplicationStatus.ACCEPTED,
+        ApplicationStatus.REJECTED,
+        ApplicationStatus.WITHDRAWN,
+    }:
+        return target.value
+    if target is ApplicationStatus.CLOSED:
+        return current_outcome
+    return None

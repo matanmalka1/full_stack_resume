@@ -147,6 +147,10 @@ def build_inventory(root: Path) -> dict[str, Any]:
     applications = []
     problems = []
     for index, row in enumerate(rows, 2):
+        if not row["date_created"]:
+            problems.append(f"row {index} has no recorded creation date")
+        if row["status"] == "sent" and not row["date_sent"]:
+            problems.append(f"row {index} is sent but has no recorded submission date")
         paths = legacy_artifact_paths(root, row)
         artifact_data = []
         for kind, path in paths.items():
@@ -397,22 +401,46 @@ def migrate_legacy_state(source_root: Path, target_root: Path, *, dry_run: bool)
                 "legacy_csv_row": row,
                 "original_path": paths["job_snapshot"].relative_to(source_root).as_posix(),
             },
+            actor_type="migration",
+            client="worker",
+            installation_id="legacy-migration",
         )
         if row["status"] == "sent":
+            submitted_at = f"{row['date_sent']}T00:00:00+00:00"
+            repository.insert_legacy_recruitment_event(
+                application_id=app_id,
+                mapped_from_status="saved",
+                mapped_to_status="applied",
+                legacy_event_id=None,
+                legacy_from_status=None,
+                legacy_to_status="sent",
+                occurred_at=submitted_at,
+                reason="legacy sent mapped to applied",
+            )
+            repository.insert_submission(
+                _deterministic_id("external-submission", company, role),
+                app_id,
+                "external",
+                None,
+                None,
+                submitted_at,
+                {"legacy_status": "sent", "source": "legacy-csv"},
+            )
             with repository.transaction() as connection:
                 connection.execute(
-                    "UPDATE applications SET current_status='applied', last_contact_date=?, updated_at=? WHERE id=?",
-                    (row["date_sent"] or None, utc_now(), app_id),
-                )
-                connection.execute(
-                    "INSERT INTO status_history(application_id, from_status, to_status, changed_at, reason) VALUES(?, 'saved', 'applied', ?, 'legacy sent mapped to applied')",
-                    (app_id, f"{row['date_sent']}T00:00:00+00:00"),
+                    "UPDATE applications SET last_contact_date=? WHERE id=?",
+                    (row["date_sent"] or None, app_id),
                 )
         elif row["status"] == "draft":
-            repository.transition_status(
-                app_id,
-                "preparing",
-                "legacy draft mapped to preparing; v1 ready checks not previously run",
+            repository.insert_legacy_recruitment_event(
+                application_id=app_id,
+                mapped_from_status="saved",
+                mapped_to_status="saved",
+                legacy_event_id=None,
+                legacy_from_status=None,
+                legacy_to_status="draft",
+                occurred_at=f"{row['date_created']}T00:00:00+00:00",
+                reason="legacy draft retained as migration history",
             )
         else:
             raise MigrationSafetyError(
@@ -752,13 +780,28 @@ def _semantic_migration_state(database: Path) -> dict[str, list[dict[str, Any]]]
             WHERE a.source='legacy-csv' ORDER BY js.id
         """,
         ),
-        "status_history": _read_only_rows(
+        "recruitment_events": _read_only_rows(
             database,
             """
-            SELECT sh.application_id, sh.from_status, sh.to_status, sh.reason
-            FROM status_history sh JOIN applications a ON a.id=sh.application_id
+            SELECT events.application_id, events.event_type, events.from_status,
+                   events.to_status, events.reason, events.actor_type, events.client,
+                   events.installation_id, events.occurred_at, events.payload_json,
+                   events.legacy_event_id, events.legacy_from_status, events.legacy_to_status
+            FROM recruitment_events events
+            JOIN applications a ON a.id=events.application_id
             WHERE a.source='legacy-csv'
-            ORDER BY sh.application_id, sh.id
+            ORDER BY events.application_id, events.occurred_at, events.rowid
+        """,
+        ),
+        "submissions": _read_only_rows(
+            database,
+            """
+            SELECT submissions.id, submissions.application_id, submissions.submission_type,
+                   submissions.approved_revision_id, submissions.artifact_version_id,
+                   submissions.submitted_at, submissions.metadata_json
+            FROM submissions JOIN applications a ON a.id=submissions.application_id
+            WHERE a.source='legacy-csv'
+            ORDER BY submissions.application_id, submissions.submitted_at, submissions.id
         """,
         ),
         "artifact_versions": _read_only_rows(

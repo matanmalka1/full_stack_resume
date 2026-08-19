@@ -6,7 +6,6 @@ from typing import Any, Self
 
 from ...application.ports import UnitOfWork
 from ...domain.models import (
-    ApplicationStatus,
     JobAnalysis,
     SelectionManifest,
     SelectionPlan,
@@ -77,6 +76,9 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
         snapshot_id: str | None = None,
         captured_at: str | None = None,
         source_metadata: dict[str, Any] | None = None,
+        actor_type: str = "user",
+        client: str = "cli",
+        installation_id: str = "unconfigured-test-installation",
     ) -> tuple[str, str]:
         if not company.strip() or not target_role.strip():
             raise ValueError("company and target role are required")
@@ -102,6 +104,9 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
                     notes,
                     now,
                     source_metadata,
+                    actor_type,
+                    client,
+                    installation_id,
                 )
                 uow.commit()
         else:
@@ -118,6 +123,9 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
                 notes,
                 now,
                 source_metadata,
+                actor_type,
+                client,
+                installation_id,
             )
         return app_id, snap_id
 
@@ -135,6 +143,9 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
         notes: str,
         now: str,
         source_metadata: dict[str, Any] | None,
+        actor_type: str,
+        client: str,
+        installation_id: str,
     ) -> None:
         self.applications._insert_application(
             application_id=app_id,
@@ -144,6 +155,9 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
             notes=notes,
             source=source,
             created_at=now,
+            actor_type=actor_type,
+            client=client,
+            installation_id=installation_id,
         )
         with self.transaction() as connection:
             connection.execute(
@@ -286,25 +300,6 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
                     application_id,
                 ),
             )
-            current_row = connection.execute(
-                "SELECT current_status FROM applications WHERE id=?", (application_id,)
-            ).fetchone()
-            if current_row is None:
-                raise KeyError(application_id)
-            current = ApplicationStatus(current_row["current_status"])
-            if current in (ApplicationStatus.SAVED, ApplicationStatus.READY):
-                reason = (
-                    "analysis created"
-                    if current is ApplicationStatus.SAVED
-                    else "new analysis invalidated the prior ready version"
-                )
-                self.applications._transition_status(
-                    connection,
-                    application_id,
-                    ApplicationStatus.PREPARING,
-                    reason,
-                    now,
-                )
             plan_row = connection.execute(
                 "SELECT * FROM selection_plans WHERE id=?", (selection_plan_id,)
             ).fetchone()

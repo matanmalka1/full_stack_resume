@@ -6,7 +6,7 @@ from ...domain.draft_markdown import serialize_markdown, synchronize_markdown_cl
 from ...domain.drafts import apply_claim_edit, build_draft, seal_draft
 from ...domain.knowledge import Knowledge
 from ...domain.models import (
-    ApplicationStatus,
+    AuditRecord,
     DecisionRecord,
     DraftDocument,
     ValidationReport,
@@ -17,6 +17,7 @@ from ...domain.validation import validate_draft
 from ...util import canonical_json, new_id, sha256_text, utc_now
 from ..commands import (
     ApprovalResult,
+    DecisionMarkdownExport,
     DraftCommand,
     DraftResult,
     EditResult,
@@ -415,6 +416,7 @@ class DraftService(ServiceBase[DraftRepository]):
             "actor_type": "user",
             "client": "cli",
             "command": "approve_draft",
+            "installation_id": self.installation_id,
         }
         with self.repo.unit_of_work() as uow:
             transaction = self.repo.bind(uow)
@@ -473,6 +475,23 @@ class DraftService(ServiceBase[DraftRepository]):
                 created_at=now,
             )
             transaction.insert_decision(decision)
+            transaction.insert_audit(
+                AuditRecord(
+                    id=new_id(),
+                    application_id=application_id,
+                    action="approve_draft",
+                    entity_type="approved_revision",
+                    entity_id=revision.id,
+                    actor_type="user",
+                    client="cli",
+                    installation_id=self.installation_id,
+                    occurred_at=now,
+                    details={
+                        "decision_record_id": decision.id,
+                        "validation_run_id": validation_id,
+                    },
+                )
+            )
             transaction.record_event(
                 application_id,
                 "draft_approved",
@@ -482,12 +501,6 @@ class DraftService(ServiceBase[DraftRepository]):
                     "version": revision.version_number,
                 },
             )
-            if application["current_status"] == ApplicationStatus.READY.value:
-                transaction.transition_status(
-                    application_id,
-                    ApplicationStatus.PREPARING,
-                    "new approved version requires fresh rendering and ready validation",
-                )
             uow.commit()
         return ApprovalResult(
             application_id=application_id,
@@ -496,4 +509,95 @@ class DraftService(ServiceBase[DraftRepository]):
             markdown_artifact_version_id=markdown_version_id,
             manifest_artifact_version_id=manifest_version_id,
             decision_record_id=decision.id,
+        )
+
+    def export_decision_markdown(
+        self, application_id: str, approved_revision_id: str
+    ) -> DecisionMarkdownExport:
+        """Render human-readable provenance for one explicitly named revision."""
+        try:
+            application = self.repo.get_application(application_id)
+            revision = self.repo.approved_revision(approved_revision_id)
+            decision = self.repo.decision_for_revision(approved_revision_id)
+        except KeyError as exc:
+            raise UnknownRecord(f"unknown decision export source: {exc.args[0]}") from exc
+        if (
+            revision.application_id != application_id
+            or decision["application_id"] != application_id
+        ):
+            raise StateConflict("approved revision belongs to another application")
+        import json
+
+        structured = json.loads(decision["structured_json"])
+        selected = structured.get("selected_fact_ids") or []
+        gaps = structured.get("accepted_warnings_or_gaps") or {}
+        overrides = structured.get("user_overrides") or {}
+
+        def value(item: object) -> str:
+            if isinstance(item, (dict, list)):
+                return json.dumps(item, ensure_ascii=False, sort_keys=True)
+            return str(item)
+
+        lines = [
+            "# CV Decision and Provenance",
+            "",
+            f"- Application: {application['company']} — {application['target_role']}",
+            f"- Application ID: `{application_id}`",
+            f"- Approved revision ID: `{revision.id}`",
+            f"- Approved at: {revision.approved_at}",
+            f"- Decision record ID: `{decision['id']}`",
+            "",
+            "## Decision",
+            "",
+            decision["summary"],
+            "",
+            "## Classification",
+            "",
+        ]
+        for label, key in (
+            ("Track", "track"),
+            ("Profile", "profile"),
+            ("Emphasis", "emphasis"),
+            ("Language", "language"),
+            ("Fit", "fit"),
+        ):
+            lines.append(f"- {label}: {value(structured.get(key, ''))}")
+        lines.extend(["", "## Selected facts", ""])
+        lines.extend(f"- `{fact_id}`" for fact_id in selected)
+        if not selected:
+            lines.append("- None recorded")
+        lines.extend(
+            [
+                "",
+                "## Accepted gaps and overrides",
+                "",
+                f"- Accepted warnings or gaps: {value(gaps)}",
+                f"- User overrides: {value(overrides)}",
+                "",
+                "## Exact lineage",
+                "",
+                f"- Job snapshot ID: `{revision.job_snapshot_id}`",
+                f"- Job analysis ID: `{revision.job_analysis_id}`",
+                f"- Selection plan ID: `{revision.selection_plan_id}`",
+                f"- Working draft ID: `{revision.working_draft_id}`",
+                f"- Validation run ID: `{revision.validation_run_id}`",
+                f"- Draft content SHA-256: `{revision.draft_content_hash}`",
+                f"- Knowledge context SHA-256: `{revision.knowledge_context_hash}`",
+                f"- Candidate context SHA-256: `{revision.candidate_context_hash}`",
+                f"- Resume JSON SHA-256: `{revision.resume_json_hash}`",
+                f"- Resume Markdown SHA-256: `{revision.resume_markdown_hash}`",
+                "",
+                "## Approval actor",
+                "",
+            ]
+        )
+        for key in ("actor_type", "client", "installation_id", "command"):
+            lines.append(f"- {key}: {revision.decision_provenance.get(key, '')}")
+        content = "\n".join(lines) + "\n"
+        return DecisionMarkdownExport(
+            application_id=application_id,
+            approved_revision_id=approved_revision_id,
+            filename=f"decision-{approved_revision_id}.md",
+            content=content,
+            content_hash=sha256_text(content),
         )

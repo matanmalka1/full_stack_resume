@@ -204,6 +204,19 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
             raise KeyError(f"no decision record for artifact version {artifact_version_id}")
         return dict(row)
 
+    def decision_for_revision(self, revision_id: str) -> dict[str, Any]:
+        with self.read_connection() as connection:
+            row = connection.execute(
+                "SELECT decisions.* FROM decision_records AS decisions "
+                "JOIN artifact_versions AS versions "
+                "ON versions.id=decisions.artifact_version_id "
+                "WHERE versions.revision_id=? ORDER BY decisions.created_at DESC LIMIT 1",
+                (revision_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"no decision record for approved revision {revision_id}")
+        return dict(row)
+
     def record_generation_run(self, values: dict[str, Any]) -> str:
         run_id = values.get("id") or new_id()
         with self.transaction() as connection:

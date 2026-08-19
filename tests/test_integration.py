@@ -10,7 +10,12 @@ from helpers import ACCOUNT_MANAGER_JOB
 from helpers import working_claim as _working_claim
 
 import cv_engine.application.services.drafts as draft_service_module
-from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
+from cv_engine.application.commands import (
+    AnalyzeCommand,
+    DraftCommand,
+    IngestCommand,
+    SubmissionCommand,
+)
 from cv_engine.application.errors import WorkflowError
 from cv_engine.domain.draft_markdown import parse_draft, serialize_markdown
 from cv_engine.domain.models import ValidationIssue, ValidationReport
@@ -46,7 +51,7 @@ def test_default_flow_stops_for_review_then_reaches_ready(services) -> None:
     assert drafted.validation.passed
     markdown, manifest = paths.markdown, paths.manifest
     assert markdown.is_file() and manifest.is_file()
-    assert services.repository.get_application(app_id)["current_status"] == "preparing"
+    assert services.repository.get_application(app_id)["current_status"] == "saved"
     assert services.repository.artifact_versions(app_id) == []
     approved = services.drafts.approve(app_id)
     assert approved.version == 1
@@ -60,23 +65,33 @@ def test_default_flow_stops_for_review_then_reaches_ready(services) -> None:
         "Matan Malka - Account Manager - CV.pdf"
     )
     assert rendered.validation.groups["filename"] is True
-    assert services.repository.get_application(app_id)["current_status"] == "preparing"
+    assert services.repository.get_application(app_id)["current_status"] == "saved"
     assert services.rendering.ready_qualification(app_id).ready_qualified
     with connect(services.repository.path) as connection:
         statuses = connection.execute(
-            "SELECT to_status FROM status_history WHERE application_id=? ORDER BY id",
+            "SELECT to_status FROM recruitment_events WHERE application_id=? ORDER BY rowid",
             (app_id,),
         ).fetchall()
     assert "ready" not in {row["to_status"] for row in statuses}
     decision = services.repository.latest_decision(app_id)
     assert decision["job_snapshot_id"] == ingested.job_snapshot_id
-    submission_result = services.tracking.submit(app_id, "submitted to employer")
+    submission_result = services.tracking.submit_application(
+        SubmissionCommand(
+            application_id=app_id,
+            approved_revision_id=approved.revision_id,
+            pdf_artifact_version_id=pdf_record["id"],
+            submitted_at="2026-08-19T10:00:00+00:00",
+            metadata={"reason": "submitted to employer"},
+        )
+    )
     assert submission_result.current_status == "applied"
     with connect(services.repository.path) as connection:
         submission = connection.execute(
-            "SELECT artifact_version_id FROM submissions WHERE application_id=?", (app_id,)
+            "SELECT approved_revision_id, artifact_version_id FROM submissions WHERE application_id=?",
+            (app_id,),
         ).fetchone()
     assert submission is not None
+    assert submission["approved_revision_id"] == approved.revision_id
     assert submission["artifact_version_id"] == submission_result.pdf_artifact_version_id
 
 

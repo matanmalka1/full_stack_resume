@@ -57,7 +57,19 @@ def test_snapshot_restore_and_migration_preserve_rows_and_artifacts(
         snapshots = connection.execute(
             "SELECT payload_path, source_hash, source_metadata_json FROM job_snapshots"
         ).fetchall()
-    assert statuses == {"alpha": "preparing", "beta": "applied"}
+        migration_events = connection.execute(
+            "SELECT legacy_to_status, from_status, to_status FROM recruitment_events "
+            "WHERE event_type='migration'"
+        ).fetchall()
+        external = connection.execute(
+            "SELECT submission_type, approved_revision_id, artifact_version_id FROM submissions"
+        ).fetchall()
+    assert statuses == {"alpha": "saved", "beta": "applied"}
+    assert {tuple(row) for row in migration_events} == {
+        ("draft", "saved", "saved"),
+        ("sent", "saved", "applied"),
+    }
+    assert [tuple(row) for row in external] == [("external", None, None)]
     assert len(paths) == 13
     for snapshot_row in snapshots:
         payload_path = target / snapshot_row["payload_path"]
@@ -68,6 +80,20 @@ def test_snapshot_restore_and_migration_preserve_rows_and_artifacts(
     sales = (target / "base/sales.md").read_text(encoding="utf-8")
     assert "a team of 2-3 sales representatives" in sales
     assert "30% YoY" not in sales
+
+
+def test_migration_refuses_to_invent_a_missing_submission_date(legacy_repo: Path) -> None:
+    status = legacy_repo / "jobs/status.csv"
+    status.write_text(
+        status.read_text(encoding="utf-8").replace(
+            "sent,2026-01-02,2026-01-03", "sent,2026-01-02,"
+        ),
+        encoding="utf-8",
+    )
+    inventory = build_inventory(legacy_repo)
+    assert "row 3 is sent but has no recorded submission date" in inventory["problems"]
+    with pytest.raises(MigrationSafetyError, match="incomplete inventory"):
+        migrate_legacy_state(legacy_repo, legacy_repo / "target", dry_run=True)
 
 
 def test_migration_gate_recomputes_all_authoritative_evidence(migration_gate_repo) -> None:
@@ -142,7 +168,8 @@ def test_retrospective_verification_reproduces_completed_migration(
     assert report["semantic_counts"] == {
         "applications": 2,
         "job_snapshots": 2,
-        "status_history": 4,
+        "recruitment_events": 4,
+        "submissions": 1,
         "artifact_versions": 13,
     }
     with connect(root / "data/applications.sqlite3") as connection:

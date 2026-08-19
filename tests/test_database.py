@@ -43,26 +43,22 @@ def _sqlite_master_fingerprint(path: Path) -> list[tuple[str, str, str, str]]:
 def test_status_history_and_transition_contract(application_repo) -> None:
     repo = application_repo
     app_id, _ = _create(repo, company="Acme", target_role="Developer", text="Python developer role")
-    repo.transition_status(app_id, ApplicationStatus.PREPARING, "analysis")
-    assert repo.get_application(app_id)["current_status"] == "preparing"
-    with pytest.raises(ValueError, match="engine-owned"):
-        repo.transition_status(app_id, ApplicationStatus.READY)
-    with pytest.raises(ValueError) as applied_refusal:
-        repo.transition_status(app_id, ApplicationStatus.APPLIED)
-    assert str(applied_refusal.value) == (
-        "applied is submission-owned; it can only be reached through "
-        "Engine.submit(), which performs fresh ready integrity verification "
-        "and binds the submission to the exact validated PDF artifact version. "
-        "The generic status transition never accepts applied, even with a real "
-        "rendered PDF artifact version id, because it cannot perform that "
-        "verification itself."
-    )
+    assert not hasattr(repo, "transition_status")
+    with pytest.raises(ValueError):
+        ApplicationStatus("preparing")
+    with pytest.raises(ValueError):
+        ApplicationStatus("ready")
     with connect(repo.path) as connection:
         history = connection.execute(
-            "SELECT from_status, to_status FROM status_history WHERE application_id=? ORDER BY id",
+            "SELECT from_status, to_status, actor_type, client FROM recruitment_events "
+            "WHERE application_id=? ORDER BY rowid",
             (app_id,),
         ).fetchall()
-    assert [tuple(row) for row in history] == [(None, "saved"), ("saved", "preparing")]
+        with pytest.raises(sqlite3.IntegrityError, match="invalid recruitment status"):
+            connection.execute(
+                "UPDATE applications SET current_status='ready' WHERE id=?", (app_id,)
+            )
+    assert [tuple(row) for row in history] == [(None, "saved", "user", "cli")]
 
 
 def test_immutable_job_snapshot_trigger(application_repo) -> None:
@@ -80,10 +76,19 @@ def test_immutable_job_snapshot_trigger(application_repo) -> None:
 def test_next_action_is_not_a_status(application_repo) -> None:
     repo = application_repo
     app_id, _ = _create(repo, company="Acme", target_role="Sales", text="Sales role")
-    repo.set_next_action(app_id, "Follow up", "2026-08-20")
+    event_id = repo.insert_next_action_event(
+        application_id=app_id,
+        next_action="Follow up",
+        next_action_date="2026-08-20",
+        actor_type="user",
+        client="cli",
+        installation_id="test-installation",
+        occurred_at="2026-08-19T10:00:00+00:00",
+    )
     row = repo.get_application(app_id)
     assert row["current_status"] == "saved"
     assert row["next_action"] == "Follow up"
+    assert repo.recruitment_event(event_id)["event_type"] == "next_action"
 
 
 def test_m1_sqlite_master_fingerprint_is_frozen(tmp_path: Path) -> None:
@@ -113,7 +118,6 @@ def test_ready_is_not_persisted_and_submission_storage_commits_atomically(
         target_role="Developer",
         text="Another Python role",
     )
-    repo.transition_status(app_id, ApplicationStatus.PREPARING, "analysis")
     pdf_id = repo.register_artifact_version(
         app_id,
         "resume_pdf",
@@ -132,15 +136,23 @@ def test_ready_is_not_persisted_and_submission_storage_commits_atomically(
         transaction.insert_submission(
             "submission-1",
             app_id,
+            "external",
+            None,
             pdf_id,
             "2026-08-18T10:00:00+00:00",
             {"reason": "application service verified exact Ready proof"},
         )
-        transaction.store_applied_transition(
-            app_id,
-            ApplicationStatus.PREPARING,
-            "2026-08-18T10:00:00+00:00",
-            "submitted",
+        transaction.insert_recruitment_event(
+            application_id=app_id,
+            expected_current_status="saved",
+            target_status="applied",
+            event_type="status_transition",
+            reason="submitted",
+            actor_type="user",
+            client="cli",
+            installation_id="test-installation",
+            occurred_at="2026-08-18T10:00:00+00:00",
+            terminal_outcome=None,
         )
         uow.commit()
     assert repo.get_application(app_id)["current_status"] == "applied"
@@ -166,6 +178,17 @@ def test_ready_is_not_persisted_and_submission_storage_commits_atomically(
         {(row["path"], row["content_hash"]) for row in inventory}
     )
     assert repo.integrity_check() == []
+
+    with pytest.raises(sqlite3.IntegrityError):
+        repo.insert_submission(
+            "fake-internal",
+            app_id,
+            "internal",
+            None,
+            pdf_id,
+            "2026-08-18T11:00:00+00:00",
+            {},
+        )
 
 
 def test_tracking_service_sets_next_action_without_changing_status(services) -> None:

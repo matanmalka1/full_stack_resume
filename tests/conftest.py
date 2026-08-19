@@ -446,7 +446,7 @@ def ready_application(approved_application, monkeypatch: pytest.MonkeyPatch):
         assert rendered.validation.passed, rendered.validation.model_dump()
         assert (
             setup.services.repository.get_application(setup.application_id)["current_status"]
-            == "preparing"
+            == "saved"
         )
         assert setup.services.rendering.ready_qualification(setup.application_id).ready_qualified
         return replace(setup, pdf=pdf, ready_report=rendered.validation)

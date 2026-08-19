@@ -55,8 +55,6 @@ class FitLevel(StrEnum):
 
 class ApplicationStatus(StrEnum):
     SAVED = "saved"
-    PREPARING = "preparing"
-    READY = "ready"
     APPLIED = "applied"
     RECRUITER_SCREEN = "recruiter_screen"
     INTERVIEW = "interview"
@@ -67,6 +65,12 @@ class ApplicationStatus(StrEnum):
     REJECTED = "rejected"
     WITHDRAWN = "withdrawn"
     CLOSED = "closed"
+
+
+class TerminalOutcome(StrEnum):
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+    WITHDRAWN = "withdrawn"
 
 
 class Fact(StrictModel):
@@ -563,6 +567,21 @@ class DecisionRecord(StrictModel):
     structured: dict[str, Any]
     summary: str
     created_at: str
+
+
+class AuditRecord(StrictModel):
+    """One immutable local actor record for an application-layer decision."""
+
+    id: str
+    application_id: str
+    action: str
+    entity_type: str
+    entity_id: str
+    actor_type: Literal["user", "system", "migration"]
+    client: Literal["web", "cli", "worker"]
+    installation_id: str
+    occurred_at: str
+    details: dict[str, Any] = {}
 
 
 class ValidationRunLineage(StrictModel):
