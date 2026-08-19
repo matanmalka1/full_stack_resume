@@ -8,18 +8,7 @@ from ...util import sha256_text, utc_now
 from .connection import connect, memory_connection
 
 MIGRATIONS_DIR = Path(__file__).with_name("migrations")
-REGISTERED_MIGRATIONS = (
-    "0001_baseline.sql",
-    "0002_preparation_records.sql",
-    "0003_snapshot_payload_cutover.sql",
-    "0004_artifact_identity_immutability.sql",
-    "0005_approved_revisions.sql",
-    "0006_tracking_and_audit.sql",
-    "0007_migration_run_source_identity.sql",
-    "0008_operations.sql",
-    "0009_idempotency_receipts.sql",
-    "0010_knowledge_mutation_journal.sql",
-)
+REGISTERED_MIGRATIONS = ("0001_baseline.sql",)
 SCHEMA_VERSION = "2"
 
 

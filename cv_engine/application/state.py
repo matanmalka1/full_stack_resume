@@ -358,13 +358,6 @@ def derive_warnings(context: ProjectionContext, latest_ready: ApprovedRevision |
             warnings.append(
                 WarningView(code="NEXT_ACTION_OVERDUE", message="The next action is overdue.")
             )
-    if context.application.get("source") == "migration":
-        warnings.append(
-            WarningView(
-                code="MIGRATED_HISTORICAL",
-                message="This Application contains migrated historical records.",
-            )
-        )
     draft = context.active_working_draft
     if draft is not None:
         referenced = {

@@ -577,7 +577,7 @@ class AuditRecord(StrictModel):
     action: str
     entity_type: str
     entity_id: str
-    actor_type: Literal["user", "system", "migration"]
+    actor_type: Literal["user", "system"]
     client: Literal["web", "cli", "worker"]
     installation_id: str
     occurred_at: str

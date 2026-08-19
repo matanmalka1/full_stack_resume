@@ -204,20 +204,6 @@ class TrackingRepository(ReadinessRepository, Protocol):
 
     def recruitment_event(self, event_id: str) -> dict[str, Any]: ...
 
-    def insert_legacy_recruitment_event(
-        self,
-        *,
-        application_id: str,
-        mapped_from_status: str | None,
-        mapped_to_status: str,
-        legacy_event_id: str | None,
-        legacy_from_status: str | None,
-        legacy_to_status: str,
-        occurred_at: str,
-        reason: str = "",
-        terminal_outcome: str | None = None,
-    ) -> str: ...
-
     def recruitment_events(self, application_id: str) -> list[dict[str, Any]]: ...
 
     def submissions(self, application_id: str) -> list[dict[str, Any]]: ...

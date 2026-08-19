@@ -130,22 +130,16 @@ def test_numbered_migration_application_reapplication_and_version_gates(
     with pytest.raises(MigrationChecksumError, match="checksum changed"):
         Repository(path)
 
-    path = tmp_path / "lower.sqlite3"
-    with connect(path) as connection:
-        connection.executescript((MIGRATIONS_DIR / "0001_baseline.sql").read_text(encoding="utf-8"))
-    with pytest.raises(SchemaVersionError, match="cv workspace upgrade"):
-        Repository(path)
-    assert current_schema_version(path) == "0001"
-    assert apply_migrations(path) == HEAD_VERSION
-
-    with connect(path) as connection:
+    newer = tmp_path / "newer.sqlite3"
+    Repository(newer)
+    with connect(newer) as connection:
         connection.execute(
             "INSERT INTO schema_migrations(version, name, checksum, applied_at) "
             "VALUES('9999', '9999_future.sql', 'x', '2026-01-01')"
         )
         connection.commit()
     with pytest.raises(SchemaVersionError, match="unknown or newer"):
-        Repository(path)
+        Repository(newer)
     assert repository.path.name == "state.sqlite3"
 
     empty = tmp_path / "empty.sqlite3"
@@ -155,57 +149,35 @@ def test_numbered_migration_application_reapplication_and_version_gates(
 
 
 def test_verified_baseline_adoption_and_difference_reporting(tmp_path: Path) -> None:
+    # The baseline is the only migration, so an "adoptable" database created by
+    # running its raw SQL directly (bypassing the runner, as an existing database
+    # with no schema_migrations bookkeeping would) is already at head. Adoption
+    # is expected to succeed silently rather than demand `cv workspace upgrade`.
     sql = (MIGRATIONS_DIR / "0001_baseline.sql").read_text(encoding="utf-8")
     adoptable = tmp_path / "adoptable.sqlite3"
     with connect(adoptable) as connection:
         connection.executescript(sql)
-    before = None
     with connect(adoptable) as connection:
         before = sqlite_master_fingerprint(connection)
-    with pytest.raises(SchemaVersionError, match="cv workspace upgrade"):
-        Repository(adoptable)
+    Repository(adoptable)
     with connect(adoptable) as connection:
         assert sqlite_master_fingerprint(connection) == before == baseline_fingerprint()
         assert connection.execute("SELECT version FROM schema_migrations").fetchone()[0] == "0001"
-    additive = tmp_path / "additive-0002.sqlite3"
-    with connect(additive) as connection:
-        connection.executescript(sql)
-        connection.executescript(
-            (MIGRATIONS_DIR / "0002_preparation_records.sql").read_text(encoding="utf-8")
-        )
-        additive_columns = {
-            row["name"]: row["notnull"]
-            for row in connection.execute("PRAGMA table_info(job_snapshots)")
-        }
-    assert additive_columns["original_text"] == 1
-    assert additive_columns["payload_path"] == 0
-    assert additive_columns["source_hash"] == 0
-    assert additive_columns["normalized_hash"] == 0
-
-    assert apply_migrations(adoptable) == HEAD_VERSION
-    with connect(adoptable) as connection:
-        columns = {
-            row["name"]: row["notnull"]
-            for row in connection.execute("PRAGMA table_info(job_snapshots)")
-        }
-    assert "original_text" not in columns
-    assert columns["payload_path"] == 1
-    assert columns["source_hash"] == 1
-    assert columns["normalized_hash"] == 1
+    assert current_schema_version(adoptable) == HEAD_VERSION
 
     fresh = tmp_path / "fresh-head.sqlite3"
     Repository(fresh)
-    with connect(adoptable) as upgraded_connection, connect(fresh) as fresh_connection:
-        assert sqlite_master_fingerprint(upgraded_connection) == sqlite_master_fingerprint(
+    with connect(adoptable) as adopted_connection, connect(fresh) as fresh_connection:
+        assert sqlite_master_fingerprint(adopted_connection) == sqlite_master_fingerprint(
             fresh_connection
         )
         revision_columns = {
             row["name"]: row["notnull"]
-            for row in upgraded_connection.execute("PRAGMA table_info(approved_revisions)")
+            for row in fresh_connection.execute("PRAGMA table_info(approved_revisions)")
         }
         artifact_columns = {
             row["name"]: row["notnull"]
-            for row in upgraded_connection.execute("PRAGMA table_info(artifact_versions)")
+            for row in fresh_connection.execute("PRAGMA table_info(artifact_versions)")
         }
     assert revision_columns["validation_run_id"] == 1
     assert revision_columns["resume_json_path"] == 1
@@ -217,73 +189,6 @@ def test_verified_baseline_adoption_and_difference_reporting(tmp_path: Path) -> 
         connection.execute("CREATE TABLE unexpected(id TEXT PRIMARY KEY)")
     with pytest.raises(SchemaFingerprintError, match="extra=.*unexpected"):
         Repository(mismatch)
-
-
-def test_tracking_migration_preserves_legacy_status_and_submission_evidence(
-    tmp_path: Path,
-) -> None:
-    path = tmp_path / "pre-tracking.sqlite3"
-    # Named, not positional: this test is about 0006, and a later migration
-    # being added must not silently change which one it exercises.
-    tracking_migration = "0006_tracking_and_audit.sql"
-    preceding = registered_migration_names()[: registered_migration_names().index(tracking_migration)]
-    with connect(path) as connection:
-        for name in preceding:
-            connection.executescript((MIGRATIONS_DIR / name).read_text(encoding="utf-8"))
-        connection.execute(
-            "INSERT INTO applications(id, company, target_role, current_status, created_at, "
-            "updated_at) VALUES('app', 'Co', 'Role', 'ready', '2026-01-01', '2026-01-03')"
-        )
-        connection.execute(
-            "INSERT INTO job_snapshots(id, application_id, version_number, payload_path, "
-            "source_hash, normalized_hash, captured_at, source_metadata_json, content_hash) "
-            "VALUES('snapshot', 'app', 1, 'artifacts/snapshots/app/snapshot.txt', 'source', "
-            "'normalized', '2026-01-01', '{}', 'source')"
-        )
-        for from_status, to_status, changed_at in (
-            (None, "saved", "2026-01-01"),
-            ("saved", "preparing", "2026-01-02"),
-            ("preparing", "ready", "2026-01-03"),
-        ):
-            connection.execute(
-                "INSERT INTO status_history(application_id, from_status, to_status, changed_at) "
-                "VALUES('app', ?, ?, ?)",
-                (from_status, to_status, changed_at),
-            )
-        connection.execute(
-            "INSERT INTO artifacts(id, application_id, artifact_type, logical_name, created_at) "
-            "VALUES('artifact', 'app', 'resume_pdf', 'legacy-resume', '2026-01-03')"
-        )
-        connection.execute(
-            "INSERT INTO artifact_versions(id, artifact_id, version_number, lifecycle_status, "
-            "path, content_hash, created_at, job_snapshot_id) VALUES('pdf', 'artifact', 1, "
-            "'migrated-historical', 'legacy/resume.pdf', 'hash', '2026-01-03', 'snapshot')"
-        )
-        connection.execute(
-            "INSERT INTO submissions(id, application_id, artifact_version_id, submitted_at) "
-            "VALUES('submission', 'app', 'pdf', '2026-01-03')"
-        )
-        connection.executescript(
-            (MIGRATIONS_DIR / tracking_migration).read_text(encoding="utf-8")
-        )
-
-        application = connection.execute(
-            "SELECT current_status, terminal_outcome FROM applications WHERE id='app'"
-        ).fetchone()
-        events = connection.execute(
-            "SELECT id, event_type, from_status, to_status, legacy_from_status, "
-            "legacy_to_status FROM recruitment_events ORDER BY CAST(id AS INTEGER)"
-        ).fetchall()
-        submission = connection.execute(
-            "SELECT id, submission_type, approved_revision_id, artifact_version_id FROM submissions"
-        ).fetchone()
-    assert tuple(application) == ("saved", None)
-    assert [tuple(row) for row in events] == [
-        ("1", "status_transition", None, "saved", None, None),
-        ("2", "migration", "saved", "saved", "saved", "preparing"),
-        ("3", "migration", "saved", "saved", "preparing", "ready"),
-    ]
-    assert tuple(submission) == ("submission", "external", None, "pdf")
 
 
 def test_connection_policy_unit_of_work_bind_and_foreign_keys(tmp_path: Path) -> None:

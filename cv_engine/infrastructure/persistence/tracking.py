@@ -152,57 +152,6 @@ class SqliteTrackingRepository(SqliteRepositoryBase):
             raise KeyError(event_id)
         return dict(row)
 
-    def insert_legacy_recruitment_event(
-        self,
-        *,
-        application_id: str,
-        mapped_from_status: str | None,
-        mapped_to_status: str,
-        legacy_event_id: str | None,
-        legacy_from_status: str | None,
-        legacy_to_status: str,
-        occurred_at: str,
-        reason: str = "",
-        terminal_outcome: str | None = None,
-    ) -> str:
-        event_id = new_id()
-        with self.transaction() as connection:
-            row = connection.execute(
-                "SELECT current_status FROM applications WHERE id=?", (application_id,)
-            ).fetchone()
-            if row is None:
-                raise KeyError(application_id)
-            if row["current_status"] != mapped_from_status:
-                raise ValueError(
-                    "application status changed before migration event: "
-                    f"expected {mapped_from_status}, found {row['current_status']}"
-                )
-            connection.execute(
-                "UPDATE applications SET current_status=?, terminal_outcome=?, updated_at=? "
-                "WHERE id=?",
-                (mapped_to_status, terminal_outcome, occurred_at, application_id),
-            )
-            connection.execute(
-                "INSERT INTO recruitment_events(id, application_id, event_type, from_status, "
-                "to_status, reason, actor_type, client, installation_id, occurred_at, "
-                "payload_json, legacy_event_id, legacy_from_status, legacy_to_status, created_at) "
-                "VALUES(?, ?, 'migration', ?, ?, ?, 'migration', 'worker', "
-                "'legacy-migration', ?, '{}', ?, ?, ?, ?)",
-                (
-                    event_id,
-                    application_id,
-                    mapped_from_status,
-                    mapped_to_status,
-                    reason,
-                    occurred_at,
-                    legacy_event_id,
-                    legacy_from_status,
-                    legacy_to_status,
-                    occurred_at,
-                ),
-            )
-        return event_id
-
     def recruitment_events(self, application_id: str) -> list[dict[str, Any]]:
         with self.read_connection() as connection:
             rows = connection.execute(
