@@ -139,12 +139,53 @@ def _defines_application_status_transition_table(path: Path) -> bool:
     return False
 
 
-def _imports_relative_module(path: Path, module: str) -> bool:
+def _layer_modules(name: str) -> list[Path]:
+    """The modules that make up a top-level layer, whether it is one file or a package.
+
+    A layer that starts as a single module (`cli.py`) and later becomes a
+    package (`cli/`) must keep the same coverage without the check being
+    rewritten by hand for the new shape.
+    """
+    package = ENGINE / name
+    if package.is_dir():
+        return sorted(package.rglob("*.py"))
+    module = ENGINE / f"{name}.py"
+    return [module] if module.is_file() else []
+
+
+def _resolved_import_modules(path: Path) -> list[tuple[str, int]]:
+    """Every module this file imports, as a dotted path relative to `cv_engine`.
+
+    Absolute imports of `cv_engine...` are normalized by stripping the prefix.
+    Relative imports are resolved against the importing file's own package
+    position (mirroring Python's own relative-import rule: level 1 is the
+    file's containing package, each further level goes up one more), so a
+    check for a target module finds it however many directories separate the
+    importing file from the package root. That is what lets a layer move from
+    a single module to a package without the check silently losing coverage.
+    """
     tree = ast.parse(path.read_text(encoding="utf-8"))
-    return any(
-        isinstance(node, ast.ImportFrom) and node.level == 1 and node.module == module
-        for node in ast.walk(tree)
-    )
+    own_package = path.relative_to(ENGINE).with_suffix("").parts[:-1]
+    found: list[tuple[str, int]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                name = alias.name
+                if name == "cv_engine" or name.startswith("cv_engine."):
+                    name = name[len("cv_engine.") :]
+                found.append((name, node.lineno))
+        elif isinstance(node, ast.ImportFrom):
+            if node.level == 0:
+                module = node.module or ""
+                if module == "cv_engine" or module.startswith("cv_engine."):
+                    module = module[len("cv_engine.") :]
+                found.append((module, node.lineno))
+            else:
+                depth = max(len(own_package) - (node.level - 1), 0)
+                base = own_package[:depth]
+                target = ".".join((*base, node.module)) if node.module else ".".join(base)
+                found.append((target, node.lineno))
+    return found
 
 
 def _direct_validation_report_calls(path: Path) -> list[int]:
@@ -195,6 +236,15 @@ def _containment_test_lines(path: Path) -> list[int]:
 
 def test_domain_and_application_dependencies_point_inward() -> None:
     """Report every dependency and storage-boundary violation in one contract."""
+    from cv_engine.runtime.workspace import ROOT_NAMES
+
+    # The Workspace's own root names, read from their one definition, plus the
+    # one storage-layout parameter name (`base_dir`, in infrastructure/knowledge.py)
+    # that predates the Workspace roots and is not one of them. A hand-picked
+    # subset of ROOT_NAMES would silently stop covering a root nobody remembered
+    # to add to this list; reading the tuple itself cannot fall out of date.
+    storage_layout_names = set(ROOT_NAMES) | {"base_dir"}
+
     offenders: list[str] = []
     internal_layers = {"domain", "application", "infrastructure", "runtime", "cli"}
 
@@ -219,7 +269,7 @@ def test_domain_and_application_dependencies_point_inward() -> None:
             offenders.extend(
                 f"{path.relative_to(ENGINE)}:{number} names storage layout: {line.strip()}"
                 for number, line in _code_lines(path)
-                if "artifacts_root" in line or "knowledge_root" in line or "base_dir" in line
+                if any(name in line for name in storage_layout_names)
             )
 
     assert not offenders, offenders
@@ -233,9 +283,13 @@ def test_known_outer_layer_policy_debt_does_not_grow() -> None:
     here instead of arriving with a fresh allowlist of its own.
     """
     offenders: set[str] = set()
-    cli = ENGINE / "cli.py"
-    if _imports_relative_module(cli, "infrastructure.db"):
-        offenders.add("cli.py: imports infrastructure.db")
+    for path in _layer_modules("cli"):
+        relative = path.relative_to(ENGINE).as_posix()
+        if any(
+            target == "infrastructure.db" or target.startswith("infrastructure.db.")
+            for target, _line in _resolved_import_modules(path)
+        ):
+            offenders.add(f"{relative}: imports infrastructure.db")
 
     for path in sorted(ENGINE.rglob("*.py")):
         relative = path.relative_to(ENGINE).as_posix()
