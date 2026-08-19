@@ -19,8 +19,8 @@ or weaken an existing acceptance gate.
       UnitOfWork behavior unchanged.
 - [x] **TODO 8 — completed (`0b5a2c4`):** retired `persistence/primitives.py`; all random
       v2 identities now use the shared UUIDv4 policy in `util.new_id()`.
-- [ ] **TODO 9:** retire `persistence/serialization.py` while preserving the
-      serialization-version contract.
+- [x] **TODO 9 — completed (`064465b`):** removed the unused serialization registry;
+      versioning now begins only with a concrete payload schema and reader/writer.
 - [x] **TODO 10 — completed (`73bb020`):** retired `compat.py`; omitted-source compatibility
       resolution now lives at the CLI boundary.
 - [ ] **TODO 11:** slim `ServiceBase` by moving single-consumer helpers to their owning
