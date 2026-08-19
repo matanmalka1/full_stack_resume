@@ -106,12 +106,65 @@ close-out record is `docs/v2/records/m2-operations.md`.
 
 ## E. §4.5 Knowledge consistency — the highest correctness risk
 
-Not started. Scope is the five bullets of the plan §4.5, plus:
+**Ready to start.** This boundary is sequential: the journal schema owns the durable record
+consumed by file staging, recovery, the lifecycle commands, and finally the contextual
+SelectionPlan command. Those packages converge on the Knowledge port/service, repository, and
+composition root, so parallel lanes would not have honest exclusive ownership.
 
-- [ ] **A6** — the confirm/promote mapping and the `--confirm` refusal leave `cli.py` for
-      `KnowledgeService`.
-- [ ] `cv fact attach` requires a re-analysis before a plan can select the new fact;
-      `confirm_and_use_fact` is the proper command (carried from 2a).
+Execution packages:
+
+- [ ] **E1 — durable journal and repository contract.** Add the next additive migration for the
+      Knowledge mutation journal and focused quarantine state. Persist mutation identity,
+      strategy, source/staged paths, old/new hashes, SQLite mutation identity, state, and
+      timestamps. Add typed repository/UoW operations for `PREPARED -> COMMITTED` and quarantine,
+      with constraints that reject illegal transitions and mutation-identity reuse. Prove only
+      the migration and repository contract with focused real-SQLite tests.
+- [ ] **E2 — validated filesystem mutation preparation.** Replace direct Knowledge rewrites with
+      a repository adapter that can build and validate the complete proposed Knowledge document,
+      stage it under the isolated Workspace, hash old/new bytes, atomically replace the source,
+      and restore only when hashes prove the action is safe. Keep path/layout knowledge out of the
+      application layer. Prove validation, containment, atomic replace, and hash refusal with the
+      focused Knowledge adapter tests.
+- [ ] **E3 — journal coordinator, recovery, and quarantine.** Implement the six-step protocol from
+      `architecture.md` §7.2, startup recovery before normal services are exposed, and explicit
+      reconciliation. Recovery must finish, restore, or quarantine from durable hashes and DB
+      identities; it must never infer a missing fact. Normal queries expose only committed state.
+      Focused quarantine blocks further promotions and approvals that depend on unreconciled
+      Knowledge while history/export/tracking remain readable. Cover the eight failure windows in
+      one parameterized focused matrix; do not run a broad suite here.
+- [ ] **E4 — route the existing lifecycle through the journal.** Move create-pending, claim
+      capture, `pending -> confirmed`, `confirmed -> canonical`, and Profile attachment onto the
+      coordinator, with one immutable audit event per transition. Move the confirm/promote mapping
+      and the `--confirm` refusal from `cli.py` into `KnowledgeService` (**A6**), leaving the CLI as
+      argument parsing/output only. Preserve the CLI-only canonical-correction rule: correction
+      creates a replacement fact and never edits an old canonical fact. Run only the closest fact
+      lifecycle and CLI refusal tests.
+- [ ] **E5 — contextual fact and SelectionPlan commands.** Implement `create_pending_fact` with a
+      generated UUIDv4 identity, `create_fact_from_claim` with exact claim text and explicit
+      metadata, and `confirm_and_use_fact` as one logical journaled command:
+      `pending -> confirmed -> canonical -> Profile attachment -> immutable SelectionPlan`.
+      Validate the entire command before mutation, record every lifecycle transition separately,
+      use explicit Application/analysis/Profile/section inputs, and report the whole command as
+      failed if it cannot complete. Plain `cv fact attach` remains a Knowledge-only mutation and
+      therefore requires re-analysis before an ordinary plan can select the fact; the contextual
+      command is the atomic path carried from 2a. Prove the happy path and constraint-failure
+      rollback with focused service tests.
+- [ ] **E6 — boundary integration and verification handoff.** Remove superseded direct-write
+      paths, prove by inspection that all Knowledge writers enter through the journal, and wire
+      reconciliation into `cv reconcile`. Inspect the final diff and test-count baseline, but do
+      not run the broad closing gate. Instead, finish with a copy-paste-ready command sheet for the
+      user covering: the non-browser suite; golden hashes; architecture test; deterministic
+      offline CLI lifecycle in a fresh isolated `development`/`copy` Workspace with
+      `OPENAI_API_KEY` unset; browser-complete suite; and a fresh `0001`-only database upgrading
+      cleanly to head. The sheet must include all setup, fixture/input, Workspace, and explicit-ID
+      steps rather than describing the flow in prose. Record the boundary as **awaiting user
+      verification**, not closed.
+
+During E1–E5, do not run the full suite, golden suite, browser suite, or offline lifecycle. A
+failure in a focused check is fixed before moving forward. E6 does not run those broad checks
+either: it supplies their exact commands for the user to run independently. §4.7 item 5 closes
+only after the user reports that every crash window deterministically recovered or explicitly
+quarantined and the remaining handoff commands passed.
 
 ## F. §4.6 Backup and migration scaffolding
 
