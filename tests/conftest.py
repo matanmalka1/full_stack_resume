@@ -38,12 +38,12 @@ from cv_engine.domain.selection import EmphasisPolicyStore
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.infrastructure.canonical_data import V2_IDENTITY_FACT, write_canonical_sources
 from cv_engine.infrastructure.knowledge import (
-    create_fact,
     load_candidate_context,
     load_emphasis_policies,
     load_fact_store,
     load_presentations,
     load_profile_store,
+    seed_fact_before_workspace,
 )
 from cv_engine.infrastructure.migration import (
     dry_run_migration,
@@ -205,7 +205,9 @@ def v1_repo(tmp_path: Path) -> Path:
     # The identity fact and candidate context are v2 additions to the knowledge
     # store, so the fixture adds them the way the product does rather than
     # baking them into the frozen v1 migration baseline.
-    create_fact(root / "base", "common.md", dict(V2_IDENTITY_FACT), canonical=True)
+    seed_fact_before_workspace(
+        root / "base", "common.md", dict(V2_IDENTITY_FACT), canonical=True
+    )
     shutil.copy2(SOURCE_ROOT / "base/candidate.json", root / "base/candidate.json")
     for name in ("profiles", "rendering", "ai", "config"):
         shutil.copytree(SOURCE_ROOT / name, root / name)

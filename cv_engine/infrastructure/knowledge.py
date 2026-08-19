@@ -37,7 +37,7 @@ def read_fact_source(path: Path) -> FactSource:
     return parse_fact_source(path.read_text(encoding="utf-8"), origin=str(path))
 
 
-def write_fact_source(path: Path, title: str, source: FactSource) -> None:
+def _write_fact_source(path: Path, title: str, source: FactSource) -> None:
     path.write_text(render_fact_source(title, source), encoding="utf-8")
 
 
@@ -93,43 +93,21 @@ def load_candidate_context(knowledge_root: Path, facts: FactStore) -> CandidateC
     return build_candidate_context(payload, facts, origin=str(path))
 
 
-def create_fact(
+def seed_fact_before_workspace(
     base_dir: Path, source_name: str, payload: dict, *, canonical: bool = False
 ) -> Fact:
-    """Persist a new fact into the canonical source file that will own it.
+    """Seed bootstrap Knowledge before a Workspace and its journal exist.
 
-    The record is written to its final location immediately, so its identity
-    and canonical location never move as it is confirmed.
+    Normal commands must use ``KnowledgeService``. This helper exists only for
+    constructing the isolated test Knowledge fixture before its Workspace marker
+    and SQLite database are created.
     """
     store = load_fact_store(base_dir)
     record = build_new_fact(store, source_name, payload, canonical=canonical)
     path = base_dir / source_name
     title, source = parse_fact_source_document(path.read_text(encoding="utf-8"), origin=str(path))
-    write_fact_source(path, title, with_new_fact(source, record, canonical=canonical))
+    _write_fact_source(path, title, with_new_fact(source, record, canonical=canonical))
     return record.model_copy(update={"source_file": f"base/{source_name}"})
-
-
-def promote_fact(
-    base_dir: Path,
-    fact_id: str,
-    target: FactStatus | str,
-    *,
-    explicitly_confirmed: bool,
-) -> tuple[Fact, Fact]:
-    """Advance one fact's lifecycle status and make it survive the process.
-
-    Returns the fact before and after the transition. Transition legality and
-    the explicit-confirmation requirement are enforced by `FactStore.promote`.
-    """
-    status = FactStatus(target)
-    store = load_fact_store(base_dir)
-    before = store.get(fact_id)
-    promoted = store.promote(fact_id, status, explicitly_confirmed=explicitly_confirmed)
-    path = base_dir / source_name_of(before)
-    title, source = parse_fact_source_document(path.read_text(encoding="utf-8"), origin=str(path))
-    confirmed_at = before.confirmed_at or utc_now()[:10]
-    write_fact_source(path, title, with_promoted_fact(source, fact_id, status, confirmed_at))
-    return before, promoted.model_copy(update={"confirmed_at": confirmed_at})
 
 
 class FileKnowledge:
