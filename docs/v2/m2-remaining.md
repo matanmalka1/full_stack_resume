@@ -71,8 +71,12 @@ Stage 7b landed in 2a and does not recur.
 
 ## C. §4.3 State and permissions
 
-Not started. Scope is the five bullets of the plan §4.3; none is open to interpretation
-here, so they are not restated.
+**Closed.** Implementation landed at `fe1e92c`. One central policy derives stale/review
+reasons, warnings, both state axes, Ready compatibility, milestone visibility, and the
+available/blocked/recommended actions from a typed `ProjectionContext`. Application Detail and
+list projections use the same policy, with their SQLite inputs read through one transaction and
+small repository queries rather than a combined SQL read model. `active_operation` remains
+nullable until §4.4 supplies Operations.
 
 Inherited checks resolved before this section starts:
 
@@ -114,7 +118,7 @@ State of the plan's seven §4.7 checkboxes; the criteria themselves live there.
 | --- | --- |
 | 1 — repositories/UoW under real SQLite | Partial: boundary 1, M1 table set only |
 | 2 — immutable entities reject bypasses | Partial: eleven tables covered at boundary 1 |
-| 3 — projection/action policy under concurrency | Open, follows C |
+| 3 — projection/action policy under concurrency | Closed at `fe1e92c`; includes two-connection SQLite snapshot consistency |
 | 4 — ETag, idempotency, leases, cancellation, retry, `SOURCE_CHANGED` | Open, follows D |
 | 5 — journal crash windows | Open, follows E |
 | 6 — backup restore to an openable Workspace | Open, follows F |
@@ -125,5 +129,5 @@ No §4.7 checkbox is ticked yet. Boundary 1 deliberately claimed none — see
 
 ## Dependency order
 
-A → B → C, with D able to run alongside C because it touches different tables; E after C; F before
-anything that touches real data. G closes incrementally rather than as a phase.
+A → B → C are closed. D is now independent; E follows the closed state-policy boundary; F remains
+required before anything that touches real data. G closes incrementally rather than as a phase.
