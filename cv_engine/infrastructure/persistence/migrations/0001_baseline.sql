@@ -144,18 +144,13 @@ CREATE TABLE IF NOT EXISTS working_drafts (
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_working_draft_per_application
 ON working_drafts(application_id) WHERE active = 1;
 
-CREATE TABLE IF NOT EXISTS status_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    application_id TEXT NOT NULL REFERENCES applications(id),
-    from_status TEXT,
-    to_status TEXT NOT NULL,
-    changed_at TEXT NOT NULL,
-    reason TEXT NOT NULL DEFAULT ''
-);
-
-CREATE INDEX IF NOT EXISTS idx_status_application ON status_history(application_id);
-CREATE TRIGGER IF NOT EXISTS no_update_status_history BEFORE UPDATE ON status_history BEGIN SELECT RAISE(ABORT, 'immutable record'); END;
-CREATE TRIGGER IF NOT EXISTS no_delete_status_history BEFORE DELETE ON status_history BEGIN SELECT RAISE(ABORT, 'immutable record'); END;
+-- `status_history` was here. It recorded the v1 status timeline and was read
+-- exactly twice, both by one-time backfills in the old 0006 that built
+-- `recruitment_events` from it. recruitment_events replaced it: it carries the
+-- same transitions plus actor, client, installation, corrections, and terminal
+-- outcome. Nothing has written or read status_history since. It survived into
+-- the squashed baseline only because the squash preserved the final schema
+-- faithfully, v1 leftovers included, and is dropped here with v1 itself.
 
 CREATE TABLE IF NOT EXISTS application_events (
     id TEXT PRIMARY KEY,

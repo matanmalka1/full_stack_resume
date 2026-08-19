@@ -40,7 +40,13 @@ def _sqlite_master_fingerprint(path: Path) -> list[tuple[str, str, str, str]]:
     return [(kind, name, table, " ".join(ddl.split())) for kind, name, table, ddl in rows]
 
 
-def test_status_history_and_transition_contract(application_repo) -> None:
+def test_recruitment_event_and_transition_contract(application_repo) -> None:
+    """Named for the table it reads.
+
+    It was `test_status_history_...` until recruitment_events replaced that
+    table; the body moved and the name did not, which is how the dead table kept
+    looking referenced.
+    """
     repo = application_repo
     app_id, _ = _create(repo, company="Acme", target_role="Developer", text="Python developer role")
     assert not hasattr(repo, "transition_status")

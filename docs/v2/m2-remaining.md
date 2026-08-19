@@ -250,6 +250,23 @@ Nothing failed when one did not.
       Scope is `application_events`, `generation_runs`, and `validation_runs`: named by a
       persistence module, exercised by no test.
 
+      A fourth, `status_history`, was found dead while closing H1 and dropped on the
+      user's decision. `recruitment_events` had replaced it — same transitions plus actor,
+      client, installation, corrections, and terminal outcome — and its only two
+      references were one-time backfills in the old `0006` that built the replacement from
+      it. It survived into the squashed baseline only because the squash preserved the
+      final schema faithfully, v1 leftovers included.
+
+      Two things it cost, both worth carrying into the next dead-code search. It looked
+      referenced because `tests/test_database.py` had a test *named*
+      `test_status_history_and_transition_contract` whose body queried
+      `recruitment_events`: the body had moved and the name had not. A
+      `\bstatus_history\b` grep matches that name, because `_` is a word character, so the
+      search that found the table reported it as referenced. And dropping it removed
+      `sqlite_sequence` too — `status_history` held the schema's only `AUTOINCREMENT`, so
+      SQLite stopped creating its bookkeeping table and a `MUTABLE_TABLES` entry went with
+      it.
+
 This is the last irreversibility guard in the product: immutable records are the one
 thing `CLAUDE.md` still names as not regenerable. Everything else outstanding is
 cleanup, and lives in `cleanup-todos.md`.

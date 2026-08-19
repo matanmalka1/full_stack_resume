@@ -57,7 +57,6 @@ MUTABLE_TABLES = frozenset(
         "knowledge_mutation_journal",  # permits one prepared-to-terminal transition
         "schema_meta",  # bookkeeping
         "schema_migrations",  # bookkeeping
-        "sqlite_sequence",  # SQLite's own AUTOINCREMENT bookkeeping
     }
 )
 
@@ -408,7 +407,7 @@ def test_every_immutable_table_refuses_update_and_delete(tmp_path: Path) -> None
     The structural test above proves the triggers exist. This proves each one
     fires, on all of them: a trigger only runs when there is a row, so a table
     the test suite never populates was guarded on paper and unproven in fact.
-    Eleven of the fifteen were in that state.
+    Eleven of the then fifteen were in that state.
 
     The row is derived from `PRAGMA table_info` — every NOT NULL and primary-key
     column, filled by declared type — so a new immutable table is covered the
@@ -462,7 +461,7 @@ def test_every_immutable_table_refuses_update_and_delete(tmp_path: Path) -> None
         assert not problems, problems
         # A guard that cannot be observed failing is not evidence. Floor rather
         # than an exact count, so adding an immutable table does not edit a test.
-        assert len(immutable) >= 15, immutable
+        assert len(immutable) >= 14, immutable
     finally:
         connection.close()
 
