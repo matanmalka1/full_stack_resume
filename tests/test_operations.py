@@ -36,7 +36,7 @@ from cv_engine.application.operations import (
 )
 from cv_engine.domain.models import ValidationIssue, ValidationReport
 from cv_engine.infrastructure.persistence import Repository
-from cv_engine.runtime.operations import OperationWorker
+from cv_engine.runtime.execution import OperationWorker
 from cv_engine.util import new_id, sha256_text
 
 

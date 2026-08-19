@@ -1,4 +1,11 @@
-"""Foreground and supervised-local hosts for the shared Operation runner."""
+"""Where an Operation actually runs: in the caller, or in a worker pool.
+
+The runner itself is `application/operation_runner.py`. This is the two hosts
+it can run inside — the foreground one the CLI drives, and the supervised pool
+`cv web` owns — which is why the module is named for the role rather than for
+Operations. Its siblings here are named the same way: backup, composition,
+config, workspace.
+"""
 
 from __future__ import annotations
 

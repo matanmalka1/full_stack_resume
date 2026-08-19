@@ -46,11 +46,26 @@ or weaken an existing acceptance gate.
       diffing unparsed ASTs before and after, which is what caught a silently dropped
       decorator during the ports split.
 
-- [ ] **TODO 17:** the four `operations.py` modules — `application/operations.py` (288),
-      `application/services/operations.py` (518), `infrastructure/persistence/operations.py`
-      (639), `runtime/operations.py` (103). The layering is correct; the repeated name is
-      not, and it makes every traceback and import ambiguous at a glance. Rename by role,
-      not by layer.
+- [x] **TODO 17 — completed, but not as written.** The item assumed all four
+      `operations.py` modules were misnamed. Checking each against its own package's
+      naming convention rather than against the other three, only one was.
+
+      | Module | Siblings named for | Verdict |
+      | --- | --- | --- |
+      | `application/operations.py` | the DTO family — `commands`, `queries`, `knowledge_mutations` | correct; it is the Operation contract |
+      | `application/services/operations.py` | subject area — `analysis`, `drafts`, `rendering`, `tracking` | correct |
+      | `infrastructure/persistence/operations.py` | the table it owns — `applications`, `artifacts`, `audit`, `tracking` | correct |
+      | `runtime/operations.py` | role — `backup`, `composition`, `config`, `workspace` | **wrong**; renamed to `execution.py` |
+
+      Renaming all four would have broken four internal conventions to fix one
+      cross-package collision that no importer or traceback is actually ambiguous
+      about: a relative `from .operations import` can only mean the sibling, and a
+      traceback prints the full path. Only `runtime/` was named for what the module is
+      about while its siblings are named for what they do. It holds
+      `ForegroundOperationExecutor` and `OperationWorker` — the two hosts an Operation
+      runs inside — so `execution.py` says what the others say.
+
+      Two importers changed: `runtime/composition.py` and `tests/test_operations.py`.
 
 - [ ] **TODO 18:** the remaining files over 500 lines, in descending order:
       `application/services/knowledge.py` (723, grew in §4.5), `domain/models.py` (676),

@@ -36,7 +36,7 @@ from ..infrastructure.persistence import Repository
 from ..infrastructure.providers import OpenAIClassificationProvider
 from ..infrastructure.rendering import PlaywrightRenderer
 from ..util import new_id
-from .operations import ForegroundOperationExecutor, OperationWorker
+from .execution import ForegroundOperationExecutor, OperationWorker
 from .workspace import Workspace
 
 
