@@ -332,26 +332,6 @@ v2 starts with an empty database. The reasoning that was retired is preserved in
       implementation. It is not stale — §8 describes it normatively as materially
       stronger than supersession, so it is unbuilt scope rather than a leftover. Left
       alone.
-- [x] Reconciled the approved specifications with the decision. Retiring v1 in code left
-      four specs describing work that will never happen, which is worse than the code
-      being wrong: a specification is what the next reader trusts.
-
-      `implementation-plan.md`: §4.6 rescoped to backup and restore, §4.7 ticked with the
-      evidence pointing at this file, §9 "Live cutover event" withdrawn, M6 retitled, and
-      the M1 criterion annotated where it accepted an adapter since deleted.
-      `product-spec.md`: §20 rewritten — `Cutover Complete` and `Live` are no longer
-      states — the v1-migration Definition-of-Done item removed, and
-      `actor_type` corrected to `user | system`.
-      `test-and-acceptance-plan.md`: §14 "Migration acceptance" withdrawn, keeping the one
-      rule that was never about migration — a file is not evidence of a decision; §13
-      loses the manifest step; §2.8 renamed to backup tests.
-      `architecture.md`: the read-only v1 source adapter removed as the sole guard
-      exception, and the `Engine` façade described as gone rather than temporary.
-
-      `actor_type` was the sharpest of these: the spec still listed `migration` as a valid
-      audit actor after the code had dropped it, so the two disagreed on a stored value's
-      permitted range.
-
 - [x] Collapsed Class C in `CLAUDE.md`. Class C was "schema, artifact paths, or v1 data",
       gated on the browser suite, a `0001`-only upgrade to head, and the migration-safety
       rules. It is now "schema or artifact paths", gated on the browser suite and the
