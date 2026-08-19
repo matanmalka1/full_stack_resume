@@ -25,9 +25,11 @@ from ..errors import (
 from ..ports import (
     ArtifactStore,
     ClassificationProvider,
+    DraftRepository,
     KnowledgeStore,
     Renderer,
     RevisionPayloadStore,
+    WorkingDraftReader,
 )
 
 RepoT = TypeVar("RepoT")
@@ -97,15 +99,6 @@ class ServiceBase(Generic[RepoT]):
             )
         return self._snapshots
 
-    def working_draft_record(self, application_id: str) -> WorkingDraft:
-        try:
-            return self.repo.active_working_draft(application_id)
-        except KeyError as exc:
-            raise UnknownRecord(f"no working draft for application: {application_id}") from exc
-
-    def working_draft(self, application_id: str) -> DraftDocument:
-        return self.working_draft_record(application_id).source
-
     def store_working_draft(self, draft: DraftDocument) -> Any:
         try:
             return self.artifacts.write_working_draft(draft)
@@ -130,36 +123,54 @@ class ServiceBase(Generic[RepoT]):
         except OSError as exc:
             raise InfrastructureFailure(f"could not read stored artifact: {exc}") from exc
 
-    def _bound_analysis(
-        self,
-        application_id: str,
-        draft: DraftDocument,
-        profiles: ProfileStore,
-        facts: FactStore,
-        *,
-        recorded_analysis_id: str | None = None,
-    ) -> tuple[str, JobAnalysis]:
-        """The analysis this exact draft was built from, or a refusal.
-
-        Called before any write on every path that consumes a draft, so a draft
-        whose chain no longer holds is rejected while the working area, the
-        artifact directory, and SQLite are all still untouched.
-        """
-        chain = check_draft_chain(
-            self.repo,
-            application_id,
-            draft,
-            profiles,
-            facts,
-            recorded_analysis_id=recorded_analysis_id,
-        )
-        try:
-            return chain.bound()
-        except ChainError as exc:
-            raise LineageBroken(f"draft chain rejected: {exc}") from exc
-
     @property
     def renderer(self) -> Renderer:
         if self._renderer is None:
             raise DependencyUnavailable("this command needs a renderer and none was configured")
         return self._renderer
+
+
+def working_draft_record(repo: WorkingDraftReader, application_id: str) -> WorkingDraft:
+    """The application's active working draft, or a refusal naming it.
+
+    A free function rather than a `ServiceBase` method: the repository it needs
+    is `WorkingDraftReader`, and taking it as an argument is what makes each
+    caller declare a port that actually supplies it.
+    """
+    try:
+        return repo.active_working_draft(application_id)
+    except KeyError as exc:
+        raise UnknownRecord(f"no working draft for application: {application_id}") from exc
+
+
+def working_draft_document(repo: WorkingDraftReader, application_id: str) -> DraftDocument:
+    return working_draft_record(repo, application_id).source
+
+
+def bound_analysis(
+    repo: DraftRepository,
+    application_id: str,
+    draft: DraftDocument,
+    profiles: ProfileStore,
+    facts: FactStore,
+    *,
+    recorded_analysis_id: str | None = None,
+) -> tuple[str, JobAnalysis]:
+    """The analysis this exact draft was built from, or a refusal.
+
+    Called before any write on every path that consumes a draft, so a draft
+    whose chain no longer holds is rejected while the working area, the
+    artifact directory, and SQLite are all still untouched.
+    """
+    chain = check_draft_chain(
+        repo,
+        application_id,
+        draft,
+        profiles,
+        facts,
+        recorded_analysis_id=recorded_analysis_id,
+    )
+    try:
+        return chain.bound()
+    except ChainError as exc:
+        raise LineageBroken(f"draft chain rejected: {exc}") from exc

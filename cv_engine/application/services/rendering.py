@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from ...domain.models import (
     ReadyQualification,
     ValidationReport,
@@ -24,7 +26,7 @@ from ..ports import (
     ReadinessRepository,
 )
 from ..ready import qualify_ready_revision
-from .base import ServiceBase
+from .base import ServiceBase, bound_analysis
 
 
 class RenderingService(ServiceBase[ReadinessRepository]):
@@ -46,7 +48,8 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         draft = self.stored_draft(manifest_path)
         revision_id = manifest_record.get("revision_id")
         profile = profiles.get(draft.profile)
-        _, analysis = self._bound_analysis(
+        _, analysis = bound_analysis(
+            self.repo,
             application_id,
             draft,
             profiles,
@@ -107,7 +110,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
             (artifact_ids[1], "resume_pdf", "resume", pdf_path),
             (artifact_ids[2], "visual_evidence", "resume", screenshot_path),
         ]:
-            metadata = {"validation_passed": report.passed}
+            metadata: dict[str, Any] = {"validation_passed": report.passed}
             if artifact_type == "resume_pdf":
                 metadata["recruiter_filename"] = targets.recruiter_pdf_filename
             registered_id = self.repo.register_artifact_version(

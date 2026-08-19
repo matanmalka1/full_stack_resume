@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, Self, runtime_checkable
 
 from ..domain.knowledge import Knowledge
 from ..domain.models import (
@@ -372,18 +372,38 @@ class ArtifactRegistry(Protocol):
 class FactAudit(Protocol):
     """The fact lifecycle's trail, which lives beside the files it describes."""
 
-    def record_fact_event(self, **kwargs: Any) -> str: ...
+    def record_fact_event(
+        self,
+        *,
+        fact_id: str,
+        source_file: str,
+        event_type: str,
+        from_status: str | None,
+        to_status: str,
+        fact: dict[str, Any],
+        facts_version: str,
+        lifecycle_version: str,
+        reason: str = ...,
+        application_id: str | None = ...,
+        claim_id: str | None = ...,
+    ) -> str: ...
 
     def fact_events(self, fact_id: str | None = ...) -> list[dict[str, Any]]: ...
 
     def latest_fact_statuses(self) -> dict[str, str]: ...
 
 
+class WorkingDraftReader(Protocol):
+    """Read access to the one active working draft of an application."""
+
+    def active_working_draft(self, application_id: str) -> WorkingDraft: ...
+
+
 class PreparationRepository(ApplicationStore, JobStore, Protocol):
     """Application identity plus immutable snapshot/analysis preparation."""
 
 
-class DraftRepository(ApplicationStore, JobStore, ArtifactRegistry, Protocol):
+class DraftRepository(ApplicationStore, JobStore, ArtifactRegistry, WorkingDraftReader, Protocol):
     """The records needed to validate, approve, render, and qualify a draft."""
 
     def create_working_draft(
@@ -410,8 +430,6 @@ class DraftRepository(ApplicationStore, JobStore, ArtifactRegistry, Protocol):
         parent_revision_id: str | None = None,
         updated_at: str | None = None,
     ) -> WorkingDraft: ...
-
-    def active_working_draft(self, application_id: str) -> WorkingDraft: ...
 
     def update_working_draft(
         self,
@@ -443,11 +461,16 @@ class DraftRepository(ApplicationStore, JobStore, ArtifactRegistry, Protocol):
 
     def unit_of_work(self) -> UnitOfWork: ...
 
-    def bind(self, uow: UnitOfWork) -> DraftRepository: ...
+    def bind(self, uow: UnitOfWork) -> Self: ...
 
 
-class KnowledgeAuditRepository(FactAudit, Protocol):
-    """The SQLite audit side of the file-backed Knowledge lifecycle."""
+class KnowledgeAuditRepository(FactAudit, WorkingDraftReader, Protocol):
+    """The SQLite audit side of the file-backed Knowledge lifecycle.
+
+    Promoting a manual claim reads the working draft the claim was edited in,
+    so the port says so instead of relying on the adapter carrying more than
+    the service declared.
+    """
 
 
 class QueryRepository(ApplicationStore, JobStore, ArtifactRegistry, Protocol):

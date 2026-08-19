@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
+from ...application.ports import UnitOfWork
 from ...domain.models import (
     ApplicationStatus,
     JobAnalysis,
@@ -12,7 +13,7 @@ from ...domain.models import (
 )
 from ...util import canonical_json, new_id, utc_now
 from .applications import SqliteApplicationRepository
-from .base import SqliteRepositoryBase
+from .base import SqliteRepositoryBase, sqlite_unit_of_work
 from .connection import SqliteUnitOfWork
 
 _SNAPSHOT_COLUMNS = (
@@ -49,14 +50,15 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
         super().__init__(path, connection)
         self.applications = applications or SqliteApplicationRepository(path, connection)
 
-    def bind(self, uow: SqliteUnitOfWork) -> SqlitePreparationRepository:
-        if uow.connection is None:
+    def bind(self, uow: UnitOfWork) -> Self:
+        sqlite_uow = sqlite_unit_of_work(uow)
+        if sqlite_uow.connection is None:
             raise RuntimeError("UnitOfWork is not active")
-        if uow.path.resolve() != self.path.resolve():
+        if sqlite_uow.path.resolve() != self.path.resolve():
             raise ValueError("UnitOfWork belongs to another database")
         return type(self)(
             self.path,
-            uow.connection,
+            sqlite_uow.connection,
             self.applications.bind(uow),
         )
 

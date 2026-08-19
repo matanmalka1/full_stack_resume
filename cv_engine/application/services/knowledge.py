@@ -28,7 +28,7 @@ from ..errors import (
 from ..ports import (
     KnowledgeAuditRepository,
 )
-from .base import ServiceBase
+from .base import ServiceBase, working_draft_document
 
 
 class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
@@ -181,7 +181,7 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
         claim's own text becomes the candidate fact rather than being retyped,
         so nothing is strengthened on the way in.
         """
-        draft = self.working_draft(application_id)
+        draft = working_draft_document(self.repo, application_id)
         claims = [
             draft.headline,
             *draft.contacts,

@@ -20,6 +20,7 @@ from .application.commands import (
     RecruitmentStatusCommand,
 )
 from .application.errors import WorkflowError
+from .application.ports import ApplicationRepository, ApplicationStore
 from .application.queries import ApplicationListView
 from .domain.facts import FACT_SOURCE_NAMES
 from .domain.models import ApplicationStatus, FactStatus
@@ -30,7 +31,7 @@ from .infrastructure.migration import (
     verify_snapshot,
 )
 from .infrastructure.paths import resolve_within
-from .infrastructure.persistence import Repository, current_schema_version, initialize
+from .infrastructure.persistence import current_schema_version, initialize
 from .runtime.composition import Services, build_services
 from .runtime.config import resolve_config
 from .runtime.workspace import Workspace, WorkspaceError, create_workspace, load_workspace
@@ -361,7 +362,7 @@ def build_parser() -> argparse.ArgumentParser:
 EXPORT_SCHEMA_VERSION = "2.0"
 
 
-def export_csv(applications: ApplicationListView | Repository, output: Path) -> Path:
+def export_csv(applications: ApplicationListView | ApplicationStore, output: Path) -> Path:
     """Export applications with an explicit, versioned schema.
 
     The v1 export had no version marker, so a consumer could not tell which
@@ -504,7 +505,7 @@ def fact_command(knowledge: Any, args: argparse.Namespace) -> int:
     return 0
 
 
-def generic_reconcile(workspace: Workspace, repository: Repository) -> dict[str, Any]:
+def generic_reconcile(workspace: Workspace, repository: ApplicationRepository) -> dict[str, Any]:
     problems = repository.integrity_check()
     checked = 0
     for row in repository.artifact_inventory():
@@ -598,8 +599,13 @@ class CommandContext:
         return self.services
 
     @property
-    def repository(self) -> Repository:
+    def repository(self) -> ApplicationRepository:
         return self.built_services.repository
+
+    @property
+    def opened_database_path(self) -> Path:
+        assert self.database_path is not None
+        return self.database_path
 
 
 Handler = Callable[[CommandContext], int]
@@ -671,8 +677,9 @@ def _migrate(context: CommandContext) -> int:
 
 @_command("init", needs="database")
 def _init(context: CommandContext) -> int:
-    initialize(context.database_path)
-    _print({"database": str(context.database_path), "schema_initialized": True})
+    database_path = context.opened_database_path
+    initialize(database_path)
+    _print({"database": str(database_path), "schema_initialized": True})
     return 0
 
 

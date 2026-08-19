@@ -34,7 +34,7 @@ from ..errors import (
 from ..ports import (
     DraftRepository,
 )
-from .base import ServiceBase
+from .base import ServiceBase, bound_analysis, working_draft_record
 
 
 class DraftService(ServiceBase[DraftRepository]):
@@ -219,9 +219,9 @@ class DraftService(ServiceBase[DraftRepository]):
     def _validate_working(self, application_id: str) -> tuple[ValidationReport, str]:
         knowledge = self.load_knowledge()
         facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
-        working = self.working_draft_record(application_id)
+        working = working_draft_record(self.repo, application_id)
         draft = working.source
-        _, analysis = self._bound_analysis(application_id, draft, profiles, facts)
+        _, analysis = bound_analysis(self.repo, application_id, draft, profiles, facts)
         markdown = serialize_markdown(draft)
         report = validate_draft(
             draft,
@@ -256,9 +256,9 @@ class DraftService(ServiceBase[DraftRepository]):
     ) -> EditResult:
         knowledge = self.load_knowledge()
         facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
-        working = self.working_draft_record(application_id)
+        working = working_draft_record(self.repo, application_id)
         draft = working.source
-        _, analysis = self._bound_analysis(application_id, draft, profiles, facts)
+        _, analysis = bound_analysis(self.repo, application_id, draft, profiles, facts)
         try:
             updated = apply_claim_edit(
                 draft,
@@ -305,9 +305,9 @@ class DraftService(ServiceBase[DraftRepository]):
     def sync_working_claims(self, application_id: str) -> EditResult:
         knowledge = self.load_knowledge()
         facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
-        working = self.working_draft_record(application_id)
+        working = working_draft_record(self.repo, application_id)
         draft = working.source
-        _, analysis = self._bound_analysis(application_id, draft, profiles, facts)
+        _, analysis = bound_analysis(self.repo, application_id, draft, profiles, facts)
         try:
             updated = synchronize_markdown_claims(
                 draft, self.working_markdown(application_id), facts
@@ -340,13 +340,13 @@ class DraftService(ServiceBase[DraftRepository]):
 
     def approve(self, application_id: str) -> ApprovalResult:
         self._require_synced_projection(
-            application_id, self.working_draft_record(application_id).source
+            application_id, working_draft_record(self.repo, application_id).source
         )
         report, validation_id = self._validate_working(application_id)
         if not report.passed:
             raise ValidationBlocked("approval blocked by pre-render validation", report)
         facts, profiles, _ = self.knowledge()
-        working = self.working_draft_record(application_id)
+        working = working_draft_record(self.repo, application_id)
         draft = working.source
         # SQLite is authoritative. Seal the exact stored document and commit its
         # immutable payloads before any revision row can become visible.
@@ -356,7 +356,7 @@ class DraftService(ServiceBase[DraftRepository]):
         # The decision record explains the draft being approved, so it is bound to
         # that draft's own analysis. A newer analysis does not get to describe an
         # older document.
-        analysis_id, analysis = self._bound_analysis(application_id, draft, profiles, facts)
+        analysis_id, analysis = bound_analysis(self.repo, application_id, draft, profiles, facts)
         revision_id = new_id()
         try:
             published = self.revision_payloads.commit_revision(

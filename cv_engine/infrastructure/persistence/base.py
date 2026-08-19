@@ -3,11 +3,22 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, Self
 
+from ...application.ports import UnitOfWork
 from .connection import SqliteUnitOfWork, connect, transaction
 
-TRepository = TypeVar("TRepository", bound="SqliteRepositoryBase")
+
+def sqlite_unit_of_work(uow: UnitOfWork) -> SqliteUnitOfWork:
+    """The UnitOfWork a SQLite repository can bind to.
+
+    The port promises only commit/rollback, so a repository that needs the open
+    connection behind it has to say so. Refusing here names the mismatch
+    instead of failing later on a missing attribute.
+    """
+    if not isinstance(uow, SqliteUnitOfWork):
+        raise TypeError("a SQLite repository binds only a SQLite UnitOfWork")
+    return uow
 
 
 class SqliteRepositoryBase:
@@ -15,12 +26,13 @@ class SqliteRepositoryBase:
         self.path = Path(path)
         self._bound_connection = connection
 
-    def bind(self: TRepository, uow: SqliteUnitOfWork) -> TRepository:
-        if uow.connection is None:
+    def bind(self, uow: UnitOfWork) -> Self:
+        sqlite_uow = sqlite_unit_of_work(uow)
+        if sqlite_uow.connection is None:
             raise RuntimeError("UnitOfWork is not active")
-        if uow.path.resolve() != self.path.resolve():
+        if sqlite_uow.path.resolve() != self.path.resolve():
             raise ValueError("UnitOfWork belongs to another database")
-        return type(self)(self.path, uow.connection)
+        return type(self)(self.path, sqlite_uow.connection)
 
     @contextmanager
     def transaction(self) -> Iterator[Any]:
