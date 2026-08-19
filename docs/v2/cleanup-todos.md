@@ -35,8 +35,19 @@ or weaken an existing acceptance gate.
       about 2 MB physically while keeping independent editable environments and Workspace state.
 - [ ] **TODO 14:** reassess architecture-test ceremony and replace manual checks with
       derived guards where possible without weakening the no-growth allowlist rule.
-- [ ] **TODO 15:** restore the `UNIQUE` constraint on `submissions.artifact_version_id`.
-      `0001_baseline.sql` declared it `NOT NULL UNIQUE`; the `0006` rebuild dropped both,
-      so the same artifact can now be recorded as submitted twice in an immutable table.
-      Found while aligning migration with `migration-plan.md` §5; it is a `0006`
-      regression, not part of that alignment, so it needs its own migration and commit.
+- [x] **TODO 15 — completed:** restored `UNIQUE` on `submissions.artifact_version_id`.
+      The `0006` rebuild had dropped it, so the same artifact could be recorded as
+      submitted twice in a table with no-update and no-delete triggers — a permanent
+      claim that a CV was sent twice when it was sent once.
+
+      **`NOT NULL` was deliberately not restored.** The item recorded the M1 column as
+      `NOT NULL UNIQUE`, but that shape predates external submissions.
+      `record_external_submission` passes `artifact_version_id=None` when the candidate
+      applied through a company form, so `NOT NULL` would reject a supported case.
+      SQLite permits repeated NULLs under `UNIQUE`, so nullable-and-unique gives both
+      properties at once.
+
+      The item said this needed its own migration. It no longer did: with the chain
+      squashed to one baseline and no database anywhere, it is a one-token schema edit.
+      The frozen fingerprint moved by exactly one entry, `TEXT` to `TEXT UNIQUE`, with
+      the entry count unchanged at 80.

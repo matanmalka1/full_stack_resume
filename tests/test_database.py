@@ -201,6 +201,34 @@ def test_ready_is_not_persisted_and_submission_storage_commits_atomically(
             {},
         )
 
+    # One artifact, one submission. The table is immutable, so a duplicate cannot
+    # be corrected afterwards: the history would permanently say a CV was sent
+    # twice when it was sent once.
+    with pytest.raises(sqlite3.IntegrityError):
+        repo.insert_submission(
+            "submission-duplicate",
+            app_id,
+            "external",
+            None,
+            pdf_id,
+            "2026-08-18T12:00:00+00:00",
+            {},
+        )
+
+    # An external submission may carry no artifact at all — applied through the
+    # company's own form. Repeated NULLs stay legal under the same constraint.
+    for index in (1, 2):
+        repo.insert_submission(
+            f"submission-no-artifact-{index}",
+            app_id,
+            "external",
+            None,
+            None,
+            f"2026-08-18T1{index}:30:00+00:00",
+            {},
+        )
+    assert len(repo.submissions(app_id)) == 3
+
 
 def test_tracking_service_sets_next_action_without_changing_status(services) -> None:
     ingested = services.applications.ingest(

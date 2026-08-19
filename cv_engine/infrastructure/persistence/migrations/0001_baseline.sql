@@ -352,15 +352,23 @@ CREATE TABLE IF NOT EXISTS validation_runs (
 CREATE TRIGGER IF NOT EXISTS no_update_validation_runs BEFORE UPDATE ON validation_runs BEGIN SELECT RAISE(ABORT, 'immutable record'); END;
 CREATE TRIGGER IF NOT EXISTS no_delete_validation_runs BEFORE DELETE ON validation_runs BEGIN SELECT RAISE(ABORT, 'immutable record'); END;
 
--- Submissions can predate ApprovedRevision (historical artifact-version rows
--- deliberately keep a NULL revision identity) or reference one directly. External
--- submissions have no ApprovedRevision at all.
+-- Submissions either reference an ApprovedRevision or, when external, have none
+-- at all.
+--
+-- `artifact_version_id` is UNIQUE but nullable, and the two work together. UNIQUE
+-- stops one artifact being recorded as submitted twice, which this table cannot
+-- undo: it is immutable, so a duplicate is permanent and the history then says a
+-- CV was sent twice when it was sent once. Nullable because an external
+-- submission may have no artifact — the candidate applied through a form. SQLite
+-- allows repeated NULLs under UNIQUE, so both hold at once. It is deliberately
+-- not NOT NULL: that was the M1 shape, before external submissions existed, and
+-- restoring it would make `record_external_submission` unable to record one.
 CREATE TABLE IF NOT EXISTS submissions (
     id TEXT PRIMARY KEY,
     application_id TEXT NOT NULL REFERENCES applications(id),
     submission_type TEXT NOT NULL CHECK (submission_type IN ('internal', 'external')),
     approved_revision_id TEXT REFERENCES approved_revisions(id),
-    artifact_version_id TEXT REFERENCES artifact_versions(id),
+    artifact_version_id TEXT UNIQUE REFERENCES artifact_versions(id),
     submitted_at TEXT NOT NULL,
     metadata_json TEXT NOT NULL DEFAULT '{}',
     CHECK (
