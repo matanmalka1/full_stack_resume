@@ -113,33 +113,33 @@ composition root, so parallel lanes would not have honest exclusive ownership.
 
 Execution packages:
 
-- [ ] **E1 — durable journal and repository contract.** Add the next additive migration for the
+- [x] **E1 — durable journal and repository contract** (`e30b2f4`). Add the next additive migration for the
       Knowledge mutation journal and focused quarantine state. Persist mutation identity,
       strategy, source/staged paths, old/new hashes, SQLite mutation identity, state, and
       timestamps. Add typed repository/UoW operations for `PREPARED -> COMMITTED` and quarantine,
       with constraints that reject illegal transitions and mutation-identity reuse. Prove only
       the migration and repository contract with focused real-SQLite tests.
-- [ ] **E2 — validated filesystem mutation preparation.** Replace direct Knowledge rewrites with
+- [x] **E2 — validated filesystem mutation preparation** (`c77ea44`). Replace direct Knowledge rewrites with
       a repository adapter that can build and validate the complete proposed Knowledge document,
       stage it under the isolated Workspace, hash old/new bytes, atomically replace the source,
       and restore only when hashes prove the action is safe. Keep path/layout knowledge out of the
       application layer. Prove validation, containment, atomic replace, and hash refusal with the
       focused Knowledge adapter tests.
-- [ ] **E3 — journal coordinator, recovery, and quarantine.** Implement the six-step protocol from
+- [x] **E3 — journal coordinator, recovery, and quarantine** (`9aaa855`). Implement the six-step protocol from
       `architecture.md` §7.2, startup recovery before normal services are exposed, and explicit
       reconciliation. Recovery must finish, restore, or quarantine from durable hashes and DB
       identities; it must never infer a missing fact. Normal queries expose only committed state.
       Focused quarantine blocks further promotions and approvals that depend on unreconciled
       Knowledge while history/export/tracking remain readable. Cover the eight failure windows in
       one parameterized focused matrix; do not run a broad suite here.
-- [ ] **E4 — route the existing lifecycle through the journal.** Move create-pending, claim
+- [x] **E4 — route the existing lifecycle through the journal** (`9aaa855`). Move create-pending, claim
       capture, `pending -> confirmed`, `confirmed -> canonical`, and Profile attachment onto the
       coordinator, with one immutable audit event per transition. Move the confirm/promote mapping
       and the `--confirm` refusal from `cli.py` into `KnowledgeService` (**A6**), leaving the CLI as
       argument parsing/output only. Preserve the CLI-only canonical-correction rule: correction
       creates a replacement fact and never edits an old canonical fact. Run only the closest fact
       lifecycle and CLI refusal tests.
-- [ ] **E5 — contextual fact and SelectionPlan commands.** Implement `create_pending_fact` with a
+- [x] **E5 — contextual fact and SelectionPlan commands** (`9aaa855`). Implement `create_pending_fact` with a
       generated UUIDv4 identity, `create_fact_from_claim` with exact claim text and explicit
       metadata, and `confirm_and_use_fact` as one logical journaled command:
       `pending -> confirmed -> canonical -> Profile attachment -> immutable SelectionPlan`.
@@ -149,7 +149,7 @@ Execution packages:
       therefore requires re-analysis before an ordinary plan can select the fact; the contextual
       command is the atomic path carried from 2a. Prove the happy path and constraint-failure
       rollback with focused service tests.
-- [ ] **E6 — boundary integration and verification handoff.** Remove superseded direct-write
+- [x] **E6 — boundary integration and verification handoff** (`707c53d`). Removed superseded direct-write
       paths, prove by inspection that all Knowledge writers enter through the journal, and wire
       reconciliation into `cv reconcile`. Inspect the final diff and test-count baseline, but do
       not run the broad closing gate. Instead, finish with a copy-paste-ready command sheet for the
@@ -157,8 +157,8 @@ Execution packages:
       offline CLI lifecycle in a fresh isolated `development`/`copy` Workspace with
       `OPENAI_API_KEY` unset; browser-complete suite; and a fresh `0001`-only database upgrading
       cleanly to head. The sheet must include all setup, fixture/input, Workspace, and explicit-ID
-      steps rather than describing the flow in prose. Record the boundary as **awaiting user
-      verification**, not closed.
+      steps rather than describing the flow in prose. The implementation is **awaiting user
+      verification**, not closed; the command sheet was supplied at handoff.
 
 During E1–E5, do not run the full suite, golden suite, browser suite, or offline lifecycle. A
 failure in a focused check is fixed before moving forward. E6 does not run those broad checks
@@ -184,7 +184,7 @@ State of the plan's seven §4.7 checkboxes; the criteria themselves live there.
 | 2 — immutable entities reject bypasses | Partial: eleven tables covered at boundary 1 |
 | 3 — projection/action policy under concurrency | Closed at `fe1e92c`; includes two-connection SQLite snapshot consistency |
 | 4 — ETag, idempotency, leases, cancellation, retry, `SOURCE_CHANGED` | Closed at `bfbd64d`; evidence in `m2-operations.md` |
-| 5 — journal crash windows | Open, follows E |
+| 5 — journal crash windows | Awaiting user verification; implementation at `9aaa855`, handoff at `707c53d` |
 | 6 — backup restore to an openable Workspace | Open, follows F |
 | 7 — no M2 code points to live v1 paths | Holds so far; a standing constraint, not a deliverable |
 
