@@ -20,7 +20,7 @@ frozen v1 backup and runs v1; it does not downgrade a v2 database.
 ## 2. Non-negotiable safety rules
 
 1. Development and migration rehearsal use copies only.
-2. v2 never opens the v1 live Workspace during implementation, Alpha, or Beta.
+2. v2 never opens the v1 live Workspace during implementation or rehearsal.
 3. No dual-write, shadow-write, or bidirectional sync is implemented.
 4. Live v1 writes are frozen before the cutover backup.
 5. A complete backup must exist, verify, restore, open, and reconcile before migration.
@@ -79,23 +79,34 @@ inventory is authoritative for the actual copy/cutover.
 
 ## 5. Backup contract
 
-The pre-migration backup includes:
+Most of the v1 record is version-controlled in this repository. `outputs/`, `jobs/`,
+`base/`, and `cv-html/` are tracked, which covers the tailored CVs, the rendered HTML
+and PDFs, the job descriptions, and the status timeline. Git is already
+content-addressed, already hashes every blob, and already restores into a fresh
+directory:
 
-- SQLite database plus required sidecar handling
-- all version-controlled Knowledge sources used by the Workspace
-- all immutable and working snapshots/revisions/artifacts in scope
-- Workspace/config metadata required for restore
-- current source version/tag/commit metadata
-- restore instructions
-- a manifest with path, type, size, and SHA-256 for every payload
-- database/entity count summary
+```bash
+git worktree add <new-directory> <frozen-v1-commit>
+```
 
-Verification checks archive integrity, manifest completeness, every hash, source counts,
-and restore instructions.
+That single command is the archive, the manifest, and the restore proof for every
+tracked payload. Do not reimplement it as a tar archive with a hand-built manifest and a
+separate hash list; a manifest maintained beside Git can only drift away from it.
 
-Restore extracts to a new temporary directory only. It never overlays a live Workspace.
-The restored v1 Workspace is opened with v1-compatible read/integrity/reconciliation
-tools and compared with the backup manifest.
+A separate backup covers only what Git does not track:
+
+- `data/applications.sqlite3` and its WAL sidecars, copied with the SQLite backup API
+  rather than `cp`, so the copy is transactionally consistent:
+
+  ```bash
+  sqlite3 data/applications.sqlite3 ".backup <target>"
+  ```
+
+- any artifact or Knowledge file the Stage A inventory finds outside Git
+
+Verification is the count and hash comparison in section 8, run against the restored
+worktree and the restored database. Restore always targets a new directory and never
+overlays a live Workspace.
 
 ## 6. Target model mapping
 
@@ -274,81 +285,69 @@ Applications; unrelated reference artifacts do not become Applications.
 
 ## 7. Migration implementation stages
 
-### Stage A — inventory
+Five stages. The source is a frozen Git commit and the target is always a fresh
+Workspace, so a stage can be re-run from scratch at any time; nothing accumulates state
+that a later stage has to clean up.
 
+### Stage A — freeze and inventory
+
+- record the frozen v1 commit; no further v1 writes after it
 - verify source SQLite integrity and foreign keys
-- inventory every entity/file/hash
-- detect missing/cross-owned/duplicate/unregistered items
-- produce signed/hashed inventory report
+- inventory every entity, file, and hash, including anything outside Git
+- detect missing, cross-owned, duplicate, or unregistered items
 
-### Stage B — backup and restore proof
+### Stage B — copy the source
 
-- create complete timestamped backup
-- verify manifest and hashes
-- restore into a new temporary directory
-- open and reconcile restored v1 copy
-- prove counts/hashes match inventory
+- `git worktree add` the frozen commit into a new directory
+- `.backup` the SQLite database if one exists
+- compare counts and hashes against the Stage A inventory
 
-### Stage C — schema mapping tests
+### Stage C — mapping tests
 
 - run unit mapping tests
 - run representative migration fixtures
 - prove deterministic status/entity/artifact mappings
-- prove unsafe/incomplete records become explicit historical exceptions rather than
+- prove unsafe or incomplete records become explicit historical exceptions rather than
   guessed active entities
 
-### Stage D — full dry run on restored copy
+### Stage D — dry run on the copy
 
-- create a new v2 copy Workspace and marker
-- run migration into the target schema/filesystem
+- migrate the copy into a new v2 target Workspace
 - reconcile database, Knowledge, lineage, paths, hashes, and counts
-- run v2 application queries and relevant acceptance tests
-- produce dry-run report and hash
+- run v2 application queries and the relevant acceptance tests
+- investigate every warning and unmapped item; require `unexplained = 0`
 
-### Stage E — Beta on a fresh faithful copy
+### Stage E — separately authorized cutover
 
-- repeat against a new current copy rather than reusing an old rehearsal
-- run the complete Web/CLI v2 acceptance suite
-- verify backup/restore of the migrated v2 copy
-- investigate every warning/unmapped item
-- require `unexplained = 0`
-
-### Stage F — Release Ready report
-
-- record source/target versions
-- attach inventory, backup, restore, dry-run, mapping, reconciliation, and acceptance
-  evidence
-- do not access live v1 for mutation
-
-### Stage G — separately authorized live cutover
-
-- freeze v1 writes
-- repeat inventory delta check
-- create and verify final backup/restore
-- run exact proven migration
+- confirm the frozen commit is unchanged
+- run the exact migration Stage D proved, into the Workspace that will be used
 - reconcile and run full acceptance
 - activate v2 only after every gate passes
 
-## 8. Migration gate report
+## 8. Migration gate
 
-The apply command requires an exact gate report proving:
+The apply command refuses to start unless it can prove, from the data itself:
 
-- explicit source root identity, source format/version where discoverable, and exact
-  inventory hash; a v1 Workspace ID/marker is not required when v1 has none
-- expected target v2 Workspace ID/purpose/data class/version
-- source inventory hash and counts
-- verified backup/archive/manifest hashes
-- verified restore path/report hash
-- migration code/product/database versions
-- passing migration test report hash
-- successful full dry-run report hash
-- expected source/target entity and file counts
-- explicit mapping policy version
-- zero unresolved critical warnings
-- zero unexplained records/files
+- the frozen source commit and source root identity, plus the exact inventory hash
+- the expected target v2 Workspace ID, purpose, data class, and version
+- hashes of the backed-up payloads Git does not track
+- source and target entity and file counts, reconciled as
+
+  ```text
+  source_count == migrated_count + explicitly_excluded_count
+  ```
+
+- zero unexplained records or files, and zero unresolved critical warnings
+
+Each item is checked against the source and target at apply time. The gate does not
+accept the hash of a report as evidence: hashing a report proves only that the paperwork
+is unchanged, not that the data matches. Count parity is enforced in code and raises
+rather than logging, because the failure it catches — rows silently dropped by a join or
+a filter during a rebuild — leaves no trace in a table that immutability triggers then
+protect.
 
 The command refuses a different source state, changed inventory, missing artifact,
-failed restore proof, stale report, or mismatched Workspace marker.
+failed restore comparison, or mismatched Workspace marker.
 
 ## 9. Reconciliation
 
@@ -399,18 +398,18 @@ rollback deterministic.
 
 ## 12. Live cutover completion
 
-Cutover Complete is separate from Engineering Complete and Release Ready. It requires:
+Cutover Complete is separate from Engineering Complete. It requires:
 
-- [ ] v1 writes frozen
-- [ ] final source inventory captured
-- [ ] final backup verified and restored
+- [ ] v1 writes frozen at a recorded commit
+- [ ] source inventory captured and unchanged since Stage A
+- [ ] untracked payloads backed up and compared
 - [ ] migration apply gate passed
 - [ ] migration completed without partial state
 - [ ] reconciliation passed with zero unexplained items
-- [ ] full v2 acceptance passed on migrated live Workspace
+- [ ] full v2 acceptance passed on the migrated Workspace
 - [ ] v2 activated
 - [ ] user confirmed normal access to expected Applications/artifacts
-- [ ] rollback evidence retained
 
-The product is never cut over as an experiment. Release Ready must already be proven on
-a faithful copy.
+Rollback evidence needs no separate step: the frozen commit and the database backup are
+the rollback. The product is never cut over as an experiment — Stage D must already have
+proven the exact migration on a copy.
