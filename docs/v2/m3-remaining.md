@@ -376,8 +376,8 @@ Nothing in Stage B's product code was reopened. Stage D has not begun.
 
 ### D — Analyze, review decisions, deterministic selection plans
 
-**Implemented, not closed.** Evidence has not been run. The commands to run it and the
-predicted numbers are below; nothing here is accepted until they come back.
+**Stage D is closed**, at `1da0003`, `335a476`, `ab1b9e4`, and `16c4c96`, on evidence the
+user ran and accepted.
 
 - [x] **The verification came first, and it held.** A successful analyze activation
       already commits the JobAnalysis and its initial deterministic SelectionPlan
@@ -467,14 +467,35 @@ routes and the narrowing repair), `16c4c96` (tests).
 OpenAPI and TypeScript were regenerated at `ab1b9e4`. The diff is additive and nothing
 moved: 3 paths added, 6 schemas added, 0 removed, 0 existing schemas changed.
 
-| Measure | Stage C | Stage D predicted | Delta |
-| --- | --- | --- | --- |
-| Non-browser suite | 282 passed, 4 deselected | **307 passed, 4 deselected** | +25 |
+| Measure | Baseline | Stage A | Stage C | Stage D | Delta |
+| --- | --- | --- | --- | --- | --- |
+| Non-browser suite | 236 passed, 4 deselected | 259 passed | 282 passed | **307 passed, 4 deselected** | +25 |
 
-The +25 is 16 from `test_api_analyses.py` (14 functions, two parametrised over 2) and 9
-from `test_selection.py` (8 functions, one parametrised over 2). Nothing else was added or
-removed. Same interpreter as every earlier M3 measurement: `.venv/bin/python`, Python
-3.14.2.
+The +25 is accounted for exactly: 16 from `test_api_analyses.py` (14 functions, two
+parametrised over 2) and 9 from `test_selection.py` (8 functions, one parametrised over
+2). Nothing else moved. The prediction of 307 was made before the evidence run and held.
+The 4 deselected are still exactly the browser-marked tests, so 307 + 4 stays internally
+consistent with the 236 / 240 baseline. Same interpreter as every earlier M3 measurement:
+`.venv/bin/python`, Python 3.14.2.
+
+| Focused evidence | Result |
+| --- | --- |
+| `test_selection.py` — the overlay, its refusals, and no-overlay parity | **17 passed** |
+| `test_api_analyses.py` — the Stage D surface and the atomicity proof | **16 passed** |
+| `test_api_foundation.py` + `test_api_applications.py` + `test_api_operations.py` + `test_operations.py` — the narrowing change's blast radius | **91 passed** |
+| `test_architecture.py` — routers hold no domain types | **10 passed** |
+| Non-browser suite | **307 passed, 4 deselected** |
+
+The 91 is 19 + 11 + 12 + 49, which confirms Stage A's, B's and C's API files unchanged and
+puts the whole Operation suite behind the `submit_*` narrowing. The browser suite was not
+run: no rendering or browser path is reachable from anything Stage D touched.
+
+**The first evidence run passed with no repair round**, which had not happened in M3
+before - Stage A needed three and Stage C needed two. The difference is where the work
+went: the two product questions were settled before the request schemas were written, and
+the third instance of Stage C's narrowing defect was found by looking for the *shape*
+across all three `submit_*` methods rather than waiting for the analyze route to fail on
+it. That is the lesson Stage C recorded, applied once rather than learned again.
 
 Not done in Stage D, and deliberately: no CLI subcommand for either new command. Stage D's
 scope is the API surface, the CLI's own analyze path is unchanged, and the deterministic
