@@ -125,14 +125,21 @@ or weaken an existing acceptance gate.
       `knowledge_context_hash`. That was the conservative choice for a boundary that was
       already Class B: adding them would move every stored hash and every golden that
       depends on one. Decide it on its own, with the hash movement stated up front.
-- [ ] **TODO 21:** write `language` into the DecisionRecord's `structured` payload.
-      `export_decision_markdown` renders `- Language: ` from `structured["language"]`,
-      and `approve_draft` never puts it there — so the field is blank in every exported
-      decision, beside a populated Track, Profile, Emphasis, and Fit. The value exists on
-      both `DraftDocument` and `JobAnalysis`; only the record omits it.
+- [x] **TODO 21 — completed:** `approve_draft` writes `language` into the
+      DecisionRecord's `structured` payload, sourced from `draft.language` — the language
+      of the exact document being approved, not of the latest analysis and not of the
+      current projection. The export was already reading `structured["language"]`; it now
+      finds a value there, so `- Language: en` / `- Language: he` renders beside the
+      populated Track, Profile, Emphasis, and Fit instead of a blank.
 
-      Found by the M3 Stage G offline CLI run, and it predates Stage G. It is worth more
-      than a formatting fix because DecisionRecords are immutable: existing revisions
-      cannot be backfilled, so for those the language is recoverable only by joining back
-      to the analysis. Adding the key is a stored-value change to an immutable record —
-      Class B — and needs its own boundary, not a drive-by edit.
+      **No backfill, by design.** DecisionRecords are immutable, so records written before
+      this change keep their blank Language and stay recoverable only by joining back to
+      their bound analysis. The fix applies to new approvals only.
+
+      Class B, and gated as one: the stored value's meaning changed, but no migration, no
+      OpenAPI change, and no artifact-layout change — `structured_json` is an untyped
+      payload column and the API never exposes it. The regression
+      (`test_decision_record_states_the_approved_draft_s_own_language`) approves twice on
+      one Application, in `en` then `he`, and re-reads the first record while both the
+      latest analysis and the newest revision say `he`: that is what proves the export
+      reads the stored record rather than recomputing from what is current.

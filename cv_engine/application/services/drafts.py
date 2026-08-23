@@ -1191,6 +1191,10 @@ class DraftService(ServiceBase[DraftRepository]):
             "track": draft.track.value,
             "profile": draft.profile.value,
             "emphasis": draft.emphasis.value,
+            # The language of the exact document being approved, not of whatever
+            # analysis is current: the record explains this draft, and a later
+            # re-analysis under a language override must not restate its language.
+            "language": draft.language,
             "confidence": analysis.confidence,
             "rationale": analysis.rationale,
             "fit": analysis.fit.value,

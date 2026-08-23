@@ -1320,7 +1320,9 @@ blank rather than as a missing section.
 It predates Stage G and belongs to approval, not to AI. It matters more than a formatting
 slip because a DecisionRecord is immutable: every revision approved so far has a record
 that cannot be backfilled, so the value is recoverable only by joining back to the
-analysis. Recorded in `docs/v2/cleanup-todos.md` as TODO 21.
+analysis. Recorded in `docs/v2/cleanup-todos.md` as TODO 21, and closed there on its own
+Class B boundary: `approve_draft` now writes `draft.language` into the record, and no
+existing record was backfilled.
 
 #### What Stage G cost, worth carrying forward
 

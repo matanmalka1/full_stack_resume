@@ -302,6 +302,54 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
                 connection.execute(statement, (revision.id,))
 
 
+def test_decision_record_states_the_approved_draft_s_own_language(drafted_application) -> None:
+    """The record explains one document, so it names that document's language.
+
+    Asserted across two approvals in two languages on one Application. With a
+    single language in play, a record that had copied the current analysis would
+    pass every assertion here, so the second revision is what makes the first
+    record's value mean anything: it is read back while both the latest analysis
+    and the newest revision say the other language.
+    """
+    setup = drafted_application("Decision Language")
+    services, app_id = setup.services, setup.application_id
+
+    def language_of(revision_id: str) -> str:
+        # By revision, never `latest`: `utc_now` is second-resolution, so two
+        # approvals inside one second tie on `created_at` and `latest_decision`
+        # answers with whichever row the ordering happens to reach first.
+        record = services.repository.decision_for_revision(revision_id)
+        return json.loads(record["structured_json"])["language"]
+
+    english = parse_draft(setup.manifest.read_text(encoding="utf-8"))
+    assert english.language == "en"
+    first = approve_active_draft(services, app_id)
+
+    assert language_of(first.revision_id) == english.language
+    first_export = services.drafts.export_decision_markdown(app_id, first.revision_id).content
+    assert "- Language: en" in first_export
+
+    hebrew_analysis = _analyze(services, app_id, language="he")
+    _draft(services, app_id, hebrew_analysis.analysis_id)
+    hebrew = parse_draft(setup.manifest.read_text(encoding="utf-8"))
+    assert hebrew.language == "he"
+    second = approve_active_draft(services, app_id)
+
+    assert language_of(second.revision_id) == hebrew.language == "he"
+    second_export = services.drafts.export_decision_markdown(app_id, second.revision_id).content
+    assert "- Language: he" in second_export
+
+    # Re-read the first record with the latest analysis and the newest revision
+    # both in Hebrew: the export renders what was stored, not what is current.
+    assert services.repository.latest_analysis(app_id)[1].language == "he"
+    assert language_of(first.revision_id) == "en"
+    reread = services.drafts.export_decision_markdown(app_id, first.revision_id).content
+    assert reread == first_export
+    assert "- Language: en" in reread
+    assert "- Language: he" not in reread
+    assert "- Language: \n" not in reread
+
+
 # --- 3. records may not cross application ownership boundaries -------------
 
 
