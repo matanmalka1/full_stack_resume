@@ -212,11 +212,10 @@ Three rounds of evidence were needed, and what each cost is worth carrying forwa
       `GET /applications/{id}/decision`, and `POST /applications/{id}/close`. No command
       ships without one.
 
-**The focused Stage B repair is implemented and awaiting new user evidence.** The earlier
-closure at `0374aa5` / `a0c3c34` was premature: its tests did not prove atomic snapshot
-audit, and the endpoint checklist was too general to reveal the missing artifact and
-decision reads. The accepted evidence remains truthful for what it ran, but it does not
-close these two gaps.
+The first closure, at `0374aa5` / `a0c3c34`, was premature: its tests did not prove atomic
+snapshot audit, and the endpoint checklist was too general to reveal the missing artifact
+and decision reads. Its accepted evidence remains truthful for what it ran; it simply did
+not close those two gaps, which is why the repair at `cbc3367` followed.
 
 | Evidence | Result |
 | --- | --- |
@@ -228,10 +227,29 @@ close these two gaps.
 | Diff whitespace check | passed |
 
 The repair adds 2 cases to `test_api_applications.py`: audit-insertion rollback and the two
-read endpoints. Its 11 cases make the predicted next non-browser collection **270**:
-Stage A's 259 plus Stage B's 11. OpenAPI/TypeScript have been regenerated. Stage B remains
-open until the user runs and accepts the focused handover; the full non-browser suite
-remains the M3 boundary gate. Stage C has not begun.
+read endpoints, bringing the file to 11. OpenAPI and TypeScript were regenerated with it.
+
+**Stage B is closed**, at `cbc3367`, superseding the premature closure at `0374aa5` /
+`a0c3c34`. The table above stays as the evidence for the pre-repair state, truthful for
+what it ran; the repair's own focused handover was never run on its own, and its evidence
+is Stage C's instead:
+
+| Evidence for the repair | Result |
+| --- | --- |
+| `test_api_foundation.py` + `test_api_applications.py`, at Stage C's second run | **30 passed** |
+| Non-browser suite, at Stage C's close | **282 passed, 4 deselected** |
+
+The 30 is 19 for the foundation plus 11 for Stage B, which confirms the 11 exactly rather
+than by subtraction. The predicted collection of 270 was never observed on its own, and it
+did not need to be: 259 + 11 + 12 = 282, so Stage C's accepted number reconciles Stage B's
+prediction retrospectively and with no unexplained delta.
+
+One consequence of Stage B reached Stage C rather than Stage B: making an unacknowledged
+duplicate a refusal broke two Operation test helpers that ingest the same job text for
+every company, and nothing ran `test_operations.py` between the two stages to notice.
+Repaired under Stage C at `a7c3425` and `b1b2171`, in the test helpers only - Stage B's
+product code is unchanged. It is recorded here because the cause belongs to this stage even
+though the failure surfaced in the next one.
 
 ### C — Operations surface
 
