@@ -761,15 +761,187 @@ Stage F has not begun.
 
 ### F — Render, artifacts, Ready
 
-- [ ] `POST /approved-revisions/{id}/render` → 202.
-- [ ] `download_artifact` / `export_recruiter_pdf` as **application** use-cases returning a
-      stream descriptor and a safe filename. The router never sees a local path and never
-      calls `infrastructure/paths.py`; containment stays that module's single
-      implementation, reached through a port.
-- [ ] `GET /artifacts/{id}` and `/download`, **by ID only**.
-- [ ] Security: traversal, encoded traversal, symlink escape, unregistered ID, hash
-      mismatch.
-- [ ] The acceptance journey first passes end to end offline here.
+**Stage F is closed**, at `2590559`, `9f98111`, `40e396d`, `1de0b4f`, `048090e`, and
+`3e84fe9`, on evidence the user ran and accepted.
+
+- [x] `POST /approved-revisions/{id}/render` → 202 through the existing
+      `accepted_operation` helper, with `Location` and an optional `Idempotency-Key`. The
+      body names the Application the client believes it is rendering for; a mismatch is
+      `412 LINEAGE_BROKEN` before any Operation is created. Render failure leaves the
+      ApprovedRevision approved because nothing in the render path writes to it, and retry
+      is the existing `POST /operations/{id}/retry`, which creates a new Operation.
+- [x] `download_artifact` / `export_recruiter_pdf` as **application** use-cases returning a
+      stream descriptor and a safe filename. `ArtifactStream` carries a size and a chunk
+      factory and no `Path`, so no local path reaches the API layer. The routers call no
+      containment code and import no infrastructure; containment stays
+      `infrastructure/paths.py`'s single implementation, reached through the payload-store
+      port, and `test_path_containment_has_one_implementation` still passes unchanged.
+- [x] `GET /artifacts/{id}` and `/download`, **by ID only**, plus
+      `GET /approved-revisions/{id}` for §20's "ApprovedRevision and Ready qualification
+      detail" and `/recruiter-pdf` for §16's two-ID export.
+- [x] Security: traversal, encoded traversal, symlink escape, unregistered ID, hash
+      mismatch, missing payload, and a Problem Details sweep asserting no refusal carries
+      the Workspace root, a traceback, an artifact directory, or a home path.
+- [x] The acceptance journey passes end to end offline here, in `test_api_journey.py`.
+
+**Three decisions worth keeping.**
+
+1. **`download_artifact` does not require `ready_qualified`; `export_recruiter_pdf` does.**
+   Download serves the HTML preview, the screenshot, the approved Markdown, and archived
+   draft snapshots, none of which become readable only once a revision qualifies. §16 asks
+   for qualification on the recruiter export specifically, and that is the only place it
+   is checked.
+2. **The export passes no filename override.** The recruiter name is the one render wrote
+   into that artifact's registration. Recomputing it at export time would invent a value
+   the immutable record never carried, and would make an export depend on a renderer being
+   configured at all.
+3. **The media type comes from the registered `artifact_type`, never from the filename.**
+   The type is a value this system wrote when it produced the payload; the extension is
+   part of a stored string.
+
+**`ApprovedRevisionView` omits two stored paths, deliberately.** `ApprovedRevision` carries
+`resume_json_reference` and `resume_markdown_reference`; the view does not, and
+`approved_revision_view` names every field explicitly rather than validating from
+attributes. That spelling is a no-op when the source is already a wider model, and it is
+how the runner's Operation record reached HTTP clients three separate times in M3. A client
+reaches those two payloads the way it reaches every other one: by artifact-version ID.
+
+`test_no_endpoint_accepts_or_exposes_a_filesystem_path` makes that permanent by reading the
+*generated contract* rather than the routers, because a path arriving through an inherited
+field would never appear in a router's source. It carries one declared exception,
+`entity_references`, which maps to entity IDs, and a companion test runs the detector
+against a schema that does contain the shape - a blind guard reporting zero is worse than
+no guard, which Stage A learned the hard way.
+
+Class B: no migration, no schema change, and no change to where immutable payloads live -
+Stage F only reads them. The fingerprint was run anyway and did not move.
+
+OpenAPI and TypeScript were regenerated at `40e396d`: 5 paths added, 3 schemas added, 0
+removed, 0 existing schemas changed.
+
+#### The first evidence run found a defect older than this stage
+
+Four failures. One was mine; three were one product defect, and it had been live since
+Stage A.
+
+**`BodySizeLimitMiddleware` cancelled every streaming response.** It buffers the request
+body and replays it through a wrapped receive channel, and after the replay it returned
+`{"type": "http.disconnect"}` on every later call. That reads as a reasonable "nothing more
+to receive" and is wrong for a reason only streaming makes visible:
+`StreamingResponse.__call__` runs `listen_for_disconnect(receive)` concurrently with its
+send loop and cancels the entire task group as soon as `receive()` reports a disconnect.
+The synthetic disconnect arrived immediately, so the send loop was cancelled before writing
+a byte - `200`, correct headers, empty body.
+
+**No gate could have caught it before now.** No JSON response listens for disconnect, and
+until Stage F the product had no streaming route at all. It is the same shape as Stage C's
+`active_operation` narrowing: a defect that predates the stage exposing it, invisible
+because the code path that reveals it did not exist yet. Confirmed by isolation - one app,
+one route, middleware on and off - rather than by reasoning, and repaired at `048090e` so
+the replay channel delegates to the real `receive` once the body is handed over, which is
+the correct ASGI semantic.
+
+The regression lives at the middleware, not on a download route. The defect is not about
+artifacts, and a test on the download endpoint would stop covering it the day that endpoint
+changed.
+
+**And the part worth carrying: three of my own tests passed against an empty body.**
+`test_every_rendered_artifact_type_downloads_as_what_it_is` asserted only the content type;
+the recruiter filename test asserted only the `Content-Disposition`. Both passed while the
+endpoint served nothing. That is precisely the "ask what a passing test actually proves"
+failure, committed in the stage that quotes the rule. Both now compare delivered bytes
+against the stored payload and check `Content-Length` against what arrived.
+
+The fourth failure was mine alone: the journey sent an empty `claim_edits` list and my
+comment claimed "an empty patch is still a save". `UpdateWorkingDraftRequest.claim_edits`
+is `min_length=1` - a save that changes nothing is not an edit - so I had asserted a
+contract that does not exist. The Edit step now makes the smallest genuine claim edit,
+which is the exact patch shape Stage E already proves returns `200`.
+
+#### Accepted evidence
+
+Two rounds. The second passed with nothing left over.
+
+| Measure | Baseline | Stage A | Stage C | Stage D | Stage E | Stage F | Delta |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Non-browser suite | 236 passed, 4 deselected | 259 | 282 | 307 | 332 | **363 passed, 4 deselected** | +31 |
+| Browser-complete suite | 240 passed | — | — | — | 336 | **367 passed** | +31 |
+
+The +31 is accounted for exactly: 27 from `test_api_artifacts.py` (24 functions, one
+parametrised over 4 traversal spellings), 1 from `test_api_journey.py`, and 3 guards in
+`test_api_foundation.py` - two for the path-shape contract check and one for the streaming
+regression. Nothing else moved. The prediction of 362 / 366 was made before the first
+evidence run and **held exactly as a collection count through it**; the +1 to 363 / 367 is
+the middleware regression added beside the repair, and was predicted before the second run.
+The 4 deselected are still exactly the browser-marked tests, so 363 + 4 = 367 stays
+internally consistent with the 236 / 240 baseline. Same interpreter as every earlier M3
+measurement: `.venv/bin/python`, Python 3.14.2.
+
+| Focused evidence | Run | Result |
+| --- | --- | --- |
+| `test_api_artifacts.py` — the Stage F surface and its security paths | after `3e84fe9` | **27 passed** |
+| `test_api_journey.py` — the §5.4 acceptance sequence | after `3e84fe9` | **1 passed** |
+| `test_api_foundation.py` + `test_architecture.py` — OpenAPI/TS drift, router layering, no path in the contract, streaming regression | after `3e84fe9` | **32 passed** |
+| `test_ready_integrity.py` + `test_rendering.py` + `test_integration.py` — the render/qualification blast radius | first round | **27 passed, 3 deselected** |
+| Schema fingerprint | first round | **1 passed**, unchanged |
+| Ruff, ruff format, pyright | both rounds | clean; **0 errors, 0 warnings, 0 informations** |
+| Non-browser suite | after `3e84fe9` | **363 passed, 4 deselected** |
+| Browser-complete suite, `CV_REQUIRE_BROWSER=1` | after `3e84fe9` | **367 passed** |
+
+The two first-round rows are not re-run: `048090e` touches only the middleware's replay
+channel and `3e84fe9` is test-only, and neither is read by the fingerprint or by the
+rendering files.
+
+#### The offline CLI run, and what it deliberately does not cover
+
+`workspace init → init → ingest → analyze → draft → validate → approve → render → ready →
+reconcile` completed against a fresh Workspace with `OPENAI_API_KEY` unset, through a real
+Chromium render. What it establishes:
+
+- `ready` passed all six groups and `reconcile` passed with **5 artifact versions checked**
+  and no problems - resume Markdown, claim manifest, HTML, PDF, screenshot, exactly as
+  predicted and exactly the five Stage E saw.
+- `cv validate` printed `1b4aa7ba`, and the ApprovedRevision's `validation_run_id` is that
+  same run. The §15 binding still holds offline after Stage F.
+- `decision_provenance_json` reads `{"actor_type": "user", "client": "cli"}`. This is not
+  in the CLI's own output and was read back from the immutable record in the kept
+  Workspace rather than assumed, because the claim had been made in the handover.
+- The `resume_pdf` registration carries
+  `{"recruiter_filename": "Matan Malka - Account Manager - CV.pdf"}` while its stored path
+  is `9c8ab5e4-….pdf`. That is architecture §6.2's separation - a recruiter name is a
+  delivery name, never the physical identity - holding in a real Workspace, and it is the
+  registration the export route reads.
+
+**None of Stage F's new surface is reachable from the CLI**, and this was stated before the
+run rather than discovered after it. There is no `cv download` and no artifact-by-ID
+subcommand; Stage F's scope was the API, as Stages D and E were. The render route, both
+artifact endpoints, the Ready surface and every security path are proved by
+`test_api_artifacts.py` and `test_api_journey.py` over real HTTP, and by nothing in this
+run. This run's job was to confirm Stage F broke none of the CLI path that already existed,
+and it did that.
+
+The bound was set in advance because Stage E made a claim about its own CLI run that turned
+out to be wrong in exactly this way.
+
+#### What Stage F cost, worth carrying forward
+
+1. **A defect can be older than the stage that exposes it, and this is now the second time
+   in M3.** Stage C found `active_operation` shipping the runner record; Stage F found the
+   body-limit middleware cancelling responses. Both were invisible because the code path
+   that reveals them did not exist yet, and both were found by the first run of a new
+   surface rather than by any existing gate. The lesson is not "add more gates" - it is
+   that a new *kind* of route is where old middleware gets tested for the first time.
+2. **Three of my own tests passed against an empty body**, because they asserted headers
+   and not bytes. This file has told other people to ask what a passing test proves since
+   Stage C. Asserting the shape of a response while never asserting it has content is the
+   cheapest possible version of that mistake, and it hid a live product defect through an
+   entire authoring pass.
+3. **Reproducing beat reasoning.** The empty-body cause was found in one minimal app with
+   the middleware toggled on and off, not by reading `StreamingResponse`. Three plausible
+   explanations were available - the explicit `Content-Length`, the generator, the ASGI
+   replay - and only the isolation run distinguished them.
+
+Stage G has not begun.
 
 ### G — AI tasks (§5.3)
 
