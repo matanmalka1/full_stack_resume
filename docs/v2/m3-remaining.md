@@ -280,7 +280,7 @@ remains the M3 boundary gate. Stage C has not begun.
       the OpenAPI diff.
 
 **The first evidence run failed, and it found two defects - one introduced here and one
-older.** Both are repaired at `a7c3425`; Stage C is awaiting a second run.
+older.** Repaired at `a7c3425` and `<repair2>`; Stage C is awaiting a clean run.
 
 1. **`as_operation_view` did not narrow anything.** It handed the record to
    `OperationView.model_validate(record, from_attributes=True)`. A `PersistedOperation`
@@ -301,20 +301,34 @@ older.** Both are repaired at `a7c3425`; Stage C is awaiting a second run.
    identity again. `from_attributes=True` appears nowhere else in `cv_engine`, so this was
    the only instance of the pattern.
 
-2. **`_operation_for_runner` refused its own second call.** Stage B made an unacknowledged
-   duplicate a refusal; the helper ingests the same job text for every company, and one
-   test calls it twice in one Workspace. This is Stage B's change surfacing in the first
-   run of `test_operations.py` since it landed - a test-helper defect, not a product one,
-   and the product code Stage B shipped is unchanged. The helper now acknowledges, as
-   `analyzed_application` in `conftest.py` already does.
+2. **Two Operation helpers refused their own second call.** Stage B made an
+   unacknowledged duplicate a refusal; both helpers ingest the same job text under a
+   different company, and a test that builds two Operations in one Workspace therefore
+   hits the second one as a duplicate. This is Stage B's change surfacing in the first run
+   of `test_operations.py` since it landed - a test-helper defect, not a product one, and
+   the product code Stage B shipped is unchanged.
+
+   **This took two rounds, and the reason is worth keeping.** The first repair fixed
+   `_operation_for_runner` because that was the helper the traceback named, and
+   `_queued` - the same shape, four callers, one of them calling it twice - was left. A
+   name-driven repair found one of two again. The second repair derived the set instead:
+   every `ingest` call in the suite, parsed from the AST with its enclosing function and
+   whether it acknowledges. That found exactly two helpers; the other 15 sites are
+   single-ingest tests, which the full run confirms. Both helpers now share one
+   `_ingest_for_operation`, so a third caller cannot reintroduce this.
 
 Worth carrying forward: the assertion that caught the first defect compared the response's
 field set against `OperationResponse.model_fields` rather than against a hand-written list.
 A list would have been written from the same wrong belief that the narrowing worked.
 
-OpenAPI and TypeScript were regenerated; the entry-level diff is in `a0116cd`, and the
-repair does not move either file. Nothing in Stage B's product code was reopened, and
-Stage D has not begun.
+The collection prediction held exactly. The second run collected **282** and reported
+`1 failed, 281 passed, 4 deselected`, against a predicted 282 and a baseline of 236 / 240;
+the single failure was defect 2's second helper and nothing else moved. `test_api_*`
+passed in full at that run: 61 for the Stage C pair and 30 for the Stage A/B pair.
+
+OpenAPI and TypeScript were regenerated; the entry-level diff is in `a0116cd`, and neither
+repair moves either file. Nothing in Stage B's product code was reopened, and Stage D has
+not begun.
 
 Predicted next non-browser collection: **282** - Stage B's 270 plus the 12 cases in
 `test_api_operations.py` (9 functions, two of them parametrised over 3 and 2). No test was

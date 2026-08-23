@@ -371,11 +371,15 @@ class _Handler:
         return self._activate(operation, prepared, repository)
 
 
-def _operation_for_runner(services, company: str = "Runner Co"):
-    # Acknowledged, because the job text is identical for every company here and
-    # Stage B made an unacknowledged duplicate a refusal. A caller that builds
-    # two of these in one Workspace is not testing duplicate detection.
-    ingested = services.applications.ingest(
+def _ingest_for_operation(services, company: str):
+    """An Application to hang an Operation on, and nothing more.
+
+    Acknowledged, because every caller ingests the same job text under a
+    different company and Stage B made an unacknowledged duplicate a refusal. A
+    test that builds two Operations in one Workspace is exercising the runner,
+    not duplicate detection.
+    """
+    return services.applications.ingest(
         IngestCommand(
             company=company,
             target_role="Developer",
@@ -383,6 +387,10 @@ def _operation_for_runner(services, company: str = "Runner Co"):
             acknowledged_duplicates=True,
         )
     )
+
+
+def _operation_for_runner(services, company: str = "Runner Co"):
+    ingested = _ingest_for_operation(services, company)
     operation = services.repository.create_operation(
         _stored_request(ingested.application_id, company.casefold().replace(" ", "-")),
         installation_id=services.workspace.installation_id(),
@@ -1020,9 +1028,7 @@ def test_worker_shutdown_requests_cancellation_and_prevents_activation(services)
 
 
 def _queued(services, company: str, key: str = "request-1", created_at: str | None = None):
-    ingested = services.applications.ingest(
-        IngestCommand(company=company, target_role="Developer", job_text="Python role")
-    )
+    ingested = _ingest_for_operation(services, company)
     return services.repository.create_operation(
         _stored_request(ingested.application_id, key=key),
         installation_id=services.workspace.installation_id(),
