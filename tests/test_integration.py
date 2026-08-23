@@ -318,9 +318,7 @@ def test_fast_orchestration_preserves_call_order_and_gate_messages(
             execute=lambda operation_id: operation_results[operation_id]
         ),
         repository=SimpleNamespace(
-            latest_validation_for_working_draft=lambda _draft_id: {
-                "report": report("pre-render")
-            },
+            latest_validation_for_working_draft=lambda _draft_id: {"report": report("pre-render")},
             artifact_version=lambda _artifact_id: {"metadata_json": "{}"},
             validation_for_artifact=lambda *_args: report("post-render"),
         ),

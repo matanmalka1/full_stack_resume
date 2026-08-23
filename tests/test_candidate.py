@@ -82,7 +82,9 @@ def test_filename_override_and_dependency_hash_follow_canonical_context(
     common.write_text(
         text.replace("linkedin.com/in/matanmalka1", "linkedin.com/in/other"), encoding="utf-8"
     )
-    after = load_candidate_context(workspace_root, load_fact_store(workspace_root / "base")).version_hash
+    after = load_candidate_context(
+        workspace_root, load_fact_store(workspace_root / "base")
+    ).version_hash
     assert after != before
 
 

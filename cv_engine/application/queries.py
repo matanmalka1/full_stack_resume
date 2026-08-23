@@ -170,9 +170,7 @@ def application_view(record: dict[str, Any]) -> ApplicationView:
 def application_list_item_view(
     record: dict[str, Any], state: ApplicationStateView
 ) -> ApplicationListItemView:
-    return ApplicationListItemView.model_validate(
-        {**record, **state.model_dump(mode="python")}
-    )
+    return ApplicationListItemView.model_validate({**record, **state.model_dump(mode="python")})
 
 
 def snapshot_view(record: dict[str, Any], job_text: str) -> JobSnapshotView:

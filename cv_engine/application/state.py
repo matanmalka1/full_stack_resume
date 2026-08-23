@@ -107,7 +107,10 @@ def derive_staleness(context: ProjectionContext) -> list[ReasonView]:
                 "job_snapshot_id": context.active_job_snapshot_id,
             },
         )
-    if context.active_analysis_id is not None and draft.job_analysis_id != context.active_analysis_id:
+    if (
+        context.active_analysis_id is not None
+        and draft.job_analysis_id != context.active_analysis_id
+    ):
         add(
             "ANALYSIS_REPLACED",
             "A newer analysis replaced the analysis used by this draft.",
@@ -193,9 +196,7 @@ def derive_staleness(context: ProjectionContext) -> list[ReasonView]:
     return [reasons[code] for code in STALE_PRECEDENCE if code in reasons]
 
 
-def derive_review_reasons(
-    context: ProjectionContext, stale: list[ReasonView]
-) -> list[ReasonView]:
+def derive_review_reasons(context: ProjectionContext, stale: list[ReasonView]) -> list[ReasonView]:
     del stale  # Staleness alone is deliberately not a review decision.
     analysis = context.active_analysis
     plan = context.active_selection_plan
@@ -210,8 +211,10 @@ def derive_review_reasons(
                 ["apply_analysis_decisions"],
             )
         )
-    if analysis is not None and analysis.fit.value == "low" and (
-        analysis.user_override.get("fit") != "accepted-low-fit"
+    if (
+        analysis is not None
+        and analysis.fit.value == "low"
+        and (analysis.user_override.get("fit") != "accepted-low-fit")
     ):
         reasons.append(
             _reason(
@@ -221,8 +224,10 @@ def derive_review_reasons(
                 ["apply_analysis_decisions"],
             )
         )
-    if analysis is not None and any(gap.severity == "hard" for gap in analysis.gaps) and (
-        analysis.user_override.get("fit") != "accepted-low-fit"
+    if (
+        analysis is not None
+        and any(gap.severity == "hard" for gap in analysis.gaps)
+        and (analysis.user_override.get("fit") != "accepted-low-fit")
     ):
         reasons.append(
             _reason(
@@ -324,7 +329,9 @@ def derive_states(
     return preparation, draft_state
 
 
-def derive_warnings(context: ProjectionContext, latest_ready: ApprovedRevision | None) -> list[WarningView]:
+def derive_warnings(
+    context: ProjectionContext, latest_ready: ApprovedRevision | None
+) -> list[WarningView]:
     warnings: list[WarningView] = []
     if latest_ready is not None and latest_ready.job_snapshot_id != context.active_job_snapshot_id:
         warnings.append(
@@ -398,7 +405,11 @@ def derive_actions(
     available: set[str] = {"analyze"}
     for reason in review:
         available.update(reason.allowed_resolution_actions)
-    if context.active_analysis is not None and context.active_selection_plan is not None and not review:
+    if (
+        context.active_analysis is not None
+        and context.active_selection_plan is not None
+        and not review
+    ):
         available.add("create_draft")
     if draft is not None:
         available.update({"archive_working_draft", "replace_working_draft"})

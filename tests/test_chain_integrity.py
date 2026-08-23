@@ -262,7 +262,8 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
     )
     assert sha256_file(workspace_root / revision.resume_json_reference) == revision.resume_json_hash
     assert (
-        sha256_file(workspace_root / revision.resume_markdown_reference) == revision.resume_markdown_hash
+        sha256_file(workspace_root / revision.resume_markdown_reference)
+        == revision.resume_markdown_hash
     )
     assert (
         parse_draft((workspace_root / revision.resume_json_reference).read_text(encoding="utf-8"))

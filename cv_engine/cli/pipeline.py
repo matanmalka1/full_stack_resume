@@ -44,8 +44,7 @@ def _analyze(context: CommandContext) -> int:
     command = AnalyzeCommand(
         application_id=args.application_id,
         job_snapshot_id=(
-            args.job_snapshot
-            or _latest_job_snapshot_id(context.repository, args.application_id)
+            args.job_snapshot or _latest_job_snapshot_id(context.repository, args.application_id)
         ),
         track_override=args.track,
         profile_override=args.profile,
@@ -85,8 +84,7 @@ def _draft(context: CommandContext) -> int:
     command = DraftCommand(
         application_id=args.application_id,
         job_analysis_id=(
-            args.job_analysis
-            or _latest_job_analysis_id(context.repository, args.application_id)
+            args.job_analysis or _latest_job_analysis_id(context.repository, args.application_id)
         ),
         selection_plan_id=(
             args.selection_plan
@@ -104,9 +102,7 @@ def _draft(context: CommandContext) -> int:
         code = completed.failure_code.value if completed.failure_code is not None else "UNKNOWN"
         raise WorkflowError(f"{code}: {detail}")
     output_ids = {output.output_type: output.output_id for output in completed.outputs}
-    validation = context.repository.latest_validation_for_working_draft(
-        output_ids["working_draft"]
-    )
+    validation = context.repository.latest_validation_for_working_draft(output_ids["working_draft"])
     if validation is None:
         raise WorkflowError("draft Operation completed without a ValidationRun")
     paths = services.artifacts.working_paths(args.application_id)

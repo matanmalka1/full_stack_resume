@@ -185,8 +185,7 @@ def test_terminal_operation_rows_cannot_be_rewritten_or_deleted(services) -> Non
     )
     with services.repository.transaction() as connection:
         connection.execute(
-            "UPDATE operations SET status='cancelled', phase='completed', finished_at=? "
-            "WHERE id=?",
+            "UPDATE operations SET status='cancelled', phase='completed', finished_at=? WHERE id=?",
             ("2026-08-19T08:01:00+00:00", created.id),
         )
 
@@ -248,9 +247,7 @@ def test_application_and_global_render_leases_queue_contending_work(services) ->
         idempotency_key="render-1",
         sources=OperationSources(approved_revision_id="revision-1"),
     )
-    render_one = services.repository.create_operation(
-        render_request, installation_id=installation
-    )
+    render_one = services.repository.create_operation(render_request, installation_id=installation)
     third = services.applications.ingest(
         IngestCommand(company="Lease C", target_role="Developer", job_text="Python role")
     )
@@ -312,9 +309,7 @@ def test_heartbeat_prevents_interruption_until_extended_lease_expires(services) 
         now="2026-08-19T08:00:00+00:00",
     )
     assert claimed is not None
-    assert services.repository.interrupt_expired_operations(
-        now="2026-08-19T08:00:20+00:00"
-    ) == []
+    assert services.repository.interrupt_expired_operations(now="2026-08-19T08:00:20+00:00") == []
 
     services.repository.heartbeat_operation(
         created.id,
@@ -322,12 +317,10 @@ def test_heartbeat_prevents_interruption_until_extended_lease_expires(services) 
         lease_seconds=30,
         now="2026-08-19T08:00:20+00:00",
     )
-    assert services.repository.interrupt_expired_operations(
-        now="2026-08-19T08:00:49+00:00"
-    ) == []
-    assert services.repository.interrupt_expired_operations(
-        now="2026-08-19T08:00:51+00:00"
-    ) == [created.id]
+    assert services.repository.interrupt_expired_operations(now="2026-08-19T08:00:49+00:00") == []
+    assert services.repository.interrupt_expired_operations(now="2026-08-19T08:00:51+00:00") == [
+        created.id
+    ]
     assert services.repository.operation(created.id).status is OperationStatus.INTERRUPTED
 
 
@@ -344,9 +337,7 @@ def test_startup_interrupts_a_queued_operation_with_an_expired_runner_lease(serv
             ),
         )
 
-    interrupted = services.repository.interrupt_expired_operations(
-        now="2026-08-19T08:00:00+00:00"
-    )
+    interrupted = services.repository.interrupt_expired_operations(now="2026-08-19T08:00:00+00:00")
 
     assert interrupted == [operation.id]
     assert services.repository.operation(operation.id).status is OperationStatus.INTERRUPTED
@@ -835,9 +826,10 @@ def test_failed_render_operation_preserves_registered_outputs_as_inactive(
     assert len(failed.outputs) == 3
     assert all(not output.active for output in failed.outputs)
     for output in failed.outputs:
-        assert setup.services.repository.artifact_version(output.output_id)[
-            "lifecycle_status"
-        ] == "rendered-invalid"
+        assert (
+            setup.services.repository.artifact_version(output.output_id)["lifecycle_status"]
+            == "rendered-invalid"
+        )
 
 
 def test_cancel_and_manual_retry_keep_the_old_operation_immutable(services) -> None:
@@ -897,9 +889,10 @@ def test_approval_idempotency_returns_the_exact_original_revision(drafted_applic
     )
 
     assert repeated == first
-    assert [revision.id for revision in setup.services.repository.approved_revisions(
-        setup.application_id
-    )] == [first.revision_id]
+    assert [
+        revision.id
+        for revision in setup.services.repository.approved_revisions(setup.application_id)
+    ] == [first.revision_id]
     receipt = setup.services.repository.idempotency_receipt(
         "approve_draft",
         "approval-key",
@@ -943,9 +936,7 @@ def test_pending_approval_receipt_recovers_a_committed_revision(drafted_applicat
         installation_id=setup.services.workspace.installation_id(),
         reserved_entity_id=reserved_revision,
     )
-    committed = setup.services.drafts.approve(
-        setup.application_id, revision_id=reserved_revision
-    )
+    committed = setup.services.drafts.approve(setup.application_id, revision_id=reserved_revision)
     assert receipt["status"] == "pending"
 
     recovered = setup.services.operations.approve_idempotent(
@@ -979,9 +970,7 @@ def test_worker_shutdown_requests_cancellation_and_prevents_activation(services)
         runner_id="shutdown-worker",
         heartbeat_interval_seconds=0.02,
     )
-    worker = OperationWorker(
-        services.repository, runner, concurrency=1, poll_interval_seconds=0.01
-    )
+    worker = OperationWorker(services.repository, runner, concurrency=1, poll_interval_seconds=0.01)
     stop = Event()
     thread = Thread(target=worker.serve, args=(stop,))
     thread.start()
@@ -1056,9 +1045,7 @@ def test_lease_owning_methods_refuse_a_runner_that_does_not_hold_the_lease(servi
     """
     repository = services.repository
     operation = _queued(services, "Lease Co")
-    repository.claim_operation(
-        operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00"
-    )
+    repository.claim_operation(operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
 
     calls = {
         "set_operation_phase": lambda runner: repository.set_operation_phase(
@@ -1123,9 +1110,7 @@ def test_outputs_cannot_be_activated_once_the_operation_stops_running(services) 
     repository.request_operation_cancellation(operation.id)
     repository.record_operation_output(operation.id, "analysis", "analysis-3")
     with pytest.raises(StateConflict, match="cannot be activated"):
-        repository.record_operation_output(
-            operation.id, "analysis", "analysis-4", active=True
-        )
+        repository.record_operation_output(operation.id, "analysis", "analysis-4", active=True)
 
 
 def test_an_idempotency_receipt_completes_once_and_agrees_with_itself(services) -> None:

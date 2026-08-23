@@ -436,7 +436,14 @@ def test_backup_captures_committed_writes_still_in_the_write_ahead_log(tmp_path:
     connection.execute(
         "INSERT INTO applications(id, company, target_role, current_status, notes, "
         "source, created_at, updated_at) VALUES(?, ?, ?, ?, '', 'manual', ?, ?)",
-        ("app-wal", "alpha", "dev", "saved", "2026-01-01T00:00:00+00:00", "2026-01-01T00:00:00+00:00"),
+        (
+            "app-wal",
+            "alpha",
+            "dev",
+            "saved",
+            "2026-01-01T00:00:00+00:00",
+            "2026-01-01T00:00:00+00:00",
+        ),
     )
     connection.commit()
 

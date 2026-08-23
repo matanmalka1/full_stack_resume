@@ -360,12 +360,8 @@ class FileKnowledge:
             profile_payload, fact_id, section, origin=profile_path.name, pin=True
         )
         profile_text = json.dumps(profile_document, ensure_ascii=False, indent=2) + "\n"
-        proposed = self._validate_overrides(
-            {fact_path: fact_text, profile_path: profile_text}
-        )
-        primary = self._stage_validated(
-            mutation_id, fact_path, fact_text, proposed.versions()
-        )
+        proposed = self._validate_overrides({fact_path: fact_text, profile_path: profile_text})
+        primary = self._stage_validated(mutation_id, fact_path, fact_text, proposed.versions())
         try:
             attachment = self._stage_validated(
                 f"{mutation_id}-profile", profile_path, profile_text, proposed.versions()

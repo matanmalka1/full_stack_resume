@@ -108,9 +108,7 @@ class SqliteOperationRepository(SqliteRepositoryBase):
                         "idempotency key already used with a different Operation payload",
                         code=IDEMPOTENCY_KEY_REUSED,
                     )
-                return self._operation_record(
-                    existing, self._outputs(connection, existing["id"])
-                )
+                return self._operation_record(existing, self._outputs(connection, existing["id"]))
             try:
                 connection.execute(
                     "INSERT INTO operations("
@@ -387,9 +385,7 @@ class SqliteOperationRepository(SqliteRepositoryBase):
             current = connection.execute(
                 "SELECT * FROM operations WHERE id=?", (operation_id,)
             ).fetchone()
-            return self._operation_record(
-                current, self._outputs(connection, operation_id)
-            )
+            return self._operation_record(current, self._outputs(connection, operation_id))
 
     def record_operation_output(
         self,

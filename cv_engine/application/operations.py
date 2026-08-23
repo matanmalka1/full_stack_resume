@@ -267,9 +267,7 @@ _ALLOWED_TRANSITIONS: dict[OperationStatus, frozenset[OperationStatus]] = {
 }
 
 
-def require_operation_transition(
-    current: OperationStatus, target: OperationStatus
-) -> None:
+def require_operation_transition(current: OperationStatus, target: OperationStatus) -> None:
     """Refuse lifecycle rewrites and transitions not approved by the specification."""
     if target not in _ALLOWED_TRANSITIONS[current]:
         raise OperationContractError(

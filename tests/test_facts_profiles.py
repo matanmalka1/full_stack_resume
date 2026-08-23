@@ -53,7 +53,9 @@ def test_seed_and_repository_knowledge_hold_the_same_facts() -> None:
         # The identity fact is added through the lifecycle, so it is expected to
         # be live-only; anything else missing from the seed is real drift.
         live_only = set(live) - set(seeded) - {V2_IDENTITY_FACT["fact_id"]}
-        problems += [f"{name}: {fact_id} is in base/ but not the seed" for fact_id in sorted(live_only)]
+        problems += [
+            f"{name}: {fact_id} is in base/ but not the seed" for fact_id in sorted(live_only)
+        ]
         problems += [
             f"{name}: {fact_id} is in the seed but not base/"
             for fact_id in sorted(set(seeded) - set(live))

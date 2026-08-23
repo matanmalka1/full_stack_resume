@@ -302,7 +302,9 @@ class SqliteDraftRepository(SqliteRepositoryBase):
                 (validation_run_id, working_draft_id),
             ).fetchone()
             if row is None:
-                raise PreconditionFailed("approval requires an existing working draft and validation")
+                raise PreconditionFailed(
+                    "approval requires an existing working draft and validation"
+                )
             if (
                 row["application_id"] != application_id
                 or row["plan_application_id"] != application_id
@@ -405,8 +407,7 @@ class SqliteDraftRepository(SqliteRepositoryBase):
     def approved_revisions(self, application_id: str) -> list[ApprovedRevision]:
         with self.read_connection() as connection:
             rows = connection.execute(
-                "SELECT * FROM approved_revisions WHERE application_id=? "
-                "ORDER BY version_number",
+                "SELECT * FROM approved_revisions WHERE application_id=? ORDER BY version_number",
                 (application_id,),
             ).fetchall()
         return [self._revision_record(row) for row in rows]

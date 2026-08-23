@@ -61,7 +61,9 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
                         "belonging to another application"
                     )
                 if job_snapshot_id is not None and revision["job_snapshot_id"] != job_snapshot_id:
-                    raise LineageBroken("an artifact version's revision and job snapshot must match")
+                    raise LineageBroken(
+                        "an artifact version's revision and job snapshot must match"
+                    )
             artifact = connection.execute(
                 "SELECT id FROM artifacts WHERE application_id IS ? "
                 "AND artifact_type=? AND logical_name=?",
@@ -327,9 +329,7 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
             validator_versions=json.loads(row["validator_versions_json"]),
         )
 
-    def latest_validation_for_working_draft(
-        self, working_draft_id: str
-    ) -> dict[str, Any] | None:
+    def latest_validation_for_working_draft(self, working_draft_id: str) -> dict[str, Any] | None:
         with self.read_connection() as connection:
             row = connection.execute(
                 "SELECT id, edit_version, content_hash, job_snapshot_id, job_analysis_id, "

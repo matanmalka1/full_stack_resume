@@ -137,9 +137,7 @@ def test_existing_immutable_payload_is_never_overwritten(
 
 def test_revision_commit_reuses_only_exact_recovery_orphans(payload_store: PayloadStore) -> None:
     first = payload_store.commit_revision("app", "revision", '{"value":1}', "markdown")
-    recovered = payload_store.commit_revision(
-        "app", "revision", '{"value":1}', "markdown"
-    )
+    recovered = payload_store.commit_revision("app", "revision", '{"value":1}', "markdown")
     assert recovered == first
 
     with pytest.raises(FileExistsError, match="different content"):

@@ -44,15 +44,11 @@ def test_new_fact_is_persisted_as_pending_and_cannot_reach_a_cv(services: Servic
 
 def test_contextual_pending_fact_gets_a_generated_uuid(services: Services) -> None:
     payload = {key: value for key, value in NEW_FACT.items() if key != "fact_id"}
-    result = services.knowledge_lifecycle.create_pending_fact(
-        "situational_skills.md", payload
-    )
+    result = services.knowledge_lifecycle.create_pending_fact("situational_skills.md", payload)
     assert uuid.UUID(result.fact.fact_id).version == 4
     assert result.fact.status is FactStatus.PENDING
     with pytest.raises(KnowledgeRejected, match="not user-editable"):
-        services.knowledge_lifecycle.create_pending_fact(
-            "situational_skills.md", dict(NEW_FACT)
-        )
+        services.knowledge_lifecycle.create_pending_fact("situational_skills.md", dict(NEW_FACT))
 
 
 def test_create_fact_from_claim_preserves_exact_claim_text(drafted_application) -> None:
@@ -118,7 +114,9 @@ def test_knowledge_file_activation_refuses_source_or_staged_hash_changes(
     services.knowledge.discard_staged(staged)
 
 
-@pytest.mark.parametrize("window", ["staged-missing", "staged-corrupt", "old-mismatch", "backup-missing"])
+@pytest.mark.parametrize(
+    "window", ["staged-missing", "staged-corrupt", "old-mismatch", "backup-missing"]
+)
 def test_prepared_knowledge_mutation_recovers_or_quarantines_from_hashes(
     services: Services, monkeypatch: pytest.MonkeyPatch, window: str
 ) -> None:
@@ -184,9 +182,7 @@ def test_startup_finishes_crashes_before_and_after_file_activation(
     with pytest.raises(RuntimeError, match="after replace"):
         recovered.knowledge_lifecycle.add_fact("situational_skills.md", second_payload)
     recovered_again = build_services(services.workspace)
-    assert (
-        _reload(recovered_again).get("situational.sqlite.second").status is FactStatus.PENDING
-    )
+    assert _reload(recovered_again).get("situational.sqlite.second").status is FactStatus.PENDING
     assert len(recovered_again.knowledge_lifecycle.fact_history().events) == 2
 
 
@@ -311,7 +307,9 @@ def test_selection_plan_failure_restores_both_knowledge_files_and_quarantines(
         application_id=application_id,
     )
     fact_source = services.workspace.knowledge_root / "base" / "sales.md"
-    profile_source = services.workspace.knowledge_root / "profiles" / "sales" / "account-manager.yaml"
+    profile_source = (
+        services.workspace.knowledge_root / "profiles" / "sales" / "account-manager.yaml"
+    )
     before_fact = fact_source.read_bytes()
     before_profile = profile_source.read_bytes()
 
@@ -425,7 +423,8 @@ def test_lifecycle_survives_process_boundaries_through_the_cli(
     ids = [fact["fact_id"] for fact in json.loads(listed.stdout)]
     assert "situational.sqlite" in ids
     assert (
-        load_fact_store(workspace_root / "base").get("situational.sqlite").status is FactStatus.CANONICAL
+        load_fact_store(workspace_root / "base").get("situational.sqlite").status
+        is FactStatus.CANONICAL
     )
 
     history = json.loads(cli_subprocess("fact", "history", "situational.sqlite").stdout)

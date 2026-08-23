@@ -300,9 +300,7 @@ def test_knowledge_mutation_journal_has_one_guarded_terminal_transition(
                 (prepared.id,),
             )
         with pytest.raises(sqlite3.IntegrityError, match="immutable record"):
-            connection.execute(
-                "DELETE FROM knowledge_mutation_journal WHERE id=?", (prepared.id,)
-            )
+            connection.execute("DELETE FROM knowledge_mutation_journal WHERE id=?", (prepared.id,))
 
 
 def test_knowledge_mutation_quarantine_requires_reason_and_unique_db_identity(

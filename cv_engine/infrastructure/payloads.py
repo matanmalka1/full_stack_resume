@@ -304,6 +304,7 @@ class PayloadStore:
         SQLite registration is deliberately left to the caller. If either
         registration later fails, these files are safe reconciliation orphans.
         """
+
         def commit_or_reuse(
             destination: Path, content: bytes, validator: PayloadValidator
         ) -> StoredPayload:

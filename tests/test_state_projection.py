@@ -81,9 +81,7 @@ def test_material_ambiguity_is_a_review_reason_and_blocks_drafting(services) -> 
 
     detail = services.queries.application_detail(ingested.application_id)
     assert detail.preparation_state is PreparationState.NEEDS_REVIEW
-    assert "MATERIAL_CLASSIFICATION_AMBIGUITY" in {
-        reason.code for reason in detail.review_reasons
-    }
+    assert "MATERIAL_CLASSIFICATION_AMBIGUITY" in {reason.code for reason in detail.review_reasons}
     blocked = {item.action: item.reasons for item in detail.blocked_actions}
     assert "MATERIAL_CLASSIFICATION_AMBIGUITY" in blocked["create_draft"]
     assert detail.recommended_action == "apply_analysis_decisions"
@@ -127,9 +125,7 @@ def test_new_snapshot_makes_ready_historical_and_requires_analysis(ready_applica
     assert detail.preparation_state is PreparationState.NEEDS_ANALYSIS
     assert detail.latest_ready_revision_id == setup.approved.revision_id
     assert detail.active_analysis_id is None
-    assert {warning.code for warning in detail.warnings} == {
-        "READY_REVISION_FOR_OLDER_SNAPSHOT"
-    }
+    assert {warning.code for warning in detail.warnings} == {"READY_REVISION_FOR_OLDER_SNAPSHOT"}
 
 
 def test_new_analysis_makes_parallel_draft_stale_without_erasing_ready_history(
@@ -159,9 +155,7 @@ def test_new_analysis_makes_parallel_draft_stale_without_erasing_ready_history(
         "SELECTION_PLAN_REPLACED",
     ]
     assert detail.latest_ready_revision_id == setup.approved.revision_id
-    assert {warning.code for warning in detail.warnings} == {
-        "READY_REVISION_FOR_OLDER_ANALYSIS"
-    }
+    assert {warning.code for warning in detail.warnings} == {"READY_REVISION_FOR_OLDER_ANALYSIS"}
 
 
 def test_failed_exact_validation_drives_state_and_approve_blocker(drafted_application) -> None:
@@ -288,9 +282,7 @@ def test_pending_claim_recommends_its_resolution_action(drafted_application) -> 
 
     detail = setup.services.queries.application_detail(setup.application_id)
     assert detail.preparation_state is PreparationState.NEEDS_REVIEW
-    assert {reason.code for reason in detail.review_reasons} == {
-        "PENDING_FACT_REQUIRES_RESOLUTION"
-    }
+    assert {reason.code for reason in detail.review_reasons} == {"PENDING_FACT_REQUIRES_RESOLUTION"}
     assert detail.recommended_action == "confirm_and_use_fact"
     assert "confirm_and_use_fact" in detail.available_actions
 

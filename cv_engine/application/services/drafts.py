@@ -375,9 +375,7 @@ class DraftService(ServiceBase[DraftRepository]):
             validation=report,
         )
 
-    def approve(
-        self, application_id: str, *, revision_id: str | None = None
-    ) -> ApprovalResult:
+    def approve(self, application_id: str, *, revision_id: str | None = None) -> ApprovalResult:
         quarantined = self.repo.quarantined_knowledge_mutations()
         if quarantined:
             raise PreconditionFailed(

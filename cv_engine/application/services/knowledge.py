@@ -183,10 +183,7 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
                     state.current_sha256 == staged.old_sha256
                     and state.staged_sha256 == staged.new_sha256
                 )
-                or (
-                    state.current_sha256 == staged.new_sha256
-                    and state.staged_sha256 is None
-                )
+                or (state.current_sha256 == staged.new_sha256 and state.staged_sha256 is None)
             )
         ]
         if invalid:
@@ -373,9 +370,7 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
         except KeyError as exc:
             raise KnowledgeRejected(f"unknown fact transition command: {command}") from exc
         if not explicitly_confirmed:
-            raise KnowledgeRejected(
-                f"promotion to {target.value} requires explicit --confirm"
-            )
+            raise KnowledgeRejected(f"promotion to {target.value} requires explicit --confirm")
         return self.promote_fact(
             fact_id,
             target.value,
@@ -561,9 +556,7 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
                 _updated_profile,
                 _profile_source,
                 proposed,
-            ) = self._knowledge.stage_confirm_and_use_fact(
-                mutation_id, fact_id, profile, section
-            )
+            ) = self._knowledge.stage_confirm_and_use_fact(mutation_id, fact_id, profile, section)
             selected_profile = proposed.profiles.get(profile)
             _selected, manifest = build_selection(
                 analysis=analysis,
@@ -639,9 +632,7 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
             }
         )
         payload = {
-            "knowledge_files": [
-                self._stored_staged_file(staged) for staged in staged_files[1:]
-            ],
+            "knowledge_files": [self._stored_staged_file(staged) for staged in staged_files[1:]],
             "actions": actions,
         }
         primary = staged_files[0]
@@ -703,8 +694,7 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
         prepared = self.repo.prepared_knowledge_mutations()
         quarantined = self.repo.quarantined_knowledge_mutations()
         problems.extend(
-            f"Knowledge mutation still requires recovery: {mutation.id}"
-            for mutation in prepared
+            f"Knowledge mutation still requires recovery: {mutation.id}" for mutation in prepared
         )
         problems.extend(
             f"Knowledge mutation is quarantined: {mutation.id} ({mutation.quarantine_reason})"

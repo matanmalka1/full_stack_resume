@@ -187,7 +187,9 @@ def _inject_headline_typed_claim(draft, text: str = FABRICATED_HEADLINE_CLAIM) -
     return injected
 
 
-def test_headline_claim_type_outside_the_headline_is_blocked(workspace_root: Path, draft_factory) -> None:
+def test_headline_claim_type_outside_the_headline_is_blocked(
+    workspace_root: Path, draft_factory
+) -> None:
     facts, profile, analysis, draft, _markdown = draft_factory(
         "Account Manager retention portfolio customer relationships",
         write=True,

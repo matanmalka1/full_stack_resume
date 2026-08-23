@@ -96,9 +96,9 @@ class RenderingService(ServiceBase[ReadinessRepository]):
             draft,
             profiles,
             facts,
-            recorded_analysis_id=self.repo.decision_for_revision(
-                command.approved_revision_id
-            )["job_analysis_id"],
+            recorded_analysis_id=self.repo.decision_for_revision(command.approved_revision_id)[
+                "job_analysis_id"
+            ],
         )
         source_report = validate_draft(
             draft,
@@ -210,9 +210,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
                 raise InfrastructureFailure(
                     "artifact registry did not preserve the reserved output identity"
                 )
-        repo.record_validation(
-            command.application_id, "post-render", report, artifact_ids[1]
-        )
+        repo.record_validation(command.application_id, "post-render", report, artifact_ids[1])
         if report.passed:
             qualification = qualify_ready_revision(
                 self.artifacts,

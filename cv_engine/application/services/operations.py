@@ -51,9 +51,7 @@ class AnalysisOperationHandler:
     def _command(operation: PersistedOperation) -> AnalyzeCommand:
         return AnalyzeCommand.model_validate(operation.payload)
 
-    def check_sources(
-        self, operation: PersistedOperation, repository: OperationRepository
-    ) -> None:
+    def check_sources(self, operation: PersistedOperation, repository: OperationRepository) -> None:
         sources = operation.sources
         if sources.job_snapshot_id is None or sources.job_snapshot_hash is None:
             raise SourceChanged("Analysis Operation has no frozen job snapshot identity.")
@@ -130,9 +128,7 @@ class DraftOperationHandler:
     def _command(operation: PersistedOperation) -> DraftCommand:
         return DraftCommand.model_validate(operation.payload)
 
-    def check_sources(
-        self, operation: PersistedOperation, repository: OperationRepository
-    ) -> None:
+    def check_sources(self, operation: PersistedOperation, repository: OperationRepository) -> None:
         sources = operation.sources
         if (
             sources.job_snapshot_id is None
@@ -201,9 +197,7 @@ class RenderOperationHandler:
     def _command(operation: PersistedOperation) -> RenderCommand:
         return RenderCommand.model_validate(operation.payload)
 
-    def check_sources(
-        self, operation: PersistedOperation, repository: OperationRepository
-    ) -> None:
+    def check_sources(self, operation: PersistedOperation, repository: OperationRepository) -> None:
         sources = operation.sources
         if sources.approved_revision_id is None:
             raise SourceChanged("Render Operation has no frozen ApprovedRevision identity.")
@@ -230,9 +224,7 @@ class RenderOperationHandler:
             or manifest["content_hash"] != dependencies.get("claim_manifest")
         ):
             raise SourceChanged("Approved render inputs changed before activation.")
-        current_knowledge = sha256_text(
-            canonical_json(self.service.load_knowledge().versions())
-        )
+        current_knowledge = sha256_text(canonical_json(self.service.load_knowledge().versions()))
         if sources.knowledge_context_hash != current_knowledge:
             raise SourceChanged("Knowledge changed before render activation.")
 
@@ -500,9 +492,7 @@ class OperationService(ServiceBase[OperationRepository]):
             if recovered is None:
                 raise
             result = recovered
-        self.repo.complete_idempotency_receipt(
-            receipt["id"], result.model_dump(mode="json")
-        )
+        self.repo.complete_idempotency_receipt(receipt["id"], result.model_dump(mode="json"))
         return result
 
     def retry(self, operation_id: str, *, idempotency_key: str) -> PersistedOperation:

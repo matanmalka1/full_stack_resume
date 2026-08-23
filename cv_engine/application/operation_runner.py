@@ -100,9 +100,7 @@ class OperationRunner:
     def _cancelled(self, operation_id: str) -> bool:
         return self.repository.cancellation_requested(operation_id)
 
-    def _fail(
-        self, operation_id: str, error: OperationExecutionError
-    ) -> PersistedOperation:
+    def _fail(self, operation_id: str, error: OperationExecutionError) -> PersistedOperation:
         return self.repository.fail_operation(
             operation_id,
             error.code,
@@ -182,25 +180,19 @@ class OperationRunner:
                     operation_id, OperationPhase.EXECUTING, runner_id=self.runner_id
                 )
                 with self._heartbeat(operation_id):
-                    prepared = handler.execute(
-                        operation, lambda: self._cancelled(operation_id)
-                    )
+                    prepared = handler.execute(operation, lambda: self._cancelled(operation_id))
                 break
             except OperationExecutionError as error:
                 if error.technical_log_reference is None:
                     error = OperationExecutionError(
                         error.code,
                         error.safe_detail,
-                        technical_log_reference=self.technical_logger(
-                            error.__cause__ or error
-                        ),
+                        technical_log_reference=self.technical_logger(error.__cause__ or error),
                     )
                 current = self.repository.operation(operation_id)
                 attempts_after_failure = current.attempts_completed + 1
                 if allows_automatic_retry(error.code, attempts_after_failure):
-                    self.repository.record_operation_attempt(
-                        operation_id, runner_id=self.runner_id
-                    )
+                    self.repository.record_operation_attempt(operation_id, runner_id=self.runner_id)
                     self.sleeper(self.retry_delay_seconds)
                     continue
                 return self._fail(operation_id, error)
@@ -223,9 +215,7 @@ class OperationRunner:
                 active=False,
             )
         if self._cancelled(operation_id):
-            return self.repository.complete_operation(
-                operation_id, runner_id=self.runner_id
-            )
+            return self.repository.complete_operation(operation_id, runner_id=self.runner_id)
 
         try:
             with self.repository.unit_of_work() as uow:
@@ -238,9 +228,7 @@ class OperationRunner:
                 )
                 handler.check_sources(operation, bound)
                 if bound.cancellation_requested(operation_id):
-                    result = bound.complete_operation(
-                        operation_id, runner_id=self.runner_id
-                    )
+                    result = bound.complete_operation(operation_id, runner_id=self.runner_id)
                     uow.commit()
                     return result
                 bound.set_operation_phase(
@@ -276,9 +264,7 @@ class OperationRunner:
                         technical_log_reference=reference,
                     )
                 else:
-                    result = bound.complete_operation(
-                        operation_id, runner_id=self.runner_id
-                    )
+                    result = bound.complete_operation(operation_id, runner_id=self.runner_id)
                 uow.commit()
                 return result
         except OperationExecutionError as error:
