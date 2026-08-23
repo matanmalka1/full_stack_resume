@@ -533,19 +533,101 @@ it needs.
 
 ### E — WorkingDraft, ETag, and the corrected validate/approve contract
 
-- [ ] `generate` (202), `GET`/`PATCH` with ETag and `If-Match`, `apply_selection_change`,
-      `archive`, `replace`.
-- [ ] **`validate_draft(working_draft_id, expected_version)`** replaces
-      `validate_working(application_id)`. 200 including `passed=false`.
-- [ ] **`approve_draft(working_draft_id, expected_version, validation_run_id)`.** Today
-      `DraftService.approve` calls `_validate_working` *inside* approval, so it creates its
-      own ValidationRun and the four binding checks in `state-and-use-cases.md` §15 are
-      vacuous. This is a correctness gap in existing code, not only an API concern. The
-      idempotency payload hash covers all three arguments plus the draft content hash.
-- [ ] CLI: `cv validate` prints the run ID; `cv approve` resolves the matching run at the
+**Stage E is implemented and awaiting evidence.** Commits `971be7d` (application,
+domain, infrastructure, CLI), `91cc6db` (API surface and the regenerated contract),
+`76bc471` (tests). Nothing here is closed until the user has run the handover below.
+
+- [x] `generate` (202) at `POST /applications/{id}/working-draft/generate`, through the
+      existing `accepted_operation` helper with both source IDs explicit. `GET`/`PATCH`
+      with ETag and `If-Match`. `apply_selection_change`, `archive`, `replace` - one
+      endpoint each, none of them folded into another.
+- [x] **`validate_draft(working_draft_id, expected_version)`** replaces
+      `validate_working(application_id)`. `200` including `passed=false`; the immutable
+      run is recorded either way; a version the caller no longer holds is `409` rather
+      than a report on content the caller is not looking at.
+- [x] **`approve_draft(working_draft_id, expected_version, validation_run_id)`.**
+      `DraftService.approve` called `_validate_working` *inside* approval, so the four
+      binding checks in `state-and-use-cases.md` §15 compared a run against the draft that
+      had just produced it: they could not fail. They are real now, and a fifth joined
+      them - the run's frozen knowledge context must still be current - because §15 asks
+      for it and it is the same class of mistake. The idempotency payload covers all three
+      arguments plus the draft's content hash.
+- [x] CLI: `cv validate` prints the run ID; `cv approve` resolves the matching run at the
       CLI boundary and refuses, naming `cv validate`, when none matches; `cv fast` chains
       with the real ID. Observable change: `cv approve` alone now requires a prior
       `cv validate`.
+
+**Three decisions taken while writing it**, each of which fixed a contract:
+
+1. **A structured patch is a list of claim edits, applied as one version.** Applying each
+   claim as its own version would hand the client a version it never asked about, and
+   make a half-applied patch indistinguishable from a completed one. Unauthorized free
+   text is kept as a `pending` claim carrying its reason - §14 requires it saved, not
+   refused and not discarded - and the result names those claims so a client does not have
+   to diff the document to find them.
+2. **`update_working_draft` records no ValidationRun.** §15 owns runs. One per autosave
+   would fill the record with evidence nobody asked for and make `validated` mean
+   "recently saved" instead of "recently checked". The existing `edit_claim` and
+   `sync_working_claims` CLI paths keep their own behaviour and were not touched.
+3. **A selection change on a manually edited draft is refused, not applied.** The rebuild
+   is deterministic, so it would replace the user's own sentences with the engine's - which
+   is exactly §14's "requires wording judgment" branch. `manually_edited` decides it in the
+   domain from three markers only a human edit path can set: a relinked claim, a `pending`
+   claim, and the one derivation `apply_claim_edit` writes.
+
+**Class C**, and it is the only one in Stage E: archived drafts are a new immutable payload
+layout, `artifacts/drafts/{application}/{draft}-v{version}.json`, registered as a
+`working_draft_snapshot` artifact version. No schema change and no migration, so the frozen
+fingerprint does not move; `cv reconcile` verifies the new payloads through the same
+inventory as every other one.
+
+**Class B**, both additive: `update_working_draft` takes an optional `selection_plan_id` so
+a selection change can repoint the draft in the same write, and `create_selection_plan`
+takes an optional repository so a caller can bind it to its own UnitOfWork rather than a
+second copy of the overlay existing.
+
+OpenAPI and TypeScript were regenerated at `91cc6db`: 7 paths added, 13 schemas added, 0
+removed, 0 existing schemas changed.
+
+**Test call sites moved, and that is the change rather than churn around it.** 18 sites
+called `services.drafts.approve(application_id)` and 3 called `validate_working`. They now
+go through `approve_active_draft` / `validate_active_draft` in `tests/helpers.py`, which
+validate first - which is what every caller must now do. Four of the 18 are inside
+`pytest.raises`, and each still refuses at the same place for the same reason: the chain
+check and the quarantine check happen before validation would matter, the projection check
+belongs to approval, and the failing-report case now surfaces from the binding check rather
+than from approval's own run.
+
+**Not done in Stage E, deliberately:** `regenerate_section` and `regenerate_claim` have no
+endpoint. They are AI Operations and belong to Stage G; §14 names them as the branch
+`apply_selection_change` directs a manually edited draft to, and that refusal names them by
+command rather than by route.
+
+#### Handover — focused tests, in sub-stage order
+
+The user runs these. Predictions are stated first so an unexplained delta is a finding.
+
+| Order | Command | What it proves | Pass looks like |
+| --- | --- | --- | --- |
+| 1 | `.venv/bin/python -m pytest tests/test_api_working_drafts.py` | The whole Stage E surface: generation, ETag, patch, selection change, archive, replace, validate, approve, and the three CLI cases | **23 passed** |
+| 2 | `.venv/bin/python -m pytest tests/test_operations.py tests/test_integration.py tests/test_chain_integrity.py` | The blast radius of the approval signature change and of the renamed domain-validator import | **no failures**; these files gain and lose no cases |
+| 3 | `.venv/bin/python -m pytest tests/test_api_foundation.py tests/test_architecture.py` | OpenAPI/TypeScript drift against the regenerated contract, and that the new router imports no domain type | **29 passed** |
+| 4 | `.venv/bin/python -m pytest` | The Class B gate for the boundary | **330 passed, 4 deselected** |
+| 5 | `.venv/bin/python -m ruff check cv_engine tests && .venv/bin/python -m ruff format --check cv_engine tests && .venv/bin/python -m pyright` | Lint, format, and the port/adapter structural check | ruff clean; **0 errors, 0 warnings, 0 informations** |
+| 6 | Offline CLI, `OPENAI_API_KEY` unset, fresh Workspace: `ingest → analyze → draft → validate → approve → render → ready → reconcile` | That `cv approve` still reaches an ApprovedRevision after `cv validate`, and that `cv reconcile` verifies the new draft-snapshot payload layout | `validate` prints a `validation_run_id`; `approve` returns a revision whose `validation_run_id` is that one; `reconcile` passes |
+
+The 330 is 307 + 23, and the 23 is exactly the function count of the new file - none of
+its cases are parametrised, and no test function was added or removed anywhere else. The 4
+deselected are still exactly the browser-marked tests. Same interpreter as every earlier
+M3 measurement: `.venv/bin/python`, Python 3.14.2.
+
+The browser suite is not requested. Nothing in Stage E touches a rendering or browser path;
+the one flow that ends in a render, `cv fast`, is covered at the seam upstream of the
+renderer and its end-to-end case stays browser-marked where it already was.
+
+**Run by the agent, and stated as such:** ruff, ruff format, pyright, OpenAPI generation,
+and `npm run generate` were run while writing this. No pytest was run - the counts above
+are predictions derived from the source, not measurements.
 
 ### F — Render, artifacts, Ready
 
