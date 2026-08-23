@@ -179,22 +179,35 @@ def test_a_failed_render_leaves_the_approved_revision_exactly_as_it_was(
 
 
 def test_retrying_a_failed_render_creates_a_new_operation(
-    api_worker, approved_application, monkeypatch
+    api_worker, approved_application, deterministic_renderer, monkeypatch
 ) -> None:
-    """§16: "Retry creates a new Operation" - not a reopening of the failed one."""
+    """§5.4: retry is new work and only its exact artifacts establish Ready."""
     setup = approved_application("Retry Co")
+    revision_before = setup.services.repository.approved_revision(setup.approved.revision_id)
 
     def explode(*_args, **_kwargs):
         raise OSError("no browser here")
 
-    monkeypatch.setattr("cv_engine.infrastructure.rendering.render_pdf", explode)
-    failed = _render_over_http(api_worker, setup.application_id, setup.approved.revision_id)
+    with monkeypatch.context() as failure_patch:
+        failure_patch.setattr("cv_engine.infrastructure.rendering.render_pdf", explode)
+        failed = _render_over_http(api_worker, setup.application_id, setup.approved.revision_id)
     assert failed["status"] == "failed", failed
+    assert (
+        setup.services.repository.approved_revision(setup.approved.revision_id) == revision_before
+    )
 
     retried = _post(api_worker, f"/operations/{failed['id']}/retry")
     assert retried.status_code == 202, retried.text
     assert retried.json()["id"] != failed["id"]
     assert retried.headers["Location"].endswith(retried.json()["id"])
+
+    completed = api_worker.wait_for_operation(retried.json()["id"])
+    assert completed["status"] == "succeeded", completed
+    assert completed["retry_of_operation_id"] == failed["id"]
+    assert all(output["active"] for output in completed["outputs"])
+    detail = _get(api_worker, f"/applications/{setup.application_id}").json()
+    assert detail["preparation_state"] == "ready"
+    assert detail["latest_ready_revision_id"] == setup.approved.revision_id
 
 
 # --- artifact access, by ID and only by ID -----------------------------------

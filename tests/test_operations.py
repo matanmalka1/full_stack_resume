@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
-from threading import Barrier, Event, Thread
+from threading import Barrier, Event, Lock, Thread
 
 import pytest
 from helpers import ACCOUNT_MANAGER_JOB, run_cli, validate_active_draft
@@ -45,7 +45,7 @@ from cv_engine.application.operations import (
 )
 from cv_engine.domain.models import ValidationIssue, ValidationReport
 from cv_engine.infrastructure.persistence import Repository
-from cv_engine.runtime.execution import OperationWorker
+from cv_engine.runtime.execution import ForegroundOperationExecutor, OperationWorker
 from cv_engine.util import new_id, sha256_text
 
 
@@ -227,6 +227,63 @@ def test_two_runners_racing_one_operation_produce_one_claim(services) -> None:
     claimed = [result for result in results if result is not None]
     assert len(claimed) == 1
     assert claimed[0].lease_owner in {"runner-a", "runner-b"}
+
+
+def test_foreground_executor_and_worker_race_one_operation_without_duplicate_execution(
+    services,
+) -> None:
+    """The two concrete hosts contend through the same durable claim contract."""
+    operation = _operation_for_runner(services, "Foreground Worker Race Co")
+    barrier = Barrier(2)
+    execution_lock = Lock()
+    executions = 0
+
+    def execute(_operation, _cancelled):
+        nonlocal executions
+        with execution_lock:
+            executions += 1
+        return PreparedOperation()
+
+    handler = _Handler(execute=execute)
+    foreground = ForegroundOperationExecutor(
+        services.repository,
+        OperationRunner(
+            services.repository,
+            {OperationType.ANALYZE_JOB: handler},
+            runner_id="foreground-racer",
+        ),
+        poll_interval_seconds=0,
+        sleeper=lambda _seconds: None,
+    )
+    worker = OperationWorker(
+        services.repository,
+        OperationRunner(
+            services.repository,
+            {OperationType.ANALYZE_JOB: handler},
+            runner_id="worker-racer",
+        ),
+        concurrency=1,
+        poll_interval_seconds=0,
+    )
+
+    def run_foreground():
+        barrier.wait(timeout=2)
+        return foreground.execute(operation.id)
+
+    def run_worker():
+        barrier.wait(timeout=2)
+        return worker.run_once()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        foreground_result, worker_result = [
+            future.result(timeout=5)
+            for future in (pool.submit(run_foreground), pool.submit(run_worker))
+        ]
+
+    assert executions == 1
+    assert foreground_result.status is OperationStatus.SUCCEEDED
+    assert services.repository.operation(operation.id).status is OperationStatus.SUCCEEDED
+    assert worker_result is None or worker_result.id == operation.id
 
 
 def test_application_and_global_render_leases_queue_contending_work(services) -> None:

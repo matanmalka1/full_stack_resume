@@ -30,7 +30,7 @@ from __future__ import annotations
 import os
 
 from api_harness import MUTATION_HEADERS
-from helpers import ACCOUNT_MANAGER_JOB, working_claim
+from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB, working_claim
 
 from cv_engine.api.app import API_PREFIX
 
@@ -121,6 +121,10 @@ def test_the_full_api_journey_reaches_ready_offline(
     )
     working_draft_id = _outputs(drafted)["working_draft"]
 
+    detail = _get(api_worker, f"/applications/{application_id}").json()
+    assert detail["preparation_state"] == "ready_for_approval"
+    assert detail["working_draft_state"] == "validated"
+
     read = _get(api_worker, f"/working-drafts/{working_draft_id}")
     assert read.status_code == 200, read.text
     etag = read.headers["ETag"]
@@ -148,6 +152,10 @@ def test_the_full_api_journey_reaches_ready_offline(
     new_etag = edited.headers["ETag"]
     assert new_etag != etag
 
+    detail = _get(api_worker, f"/applications/{application_id}").json()
+    assert detail["preparation_state"] == "draft_in_progress"
+    assert detail["working_draft_state"] == "editing"
+
     # The same token again is the concurrency matrix's first row: the second
     # save must change nothing at all rather than win or merge.
     stale = _patch(
@@ -166,6 +174,10 @@ def test_the_full_api_journey_reaches_ready_offline(
     assert validated.status_code == 200, validated.text
     assert validated.json()["passed"] is True, validated.json()["report"]
     validation_run_id = validated.json()["validation_run_id"]
+
+    detail = _get(api_worker, f"/applications/{application_id}").json()
+    assert detail["preparation_state"] == "ready_for_approval"
+    assert detail["working_draft_state"] == "validated"
 
     # --- Approve --------------------------------------------------------
     approved = _post(
@@ -221,3 +233,97 @@ def test_the_full_api_journey_reaches_ready_offline(
     by_id = _get(api_worker, f"/artifacts/{pdf_artifact_version_id}/download")
     assert by_id.status_code == 200, by_id.text
     assert by_id.content == export.content
+
+
+def test_the_review_journey_resolves_once_and_reaches_ready(
+    api_worker, deterministic_renderer
+) -> None:
+    created = _post(
+        api_worker,
+        "/applications",
+        {
+            "company": "Review Journey Co",
+            "target_role": "Account Manager",
+            "job_text": AMBIGUOUS_HEBREW_JOB,
+            "acknowledged_duplicates": True,
+        },
+    )
+    assert created.status_code == 201, created.text
+    application_id = created.json()["application_id"]
+
+    analyzed = _run_operation(
+        api_worker,
+        _post(
+            api_worker,
+            f"/applications/{application_id}/analyses",
+            {"job_snapshot_id": created.json()["job_snapshot_id"]},
+        ),
+    )
+    original = _outputs(analyzed)
+    state = _get(api_worker, f"/applications/{application_id}").json()
+    assert state["preparation_state"] == "needs_review"
+    assert state["recommended_action"] == "apply_analysis_decisions"
+
+    decided = _post(
+        api_worker,
+        f"/analyses/{original['job_analysis']}/apply-decisions",
+        {
+            "application_id": application_id,
+            "profile_override": "account-manager",
+            "accept_low_fit": True,
+        },
+    )
+    assert decided.status_code == 201, decided.text
+    resolved = decided.json()
+    assert resolved["created_analysis"] is True
+    assert resolved["job_analysis_id"] != original["job_analysis"]
+    assert resolved["selection_plan_id"] != original["selection_plan"]
+    state = _get(api_worker, f"/applications/{application_id}").json()
+    assert state["review_reasons"] == []
+    assert state["preparation_state"] == "ready_to_draft"
+
+    drafted = _run_operation(
+        api_worker,
+        _post(
+            api_worker,
+            f"/applications/{application_id}/working-draft/generate",
+            {
+                "job_analysis_id": resolved["job_analysis_id"],
+                "selection_plan_id": resolved["selection_plan_id"],
+            },
+        ),
+    )
+    working_draft_id = _outputs(drafted)["working_draft"]
+    working = _get(api_worker, f"/working-drafts/{working_draft_id}").json()
+
+    validated = _post(
+        api_worker,
+        f"/working-drafts/{working_draft_id}/validate",
+        {"expected_edit_version": working["edit_version"]},
+    )
+    assert validated.status_code == 200, validated.text
+    assert validated.json()["passed"] is True
+
+    approved = _post(
+        api_worker,
+        f"/working-drafts/{working_draft_id}/approve",
+        {
+            "expected_edit_version": working["edit_version"],
+            "validation_run_id": validated.json()["validation_run_id"],
+        },
+    )
+    assert approved.status_code == 201, approved.text
+    revision_id = approved.json()["revision_id"]
+
+    rendered = _run_operation(
+        api_worker,
+        _post(
+            api_worker,
+            f"/approved-revisions/{revision_id}/render",
+            {"application_id": application_id},
+        ),
+    )
+    assert _outputs(rendered)["resume_pdf"]
+    state = _get(api_worker, f"/applications/{application_id}").json()
+    assert state["preparation_state"] == "ready"
+    assert state["latest_ready_revision_id"] == revision_id

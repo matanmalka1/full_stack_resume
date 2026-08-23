@@ -537,6 +537,7 @@ def test_a_cancelled_run_keeps_its_completed_output_as_inactive_evidence(
     ]
     assert [output.output_id for output in references] == [artifacts[0]["id"]]
     assert all(not output.active for output in references)
+    assert len(fake_openai.calls_for("propose_job_analysis")) == 1
     # Cancellation prevents activation, so nothing was committed.
     assert not any(output.output_type == "job_analysis" for output in completed.outputs)
     with pytest.raises(UnknownRecord):
@@ -579,6 +580,7 @@ def test_a_source_that_moves_after_execution_keeps_the_output_as_inactive_eviden
     ]
     assert [output.output_id for output in references] == [artifacts[0]["id"]]
     assert all(not output.active for output in references)
+    assert len(fake_openai.calls_for("propose_job_analysis")) == 1
 
 
 def test_the_provider_receives_the_job_text_and_not_the_whole_fact_store(
@@ -851,5 +853,6 @@ def test_a_proposal_cannot_add_experience_that_is_not_in_the_facts(
 
     assert completed.status.value == "failed"
     assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
+    assert len(fake_openai.calls_for("regenerate_claim")) == 1
     unchanged = ai_services.repository.active_working_draft(ingested.application_id)
     assert unchanged.content_hash == working.content_hash

@@ -119,13 +119,28 @@ def _safe_context(error: ApplicationError) -> dict[str, Any] | None:
     return None
 
 
+def _safe_detail(error: ApplicationError) -> str:
+    """Keep dependency diagnostics out of the HTTP representation.
+
+    Expected domain refusals are written for the user and may retain their
+    message. Infrastructure and provider exceptions commonly carry local
+    paths, credentials, response text, or transport diagnostics; those details
+    belong only in the structured technical log.
+    """
+    if isinstance(error, DependencyUnavailable):
+        return "A required dependency is unavailable."
+    if isinstance(error, InfrastructureFailure):
+        return "An internal dependency failed."
+    return str(error)
+
+
 async def application_error_handler(request: Request, exc: Exception) -> JSONResponse:
     error = exc if isinstance(exc, ApplicationError) else ApplicationError(str(exc))
     status = status_for(error)
     return problem(
         status,
         error.code,
-        str(error),
+        _safe_detail(error),
         context=_safe_context(error),
         instance=request.url.path,
     )

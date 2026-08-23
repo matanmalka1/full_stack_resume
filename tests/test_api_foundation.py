@@ -103,7 +103,9 @@ def test_an_unregistered_subclass_inherits_its_parents_status() -> None:
     assert NotRegistered("x").code == "NOT_REGISTERED"
 
 
-def test_problem_details_carry_a_stable_code_and_leak_nothing(api) -> None:
+def test_problem_details_carry_a_stable_code_and_leak_nothing(
+    api, services, monkeypatch: pytest.MonkeyPatch
+) -> None:
     response = api.post(f"{API_PREFIX}/does-not-exist", headers={"Origin": ALLOWED_ORIGIN})
 
     assert response.status_code == 404
@@ -112,6 +114,30 @@ def test_problem_details_carry_a_stable_code_and_leak_nothing(api) -> None:
     # asserted on the refusals the middlewares produce, below.
     assert "Traceback" not in response.text
     assert str(REPO_ROOT) not in response.text
+
+    leaked = (
+        f"provider said invalid token sk-live-secret at {REPO_ROOT}/private.db; "
+        "Traceback: provider wire message"
+    )
+
+    def fail_ingest(_command):
+        raise InfrastructureFailure(leaked)
+
+    monkeypatch.setattr(services.applications, "ingest", fail_ingest)
+    failed = api.post(
+        f"{API_PREFIX}/applications",
+        json={
+            "company": "Safe Problem Co",
+            "target_role": "Developer",
+            "job_text": "Python role",
+            "acknowledged_duplicates": True,
+        },
+        headers={"Origin": ALLOWED_ORIGIN},
+    )
+    assert failed.status_code == 500
+    assert failed.json()["detail"] == "An internal dependency failed."
+    for secret in ("private.db", "Traceback", "sk-live-secret", "provider wire message"):
+        assert secret not in failed.text
 
 
 # --- transport limits -------------------------------------------------------

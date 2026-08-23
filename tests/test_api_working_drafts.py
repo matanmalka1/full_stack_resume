@@ -22,7 +22,7 @@ import json
 
 import pytest
 from api_harness import MUTATION_HEADERS
-from helpers import ACCOUNT_MANAGER_JOB, working_claim
+from helpers import ACCOUNT_MANAGER_JOB, run_cli, working_claim
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import IngestCommand
@@ -146,6 +146,31 @@ def test_generation_is_an_accepted_operation_naming_both_of_its_sources(api_work
     assert body["active"] is True
 
 
+def test_generation_reuses_one_operation_for_one_idempotency_key(api_worker) -> None:
+    application_id = _application(api_worker.services, "Idempotent Generation Co")
+    sources = _analyze(api_worker, application_id)
+    path = f"/applications/{application_id}/working-draft/generate"
+    body = {
+        "job_analysis_id": sources["job_analysis"],
+        "selection_plan_id": sources["selection_plan"],
+    }
+    headers = {"Idempotency-Key": "generate-once"}
+
+    first = _post(api_worker, path, body, **headers)
+    second = _post(api_worker, path, body, **headers)
+
+    assert first.status_code == second.status_code == 202
+    assert first.json()["id"] == second.json()["id"]
+    finished = api_worker.wait_for_operation(first.json()["id"])
+    working_ids = [
+        output["output_id"]
+        for output in finished["outputs"]
+        if output["output_type"] == "working_draft"
+    ]
+    assert len(working_ids) == 1
+    assert _state(api_worker, application_id)["active_working_draft_id"] == working_ids[0]
+
+
 def test_generation_refuses_a_plan_belonging_to_another_application(api_worker) -> None:
     """Explicit source IDs are checked, not trusted (§5.4 item 5)."""
     application_id, _draft_id, _sources = _drafted(api_worker, "Source Owner Co")
@@ -217,6 +242,43 @@ def test_a_second_save_with_the_same_etag_is_a_conflict_that_changes_nothing(api
     after = _read(api_worker, working_draft_id).json()
     assert after["edit_version"] == first.json()["edit_version"]
     assert after["content_hash"] == first.json()["content_hash"]
+
+
+def test_cli_edit_wins_before_a_web_autosave_with_the_stale_etag(api_worker) -> None:
+    """The two clients share the same optimistic draft version, not two stores."""
+    application_id, working_draft_id, _sources = _drafted(api_worker, "CLI Web Race Co")
+    read = _read(api_worker, working_draft_id)
+    claim = working_claim(api_worker.services, application_id, "sales.metric.performance")
+    before = read.json()
+
+    edited = run_cli(
+        "--workspace",
+        str(api_worker.services.workspace.root),
+        "edit-claim",
+        application_id,
+        claim.claim_id,
+        "--text",
+        claim.text,
+        "--fact-id",
+        claim.fact_ids[0],
+    )
+    assert edited.returncode == 0, edited.stderr
+    cli_version = _read(api_worker, working_draft_id).json()
+    assert cli_version["edit_version"] == before["edit_version"] + 1
+
+    stale_web = _patch(
+        api_worker,
+        working_draft_id,
+        read.headers["ETag"],
+        [{"claim_id": claim.claim_id, "fact_ids": claim.fact_ids, "text": claim.text}],
+    )
+    assert stale_web.status_code == 409, stale_web.text
+    assert stale_web.json()["code"] == "STATE_CONFLICT"
+    after = _read(api_worker, working_draft_id).json()
+    assert (after["edit_version"], after["content_hash"]) == (
+        cli_version["edit_version"],
+        cli_version["content_hash"],
+    )
 
 
 def test_free_text_no_fact_authorizes_is_kept_as_a_pending_claim(api_worker) -> None:
