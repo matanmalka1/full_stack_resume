@@ -397,6 +397,7 @@ def test_invalid_classifications_are_rejected_before_any_persistence(services: S
                 company=f"Inconsistent Co {index}",
                 target_role="Account Manager",
                 job_text=ACCOUNT_MANAGER_JOB,
+                acknowledged_duplicates=True,
             )
         )
         app_id = ingested.application_id

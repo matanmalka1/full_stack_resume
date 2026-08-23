@@ -4,6 +4,92 @@
  */
 
 export interface paths {
+    "/api/v1/applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List applications */
+        get: operations["list_applications_api_v1_applications_get"];
+        put?: never;
+        /** Create an application and its first immutable job snapshot */
+        post: operations["create_application_api_v1_applications_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/duplicate-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check for possible duplicate applications */
+        post: operations["duplicate_check_api_v1_applications_duplicate_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read an application and its active preparation state */
+        get: operations["application_detail_api_v1_applications__application_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close an application without deleting its history */
+        post: operations["close_application_api_v1_applications__application_id__close_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/job-snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a new immutable job snapshot */
+        post: operations["create_job_snapshot_api_v1_applications__application_id__job_snapshots_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -25,6 +111,283 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ApplicationDetailResponse */
+        ApplicationDetailResponse: {
+            /** Active Analysis Id */
+            active_analysis_id?: string | null;
+            /** Active Job Snapshot Id */
+            active_job_snapshot_id: string;
+            /** Active Operation */
+            active_operation?: {
+                [key: string]: unknown;
+            } | null;
+            /** Active Selection Plan Id */
+            active_selection_plan_id?: string | null;
+            /** Active Working Draft Id */
+            active_working_draft_id?: string | null;
+            application: components["schemas"]["ApplicationResponse"];
+            /** Available Actions */
+            available_actions: string[];
+            /** Blocked Actions */
+            blocked_actions: components["schemas"]["BlockedActionResponse"][];
+            latest_analysis?: components["schemas"]["JobAnalysisResponse"] | null;
+            /** Latest Approved Revision Id */
+            latest_approved_revision_id?: string | null;
+            /** Latest Ready Revision Id */
+            latest_ready_revision_id?: string | null;
+            latest_snapshot: components["schemas"]["JobSnapshotResponse"];
+            /** Newer Draft In Progress */
+            newer_draft_in_progress: boolean;
+            /** Preparation State */
+            preparation_state: string;
+            /** Primary Stale Reason */
+            primary_stale_reason?: string | null;
+            /** Recommended Action */
+            recommended_action?: string | null;
+            /** Recruitment Status */
+            recruitment_status: string;
+            /** Review Reasons */
+            review_reasons: components["schemas"]["ReasonResponse"][];
+            /** Stale Reasons */
+            stale_reasons: components["schemas"]["ReasonResponse"][];
+            /** Terminal Outcome */
+            terminal_outcome?: string | null;
+            /** Warnings */
+            warnings: components["schemas"]["WarningResponse"][];
+            /** Working Draft State */
+            working_draft_state: string;
+        };
+        /** ApplicationListItemResponse */
+        ApplicationListItemResponse: {
+            /** Active Analysis Id */
+            active_analysis_id?: string | null;
+            /** Active Job Snapshot Id */
+            active_job_snapshot_id: string;
+            /** Active Operation */
+            active_operation?: {
+                [key: string]: unknown;
+            } | null;
+            /** Active Selection Plan Id */
+            active_selection_plan_id?: string | null;
+            /** Active Working Draft Id */
+            active_working_draft_id?: string | null;
+            /** Available Actions */
+            available_actions: string[];
+            /** Blocked Actions */
+            blocked_actions: components["schemas"]["BlockedActionResponse"][];
+            /** Classification Confidence */
+            classification_confidence?: number | null;
+            /** Company */
+            company: string;
+            /** Created At */
+            created_at: string;
+            /** Current Status */
+            current_status: string;
+            /** Emphasis */
+            emphasis?: string | null;
+            /** Fit Level */
+            fit_level?: string | null;
+            /** Id */
+            id: string;
+            /** Language */
+            language?: string | null;
+            /** Last Contact Date */
+            last_contact_date?: string | null;
+            /** Latest Approved Revision Id */
+            latest_approved_revision_id?: string | null;
+            /** Latest Ready Revision Id */
+            latest_ready_revision_id?: string | null;
+            /** Newer Draft In Progress */
+            newer_draft_in_progress: boolean;
+            /** Next Action */
+            next_action?: string | null;
+            /** Next Action Date */
+            next_action_date?: string | null;
+            /** Normalized Role */
+            normalized_role?: string | null;
+            /** Notes */
+            notes: string;
+            /** Preparation State */
+            preparation_state: string;
+            /** Primary Stale Reason */
+            primary_stale_reason?: string | null;
+            /** Profile */
+            profile?: string | null;
+            /** Recommended Action */
+            recommended_action?: string | null;
+            /** Recruitment Status */
+            recruitment_status: string;
+            /** Review Reasons */
+            review_reasons: components["schemas"]["ReasonResponse"][];
+            /** Source */
+            source: string;
+            /** Source Url */
+            source_url?: string | null;
+            /** Stale Reasons */
+            stale_reasons: components["schemas"]["ReasonResponse"][];
+            /** Target Role */
+            target_role: string;
+            /** Terminal Outcome */
+            terminal_outcome?: string | null;
+            /** Track */
+            track?: string | null;
+            /** Updated At */
+            updated_at: string;
+            /** Warnings */
+            warnings: components["schemas"]["WarningResponse"][];
+            /** Working Draft State */
+            working_draft_state: string;
+        };
+        /** ApplicationListResponse */
+        ApplicationListResponse: {
+            /** Items */
+            items: components["schemas"]["ApplicationListItemResponse"][];
+        };
+        /** ApplicationResponse */
+        ApplicationResponse: {
+            /** Classification Confidence */
+            classification_confidence?: number | null;
+            /** Company */
+            company: string;
+            /** Created At */
+            created_at: string;
+            /** Current Status */
+            current_status: string;
+            /** Emphasis */
+            emphasis?: string | null;
+            /** Fit Level */
+            fit_level?: string | null;
+            /** Id */
+            id: string;
+            /** Language */
+            language?: string | null;
+            /** Last Contact Date */
+            last_contact_date?: string | null;
+            /** Next Action */
+            next_action?: string | null;
+            /** Next Action Date */
+            next_action_date?: string | null;
+            /** Normalized Role */
+            normalized_role?: string | null;
+            /** Notes */
+            notes: string;
+            /** Profile */
+            profile?: string | null;
+            /** Source */
+            source: string;
+            /** Source Url */
+            source_url?: string | null;
+            /** Target Role */
+            target_role: string;
+            /** Terminal Outcome */
+            terminal_outcome?: string | null;
+            /** Track */
+            track?: string | null;
+            /** Updated At */
+            updated_at: string;
+        };
+        /** BlockedActionResponse */
+        BlockedActionResponse: {
+            /** Action */
+            action: string;
+            /** Reasons */
+            reasons: string[];
+        };
+        /** CloseApplicationResponse */
+        CloseApplicationResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Current Status */
+            current_status: string;
+            /** Event Id */
+            event_id?: string | null;
+            /** Next Action */
+            next_action?: string | null;
+            /** Next Action Date */
+            next_action_date?: string | null;
+            /** Terminal Outcome */
+            terminal_outcome?: string | null;
+        };
+        /** CreateApplicationRequest */
+        CreateApplicationRequest: {
+            /**
+             * Acknowledged Duplicates
+             * @default false
+             */
+            acknowledged_duplicates: boolean;
+            /** Company */
+            company: string;
+            /** Job Text */
+            job_text: string;
+            /** Source Url */
+            source_url?: string | null;
+            /** Target Role */
+            target_role: string;
+        };
+        /** CreateApplicationResponse */
+        CreateApplicationResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Duplicate Matches */
+            duplicate_matches: components["schemas"]["DuplicateMatchResponse"][];
+            /** Job Snapshot Id */
+            job_snapshot_id: string;
+            /** Warnings */
+            warnings: string[];
+        };
+        /** CreateJobSnapshotRequest */
+        CreateJobSnapshotRequest: {
+            /** Job Text */
+            job_text: string;
+            /**
+             * Source Metadata
+             * @default {}
+             */
+            source_metadata: {
+                [key: string]: unknown;
+            };
+            /** Source Url */
+            source_url?: string | null;
+        };
+        /** CreateJobSnapshotResponse */
+        CreateJobSnapshotResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Job Snapshot Id */
+            job_snapshot_id: string;
+        };
+        /** DuplicateCheckRequest */
+        DuplicateCheckRequest: {
+            /** Company */
+            company: string;
+            /** Job Text */
+            job_text: string;
+            /** Source Url */
+            source_url?: string | null;
+            /** Target Role */
+            target_role: string;
+        };
+        /** DuplicateCheckResponse */
+        DuplicateCheckResponse: {
+            /** Matches */
+            matches: components["schemas"]["DuplicateMatchResponse"][];
+        };
+        /** DuplicateMatchResponse */
+        DuplicateMatchResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Company */
+            company: string;
+            /** Matched On */
+            matched_on: ("source_url" | "normalized_text" | "company_title")[];
+            /** Target Role */
+            target_role: string;
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
+        };
         /**
          * HealthResponse
          * @description What `cv web` probes to tell its own instance from a foreign process.
@@ -49,6 +412,50 @@ export interface components {
             /** Workspace Id */
             workspace_id: string;
         };
+        /** JobAnalysisResponse */
+        JobAnalysisResponse: {
+            /** Analysis */
+            analysis: {
+                [key: string]: unknown;
+            };
+            /** Application Id */
+            application_id: string;
+            /** Created At */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Job Snapshot Id */
+            job_snapshot_id: string;
+            /** Model */
+            model: string;
+            /** Provider */
+            provider: string;
+            /** Version Number */
+            version_number: number;
+        };
+        /** JobSnapshotResponse */
+        JobSnapshotResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Captured At */
+            captured_at: string;
+            /** Content Hash */
+            content_hash: string;
+            /** Id */
+            id: string;
+            /** Job Text */
+            job_text: string;
+            /** Prior Snapshot Id */
+            prior_snapshot_id?: string | null;
+            /** Source Metadata */
+            source_metadata: {
+                [key: string]: unknown;
+            };
+            /** Source Url */
+            source_url?: string | null;
+            /** Version Number */
+            version_number: number;
+        };
         /** KnowledgeVersions */
         KnowledgeVersions: {
             /** Candidate Context */
@@ -64,6 +471,43 @@ export interface components {
             /** Profiles */
             profiles: string;
         };
+        /** ReasonResponse */
+        ReasonResponse: {
+            /** Allowed Resolution Actions */
+            allowed_resolution_actions: string[];
+            /** Code */
+            code: string;
+            /** Entity References */
+            entity_references: {
+                [key: string]: string;
+            };
+            /** Message */
+            message: string;
+        };
+        /** ValidationError */
+        ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
+        };
+        /** WarningResponse */
+        WarningResponse: {
+            /** Code */
+            code: string;
+            /** Entity References */
+            entity_references: {
+                [key: string]: string;
+            };
+            /** Message */
+            message: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -73,6 +517,189 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_applications_api_v1_applications_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationListResponse"];
+                };
+            };
+        };
+    };
+    create_application_api_v1_applications_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateApplicationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateApplicationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    duplicate_check_api_v1_applications_duplicate_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DuplicateCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateCheckResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    application_detail_api_v1_applications__application_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_application_api_v1_applications__application_id__close_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloseApplicationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_job_snapshot_api_v1_applications__application_id__job_snapshots_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateJobSnapshotRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateJobSnapshotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     health_api_v1_health_get: {
         parameters: {
             query?: never;

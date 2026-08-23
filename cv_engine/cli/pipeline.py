@@ -26,12 +26,19 @@ def _ingest(context: CommandContext) -> int:
             target_role=args.role,
             job_text=_job_text(args),
             source_url=args.url,
+            actor_type="user",
+            client="cli",
+            acknowledged_duplicates=args.acknowledge_duplicates,
         )
     )
     _print(
         {
             "application_id": ingested.application_id,
             "job_snapshot_id": ingested.job_snapshot_id,
+            "warnings": ingested.warnings,
+            "duplicate_matches": [
+                match.model_dump(mode="json") for match in ingested.duplicate_matches
+            ],
         }
     )
     return 0

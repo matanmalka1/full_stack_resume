@@ -1,6 +1,1057 @@
 {
   "components": {
     "schemas": {
+      "ApplicationDetailResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "active_analysis_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Analysis Id"
+          },
+          "active_job_snapshot_id": {
+            "title": "Active Job Snapshot Id",
+            "type": "string"
+          },
+          "active_operation": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Operation"
+          },
+          "active_selection_plan_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Selection Plan Id"
+          },
+          "active_working_draft_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Working Draft Id"
+          },
+          "application": {
+            "$ref": "#/components/schemas/ApplicationResponse"
+          },
+          "available_actions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Available Actions",
+            "type": "array"
+          },
+          "blocked_actions": {
+            "items": {
+              "$ref": "#/components/schemas/BlockedActionResponse"
+            },
+            "title": "Blocked Actions",
+            "type": "array"
+          },
+          "latest_analysis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobAnalysisResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latest_approved_revision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Approved Revision Id"
+          },
+          "latest_ready_revision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Ready Revision Id"
+          },
+          "latest_snapshot": {
+            "$ref": "#/components/schemas/JobSnapshotResponse"
+          },
+          "newer_draft_in_progress": {
+            "title": "Newer Draft In Progress",
+            "type": "boolean"
+          },
+          "preparation_state": {
+            "title": "Preparation State",
+            "type": "string"
+          },
+          "primary_stale_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Stale Reason"
+          },
+          "recommended_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Action"
+          },
+          "recruitment_status": {
+            "title": "Recruitment Status",
+            "type": "string"
+          },
+          "review_reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ReasonResponse"
+            },
+            "title": "Review Reasons",
+            "type": "array"
+          },
+          "stale_reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ReasonResponse"
+            },
+            "title": "Stale Reasons",
+            "type": "array"
+          },
+          "terminal_outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terminal Outcome"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/WarningResponse"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "working_draft_state": {
+            "title": "Working Draft State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "recruitment_status",
+          "preparation_state",
+          "working_draft_state",
+          "review_reasons",
+          "stale_reasons",
+          "warnings",
+          "active_job_snapshot_id",
+          "newer_draft_in_progress",
+          "available_actions",
+          "blocked_actions",
+          "application",
+          "latest_snapshot"
+        ],
+        "title": "ApplicationDetailResponse",
+        "type": "object"
+      },
+      "ApplicationListItemResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "active_analysis_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Analysis Id"
+          },
+          "active_job_snapshot_id": {
+            "title": "Active Job Snapshot Id",
+            "type": "string"
+          },
+          "active_operation": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Operation"
+          },
+          "active_selection_plan_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Selection Plan Id"
+          },
+          "active_working_draft_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Working Draft Id"
+          },
+          "available_actions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Available Actions",
+            "type": "array"
+          },
+          "blocked_actions": {
+            "items": {
+              "$ref": "#/components/schemas/BlockedActionResponse"
+            },
+            "title": "Blocked Actions",
+            "type": "array"
+          },
+          "classification_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classification Confidence"
+          },
+          "company": {
+            "title": "Company",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "current_status": {
+            "title": "Current Status",
+            "type": "string"
+          },
+          "emphasis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emphasis"
+          },
+          "fit_level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fit Level"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "last_contact_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Contact Date"
+          },
+          "latest_approved_revision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Approved Revision Id"
+          },
+          "latest_ready_revision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Ready Revision Id"
+          },
+          "newer_draft_in_progress": {
+            "title": "Newer Draft In Progress",
+            "type": "boolean"
+          },
+          "next_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action"
+          },
+          "next_action_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action Date"
+          },
+          "normalized_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normalized Role"
+          },
+          "notes": {
+            "title": "Notes",
+            "type": "string"
+          },
+          "preparation_state": {
+            "title": "Preparation State",
+            "type": "string"
+          },
+          "primary_stale_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Stale Reason"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile"
+          },
+          "recommended_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Action"
+          },
+          "recruitment_status": {
+            "title": "Recruitment Status",
+            "type": "string"
+          },
+          "review_reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ReasonResponse"
+            },
+            "title": "Review Reasons",
+            "type": "array"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "stale_reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ReasonResponse"
+            },
+            "title": "Stale Reasons",
+            "type": "array"
+          },
+          "target_role": {
+            "title": "Target Role",
+            "type": "string"
+          },
+          "terminal_outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terminal Outcome"
+          },
+          "track": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/WarningResponse"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "working_draft_state": {
+            "title": "Working Draft State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "recruitment_status",
+          "preparation_state",
+          "working_draft_state",
+          "review_reasons",
+          "stale_reasons",
+          "warnings",
+          "active_job_snapshot_id",
+          "newer_draft_in_progress",
+          "available_actions",
+          "blocked_actions",
+          "id",
+          "company",
+          "target_role",
+          "current_status",
+          "notes",
+          "source",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ApplicationListItemResponse",
+        "type": "object"
+      },
+      "ApplicationListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApplicationListItemResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ApplicationListResponse",
+        "type": "object"
+      },
+      "ApplicationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "classification_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classification Confidence"
+          },
+          "company": {
+            "title": "Company",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "current_status": {
+            "title": "Current Status",
+            "type": "string"
+          },
+          "emphasis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emphasis"
+          },
+          "fit_level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fit Level"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "last_contact_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Contact Date"
+          },
+          "next_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action"
+          },
+          "next_action_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action Date"
+          },
+          "normalized_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normalized Role"
+          },
+          "notes": {
+            "title": "Notes",
+            "type": "string"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "target_role": {
+            "title": "Target Role",
+            "type": "string"
+          },
+          "terminal_outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terminal Outcome"
+          },
+          "track": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "company",
+          "target_role",
+          "current_status",
+          "notes",
+          "source",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ApplicationResponse",
+        "type": "object"
+      },
+      "BlockedActionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "action",
+          "reasons"
+        ],
+        "title": "BlockedActionResponse",
+        "type": "object"
+      },
+      "CloseApplicationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "current_status": {
+            "title": "Current Status",
+            "type": "string"
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
+          },
+          "next_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action"
+          },
+          "next_action_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action Date"
+          },
+          "terminal_outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terminal Outcome"
+          }
+        },
+        "required": [
+          "application_id",
+          "current_status"
+        ],
+        "title": "CloseApplicationResponse",
+        "type": "object"
+      },
+      "CreateApplicationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "acknowledged_duplicates": {
+            "default": false,
+            "title": "Acknowledged Duplicates",
+            "type": "boolean"
+          },
+          "company": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Company",
+            "type": "string"
+          },
+          "job_text": {
+            "minLength": 1,
+            "title": "Job Text",
+            "type": "string"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "target_role": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Target Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "company",
+          "target_role",
+          "job_text"
+        ],
+        "title": "CreateApplicationRequest",
+        "type": "object"
+      },
+      "CreateApplicationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "duplicate_matches": {
+            "items": {
+              "$ref": "#/components/schemas/DuplicateMatchResponse"
+            },
+            "title": "Duplicate Matches",
+            "type": "array"
+          },
+          "job_snapshot_id": {
+            "title": "Job Snapshot Id",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "application_id",
+          "job_snapshot_id",
+          "warnings",
+          "duplicate_matches"
+        ],
+        "title": "CreateApplicationResponse",
+        "type": "object"
+      },
+      "CreateJobSnapshotRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "job_text": {
+            "minLength": 1,
+            "title": "Job Text",
+            "type": "string"
+          },
+          "source_metadata": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Source Metadata",
+            "type": "object"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          }
+        },
+        "required": [
+          "job_text"
+        ],
+        "title": "CreateJobSnapshotRequest",
+        "type": "object"
+      },
+      "CreateJobSnapshotResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "job_snapshot_id": {
+            "title": "Job Snapshot Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "application_id",
+          "job_snapshot_id"
+        ],
+        "title": "CreateJobSnapshotResponse",
+        "type": "object"
+      },
+      "DuplicateCheckRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "company": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Company",
+            "type": "string"
+          },
+          "job_text": {
+            "minLength": 1,
+            "title": "Job Text",
+            "type": "string"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "target_role": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Target Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "company",
+          "target_role",
+          "job_text"
+        ],
+        "title": "DuplicateCheckRequest",
+        "type": "object"
+      },
+      "DuplicateCheckResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "matches": {
+            "items": {
+              "$ref": "#/components/schemas/DuplicateMatchResponse"
+            },
+            "title": "Matches",
+            "type": "array"
+          }
+        },
+        "required": [
+          "matches"
+        ],
+        "title": "DuplicateCheckResponse",
+        "type": "object"
+      },
+      "DuplicateMatchResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "company": {
+            "title": "Company",
+            "type": "string"
+          },
+          "matched_on": {
+            "items": {
+              "enum": [
+                "source_url",
+                "normalized_text",
+                "company_title"
+              ],
+              "type": "string"
+            },
+            "title": "Matched On",
+            "type": "array"
+          },
+          "target_role": {
+            "title": "Target Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "application_id",
+          "company",
+          "target_role",
+          "matched_on"
+        ],
+        "title": "DuplicateMatchResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
       "HealthResponse": {
         "additionalProperties": false,
         "description": "What `cv web` probes to tell its own instance from a foreign process.\n\n`installation_id` and `workspace_id` together answer \"is the process on this\nport mine, and is it serving the Workspace I am about to open\". The version\nsurfaces are the §17 provenance set, reported so a client can refuse to talk\nto an instance it does not understand.",
@@ -45,6 +1096,123 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "JobAnalysisResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "analysis": {
+            "additionalProperties": true,
+            "title": "Analysis",
+            "type": "object"
+          },
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_snapshot_id": {
+            "title": "Job Snapshot Id",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "version_number": {
+            "title": "Version Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "application_id",
+          "job_snapshot_id",
+          "version_number",
+          "analysis",
+          "provider",
+          "model",
+          "created_at"
+        ],
+        "title": "JobAnalysisResponse",
+        "type": "object"
+      },
+      "JobSnapshotResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "captured_at": {
+            "title": "Captured At",
+            "type": "string"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_text": {
+            "title": "Job Text",
+            "type": "string"
+          },
+          "prior_snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prior Snapshot Id"
+          },
+          "source_metadata": {
+            "additionalProperties": true,
+            "title": "Source Metadata",
+            "type": "object"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "version_number": {
+            "title": "Version Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "application_id",
+          "version_number",
+          "job_text",
+          "captured_at",
+          "source_metadata",
+          "content_hash"
+        ],
+        "title": "JobSnapshotResponse",
+        "type": "object"
+      },
       "KnowledgeVersions": {
         "additionalProperties": false,
         "properties": {
@@ -83,6 +1251,108 @@
         ],
         "title": "KnowledgeVersions",
         "type": "object"
+      },
+      "ReasonResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed_resolution_actions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Resolution Actions",
+            "type": "array"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "entity_references": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Entity References",
+            "type": "object"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "entity_references",
+          "allowed_resolution_actions"
+        ],
+        "title": "ReasonResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WarningResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "entity_references": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Entity References",
+            "type": "object"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "entity_references"
+        ],
+        "title": "WarningResponse",
+        "type": "object"
       }
     }
   },
@@ -92,6 +1362,243 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/applications": {
+      "get": {
+        "operationId": "list_applications_api_v1_applications_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List applications",
+        "tags": [
+          "applications"
+        ]
+      },
+      "post": {
+        "operationId": "create_application_api_v1_applications_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateApplicationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateApplicationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create an application and its first immutable job snapshot",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
+    "/api/v1/applications/duplicate-check": {
+      "post": {
+        "operationId": "duplicate_check_api_v1_applications_duplicate_check_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DuplicateCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DuplicateCheckResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check for possible duplicate applications",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}": {
+      "get": {
+        "operationId": "application_detail_api_v1_applications__application_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read an application and its active preparation state",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/close": {
+      "post": {
+        "operationId": "close_application_api_v1_applications__application_id__close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloseApplicationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Close an application without deleting its history",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/job-snapshots": {
+      "post": {
+        "operationId": "create_job_snapshot_api_v1_applications__application_id__job_snapshots_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateJobSnapshotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateJobSnapshotResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create a new immutable job snapshot",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
     "/api/v1/health": {
       "get": {
         "operationId": "health_api_v1_health_get",

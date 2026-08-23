@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse
 from ..application.errors import (
     ApplicationError,
     DependencyUnavailable,
+    DuplicateAcknowledgementRequired,
     InfrastructureFailure,
     KnowledgeRejected,
     LineageBroken,
@@ -38,6 +39,7 @@ PROBLEM_CONTENT_TYPE = "application/problem+json"
 STATUS_BY_ERROR: dict[type[ApplicationError], int] = {
     UnknownRecord: 404,
     StateConflict: 409,
+    DuplicateAcknowledgementRequired: 412,
     ValidationBlocked: 412,
     LineageBroken: 412,
     KnowledgeRejected: 412,
@@ -102,6 +104,8 @@ def _safe_context(error: ApplicationError) -> dict[str, Any] | None:
     this is the blocked-approval path, where the client needs to know *that* it
     is blocked.
     """
+    if isinstance(error, DuplicateAcknowledgementRequired):
+        return {"matches": error.matches}
     if isinstance(error, ValidationBlocked) and error.report is not None:
         report = error.report
         groups = getattr(report, "groups", None)

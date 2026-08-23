@@ -16,6 +16,11 @@ def _add_job_input(parser: argparse.ArgumentParser) -> None:
     group.add_argument("--job-file")
     group.add_argument("--job-text")
     parser.add_argument("--url")
+    parser.add_argument(
+        "--acknowledge-duplicates",
+        action="store_true",
+        help="create even when duplicate warnings match an existing application",
+    )
 
 
 def _add_overrides(parser: argparse.ArgumentParser) -> None:

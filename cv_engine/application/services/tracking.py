@@ -7,6 +7,7 @@ from ...domain.recruitment import terminal_outcome_after, transition_allowed
 from ...util import new_id, utc_now
 from ..commands import (
     ApplicationMutationResult,
+    CloseApplicationCommand,
     ExternalSubmissionCommand,
     NextActionCommand,
     RecruitmentCorrectionCommand,
@@ -109,6 +110,18 @@ class TrackingService(ServiceBase[TrackingRepository]):
             )
             uow.commit()
         return self._result(command.application_id, event_id=event_id)
+
+    def close_application(self, command: CloseApplicationCommand) -> ApplicationMutationResult:
+        """Archive one application through the normal append-only status policy."""
+        return self.transition_status(
+            RecruitmentStatusCommand(
+                application_id=command.application_id,
+                target_status=ApplicationStatus.CLOSED.value,
+                reason="application closed",
+                actor_type=command.actor_type,
+                client=command.client,
+            )
+        )
 
     def correct_recruitment_status(
         self, command: RecruitmentCorrectionCommand

@@ -197,16 +197,22 @@ Three rounds of evidence were needed, and what each cost is worth carrying forwa
 
 ### B — Applications: create, duplicate-check, read
 
-- [ ] Duplicate detection over all three contracts: identical source URL, identical
+- [x] Duplicate detection over all three contracts: identical source URL, identical
       normalized-text hash, company/title heuristic. Each match reports which one matched.
-- [ ] `IngestCommand` gains `client`, `actor_type`, `acknowledged_duplicates`; `ingest`
+- [x] `IngestCommand` gains `client`, `actor_type`, `acknowledged_duplicates`; `ingest`
       stops hardcoding `client="cli"`.
-- [ ] `create_job_snapshot`, `close_application`.
-- [ ] Duplicate acknowledgement: create always re-runs detection; matches plus
+- [x] `create_job_snapshot`, `close_application`.
+- [x] Duplicate acknowledgement: create always re-runs detection; matches plus
       `acknowledged_duplicates=false` is **412 `DUPLICATE_ACKNOWLEDGEMENT_REQUIRED`** with
       the matches in `context` and **nothing created**; the retry with the flag is 201 and
       still carries the warnings.
-- [ ] Endpoints, including `POST /applications/{id}/close`. No command ships without one.
+- [x] Endpoints, including `POST /applications/{id}/close`. No command ships without one.
+
+**Stage B implementation is complete and awaiting the user's focused evidence.** It adds
+9 tests in `test_api_applications.py`, so the predicted non-browser collection after
+acceptance is **268**: Stage A's 259 plus exactly 9. The tracker does not close Stage B or
+record a passing count until the user runs and accepts the handover commands. Stage C has
+not begun.
 
 ### C — Operations surface
 

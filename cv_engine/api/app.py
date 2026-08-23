@@ -18,7 +18,7 @@ from starlette.requests import Request
 from ..application.errors import ApplicationError
 from .dependencies import install_services
 from .problems import application_error_handler, problem
-from .routers import health
+from .routers import applications, health
 from .security import BodySizeLimitMiddleware, OriginPolicyMiddleware, allowed_origins
 from .services import ApiServices
 
@@ -66,6 +66,7 @@ def create_app(
     app.add_exception_handler(500, _unexpected_error_handler)
 
     app.include_router(health.router, prefix=API_PREFIX)
+    app.include_router(applications.router, prefix=API_PREFIX)
     return app
 
 

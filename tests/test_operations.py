@@ -231,7 +231,12 @@ def test_application_and_global_render_leases_queue_contending_work(services) ->
         IngestCommand(company="Lease A", target_role="Developer", job_text="Python role")
     )
     second = services.applications.ingest(
-        IngestCommand(company="Lease B", target_role="Developer", job_text="Python role")
+        IngestCommand(
+            company="Lease B",
+            target_role="Developer",
+            job_text="Python role",
+            acknowledged_duplicates=True,
+        )
     )
     installation = services.workspace.installation_id()
     app_one = services.repository.create_operation(
@@ -249,7 +254,12 @@ def test_application_and_global_render_leases_queue_contending_work(services) ->
     )
     render_one = services.repository.create_operation(render_request, installation_id=installation)
     third = services.applications.ingest(
-        IngestCommand(company="Lease C", target_role="Developer", job_text="Python role")
+        IngestCommand(
+            company="Lease C",
+            target_role="Developer",
+            job_text="Python role",
+            acknowledged_duplicates=True,
+        )
     )
     render_two = services.repository.create_operation(
         render_request.model_copy(
@@ -277,6 +287,7 @@ def test_ai_resource_allows_two_operations_and_queues_the_third(services) -> Non
                 company=f"AI Lease {number}",
                 target_role="Developer",
                 job_text="Python role",
+                acknowledged_duplicates=True,
             )
         )
         request = _stored_request(ingested.application_id, f"ai-{number}").model_copy(
@@ -522,6 +533,7 @@ def test_analysis_operation_matches_direct_service_and_reuses_idempotency_key(se
             company="Direct Analysis Co",
             target_role="Account Manager",
             job_text=ACCOUNT_MANAGER_JOB,
+            acknowledged_duplicates=True,
         )
     )
     direct_result = services.analysis.analyze(

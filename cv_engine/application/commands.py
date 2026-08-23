@@ -18,11 +18,37 @@ class BoundaryDTO(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
+DuplicateMatchReason = Literal["source_url", "normalized_text", "company_title"]
+
+
 class IngestCommand(BoundaryDTO):
     company: str
     target_role: str
     job_text: str
     source_url: str | None = None
+    actor_type: Literal["user", "system"] = "user"
+    client: Literal["web", "cli", "worker"] = "cli"
+    acknowledged_duplicates: bool = False
+
+
+class DuplicateCheckCommand(BoundaryDTO):
+    company: str
+    target_role: str
+    job_text: str
+    source_url: str | None = None
+
+
+class CreateJobSnapshotCommand(BoundaryDTO):
+    application_id: str
+    job_text: str
+    source_url: str | None = None
+    source_metadata: dict[str, Any] = {}
+
+
+class CloseApplicationCommand(BoundaryDTO):
+    application_id: str
+    actor_type: Literal["user", "system"] = "user"
+    client: Literal["web", "cli", "worker"] = "cli"
 
 
 class AnalyzeCommand(BoundaryDTO):
@@ -95,7 +121,25 @@ class NextActionCommand(BoundaryDTO):
     client: Literal["web", "cli", "worker"] = "cli"
 
 
+class DuplicateMatch(BoundaryDTO):
+    application_id: str
+    company: str
+    target_role: str
+    matched_on: list[DuplicateMatchReason]
+
+
 class IngestedApplication(BoundaryDTO):
+    application_id: str
+    job_snapshot_id: str
+    warnings: list[str] = []
+    duplicate_matches: list[DuplicateMatch] = []
+
+
+class DuplicateCheckResult(BoundaryDTO):
+    matches: list[DuplicateMatch] = []
+
+
+class CreatedJobSnapshot(BoundaryDTO):
     application_id: str
     job_snapshot_id: str
 

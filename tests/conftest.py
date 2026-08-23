@@ -266,6 +266,7 @@ def analyzed_application(services: Services):
                 company=company,
                 target_role=role,
                 job_text=job_text,
+                acknowledged_duplicates=True,
             )
         )
         analysed = services.analysis.analyze(
@@ -521,6 +522,7 @@ def provider_analysis(services: Services, monkeypatch):
                 company=company,
                 target_role=role,
                 job_text=job_text,
+                acknowledged_duplicates=True,
             )
         )
         analysed = services.analysis.analyze(

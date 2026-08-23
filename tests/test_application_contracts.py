@@ -373,7 +373,10 @@ def test_commands_require_owned_explicit_sources_and_cli_resolves_latest(service
     )
     theirs = services.applications.ingest(
         IngestCommand(
-            company="Theirs Co", target_role="Account Manager", job_text=ACCOUNT_MANAGER_JOB
+            company="Theirs Co",
+            target_role="Account Manager",
+            job_text=ACCOUNT_MANAGER_JOB,
+            acknowledged_duplicates=True,
         )
     )
 
@@ -401,7 +404,10 @@ def test_commands_require_owned_explicit_sources_and_cli_resolves_latest(service
         )
     ingested = services.applications.ingest(
         IngestCommand(
-            company="Legacy Co", target_role="Account Manager", job_text=ACCOUNT_MANAGER_JOB
+            company="Legacy Co",
+            target_role="Account Manager",
+            job_text=ACCOUNT_MANAGER_JOB,
+            acknowledged_duplicates=True,
         )
     )
 

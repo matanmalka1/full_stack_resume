@@ -45,6 +45,14 @@ class PreconditionFailed(ApplicationError):
     """The named state exists but cannot legally satisfy the command."""
 
 
+class DuplicateAcknowledgementRequired(PreconditionFailed):
+    """Application creation found duplicates that were not acknowledged."""
+
+    def __init__(self, message: str, matches: list[Any]):
+        super().__init__(message, code=DUPLICATE_ACKNOWLEDGEMENT_REQUIRED)
+        self.matches = matches
+
+
 class ValidationBlocked(PreconditionFailed):
     """Approval/render/submission was attempted against failing validation."""
 

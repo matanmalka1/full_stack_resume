@@ -220,6 +220,33 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
             )
         return resolved_snapshot_id
 
+    def duplicate_application_inputs(self) -> list[dict[str, Any]]:
+        """Return the stored inputs needed by application duplicate policy.
+
+        The adapter deliberately does not decide what constitutes a duplicate.
+        Normalization and the three matching contracts belong to the application
+        use-case, not to SQLite collation rules.
+        """
+        with self.read_connection() as connection:
+            rows = connection.execute(
+                "SELECT a.id AS application_id, a.company, a.target_role, "
+                "j.source_url, j.normalized_hash "
+                "FROM applications AS a JOIN job_snapshots AS j ON j.application_id=a.id "
+                "ORDER BY a.created_at, a.id, j.version_number"
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def snapshot_for_content_hash(
+        self, application_id: str, content_hash: str
+    ) -> dict[str, Any] | None:
+        with self.read_connection() as connection:
+            row = connection.execute(
+                f"SELECT {_SNAPSHOT_COLUMNS} FROM job_snapshots "
+                "WHERE application_id=? AND content_hash=?",
+                (application_id, content_hash),
+            ).fetchone()
+        return dict(row) if row is not None else None
+
     def latest_snapshot(self, application_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
             row = connection.execute(

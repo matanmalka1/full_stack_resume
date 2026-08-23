@@ -60,6 +60,7 @@ def _fast(
     emphasis: str | None = None,
     language: str | None = None,
     accept_low_fit: bool = False,
+    acknowledged_duplicates: bool = False,
 ) -> dict[str, Any]:
     """The explicit no-pause flow: an approval instruction, not a bypass.
 
@@ -73,6 +74,9 @@ def _fast(
             target_role=role,
             job_text=job_text,
             source_url=url,
+            actor_type="user",
+            client="cli",
+            acknowledged_duplicates=acknowledged_duplicates,
         )
     )
     analysis_operation = services.operations.submit_analysis(
@@ -181,6 +185,7 @@ def _fast_command(context: CommandContext) -> int:
             emphasis=args.emphasis,
             language=args.language,
             accept_low_fit=args.accept_low_fit,
+            acknowledged_duplicates=args.acknowledge_duplicates,
         )
     )
     return 0

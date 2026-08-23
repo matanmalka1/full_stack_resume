@@ -83,6 +83,23 @@ class ApplicationStore(Protocol):
 class JobStore(Protocol):
     """Immutable job snapshots and the analyses derived from them."""
 
+    def duplicate_application_inputs(self) -> list[dict[str, Any]]: ...
+
+    def add_job_snapshot(
+        self,
+        application_id: str,
+        payload_path: str,
+        source_hash: str,
+        normalized_hash: str,
+        source_url: str | None = ...,
+        source_metadata: dict[str, Any] | None = ...,
+        snapshot_id: str | None = ...,
+    ) -> str: ...
+
+    def snapshot_for_content_hash(
+        self, application_id: str, content_hash: str
+    ) -> dict[str, Any] | None: ...
+
     def latest_snapshot(self, application_id: str) -> dict[str, Any]: ...
 
     def get_snapshot(self, snapshot_id: str) -> dict[str, Any]: ...
