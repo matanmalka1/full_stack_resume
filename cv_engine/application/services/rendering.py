@@ -166,7 +166,89 @@ class RenderingService(ServiceBase[ReadinessRepository]):
             raise
         except (OSError, RuntimeError) as exc:
             raise InfrastructureFailure(f"rendering failed: {exc}") from exc
+        self._register_outputs(prepared, report)
         return ExecutedRender(prepared=prepared, report=report)
+
+    def _register_outputs(self, prepared: PreparedRender, report: ValidationReport) -> None:
+        """Register the three rendered artifacts, in the execute phase.
+
+        **Not at activation.** The Operation runner records this render's three
+        outputs as soon as `execute` returns and *before* it re-checks
+        cancellation, using the IDs `prepare` reserved. Registering the matching
+        `artifact_versions` rows inside the activation transaction meant that a
+        render cancelled - or overtaken by a source change - in the window
+        between the two phases ended with three Operation outputs naming rows
+        that were never written. `operation_outputs.output_id` carries no
+        foreign key, so nothing in the schema refused it and nothing reading the
+        Operation could tell the dangling references from real ones.
+
+        Product specification §18 requires the opposite: a completed output
+        after cancellation is recorded as inactive evidence. A reference to
+        nothing is not evidence. So the row is written in the same phase as the
+        file it points at, and *activation* stays where §6 invariant 15 puts it -
+        on the Operation output's `active` flag, which the runner sets only
+        inside a successful commit. Output existence and output activation are
+        separate, and this is the seam where they separate.
+
+        This is the same repair the AI tasks took in Stage G, in the mirror
+        image: there a payload existed with no row naming it, here a row named
+        something that did not exist.
+
+        Written outside the *activation* transaction, in its own UnitOfWork.
+        Both halves of that matter and they pull in opposite directions:
+
+        - Not the activation transaction, because a row committed only alongside
+          the outcome does not exist when there is no outcome. That is the
+          orphan this repair exists to remove.
+        - Still one transaction, because three artifacts are one render. Left as
+          three independent writes, a failure on the second or third would leave
+          one or two rows committed while `execute` raised - so the runner would
+          record no Operation output at all, and the Application would carry
+          registered artifacts belonging to a render that never reported. Half a
+          render's evidence is not evidence, and "it survives cancellation" is a
+          weaker claim than "it is all there or none of it is".
+
+        A failing render still registers, under `rendered-invalid`. The
+        artifacts are real, the validation report says why they are unusable,
+        and the runner's `activate_outputs=False` keeps every output inactive -
+        which is the failed-validation behavior Stage F already had, unchanged.
+        """
+        command = prepared.command
+        draft = prepared.draft
+        targets = prepared.targets
+        lifecycle = "rendered" if report.passed else "rendered-invalid"
+        with self.repo.unit_of_work() as uow:
+            repository = self.repo.bind(uow)
+            for artifact_version_id, artifact_type, path in [
+                (prepared.artifact_ids[0], "resume_html", targets.html),
+                (prepared.artifact_ids[1], "resume_pdf", targets.pdf),
+                (prepared.artifact_ids[2], "visual_evidence", targets.screenshot),
+            ]:
+                metadata: dict[str, Any] = {"validation_passed": report.passed}
+                if artifact_type == "resume_pdf":
+                    metadata["recruiter_filename"] = targets.recruiter_pdf_filename
+                registered_id = repository.register_artifact_version(
+                    command.application_id,
+                    artifact_type,
+                    "resume",
+                    self.artifacts.relative(path),
+                    sha256_file(path),
+                    lifecycle,
+                    revision_id=command.approved_revision_id,
+                    job_snapshot_id=draft.job_snapshot_id,
+                    track=draft.track.value,
+                    profile=draft.profile.value,
+                    emphasis=draft.emphasis.value,
+                    facts_version=prepared.knowledge.facts.version,
+                    approved_at=prepared.manifest_record["approved_at"],
+                    metadata=metadata,
+                    artifact_version_id=artifact_version_id,
+                )
+                if registered_id != artifact_version_id:
+                    raise InfrastructureFailure(
+                        "artifact registry did not preserve the reserved output identity"
+                    )
+            uow.commit()
 
     def activate(
         self,
@@ -177,41 +259,12 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         prepared = executed.prepared
         command = prepared.command
         report = executed.report
-        draft = prepared.draft
-        facts = prepared.knowledge.facts
         artifact_ids = prepared.artifact_ids
-        targets = prepared.targets
-        html_path, pdf_path, screenshot_path = targets.html, targets.pdf, targets.screenshot
-        lifecycle = "rendered" if report.passed else "rendered-invalid"
-        for artifact_version_id, artifact_type, logical_name, path in [
-            (artifact_ids[0], "resume_html", "resume", html_path),
-            (artifact_ids[1], "resume_pdf", "resume", pdf_path),
-            (artifact_ids[2], "visual_evidence", "resume", screenshot_path),
-        ]:
-            metadata: dict[str, Any] = {"validation_passed": report.passed}
-            if artifact_type == "resume_pdf":
-                metadata["recruiter_filename"] = targets.recruiter_pdf_filename
-            registered_id = repo.register_artifact_version(
-                command.application_id,
-                artifact_type,
-                logical_name,
-                self.artifacts.relative(path),
-                sha256_file(path),
-                lifecycle,
-                revision_id=command.approved_revision_id,
-                job_snapshot_id=draft.job_snapshot_id,
-                track=draft.track.value,
-                profile=draft.profile.value,
-                emphasis=draft.emphasis.value,
-                facts_version=facts.version,
-                approved_at=prepared.manifest_record["approved_at"],
-                metadata=metadata,
-                artifact_version_id=artifact_version_id,
-            )
-            if registered_id != artifact_version_id:
-                raise InfrastructureFailure(
-                    "artifact registry did not preserve the reserved output identity"
-                )
+        # The three artifact versions already exist: `execute` registered them
+        # beside the files they point at, so a cancellation between the phases
+        # leaves inactive evidence rather than dangling references. What belongs
+        # here is only what activation means - the post-render ValidationRun that
+        # binds this report to the exact PDF, and the Ready qualification.
         repo.record_validation(command.application_id, "post-render", report, artifact_ids[1])
         if report.passed:
             qualification = qualify_ready_revision(

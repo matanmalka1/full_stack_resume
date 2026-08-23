@@ -915,6 +915,157 @@ def test_failed_render_operation_preserves_registered_outputs_as_inactive(
         )
 
 
+def _render_operation(setup, key: str):
+    return setup.services.operations.submit_render(
+        RenderCommand(
+            application_id=setup.application_id,
+            approved_revision_id=setup.approved.revision_id,
+        ),
+        idempotency_key=key,
+        rendering_service=setup.services.rendering,
+    )
+
+
+def _cancel_after_render(setup, operation_id: str):
+    def interfere(_executed) -> None:
+        setup.services.repository.request_operation_cancellation(operation_id)
+
+    return interfere
+
+
+def _move_the_source_after_render(setup, _operation_id: str):
+    def interfere(_executed) -> None:
+        manifest = setup.services.repository.artifact_version_for_revision(
+            setup.approved.revision_id, "claim_manifest", "approved"
+        )
+        path = setup.services.artifacts.resolve(manifest["path"])
+        path.write_text(path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+
+    return interfere
+
+
+@pytest.mark.parametrize(
+    "interference,expected_status,expected_code",
+    [
+        (
+            _cancel_after_render,
+            OperationStatus.CANCELLED,
+            OperationFailureCode.CANCELLED_BEFORE_ACTIVATION,
+        ),
+        (
+            _move_the_source_after_render,
+            OperationStatus.FAILED,
+            OperationFailureCode.SOURCE_CHANGED,
+        ),
+    ],
+    ids=["cancelled", "source-changed"],
+)
+def test_a_render_stopped_between_the_phases_keeps_registered_inactive_outputs(
+    ready_application, monkeypatch, interference, expected_status, expected_code
+) -> None:
+    """§18: "a completed output after cancellation is recorded as inactive evidence".
+
+    Both parameters are the same window: the render finished and its three
+    artifacts exist, and then the Operation stopped before activation - once
+    because the user cancelled, once because the approved source moved under it.
+
+    What has to hold in both is that every Operation output names a row that is
+    really there. `operation_outputs.output_id` carries no foreign key, so
+    nothing in the schema refuses a dangling reference and nothing reading the
+    Operation can tell one from a real output. A reference to nothing is not
+    evidence.
+
+    Parameterized rather than written twice because the property is one
+    property; the two interferences are only the two ways of reaching the
+    window. `artifact_version` raises `UnknownRecord` for an ID registered
+    nowhere, so resolving all three *is* the assertion.
+    """
+    setup = ready_application(f"Stopped Render {expected_status.value}")
+    operation = _render_operation(setup, f"stopped-render-{expected_status.value}")
+    original = setup.services.rendering.execute
+    interfere = interference(setup, operation.id)
+
+    def execute_then_interfere(prepared):
+        executed = original(prepared)
+        interfere(executed)
+        return executed
+
+    monkeypatch.setattr(setup.services.rendering, "execute", execute_then_interfere)
+    stopped = setup.services.foreground_operations.execute(operation.id)
+
+    assert stopped.status is expected_status
+    assert stopped.failure_code is expected_code
+    outputs = [
+        output
+        for output in stopped.outputs
+        if output.output_type in {"resume_html", "resume_pdf", "visual_evidence"}
+    ]
+    assert len(outputs) == 3
+    assert all(not output.active for output in outputs)
+    for output in outputs:
+        registered = setup.services.repository.artifact_version(output.output_id)
+        assert registered["revision_id"] == setup.approved.revision_id
+        assert registered["lifecycle_status"] == "rendered"
+
+    # The post-render ValidationRun belongs to activation and did not happen, so
+    # nothing claims these artifacts were checked into Ready. Asserted on the
+    # PDF, which is the one an approval or a download would reach for.
+    pdf = next(output for output in outputs if output.output_type == "resume_pdf")
+    with pytest.raises(UnknownRecord):
+        setup.services.repository.validation_for_artifact(
+            setup.application_id, "post-render", pdf.output_id
+        )
+
+
+def test_a_failure_partway_through_registration_leaves_no_artifact_at_all(
+    ready_application, monkeypatch
+) -> None:
+    """Three artifacts are one render: all of them are registered, or none is.
+
+    The first repair moved registration into `execute` so the rows survive a
+    cancellation. Left as three independent writes that would have bought the
+    opposite bug: a failure on the third leaves two rows committed while
+    `execute` raises, so the runner records no Operation output at all and the
+    Application carries registered artifacts belonging to a render that never
+    reported. That is the mirror of the orphan being repaired, and it is not
+    reachable through cancellation or `SOURCE_CHANGED`, which is why neither of
+    those tests would have found it.
+
+    The third registration is failed deliberately. What is asserted is that the
+    first two did not survive it.
+    """
+    setup = ready_application("Partial Registration Co")
+    repository = setup.services.repository
+    before = {row["id"] for row in repository.artifact_versions(setup.application_id)}
+    operation = _render_operation(setup, "partial-registration")
+    # Patched on the class, not on this instance. `bind` returns a *new*
+    # repository object wrapping the UnitOfWork's connection, so an
+    # instance-level patch is invisible to exactly the code under test - the
+    # registrations run on the bound copy.
+    original = type(repository).register_artifact_version
+    calls = 0
+
+    def fail_on_the_third(self, *args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 3:
+            raise InfrastructureFailure("injected registry failure")
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(type(repository), "register_artifact_version", fail_on_the_third)
+    failed = setup.services.foreground_operations.execute(operation.id)
+
+    assert failed.status is OperationStatus.FAILED
+    assert calls == 3, "the injected failure never reached the code under test"
+    after = {row["id"] for row in repository.artifact_versions(setup.application_id)}
+    assert after == before, "a partial render registration survived"
+    assert not [
+        output
+        for output in failed.outputs
+        if output.output_type in {"resume_html", "resume_pdf", "visual_evidence"}
+    ]
+
+
 def test_cancel_and_manual_retry_keep_the_old_operation_immutable(services) -> None:
     operation = _operation_for_runner(services, "Manual Retry Co")
     cancelled = services.operations.cancel(operation.id)
