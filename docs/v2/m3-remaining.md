@@ -761,13 +761,12 @@ Stage F has not begun.
 
 ### F — Render, artifacts, Ready
 
-**Stage F is reopened.** It was closed at `2590559`, `9f98111`, `40e396d`, `1de0b4f`,
-`048090e`, `3e84fe9`, and `236762f` on evidence the user ran and accepted across three
-rounds, and everything that evidence proved still holds. What reopens it is a defect that
-review of Stage G found *in Stage F's code*, described under "Reopened: render can record
-an output that does not exist" below. It is recorded here rather than carried as a
-past-tense note in Stage G, because a stage marked closed over a known live defect is a
-status that misleads whoever reads it next.
+**Stage F is closed**, at `2590559`, `9f98111`, `40e396d`, `1de0b4f`, `048090e`,
+`3e84fe9`, and `236762f`, and reopened and closed a second time on the render output
+defect described below. Four rounds of accepted evidence in total.
+
+It was reopened rather than footnoted because a stage marked closed over a known live
+defect is a status that misleads whoever reads it next.
 
 It was marked closed once prematurely, at `dcd598b`, and reopened when the user found a
 TOCTOU window in the delivery path while reading the diff. The earlier rounds are kept
@@ -1017,15 +1016,88 @@ The specification's rule is one rule for both: output existence and output activ
 separate (§6 invariant 15), and a completed output after cancellation is recorded as
 inactive evidence (§18). A reference to nothing is not evidence.
 
-**Not fixed here.** Stage G is an AI boundary and this is render's; widening one stage to
-repair another is how a boundary stops meaning anything. It is a **blocker of Stage H**,
-listed there, and the repair belongs to whichever commit reopens F properly - most likely
-registering the three artifact versions in the execute phase, exactly as the AI handlers
-now do, and letting `activate_outputs=False` continue to carry the failed-validation case.
+It was left unrepaired when Stage G closed, because widening one stage to fix another is
+how a boundary stops meaning anything. It is repaired now, in its own boundary.
 
-Nothing about the accepted Stage F evidence is withdrawn: the surface, the security
+Nothing about the accepted Stage F evidence was withdrawn: the surface, the security
 paths, the TOCTOU repair, and the acceptance journey all still pass. This is a path none
 of them exercised, because none of them cancels a render mid-flight.
+
+#### The repair
+
+`RenderingService.execute` now registers the three `artifact_versions` rows itself, at
+the end of the render, through the unbound repository. `activate` keeps only what
+activation means: the post-render ValidationRun that binds the report to the exact PDF,
+and the Ready qualification.
+
+That is the same shape Stage G gave the AI tasks, and it holds the same three properties:
+
+- **Every Operation output resolves.** The runner records the three references as soon as
+  `execute` returns and before it re-checks cancellation; the rows they name now already
+  exist.
+- **Nothing is activated early.** `activate_operation_output` is still the only thing that
+  sets `active`, and it still runs only inside a successful commit.
+- **The failed-validation path is unchanged.** A failing render registers under
+  `rendered-invalid` and `activate_outputs=False` keeps all three inactive, exactly as
+  Stage F already had it.
+
+Registering through the unbound repository is deliberate and is the whole point: a row
+committed only alongside the outcome does not exist when there is no outcome.
+
+A second defect was found in the first version of this repair, by reading the diff rather
+than by running it. The three registrations were three independent transactions, so a
+failure on the second or third left one or two rows committed while `execute` raised -
+and the runner, never reaching the outputs, recorded none. That is the mirror of the
+orphan being repaired: registered artifacts belonging to a render that never reported.
+Neither the cancellation nor the `SOURCE_CHANGED` regression could reach it.
+
+All three now register inside one UnitOfWork, so the two properties hold together: the
+rows survive a cancellation after `execute`, and a failure partway through registration
+rolls all of them back. A third regression covers it by failing the third registration
+and asserting that the first two did not survive.
+
+That regression is patched on the repository **class**, not on the instance. `bind`
+returns a new repository object wrapping the UnitOfWork's connection, so an
+instance-level patch is invisible to exactly the code under test - which a probe caught
+by reporting zero calls into the injected failure.
+
+#### Accepted evidence for the repair
+
+| Gate | Result |
+| --- | --- |
+| Focused — `test_operations.py` | **53 passed** |
+| Blast radius — Ready integrity, rendering, artifact API, journey, chain integrity | **58 passed, 1 deselected** |
+| Full non-browser suite | **434 passed, 4 deselected** |
+| Browser-complete | **438 passed** |
+| OpenAPI and TypeScript | no drift |
+| Offline CLI, `OPENAI_API_KEY` unset | render, Ready, and reconcile all passed |
+
+The browser-complete run is not a Class B requirement and was run anyway: the repair puts
+a SQLite write inside `RenderingService.execute`, and the four browser-marked tests are
+the only ones that reach that function through real Chromium rather than through the
+deterministic renderer.
+
+The offline CLI run reported `reconcile: passed`, `artifact_versions_checked: 5`, no
+problems, and exactly the five deterministic artifact types with no `provider_response`
+among them - so the repair did not disturb the successful path outside the tests.
+
+#### What the reopening cost, worth carrying forward
+
+1. **Moving a write to fix one atomicity bug introduced another.** Registering in
+   `execute` removed the orphan and created the mirror of it: three independent
+   transactions, so a failure partway through left rows behind for a render that never
+   reported. Both are the same question - what is one unit of evidence - answered wrongly
+   in opposite directions. The answer is that three artifacts are one render, and one
+   render is one transaction, sited outside activation.
+2. **Neither regression could have found it.** Cancellation and `SOURCE_CHANGED` both
+   reach the window *after* a successful `execute`. A test suite that covers the two ways
+   a thing stops does not cover the way it half-happens.
+3. **A monkeypatch on the wrong object passes silently in the wrong direction.** The
+   first version of the atomicity regression patched the repository *instance*, while the
+   code under test runs on the bound copy `bind` creates. It was caught by a probe
+   reporting zero calls into the injected failure - the assertion `calls == 3` would have
+   failed loudly, but only because it was there. An injection test with no assertion that
+   the injection fired is a test that proves the happy path.
 
 #### What Stage F cost, worth carrying forward
 
@@ -1248,7 +1320,7 @@ blank rather than as a missing section.
 It predates Stage G and belongs to approval, not to AI. It matters more than a formatting
 slip because a DecisionRecord is immutable: every revision approved so far has a record
 that cannot be backfilled, so the value is recoverable only by joining back to the
-analysis. Recorded in `docs/v2/cleanup-todos.md` as TODO 17.
+analysis. Recorded in `docs/v2/cleanup-todos.md` as TODO 21.
 
 #### What Stage G cost, worth carrying forward
 
@@ -1272,13 +1344,9 @@ analysis. Recorded in `docs/v2/cleanup-todos.md` as TODO 17.
 
 ### H — acceptance and close-out
 
-**Blocked on one item before H can close:**
-
-- [ ] **Render records Operation outputs with no `ArtifactVersion` behind them** when a
-      render is cancelled or its sources move between execution and activation. Stage F is
-      reopened on it; the finding is written up there. H cannot certify the Operations
-      matrix or outcomes-as-data while a terminal Operation can carry references to rows
-      that do not exist.
+The render blocker recorded here is closed: Stage F's repair was gated and accepted, so
+no terminal Operation can carry a reference to a row that was never written. H is gated
+only on its own items below.
 
 - [ ] Journeys §5.1–5.4 in full, plus **only the preparation half of §5.5**. §5.5's
       submission bullet needs the submission endpoint and is **deferred to M5** — recorded,

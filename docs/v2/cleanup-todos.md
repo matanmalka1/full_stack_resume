@@ -117,7 +117,7 @@ or weaken an existing acceptance gate.
       squashed to one baseline and no database anywhere, it is a one-token schema edit.
       The frozen fingerprint moved by exactly one entry, `TEXT` to `TEXT UNIQUE`, with
       the entry count unchanged at 80.
-- [ ] **TODO 16:** decide whether the AI task contract belongs in `knowledge_context`.
+- [ ] **TODO 20:** decide whether the AI task contract belongs in `knowledge_context`.
       Stage G made `ai/contracts/task_contracts.json` the single source of contract and
       prompt versions, and both are stored on every provider run and on the registered
       response artifact. They are deliberately **not** in `Knowledge.versions()`, so
@@ -125,7 +125,7 @@ or weaken an existing acceptance gate.
       `knowledge_context_hash`. That was the conservative choice for a boundary that was
       already Class B: adding them would move every stored hash and every golden that
       depends on one. Decide it on its own, with the hash movement stated up front.
-- [ ] **TODO 17:** write `language` into the DecisionRecord's `structured` payload.
+- [ ] **TODO 21:** write `language` into the DecisionRecord's `structured` payload.
       `export_decision_markdown` renders `- Language: ` from `structured["language"]`,
       and `approve_draft` never puts it there — so the field is blank in every exported
       decision, beside a populated Track, Profile, Emphasis, and Fit. The value exists on
