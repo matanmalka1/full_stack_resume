@@ -208,11 +208,20 @@ Three rounds of evidence were needed, and what each cost is worth carrying forwa
       still carries the warnings.
 - [x] Endpoints, including `POST /applications/{id}/close`. No command ships without one.
 
-**Stage B implementation is complete and awaiting the user's focused evidence.** It adds
-9 tests in `test_api_applications.py`, so the predicted non-browser collection after
-acceptance is **268**: Stage A's 259 plus exactly 9. The tracker does not close Stage B or
-record a passing count until the user runs and accepts the handover commands. Stage C has
-not begun.
+**Stage B is closed**, at `0374aa5`, on focused evidence the user ran and accepted.
+
+| Evidence | Result |
+| --- | --- |
+| Stage B, API foundation, and affected application/Operation contracts | **35 passed** |
+| API layering and router architecture guards | **3 passed** |
+| OpenAPI and TypeScript regeneration | completed successfully |
+| Ruff | passed |
+| Pyright | **0 errors, 0 warnings, 0 informations** |
+| Diff whitespace check | passed |
+
+The 9 new cases live in `test_api_applications.py`, so the predicted next non-browser
+collection is **268**: Stage A's 259 plus exactly 9. That is a prediction, not a full-suite
+claim; the full non-browser suite remains the M3 boundary gate. Stage C has not begun.
 
 ### C — Operations surface
 
