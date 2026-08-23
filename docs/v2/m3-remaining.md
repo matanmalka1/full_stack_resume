@@ -761,11 +761,13 @@ Stage F has not begun.
 
 ### F — Render, artifacts, Ready
 
-**Stage F is not closed.** It was marked closed at `dcd598b` on the evidence below, and
-then the user found a TOCTOU window in the delivery path while reading the diff. The
-repair is at `236762f`; the stage reopens until its third evidence round is accepted.
-The earlier rounds are kept below exactly as they were recorded - a round that happened
-is not rewritten because a later one found something.
+**Stage F is closed**, at `2590559`, `9f98111`, `40e396d`, `1de0b4f`, `048090e`, `3e84fe9`,
+and `236762f`, on evidence the user ran and accepted across three rounds.
+
+It was marked closed once prematurely, at `dcd598b`, and reopened when the user found a
+TOCTOU window in the delivery path while reading the diff. The earlier rounds are kept
+below exactly as they were recorded - a round that happened is not rewritten because a
+later one found something.
 
 - [x] `POST /approved-revisions/{id}/render` → 202 through the existing
       `accepted_operation` helper, with `Location` and an optional `Idempotency-Key`. The
@@ -961,6 +963,33 @@ can reach the method.
 Three regressions, all deterministic: substitution inside the window, deletion inside the
 window, and stability across repeated iteration. The third is the property that makes
 handing a delivery onward before consuming it safe.
+
+**Accepted evidence for this round**, after `236762f`:
+
+| Measure | Round two | Round three | Delta |
+| --- | --- | --- | --- |
+| `test_api_artifacts.py` | 27 passed | **30 passed** | +3 |
+| Non-browser suite | 363 passed, 4 deselected | **366 passed, 4 deselected** | +3 |
+
+The +3 is the three regressions, none parametrised, and nothing else moved. Predicted
+before the run and matched exactly.
+
+**The offline CLI run was not repeated, and the reason is checked rather than asserted.**
+The output supplied for this round is the round-two run re-pasted - every UUID matches,
+including `created_at`, which a fresh `mktemp -d` Workspace cannot reproduce because the
+IDs are uuid4. That is acceptable here, and only because the diff says so: an AST
+comparison of `PayloadStore` across `236762f` reports **22 methods before and after, one
+changed - `open_artifact` - and 21 byte-identical**, and `open_artifact` has no call site
+under `cv_engine/cli/`. `read_snapshot` and `commit`, which the CLI run does exercise, are
+among the 21.
+
+Worth recording: the first attempt at that check was a shell `diff` of two `git show`
+extracts, and it printed `IDENTICAL` for both methods because the quoting was wrong and
+**both sides were empty**. It was a green result from a tool that had compared nothing -
+the same failure Stage A recorded about a name-only AST audit, reproduced inside the
+verification of a fix for a defect that a green suite had also missed. The replacement
+parses both revisions and reports the method count, so an extraction that produces nothing
+fails loudly instead of agreeing with itself.
 
 #### What Stage F cost, worth carrying forward
 
