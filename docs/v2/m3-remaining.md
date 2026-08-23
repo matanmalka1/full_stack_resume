@@ -74,29 +74,126 @@ handed over as an independent boundary.
       code, and the two tests that matched on the prose assert `.code` instead.
 - [x] **A2 — the state-record handover.** This file; `CLAUDE.md` and `docs/README.md`
       repointed; superseded banner on `m2-remaining.md`.
-- [ ] **A3 — leaking builtins.** Repositories raise bare `ValueError`/`KeyError`, which the
-      CLI catches wholesale and the API cannot. `raise ValueError("working draft edit
-      version mismatch")` in `persistence/drafts.py` *is* the ETag-conflict path and must be
-      409, not 500. Translate at the service boundary into `StateConflict`/`UnknownRecord`,
-      with CLI messages and exit codes unchanged.
-- [ ] **A4 — config contract.** `api_max_body_bytes` (2 MiB) and `api_dev_origin` added to
-      `runtime/config.py`, so the chosen body limit is recorded where §10 of the test plan
-      requires and `cv workspace status` can report it.
-- [ ] **A5 — the `api` package.** `app.py` (`create_app(services: ApiServices)`),
-      `services.py`, `dependencies.py`, `problems.py`, `security.py`, `schemas/`,
-      `routers/`. Problem Details as one mapping table, no message parsing. Body limit,
-      Origin validation, non-wildcard CORS. `GET /api/v1/health` carrying the §17 version
-      surfaces.
-- [ ] **A6 — architecture guard.** `test_architecture.py` has no `api` layer today.
-      Register it; forbid `runtime`/`infrastructure`/`cli`/`sqlite3`/`playwright` inside
-      `api`; forbid `cv_engine.api` from the inner layers; and forbid `cv_engine.domain`
-      inside `api/routers/` as the derived form of acceptance item 4.
-- [ ] **A7 — OpenAPI and TypeScript.** `openapi/` at the repo root with `openapi.json`,
-      `types.ts`, `package.json`, lockfile. A Python drift test regenerating the schema from
-      `create_app`, and an `npm ci && npm run generate && git diff --exit-code` check.
-- [ ] **A8 — dependencies.** `fastapi` in `[project.dependencies]`, `httpx` in the `test`
-      extra. Not installed in `.venv` yet; the environment needs a reinstall before any API
-      test can run.
+- [x] **A3 — leaking builtins, and the consumer audit it forced.** Persistence raised bare `KeyError`/`ValueError` at 63
+      sites. Each now raises the taxonomy, classified at the raise site because that is
+      the only place that knows which refusal it is: 36 `KeyError` sites were
+      `UnknownRecord`, and the 27 `ValueError` sites split across `StateConflict`,
+      `LineageBroken`, `PreconditionFailed`, and `ValidationBlocked`. A blanket mapping at
+      the service boundary would have collapsed those into one status - notably the ETag
+      conflict, which must be 409 rather than 412. Three sites keep `ValueError`
+      deliberately: a UnitOfWork built against another database (twice) and a non-positive
+      lease, which are caller bugs rather than domain refusals.
+      `test_persistence_refuses_through_the_application_taxonomy` derives the rule from the
+      AST and fails if an exemption stops matching a real raise.
+
+      **The first evidence run failed here, and the count of broken call sites was 47, not
+      the 11 the failures showed.** The taxonomy does not inherit from `KeyError` or
+      `ValueError`, so every handler that caught a builtin over a repository call became
+      dead code at once. Most were latent: only 11 had a test that noticed. An AST audit -
+      55 repository methods that raise the taxonomy, cross-referenced against every
+      `try`/`except` over a call to one - found the rest, and it is the reason this was
+      repaired by class of behaviour rather than by chasing failures:
+
+      - optional lookups that must still yield `None` (`latest_selection_plan`,
+        `active_working_draft`, the chain's decision lookup, an Operation's approved-source
+        probe);
+      - missing Ready evidence that must still produce a failed qualification rather than an
+        exception - 8 sites in `ready.py`, 3 in `chain.py`;
+      - missing Operation sources that must still be `SOURCE_CHANGED` - 4 sites, including
+        the render handler that also catches `OSError`/`ValueError` from artifact resolution;
+      - translations that exist to attach a better message, which now catch the taxonomy and
+        re-raise it.
+
+      Six `except ValueError` handlers remain deliberately, none of them over a repository
+      refusal: the payload store's own validation, artifact path resolution, invalid stored
+      projections, and - twice, and load-bearing - `ApplicationStatus(...)` rejecting an
+      unknown status string.
+
+      Four handlers were dead rather than mis-typed and were removed, so nothing implies a
+      mapping that no longer happens. Two consequences worth stating: a working-draft
+      lineage failure now surfaces as `LineageBroken` (412) rather than `StateConflict`
+      (409), and a correction naming another application's event does the same. Both are
+      more accurate than the mapping they replace; the edit-version mismatch, which is the
+      ETag case, is still `StateConflict` (409).
+
+      A third evidence run found two more, and the miss was in my audit rather than in the
+      code: `pytest.raises((KeyError, sqlite3.Error))` puts the exception in a tuple, and
+      the audit only read a bare name. Both are now the `UnknownRecord` contract and the
+      `sqlite3` import went with them.
+
+      `test_no_test_asserts_a_bare_builtin_from_a_repository` makes that permanent: it
+      discovers the repository methods that raise the taxonomy and fails on any
+      `pytest.raises` over one that names `KeyError` or `ValueError`, reading **both**
+      spellings. Checked by breaking it - run against the previous revision of
+      `test_application_contracts.py`, the name-only version reports 0 and the tuple-aware
+      version reports exactly the two sites.
+- [x] **A4 — config contract.** `api_max_body_bytes` (2 MiB) and `api_dev_origin` in
+      `runtime/config.py`, so the limit is recorded where §10 of the test plan requires and
+      `cv workspace status` reports it. `build_api_services` reads them.
+- [x] **A5 — the `api` package.** `app.py`, `services.py`, `dependencies.py`,
+      `problems.py`, `security.py`, `schemas/`, `routers/`. `create_app(ApiServices)` takes
+      the narrow container; `runtime.build_api_services` fills it. Problem Details is one
+      table keyed by exception class, resolved through the MRO so an unregistered subclass
+      inherits its parent's status instead of becoming a 500. `GET /api/v1/health` carries
+      the identity pair `cv web` probes plus the version surfaces.
+
+      Both middlewares are raw ASGI rather than `BaseHTTPMiddleware`. Reading the body
+      from a `BaseHTTPMiddleware` request consumes the receive channel and leaves the route
+      with nothing; the body limit has to read the body, so it buffers and replays it. That
+      failure would have been invisible against a 404, so the test drives it over a route
+      that echoes what it received.
+- [x] **A6 — architecture guard.** `api` registered as a layer:
+      `api -> {domain, application, api, util}`, with `runtime`, `infrastructure`, `cli`,
+      `sqlite3`, and `playwright` forbidden inside it; `cv_engine.api` forbidden from the
+      four inner layers; and `cv_engine.domain` forbidden inside `api/routers/` as the
+      derived form of acceptance item 4.
+- [x] **A7 — OpenAPI and TypeScript.** `openapi/generate_openapi.py`, `package.json`
+      pinning `openapi-typescript` as its only dependency, `README.md`, and the drift test.
+      `openapi.json` (OpenAPI 3.1.0, one path) and `types.ts` are generated and committed,
+      so a schema change arrives as a reviewable diff the way the frozen SQLite fingerprint
+      does. Generation needs no Workspace, database, or provider: only the route table is
+      read.
+- [x] **A8 — dependencies.** `fastapi>=0.115,<1` in `[project.dependencies]`, and
+      `httpx2>=2.12,<3` in the `test` extra for Starlette's `TestClient`.
+
+      `httpx2`, not `httpx`, and the first evidence run is what settled it. Starlette 1.6 -
+      the version fastapi 0.141 pins - does `import httpx2 as httpx` in its test client and
+      falls back to `httpx` with a deprecation warning naming the supported package. The
+      warning was accurate, so the dependency moved rather than the warning being filtered.
+      No code changes with it: the test client imports whichever is present under the same
+      name, and nothing in this repository imports an HTTP client directly.
+
+      The environment needs `pip install -e '.[test]'` before any API test can run.
+
+Also landed, at the user's request and committed separately so it stays reviewable: a
+repository-wide `ruff format` pass over the 26 files that had drifted since TODO 1 defined
+the lint/format contract. Formatting only.
+
+**Stage A is closed**, at `b9b1ab3`, on evidence the user ran and accepted.
+
+| Measure | Baseline | Stage A | Delta |
+| --- | --- | --- | --- |
+| Non-browser suite | 236 passed, 4 deselected | **259 passed, 4 deselected, no warnings** | +23 |
+| Collection | 236 | 259 | +23 |
+
+The +23 is accounted for exactly: 19 from `test_api_foundation.py` (12 functions, one
+parametrised over the 8 refusals) and 4 new guards in `test_architecture.py`. The final
++1 against the prediction of 258 is the tuple-aware guard added during the third repair
+round, and nothing else moved. The environment installed `httpx2` 2.12.0 and the run
+carried no warnings, so the deprecation is resolved by the dependency rather than
+filtered. The full suite contains all 29 focused cases, so the focused run was not
+repeated.
+
+Three rounds of evidence were needed, and what each cost is worth carrying forward:
+
+1. A nested `Request` import that FastAPI could not resolve, because
+   `from __future__ import annotations` makes annotations strings that resolve against
+   module globals.
+2. 47 dead exception handlers, of which the failures showed 11. Deriving the set from the
+   code found the other 36; patching the visible ones would have left them latent.
+3. Two assertions my own audit could not see, because it read `pytest.raises(X)` and not
+   `pytest.raises((X, Y))`. A blind tool reporting zero is worse than no tool, which is
+   why the replacement is a committed guard rather than a corrected script.
 
 ### B — Applications: create, duplicate-check, read
 
