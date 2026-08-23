@@ -533,9 +533,8 @@ it needs.
 
 ### E — WorkingDraft, ETag, and the corrected validate/approve contract
 
-**Stage E is implemented and awaiting evidence.** Commits `971be7d` (application,
-domain, infrastructure, CLI), `91cc6db` (API surface and the regenerated contract),
-`76bc471` (tests). Nothing here is closed until the user has run the handover below.
+**Stage E is closed**, at `971be7d`, `91cc6db`, `76bc471`, `076cf80`, `06997bb`, and
+`c11d929`, on evidence the user ran and accepted.
 
 - [x] `generate` (202) at `POST /applications/{id}/working-draft/generate`, through the
       existing `accepted_operation` helper with both source IDs explicit. `GET`/`PATCH`
@@ -673,55 +672,89 @@ failures are the same two tests in both suites.
 Repaired at `c11d929`, in the two test files only. **No product code changed**, which is
 why the three steps that exercise only product code are not re-run below.
 
-#### Handover — the steps the repair reopens
+#### Accepted evidence
 
-Only the four that counted the two failures. Steps 3, 5, and 7 of the previous handover
-passed on unchanged files and are not fresh evidence to re-collect.
+Two rounds. The first is recorded above; the second is the repair's, and it passed with
+nothing left over.
 
-| Order | Command | What it proves | Pass looks like |
-| --- | --- | --- | --- |
-| 1 | `.venv/bin/python -m pytest tests/test_api_working_drafts.py` | The Stage E surface, with the generation-state assertion corrected | **25 passed** |
-| 2 | `.venv/bin/python -m pytest tests/test_operations.py tests/test_integration.py tests/test_chain_integrity.py` | The approval-signature blast radius, with the foreign-projection baseline corrected | **67 passed, 2 deselected** |
-| 3 | `.venv/bin/python -m pytest` | The non-browser suite | **332 passed, 4 deselected** |
-| 4 | `env CV_REQUIRE_BROWSER=1 .venv/bin/python -m pytest -q -m ""` | The browser-complete suite the class requires | **336 passed** |
-| 5 | Offline CLI — the corrected script below | That `cv approve` reaches an ApprovedRevision after `cv validate`, that the revision records `client: cli`, and that `cv reconcile` verifies the new draft-snapshot payload layout | `reconcile` and `ready` both report `passed: true` |
+| Measure | Baseline | Stage A | Stage C | Stage D | Stage E | Delta |
+| --- | --- | --- | --- | --- | --- | --- |
+| Non-browser suite | 236 passed, 4 deselected | 259 passed | 282 passed | 307 passed | **332 passed, 4 deselected** | +25 |
+| Browser-complete suite | 240 passed | — | — | — | **336 passed** | +25 |
 
-Both 332 and 336 were already confirmed as collection counts by the first run; the repair
-adds and removes no case, so the prediction is that the two failures become passes and
-nothing else moves.
+The +25 is accounted for exactly: 25 functions in `test_api_working_drafts.py`, none of
+them parametrised. Nothing else moved - the 21 existing call sites that changed to the
+shared validate-then-approve helpers changed bodies only, and the CLI, archive, and replace
+provenance assertions were added to cases that already existed. The prediction of 332 / 336
+was made before the first evidence run, held as a collection count through it, and held as
+a pass count after the repair. The 4 deselected are still exactly the browser-marked tests,
+so 332 + 4 = 336 stays internally consistent with the 236 / 240 baseline. Same interpreter
+as every earlier M3 measurement: `.venv/bin/python`, Python 3.14.2.
 
-**The offline CLI script in the previous handover was broken, in two ways that were mine.**
-`--workspace` is a top-level option, so it has to precede the subcommand rather than follow
-`workspace init`; and zsh does not word-split an unquoted parameter expansion, so a command
-held in a plain variable is looked up as one filename. A shell function fixes both:
+| Focused evidence | Run | Result |
+| --- | --- | --- |
+| `test_api_working_drafts.py` — the Stage E surface | after `c11d929` | **25 passed** |
+| `test_operations.py` + `test_integration.py` + `test_chain_integrity.py` — the approval-signature blast radius | after `c11d929` | **67 passed, 2 deselected** |
+| `test_api_foundation.py` + `test_architecture.py` — OpenAPI/TypeScript drift and router layering | first round | **29 passed** |
+| Schema fingerprint | first round | **1 passed**, unchanged |
+| Ruff, ruff format, pyright | first round | clean; **0 errors, 0 warnings, 0 informations** |
+| Non-browser suite | after `c11d929` | **332 passed, 4 deselected** |
+| Browser-complete suite, `CV_REQUIRE_BROWSER=1` | after `c11d929` | **336 passed** |
 
-```bash
-WS=$(mktemp -d)/stage-e
-unset OPENAI_API_KEY
-cv() { .venv/bin/python -m cv_engine.cli --workspace "$WS" "$@"; }
+The three first-round rows are not re-run: `c11d929` touches two test files and no product
+code, and neither file is read by any of them.
 
-cv workspace init --purpose test --data-class test --knowledge-from .
-cv workspace status
+**The Class C gate is satisfied.** The schema fingerprint did not move, which is what the
+payload-layout change was predicted to do: no migration, no table, no trigger. The browser
+suite passed, which the class requires whatever the change appears to touch.
 
-APP=$(cv ingest --company "Stage E Co" --role "Account Manager" \
-  --job-text "Account Manager responsible for retention, portfolio growth, negotiation, and customer relationships." \
-  | .venv/bin/python -c 'import json,sys; print(json.load(sys.stdin)["application_id"])')
+#### The offline CLI run, and one thing it did not prove
 
-cv analyze "$APP" && cv draft "$APP" && cv validate "$APP" && cv approve "$APP"
-cv render "$APP" && cv ready "$APP" && cv reconcile
+`ingest → analyze → draft → validate → approve → render → ready → reconcile` completed with
+`OPENAI_API_KEY` unset against a fresh Workspace. What it establishes:
 
-.venv/bin/python -c "
-from cv_engine.infrastructure.persistence.repository import Repository
-revision = Repository('$WS/data/applications.sqlite3').latest_approved_revision('$APP')
-print(revision.validation_run_id, revision.decision_provenance)
-"
-```
+- `cv validate` printed `validation_run_id 05360d9d`, and the ApprovedRevision `cv approve`
+  created records **that same run**. The §15 binding is proved end to end offline, through
+  the CLI, against a run approval did not create.
+- `decision_provenance` on the revision reads `{"actor_type": "user", "client": "cli"}` —
+  the CLI half of the provenance contract the Web regression at `06997bb` pins from the
+  other side.
+- `ready` passed all six groups; `reconcile` passed with 5 artifact versions checked and no
+  problems.
 
-The database is under the Workspace's `data/` root, not `state/`. The last line is the
-provenance check: `client` must read `cli`, which is the CLI half of the contract the Web
-regression at `06997bb` pins from the other side.
+**And one correction.** The previous handover claimed this run would prove `cv reconcile`
+verifies the new draft-snapshot payload layout. It did not, and could not: the CLI has no
+`archive` or `replace` subcommand - Stage E's scope was the API surface - so no
+`working_draft_snapshot` was ever written, and the 5 artifact versions checked are the
+resume Markdown, the claim manifest, the HTML, the PDF, and the screenshot.
 
-**Run by the agent, and stated as such:** ruff, ruff format, pyright, `generate_openapi.py`,
-and `npm run generate`. **No pytest was run by the agent** at any point. The counts above
-that are marked confirmed come from the user's run; the rest remain predictions, and Stage E
-stays open until the four steps above are green.
+No test was added to close that, deliberately. `generic_reconcile` iterates
+`artifact_inventory()`, which is every row of `artifact_versions` with no per-type branch,
+so there is no code path that could treat a draft snapshot differently from any other
+payload - the check is already derived, and a test for it would be testing that a loop
+loops. What the payload layout itself needs is covered: the archive and replace cases
+resolve the registered path, read the file, and parse it. The gap is recorded rather than
+papered over because the claim was made and was wrong.
+
+#### What Stage E cost, worth carrying forward
+
+Three rounds of review and evidence, and each found something the previous one could not.
+
+1. **The user found both product defects by reading the diff**, and no test would have
+   caught either: a route spelled differently from the specification, and Web commands
+   writing `client: cli` into an immutable `decision_provenance`. Both are the same shape -
+   a value that is wrong rather than absent - and that shape is invisible to a test suite
+   that only ever exercises one caller. **This is the second time in M3 a route shipped
+   with a spelling the specification does not use**; Stage D's was `f72dbd4`. The cheap
+   check both times would have been to read §21 beside the route table before writing it,
+   not after.
+2. **I understated the gate.** Stage E is Class C, and I argued the browser suite away from
+   what the change touches. The class decides the gate; that is the whole reason classes
+   exist, and the argument I made is the argument the rule was written to overrule.
+3. **Both first-round failures were my assertions, not the product** - and one of them was
+   hiding something load-bearing. Asserting `draft_in_progress` after generation concealed
+   that generation already records a passing run for the exact draft, which is precisely
+   what lets the no-review path and `cv fast` approve without inventing evidence. The
+   corrected assertion documents it.
+
+Stage F has not begun.
