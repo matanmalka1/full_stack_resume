@@ -6,6 +6,7 @@ from ...application.commands import (
     AnalyzeCommand,
     CloseApplicationCommand,
     CreateJobSnapshotCommand,
+    DraftCommand,
     DuplicateCheckCommand,
     IngestCommand,
 )
@@ -27,6 +28,7 @@ from ..schemas.applications import (
     DuplicateCheckRequest,
     DuplicateCheckResponse,
 )
+from ..schemas.drafts import GenerateWorkingDraftRequest
 from ..schemas.operations import OperationResponse
 
 router = APIRouter(prefix="/applications", tags=["applications"])
@@ -149,6 +151,36 @@ def create_analysis(
         ),
         idempotency_key=idempotency_key or new_id(),
         analysis_service=services.analysis,
+    )
+    return accepted_operation(response, queued)
+
+
+@router.post(
+    "/{application_id}/working-draft/generate",
+    response_model=OperationResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Generate the active working draft from an exact analysis and plan",
+)
+def generate_working_draft(
+    application_id: str,
+    request: GenerateWorkingDraftRequest,
+    services: Services,
+    response: Response,
+    idempotency_key: IdempotencyKey = None,
+) -> OperationResponse:
+    """`202` and a `Location`: generation is a durable Operation (§14).
+
+    Both sources are named by the client. The Operation freezes them, so an
+    analysis or plan that moves before activation fails the source check as
+    `SOURCE_CHANGED` instead of silently drafting from something else.
+    """
+    queued = services.operations.submit_draft(
+        DraftCommand(
+            application_id=application_id,
+            **request.model_dump(mode="python"),
+        ),
+        idempotency_key=idempotency_key or new_id(),
+        draft_service=services.drafts,
     )
     return accepted_operation(response, queued)
 

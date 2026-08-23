@@ -18,7 +18,7 @@ from starlette.requests import Request
 from ..application.errors import ApplicationError
 from .dependencies import install_services
 from .problems import application_error_handler, problem
-from .routers import analyses, applications, health, operations
+from .routers import analyses, applications, health, operations, working_drafts
 from .security import BodySizeLimitMiddleware, OriginPolicyMiddleware, allowed_origins
 from .services import ApiServices
 from .versioning import API_PREFIX, API_VERSION
@@ -66,6 +66,7 @@ def create_app(
     app.include_router(health.router, prefix=API_PREFIX)
     app.include_router(applications.router, prefix=API_PREFIX)
     app.include_router(analyses.router, prefix=API_PREFIX)
+    app.include_router(working_drafts.router, prefix=API_PREFIX)
     app.include_router(operations.router, prefix=API_PREFIX)
     return app
 

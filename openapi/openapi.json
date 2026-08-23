@@ -845,6 +845,130 @@
         "title": "ApplyAnalysisDecisionsRequest",
         "type": "object"
       },
+      "ApplySelectionChangeRequest": {
+        "additionalProperties": false,
+        "description": "The user's explicit fact decisions for a deterministic re-selection.\n\nTwo lists, not three, on the same reasoning as the analysis review form:\n`selected` is what the resulting plan reports, and explicit inclusion is a\npin.",
+        "properties": {
+          "excluded_fact_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Excluded Fact Ids",
+            "type": "array"
+          },
+          "expected_edit_version": {
+            "title": "Expected Edit Version",
+            "type": "integer"
+          },
+          "pinned_fact_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Pinned Fact Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "expected_edit_version"
+        ],
+        "title": "ApplySelectionChangeRequest",
+        "type": "object"
+      },
+      "ApprovalResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "decision_record_id": {
+            "title": "Decision Record Id",
+            "type": "string"
+          },
+          "manifest_artifact_version_id": {
+            "title": "Manifest Artifact Version Id",
+            "type": "string"
+          },
+          "markdown_artifact_version_id": {
+            "title": "Markdown Artifact Version Id",
+            "type": "string"
+          },
+          "revision_id": {
+            "title": "Revision Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "application_id",
+          "revision_id",
+          "version",
+          "markdown_artifact_version_id",
+          "manifest_artifact_version_id",
+          "decision_record_id"
+        ],
+        "title": "ApprovalResponse",
+        "type": "object"
+      },
+      "ApproveDraftRequest": {
+        "additionalProperties": false,
+        "description": "Approval names the ValidationRun whose result it is relying on.\n\nThe run is not created here. Approval verifies that the run describes this\nexact draft version and content and that it passed; a run approval created\nfor itself could only ever agree with approval.",
+        "properties": {
+          "expected_edit_version": {
+            "title": "Expected Edit Version",
+            "type": "integer"
+          },
+          "validation_run_id": {
+            "title": "Validation Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_edit_version",
+          "validation_run_id"
+        ],
+        "title": "ApproveDraftRequest",
+        "type": "object"
+      },
+      "ArchivedWorkingDraftResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "artifact_version_id": {
+            "title": "Artifact Version Id",
+            "type": "string"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "edit_version": {
+            "title": "Edit Version",
+            "type": "integer"
+          },
+          "working_draft_id": {
+            "title": "Working Draft Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "application_id",
+          "working_draft_id",
+          "edit_version",
+          "content_hash",
+          "artifact_version_id"
+        ],
+        "title": "ArchivedWorkingDraftResponse",
+        "type": "object"
+      },
       "ArtifactVersionResponse": {
         "additionalProperties": false,
         "properties": {
@@ -1025,6 +1149,62 @@
           "reasons"
         ],
         "title": "BlockedActionResponse",
+        "type": "object"
+      },
+      "ClaimPatchRequest": {
+        "additionalProperties": false,
+        "description": "One claim's replacement content.\n\nFree text with no fact behind it is accepted and saved as a pending claim\ncarrying the reason it could not be authorized; it is never discarded.",
+        "properties": {
+          "claim_id": {
+            "title": "Claim Id",
+            "type": "string"
+          },
+          "fact_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Fact Ids",
+            "type": "array"
+          },
+          "template_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Id"
+          },
+          "template_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Version"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "required": [
+          "claim_id"
+        ],
+        "title": "ClaimPatchRequest",
         "type": "object"
       },
       "CloseApplicationResponse": {
@@ -1545,6 +1725,26 @@
         "title": "DuplicateMatchResponse",
         "type": "object"
       },
+      "GenerateWorkingDraftRequest": {
+        "additionalProperties": false,
+        "description": "What `POST /applications/{id}/working-draft/generate` accepts.\n\nBoth source IDs are explicit. A generate that resolved the latest analysis\nand plan for itself could build from a plan the user has never seen -\n§5.4's fifth acceptance item is exactly that commands take explicit source\nIDs.",
+        "properties": {
+          "job_analysis_id": {
+            "title": "Job Analysis Id",
+            "type": "string"
+          },
+          "selection_plan_id": {
+            "title": "Selection Plan Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_analysis_id",
+          "selection_plan_id"
+        ],
+        "title": "GenerateWorkingDraftRequest",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1937,6 +2137,76 @@
         "title": "ReasonResponse",
         "type": "object"
       },
+      "ReplaceWorkingDraftRequest": {
+        "additionalProperties": false,
+        "description": "Replacement names its own compatible analysis and plan (§14).\n\n`keep_previous` is the Keep decision: it materializes the immutable\nhistorical snapshot before the replacement is attempted.",
+        "properties": {
+          "expected_edit_version": {
+            "title": "Expected Edit Version",
+            "type": "integer"
+          },
+          "job_analysis_id": {
+            "title": "Job Analysis Id",
+            "type": "string"
+          },
+          "keep_previous": {
+            "default": false,
+            "title": "Keep Previous",
+            "type": "boolean"
+          },
+          "selection_plan_id": {
+            "title": "Selection Plan Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_edit_version",
+          "job_analysis_id",
+          "selection_plan_id"
+        ],
+        "title": "ReplaceWorkingDraftRequest",
+        "type": "object"
+      },
+      "SelectionChangeResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "edit_version": {
+            "title": "Edit Version",
+            "type": "integer"
+          },
+          "plan": {
+            "additionalProperties": true,
+            "title": "Plan",
+            "type": "object"
+          },
+          "selection_plan_id": {
+            "title": "Selection Plan Id",
+            "type": "string"
+          },
+          "working_draft_id": {
+            "title": "Working Draft Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "application_id",
+          "working_draft_id",
+          "edit_version",
+          "content_hash",
+          "selection_plan_id",
+          "plan"
+        ],
+        "title": "SelectionChangeResponse",
+        "type": "object"
+      },
       "SelectionPlanResponse": {
         "additionalProperties": false,
         "properties": {
@@ -2005,6 +2275,25 @@
         "title": "SelectionPlanResponse",
         "type": "object"
       },
+      "UpdateWorkingDraftRequest": {
+        "additionalProperties": false,
+        "description": "The structured patch `PATCH /working-drafts/{id}` applies as one edit.",
+        "properties": {
+          "claim_edits": {
+            "items": {
+              "$ref": "#/components/schemas/ClaimPatchRequest"
+            },
+            "minItems": 1,
+            "title": "Claim Edits",
+            "type": "array"
+          }
+        },
+        "required": [
+          "claim_edits"
+        ],
+        "title": "UpdateWorkingDraftRequest",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -2045,6 +2334,52 @@
         "title": "ValidationError",
         "type": "object"
       },
+      "ValidationRunResponse": {
+        "additionalProperties": false,
+        "description": "A ValidationRun as data. `passed=false` arrives as `200` (§22).",
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "edit_version": {
+            "title": "Edit Version",
+            "type": "integer"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "report": {
+            "additionalProperties": true,
+            "title": "Report",
+            "type": "object"
+          },
+          "validation_run_id": {
+            "title": "Validation Run Id",
+            "type": "string"
+          },
+          "working_draft_id": {
+            "title": "Working Draft Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "application_id",
+          "working_draft_id",
+          "validation_run_id",
+          "edit_version",
+          "content_hash",
+          "passed",
+          "report"
+        ],
+        "title": "ValidationRunResponse",
+        "type": "object"
+      },
       "WarningResponse": {
         "additionalProperties": false,
         "properties": {
@@ -2070,6 +2405,157 @@
           "entity_references"
         ],
         "title": "WarningResponse",
+        "type": "object"
+      },
+      "WorkingDraftResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "edit_version": {
+            "title": "Edit Version",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_analysis_id": {
+            "title": "Job Analysis Id",
+            "type": "string"
+          },
+          "latest_validation_passed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Validation Passed"
+          },
+          "latest_validation_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Validation Run Id"
+          },
+          "parent_revision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Revision Id"
+          },
+          "selection_plan_id": {
+            "title": "Selection Plan Id",
+            "type": "string"
+          },
+          "source": {
+            "additionalProperties": true,
+            "title": "Source",
+            "type": "object"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "application_id",
+          "job_analysis_id",
+          "selection_plan_id",
+          "source",
+          "edit_version",
+          "content_hash",
+          "active",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "WorkingDraftResponse",
+        "type": "object"
+      },
+      "WorkingDraftUpdateResponse": {
+        "additionalProperties": false,
+        "description": "The new token, and which claims were saved as pending.",
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "edit_version": {
+            "title": "Edit Version",
+            "type": "integer"
+          },
+          "pending_claim_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Pending Claim Ids",
+            "type": "array"
+          },
+          "selection_plan_id": {
+            "title": "Selection Plan Id",
+            "type": "string"
+          },
+          "working_draft_id": {
+            "title": "Working Draft Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "application_id",
+          "working_draft_id",
+          "edit_version",
+          "content_hash",
+          "selection_plan_id"
+        ],
+        "title": "WorkingDraftUpdateResponse",
+        "type": "object"
+      },
+      "WorkingDraftVersionRequest": {
+        "additionalProperties": false,
+        "description": "The exact version a command is addressed to.",
+        "properties": {
+          "expected_edit_version": {
+            "title": "Expected Edit Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_edit_version"
+        ],
+        "title": "WorkingDraftVersionRequest",
         "type": "object"
       }
     }
@@ -2578,6 +3064,77 @@
         ]
       }
     },
+    "/api/v1/applications/{application_id}/working-draft/generate": {
+      "post": {
+        "description": "`202` and a `Location`: generation is a durable Operation (§14).\n\nBoth sources are named by the client. The Operation freezes them, so an\nanalysis or plan that moves before activation fails the source check as\n`SOURCE_CHANGED` instead of silently drafting from something else.",
+        "operationId": "generate_working_draft_api_v1_applications__application_id__working_draft_generate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateWorkingDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Generate the active working draft from an exact analysis and plan",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
     "/api/v1/health": {
       "get": {
         "operationId": "health_api_v1_health_get",
@@ -2742,6 +3299,412 @@
         "summary": "Queue a new Operation retrying a terminal one",
         "tags": [
           "operations"
+        ]
+      }
+    },
+    "/api/v1/working-drafts/{working_draft_id}": {
+      "get": {
+        "description": "`200` plus an `ETag` built from `edit_version` and `content_hash` (§20).",
+        "operationId": "read_working_draft_api_v1_working_drafts__working_draft_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "working_draft_id",
+            "required": true,
+            "schema": {
+              "title": "Working Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkingDraftResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read one working draft and its ETag",
+        "tags": [
+          "working-drafts"
+        ]
+      },
+      "patch": {
+        "description": "`200` and the new `ETag`; a mismatch is `409` and changes nothing (§14).\n\nThe header is parsed into the two arguments the command declares rather\nthan handed through as a string, so the application layer is never asked to\nunderstand an HTTP header.",
+        "operationId": "update_working_draft_api_v1_working_drafts__working_draft_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "working_draft_id",
+            "required": true,
+            "schema": {
+              "title": "Working Draft Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required. The ETag returned by the matching working-draft read. A value that no longer describes the stored draft is a 409 and changes nothing.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "description": "Required. The ETag returned by the matching working-draft read. A value that no longer describes the stored draft is a 409 and changes nothing.",
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkingDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkingDraftUpdateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Autosave one structured patch against an exact draft version",
+        "tags": [
+          "working-drafts"
+        ]
+      }
+    },
+    "/api/v1/working-drafts/{working_draft_id}/apply-selection-change": {
+      "post": {
+        "description": "`201`: the change creates an immutable SelectionPlan (§14, §22).\n\nA draft carrying manual wording is refused with a `412` naming the\nregeneration commands, because a deterministic rebuild would replace the\nuser's sentences with the engine's.",
+        "operationId": "apply_selection_change_api_v1_working_drafts__working_draft_id__apply_selection_change_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "working_draft_id",
+            "required": true,
+            "schema": {
+              "title": "Working Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplySelectionChangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectionChangeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Re-select facts deterministically and rebuild the draft",
+        "tags": [
+          "working-drafts"
+        ]
+      }
+    },
+    "/api/v1/working-drafts/{working_draft_id}/approve": {
+      "post": {
+        "description": "`201`: approval creates the immutable ApprovedRevision (§15, §22).\n\nThe same key with the same payload returns the same revision; the same key\nwith a different draft, version, run, or content hash is\n`409 IDEMPOTENCY_KEY_REUSED`.",
+        "operationId": "approve_working_draft_api_v1_working_drafts__working_draft_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "working_draft_id",
+            "required": true,
+            "schema": {
+              "title": "Working Draft Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approve exactly the content one ValidationRun passed",
+        "tags": [
+          "working-drafts"
+        ]
+      }
+    },
+    "/api/v1/working-drafts/{working_draft_id}/archive": {
+      "post": {
+        "description": "`200`: the snapshot is registered before the active pointer is cleared.",
+        "operationId": "archive_working_draft_api_v1_working_drafts__working_draft_id__archive_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "working_draft_id",
+            "required": true,
+            "schema": {
+              "title": "Working Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkingDraftVersionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchivedWorkingDraftResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Archive the draft as an immutable historical snapshot",
+        "tags": [
+          "working-drafts"
+        ]
+      }
+    },
+    "/api/v1/working-drafts/{working_draft_id}/replace": {
+      "post": {
+        "description": "`202` and a `Location`: replacement is the draft Operation (§14).\n\nNothing is deleted first. The Operation commits the new document over the\nsame active record, so a failure leaves the existing draft untouched, and\n`keep_previous` materializes the historical snapshot before any of it\nstarts.",
+        "operationId": "replace_working_draft_api_v1_working_drafts__working_draft_id__replace_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "working_draft_id",
+            "required": true,
+            "schema": {
+              "title": "Working Draft Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceWorkingDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Replace the draft from an explicit compatible analysis and plan",
+        "tags": [
+          "working-drafts"
+        ]
+      }
+    },
+    "/api/v1/working-drafts/{working_draft_id}/validate": {
+      "post": {
+        "description": "`200` whether or not it passed: a failed validation is an outcome (§22).\n\nOnly a validator that could not execute is an error, and that surfaces as\n`500`/`503` from the application taxonomy rather than as a report nobody\nproduced.",
+        "operationId": "validate_working_draft_api_v1_working_drafts__working_draft_id__validate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "working_draft_id",
+            "required": true,
+            "schema": {
+              "title": "Working Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkingDraftVersionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate one exact working draft version",
+        "tags": [
+          "working-drafts"
         ]
       }
     }
