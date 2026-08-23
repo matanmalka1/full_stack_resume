@@ -106,6 +106,17 @@ def _state(harness, application_id: str) -> dict:
     return response.json()
 
 
+def _audit(harness, application_id: str, action: str) -> dict:
+    """The one audit record for this action, or an assertion naming what is there."""
+    records = [
+        record
+        for record in harness.services.repository.audit_records(application_id)
+        if record["action"] == action
+    ]
+    assert len(records) == 1, records
+    return records[0]
+
+
 def _unsupported_edit(harness, application_id: str) -> dict:
     """One claim rewritten into wording no fact authorizes."""
     claim = working_claim(harness.services, application_id, "sales.metric.performance")
@@ -315,6 +326,7 @@ def test_archiving_registers_the_snapshot_before_clearing_the_pointer(api_worker
     assert registered["artifact_type"] == "working_draft_snapshot"
     assert registered["lifecycle_status"] == "archived"
     assert registered["metadata"]["working_draft_id"] == working_draft_id
+    assert _audit(api_worker, application_id, "archive_working_draft")["client"] == "web"
     stored = api_worker.services.artifacts.resolve(
         api_worker.services.repository.artifact_version(body["artifact_version_id"])["path"]
     )
@@ -331,8 +343,9 @@ def test_replacement_keeps_the_previous_draft_when_the_user_asked_to(api_worker)
 
     response = _post(
         api_worker,
-        f"/working-drafts/{working_draft_id}/replace",
+        f"/applications/{application_id}/working-draft/replace",
         {
+            "working_draft_id": working_draft_id,
             "expected_edit_version": before["edit_version"],
             "job_analysis_id": sources["job_analysis"],
             "selection_plan_id": sources["selection_plan"],
@@ -353,6 +366,7 @@ def test_replacement_keeps_the_previous_draft_when_the_user_asked_to(api_worker)
         if item["artifact_type"] == "working_draft_snapshot"
     ]
     assert [item["metadata"]["edit_version"] for item in kept] == [before["edit_version"]]
+    assert _audit(api_worker, application_id, "replace_working_draft")["client"] == "web"
 
 
 def test_a_refused_replacement_leaves_the_existing_draft_exactly_as_it_was(api_worker) -> None:
@@ -364,8 +378,9 @@ def test_a_refused_replacement_leaves_the_existing_draft_exactly_as_it_was(api_w
 
     response = _post(
         api_worker,
-        f"/working-drafts/{working_draft_id}/replace",
+        f"/applications/{application_id}/working-draft/replace",
         {
+            "working_draft_id": working_draft_id,
             "expected_edit_version": before["edit_version"],
             "job_analysis_id": other_sources["job_analysis"],
             "selection_plan_id": other_sources["selection_plan"],
@@ -375,6 +390,40 @@ def test_a_refused_replacement_leaves_the_existing_draft_exactly_as_it_was(api_w
     assert response.status_code == 412, response.text
     assert _read(api_worker, working_draft_id).json() == before
     assert _state(api_worker, application_id)["active_working_draft_id"] == working_draft_id
+
+
+def test_replacement_refuses_a_draft_belonging_to_another_application(api_worker) -> None:
+    """The path names the Application and the body names the draft; both are checked.
+
+    Neither is inferred from the other, so this pairing has to be refused
+    explicitly - otherwise a replacement addressed to one Application would
+    quietly rebuild another Application's draft.
+    """
+    owner_id, owner_draft_id, _owner_sources = _drafted(api_worker, "Replace Owner Co")
+    intruder_id, _intruder_draft, intruder_sources = _drafted(api_worker, "Replace Intruder Co")
+    before = _read(api_worker, owner_draft_id).json()
+
+    response = _post(
+        api_worker,
+        f"/applications/{intruder_id}/working-draft/replace",
+        {
+            "working_draft_id": owner_draft_id,
+            "expected_edit_version": before["edit_version"],
+            "job_analysis_id": intruder_sources["job_analysis"],
+            "selection_plan_id": intruder_sources["selection_plan"],
+            "keep_previous": True,
+        },
+    )
+
+    assert response.status_code == 412, response.text
+    assert response.json()["code"] == "LINEAGE_BROKEN"
+    assert _read(api_worker, owner_draft_id).json() == before
+    artifacts = api_worker.client.get(f"{API_PREFIX}/applications/{owner_id}/artifacts")
+    assert not [
+        item
+        for item in artifacts.json()["items"]
+        if item["artifact_type"] == "working_draft_snapshot"
+    ]
 
 
 # --- E4: validation ----------------------------------------------------------
@@ -482,6 +531,34 @@ def test_approval_freezes_exactly_the_content_the_named_run_passed(api_worker) -
     assert revision.draft_content_hash == validated["content_hash"]
     assert revision.validation_run_id == validated["validation_run_id"]
     assert _state(api_worker, application_id)["active_working_draft_id"] is None
+
+
+def test_a_web_approval_is_recorded_as_web_in_its_immutable_provenance(api_worker) -> None:
+    """The application layer defaults to `cli`, so the router has to say otherwise.
+
+    `decision_provenance` lives on the ApprovedRevision, which is immutable. A
+    browser's approval recorded as a person at a terminal is not a mislabelled
+    log line that a later write can correct - it is permanent, and it is exactly
+    the kind of value §13 forbids inventing.
+    """
+    application_id, working_draft_id, _sources = _drafted(api_worker, "Web Provenance Co")
+    validated = _validated(api_worker, working_draft_id)
+
+    response = _post(
+        api_worker,
+        f"/working-drafts/{working_draft_id}/approve",
+        {
+            "expected_edit_version": validated["edit_version"],
+            "validation_run_id": validated["validation_run_id"],
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    revision = api_worker.services.repository.approved_revision(response.json()["revision_id"])
+    assert revision.decision_provenance["client"] == "web"
+    assert revision.decision_provenance["actor_type"] == "user"
+    assert revision.decision_provenance["command"] == "approve_draft"
+    assert _audit(api_worker, application_id, "approve_draft")["client"] == "web"
 
 
 def test_an_edit_after_validation_makes_that_run_unusable_for_approval(api_worker) -> None:
@@ -630,6 +707,10 @@ def test_cv_validate_prints_the_run_id_and_cv_approve_consumes_it(
         json.loads(approved.stdout)["revision_id"]
     )
     assert revision.validation_run_id == run_id
+    # The other half of the provenance contract: the CLI still records `cli`.
+    # Asserted here rather than in a case of its own, because this is the test
+    # that already approves through the CLI.
+    assert revision.decision_provenance["client"] == "cli"
 
 
 def test_cv_approve_refuses_when_no_run_describes_the_current_draft(
