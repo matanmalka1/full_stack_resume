@@ -16,7 +16,12 @@ from pathlib import Path
 import pytest
 from helpers import ACCOUNT_MANAGER_JOB, approve_active_draft, validate_active_draft
 
-from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
+from cv_engine.application.commands import (
+    AnalyzeCommand,
+    ApproveDraftCommand,
+    DraftCommand,
+    IngestCommand,
+)
 from cv_engine.application.errors import (
     LineageBroken,
     StateConflict,
@@ -309,6 +314,11 @@ def test_foreign_working_projection_cannot_replace_the_sqlite_source(
     working = workspace_root / "artifacts/working"
     for name in ("resume.md", "resume.claims.json"):
         shutil.copy2(working / other.application_id / name, working / target.application_id / name)
+    # Validation is its own command now, and it legitimately records a run: it
+    # validated the draft SQLite holds, which the foreign projection did not
+    # replace. So the baseline is taken *after* it, and what the assertion then
+    # measures is approval alone - which is the command under test.
+    validated = validate_active_draft(services, target.application_id)
     before_target = _persisted(services)
     before_other = _persisted(services)
 
@@ -317,7 +327,13 @@ def test_foreign_working_projection_cannot_replace_the_sqlite_source(
     # the projection disagrees with the stored draft, so a corrupted or
     # hand-copied working file cannot reach a revision at all.
     with pytest.raises(StateConflict, match="differs from the stored draft"):
-        approve_active_draft(services, target.application_id)
+        services.drafts.approve_draft(
+            ApproveDraftCommand(
+                working_draft_id=validated.working_draft_id,
+                expected_edit_version=validated.edit_version,
+                validation_run_id=validated.validation_run_id,
+            )
+        )
 
     assert _persisted(services) == before_target
     assert _persisted(services) == before_other

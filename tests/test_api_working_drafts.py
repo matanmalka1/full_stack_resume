@@ -130,9 +130,14 @@ def test_generation_is_an_accepted_operation_naming_both_of_its_sources(api_work
     """`202` plus `Location`, and the draft the Operation actually committed (§14)."""
     application_id, working_draft_id, sources = _drafted(api_worker, "Draft Generation Co")
 
+    # Generation records its own passing ValidationRun against the exact draft it
+    # committed, so §5's `validated` holds the moment the Operation succeeds.
+    # That is what lets the no-review path approve without a separate validate,
+    # and it is why `cv fast` can name a real run rather than making one.
     state = _state(api_worker, application_id)
     assert state["active_working_draft_id"] == working_draft_id
-    assert state["preparation_state"] == "draft_in_progress"
+    assert state["working_draft_state"] == "validated"
+    assert state["preparation_state"] == "ready_for_approval"
 
     body = _read(api_worker, working_draft_id).json()
     assert body["job_analysis_id"] == sources["job_analysis"]
