@@ -761,8 +761,13 @@ Stage F has not begun.
 
 ### F — Render, artifacts, Ready
 
-**Stage F is closed**, at `2590559`, `9f98111`, `40e396d`, `1de0b4f`, `048090e`, `3e84fe9`,
-and `236762f`, on evidence the user ran and accepted across three rounds.
+**Stage F is reopened.** It was closed at `2590559`, `9f98111`, `40e396d`, `1de0b4f`,
+`048090e`, `3e84fe9`, and `236762f` on evidence the user ran and accepted across three
+rounds, and everything that evidence proved still holds. What reopens it is a defect that
+review of Stage G found *in Stage F's code*, described under "Reopened: render can record
+an output that does not exist" below. It is recorded here rather than carried as a
+past-tense note in Stage G, because a stage marked closed over a known live defect is a
+status that misleads whoever reads it next.
 
 It was marked closed once prematurely, at `dcd598b`, and reopened when the user found a
 TOCTOU window in the delivery path while reading the diff. The earlier rounds are kept
@@ -991,6 +996,37 @@ verification of a fix for a defect that a green suite had also missed. The repla
 parses both revisions and reports the method count, so an extraction that produces nothing
 fails loudly instead of agreeing with itself.
 
+#### Reopened: render can record an output that does not exist
+
+Found while repairing the same shape in the AI handlers, not by any gate.
+
+`RenderOperationHandler.execute` mints three artifact IDs in `prepare` and returns them
+in `PreparedOperation.outputs`. The runner records all three as `operation_outputs` rows
+immediately - **before** it re-checks cancellation. The matching `artifact_versions` rows
+are written later, by `RenderingService.activate`.
+
+Cancel the render, or let its sources move, in the window between the two and the
+Operation ends holding three output references to artifact version IDs that were never
+registered. `operation_outputs.output_id` carries no foreign key, so nothing in the
+schema refuses it, and nothing reading the Operation can tell the dangling references
+from real ones.
+
+This is worse than the orphan Stage G fixed, and it is the mirror image of it. There, a
+payload existed with no row naming it; here, a row names something that does not exist.
+The specification's rule is one rule for both: output existence and output activation are
+separate (§6 invariant 15), and a completed output after cancellation is recorded as
+inactive evidence (§18). A reference to nothing is not evidence.
+
+**Not fixed here.** Stage G is an AI boundary and this is render's; widening one stage to
+repair another is how a boundary stops meaning anything. It is a **blocker of Stage H**,
+listed there, and the repair belongs to whichever commit reopens F properly - most likely
+registering the three artifact versions in the execute phase, exactly as the AI handlers
+now do, and letting `activate_outputs=False` continue to carry the failed-validation case.
+
+Nothing about the accepted Stage F evidence is withdrawn: the surface, the security
+paths, the TOCTOU repair, and the acceptance journey all still pass. This is a path none
+of them exercised, because none of them cancels a render mid-flight.
+
 #### What Stage F cost, worth carrying forward
 
 1. **A defect can be older than the stage that exposes it, and this is now the second time
@@ -1017,27 +1053,232 @@ fails loudly instead of agreeing with itself.
    a verified path is invisible to every test that consumes the stream immediately, which
    was all of them.
 
-Stage G has not begun.
-
 ### G — AI tasks (§5.3)
 
-- [ ] New **`AIProvider` port in `application/ports/outbound.py`**, one method per
-      contracted task. `ClassificationProvider` retires into it — it is named for one task
-      and cannot carry five. The existing `AIProvider` protocol in
-      `infrastructure/providers.py` is transport, not an application contract, and is
-      renamed `StructuredOutputClient` to free the name.
-- [ ] `propose_job_analysis` under its contract name. The deterministic domain function
-      `classify_job` keeps its name — they are two different things, so there is no
-      conflict. Stored provenance names the contract that ran.
-- [ ] `propose_selection_plan`, `draft_resume`, `regenerate_section`, `regenerate_claim`
-      plus handler registration. The three `OperationType` values already exist and already
-      pass the DB CHECK; only registration is missing.
-- [ ] Task-contract drift: `ai/contracts/task_contracts.json` is read by nothing while the
-      same version is hardcoded in two places and persisted as provenance. Load it or delete
-      it.
-- [ ] Sanitized raw output as an immutable artifact. No silent fallback.
+**Stage G is closed**, on evidence the user ran and accepted.
+
+- [x] New **`AIProvider` port in `application/ports/outbound.py`**, one method per
+      contracted task, each taking one explicit minimal context and returning
+      `AIProposal[T]` — a typed Proposal with its `ProviderTaskResult` provenance.
+      `ClassificationProvider` is gone rather than deprecated, so there is one source of
+      authority. The transport protocol in `infrastructure/providers.py` is renamed
+      `StructuredOutputClient` and keeps strict Structured Outputs; `OpenAIProvider`
+      implements the five tasks over it.
+- [x] `propose_job_analysis` under its contract name. The deterministic domain function
+      `classify_job` is untouched. Stored provenance names the contract that ran.
+- [x] `propose_selection_plan`, `draft_resume`, `regenerate_section`, `regenerate_claim`,
+      with handler registration through the composition root. The Proposal never becomes
+      state directly: a plan proposal is reduced to the deterministic
+      `create_selection_plan` command and committed by it, and proposed wording goes
+      through `apply_claim_edit` — the same authority a manual edit passes.
+- [x] Task-contract drift closed. `ai/contracts/task_contracts.json` is now loaded, via
+      the Knowledge port, and is the only source of contract version, prompt version, and
+      prompt text. The two hardcoded copies are gone.
+- [x] Sanitized raw output as an immutable registered artifact under the already-approved
+      `provider/{application_id}/{operation_id}/{artifact_id}.json` layout, registered in
+      the execute phase under one `lifecycle_status`, `provider-output`. Whether the
+      answer was used is carried by the Operation's own status and by its output's
+      `active` flag (§6 invariant 15), not by a third copy in the artifact row. No silent
+      fallback: a provider failure fails the Operation and commits nothing.
+
+Three decisions worth keeping, because each replaced a value or a rule that could drift:
+
+1. **Provider failures are classified by exception class, not by message text.** The
+   previous code case-folded the message and searched for `429`, `timeout`, and `http 5`.
+   A reworded message silently reclassified a failure, and only four codes may be
+   retried — so the retry policy depended on prose. `FAILURE_CODE_BY_ERROR` resolves
+   through the MRO the way `problems.STATUS_BY_ERROR` does.
+2. **An unsupported AI claim fails; an unsupported *human* claim is still saved as
+   pending.** §14's pending rule is for a person mid-edit. A provider is not mid-edit,
+   and invariant 11 plus test-plan §6 require the claim to fail rather than be quietly
+   downgraded. It maps to the existing `INVALID_OUTPUT`: the baseline `failure_code`
+   CHECK is the specification's list, and a twelfth value would be a schema change for a
+   distinction the safe failure detail already carries.
+3. **Deterministic generation runs now record `task_contract_version="none"` and
+   `prompt_version="none"`.** They previously recorded `1.0.0` and `system-v1`, which
+   named an AI contract and a prompt that the deterministic composer never read — beside
+   a contract file nothing loaded. The column is `NOT NULL`, so the honest answer is a
+   literal saying there was none. This is a stored-value change and is why the boundary
+   is Class B.
+
+#### The first evidence run: three failures, and only one was a product bug's cousin
+
+`3 failed, 423 passed, 4 deselected`. None of the three was in the AI path itself, which
+is worth saying plainly rather than filing away as noise.
+
+1. **A test of mine asserted through an API that does not exist.**
+   `client.app.routes` yields `_IncludedRouter` objects in this Starlette version, not
+   objects with a `.path`. The test was also redundant: the two functional route tests
+   already `POST` to the literal specified paths and require `202`, which is a stronger
+   proof that a rename would break than reading a route table is. Removed rather than
+   repaired — a test that needs a workaround to assert something another test already
+   asserts is not carrying its weight.
+2. **A signature change broke an existing test double, and the failure mode was the
+   informative part.** `AnalysisService.prepare` now takes `operation_id`;
+   `test_analysis_handler_classifies_timeout_and_uses_its_single_retry` monkeypatched a
+   replacement that took only the command. The `TypeError` was classified as
+   `VALIDATION_EXECUTION_FAILED` and the Operation failed rather than retrying — which is
+   the runner behaving correctly. The double now accepts `operation_id` **and raises
+   `ProviderTimeout` instead of `InfrastructureFailure("provider request timed out")`**,
+   so it pins the typed classification rather than the message search it replaced.
+3. **Removing the message search left its default arm unasserted**, so a test was added
+   for it: an unclassified `InfrastructureFailure` is `VALIDATION_EXECUTION_FAILED` and
+   stops on the first attempt. Without it, nothing would fail if a message that merely
+   reads like a timeout started buying a second provider call again.
+
+Two of the three were tests of mine, and the third was a test double my own signature
+change had made uncallable. None was in the AI path. The run that mattered was the review
+that followed it.
+
+The `git diff --exit-code` form of the OpenAPI gate was **wrong as given** and reported a
+diff that is not drift: the boundary is uncommitted, so `git diff` compares the working
+tree against `HEAD` and necessarily shows the whole change. Before a commit exists, the
+check is that regeneration is byte-identical to the working tree — verified by hashing
+both files, regenerating, and hashing again.
+
+#### Review of the first evidence run: two product gaps and two proof gaps
+
+Found by reading the diff after the suite was green but for three test-level
+failures — which is the fourth time in M3 that a review, not a gate, found the real
+problem.
+
+**Product gap 1: a provider response could become an orphan.** The payload was written
+during `execute` but the `ArtifactVersion` was registered inside `activate`. Cancel the
+Operation, or let its sources move, in the window between the two, and the file sat on
+disk with no row naming it and no Operation output referring to it — against §18's "a
+completed output after cancellation is recorded as inactive evidence".
+
+Fixed by moving registration into `execute`, beside the payload it points at, and
+expressing *activation* where the specification puts it: on the Operation output's
+`active` flag, which the runner sets only inside a successful commit. Each AI handler
+now returns the reference in `PreparedOperation.outputs`, which the runner records as
+inactive **before** it re-checks cancellation. That is the same shape `RenderOperationHandler`
+already used for its three artifacts.
+
+It also collapsed a duplicate: `lifecycle_status` had grown two values,
+`provider-output` and `provider-output-rejected`, to say something the Operation's
+status and its output's `active` flag already said twice. There is now one value.
+
+**Product gap 2: the two schema versions architecture §11 names were not stored.**
+`ProviderContext` carried contract, prompt, model, and usage but neither
+`input_schema_version` nor `output_schema_version`. Both are now declared per task in
+the contract file and stored — together with `input_schema_hash` and
+`output_schema_hash`, derived from the actual Pydantic models at call time. The declared
+version is the label a human reads; the hash is what makes the label checkable, which is
+the same pairing `prompt_version`/`prompt_hash` already uses. The hashes go beyond what
+§11 lists and can be dropped in one edit if that is not wanted.
+
+Repairing this exposed a smaller one: a refusal carried only sanitized bytes, so the
+registered evidence for a refused answer had no provider, model, or response ID on it.
+`ProviderFailure` now carries the whole `ProviderTaskResult`, built at the refusal site
+with an empty parsed output. A refusal is exactly when "which model refused, under which
+contract" has to be answerable.
+
+**Proof gap 1: the strict-schema assertion only saw the root.** `_strict_schema` recurses;
+the test did not. `DraftProposal.claims` is a list of `ProposedClaim`, so the node a
+provider could actually have smuggled a field through was `$defs.ProposedClaim`, two
+levels below anything the assertion reached. The test now walks every object node, and a
+second test asserts that a nested model exists at all — so if the Proposal shapes are
+ever flattened, the walk fails loudly instead of passing over a flat document.
+
+**Proof gap 2: the injection test asserted almost nothing.** It checked that `language`
+was one of its two legal values and that `fit` was not `None` — both true of every
+analysis this engine can produce. It would have passed against an injection that flipped
+Fit from low to high. It now classifies the same job text deterministically and compares
+every policy-owned field against it: language, Fit, both requirement lists, approval
+routing and its reasons, surviving gaps, overrides, and the allowed-fact pool. A
+companion test proves that comparison can fail, so the five cases cannot pass vacuously.
+
+Repairing gap 1 exposed the same shape in render, in the mirror image: its three
+artifact IDs are recorded as Operation outputs before cancellation is re-checked, but
+their `artifact_versions` rows are written at activation - so a cancelled render ends up
+with references to rows that do not exist. It is not repaired here, because widening one
+stage to fix another is how a boundary stops meaning anything. **Stage F is reopened on
+it and it is listed as a blocker of Stage H**; the write-up is under Stage F.
+
+Class: **B**, not C. `migrations/0001_baseline.sql` is untouched; the five
+`operation_type` values already passed its CHECK, no new `failure_code` was added, and
+`provider/…` was already an approved layout in `PayloadStore._approved_destination`. So
+there is no fingerprint to regenerate and no browser path to re-run.
+
+One specification-versus-file conflict, resolved rather than reinterpreted silently:
+`task_contracts.json` declared v1's six task names (`classify_job`, `analyze_gaps`,
+`select_relevant_facts`, `extract_claims`, `explain_decisions`), not product-spec §12's
+five. §5.3 says to *version and implement* the five, so the file now declares them at
+contract version `2.0.0` against a new `ai/prompts/system-v2.md`. `system-v1.md` is left
+in place as frozen v1 evidence.
+
+#### Accepted evidence
+
+Interpreter `/Users/matanmalka/Projects/resume_python-v2/.venv/bin/python`, Python 3.14.2.
+
+| Gate | Result |
+| --- | --- |
+| AI focused — `test_provider.py`, `test_ai_tasks.py`, `test_api_ai.py` | **65 passed** |
+| Blast radius — classification policy, operations, working-draft API, analyses API, application contracts, architecture | **120 passed** |
+| Full non-browser suite | **431 passed, 4 deselected** |
+| OpenAPI and TypeScript | regeneration byte-identical to the working tree |
+| Offline CLI, `OPENAI_API_KEY` unset | reached Ready and reconciled |
+
+431 was predicted before the run and held exactly. Against the pre-Stage-G baseline of
+366 + 4, the +65 is entirely the three AI test files; no existing test was deleted, and
+the two that changed were repaired rather than relaxed.
+
+The offline run is the one that matters most for this stage, because Stage G is where an
+AI dependency could have leaked into the deterministic path:
+
+- `ingest → analyze → draft → validate → approve → render → ready → reconcile`, all with
+  no key configured and no provider constructed.
+- `reconcile`: `passed: true`, `artifact_versions_checked: 5`, no problems, fact
+  lifecycle clean at 87 canonical facts.
+- **Five artifact versions, and none of them a `provider_response`** — asserted by the
+  run, not eyeballed. That is the proof that the deterministic path calls no provider,
+  and it is a stronger statement than "no key was set".
+- The `validation_run_id` in the Ready integrity report is the same one the Decision
+  Record names, and `decision_provenance` records `client: cli`.
+
+#### One defect the offline run exposed, outside this stage
+
+`- Language: ` renders empty in the decision Markdown. The export reads `language` from
+the DecisionRecord's `structured` payload, and `approve_draft` never writes it there -
+though both `DraftDocument.language` and `JobAnalysis.language` carry it. The Fit,
+Track, Profile, and Emphasis beside it are all populated, so the omission reads as a
+blank rather than as a missing section.
+
+It predates Stage G and belongs to approval, not to AI. It matters more than a formatting
+slip because a DecisionRecord is immutable: every revision approved so far has a record
+that cannot be backfilled, so the value is recoverable only by joining back to the
+analysis. Recorded in `docs/v2/cleanup-todos.md` as TODO 17.
+
+#### What Stage G cost, worth carrying forward
+
+1. **A contract file that nothing loads is not a contract.** `task_contracts.json` sat
+   unread while the same two versions were typed into the adapter and into the
+   generation-run record. Nothing was wrong with any of the three, which is exactly why
+   it survived: agreement between copies is invisible until one of them moves. The same
+   reasoning removed the deterministic path's fabricated `1.0.0`/`system-v1`.
+2. **Classification by exception class, not by message text.** The retry policy had been
+   deciding whether to spend a second provider call by searching a message for `429`,
+   `timeout`, and `http 5`. Every review of this code had read past it.
+3. **The reviews found what the gates could not, four times out of four in M3.** The
+   green suite here hid an orphaned payload on cancellation, two missing provenance
+   fields, a strict-schema assertion that only saw the root of the document, and an
+   injection test that would have passed against an injection that flipped Fit. None of
+   those is a test that failed; all of them are properties no assertion happened to hold.
+4. **Fixing one stage's defect exposed the same shape in another's.** The cancellation
+   orphan in the AI handlers is the mirror image of a live defect in render, which is why
+   Stage F is reopened rather than mentioned. A repair that stops at its own boundary and
+   *records* what it saw over the fence is worth more than one that quietly widens.
 
 ### H — acceptance and close-out
+
+**Blocked on one item before H can close:**
+
+- [ ] **Render records Operation outputs with no `ArtifactVersion` behind them** when a
+      render is cancelled or its sources move between execution and activation. Stage F is
+      reopened on it; the finding is written up there. H cannot certify the Operations
+      matrix or outcomes-as-data while a terminal Operation can carry references to rows
+      that do not exist.
 
 - [ ] Journeys §5.1–5.4 in full, plus **only the preparation half of §5.5**. §5.5's
       submission bullet needs the submission endpoint and is **deferred to M5** — recorded,
