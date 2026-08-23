@@ -18,7 +18,7 @@ router = APIRouter(prefix="/analyses", tags=["analyses"])
 
 
 @router.post(
-    "/{analysis_id}/decisions",
+    "/{analysis_id}/apply-decisions",
     response_model=AnalysisDecisionsResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Apply one review-form submission to an analysis",

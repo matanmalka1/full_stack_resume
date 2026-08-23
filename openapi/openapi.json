@@ -2080,10 +2080,10 @@
   },
   "openapi": "3.1.0",
   "paths": {
-    "/api/v1/analyses/{analysis_id}/decisions": {
+    "/api/v1/analyses/{analysis_id}/apply-decisions": {
       "post": {
         "description": "`201`: both branches create an immutable record and neither mutates one.\n\n`application_id` is in the body rather than inferred from the analysis. The\nclient states which Application it believes it is deciding for, and a\nmismatch is a `412` naming the broken lineage instead of a decision landing\nsilently on another Application's analysis.",
-        "operationId": "apply_analysis_decisions_api_v1_analyses__analysis_id__decisions_post",
+        "operationId": "apply_analysis_decisions_api_v1_analyses__analysis_id__apply_decisions_post",
         "parameters": [
           {
             "in": "path",
@@ -2331,7 +2331,7 @@
     },
     "/api/v1/applications/{application_id}/analyses": {
       "post": {
-        "description": "`202` and a `Location`: analysis is a durable Operation (§13).\n\nNeedsReview is not an error here or anywhere else. An analysis that needs a\ndecision is a *successful* Operation whose JobAnalysis and initial\nSelectionPlan were both committed; what needs deciding is reported by the\nApplication's review reasons, and is resolved through\n`POST /analyses/{id}/decisions`.",
+        "description": "`202` and a `Location`: analysis is a durable Operation (§13).\n\nNeedsReview is not an error here or anywhere else. An analysis that needs a\ndecision is a *successful* Operation whose JobAnalysis and initial\nSelectionPlan were both committed; what needs deciding is reported by the\nApplication's review reasons, and is resolved through\n`POST /analyses/{id}/apply-decisions`.",
         "operationId": "create_analysis_api_v1_applications__application_id__analyses_post",
         "parameters": [
           {

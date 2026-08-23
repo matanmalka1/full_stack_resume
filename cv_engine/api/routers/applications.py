@@ -140,7 +140,7 @@ def create_analysis(
     decision is a *successful* Operation whose JobAnalysis and initial
     SelectionPlan were both committed; what needs deciding is reported by the
     Application's review reasons, and is resolved through
-    `POST /analyses/{id}/decisions`.
+    `POST /analyses/{id}/apply-decisions`.
     """
     queued = services.operations.submit_analysis(
         AnalyzeCommand(

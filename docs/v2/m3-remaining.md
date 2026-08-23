@@ -415,7 +415,8 @@ user ran and accepted.
       itself. The AI `propose_selection_plan` branch of the same route is Stage G and was
       not started; the acceptance helper already sets its own status so that route can
       answer 202 per request without changing shape.
-- [x] `POST /analyses/{id}/decisions` and `POST /analyses/{id}/selection-plans`, in a new
+- [x] `POST /analyses/{id}/apply-decisions` and `POST /analyses/{id}/selection-plans`, in a
+      new
       `api/routers/analyses.py`. `application_id` is in the body of both rather than
       inferred from the analysis: the client states which Application it believes it is
       deciding for, and a mismatch is a 412 naming the broken lineage instead of a

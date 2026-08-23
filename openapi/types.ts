@@ -4,7 +4,7 @@
  */
 
 export interface paths {
-    "/api/v1/analyses/{analysis_id}/decisions": {
+    "/api/v1/analyses/{analysis_id}/apply-decisions": {
         parameters: {
             query?: never;
             header?: never;
@@ -22,7 +22,7 @@ export interface paths {
          *     mismatch is a `412` naming the broken lineage instead of a decision landing
          *     silently on another Application's analysis.
          */
-        post: operations["apply_analysis_decisions_api_v1_analyses__analysis_id__decisions_post"];
+        post: operations["apply_analysis_decisions_api_v1_analyses__analysis_id__apply_decisions_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -122,7 +122,7 @@ export interface paths {
          *     decision is a *successful* Operation whose JobAnalysis and initial
          *     SelectionPlan were both committed; what needs deciding is reported by the
          *     Application's review reasons, and is resolved through
-         *     `POST /analyses/{id}/decisions`.
+         *     `POST /analyses/{id}/apply-decisions`.
          */
         post: operations["create_analysis_api_v1_applications__application_id__analyses_post"];
         delete?: never;
@@ -952,7 +952,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    apply_analysis_decisions_api_v1_analyses__analysis_id__decisions_post: {
+    apply_analysis_decisions_api_v1_analyses__analysis_id__apply_decisions_post: {
         parameters: {
             query?: never;
             header?: never;

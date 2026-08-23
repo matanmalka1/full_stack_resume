@@ -195,7 +195,7 @@ def test_needs_review_is_a_successful_outcome_carrying_both_records(api_worker) 
     assert {reason["code"] for reason in state["review_reasons"]}
 
 
-# --- POST /analyses/{id}/decisions -------------------------------------------
+# --- POST /analyses/{id}/apply-decisions -------------------------------------------
 
 
 def test_a_classification_decision_creates_a_new_analysis_and_its_initial_plan(
@@ -210,7 +210,7 @@ def test_a_classification_decision_creates_a_new_analysis_and_its_initial_plan(
     original_plan = api_worker.services.repository.selection_plan(outputs["selection_plan"])
 
     response = api_worker.client.post(
-        f"{API_PREFIX}/analyses/{outputs['job_analysis']}/decisions",
+        f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
         json={
             "application_id": application_id,
             "profile_override": "account-manager",
@@ -256,7 +256,7 @@ def test_a_fact_overlay_alone_creates_a_replacement_plan_for_the_same_analysis(
     )
 
     response = api_worker.client.post(
-        f"{API_PREFIX}/analyses/{outputs['job_analysis']}/decisions",
+        f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
         json={"application_id": application_id, "excluded_fact_ids": [removed]},
         headers=MUTATION_HEADERS,
     )
@@ -287,7 +287,7 @@ def test_a_submission_carrying_both_kinds_of_decision_is_refused(api_worker) -> 
     outputs = _outputs(_analyze(api_worker, application_id))
 
     response = api_worker.client.post(
-        f"{API_PREFIX}/analyses/{outputs['job_analysis']}/decisions",
+        f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
         json={
             "application_id": application_id,
             "profile_override": "account-manager",
@@ -307,7 +307,7 @@ def test_a_submission_that_changes_nothing_is_refused(api_worker) -> None:
     outputs = _outputs(_analyze(api_worker, application_id))
 
     response = api_worker.client.post(
-        f"{API_PREFIX}/analyses/{outputs['job_analysis']}/decisions",
+        f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
         json={"application_id": application_id},
         headers=MUTATION_HEADERS,
     )
@@ -317,8 +317,11 @@ def test_a_submission_that_changes_nothing_is_refused(api_worker) -> None:
 
 @pytest.mark.parametrize(
     ("route", "payload_key"),
-    [("decisions", "profile_override"), ("selection-plans", "expected_profile_version")],
-    ids=["decisions", "selection-plans"],
+    [
+        ("apply-decisions", "profile_override"),
+        ("selection-plans", "expected_profile_version"),
+    ],
+    ids=["apply-decisions", "selection-plans"],
 )
 def test_an_analysis_belonging_to_another_application_is_refused(
     api_worker, route: str, payload_key: str
@@ -339,7 +342,7 @@ def test_an_analysis_belonging_to_another_application_is_refused(
     assert response.json()["code"] == "LINEAGE_BROKEN"
 
 
-@pytest.mark.parametrize("route", ["decisions", "selection-plans"])
+@pytest.mark.parametrize("route", ["apply-decisions", "selection-plans"])
 def test_an_unknown_analysis_is_a_not_found(api_worker, route: str) -> None:
     application_id = _application(api_worker.services, f"Unknown Analysis {route} Co")
 
