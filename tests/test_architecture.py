@@ -17,10 +17,20 @@ ENGINE = Path(__file__).resolve().parent.parent / "cv_engine"
 FORBIDDEN_EXTERNAL = {
     "domain": {"sqlite3", "fastapi", "playwright", "urllib", "uvicorn", "httpx", "requests"},
     "application": {"sqlite3", "fastapi", "playwright", "urllib", "uvicorn", "httpx", "requests"},
+    # The API is the one layer that may hold FastAPI. It may not hold storage,
+    # a browser, or provider HTTP: reaching any of those from a router is how
+    # business logic arrives there.
+    "api": {"sqlite3", "playwright", "urllib", "requests"},
 }
 ALLOWED_INTERNAL = {
     "domain": {"domain", "util"},
     "application": {"domain", "application", "util"},
+    # `api -> application`, and nothing outward of it. The composition root in
+    # `runtime` builds the services and hands them in, so `api` never imports
+    # `runtime`, `infrastructure`, or `cli`. `domain` is allowed here for the
+    # package as a whole and forbidden inside `routers/`, which is checked
+    # separately below.
+    "api": {"domain", "application", "api", "util"},
 }
 
 # Known boundary debt from docs/v2/records/architecture-audit.md. New entries are not
@@ -246,9 +256,9 @@ def test_domain_and_application_dependencies_point_inward() -> None:
     storage_layout_names = set(ROOT_NAMES) | {"base_dir"}
 
     offenders: list[str] = []
-    internal_layers = {"domain", "application", "infrastructure", "runtime", "cli"}
+    internal_layers = {"domain", "application", "infrastructure", "api", "runtime", "cli"}
 
-    for layer in ("domain", "application"):
+    for layer in ("domain", "application", "api"):
         allowed = ALLOWED_INTERNAL[layer] | {"__own_package__"}
         for path in _modules(layer):
             offenders.extend(
@@ -257,6 +267,11 @@ def test_domain_and_application_dependencies_point_inward() -> None:
                 if name in FORBIDDEN_EXTERNAL[layer]
                 or (name in internal_layers and name not in allowed)
             )
+            if layer == "api":
+                # Storage-layout rules below are about domain and application
+                # purity. The API's own storage rule is that it cannot import
+                # `infrastructure` at all, which the import check above covers.
+                continue
             offenders.extend(
                 f"{path.relative_to(ENGINE)}:{number} touches filesystem: {line.strip()}"
                 for number, line in _code_lines(path)
@@ -438,3 +453,129 @@ def test_persistence_refuses_through_the_application_taxonomy() -> None:
     # An exemption that stops matching a real raise is an exemption nobody is
     # reading any more. Fail rather than let the list drift out of date.
     assert not (exempt - seen), f"stale exemptions: {sorted(exempt - seen)}"
+
+
+def test_api_is_not_imported_by_the_layers_it_serves() -> None:
+    """`api` is a client of the application, never a dependency of it.
+
+    The direction is `api -> application` and `runtime -> api`. An import
+    pointing the other way - a service reaching for an HTTP schema, a repository
+    raising something defined in a router - is how a transport concern becomes
+    load-bearing for the CLI, which does not go through HTTP at all.
+    """
+    offenders: list[str] = []
+    for layer in ("domain", "application", "infrastructure", "cli"):
+        for path in _layer_modules(layer):
+            offenders.extend(
+                f"{path.relative_to(ENGINE)}:{line} imports api from the {layer} layer"
+                for target, line in _resolved_import_modules(path)
+                if target == "api" or target.startswith("api.")
+            )
+    assert not offenders, offenders
+
+
+def test_routers_hold_no_domain_types() -> None:
+    """The derived form of "routers contain no business logic" (M3 §5.4, item 4).
+
+    HTTP schemas are specified as separate from domain and persistence types, so
+    a router with nothing but transport in it has no reason to name a domain
+    type. One that does is either building a domain object, inspecting one, or
+    serialising one straight to the wire - the three ways business logic gets
+    into a router.
+
+    A substring check on the word "logic" could not find any of that. An import
+    edge can, and it fails at the designated place instead of arriving as an ad
+    hoc exemption somewhere else.
+    """
+    routers = ENGINE / "api/routers"
+    assert routers.is_dir(), "the api routers package must exist"
+    offenders = [
+        f"{path.relative_to(ENGINE)}:{line} imports domain type {target}"
+        for path in sorted(routers.rglob("*.py"))
+        for target, line in _resolved_import_modules(path)
+        if target == "domain" or target.startswith("domain.")
+    ]
+    assert not offenders, offenders
+
+
+def _raises_argument_names(call: ast.Call) -> set[str]:
+    """Every exception name a `pytest.raises(...)` call names.
+
+    Both spellings, because they are equally common and only one of them is
+    obvious: `pytest.raises(KeyError)` and `pytest.raises((KeyError, OSError))`.
+    An audit that only understood the first missed two live assertions during
+    M3 Stage A, which is why this reads the tuple as well.
+    """
+    if not call.args:
+        return set()
+    first = call.args[0]
+    elements = first.elts if isinstance(first, ast.Tuple) else [first]
+    return {node.id for node in elements if isinstance(node, ast.Name)}
+
+
+def test_no_test_asserts_a_bare_builtin_from_a_repository() -> None:
+    """Tests must pin the refusal contract, not the builtin it replaced.
+
+    A repository refusal is `UnknownRecord`, `StateConflict`, `LineageBroken`,
+    or another member of the taxonomy. `pytest.raises(KeyError)` around a
+    repository call asserts a contract that no longer exists; it fails loudly
+    once, and then someone is tempted to widen the tuple instead of fixing the
+    assertion.
+
+    The repository methods are discovered from the persistence package rather
+    than listed, so a new method that raises the taxonomy is covered the day it
+    is written.
+    """
+    from cv_engine.application import errors as taxonomy
+
+    taxonomy_names = {
+        name
+        for name in dir(taxonomy)
+        if isinstance(getattr(taxonomy, name), type)
+        and issubclass(getattr(taxonomy, name), taxonomy.ApplicationError)
+    }
+    persistence = ENGINE / "infrastructure/persistence"
+    raising: set[str] = set()
+    for path in sorted(persistence.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            for sub in ast.walk(node):
+                if not isinstance(sub, ast.Raise) or sub.exc is None:
+                    continue
+                raised = sub.exc.func if isinstance(sub.exc, ast.Call) else sub.exc
+                if isinstance(raised, ast.Name) and raised.id in taxonomy_names:
+                    raising.add(node.name)
+    assert raising, "no persistence method raises the taxonomy; the discovery is broken"
+
+    offenders: list[str] = []
+    for path in sorted(Path(__file__).parent.rglob("test_*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.With):
+                continue
+            named: set[str] = set()
+            for item in node.items:
+                expr = item.context_expr
+                if (
+                    isinstance(expr, ast.Call)
+                    and isinstance(expr.func, ast.Attribute)
+                    and expr.func.attr == "raises"
+                ):
+                    named |= _raises_argument_names(expr)
+            if not named & {"KeyError", "ValueError"}:
+                continue
+            body = ast.Module(body=node.body, type_ignores=[])
+            called = sorted(
+                sub.func.attr
+                for sub in ast.walk(body)
+                if isinstance(sub, ast.Call)
+                and isinstance(sub.func, ast.Attribute)
+                and sub.func.attr in raising
+            )
+            if called:
+                offenders.append(
+                    f"{path.name}:{node.lineno} asserts a bare builtin over {', '.join(called)}"
+                )
+    assert not offenders, offenders

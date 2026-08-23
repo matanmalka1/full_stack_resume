@@ -8,6 +8,7 @@ version = "1.0.0"
 description = "Fact-safe multi-track CV engine"
 requires-python = ">=3.11"
 dependencies = [
+  "fastapi>=0.115,<1",
   "Jinja2>=3.1,<4",
   "playwright>=1.48,<2",
   "pydantic>=2.9,<3",
@@ -16,6 +17,15 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
+  # Starlette's TestClient is the only reason an HTTP client is here at all; no
+  # ASGI server ships in M3, since `uvicorn` and `cv web` are M6 scope.
+  #
+  # `httpx2`, not `httpx`: starlette 1.6 imports `httpx2 as httpx` in its test
+  # client and falls back to `httpx` with a DeprecationWarning. The warning is
+  # accurate rather than noise - it names the supported client for the starlette
+  # version fastapi pins - so the dependency moves instead of the warning being
+  # filtered.
+  "httpx2>=2.12,<3",
   "pyright>=1.1.400,<2",
   "pytest>=8.3,<10",
   "ruff>=0.9,<1",

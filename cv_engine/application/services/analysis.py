@@ -64,7 +64,7 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         """Validate and compute an analysis without mutating durable application state."""
         try:
             snapshot = self.repo.get_snapshot(command.job_snapshot_id)
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise UnknownRecord(f"unknown job snapshot: {command.job_snapshot_id}") from exc
         if snapshot["application_id"] != command.application_id:
             raise LineageBroken(

@@ -1,0 +1,232 @@
+"""The API foundation: identity, refusal mapping, transport limits, contract drift.
+
+These tests drive the real application through Starlette's `TestClient`. No ASGI
+server is involved: `uvicorn` and `cv web` are M6 scope, and the client speaks
+ASGI to the app directly.
+"""
+
+from __future__ import annotations
+
+import sys
+from dataclasses import replace
+from pathlib import Path
+
+import pytest
+from fastapi import FastAPI, Request
+from fastapi.testclient import TestClient
+
+from cv_engine.api.app import API_PREFIX, DEFAULT_PORT, create_app
+from cv_engine.api.problems import PROBLEM_CONTENT_TYPE, status_for
+from cv_engine.api.security import BodySizeLimitMiddleware
+from cv_engine.application.errors import (
+    DependencyUnavailable,
+    InfrastructureFailure,
+    KnowledgeRejected,
+    LineageBroken,
+    PreconditionFailed,
+    StateConflict,
+    UnknownRecord,
+    ValidationBlocked,
+)
+from cv_engine.runtime.composition import build_api_services
+
+ALLOWED_ORIGIN = f"http://127.0.0.1:{DEFAULT_PORT}"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT / "openapi"))
+
+from generate_openapi import OUTPUT, build_schema, render  # noqa: E402
+
+
+@pytest.fixture
+def api(services):
+    """The real app over the isolated test Workspace.
+
+    The Operation worker is deliberately absent: `create_app` builds a server,
+    and the worker is hosted by the supervisor. Stages that need one start it
+    alongside the app rather than inside it.
+    """
+    with TestClient(create_app(build_api_services(services))) as client:
+        yield client
+
+
+# --- identity ---------------------------------------------------------------
+
+
+def test_health_reports_this_instance_and_its_version_surfaces(api, services) -> None:
+    response = api.get(f"{API_PREFIX}/health")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    # The two values `cv web` probes to tell its own instance from a foreign
+    # process on the same port.
+    assert body["installation_id"] == services.workspace.installation_id()
+    assert body["workspace_id"] == services.workspace.workspace_id
+    assert body["api_version"] == "1"
+    assert body["knowledge"] == services.knowledge_lifecycle.knowledge_versions().model_dump()
+
+
+# --- refusals ---------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("error", "status", "code"),
+    [
+        (UnknownRecord("gone"), 404, "UNKNOWN_RECORD"),
+        (StateConflict("moved"), 409, "STATE_CONFLICT"),
+        (PreconditionFailed("not yet"), 412, "PRECONDITION_FAILED"),
+        (ValidationBlocked("blocked"), 412, "VALIDATION_BLOCKED"),
+        (LineageBroken("wrong owner"), 412, "LINEAGE_BROKEN"),
+        (KnowledgeRejected("refused"), 412, "KNOWLEDGE_REJECTED"),
+        (DependencyUnavailable("no provider"), 503, "DEPENDENCY_UNAVAILABLE"),
+        (InfrastructureFailure("disk"), 500, "INFRASTRUCTURE_FAILURE"),
+    ],
+)
+def test_every_refusal_maps_to_one_status_and_one_code(error, status, code) -> None:
+    assert status_for(error) == status
+    assert error.code == code
+
+
+def test_an_unregistered_subclass_inherits_its_parents_status() -> None:
+    """Adding an exception class cannot turn a domain refusal into a 500.
+
+    The lookup walks the MRO, so a subclass nobody remembered to register still
+    answers 412 rather than falling through to a server error.
+    """
+
+    class NotRegistered(PreconditionFailed):
+        pass
+
+    assert status_for(NotRegistered("x")) == 412
+    assert NotRegistered("x").code == "NOT_REGISTERED"
+
+
+def test_problem_details_carry_a_stable_code_and_leak_nothing(api) -> None:
+    response = api.post(f"{API_PREFIX}/does-not-exist", headers={"Origin": ALLOWED_ORIGIN})
+
+    assert response.status_code == 404
+    # FastAPI's own 404 is not a Problem Details document; what matters here is
+    # that no handler leaks a path or a traceback. The Problem shape itself is
+    # asserted on the refusals the middlewares produce, below.
+    assert "Traceback" not in response.text
+    assert str(REPO_ROOT) not in response.text
+
+
+# --- transport limits -------------------------------------------------------
+
+
+def test_oversize_body_is_refused_before_routing(services) -> None:
+    """413 with a declared Content-Length, and 413 without one.
+
+    The path does not exist. That is the point: the refusal comes from
+    middleware that runs before routing, so an oversize body is never read into
+    a route, and the response does not reveal whether the path was real.
+    """
+    small = 512
+    base = build_api_services(services)
+    limited = replace(base, limits=replace(base.limits, max_body_bytes=small))
+    with TestClient(create_app(limited)) as client:
+        response = client.post(
+            f"{API_PREFIX}/does-not-exist",
+            content=b"x" * (small + 1),
+            headers={"Origin": ALLOWED_ORIGIN, "Content-Type": "application/json"},
+        )
+
+    assert response.status_code == 413
+    assert response.headers["content-type"].startswith(PROBLEM_CONTENT_TYPE)
+    body = response.json()
+    assert body["code"] == "BODY_LIMIT_EXCEEDED"
+    assert body["context"]["max_body_bytes"] == small
+
+
+def test_a_body_within_the_limit_arrives_intact_at_the_route() -> None:
+    """The limit must not eat the body it allows.
+
+    Reading a request body inside `BaseHTTPMiddleware` exhausts the receive
+    channel and leaves the route with nothing. That failure is invisible against
+    a 404 - the status is the same either way - so this drives the middleware
+    over a route that echoes what it received. If the replay were dropped, the
+    echo would come back empty.
+    """
+    with TestClient(_echo_app()) as client:
+        response = client.post("/echo", content=b"the exact bytes")
+
+    assert response.status_code == 200
+    assert response.json() == {"seen": "the exact bytes"}
+
+
+def _echo_app() -> FastAPI:
+    """A minimal app whose one route reads the body the middleware replayed."""
+    app = FastAPI()
+
+    @app.post("/echo")
+    async def echo(request: Request) -> dict[str, str]:
+        return {"seen": (await request.body()).decode()}
+
+    app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=1024)
+    return app
+
+
+# --- origin policy ----------------------------------------------------------
+
+
+def test_a_mutation_without_an_origin_is_refused(api) -> None:
+    response = api.post(f"{API_PREFIX}/does-not-exist", json={})
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "ORIGIN_NOT_ALLOWED"
+
+
+def test_a_mutation_from_a_foreign_origin_is_refused_without_echoing_it(api) -> None:
+    foreign = "http://evil.example"
+    response = api.post(f"{API_PREFIX}/does-not-exist", json={}, headers={"Origin": foreign})
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "ORIGIN_NOT_ALLOWED"
+    assert foreign not in response.text
+
+
+def test_a_read_needs_no_origin(api) -> None:
+    assert api.get(f"{API_PREFIX}/health").status_code == 200
+
+
+def test_cors_is_never_a_wildcard(api) -> None:
+    response = api.get(f"{API_PREFIX}/health", headers={"Origin": ALLOWED_ORIGIN})
+
+    assert response.headers.get("access-control-allow-origin") == ALLOWED_ORIGIN
+    for value in response.headers.values():
+        assert value != "*"
+
+
+def test_the_development_origin_is_one_origin_and_only_when_configured(services) -> None:
+    vite = "http://localhost:5173"
+    base = build_api_services(services)
+    without = create_app(base)
+    with TestClient(without) as client:
+        refused = client.post(f"{API_PREFIX}/does-not-exist", json={}, headers={"Origin": vite})
+    assert refused.status_code == 403
+
+    with_vite = replace(base, limits=replace(base.limits, dev_origin=vite))
+    with TestClient(create_app(with_vite)) as client:
+        accepted = client.post(f"{API_PREFIX}/does-not-exist", json={}, headers={"Origin": vite})
+    assert accepted.status_code == 404
+
+
+# --- contract drift ---------------------------------------------------------
+
+
+def test_the_committed_openapi_schema_matches_the_application() -> None:
+    """The same shape as the frozen SQLite fingerprint.
+
+    A committed contract that silently disagrees with the code is worse than no
+    committed contract: the TypeScript types are generated from this file, so a
+    drifted schema means the frontend is typed against an API that no longer
+    exists.
+    """
+    assert OUTPUT.is_file(), (
+        "openapi/openapi.json is missing; run `python openapi/generate_openapi.py`"
+    )
+    assert OUTPUT.read_text(encoding="utf-8") == render(build_schema()), (
+        "openapi/openapi.json is stale; regenerate it with "
+        "`python openapi/generate_openapi.py` and state the diff in the commit message"
+    )

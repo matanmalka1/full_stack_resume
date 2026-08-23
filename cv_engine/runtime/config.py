@@ -26,6 +26,12 @@ class Setting:
     workspace_scoped: bool = True
 
 
+# The HTTP body limit lives here rather than in the API package because the
+# test plan (§10) requires the chosen value to be recorded in the config
+# contract, and because `cv workspace status` is then able to report it.
+# 2 MiB sits inside the approved 1-2 MB order of magnitude.
+API_MAX_BODY_BYTES_DEFAULT = 2 * 1024 * 1024
+
 SETTINGS: dict[str, Setting] = {
     setting.name: setting
     for setting in (
@@ -33,6 +39,11 @@ SETTINGS: dict[str, Setting] = {
         Setting("database", "CV_DATABASE"),
         Setting("provider", "CV_PROVIDER", default="deterministic"),
         Setting("model", "CV_MODEL", default="gpt-5.6"),
+        Setting("api_max_body_bytes", "CV_API_MAX_BODY_BYTES", default=API_MAX_BODY_BYTES_DEFAULT),
+        # Unset in production: the built UI is served same-origin, so there is no
+        # second origin to allow. A value here is the one development Vite origin
+        # and nothing else — never a wildcard, never a list.
+        Setting("api_dev_origin", "CV_API_DEV_ORIGIN", default=None),
     )
 }
 

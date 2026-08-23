@@ -8,7 +8,6 @@ only described in a document drifts the first time a service is edited.
 from __future__ import annotations
 
 import inspect
-import sqlite3
 from pathlib import Path
 
 import pytest
@@ -350,7 +349,7 @@ def test_unit_of_work_commits_success_and_rolls_back_failure(tmp_path: Path) -> 
             )
             raise RuntimeError("command refused after writing")
 
-    with pytest.raises((KeyError, sqlite3.Error)):
+    with pytest.raises(errors.UnknownRecord):
         repository.get_application("b")
 
     with repository.unit_of_work() as unit:
@@ -359,7 +358,7 @@ def test_unit_of_work_commits_success_and_rolls_back_failure(tmp_path: Path) -> 
             "current_status, created_at, updated_at) "
             "VALUES ('c', 'Co', 'Role', 'Role', 'en', 'saved', '2026-01-01', '2026-01-01')"
         )
-    with pytest.raises((KeyError, sqlite3.Error)):
+    with pytest.raises(errors.UnknownRecord):
         repository.get_application("c")
 
 

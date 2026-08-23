@@ -27,6 +27,7 @@ from ..errors import (
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     InfrastructureFailure,
     KnowledgeRejected,
+    PreconditionFailed,
     UnknownRecord,
 )
 from ..knowledge_mutations import KnowledgeMutation, PrepareKnowledgeMutation, StagedKnowledgeFile
@@ -143,7 +144,7 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
     def _quarantine(self, mutation: KnowledgeMutation, reason: str) -> None:
         try:
             self.repo.quarantine_knowledge_mutation(mutation.id, reason)
-        except ValueError:
+        except PreconditionFailed:
             pass
 
     def _staged_files(self, mutation: KnowledgeMutation) -> list[StagedKnowledgeFile]:
@@ -536,7 +537,7 @@ class KnowledgeService(ServiceBase[KnowledgeAuditRepository]):
         self._ensure_mutations_allowed()
         try:
             analysis_record = self.repo.get_analysis(job_analysis_id)
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise UnknownRecord(str(exc)) from exc
         if analysis_record["application_id"] != application_id:
             raise KnowledgeRejected("job analysis belongs to another application")

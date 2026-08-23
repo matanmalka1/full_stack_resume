@@ -67,7 +67,7 @@ class TrackingService(ServiceBase[TrackingRepository]):
             application = self.repo.get_application(command.application_id)
             current = ApplicationStatus(application["current_status"])
             target = ApplicationStatus(command.target_status)
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise UnknownRecord(f"unknown application: {command.application_id}") from exc
         except ValueError as exc:
             raise StateConflict(str(exc)) from exc
@@ -79,38 +79,35 @@ class TrackingService(ServiceBase[TrackingRepository]):
             raise StateConflict(f"invalid status transition: {current.value} -> {target.value}")
         now = command.occurred_at or utc_now()
         event_id = new_id()
-        try:
-            with self.repo.unit_of_work() as uow:
-                transaction = self.repo.bind(uow)
-                transaction.insert_recruitment_event(
-                    application_id=command.application_id,
-                    expected_current_status=current.value,
-                    target_status=target.value,
-                    event_type="status_transition",
-                    reason=command.reason,
-                    actor_type=command.actor_type,
-                    client=command.client,
-                    installation_id=self.installation_id,
-                    occurred_at=now,
-                    terminal_outcome=terminal_outcome_after(
-                        application.get("terminal_outcome"), target
-                    ),
-                    event_id=event_id,
-                )
-                self._audit(
-                    transaction,
-                    application_id=command.application_id,
-                    action="transition_recruitment_status",
-                    entity_type="recruitment_event",
-                    entity_id=event_id,
-                    actor_type=command.actor_type,
-                    client=command.client,
-                    occurred_at=now,
-                    details={"from_status": current.value, "to_status": target.value},
-                )
-                uow.commit()
-        except ValueError as exc:
-            raise StateConflict(str(exc)) from exc
+        with self.repo.unit_of_work() as uow:
+            transaction = self.repo.bind(uow)
+            transaction.insert_recruitment_event(
+                application_id=command.application_id,
+                expected_current_status=current.value,
+                target_status=target.value,
+                event_type="status_transition",
+                reason=command.reason,
+                actor_type=command.actor_type,
+                client=command.client,
+                installation_id=self.installation_id,
+                occurred_at=now,
+                terminal_outcome=terminal_outcome_after(
+                    application.get("terminal_outcome"), target
+                ),
+                event_id=event_id,
+            )
+            self._audit(
+                transaction,
+                application_id=command.application_id,
+                action="transition_recruitment_status",
+                entity_type="recruitment_event",
+                entity_id=event_id,
+                actor_type=command.actor_type,
+                client=command.client,
+                occurred_at=now,
+                details={"from_status": current.value, "to_status": target.value},
+            )
+            uow.commit()
         return self._result(command.application_id, event_id=event_id)
 
     def correct_recruitment_status(
@@ -123,7 +120,7 @@ class TrackingService(ServiceBase[TrackingRepository]):
             current = ApplicationStatus(application["current_status"])
             target = ApplicationStatus(command.target_status)
             corrected = self.repo.recruitment_event(command.corrects_event_id)
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise UnknownRecord(f"unknown recruitment correction source: {exc.args[0]}") from exc
         except ValueError as exc:
             raise StateConflict(str(exc)) from exc
@@ -169,10 +166,8 @@ class TrackingService(ServiceBase[TrackingRepository]):
                     },
                 )
                 uow.commit()
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise UnknownRecord(f"unknown recruitment correction source: {exc.args[0]}") from exc
-        except ValueError as exc:
-            raise StateConflict(str(exc)) from exc
         return self._result(command.application_id, event_id=event_id)
 
     def set_next_action(self, command: NextActionCommand) -> ApplicationMutationResult:
@@ -204,7 +199,7 @@ class TrackingService(ServiceBase[TrackingRepository]):
                     },
                 )
                 uow.commit()
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise UnknownRecord(f"unknown application: {command.application_id}") from exc
         return self._result(command.application_id, event_id=event_id)
 
@@ -212,7 +207,7 @@ class TrackingService(ServiceBase[TrackingRepository]):
         try:
             application = self.repo.get_application(command.application_id)
             revision = self.repo.approved_revision(command.approved_revision_id)
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise UnknownRecord(f"unknown submission source: {exc.args[0]}") from exc
         if revision.application_id != command.application_id:
             raise StateConflict("approved revision belongs to another application")
@@ -258,7 +253,7 @@ class TrackingService(ServiceBase[TrackingRepository]):
                     raise StateConflict(
                         "external submission artifact belongs to another application"
                     )
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise UnknownRecord(f"unknown external submission source: {exc.args[0]}") from exc
         return self._record_submission(
             application=application,
@@ -289,55 +284,52 @@ class TrackingService(ServiceBase[TrackingRepository]):
         current = ApplicationStatus(application["current_status"])
         submission_id = new_id()
         event_id: str | None = None
-        try:
-            with self.repo.unit_of_work() as uow:
-                transaction = self.repo.bind(uow)
-                transaction.insert_submission(
-                    submission_id,
-                    application_id,
-                    submission_type,
-                    approved_revision_id,
-                    artifact_version_id,
-                    submitted_at,
-                    metadata,
-                )
-                if current is ApplicationStatus.SAVED:
-                    event_id = transaction.insert_recruitment_event(
-                        application_id=application_id,
-                        expected_current_status=current.value,
-                        target_status=ApplicationStatus.APPLIED.value,
-                        event_type="status_transition",
-                        reason="submission recorded",
-                        actor_type=actor_type,
-                        client=client,
-                        installation_id=self.installation_id,
-                        occurred_at=submitted_at,
-                        terminal_outcome=terminal_outcome_after(
-                            application.get("terminal_outcome"), ApplicationStatus.APPLIED
-                        ),
-                    )
-                self._audit(
-                    transaction,
+        with self.repo.unit_of_work() as uow:
+            transaction = self.repo.bind(uow)
+            transaction.insert_submission(
+                submission_id,
+                application_id,
+                submission_type,
+                approved_revision_id,
+                artifact_version_id,
+                submitted_at,
+                metadata,
+            )
+            if current is ApplicationStatus.SAVED:
+                event_id = transaction.insert_recruitment_event(
                     application_id=application_id,
-                    action=(
-                        "submit_application"
-                        if submission_type == "internal"
-                        else "record_external_submission"
-                    ),
-                    entity_type="submission",
-                    entity_id=submission_id,
+                    expected_current_status=current.value,
+                    target_status=ApplicationStatus.APPLIED.value,
+                    event_type="status_transition",
+                    reason="submission recorded",
                     actor_type=actor_type,
                     client=client,
+                    installation_id=self.installation_id,
                     occurred_at=submitted_at,
-                    details={
-                        "submission_type": submission_type,
-                        "approved_revision_id": approved_revision_id,
-                        "artifact_version_id": artifact_version_id,
-                    },
+                    terminal_outcome=terminal_outcome_after(
+                        application.get("terminal_outcome"), ApplicationStatus.APPLIED
+                    ),
                 )
-                uow.commit()
-        except ValueError as exc:
-            raise StateConflict(str(exc)) from exc
+            self._audit(
+                transaction,
+                application_id=application_id,
+                action=(
+                    "submit_application"
+                    if submission_type == "internal"
+                    else "record_external_submission"
+                ),
+                entity_type="submission",
+                entity_id=submission_id,
+                actor_type=actor_type,
+                client=client,
+                occurred_at=submitted_at,
+                details={
+                    "submission_type": submission_type,
+                    "approved_revision_id": approved_revision_id,
+                    "artifact_version_id": artifact_version_id,
+                },
+            )
+            uow.commit()
         updated = self.repo.get_application(application_id)
         return SubmissionResult(
             application_id=application_id,

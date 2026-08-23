@@ -1,0 +1,117 @@
+{
+  "components": {
+    "schemas": {
+      "HealthResponse": {
+        "additionalProperties": false,
+        "description": "What `cv web` probes to tell its own instance from a foreign process.\n\n`installation_id` and `workspace_id` together answer \"is the process on this\nport mine, and is it serving the Workspace I am about to open\". The version\nsurfaces are the §17 provenance set, reported so a client can refuse to talk\nto an instance it does not understand.",
+        "properties": {
+          "api_version": {
+            "title": "Api Version",
+            "type": "string"
+          },
+          "installation_id": {
+            "title": "Installation Id",
+            "type": "string"
+          },
+          "knowledge": {
+            "$ref": "#/components/schemas/KnowledgeVersions"
+          },
+          "product_version": {
+            "title": "Product Version",
+            "type": "string"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "installation_id",
+          "workspace_id",
+          "product_version",
+          "api_version",
+          "schema_version",
+          "knowledge"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "KnowledgeVersions": {
+        "additionalProperties": false,
+        "properties": {
+          "candidate_context": {
+            "title": "Candidate Context",
+            "type": "string"
+          },
+          "emphasis_policies": {
+            "title": "Emphasis Policies",
+            "type": "string"
+          },
+          "facts": {
+            "title": "Facts",
+            "type": "string"
+          },
+          "facts_lifecycle": {
+            "title": "Facts Lifecycle",
+            "type": "string"
+          },
+          "presentations": {
+            "title": "Presentations",
+            "type": "string"
+          },
+          "profiles": {
+            "title": "Profiles",
+            "type": "string"
+          }
+        },
+        "required": [
+          "facts",
+          "facts_lifecycle",
+          "profiles",
+          "emphasis_policies",
+          "presentations",
+          "candidate_context"
+        ],
+        "title": "KnowledgeVersions",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "CV Engine local API",
+    "version": "1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "operationId": "health_api_v1_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Instance identity and versions",
+        "tags": [
+          "health"
+        ]
+      }
+    }
+  }
+}

@@ -4,6 +4,7 @@ from typing import Any
 
 from ..domain.models import ReadyQualification, ValidationIssue, ValidationReport
 from ..util import verify_payload
+from .errors import UnknownRecord
 from .ports import ArtifactStore, ReadinessRepository
 
 
@@ -54,7 +55,7 @@ def qualify_ready_revision(
     ):
         try:
             version = repo.artifact_version_for_revision(revision.id, artifact_type, "approved")
-        except KeyError:
+        except UnknownRecord:
             fail(
                 "approved_source",
                 f"no-approved-{label}",
@@ -131,7 +132,7 @@ def qualify_ready_revision(
 
     try:
         analysis_record = repo.get_analysis(revision.job_analysis_id)
-    except KeyError:
+    except UnknownRecord:
         fail("chain", "unknown-job-analysis", "the revision's job analysis is unavailable")
     else:
         if analysis_record["application_id"] != revision.application_id:
@@ -141,7 +142,7 @@ def qualify_ready_revision(
 
     try:
         plan = repo.selection_plan(revision.selection_plan_id)
-    except KeyError:
+    except UnknownRecord:
         fail("chain", "unknown-selection-plan", "the revision's selection plan is unavailable")
     else:
         if plan.application_id != revision.application_id:
@@ -166,7 +167,7 @@ def qualify_ready_revision(
     if markdown_version is not None:
         try:
             decision = repo.decision_for_artifact_version(markdown_version["id"])
-        except KeyError:
+        except UnknownRecord:
             fail(
                 "revision_binding",
                 "no-decision-record",
@@ -188,7 +189,7 @@ def qualify_ready_revision(
     try:
         approval_validation = repo.validation_report(revision.validation_run_id)
         lineage = repo.validation_lineage(revision.validation_run_id)
-    except KeyError:
+    except UnknownRecord:
         fail(
             "validation_linkage",
             "no-approval-validation",
@@ -227,7 +228,7 @@ def qualify_ready_revision(
             if pdf_artifact_version_id is not None
             else repo.artifact_version_for_revision(revision.id, "resume_pdf", "rendered")
         )
-    except KeyError:
+    except UnknownRecord:
         fail(
             "rendered_artifacts",
             "no-rendered-pdf",
@@ -254,7 +255,7 @@ def qualify_ready_revision(
     for artifact_type, label in (("resume_html", "html"), ("visual_evidence", "visual")):
         try:
             version = repo.artifact_version_for_revision(revision.id, artifact_type, "rendered")
-        except KeyError:
+        except UnknownRecord:
             fail(
                 "rendered_artifacts",
                 f"no-{label}",
@@ -285,7 +286,7 @@ def qualify_ready_revision(
             post_render = repo.validation_for_artifact(
                 application_id, "post-render", pdf_version["id"]
             )
-        except KeyError:
+        except UnknownRecord:
             fail(
                 "validation_linkage",
                 "no-post-render-validation",

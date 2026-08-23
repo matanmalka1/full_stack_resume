@@ -4,6 +4,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from .. import __version__
+from ..api import ApiLimits, ApiServices, InstanceIdentity
+from ..api.app import API_VERSION
 from ..application.operation_runner import OperationRunner
 from ..application.operations import OperationType
 from ..application.ports import (
@@ -32,10 +35,11 @@ from ..infrastructure.artifacts import FilesystemArtifactStore
 from ..infrastructure.knowledge import FileKnowledge
 from ..infrastructure.operation_logging import OperationFailureLogger
 from ..infrastructure.payloads import PayloadStore
-from ..infrastructure.persistence import Repository
+from ..infrastructure.persistence import Repository, current_schema_version
 from ..infrastructure.providers import OpenAIClassificationProvider
 from ..infrastructure.rendering import PlaywrightRenderer
 from ..util import new_id
+from .config import API_MAX_BODY_BYTES_DEFAULT, RuntimeConfig
 from .execution import ForegroundOperationExecutor, OperationWorker
 from .workspace import Workspace
 
@@ -85,9 +89,7 @@ def build_services(
         workspace.knowledge_root,
         workspace_root=workspace.root,
         temp_root=workspace.temp_root,
-        has_prepared_mutation=lambda: bool(
-            resolved_repository.prepared_knowledge_mutations()
-        ),
+        has_prepared_mutation=lambda: bool(resolved_repository.prepared_knowledge_mutations()),
     )
     resolved_artifacts = artifacts or FilesystemArtifactStore(workspace)
     resolved_payloads = payloads or PayloadStore(workspace)
@@ -141,4 +143,47 @@ def build_services(
         operation_runner=runner,
         foreground_operations=foreground,
         operation_worker=worker,
+    )
+
+
+def build_api_services(
+    services: Services,
+    *,
+    config: RuntimeConfig | None = None,
+) -> ApiServices:
+    """Narrow `Services` down to what the HTTP layer is allowed to reach.
+
+    `Services` also holds repositories, stores, a renderer, a provider, and the
+    Operation worker. A router needs none of those, and being able to reach one
+    is how business logic ends up in a router, so the API is handed a container
+    that simply does not carry them.
+
+    The worker is deliberately not passed either: `create_app` builds a server,
+    and the supervisor hosts the worker.
+    """
+    max_body_bytes = API_MAX_BODY_BYTES_DEFAULT
+    dev_origin: str | None = None
+    if config is not None:
+        max_body_bytes = int(config.get("api_max_body_bytes"))
+        dev_origin = config.get("api_dev_origin")
+    return ApiServices(
+        applications=services.applications,
+        queries=services.queries,
+        analysis=services.analysis,
+        drafts=services.drafts,
+        rendering=services.rendering,
+        tracking=services.tracking,
+        knowledge=services.knowledge_lifecycle,
+        operations=services.operations,
+        identity=InstanceIdentity(
+            installation_id=services.workspace.installation_id(),
+            workspace_id=services.workspace.workspace_id,
+            product_version=__version__,
+            api_version=API_VERSION,
+            # None before `cv init` has run. Reported as-is rather than
+            # invented: a health probe that claims a schema version for a
+            # database that has none is worse than one that says so.
+            schema_version=current_schema_version(services.workspace.database_path) or "",
+        ),
+        limits=ApiLimits(max_body_bytes=max_body_bytes, dev_origin=dev_origin),
     )

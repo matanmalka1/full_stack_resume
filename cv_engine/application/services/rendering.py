@@ -60,7 +60,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
     def render(self, application_id: str) -> RenderResult:
         try:
             revision_id = self.repo.latest_approved_revision(application_id).id
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise UnknownRecord(f"no approved revision for application: {application_id}") from exc
         command = RenderCommand(
             application_id=application_id,
@@ -78,7 +78,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
             manifest_record = self.repo.artifact_version_for_revision(
                 command.approved_revision_id, "claim_manifest", "approved"
             )
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise UnknownRecord(
                 f"unknown approved revision: {command.approved_revision_id}"
             ) from exc
@@ -245,7 +245,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
                 approved_revision_id,
                 pdf_artifact_version_id,
             )
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise UnknownRecord(f"no approved revision for application: {application_id}") from exc
 
     def ready_report(self, application_id: str) -> ValidationReport:

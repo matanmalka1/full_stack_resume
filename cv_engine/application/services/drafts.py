@@ -66,14 +66,11 @@ class DraftService(ServiceBase[DraftRepository]):
         )
 
     def _commit_edit(self, working: WorkingDraft, source: DraftDocument) -> WorkingDraft:
-        try:
-            changed = self.repo.update_working_draft(
-                working.id,
-                working.edit_version,
-                source,
-            )
-        except ValueError as exc:
-            raise StateConflict(str(exc)) from exc
+        changed = self.repo.update_working_draft(
+            working.id,
+            working.edit_version,
+            source,
+        )
         return changed
 
     def draft(self, command: DraftCommand) -> DraftResult:
@@ -93,7 +90,7 @@ class DraftService(ServiceBase[DraftRepository]):
         analysis_id = command.job_analysis_id
         try:
             record = self.repo.get_analysis(analysis_id)
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise UnknownRecord(f"unknown job analysis: {analysis_id}") from exc
         if record["application_id"] != command.application_id:
             raise LineageBroken(
@@ -101,7 +98,7 @@ class DraftService(ServiceBase[DraftRepository]):
             )
         try:
             plan = self.repo.selection_plan(command.selection_plan_id)
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise UnknownRecord(f"unknown selection plan: {command.selection_plan_id}") from exc
         if plan.application_id != command.application_id or plan.job_analysis_id != analysis_id:
             raise LineageBroken(
@@ -141,7 +138,7 @@ class DraftService(ServiceBase[DraftRepository]):
         # check on the named analysis, not to choose what to draft from.
         try:
             latest_snapshot = self.repo.latest_snapshot(command.application_id)
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise UnknownRecord(f"unknown application: {command.application_id}") from exc
         if record["job_snapshot_id"] != latest_snapshot["id"]:
             raise StateConflict(
@@ -560,7 +557,7 @@ class DraftService(ServiceBase[DraftRepository]):
             application = self.repo.get_application(application_id)
             revision = self.repo.approved_revision(approved_revision_id)
             decision = self.repo.decision_for_revision(approved_revision_id)
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise UnknownRecord(f"unknown decision export source: {exc.args[0]}") from exc
         if (
             revision.application_id != application_id

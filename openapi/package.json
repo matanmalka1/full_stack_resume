@@ -1,0 +1,12 @@
+{
+  "name": "cv-engine-openapi",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Generates TypeScript types from the committed OpenAPI schema. No React, Vite, or Tailwind: those arrive with the frontend in M4.",
+  "scripts": {
+    "generate": "openapi-typescript openapi.json --output types.ts"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.4.0"
+  }
+}

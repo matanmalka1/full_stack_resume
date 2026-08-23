@@ -16,6 +16,7 @@ from ..domain.facts import FactStore
 from ..domain.models import DraftDocument, JobAnalysis
 from ..domain.profiles import ProfileStore
 from ..util import canonical_json, sha256_text
+from .errors import UnknownRecord
 from .ports import DraftRepository
 
 # What a re-analysis may change without invalidating a draft built from an
@@ -85,7 +86,7 @@ def decision_record_analysis_id(repo: DraftRepository, application_id: str) -> s
             application_id, "resume_markdown", "approved"
         )
         return repo.decision_for_artifact_version(markdown_version["id"])["job_analysis_id"]
-    except KeyError:
+    except UnknownRecord:
         return None
 
 
@@ -135,7 +136,7 @@ def check_draft_chain(
 
     try:
         record = repo.get_analysis(analysis_id)
-    except KeyError:
+    except UnknownRecord:
         problems.append(("unknown-job-analysis", f"no job analysis {analysis_id} exists"))
         return unresolved(analysis_id=analysis_id)
 
@@ -159,7 +160,7 @@ def check_draft_chain(
 
     try:
         snapshot = repo.get_snapshot(draft.job_snapshot_id)
-    except KeyError:
+    except UnknownRecord:
         problems.append(("unknown-job-snapshot", f"no job snapshot {draft.job_snapshot_id} exists"))
     else:
         if snapshot["application_id"] != application_id:

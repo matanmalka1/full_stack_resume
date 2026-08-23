@@ -141,7 +141,7 @@ def working_draft_record(repo: WorkingDraftReader, application_id: str) -> Worki
     """
     try:
         return repo.active_working_draft(application_id)
-    except KeyError as exc:
+    except UnknownRecord as exc:
         raise UnknownRecord(f"no working draft for application: {application_id}") from exc
 
 

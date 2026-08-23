@@ -48,7 +48,7 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
         )
         try:
             latest_plan = transaction.latest_selection_plan(application_id)
-        except KeyError:
+        except UnknownRecord:
             latest_plan = None
         active_plan = (
             latest_plan
@@ -57,7 +57,7 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
         )
         try:
             working = transaction.active_working_draft(application_id)
-        except KeyError:
+        except UnknownRecord:
             working = None
         draft_plan = (
             transaction.selection_plan(working.selection_plan_id) if working is not None else None
@@ -131,7 +131,7 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
                     ),
                 )
                 latest = analysis_view(analyses[-1]) if analyses else None
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise UnknownRecord(f"unknown application: {application_id}") from exc
         except (TypeError, ValueError) as exc:
             raise InfrastructureFailure(f"stored application detail is invalid: {exc}") from exc
@@ -145,7 +145,7 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
     def artifact_versions(self, application_id: str) -> ArtifactVersionsView:
         try:
             self.repo.get_application(application_id)
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise UnknownRecord(f"unknown application: {application_id}") from exc
         try:
             return ArtifactVersionsView(
@@ -160,7 +160,7 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
     def latest_decision(self, application_id: str) -> DecisionRecordView:
         try:
             return decision_view(self.repo.latest_decision(application_id))
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise UnknownRecord(f"no decision record for application: {application_id}") from exc
         except (TypeError, ValueError) as exc:
             raise InfrastructureFailure(f"stored decision projection is invalid: {exc}") from exc

@@ -58,7 +58,7 @@ class AnalysisOperationHandler:
         preparation = cast(PreparationRepository, repository)
         try:
             snapshot = preparation.get_snapshot(sources.job_snapshot_id)
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise SourceChanged("The job snapshot no longer exists.") from exc
         if (
             snapshot["application_id"] != operation.application_id
@@ -67,7 +67,7 @@ class AnalysisOperationHandler:
             raise SourceChanged("The job snapshot changed before analysis activation.")
         try:
             active_snapshot = preparation.latest_snapshot(operation.application_id)
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise SourceChanged("The Application no longer has an active job snapshot.") from exc
         if active_snapshot["id"] != sources.job_snapshot_id:
             raise SourceChanged("A newer job snapshot replaced the analysis source.")
@@ -145,7 +145,7 @@ class DraftOperationHandler:
             active_snapshot = drafts.latest_snapshot(operation.application_id)
             active_analysis_id, _ = drafts.latest_analysis(operation.application_id)
             active_plan = drafts.latest_selection_plan(operation.application_id)
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise SourceChanged("A draft source no longer exists.") from exc
         dependencies = sources.dependency_hashes
         if (
@@ -211,7 +211,7 @@ class RenderOperationHandler:
             analysis = readiness.get_analysis(revision.job_analysis_id)
             plan = readiness.selection_plan(revision.selection_plan_id)
             manifest_path = self.service.artifacts.resolve(manifest["path"])
-        except (KeyError, OSError, ValueError) as exc:
+        except (UnknownRecord, OSError, ValueError) as exc:
             raise SourceChanged("An approved render source is missing or unreadable.") from exc
         dependencies = sources.dependency_hashes
         if (
@@ -289,7 +289,7 @@ class OperationService(ServiceBase[OperationRepository]):
         preparation = cast(PreparationRepository, self.repo)
         try:
             snapshot = preparation.get_snapshot(command.job_snapshot_id)
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise UnknownRecord(f"unknown job snapshot: {command.job_snapshot_id}") from exc
         if snapshot["application_id"] != command.application_id:
             raise LineageBroken(
@@ -323,7 +323,7 @@ class OperationService(ServiceBase[OperationRepository]):
             analysis = drafts.get_analysis(command.job_analysis_id)
             plan = drafts.selection_plan(command.selection_plan_id)
             snapshot = drafts.get_snapshot(analysis["job_snapshot_id"])
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise UnknownRecord("unknown source for draft generation") from exc
         if (
             analysis["application_id"] != command.application_id
@@ -367,7 +367,7 @@ class OperationService(ServiceBase[OperationRepository]):
                 command.approved_revision_id, "claim_manifest", "approved"
             )
             snapshot = readiness.get_snapshot(revision.job_snapshot_id)
-        except KeyError as exc:
+        except UnknownRecord as exc:
             raise UnknownRecord(
                 f"unknown approved revision: {command.approved_revision_id}"
             ) from exc
@@ -411,7 +411,7 @@ class OperationService(ServiceBase[OperationRepository]):
                 revision_id, "claim_manifest", "approved"
             )
             decision = drafts.decision_for_revision(revision_id)
-        except KeyError:
+        except UnknownRecord:
             return None
         return ApprovalResult(
             application_id=revision.application_id,
@@ -451,7 +451,7 @@ class OperationService(ServiceBase[OperationRepository]):
             payload = existing["payload"]
             try:
                 working = cast(DraftRepository, self.repo).active_working_draft(application_id)
-            except KeyError as exc:
+            except UnknownRecord as exc:
                 raise StateConflict("pending approval has no recoverable WorkingDraft") from exc
             if payload != {
                 "application_id": application_id,
@@ -467,7 +467,7 @@ class OperationService(ServiceBase[OperationRepository]):
         else:
             try:
                 working = cast(DraftRepository, self.repo).active_working_draft(application_id)
-            except KeyError as exc:
+            except UnknownRecord as exc:
                 raise UnknownRecord(f"no working draft for application: {application_id}") from exc
             payload = {
                 "application_id": application_id,
