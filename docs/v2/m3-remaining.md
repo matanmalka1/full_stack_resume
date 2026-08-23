@@ -463,7 +463,18 @@ every path is the one that ran before, which the first overlay test asserts dire
 comparing the selection and the manifest against a build with no parameters at all.
 
 Commits: `1da0003` (domain overlay), `335a476` (application commands), `ab1b9e4` (API
-routes and the narrowing repair), `16c4c96` (tests).
+routes and the narrowing repair), `16c4c96` (tests), `f72dbd4` (route rename).
+
+**One correction after the evidence run.** The decisions route shipped as
+`POST /analyses/{id}/decisions`; §21 spells it `apply-decisions`. §21 does allow final
+path names to be an internal design choice while resource identity, explicit source IDs
+and use-case semantics hold, so this was not a semantic deviation - but a path that
+differs from the document a client reader is holding is a defect regardless of which
+clause permits it. Renamed at `f72dbd4` with no alias: the old spelling never reached a
+released contract or a frozen record, and an alias the specification does not name would
+leave two spellings for one command in the generated types. The rename touches the route,
+its four test call sites, two parametrisation ID sets, the analyze route's description,
+and both generated files; it changes no schema and no test count.
 
 OpenAPI and TypeScript were regenerated at `ab1b9e4`. The diff is additive and nothing
 moved: 3 paths added, 6 schemas added, 0 removed, 0 existing schemas changed.
