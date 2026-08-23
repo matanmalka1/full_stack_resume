@@ -13,6 +13,7 @@ from ...domain.models import (
 )
 from ...domain.validation import validate_draft
 from ...util import new_id, sha256_file
+from ..artifacts import ArtifactDelivery, deliver_artifact
 from ..commands import (
     RenderCommand,
     RenderResult,
@@ -31,6 +32,7 @@ from ..ports import (
     ReadinessRepository,
     RenderTargets,
 )
+from ..queries import artifact_version_view
 from ..ready import qualify_ready_revision
 from .base import ServiceBase, bound_analysis
 
@@ -228,6 +230,98 @@ class RenderingService(ServiceBase[ReadinessRepository]):
             application_id=command.application_id,
             pdf_artifact_version_id=artifact_ids[1],
             validation=report,
+        )
+
+    def download_artifact(self, artifact_version_id: str) -> ArtifactDelivery:
+        """§20/§12: one registered artifact, addressed by ID and nothing else.
+
+        There is no path argument and no `latest`. An ID that is registered
+        nowhere is `UnknownRecord`, which is what a traversal string arriving in
+        the path segment turns into: an identifier that names no row. An ID that
+        *is* registered but whose payload fails containment, presence, or its
+        hash is a different refusal, raised by the store, because a record that
+        exists and does not verify is not the same finding as one that never
+        existed.
+
+        Ready qualification is deliberately not required. This serves the HTML
+        preview, the screenshot, the approved Markdown, and the archived draft
+        snapshots - none of which are the Ready PDF, and none of which become
+        readable only once a revision qualifies. The one export that does
+        require qualification is `export_recruiter_pdf`, and it says so.
+        """
+        record = self._artifact_record(artifact_version_id)
+        return deliver_artifact(
+            self.revision_payloads, artifact_version_view(record), record["path"]
+        )
+
+    def export_recruiter_pdf(
+        self,
+        approved_revision_id: str,
+        pdf_artifact_version_id: str,
+    ) -> ArtifactDelivery:
+        """§16: the exact Ready PDF, under its recruiter-facing name.
+
+        Both IDs are explicit and both are checked against each other, so an
+        export cannot be satisfied by whatever PDF happens to be newest. The
+        four verifications §16 names happen in this order: registration, then
+        that the named PDF is this revision's rendered PDF, then Ready
+        qualification of that exact pair, then - inside the store - hash and
+        containment.
+
+        Active-context compatibility is deliberately not checked. §16 says so
+        directly, and it is the property that makes a superseded revision still
+        exportable: a new JobSnapshot removes a revision from the active
+        PreparationState, but it does not unmake the evidence that the revision
+        rendered and qualified.
+        """
+        record = self._artifact_record(pdf_artifact_version_id)
+        try:
+            revision = self.repo.approved_revision(approved_revision_id)
+        except UnknownRecord as exc:
+            raise UnknownRecord(f"unknown approved revision: {approved_revision_id}") from exc
+        if record["artifact_type"] != "resume_pdf":
+            raise LineageBroken(f"artifact {pdf_artifact_version_id} is not a rendered PDF")
+        if record["revision_id"] != revision.id:
+            raise LineageBroken("the named PDF does not belong to the named approved revision")
+        qualification = qualify_ready_revision(
+            self.artifacts,
+            self.repo,
+            revision.application_id,
+            revision.id,
+            pdf_artifact_version_id,
+        )
+        if not qualification.ready_qualified:
+            raise ValidationBlocked(
+                "this approved revision is not Ready-qualified, so its PDF is not exportable",
+                qualification.validation,
+            )
+        # No `filename=` override. The recruiter name is the one render wrote
+        # into this artifact's registration; recomputing it here would invent a
+        # name at export time that the immutable record never carried, and would
+        # make an export depend on a renderer being configured at all.
+        return deliver_artifact(
+            self.revision_payloads, artifact_version_view(record), record["path"]
+        )
+
+    def _artifact_record(self, artifact_version_id: str) -> dict[str, Any]:
+        try:
+            return self.repo.artifact_version(artifact_version_id)
+        except UnknownRecord as exc:
+            raise UnknownRecord(f"unknown artifact version: {artifact_version_id}") from exc
+
+    def revision_ready_qualification(self, approved_revision_id: str) -> ReadyQualification:
+        """§20: Ready qualification for one exact revision, by its own ID.
+
+        The Application is read from the revision rather than taken from the
+        caller: a revision names exactly one, so a second argument could only
+        ever agree or be wrong.
+        """
+        try:
+            revision = self.repo.approved_revision(approved_revision_id)
+        except UnknownRecord as exc:
+            raise UnknownRecord(f"unknown approved revision: {approved_revision_id}") from exc
+        return qualify_ready_revision(
+            self.artifacts, self.repo, revision.application_id, revision.id
         )
 
     def ready_qualification(

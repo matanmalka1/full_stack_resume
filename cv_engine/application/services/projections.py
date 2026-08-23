@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import cast
 
+from ..artifacts import verify_artifact
 from ..errors import (
     # Re-exported: the v1 CLI and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
@@ -10,16 +12,20 @@ from ..errors import (
 )
 from ..ports import (
     QueryRepository,
+    ReadinessRepository,
 )
 from ..queries import (
     ApplicationDetailView,
     ApplicationListView,
+    ApprovedRevisionView,
+    ArtifactVersionDetailView,
     ArtifactVersionsView,
     DecisionRecordView,
     WorkingDraftView,
     analysis_view,
     application_list_item_view,
     application_view,
+    approved_revision_view,
     artifact_version_view,
     decision_view,
     snapshot_view,
@@ -157,6 +163,55 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
             )
         except (TypeError, ValueError) as exc:
             raise InfrastructureFailure(f"stored artifact projection is invalid: {exc}") from exc
+
+    def artifact_version(self, artifact_version_id: str) -> ArtifactVersionDetailView:
+        """§20: one registered artifact's metadata and its download eligibility.
+
+        By ID, like every other artifact surface. The stored path is read here
+        and handed straight to the verification port; it never reaches the view,
+        which is why the view and the detail view are the same field set plus
+        three answers about availability.
+        """
+        try:
+            record = self.repo.artifact_version(artifact_version_id)
+        except UnknownRecord as exc:
+            raise UnknownRecord(f"unknown artifact version: {artifact_version_id}") from exc
+        try:
+            view = artifact_version_view(record)
+        except (TypeError, ValueError) as exc:
+            raise InfrastructureFailure(f"stored artifact projection is invalid: {exc}") from exc
+        availability = verify_artifact(self.revision_payloads, view, record["path"])
+        return ArtifactVersionDetailView(
+            **view.model_dump(mode="python"),
+            downloadable=availability.downloadable,
+            size=availability.size,
+            unavailable_reason=availability.reason,
+        )
+
+    def approved_revision(self, approved_revision_id: str) -> ApprovedRevisionView:
+        """§20: one ApprovedRevision with its Ready qualification re-derived.
+
+        The qualification is computed here rather than read, and it is computed
+        for this exact revision rather than for the Application's latest one, so
+        a superseded revision reports its own truth: still qualified, still
+        exportable, and no longer the active milestone.
+        """
+        try:
+            revision = self.repo.approved_revision(approved_revision_id)
+        except UnknownRecord as exc:
+            raise UnknownRecord(f"unknown approved revision: {approved_revision_id}") from exc
+        # The same cast `submit_render` and `RenderOperationHandler` make.
+        # Qualification reads draft lineage that `QueryRepository` does not
+        # declare, and the concrete adapter satisfies `ApplicationRepository`,
+        # which extends `ReadinessRepository`. Widening `QueryRepository`
+        # instead would give every read projection write access to drafts.
+        qualification = qualify_ready_revision(
+            self.artifacts,
+            cast(ReadinessRepository, self.repo),
+            revision.application_id,
+            revision.id,
+        )
+        return approved_revision_view(revision, qualification)
 
     def working_draft(self, working_draft_id: str) -> WorkingDraftView:
         """§20: one WorkingDraft by ID, with the token a client conditions on.
