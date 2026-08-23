@@ -14,8 +14,10 @@ import uuid
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 from helpers import ACCOUNT_MANAGER_JOB, approve_active_draft, validate_active_draft
 
+from cv_engine.api.app import API_PREFIX, create_app
 from cv_engine.application.commands import (
     AnalyzeCommand,
     ApproveDraftCommand,
@@ -34,7 +36,7 @@ from cv_engine.domain.models import DecisionRecord
 from cv_engine.infrastructure.persistence import connect
 from cv_engine.infrastructure.persistence.artifacts import SqliteArtifactRepository
 from cv_engine.infrastructure.persistence.drafts import SqliteDraftRepository
-from cv_engine.runtime.composition import Services
+from cv_engine.runtime.composition import Services, build_api_services
 from cv_engine.runtime.workspace import Workspace
 from cv_engine.util import normalized_text, sha256_file, sha256_text
 
@@ -302,7 +304,9 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
                 connection.execute(statement, (revision.id,))
 
 
-def test_decision_record_states_the_approved_draft_s_own_language(drafted_application) -> None:
+def test_latest_decision_uses_revision_order_when_approvals_share_a_timestamp(
+    drafted_application, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The record explains one document, so it names that document's language.
 
     Asserted across two approvals in two languages on one Application. With a
@@ -311,6 +315,11 @@ def test_decision_record_states_the_approved_draft_s_own_language(drafted_applic
     record's value mean anything: it is read back while both the latest analysis
     and the newest revision say the other language.
     """
+    fixed_approval_time = "2026-08-23T12:34:56Z"
+    monkeypatch.setattr(
+        "cv_engine.application.services.drafts.utc_now", lambda: fixed_approval_time
+    )
+
     setup = drafted_application("Decision Language")
     services, app_id = setup.services, setup.application_id
 
@@ -338,6 +347,17 @@ def test_decision_record_states_the_approved_draft_s_own_language(drafted_applic
     assert language_of(second.revision_id) == hebrew.language == "he"
     second_export = services.drafts.export_decision_markdown(app_id, second.revision_id).content
     assert "- Language: he" in second_export
+
+    first_record = services.repository.decision_for_revision(first.revision_id)
+    second_record = services.repository.decision_for_revision(second.revision_id)
+    assert first_record["created_at"] == second_record["created_at"] == fixed_approval_time
+    assert services.repository.latest_decision(app_id)["id"] == second_record["id"]
+
+    with TestClient(create_app(build_api_services(services))) as api:
+        latest = api.get(f"{API_PREFIX}/applications/{app_id}/decision")
+    assert latest.status_code == 200
+    assert latest.json()["id"] == second_record["id"]
+    assert latest.json()["structured"]["language"] == "he"
 
     # Re-read the first record with the latest analysis and the newest revision
     # both in Hebrew: the export renders what was stored, not what is current.

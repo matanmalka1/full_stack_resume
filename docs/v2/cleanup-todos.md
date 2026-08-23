@@ -139,7 +139,19 @@ or weaken an existing acceptance gate.
       Class B, and gated as one: the stored value's meaning changed, but no migration, no
       OpenAPI change, and no artifact-layout change — `structured_json` is an untyped
       payload column and the API never exposes it. The regression
-      (`test_decision_record_states_the_approved_draft_s_own_language`) approves twice on
+      (`test_latest_decision_uses_revision_order_when_approvals_share_a_timestamp`)
+      approves twice on
       one Application, in `en` then `he`, and re-reads the first record while both the
       latest analysis and the newest revision say `he`: that is what proves the export
       reads the stored record rather than recomputing from what is current.
+- [x] **TODO 22 — completed:** `latest_decision` no longer treats the
+      second-resolution `created_at` value as a total order. It joins the decision's
+      immutable `ArtifactVersion` and orders first by that logical artifact's
+      `version_number`, with deterministic tie-breakers that do not treat a UUID as a
+      clock. A regression fixes two approvals to the same timestamp and proves both the
+      repository query and HTTP read return the second revision's decision. No migration
+      or schema change was required.
+- [ ] **TODO 23:** `tests/test_golden.py` is marked `browser`, so the golden-hash test is
+      excluded from the default non-browser suite even though its hash comparison is a
+      Class B gate. This is cleanup only and did not block M3; do not reorganize the test
+      selection as part of M3 close-out.

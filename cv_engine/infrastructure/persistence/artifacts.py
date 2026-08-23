@@ -193,8 +193,12 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
     def latest_decision(self, application_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
             row = connection.execute(
-                "SELECT * FROM decision_records WHERE application_id=? "
-                "ORDER BY created_at DESC LIMIT 1",
+                "SELECT decisions.* FROM decision_records AS decisions "
+                "JOIN artifact_versions AS versions "
+                "ON versions.id=decisions.artifact_version_id "
+                "WHERE decisions.application_id=? "
+                "ORDER BY versions.version_number DESC, "
+                "decisions.created_at DESC, decisions.id ASC LIMIT 1",
                 (application_id,),
             ).fetchone()
         if row is None:

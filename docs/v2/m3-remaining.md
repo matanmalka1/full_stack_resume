@@ -1350,6 +1350,14 @@ The render blocker recorded here is closed: Stage F's repair was gated and accep
 no terminal Operation can carry a reference to a row that was never written. H is gated
 only on its own items below.
 
+Before H began, TODO 22 temporarily blocked it: `latest_decision` ordered only by the
+second-resolution `created_at`, so two approvals in one second could return the older
+immutable decision. The blocker is closed without a migration: the query now follows the
+bound resume-Markdown `ArtifactVersion.version_number`, and a same-timestamp regression
+proves the repository and HTTP surfaces both return the second decision. TODO 23 records
+the separate, non-blocking fact that golden hashes are browser-marked and therefore absent
+from the default non-browser selection.
+
 - [ ] Journeys §5.1–5.4 in full, plus **only the preparation half of §5.5**. §5.5's
       submission bullet needs the submission endpoint and is **deferred to M5** — recorded,
       not quietly skipped.
