@@ -7,6 +7,7 @@ ASGI to the app directly.
 
 from __future__ import annotations
 
+import re
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -230,3 +231,84 @@ def test_the_committed_openapi_schema_matches_the_application() -> None:
         "openapi/openapi.json is stale; regenerate it with "
         "`python openapi/generate_openapi.py` and state the diff in the commit message"
     )
+
+
+# --- no endpoint accepts or exposes a path ----------------------------------
+
+#: Response fields whose name looks filesystem-shaped and is not. One entry,
+#: stated deliberately, so that forgetting to register a genuinely new one fails
+#: the guard instead of passing it. `entity_references` maps a reason or warning
+#: to the *entity IDs* it concerns - `{"approved_revision_id": "..."}` - which is
+#: the opposite of a stored location.
+PATH_SHAPED_NAME_EXCEPTIONS = frozenset({"entity_references"})
+
+PATH_SHAPED_NAME = re.compile(
+    r"(^|_)(path|paths|reference|references|filename|file|directory|dir|location)$"
+)
+
+
+def _path_shaped_contract_names(schema: dict) -> list[str]:
+    offenders = []
+    for name, model in schema["components"]["schemas"].items():
+        for prop in model.get("properties") or {}:
+            if PATH_SHAPED_NAME.search(prop) and prop not in PATH_SHAPED_NAME_EXCEPTIONS:
+                offenders.append(f"schema {name}.{prop}")
+    for path, operations in schema["paths"].items():
+        for method, operation in operations.items():
+            for parameter in operation.get("parameters") or []:
+                parameter_name = parameter["name"]
+                if (
+                    PATH_SHAPED_NAME.search(parameter_name)
+                    and parameter_name not in PATH_SHAPED_NAME_EXCEPTIONS
+                ):
+                    offenders.append(f"parameter {method.upper()} {path} {parameter_name}")
+            body = (operation.get("requestBody") or {}).get("content") or {}
+            for media in body.values():
+                for prop in (media.get("schema") or {}).get("properties") or {}:
+                    if PATH_SHAPED_NAME.search(prop) and prop not in PATH_SHAPED_NAME_EXCEPTIONS:
+                        offenders.append(f"body {method.upper()} {path} {prop}")
+    return sorted(offenders)
+
+
+def test_no_endpoint_accepts_or_exposes_a_filesystem_path() -> None:
+    """The derived form of architecture §14's "no endpoint accepts local paths".
+
+    Read from the generated contract rather than from the routers, because the
+    contract is what a client actually sees: a path that reached a response
+    model through an inherited field would never appear in a router's source,
+    and this is exactly how `ApprovedRevision`'s two `*_reference` columns could
+    have arrived at a browser.
+
+    A prose check for the word "path" could not find that. Reading every schema
+    property, query parameter, and request-body property can, and it fails here
+    rather than arriving as an ad hoc exemption somewhere else.
+    """
+    assert _path_shaped_contract_names(build_schema()) == []
+
+
+def test_the_path_shaped_name_guard_actually_matches_something() -> None:
+    """A blind guard reporting zero is worse than no guard (M3 Stage A, lesson 3).
+
+    So the detector is run against a schema that does contain the shape it hunts
+    for. If this stops finding anything, the pattern has been broken and the
+    test above has quietly stopped proving anything.
+    """
+    planted = {
+        "components": {
+            "schemas": {
+                "Planted": {
+                    "properties": {
+                        "resume_markdown_reference": {},
+                        "pdf_path": {},
+                        "entity_references": {},
+                        "application_id": {},
+                    }
+                }
+            }
+        },
+        "paths": {},
+    }
+    assert _path_shaped_contract_names(planted) == [
+        "schema Planted.pdf_path",
+        "schema Planted.resume_markdown_reference",
+    ]

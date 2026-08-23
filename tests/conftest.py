@@ -336,7 +336,19 @@ def approved_application(drafted_application):
 
 
 @pytest.fixture
-def ready_application(approved_application, monkeypatch: pytest.MonkeyPatch):
+def deterministic_renderer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Render without Chromium, for tests whose subject is not the browser.
+
+    Extracted from `ready_application` so the API tests can drive a render
+    through HTTP and the Operation worker without paying for a browser. What is
+    substituted is the same two module functions in both cases - the seam is
+    `infrastructure.rendering`, not the port - so an API render exercises the
+    identical service, handler, and registration path the CLI render does.
+
+    Tests that are *about* rendering, PDF geometry, or ATS text use the
+    `render_validator` fixture instead and are browser-marked by collection.
+    """
+
     def render_without_browser(
         html_path: Path, pdf_path: Path, screenshot_path: Path
     ) -> dict[str, Any]:
@@ -411,6 +423,9 @@ def ready_application(approved_application, monkeypatch: pytest.MonkeyPatch):
         deterministic_render_evidence,
     )
 
+
+@pytest.fixture
+def ready_application(approved_application, deterministic_renderer):
     def build(
         company: str = "Ready Co",
         role: str = "Account Manager",
