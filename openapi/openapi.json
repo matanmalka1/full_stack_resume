@@ -1,6 +1,46 @@
 {
   "components": {
     "schemas": {
+      "AnalysisDecisionsResponse": {
+        "additionalProperties": false,
+        "description": "Which analysis is in force after the decision, and whether it is a new one.\n\n`job_analysis_id` names the analysis the client should work from now: the\nnew one when the decision changed meaning, the original when only the fact\noverlay moved. `created_analysis` is what tells the two apart.",
+        "properties": {
+          "analysis": {
+            "additionalProperties": true,
+            "title": "Analysis",
+            "type": "object"
+          },
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "created_analysis": {
+            "title": "Created Analysis",
+            "type": "boolean"
+          },
+          "job_analysis_id": {
+            "title": "Job Analysis Id",
+            "type": "string"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/SelectionPlanResponse"
+          },
+          "selection_plan_id": {
+            "title": "Selection Plan Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "application_id",
+          "job_analysis_id",
+          "selection_plan_id",
+          "created_analysis",
+          "analysis",
+          "plan"
+        ],
+        "title": "AnalysisDecisionsResponse",
+        "type": "object"
+      },
       "ApplicationDetailResponse": {
         "additionalProperties": false,
         "properties": {
@@ -722,6 +762,89 @@
         "title": "ApplicationResponse",
         "type": "object"
       },
+      "ApplyAnalysisDecisionsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "accept_low_fit": {
+            "default": false,
+            "title": "Accept Low Fit",
+            "type": "boolean"
+          },
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "emphasis_override": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emphasis Override"
+          },
+          "excluded_fact_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Excluded Fact Ids",
+            "type": "array"
+          },
+          "language_override": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language Override"
+          },
+          "pinned_fact_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Pinned Fact Ids",
+            "type": "array"
+          },
+          "profile_override": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Override"
+          },
+          "track_override": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Override"
+          }
+        },
+        "required": [
+          "application_id"
+        ],
+        "title": "ApplyAnalysisDecisionsRequest",
+        "type": "object"
+      },
       "ArtifactVersionResponse": {
         "additionalProperties": false,
         "properties": {
@@ -967,6 +1090,86 @@
         "title": "CloseApplicationResponse",
         "type": "object"
       },
+      "CreateAnalysisRequest": {
+        "additionalProperties": false,
+        "description": "What `POST /applications/{id}/analyses` accepts.\n\n`job_snapshot_id` is explicit: an analyze command that picked its own source\ncould classify something other than what the user was looking at.",
+        "properties": {
+          "accept_low_fit": {
+            "default": false,
+            "title": "Accept Low Fit",
+            "type": "boolean"
+          },
+          "emphasis_override": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emphasis Override"
+          },
+          "job_snapshot_id": {
+            "title": "Job Snapshot Id",
+            "type": "string"
+          },
+          "language_override": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language Override"
+          },
+          "model": {
+            "default": "rules-v1",
+            "maxLength": 100,
+            "title": "Model",
+            "type": "string"
+          },
+          "profile_override": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Override"
+          },
+          "provider": {
+            "default": "deterministic",
+            "maxLength": 50,
+            "title": "Provider",
+            "type": "string"
+          },
+          "track_override": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Override"
+          }
+        },
+        "required": [
+          "job_snapshot_id"
+        ],
+        "title": "CreateAnalysisRequest",
+        "type": "object"
+      },
       "CreateApplicationRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1098,6 +1301,97 @@
           "job_snapshot_id"
         ],
         "title": "CreateJobSnapshotResponse",
+        "type": "object"
+      },
+      "CreateSelectionPlanRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "excluded_fact_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Excluded Fact Ids",
+            "type": "array"
+          },
+          "expected_candidate_context_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Candidate Context Hash"
+          },
+          "expected_profile_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Profile Version"
+          },
+          "expected_selection_policy_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Selection Policy Version"
+          },
+          "pinned_fact_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Pinned Fact Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "application_id"
+        ],
+        "title": "CreateSelectionPlanRequest",
+        "type": "object"
+      },
+      "CreateSelectionPlanResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "job_analysis_id": {
+            "title": "Job Analysis Id",
+            "type": "string"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/SelectionPlanResponse"
+          },
+          "selection_plan_id": {
+            "title": "Selection Plan Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "application_id",
+          "job_analysis_id",
+          "selection_plan_id",
+          "plan"
+        ],
+        "title": "CreateSelectionPlanResponse",
         "type": "object"
       },
       "DecisionRecordResponse": {
@@ -1643,6 +1937,74 @@
         "title": "ReasonResponse",
         "type": "object"
       },
+      "SelectionPlanResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "candidate_context_hash": {
+            "title": "Candidate Context Hash",
+            "type": "string"
+          },
+          "candidate_context_version": {
+            "title": "Candidate Context Version",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_analysis_id": {
+            "title": "Job Analysis Id",
+            "type": "string"
+          },
+          "plan": {
+            "additionalProperties": true,
+            "title": "Plan",
+            "type": "object"
+          },
+          "profile_version": {
+            "title": "Profile Version",
+            "type": "string"
+          },
+          "selection_policy_version": {
+            "title": "Selection Policy Version",
+            "type": "string"
+          },
+          "track_emphasis_dependencies": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Track Emphasis Dependencies",
+            "type": "object"
+          },
+          "version_number": {
+            "title": "Version Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "application_id",
+          "job_analysis_id",
+          "version_number",
+          "plan",
+          "candidate_context_version",
+          "candidate_context_hash",
+          "profile_version",
+          "selection_policy_version",
+          "track_emphasis_dependencies",
+          "created_at"
+        ],
+        "title": "SelectionPlanResponse",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -1718,6 +2080,112 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/analyses/{analysis_id}/decisions": {
+      "post": {
+        "description": "`201`: both branches create an immutable record and neither mutates one.\n\n`application_id` is in the body rather than inferred from the analysis. The\nclient states which Application it believes it is deciding for, and a\nmismatch is a `412` naming the broken lineage instead of a decision landing\nsilently on another Application's analysis.",
+        "operationId": "apply_analysis_decisions_api_v1_analyses__analysis_id__decisions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyAnalysisDecisionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisDecisionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apply one review-form submission to an analysis",
+        "tags": [
+          "analyses"
+        ]
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/selection-plans": {
+      "post": {
+        "description": "`201` and the plan itself: the deterministic form is synchronous (§13).\n\nThe AI `propose_selection_plan` mode is the same route answering `202` with\na `Location`, decided per request rather than per route, which is why the\nshared acceptance helper sets its own status.",
+        "operationId": "create_selection_plan_api_v1_analyses__analysis_id__selection_plans_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSelectionPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSelectionPlanResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create a replacement SelectionPlan for an analysis",
+        "tags": [
+          "analyses"
+        ]
+      }
+    },
     "/api/v1/applications": {
       "get": {
         "operationId": "list_applications_api_v1_applications_get",
@@ -1856,6 +2324,77 @@
           }
         },
         "summary": "Read an application and its active preparation state",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/analyses": {
+      "post": {
+        "description": "`202` and a `Location`: analysis is a durable Operation (§13).\n\nNeedsReview is not an error here or anywhere else. An analysis that needs a\ndecision is a *successful* Operation whose JobAnalysis and initial\nSelectionPlan were both committed; what needs deciding is reported by the\nApplication's review reasons, and is resolved through\n`POST /analyses/{id}/decisions`.",
+        "operationId": "create_analysis_api_v1_applications__application_id__analyses_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAnalysisRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Analyze one exact job snapshot",
         "tags": [
           "applications"
         ]

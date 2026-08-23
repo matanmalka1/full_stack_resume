@@ -4,6 +4,55 @@
  */
 
 export interface paths {
+    "/api/v1/analyses/{analysis_id}/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply one review-form submission to an analysis
+         * @description `201`: both branches create an immutable record and neither mutates one.
+         *
+         *     `application_id` is in the body rather than inferred from the analysis. The
+         *     client states which Application it believes it is deciding for, and a
+         *     mismatch is a `412` naming the broken lineage instead of a decision landing
+         *     silently on another Application's analysis.
+         */
+        post: operations["apply_analysis_decisions_api_v1_analyses__analysis_id__decisions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analyses/{analysis_id}/selection-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a replacement SelectionPlan for an analysis
+         * @description `201` and the plan itself: the deterministic form is synchronous (§13).
+         *
+         *     The AI `propose_selection_plan` mode is the same route answering `202` with
+         *     a `Location`, decided per request rather than per route, which is why the
+         *     shared acceptance helper sets its own status.
+         */
+        post: operations["create_selection_plan_api_v1_analyses__analysis_id__selection_plans_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/applications": {
         parameters: {
             query?: never;
@@ -50,6 +99,32 @@ export interface paths {
         get: operations["application_detail_api_v1_applications__application_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/analyses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Analyze one exact job snapshot
+         * @description `202` and a `Location`: analysis is a durable Operation (§13).
+         *
+         *     NeedsReview is not an error here or anywhere else. An analysis that needs a
+         *     decision is a *successful* Operation whose JobAnalysis and initial
+         *     SelectionPlan were both committed; what needs deciding is reported by the
+         *     Application's review reasons, and is resolved through
+         *     `POST /analyses/{id}/decisions`.
+         */
+        post: operations["create_analysis_api_v1_applications__application_id__analyses_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -210,6 +285,29 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AnalysisDecisionsResponse
+         * @description Which analysis is in force after the decision, and whether it is a new one.
+         *
+         *     `job_analysis_id` names the analysis the client should work from now: the
+         *     new one when the decision changed meaning, the original when only the fact
+         *     overlay moved. `created_analysis` is what tells the two apart.
+         */
+        AnalysisDecisionsResponse: {
+            /** Analysis */
+            analysis: {
+                [key: string]: unknown;
+            };
+            /** Application Id */
+            application_id: string;
+            /** Created Analysis */
+            created_analysis: boolean;
+            /** Job Analysis Id */
+            job_analysis_id: string;
+            plan: components["schemas"]["SelectionPlanResponse"];
+            /** Selection Plan Id */
+            selection_plan_id: string;
+        };
         /** ApplicationDetailResponse */
         ApplicationDetailResponse: {
             /** Active Analysis Id */
@@ -379,6 +477,34 @@ export interface components {
             /** Updated At */
             updated_at: string;
         };
+        /** ApplyAnalysisDecisionsRequest */
+        ApplyAnalysisDecisionsRequest: {
+            /**
+             * Accept Low Fit
+             * @default false
+             */
+            accept_low_fit: boolean;
+            /** Application Id */
+            application_id: string;
+            /** Emphasis Override */
+            emphasis_override?: string | null;
+            /**
+             * Excluded Fact Ids
+             * @default []
+             */
+            excluded_fact_ids: string[];
+            /** Language Override */
+            language_override?: string | null;
+            /**
+             * Pinned Fact Ids
+             * @default []
+             */
+            pinned_fact_ids: string[];
+            /** Profile Override */
+            profile_override?: string | null;
+            /** Track Override */
+            track_override?: string | null;
+        };
         /** ArtifactVersionResponse */
         ArtifactVersionResponse: {
             /** Approved At */
@@ -445,6 +571,40 @@ export interface components {
             /** Terminal Outcome */
             terminal_outcome?: string | null;
         };
+        /**
+         * CreateAnalysisRequest
+         * @description What `POST /applications/{id}/analyses` accepts.
+         *
+         *     `job_snapshot_id` is explicit: an analyze command that picked its own source
+         *     could classify something other than what the user was looking at.
+         */
+        CreateAnalysisRequest: {
+            /**
+             * Accept Low Fit
+             * @default false
+             */
+            accept_low_fit: boolean;
+            /** Emphasis Override */
+            emphasis_override?: string | null;
+            /** Job Snapshot Id */
+            job_snapshot_id: string;
+            /** Language Override */
+            language_override?: string | null;
+            /**
+             * Model
+             * @default rules-v1
+             */
+            model: string;
+            /** Profile Override */
+            profile_override?: string | null;
+            /**
+             * Provider
+             * @default deterministic
+             */
+            provider: string;
+            /** Track Override */
+            track_override?: string | null;
+        };
         /** CreateApplicationRequest */
         CreateApplicationRequest: {
             /**
@@ -492,6 +652,37 @@ export interface components {
             application_id: string;
             /** Job Snapshot Id */
             job_snapshot_id: string;
+        };
+        /** CreateSelectionPlanRequest */
+        CreateSelectionPlanRequest: {
+            /** Application Id */
+            application_id: string;
+            /**
+             * Excluded Fact Ids
+             * @default []
+             */
+            excluded_fact_ids: string[];
+            /** Expected Candidate Context Hash */
+            expected_candidate_context_hash?: string | null;
+            /** Expected Profile Version */
+            expected_profile_version?: string | null;
+            /** Expected Selection Policy Version */
+            expected_selection_policy_version?: string | null;
+            /**
+             * Pinned Fact Ids
+             * @default []
+             */
+            pinned_fact_ids: string[];
+        };
+        /** CreateSelectionPlanResponse */
+        CreateSelectionPlanResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Job Analysis Id */
+            job_analysis_id: string;
+            plan: components["schemas"]["SelectionPlanResponse"];
+            /** Selection Plan Id */
+            selection_plan_id: string;
         };
         /** DecisionRecordResponse */
         DecisionRecordResponse: {
@@ -699,6 +890,35 @@ export interface components {
             /** Message */
             message: string;
         };
+        /** SelectionPlanResponse */
+        SelectionPlanResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Candidate Context Hash */
+            candidate_context_hash: string;
+            /** Candidate Context Version */
+            candidate_context_version: string;
+            /** Created At */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Job Analysis Id */
+            job_analysis_id: string;
+            /** Plan */
+            plan: {
+                [key: string]: unknown;
+            };
+            /** Profile Version */
+            profile_version: string;
+            /** Selection Policy Version */
+            selection_policy_version: string;
+            /** Track Emphasis Dependencies */
+            track_emphasis_dependencies: {
+                [key: string]: string;
+            };
+            /** Version Number */
+            version_number: number;
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -732,6 +952,76 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    apply_analysis_decisions_api_v1_analyses__analysis_id__decisions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                analysis_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyAnalysisDecisionsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisDecisionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_selection_plan_api_v1_analyses__analysis_id__selection_plans_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                analysis_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSelectionPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateSelectionPlanResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_applications_api_v1_applications_get: {
         parameters: {
             query?: never;
@@ -836,6 +1126,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApplicationDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_analysis_api_v1_applications__application_id__analyses_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAnalysisRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationResponse"];
                 };
             };
             /** @description Validation Error */

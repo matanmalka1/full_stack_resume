@@ -1,27 +1,14 @@
 from __future__ import annotations
 
-from typing import Annotated
-
-from fastapi import APIRouter, Header, Response, status
+from fastapi import APIRouter, Response, status
 
 from ...util import new_id
 from ..dependencies import Services
+from ..headers import IdempotencyKey
 from ..responses import accepted_operation, operation_response
 from ..schemas.operations import OperationResponse
 
 router = APIRouter(prefix="/operations", tags=["operations"])
-
-IdempotencyKey = Annotated[
-    str | None,
-    Header(
-        alias="Idempotency-Key",
-        description=(
-            "Optional. A retry that reuses the key of an Operation which already "
-            "exists returns that Operation instead of queueing a second attempt. "
-            "Omitted, the boundary generates a key, exactly as the CLI does."
-        ),
-    ),
-]
 
 
 @router.get(

@@ -1,14 +1,19 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Response, status
 
 from ...application.commands import (
+    AnalyzeCommand,
     CloseApplicationCommand,
     CreateJobSnapshotCommand,
     DuplicateCheckCommand,
     IngestCommand,
 )
+from ...util import new_id
 from ..dependencies import Services
+from ..headers import IdempotencyKey
+from ..responses import accepted_operation
+from ..schemas.analyses import CreateAnalysisRequest
 from ..schemas.applications import (
     ApplicationDetailResponse,
     ApplicationListResponse,
@@ -22,6 +27,7 @@ from ..schemas.applications import (
     DuplicateCheckRequest,
     DuplicateCheckResponse,
 )
+from ..schemas.operations import OperationResponse
 
 router = APIRouter(prefix="/applications", tags=["applications"])
 
@@ -113,6 +119,38 @@ def create_job_snapshot(
         )
     )
     return CreateJobSnapshotResponse.model_validate(result.model_dump(mode="json"))
+
+
+@router.post(
+    "/{application_id}/analyses",
+    response_model=OperationResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Analyze one exact job snapshot",
+)
+def create_analysis(
+    application_id: str,
+    request: CreateAnalysisRequest,
+    services: Services,
+    response: Response,
+    idempotency_key: IdempotencyKey = None,
+) -> OperationResponse:
+    """`202` and a `Location`: analysis is a durable Operation (§13).
+
+    NeedsReview is not an error here or anywhere else. An analysis that needs a
+    decision is a *successful* Operation whose JobAnalysis and initial
+    SelectionPlan were both committed; what needs deciding is reported by the
+    Application's review reasons, and is resolved through
+    `POST /analyses/{id}/decisions`.
+    """
+    queued = services.operations.submit_analysis(
+        AnalyzeCommand(
+            application_id=application_id,
+            **request.model_dump(mode="python"),
+        ),
+        idempotency_key=idempotency_key or new_id(),
+        analysis_service=services.analysis,
+    )
+    return accepted_operation(response, queued)
 
 
 @router.post(

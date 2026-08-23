@@ -279,7 +279,15 @@ class RenderOperationHandler:
 
 
 class OperationService(ServiceBase[OperationRepository]):
-    """Create, cancel, retry, and query durable Operations."""
+    """Create, cancel, retry, and query durable Operations.
+
+    Every method returns `OperationView`, never the runner record. Submission is
+    included: a `202` body is the same representation `GET /operations/{id}`
+    returns, so a submit that handed back `PersistedOperation` would put the
+    payload, the frozen sources, the lease, and the idempotency key into an
+    acceptance response. The narrowing is here rather than in each caller,
+    because a caller that forgets is exactly how it leaked before.
+    """
 
     def submit_analysis(
         self,
@@ -287,7 +295,7 @@ class OperationService(ServiceBase[OperationRepository]):
         *,
         idempotency_key: str,
         analysis_service: AnalysisService,
-    ) -> PersistedOperation:
+    ) -> OperationView:
         preparation = cast(PreparationRepository, self.repo)
         try:
             snapshot = preparation.get_snapshot(command.job_snapshot_id)
@@ -311,7 +319,9 @@ class OperationService(ServiceBase[OperationRepository]):
             provider=command.provider,
             model=command.model,
         )
-        return self.repo.create_operation(request, installation_id=self.installation_id)
+        return as_operation_view(
+            self.repo.create_operation(request, installation_id=self.installation_id)
+        )
 
     def submit_draft(
         self,
@@ -319,7 +329,7 @@ class OperationService(ServiceBase[OperationRepository]):
         *,
         idempotency_key: str,
         draft_service: DraftService,
-    ) -> PersistedOperation:
+    ) -> OperationView:
         drafts = cast(DraftRepository, self.repo)
         try:
             analysis = drafts.get_analysis(command.job_analysis_id)
@@ -353,7 +363,9 @@ class OperationService(ServiceBase[OperationRepository]):
             provider="deterministic",
             model="rules-v1",
         )
-        return self.repo.create_operation(request, installation_id=self.installation_id)
+        return as_operation_view(
+            self.repo.create_operation(request, installation_id=self.installation_id)
+        )
 
     def submit_render(
         self,
@@ -361,7 +373,7 @@ class OperationService(ServiceBase[OperationRepository]):
         *,
         idempotency_key: str,
         rendering_service: RenderingService,
-    ) -> PersistedOperation:
+    ) -> OperationView:
         readiness = cast(ReadinessRepository, self.repo)
         try:
             revision = readiness.approved_revision(command.approved_revision_id)
@@ -397,7 +409,9 @@ class OperationService(ServiceBase[OperationRepository]):
             provider="deterministic",
             model="playwright",
         )
-        return self.repo.create_operation(request, installation_id=self.installation_id)
+        return as_operation_view(
+            self.repo.create_operation(request, installation_id=self.installation_id)
+        )
 
     def cancel(self, operation_id: str) -> OperationView:
         """Cancel queued work outright; ask running work to stop (§19).
