@@ -1,5 +1,10 @@
 # M2 — remaining work
 
+> **Superseded on 2026-08-23.** M2 closed with all seven §4.7 items met. The single
+> record of state is now `docs/v2/m3-remaining.md`. This file is M2's closed tracker:
+> it keeps its own evidence and is not updated with later state. This banner is the
+> only edit it received after close.
+
 Status tracker. Updated as boundaries close. Authority for scope remains
 `docs/v2/spec/implementation-plan.md` §4.1–§4.7; this file only tracks state.
 

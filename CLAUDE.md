@@ -159,10 +159,12 @@ what remains. A hard failure is never relabelled as a warning.
 
 ## Documentation
 
-`docs/v2/m2-remaining.md` is the single record of state — what is done, what remains,
-what is blocked. Nothing else records state. A record under `docs/v2/records/` is frozen
-when its boundary closes: it keeps its own evidence and is not updated with later state.
-Non-milestone cleanup items live in `docs/v2/cleanup-todos.md`.
+`docs/v2/m3-remaining.md` is the single record of state — what is done, what remains,
+what is blocked. Nothing else records state. The milestone tracker moves with the
+milestone: `docs/v2/m2-remaining.md` is M2's, closed and frozen. A record under
+`docs/v2/records/` is frozen when its boundary closes: it keeps its own evidence and is
+not updated with later state. Non-milestone cleanup items live in
+`docs/v2/cleanup-todos.md`.
 
 Decisions and their reasoning go in the commit message. Write a separate design brief
 only for a Class C change whose reasoning will not fit there.

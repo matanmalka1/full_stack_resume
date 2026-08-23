@@ -159,9 +159,10 @@ Reporting follows `CLAUDE.md`: passed / failed / remaining, with command evidenc
    This is not the re-run section 9 warns against — no lane produces a full-suite run, and
    the merged tree is not the tree any lane tested. It is the boundary's only full run, and
    the first one over the code as it will actually ship.
-5. Update `docs/v2/m2-remaining.md` with what landed and what remains. It is the only
-   record of state; a document under `docs/v2/records/` is frozen evidence for a closed
-   boundary and is never updated with later state.
+5. Update the current milestone tracker — `docs/v2/m3-remaining.md` — with what landed and
+   what remains. It is the only record of state; the tracker moves with the milestone, and
+   a document under `docs/v2/records/` is frozen evidence for a closed boundary that is
+   never updated with later state.
 6. Report per package, with command evidence.
 
 ## 7. When not to use this
@@ -173,7 +174,7 @@ wrong shape when:
   `tests/conftest.py`, so it ran with a single executor);
 - the packages are sequentially dependent (M2's schema boundary had to land before
   records, and records before projections — while §4.4 Operations touches different
-  tables and runs alongside §4.3; `docs/v2/m2-remaining.md` holds the current order);
+  tables and runs alongside §4.3; the current milestone tracker holds the current order);
 - the change is small enough that the coordination costs more than the work.
 
 Saying "this does not need three lanes" is a valid and expected outcome of planning.
