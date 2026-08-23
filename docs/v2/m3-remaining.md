@@ -637,43 +637,91 @@ OpenAPI and TypeScript were regenerated at `076cf80` as well as at `91cc6db`. Th
 diff: 1 path added, 1 path removed, 1 schema changed (`ReplaceWorkingDraftRequest` gains
 `working_draft_id`), 0 schemas added or removed.
 
-#### Handover — the full Class C gate
+#### First evidence run: two failures, both in the tests
 
-This is **Class C**: the archived-draft payload layout is a change to where immutable
-payloads live. `CLAUDE.md` sets the gate, and the earlier claim in this file that the
-browser suite was not required was wrong - it argued from what the change touches, but the
-class is what decides, and the class rule exists because a payload-layout change is exactly
-the kind that looks unreachable until it is not. The schema fingerprint is expected **not**
-to move: no migration, no table, no trigger.
+The user ran the full Class C gate. Five of the eight steps passed as predicted and are
+not repeated; two tests failed, and both assertions were wrong rather than the product.
 
-The user runs these, in order. Predictions are stated first so an unexplained delta is a
-finding rather than noise.
+| Step | Result |
+| --- | --- |
+| `test_api_foundation.py` + `test_architecture.py` | **29 passed**, as predicted |
+| Schema fingerprint | **1 passed** — the Class C payload-layout change moved no schema, as predicted |
+| ruff, ruff format, pyright | clean; **0 errors, 0 warnings, 0 informations** |
+| Non-browser suite | 332 selected, 4 deselected — **collection exactly as predicted**; 330 passed, 2 failed |
+| Browser-complete suite | 336 collected — **collection exactly as predicted**; 334 passed, 2 failed |
+
+The collection counts held on the first run, which is what the prediction was for. The two
+failures are the same two tests in both suites.
+
+1. **Generation leaves the draft `validated`, not `editing`.** Draft activation records a
+   passing ValidationRun against the exact draft it just committed, so §5's `validated`
+   holds the moment the Operation succeeds and preparation is `ready_for_approval`. The
+   assertion said `draft_in_progress`, written from an assumption about what generation
+   does rather than from what it does. Worth keeping: that run is exactly what lets the
+   no-review path approve without a separate validate, and what lets `cv fast` name a real
+   run instead of manufacturing one - so the corrected assertion documents a load-bearing
+   property that the wrong one was hiding.
+2. **`test_foreign_working_projection_cannot_replace_the_sqlite_source` measured two
+   commands and blamed one.** It counts every row in the database before and after,
+   asserting a rejected command leaves nothing behind. The rejected command is approval -
+   but approval no longer validates for itself, so the shared helper validated first, and
+   that validation legitimately wrote a run against the draft SQLite holds. The baseline is
+   now taken after the validation and approval is called directly, so the assertion
+   measures approval alone. The comparison is still the whole database; nothing was
+   weakened to make it pass.
+
+Repaired at `c11d929`, in the two test files only. **No product code changed**, which is
+why the three steps that exercise only product code are not re-run below.
+
+#### Handover — the steps the repair reopens
+
+Only the four that counted the two failures. Steps 3, 5, and 7 of the previous handover
+passed on unchanged files and are not fresh evidence to re-collect.
 
 | Order | Command | What it proves | Pass looks like |
 | --- | --- | --- | --- |
-| 1 | `.venv/bin/python -m pytest tests/test_api_working_drafts.py` | The whole Stage E surface: generation, ETag, patch, selection change, archive, replace and its lineage pair, validate, approve, Web/CLI provenance, and the three CLI cases | **25 passed** |
-| 2 | `.venv/bin/python -m pytest tests/test_operations.py tests/test_integration.py tests/test_chain_integrity.py` | The blast radius of the approval signature change and of the renamed domain-validator import | **no failures**; these files gain and lose no cases |
-| 3 | `.venv/bin/python -m pytest tests/test_api_foundation.py tests/test_architecture.py` | OpenAPI/TypeScript drift against the twice-regenerated contract, and that the new router imports no domain type | **29 passed** |
-| 4 | `.venv/bin/python -m pytest` | The non-browser suite | **332 passed, 4 deselected** |
-| 5 | `.venv/bin/python -m pytest tests/test_database.py::test_sqlite_master_fingerprint_matches_the_recorded_schema -q` | That the Class C payload-layout change moved no schema | **1 passed**, fingerprint unchanged |
-| 6 | `env CV_REQUIRE_BROWSER=1 .venv/bin/python -m pytest -q -m ""` | The browser-complete suite the class requires | **336 passed** |
-| 7 | `.venv/bin/python -m ruff check cv_engine tests && .venv/bin/python -m ruff format --check cv_engine tests && .venv/bin/python -m pyright` | Lint, format, and the port/adapter structural check | ruff clean; **0 errors, 0 warnings, 0 informations** |
-| 8 | Offline CLI, `OPENAI_API_KEY` unset, fresh Workspace: `ingest → analyze → draft → validate → approve → render → ready → reconcile` | That `cv approve` still reaches an ApprovedRevision after `cv validate`, that the revision records `client: cli`, and that `cv reconcile` verifies the new draft-snapshot payload layout | `validate` prints a `validation_run_id`; `approve` returns a revision whose `validation_run_id` is that one; `reconcile` passes |
+| 1 | `.venv/bin/python -m pytest tests/test_api_working_drafts.py` | The Stage E surface, with the generation-state assertion corrected | **25 passed** |
+| 2 | `.venv/bin/python -m pytest tests/test_operations.py tests/test_integration.py tests/test_chain_integrity.py` | The approval-signature blast radius, with the foreign-projection baseline corrected | **67 passed, 2 deselected** |
+| 3 | `.venv/bin/python -m pytest` | The non-browser suite | **332 passed, 4 deselected** |
+| 4 | `env CV_REQUIRE_BROWSER=1 .venv/bin/python -m pytest -q -m ""` | The browser-complete suite the class requires | **336 passed** |
+| 5 | Offline CLI — the corrected script below | That `cv approve` reaches an ApprovedRevision after `cv validate`, that the revision records `client: cli`, and that `cv reconcile` verifies the new draft-snapshot payload layout | `reconcile` and `ready` both report `passed: true` |
 
-**Where every number comes from.** 332 is 307 + 25. The 25 is exactly the function count of
-`tests/test_api_working_drafts.py` - none of its cases are parametrised - and no test
-function was added or removed anywhere else: the 21 existing call sites that moved to the
-shared helpers changed bodies only, and the two CLI/archive/replace provenance assertions
-were added to cases that already existed rather than as new ones. The earlier prediction of
-330 was made before the review found the two defects and stands superseded by this one;
-+2 is the two regressions at `06997bb`.
+Both 332 and 336 were already confirmed as collection counts by the first run; the repair
+adds and removes no case, so the prediction is that the two failures become passes and
+nothing else moves.
 
-336 is 332 + 4, and the 4 are still exactly the browser-marked tests, which keeps the
-browser-complete figure internally consistent with the 236 / 240 baseline all the way
-through. Same interpreter as every earlier M3 measurement: `.venv/bin/python`, Python
-3.14.2.
+**The offline CLI script in the previous handover was broken, in two ways that were mine.**
+`--workspace` is a top-level option, so it has to precede the subcommand rather than follow
+`workspace init`; and zsh does not word-split an unquoted parameter expansion, so a command
+held in a plain variable is looked up as one filename. A shell function fixes both:
+
+```bash
+WS=$(mktemp -d)/stage-e
+unset OPENAI_API_KEY
+cv() { .venv/bin/python -m cv_engine.cli --workspace "$WS" "$@"; }
+
+cv workspace init --purpose test --data-class test --knowledge-from .
+cv workspace status
+
+APP=$(cv ingest --company "Stage E Co" --role "Account Manager" \
+  --job-text "Account Manager responsible for retention, portfolio growth, negotiation, and customer relationships." \
+  | .venv/bin/python -c 'import json,sys; print(json.load(sys.stdin)["application_id"])')
+
+cv analyze "$APP" && cv draft "$APP" && cv validate "$APP" && cv approve "$APP"
+cv render "$APP" && cv ready "$APP" && cv reconcile
+
+.venv/bin/python -c "
+from cv_engine.infrastructure.persistence.repository import Repository
+revision = Repository('$WS/data/applications.sqlite3').latest_approved_revision('$APP')
+print(revision.validation_run_id, revision.decision_provenance)
+"
+```
+
+The database is under the Workspace's `data/` root, not `state/`. The last line is the
+provenance check: `client` must read `cli`, which is the CLI half of the contract the Web
+regression at `06997bb` pins from the other side.
 
 **Run by the agent, and stated as such:** ruff, ruff format, pyright, `generate_openapi.py`,
-and `npm run generate`. **No pytest was run.** Every count above is a prediction derived
-from the source, not a measurement, and Stage E stays open until the user's run either
-confirms them or produces a delta that has to be explained.
+and `npm run generate`. **No pytest was run by the agent** at any point. The counts above
+that are marked confirmed come from the user's run; the rest remain predictions, and Stage E
+stays open until the four steps above are green.
