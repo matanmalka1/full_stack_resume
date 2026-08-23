@@ -257,6 +257,7 @@ def test_the_pdf_downloads_under_its_registered_recruiter_filename(
     registered = setup.services.repository.artifact_version(pdf_id)
 
     download = _get(api_worker, f"/artifacts/{pdf_id}/download")
+    assert download.content.startswith(b"%PDF"), "a named download must still deliver bytes"
     disposition = download.headers["content-disposition"]
     assert disposition.startswith("attachment; ")
     assert "CV.pdf" in disposition
@@ -268,16 +269,26 @@ def test_every_rendered_artifact_type_downloads_as_what_it_is(
     api_worker, approved_application, deterministic_renderer
 ) -> None:
     """The media type comes from the registered type, never from the filename."""
-    _setup, outputs = _rendered(api_worker, approved_application)
+    setup, outputs = _rendered(api_worker, approved_application)
     expected = {
         "resume_html": "text/html; charset=utf-8",
         "resume_pdf": "application/pdf",
         "visual_evidence": "image/png",
     }
     for artifact_type, media_type in expected.items():
-        response = _get(api_worker, f"/artifacts/{outputs[artifact_type]}/download")
+        artifact_version_id = outputs[artifact_type]
+        response = _get(api_worker, f"/artifacts/{artifact_version_id}/download")
         assert response.status_code == 200, response.text
         assert response.headers["content-type"] == media_type, artifact_type
+        # The bytes, not just the headers. A `200` with the right content type
+        # and an empty body is exactly what the body-limit middleware produced
+        # before `1de0b4f`, and a header-only assertion passed straight through
+        # it.
+        stored = setup.services.artifacts.resolve(
+            setup.services.repository.artifact_version(artifact_version_id)["path"]
+        )
+        assert response.content == stored.read_bytes(), artifact_type
+        assert int(response.headers["content-length"]) == len(response.content)
 
 
 def test_the_approved_markdown_and_manifest_download_without_a_render(

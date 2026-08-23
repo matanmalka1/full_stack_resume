@@ -30,7 +30,7 @@ from __future__ import annotations
 import os
 
 from api_harness import MUTATION_HEADERS
-from helpers import ACCOUNT_MANAGER_JOB
+from helpers import ACCOUNT_MANAGER_JOB, working_claim
 
 from cv_engine.api.app import API_PREFIX
 
@@ -126,26 +126,35 @@ def test_the_full_api_journey_reaches_ready_offline(
     etag = read.headers["ETag"]
 
     # --- Edit -----------------------------------------------------------
-    # An empty patch is still a save: it takes the ETag, applies as one version,
-    # and returns the next token. What is being proved here is the conditional
-    # write, not the wording change.
+    # A real claim edit, restating one claim's own facts and wording. The patch
+    # has to carry at least one claim - `claim_edits` is `min_length=1`, because
+    # a save that changes nothing is not an edit - so the journey makes the
+    # smallest genuine one rather than an empty request the API rejects.
+    #
+    # It still commits a new version: `apply_claim_edit` records the manual
+    # derivation, so the content hash moves even when the words do not, which is
+    # what makes the second save below a real lost-update attempt.
+    claim = working_claim(api_worker.services, application_id, "sales.metric.performance")
+    patch_body = {
+        "claim_edits": [
+            {"claim_id": claim.claim_id, "fact_ids": claim.fact_ids, "text": claim.text}
+        ]
+    }
+
     edited = _patch(
-        api_worker,
-        f"/working-drafts/{working_draft_id}",
-        {"claim_edits": []},
-        **{"If-Match": etag},
+        api_worker, f"/working-drafts/{working_draft_id}", patch_body, **{"If-Match": etag}
     )
     assert edited.status_code == 200, edited.text
     new_etag = edited.headers["ETag"]
+    assert new_etag != etag
 
+    # The same token again is the concurrency matrix's first row: the second
+    # save must change nothing at all rather than win or merge.
     stale = _patch(
-        api_worker,
-        f"/working-drafts/{working_draft_id}",
-        {"claim_edits": []},
-        **{"If-Match": etag},
+        api_worker, f"/working-drafts/{working_draft_id}", patch_body, **{"If-Match": etag}
     )
     assert stale.status_code == 409, stale.text
-    assert new_etag != etag
+    assert _get(api_worker, f"/working-drafts/{working_draft_id}").headers["ETag"] == new_etag
 
     # --- Validate -------------------------------------------------------
     current = _get(api_worker, f"/working-drafts/{working_draft_id}").json()
