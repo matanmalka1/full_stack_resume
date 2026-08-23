@@ -242,17 +242,18 @@ def _refuse_structural_exclusion(
     title that opens a role block is what makes the block exist at all. Removing
     one does not shorten the document; it produces bullets under no role, or a
     role under no heading.
+
+    The role-title half is also what keeps the block lists comparable in
+    `_refuse_floor_loss`: an exclusion that deleted a whole block would make the
+    before/after comparison meaningless. Every role title in the Knowledge base
+    is heading-styled and therefore already structural, so the second condition
+    is insurance against a title that one day is not, rather than a second rule.
     """
     for item in pool:
-        if item.fact_id not in excluded:
-            continue
-        if item.structural:
+        if item.fact_id in excluded and (item.structural or ROLE_BLOCK_TAG in item.tags):
             raise SelectionError(
-                f"section {section!r} cannot exclude the structural claim {item.fact_id}"
-            )
-        if ROLE_BLOCK_TAG in item.tags:
-            raise SelectionError(
-                f"section {section!r} cannot exclude {item.fact_id}: it opens a role block"
+                f"section {section!r} cannot exclude {item.fact_id}: headings, dates, "
+                "contact lines and role titles are structure, not evidence"
             )
 
 

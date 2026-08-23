@@ -7,12 +7,13 @@ keywords and gaps could not change a single line of the document.
 
 from __future__ import annotations
 
+import pytest
 from helpers import PAYME_TECH_SALES_JOB
 
 from cv_engine.domain.draft_markdown import serialize_markdown
 from cv_engine.domain.models import Emphasis, Profile
 from cv_engine.domain.profiles import ProfileStore
-from cv_engine.domain.selection import STRUCTURAL_STYLES, build_selection
+from cv_engine.domain.selection import STRUCTURAL_STYLES, SelectionError, build_selection
 from cv_engine.infrastructure.rendering import normalized_role_filename
 
 ACCOUNT_MANAGER_JOB = (
@@ -303,3 +304,212 @@ def test_the_headline_reads_for_a_recruiter_and_the_filename_does_not(
     assert normalized_role_filename(profile.normalized_role, setup.candidate) == (
         "Matan Malka - Tech Sales - CV.pdf"
     )
+
+
+# --- M3 Stage D: one user's pin/exclude overlay -----------------------------
+#
+# The overlay is what §13's `create_selection_plan` receives. It constrains the
+# engine and never replaces it, so every property above still has to hold with
+# an overlay applied - and an overlay that cannot hold one of them is refused
+# rather than trimmed to fit.
+
+
+def _account_manager_selection(profile_store, policy_store, fact_store, **overlay):
+    from cv_engine.domain.analysis.classification import classify_job
+
+    analysis = classify_job(ACCOUNT_MANAGER_JOB, profile_override="account-manager")
+    return build_selection(
+        analysis=analysis,
+        profile=profile_store.get("account-manager"),
+        policy=policy_store.get(analysis.emphasis),
+        policy_store_version=policy_store.version,
+        facts=fact_store,
+        **overlay,
+    )
+
+
+def test_an_overlay_free_build_is_byte_for_byte_the_build_that_ran_before(
+    profile_store: ProfileStore, policy_store, fact_store
+) -> None:
+    """The default path is the old path.
+
+    Both parameters default to empty, and nothing about the algorithm may depend
+    on their existence. Every stored SelectionPlan and every golden output was
+    produced without them, so a difference here would be a silent rewrite of
+    records that are supposed to be immutable.
+    """
+    selected, manifest = _account_manager_selection(profile_store, policy_store, fact_store)
+    with_empty, manifest_empty = _account_manager_selection(
+        profile_store,
+        policy_store,
+        fact_store,
+        pinned_fact_ids=frozenset(),
+        excluded_fact_ids=frozenset(),
+    )
+
+    assert with_empty == selected
+    assert manifest_empty == manifest
+
+
+def test_a_pinned_fact_survives_the_budget_that_had_omitted_it(
+    profile_store: ProfileStore, policy_store, fact_store
+) -> None:
+    """Explicit inclusion is a hold, which is the only way to say it."""
+    _, before = _account_manager_selection(profile_store, policy_store, fact_store)
+    omitted = next(
+        candidate
+        for candidate in before.candidates
+        if candidate.section == "Core Skills" and candidate.outcome == "omitted"
+    )
+
+    selected, after = _account_manager_selection(
+        profile_store,
+        policy_store,
+        fact_store,
+        pinned_fact_ids=frozenset({omitted.fact_id}),
+    )
+
+    outcomes = {candidate.fact_id: candidate for candidate in after.candidates}
+    assert outcomes[omitted.fact_id].outcome == "pinned"
+    assert omitted.fact_id in after.selected_fact_ids
+    assert omitted.fact_id in selected["Core Skills"]
+    # The budget did not grow to accommodate it: something it outranked left.
+    assert len(selected["Core Skills"]) == len(
+        [
+            candidate
+            for candidate in before.candidates
+            if candidate.section == "Core Skills" and candidate.outcome != "omitted"
+        ]
+    )
+
+
+def test_an_excluded_fact_leaves_the_document_and_the_manifest_says_who_removed_it(
+    profile_store: ProfileStore, policy_store, fact_store
+) -> None:
+    """A fact the engine ranked out and one the user removed are different facts.
+
+    Both are absent from the document, and only the candidate accounting can
+    still tell them apart, which is what makes the plan evidence of a decision
+    rather than of an outcome.
+    """
+    _, before = _account_manager_selection(profile_store, policy_store, fact_store)
+    chosen = next(
+        candidate
+        for candidate in before.candidates
+        if candidate.section == "Core Skills" and candidate.outcome == "selected"
+    )
+
+    selected, after = _account_manager_selection(
+        profile_store,
+        policy_store,
+        fact_store,
+        excluded_fact_ids=frozenset({chosen.fact_id}),
+    )
+
+    outcomes = {candidate.fact_id: candidate for candidate in after.candidates}
+    assert outcomes[chosen.fact_id].outcome == "omitted"
+    assert outcomes[chosen.fact_id].reason == "excluded_by_user"
+    assert chosen.fact_id not in after.selected_fact_ids
+    assert chosen.fact_id not in selected["Core Skills"]
+    # Still accounted for. Dropping it from the manifest would leave no record
+    # that the fact was ever a candidate.
+    assert chosen.fact_id in {candidate.fact_id for candidate in after.candidates}
+    # The section refilled from its own pool rather than shrinking.
+    assert len(selected["Core Skills"]) == len(
+        [
+            candidate
+            for candidate in before.candidates
+            if candidate.section == "Core Skills" and candidate.outcome != "omitted"
+        ]
+    )
+
+
+def test_an_overlay_naming_a_fact_the_profile_never_offered_is_refused(
+    profile_store: ProfileStore, policy_store, fact_store
+) -> None:
+    with pytest.raises(SelectionError, match="offers no candidate named"):
+        _account_manager_selection(
+            profile_store,
+            policy_store,
+            fact_store,
+            pinned_fact_ids=frozenset({"development.stack.python"}),
+        )
+
+
+def test_a_fact_named_on_both_sides_of_the_overlay_is_refused(
+    profile_store: ProfileStore, policy_store, fact_store
+) -> None:
+    """Neither reading is safe, so neither is chosen."""
+    with pytest.raises(SelectionError, match="pinned and excluded"):
+        _account_manager_selection(
+            profile_store,
+            policy_store,
+            fact_store,
+            pinned_fact_ids=frozenset({"sales.achievement.retention"}),
+            excluded_fact_ids=frozenset({"sales.achievement.retention"}),
+        )
+
+
+@pytest.mark.parametrize(
+    "fact_id",
+    ["sales.role.leader.title", "sales.role.leader.dates"],
+    ids=["role-title", "role-dates"],
+)
+def test_structure_cannot_be_excluded_as_if_it_were_evidence(
+    profile_store: ProfileStore, policy_store, fact_store, fact_id: str
+) -> None:
+    """Removing a heading does not shorten a CV; it orphans what is under it."""
+    with pytest.raises(SelectionError, match="structure, not evidence"):
+        _account_manager_selection(
+            profile_store,
+            policy_store,
+            fact_store,
+            excluded_fact_ids=frozenset({fact_id}),
+        )
+
+
+def test_an_exclusion_that_costs_a_role_block_its_quantitative_floor_is_refused(
+    profile_store: ProfileStore, policy_store, fact_store
+) -> None:
+    """The invariant is not traded for the user's choice, and neither is dropped.
+
+    `sales.metric.new_customers` is the only verified-quantitative claim under
+    the field-sales role. Honouring the exclusion silently would leave that role
+    described in duties alone, which is exactly the shape
+    `min_quantitative_per_role` exists to prevent.
+    """
+    with pytest.raises(SelectionError, match="cannot reach its floors without"):
+        _account_manager_selection(
+            profile_store,
+            policy_store,
+            fact_store,
+            excluded_fact_ids=frozenset({"sales.metric.new_customers"}),
+        )
+
+
+def test_an_exclusion_that_empties_a_required_tag_is_refused(
+    profile_store: ProfileStore, policy_store, fact_store
+) -> None:
+    """The rescue refills a required tag from the pool; it cannot refill nothing.
+
+    An Account Manager CV that can evidence no account management is not that
+    Profile, whatever the user asked for, so the command is refused and names
+    the exclusions that caused it.
+    """
+    profile = profile_store.get("account-manager")
+    assert profile.required_tags == ["account-management"]
+    carriers = frozenset(
+        {
+            "sales.summary.account",
+            "sales.metric.recurring_customers",
+            "sales.cycle.account_management",
+        }
+    )
+
+    with pytest.raises(SelectionError, match="'account-management' would be left uncovered"):
+        _account_manager_selection(
+            profile_store,
+            policy_store,
+            fact_store,
+            excluded_fact_ids=carriers,
+        )
