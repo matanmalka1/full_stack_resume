@@ -758,3 +758,79 @@ Three rounds of review and evidence, and each found something the previous one c
    corrected assertion documents it.
 
 Stage F has not begun.
+
+### F — Render, artifacts, Ready
+
+- [ ] `POST /approved-revisions/{id}/render` → 202.
+- [ ] `download_artifact` / `export_recruiter_pdf` as **application** use-cases returning a
+      stream descriptor and a safe filename. The router never sees a local path and never
+      calls `infrastructure/paths.py`; containment stays that module's single
+      implementation, reached through a port.
+- [ ] `GET /artifacts/{id}` and `/download`, **by ID only**.
+- [ ] Security: traversal, encoded traversal, symlink escape, unregistered ID, hash
+      mismatch.
+- [ ] The acceptance journey first passes end to end offline here.
+
+### G — AI tasks (§5.3)
+
+- [ ] New **`AIProvider` port in `application/ports/outbound.py`**, one method per
+      contracted task. `ClassificationProvider` retires into it — it is named for one task
+      and cannot carry five. The existing `AIProvider` protocol in
+      `infrastructure/providers.py` is transport, not an application contract, and is
+      renamed `StructuredOutputClient` to free the name.
+- [ ] `propose_job_analysis` under its contract name. The deterministic domain function
+      `classify_job` keeps its name — they are two different things, so there is no
+      conflict. Stored provenance names the contract that ran.
+- [ ] `propose_selection_plan`, `draft_resume`, `regenerate_section`, `regenerate_claim`
+      plus handler registration. The three `OperationType` values already exist and already
+      pass the DB CHECK; only registration is missing.
+- [ ] Task-contract drift: `ai/contracts/task_contracts.json` is read by nothing while the
+      same version is hardcoded in two places and persisted as provenance. Load it or delete
+      it.
+- [ ] Sanitized raw output as an immutable artifact. No silent fallback.
+
+### H — acceptance and close-out
+
+- [ ] Journeys §5.1–5.4 in full, plus **only the preparation half of §5.5**. §5.5's
+      submission bullet needs the submission endpoint and is **deferred to M5** — recorded,
+      not quietly skipped.
+- [ ] Concurrency, Operations, security, and outcomes-as-data matrices.
+- [ ] The complete §6 AI matrix: strict schema generation, per-task Proposal parsing,
+      semantic support beyond fact IDs, refusal, invalid output, no silent fallback, raw
+      sanitization and artifact registration, exact metadata, stateless/minimal context, one
+      transient retry, **zero** retries for schema/business/unsupported-claim/conflict/stale
+      source, and the five prompt-injection fixtures. The manual live OpenAI smoke is an M6
+      §8.2 release item, not an M3 CI gate.
+- [ ] Tick the seven §5.4 boxes in `implementation-plan.md`.
+- [ ] Freeze a close-out record under `docs/v2/records/`; close this file out.
+- [ ] `CLAUDE.md`'s counterweight: name one control retired, or state why none was
+      retirable. Not the two empty exception sets.
+
+## Baseline
+
+Established 2026-08-23, before Stage A implementation. A test count is only comparable to
+another count from the same interpreter, so the interpreter is part of the measurement.
+
+| Measure | Value |
+| --- | --- |
+| Interpreter | `/Users/matanmalka/Projects/resume_python-v2/.venv/bin/python`, Python 3.14.2 |
+| Non-browser suite | **236 passed, 4 deselected** |
+| Browser-complete suite | **240 passed** |
+
+The two are internally consistent: the 4 deselected are exactly the browser-marked tests,
+and 236 + 4 = 240.
+
+The previously recorded figures were 242 / 246. The −6 delta is fully reconciled by the
+intervening commits, so it is explained rather than merely noted:
+
+| Change | Delta |
+| --- | --- |
+| Migration and legacy retirement | −16 |
+| Backup coverage | +4 |
+| Net schema/migration cleanup | −1 |
+| Seed parity | +1 |
+| Immutability | +1 |
+| Operations coverage | +5 |
+| **Net** | **−6** |
+
+Every later prediction in M3 is made against 236 / 240, not against 242 / 246.
