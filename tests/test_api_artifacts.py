@@ -38,7 +38,7 @@ from cv_engine.application.errors import (
     ArtifactPayloadMissing,
     UnknownRecord,
 )
-from cv_engine.util import sha256_file
+from cv_engine.util import sha256_bytes, sha256_file
 
 #: Several spellings of the same intent, because the layers that could decode
 #: them differ: Starlette normalises some, the router decodes others, and a
@@ -633,6 +633,90 @@ def test_an_unqualified_revision_refuses_its_export(api_worker, approved_applica
     # The bytes were readable and correctly hashed, so the refusal is the
     # qualification gate rather than a verification failure standing in for it.
     assert b"never rendered" not in response.content
+
+
+# --- the verified bytes are the delivered bytes -------------------------------
+
+
+def _rendered_pdf(services, approved_application, company: str):
+    setup = approved_application(company)
+    services.rendering.render(setup.application_id)
+    return setup, services.repository.latest_artifact_version(setup.application_id, "resume_pdf")
+
+
+def test_a_delivery_streams_the_bytes_it_verified_not_the_file_it_reopened(
+    services, approved_application, deterministic_renderer
+) -> None:
+    """The time-of-check/time-of-use window, closed and proved closed.
+
+    `open_artifact` used to verify the path and then hand back a factory that
+    reopened it when the response began streaming. Anything that replaced the
+    payload in between was delivered unverified, under the `ETag` and
+    `Content-Length` taken from the previous content - the client would be told
+    it was receiving one document and handed another, with a hash that agreed
+    with neither.
+
+    Holding an open descriptor would not have closed it either: `write_bytes`
+    truncates and rewrites the *same inode*, so a held handle reads the
+    substitution. This substitutes exactly that way, deliberately, because it is
+    the case a descriptor-based fix would silently fail.
+    """
+    setup, pdf = _rendered_pdf(services, approved_application, "TOCTOU Co")
+    stored = services.artifacts.resolve(pdf["path"])
+    original = stored.read_bytes()
+
+    delivery = services.rendering.download_artifact(pdf["id"])
+
+    # The window: verification has happened, not one chunk has been consumed.
+    stored.write_bytes(b"%PDF-1.4\nsubstituted payload\n")
+
+    streamed = b"".join(delivery.stream.chunks())
+    assert streamed == original
+    assert b"substituted" not in streamed
+    assert sha256_bytes(streamed) == pdf["content_hash"]
+    # The headers a router derives describe the bytes that were actually sent.
+    assert delivery.size == len(streamed)
+    assert delivery.content_hash == pdf["content_hash"]
+
+
+def test_a_delivery_survives_the_payload_being_deleted_in_the_same_window(
+    services, approved_application, deterministic_renderer
+) -> None:
+    """Deleting after verification must not fail after `200` has gone out.
+
+    The old factory opened the path when streaming began, so an unlink in the
+    window raised `FileNotFoundError` from inside the response body - after the
+    status line and headers were already on the wire, where nothing can be
+    reported to the client.
+    """
+    setup, pdf = _rendered_pdf(services, approved_application, "Vanishing Co")
+    stored = services.artifacts.resolve(pdf["path"])
+    original = stored.read_bytes()
+
+    delivery = services.rendering.download_artifact(pdf["id"])
+    stored.unlink()
+
+    assert b"".join(delivery.stream.chunks()) == original
+
+
+def test_the_delivered_bytes_are_stable_across_repeated_iteration(
+    services, approved_application, deterministic_renderer
+) -> None:
+    """Two iterations of one delivery yield the same verified content.
+
+    A factory that reread its path could return different bytes each time and
+    nothing would notice. This is the property that makes `chunks` safe to hand
+    on before it is consumed.
+    """
+    setup, pdf = _rendered_pdf(services, approved_application, "Stable Co")
+    delivery = services.rendering.download_artifact(pdf["id"])
+
+    first = b"".join(delivery.stream.chunks())
+    services.artifacts.resolve(pdf["path"]).write_bytes(b"%PDF-1.4\nchanged again\n")
+    second = b"".join(delivery.stream.chunks())
+
+    assert first == second
+    assert sha256_bytes(first) == pdf["content_hash"]
 
 
 # --- the application-layer refusals, named ------------------------------------

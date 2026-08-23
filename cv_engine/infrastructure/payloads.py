@@ -13,6 +13,7 @@ from ..application.errors import (
     ArtifactContainmentRefused,
     ArtifactHashMismatch,
     ArtifactPayloadMissing,
+    InfrastructureFailure,
 )
 from ..application.ports import (
     ArtifactStream,
@@ -20,7 +21,7 @@ from ..application.ports import (
     RevisionPayloads,
     SnapshotPayload,
 )
-from ..util import new_id, sha256_file
+from ..util import new_id, sha256_bytes, sha256_file
 from .paths import relative_within, resolve_within
 
 
@@ -319,25 +320,39 @@ class PayloadStore:
         return self._reference(stored)
 
     def open_artifact(self, reference: str, expected_hash: str) -> ArtifactStream:
-        """Verify one registered immutable payload and hand back its bytes.
+        """Verify one registered immutable payload and hand back exactly those bytes.
 
         The order is the point. Containment first, through `resolve_within`,
         which resolves symlinks before it compares - so a link inside the
         artifact root pointing anywhere else is refused by the same check that
         refuses `..`, rather than by a second rule that could disagree with it.
         Then the approved-layout check, so a row pointing at a Workspace file
-        that is not an artifact payload cannot be served. Then the registered
-        hash, because a payload that no longer matches its registration is
-        evidence of tampering rather than something to hand to a client. Only
-        then are any bytes read.
+        that is not an artifact payload cannot be served. Then the payload is
+        read once, and the hash is computed over the bytes that were read.
+
+        **The hash covers the bytes this returns, not the file it came from.**
+        Verifying the path and then reopening it to stream would leave a
+        time-of-check/time-of-use window: replace the payload in between and the
+        client receives unverified bytes under the previous `ETag` and
+        `Content-Length`, or the file disappears and the read fails after a
+        `200` and its headers have already gone out. Holding an open descriptor
+        does not close that window either - `Path.write_bytes` truncates and
+        rewrites the *same inode*, so a held handle would read the substituted
+        content. Capturing the payload and hashing what was captured is what
+        makes the guarantee hold, and it collapses two reads into one.
+
+        The buffer is the whole payload. That is affordable because artifacts
+        here are one-page CV documents, screenshots and manifests that this
+        system produced itself - architecture §14 admits no file uploads and no
+        arbitrary paths, so there is no route by which an unbounded payload
+        reaches this method.
 
         The refusals are classified here because this is the only place that
         knows which of the three checks failed, and each message names the
         check rather than the path: what fails containment is exactly what must
         not be echoed back to a client.
 
-        No `Path` leaves this method. What comes back is a size and a way to
-        read the bytes, which is what the application layer passes outward.
+        No `Path` leaves this method.
         """
         try:
             approved = self._approved_destination(resolve_within(self._workspace_root, reference))
@@ -348,19 +363,25 @@ class PayloadStore:
             ) from exc
         if not approved.is_file():
             raise ArtifactPayloadMissing("the registered artifact payload is not stored")
-        actual_hash = sha256_file(approved)
+        try:
+            payload = approved.read_bytes()
+        except FileNotFoundError as exc:
+            raise ArtifactPayloadMissing("the registered artifact payload is not stored") from exc
+        except OSError as exc:
+            raise InfrastructureFailure(
+                "the registered artifact payload could not be read"
+            ) from exc
+        actual_hash = sha256_bytes(payload)
         if actual_hash != expected_hash:
             raise ArtifactHashMismatch(
                 f"artifact payload hash mismatch: expected {expected_hash}, got {actual_hash}"
             )
-        size = approved.stat().st_size
 
         def chunks() -> Iterator[bytes]:
-            with approved.open("rb") as handle:
-                while block := handle.read(self._STREAM_CHUNK_BYTES):
-                    yield block
+            for offset in range(0, len(payload), self._STREAM_CHUNK_BYTES):
+                yield payload[offset : offset + self._STREAM_CHUNK_BYTES]
 
-        return ArtifactStream(size=size, chunks=chunks)
+        return ArtifactStream(size=len(payload), chunks=chunks)
 
     def read_snapshot(self, reference: str, expected_hash: str) -> str:
         candidate = resolve_within(self._workspace_root, reference)

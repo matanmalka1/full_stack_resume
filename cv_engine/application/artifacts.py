@@ -20,7 +20,9 @@ implementation detail:
    make the name act as a path or as a second header.
 3. **Nothing here returns a `Path`.** The verification that a payload is
    contained, present, and unchanged happens behind the port; what crosses back
-   is an `ArtifactStream`.
+   is an `ArtifactStream` whose bytes are the bytes that were hashed, so the
+   `ETag` and `Content-Length` a router derives from it cannot describe content
+   the client is not about to receive.
 """
 
 from __future__ import annotations

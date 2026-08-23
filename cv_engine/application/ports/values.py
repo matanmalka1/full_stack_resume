@@ -69,9 +69,15 @@ class ArtifactStream:
     and re-checked the registered hash by the time this exists; what is left is
     the bytes and how many of them there are.
 
+    The bytes are already captured and already verified: `size` and the content
+    hash the caller checked describe *these* bytes, not a file that will be
+    reopened later. A descriptor that reread its path on iteration would leave a
+    time-of-check/time-of-use window in which a substituted payload is delivered
+    under the previous hash and length.
+
     `chunks` is a factory rather than an iterator so the descriptor can be
-    built, inspected, and handed on before anything is read, and so a caller
-    that never streams it never opens the file.
+    built, inspected, and handed on before anything is consumed, and so it can
+    be iterated more than once without changing what it yields.
     """
 
     size: int
