@@ -141,6 +141,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/{operation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the progress of one durable Operation */
+        get: operations["operation_api_v1_operations__operation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/{operation_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel queued work, or ask running work to stop
+         * @description `200`, not `202`: cancellation is recorded synchronously.
+         *
+         *     Queued work is cancelled outright. Running work has
+         *     `cancellation_requested_at` recorded and stops at its next checkpoint, so the
+         *     returned status is truthfully still `running` - the request is what
+         *     completed, not the Operation.
+         */
+        post: operations["cancel_operation_api_v1_operations__operation_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/{operation_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Queue a new Operation retrying a terminal one
+         * @description `202` and a `Location` naming the *new* Operation.
+         *
+         *     The original is immutable and is not touched. Only a terminal Operation can
+         *     be retried; retrying a live one is a `409`.
+         */
+        post: operations["retry_operation_api_v1_operations__operation_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -151,10 +216,7 @@ export interface components {
             active_analysis_id?: string | null;
             /** Active Job Snapshot Id */
             active_job_snapshot_id: string;
-            /** Active Operation */
-            active_operation?: {
-                [key: string]: unknown;
-            } | null;
+            active_operation?: components["schemas"]["OperationResponse"] | null;
             /** Active Selection Plan Id */
             active_selection_plan_id?: string | null;
             /** Active Working Draft Id */
@@ -197,10 +259,7 @@ export interface components {
             active_analysis_id?: string | null;
             /** Active Job Snapshot Id */
             active_job_snapshot_id: string;
-            /** Active Operation */
-            active_operation?: {
-                [key: string]: unknown;
-            } | null;
+            active_operation?: components["schemas"]["OperationResponse"] | null;
             /** Active Selection Plan Id */
             active_selection_plan_id?: string | null;
             /** Active Working Draft Id */
@@ -570,6 +629,63 @@ export interface components {
             /** Profiles */
             profiles: string;
         };
+        /**
+         * OperationOutputResponse
+         * @description One immutable output an Operation produced.
+         *
+         *     Existence and activation are separate (§11): a failed or cancelled Operation
+         *     may own an output that was registered as inactive evidence, so `active` is
+         *     reported rather than inferred from the status.
+         */
+        OperationOutputResponse: {
+            /** Active */
+            active: boolean;
+            /** Output Id */
+            output_id: string;
+            /** Output Type */
+            output_type: string;
+        };
+        /**
+         * OperationResponse
+         * @description The §11 Operation query fields, and nothing wider.
+         *
+         *     This mirrors `OperationView`, not `PersistedOperation`. The payload, the
+         *     frozen sources, the lease, and the idempotency key stay inside the runner.
+         *
+         *     `message` is a safe progress line and `safe_failure_detail` a safe failure
+         *     line; neither carries a path, a provider response, or a key. There is no
+         *     percentage field, because the specification forbids fabricating one.
+         */
+        OperationResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Cancellation Requested At */
+            cancellation_requested_at?: string | null;
+            /** Created At */
+            created_at: string;
+            /** Failure Code */
+            failure_code?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Id */
+            id: string;
+            /** Message */
+            message: string;
+            /** Operation Type */
+            operation_type: string;
+            /** Outputs */
+            outputs: components["schemas"]["OperationOutputResponse"][];
+            /** Phase */
+            phase: string;
+            /** Retry Of Operation Id */
+            retry_of_operation_id?: string | null;
+            /** Safe Failure Detail */
+            safe_failure_detail?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Status */
+            status: string;
+        };
         /** ReasonResponse */
         ReasonResponse: {
             /** Allowed Resolution Actions */
@@ -877,6 +993,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    operation_api_v1_operations__operation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_operation_api_v1_operations__operation_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_operation_api_v1_operations__operation_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                operation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

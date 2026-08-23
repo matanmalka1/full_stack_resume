@@ -18,14 +18,12 @@ from starlette.requests import Request
 from ..application.errors import ApplicationError
 from .dependencies import install_services
 from .problems import application_error_handler, problem
-from .routers import applications, health
+from .routers import applications, health, operations
 from .security import BodySizeLimitMiddleware, OriginPolicyMiddleware, allowed_origins
 from .services import ApiServices
+from .versioning import API_PREFIX, API_VERSION
 
-#: The HTTP API version. Deliberately separate from the product version: the
-#: product is v2 and the API is v1, and they are free to move apart.
-API_VERSION = "1"
-API_PREFIX = f"/api/v{API_VERSION}"
+__all__ = ["API_PREFIX", "API_VERSION", "DEFAULT_HOST", "DEFAULT_PORT", "create_app"]
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
@@ -67,6 +65,7 @@ def create_app(
 
     app.include_router(health.router, prefix=API_PREFIX)
     app.include_router(applications.router, prefix=API_PREFIX)
+    app.include_router(operations.router, prefix=API_PREFIX)
     return app
 
 

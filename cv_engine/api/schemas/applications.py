@@ -5,6 +5,7 @@ from typing import Any, Literal
 from pydantic import Field
 
 from .health import HttpSchema
+from .operations import OperationResponse
 
 
 class ApplicationIntake(HttpSchema):
@@ -101,7 +102,7 @@ class ApplicationStateResponse(HttpSchema):
     stale_reasons: list[ReasonResponse]
     primary_stale_reason: str | None = None
     warnings: list[WarningResponse]
-    active_operation: dict[str, Any] | None = None
+    active_operation: OperationResponse | None = None
     active_job_snapshot_id: str
     active_analysis_id: str | None = None
     active_selection_plan_id: str | None = None
