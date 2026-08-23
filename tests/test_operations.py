@@ -372,8 +372,16 @@ class _Handler:
 
 
 def _operation_for_runner(services, company: str = "Runner Co"):
+    # Acknowledged, because the job text is identical for every company here and
+    # Stage B made an unacknowledged duplicate a refusal. A caller that builds
+    # two of these in one Workspace is not testing duplicate detection.
     ingested = services.applications.ingest(
-        IngestCommand(company=company, target_role="Developer", job_text="Python role")
+        IngestCommand(
+            company=company,
+            target_role="Developer",
+            job_text="Python role",
+            acknowledged_duplicates=True,
+        )
     )
     operation = services.repository.create_operation(
         _stored_request(ingested.application_id, company.casefold().replace(" ", "-")),

@@ -233,8 +233,17 @@ def as_operation_view(record: OperationView) -> OperationView:
     idempotency key is a credential for replaying a write. Narrowing happens in
     one function so a new runner-facing field cannot reach a client merely by
     being added to the subclass.
+
+    The field set is read from `OperationView` rather than listed here, so the
+    two cannot drift. Passing the record straight to `model_validate` does
+    **not** narrow it: a `PersistedOperation` already is an `OperationView`, and
+    pydantic returns the instance untouched instead of building a new one. That
+    silent no-op is what shipped the whole runner record inside
+    `active_operation`.
     """
-    return OperationView.model_validate(record, from_attributes=True)
+    return OperationView.model_validate(
+        {name: getattr(record, name) for name in OperationView.model_fields}
+    )
 
 
 def required_operation_resources(request: CreateOperation) -> tuple[OperationResource, ...]:

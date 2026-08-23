@@ -94,7 +94,15 @@ def test_the_operation_response_carries_no_runner_only_field(api_worker) -> None
 
 
 def test_active_operation_is_projected_as_the_same_operation_representation(services) -> None:
-    """One representation, whether polled directly or read from the projection."""
+    """One representation, whether polled directly or read from the projection.
+
+    This is also the regression test for a leak that predates Stage C: the
+    adapter narrowed `active_operation` by handing the record to
+    `OperationView.model_validate`, which returns a `PersistedOperation`
+    untouched rather than narrowing it. The projection then dumped all of it, so
+    `GET /applications/{id}` carried the payload, the frozen sources, the lease,
+    and the idempotency key inside `active_operation`.
+    """
     operation = _queued_analysis(services, "Projection Co")
 
     with TestClient(create_app(build_api_services(services))) as api:
@@ -103,6 +111,7 @@ def test_active_operation_is_projected_as_the_same_operation_representation(serv
 
     assert polled.status_code == 200
     assert detail.status_code == 200
+    assert set(detail.json()["active_operation"]) == set(OperationResponse.model_fields)
     assert detail.json()["active_operation"] == polled.json()
 
 

@@ -279,16 +279,50 @@ remains the M3 boundary gate. Stage C has not begun.
       HTTP mirror is now `OperationResponse | None`, which is what moved the two schemas in
       the OpenAPI diff.
 
-**Stage C is implemented and awaiting user evidence.** OpenAPI and TypeScript were
-regenerated; the entry-level diff is in `a0116cd`. Nothing in Stage B was reopened, and
+**The first evidence run failed, and it found two defects - one introduced here and one
+older.** Both are repaired at `<repair>`; Stage C is awaiting a second run.
+
+1. **`as_operation_view` did not narrow anything.** It handed the record to
+   `OperationView.model_validate(record, from_attributes=True)`. A `PersistedOperation`
+   already *is* an `OperationView`, so pydantic returned the instance untouched instead of
+   building a narrower one. The API then refused its own response with 14
+   `extra_forbidden` errors, because `OperationResponse` forbids exactly the runner-only
+   fields that were still attached.
+
+   **The same no-op predates Stage C**, in the SQLite adapter's `active_operation`, which
+   used that spelling and was believed to return a view. It did not, and the projection
+   dumped whatever it got, so `GET /applications/{id}` has been carrying the payload, the
+   frozen sources, the lease, and the idempotency key inside `active_operation` since the
+   endpoint existed. Typing the field is what exposed it: the leak was invisible while the
+   field was `dict[str, Any]` on both sides.
+
+   The repair reads the field set from `OperationView.model_fields` and builds from a
+   plain dict, so the two cannot drift and the narrowing cannot silently become an
+   identity again. `from_attributes=True` appears nowhere else in `cv_engine`, so this was
+   the only instance of the pattern.
+
+2. **`_operation_for_runner` refused its own second call.** Stage B made an unacknowledged
+   duplicate a refusal; the helper ingests the same job text for every company, and one
+   test calls it twice in one Workspace. This is Stage B's change surfacing in the first
+   run of `test_operations.py` since it landed - a test-helper defect, not a product one,
+   and the product code Stage B shipped is unchanged. The helper now acknowledges, as
+   `analyzed_application` in `conftest.py` already does.
+
+Worth carrying forward: the assertion that caught the first defect compared the response's
+field set against `OperationResponse.model_fields` rather than against a hand-written list.
+A list would have been written from the same wrong belief that the narrowing worked.
+
+OpenAPI and TypeScript were regenerated; the entry-level diff is in `a0116cd`, and the
+repair does not move either file. Nothing in Stage B's product code was reopened, and
 Stage D has not begun.
 
 Predicted next non-browser collection: **282** - Stage B's 270 plus the 12 cases in
 `test_api_operations.py` (9 functions, two of them parametrised over 3 and 2). No test was
-removed. Two existing assertions in `test_operations.py` moved with the contract without
-changing the count: the detail projection is compared against the view, and the
-cancel/retry immutability assertion reads the stored record once so it still compares the
-whole row.
+removed, and the repair adds no case: it changed one helper and one assertion inside
+existing tests. Two existing assertions in `test_operations.py` moved with the contract
+without changing the count either: the detail projection is compared against the view, and
+the cancel/retry immutability assertion reads the stored record once so it still compares
+the whole row.
 
 ### D — Analyze, review decisions, deterministic selection plans
 
