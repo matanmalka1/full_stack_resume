@@ -116,6 +116,88 @@ class DraftCommand(BoundaryDTO):
     selection_plan_id: str
 
 
+class ClaimPatch(BoundaryDTO):
+    """One claim's new content inside a structured WorkingDraft patch.
+
+    Free text with no fact behind it is not refused here. The domain edit path
+    keeps it as a `pending` claim carrying the reason it could not be
+    authorized, because §14 requires unauthorized free text to be saved rather
+    than silently rejected or discarded.
+    """
+
+    claim_id: str
+    fact_ids: list[str] = []
+    text: str | None = None
+    template_id: str | None = None
+    template_version: str | None = None
+
+
+class UpdateWorkingDraftCommand(BoundaryDTO):
+    """§14 autosave: one exact draft version, and a structured patch.
+
+    Both halves of the ETag are stated, not just the version. The version alone
+    proves nobody else has saved since; the content hash proves the client was
+    editing the document this command is about to change, which is what an
+    `If-Match` header actually promised.
+    """
+
+    working_draft_id: str
+    expected_edit_version: int
+    expected_content_hash: str
+    claim_edits: list[ClaimPatch] = Field(min_length=1)
+
+
+class ApplySelectionChangeCommand(SelectionOverlay):
+    """§14: a deterministic fact-selection change against one exact draft."""
+
+    working_draft_id: str
+    expected_edit_version: int
+
+
+class ArchiveWorkingDraftCommand(BoundaryDTO):
+    """§14: materialize the historical snapshot, then clear the active pointer."""
+
+    working_draft_id: str
+    expected_edit_version: int
+
+
+class ReplaceWorkingDraftCommand(BoundaryDTO):
+    """§14: replace one exact draft from an explicit compatible analysis and plan.
+
+    `keep_previous` is the user's Keep decision. It materializes the immutable
+    historical snapshot *before* the replacement is attempted, which is safe in
+    both directions: a snapshot of content that existed is true whether or not
+    the replacement then succeeds, and nothing is discarded before the new
+    draft is committed.
+    """
+
+    working_draft_id: str
+    expected_edit_version: int
+    job_analysis_id: str
+    selection_plan_id: str
+    keep_previous: bool = False
+
+
+class ValidateDraftCommand(BoundaryDTO):
+    """§15: validate one exact WorkingDraft version."""
+
+    working_draft_id: str
+    expected_edit_version: int
+
+
+class ApproveDraftCommand(BoundaryDTO):
+    """§15: approve exactly the content one exact ValidationRun passed.
+
+    All three identities are the caller's. Approval re-checks the binding
+    between them; it never runs its own validation, because a validation
+    approval creates for itself can only ever agree with approval.
+    """
+
+    working_draft_id: str
+    expected_edit_version: int
+    validation_run_id: str
+
+
 class RenderCommand(BoundaryDTO):
     application_id: str
     approved_revision_id: str
@@ -237,6 +319,60 @@ class EditResult(BoundaryDTO):
     working_draft_id: str
     edit_version: int
     validation: ValidationReport
+
+
+class WorkingDraftUpdateResult(BoundaryDTO):
+    """The new optimistic token, plus what could not be authorized.
+
+    `pending_claim_ids` names the claims saved as pending: the text is stored,
+    and the client is told which lines still need a fact rather than having to
+    diff the document to find out.
+    """
+
+    application_id: str
+    working_draft_id: str
+    edit_version: int
+    content_hash: str
+    selection_plan_id: str
+    pending_claim_ids: list[str] = []
+
+
+class SelectionChangeResult(BoundaryDTO):
+    """The immutable plan the change created, and the draft now built on it."""
+
+    application_id: str
+    working_draft_id: str
+    edit_version: int
+    content_hash: str
+    selection_plan_id: str
+    plan: SelectionPlan
+
+
+class ArchivedWorkingDraftResult(BoundaryDTO):
+    """The registered historical snapshot, and the draft it froze."""
+
+    application_id: str
+    working_draft_id: str
+    edit_version: int
+    content_hash: str
+    artifact_version_id: str
+
+
+class ValidationRunResult(BoundaryDTO):
+    """One immutable ValidationRun, whether or not it passed.
+
+    `passed=false` is a successful outcome (§22). The run ID is returned
+    because approval takes it as an argument: a client that could not name the
+    run it read could not prove which content it was approving.
+    """
+
+    application_id: str
+    working_draft_id: str
+    validation_run_id: str
+    edit_version: int
+    content_hash: str
+    passed: bool
+    report: ValidationReport
 
 
 class ApprovalResult(BoundaryDTO):

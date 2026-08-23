@@ -107,6 +107,24 @@ class PayloadStore:
             f"resume.{format}",
         )
 
+    def draft_snapshot_path(
+        self, application_id: str, working_draft_id: str, edit_version: int
+    ) -> Path:
+        """Where one archived WorkingDraft version's immutable payload lives.
+
+        The edit version is part of the filename rather than a directory, so a
+        second archive of the same draft at a later version is a new immutable
+        file and archiving the same version twice collides instead of
+        overwriting evidence.
+        """
+        if edit_version < 1:
+            raise ValueError(f"invalid working draft edit version: {edit_version}")
+        return self._target(
+            "drafts",
+            self._component(application_id, name="application_id"),
+            f"{self._component(working_draft_id, name='working_draft_id')}-v{edit_version}.json",
+        )
+
     def output_path(
         self,
         application_id: str,
@@ -196,6 +214,9 @@ class PayloadStore:
             or len(parts) == 2
             and parts[0] == "manifests"
             and parts[1].endswith(".json")
+            or len(parts) == 3
+            and parts[0] == "drafts"
+            and parts[2].endswith(".json")
         )
         if not approved:
             raise ValueError(f"payload destination is not an approved layout: {candidate}")
@@ -263,6 +284,26 @@ class PayloadStore:
             sha256=stored.sha256,
             size=stored.size,
         )
+
+    def commit_draft_snapshot(
+        self,
+        application_id: str,
+        working_draft_id: str,
+        edit_version: int,
+        structured_json: str,
+    ) -> SnapshotPayload:
+        """Materialize one archived WorkingDraft version as an immutable payload.
+
+        SQLite registration stays with the caller, exactly as it does for
+        revisions: a failure there leaves a safe filesystem orphan rather than
+        an archived pointer with nothing behind it.
+        """
+        stored = self.commit(
+            self.draft_snapshot_path(application_id, working_draft_id, edit_version),
+            write=lambda path: path.write_bytes(structured_json.encode("utf-8")),
+            validate=self._valid_json,
+        )
+        return self._reference(stored)
 
     def read_snapshot(self, reference: str, expected_hash: str) -> str:
         candidate = resolve_within(self._workspace_root, reference)

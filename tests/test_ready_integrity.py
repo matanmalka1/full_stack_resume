@@ -4,7 +4,7 @@ import uuid
 from pathlib import Path
 
 import pytest
-from helpers import ACCOUNT_MANAGER_JOB, artifact_version_and_path
+from helpers import ACCOUNT_MANAGER_JOB, approve_active_draft, artifact_version_and_path
 
 import cv_engine.infrastructure.rendering as rendering_module
 from cv_engine.application.commands import (
@@ -145,7 +145,7 @@ def test_public_workflow_cannot_restore_ready_after_tamper_without_fresh_render(
     # A new revision and render create new immutable evidence; the old PDF is
     # never reused or relinked.
     _start_new_draft(services, app_id)
-    services.drafts.approve(app_id)
+    approve_active_draft(services, app_id)
     rendered = services.rendering.render(app_id)
     assert rendered.validation.passed
     new_pdf_version = services.repository.latest_artifact_version(app_id, "resume_pdf", "rendered")
@@ -196,7 +196,7 @@ def test_ready_qualification_is_independent_of_active_context(ready_application)
         old_revision.id, "resume_pdf", "rendered"
     )
     _start_new_draft(services, app_id)
-    new_revision = services.drafts.approve(app_id)
+    new_revision = approve_active_draft(services, app_id)
     assert not services.rendering.ready_qualification(app_id).ready_qualified
     old_qualification = services.rendering.ready_qualification(
         app_id, old_revision.id, old_pdf["id"]
@@ -244,7 +244,7 @@ def test_submission_binds_current_pdf_and_remains_immutable_after_later_versions
     services, app_id = ready_application("Two Cycles")
     first_pdf = services.repository.latest_artifact_version(app_id, "resume_pdf", "rendered")
     _start_new_draft(services, app_id)
-    services.drafts.approve(app_id)
+    approve_active_draft(services, app_id)
     second_render = services.rendering.render(app_id)
     assert second_render.validation.passed, second_render.validation.model_dump()
     second_pdf = services.repository.latest_artifact_version(app_id, "resume_pdf", "rendered")
@@ -268,7 +268,7 @@ def test_submission_binds_current_pdf_and_remains_immutable_after_later_versions
 
     # A later approved version must not rewrite or relink the existing submission.
     _start_new_draft(services, app_id)
-    services.drafts.approve(app_id)
+    approve_active_draft(services, app_id)
     with connect(services.repository.path) as connection:
         after = connection.execute(
             "SELECT artifact_version_id FROM submissions WHERE application_id=?", (app_id,)

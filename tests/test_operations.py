@@ -6,11 +6,12 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Event, Thread
 
 import pytest
-from helpers import ACCOUNT_MANAGER_JOB, run_cli
+from helpers import ACCOUNT_MANAGER_JOB, run_cli, validate_active_draft
 from pydantic import ValidationError
 
 from cv_engine.application.commands import (
     AnalyzeCommand,
+    ApproveDraftCommand,
     DraftCommand,
     IngestCommand,
     RenderCommand,
@@ -907,16 +908,27 @@ def test_cli_operation_show_cancel_and_failed_retry_return_truthful_status(servi
     assert retry_payload["retry_of_operation_id"] == operation.id
 
 
+def _approve_command(services, application_id) -> ApproveDraftCommand:
+    """Validate the active draft and name the run that approval must rely on."""
+    validated = validate_active_draft(services, application_id)
+    return ApproveDraftCommand(
+        working_draft_id=validated.working_draft_id,
+        expected_edit_version=validated.edit_version,
+        validation_run_id=validated.validation_run_id,
+    )
+
+
 def test_approval_idempotency_returns_the_exact_original_revision(drafted_application) -> None:
     setup = drafted_application("Idempotent Approval Co")
+    command = _approve_command(setup.services, setup.application_id)
 
     first = setup.services.operations.approve_idempotent(
-        setup.application_id,
+        command,
         idempotency_key="approval-key",
         draft_service=setup.services.drafts,
     )
     repeated = setup.services.operations.approve_idempotent(
-        setup.application_id,
+        command,
         idempotency_key="approval-key",
         draft_service=setup.services.drafts,
     )
@@ -939,14 +951,14 @@ def test_approval_idempotency_key_cannot_cross_applications(drafted_application)
     first = drafted_application("Approval Key Owner")
     second = drafted_application("Approval Key Intruder")
     first.services.operations.approve_idempotent(
-        first.application_id,
+        _approve_command(first.services, first.application_id),
         idempotency_key="application-bound-approval",
         draft_service=first.services.drafts,
     )
 
     with pytest.raises(StateConflict) as raised:
         second.services.operations.approve_idempotent(
-            second.application_id,
+            _approve_command(second.services, second.application_id),
             idempotency_key="application-bound-approval",
             draft_service=second.services.drafts,
         )
@@ -956,24 +968,25 @@ def test_approval_idempotency_key_cannot_cross_applications(drafted_application)
 def test_pending_approval_receipt_recovers_a_committed_revision(drafted_application) -> None:
     setup = drafted_application("Approval Recovery Co")
     working = setup.services.repository.active_working_draft(setup.application_id)
+    command = _approve_command(setup.services, setup.application_id)
     reserved_revision = new_id()
     receipt = setup.services.repository.claim_idempotency_receipt(
         "approve_draft",
         "approval-recovery",
         {
-            "application_id": setup.application_id,
-            "working_draft_id": working.id,
-            "edit_version": working.edit_version,
+            "working_draft_id": command.working_draft_id,
+            "expected_edit_version": command.expected_edit_version,
+            "validation_run_id": command.validation_run_id,
             "content_hash": working.content_hash,
         },
         installation_id=setup.services.workspace.installation_id(),
         reserved_entity_id=reserved_revision,
     )
-    committed = setup.services.drafts.approve(setup.application_id, revision_id=reserved_revision)
+    committed = setup.services.drafts.approve_draft(command, revision_id=reserved_revision)
     assert receipt["status"] == "pending"
 
     recovered = setup.services.operations.approve_idempotent(
-        setup.application_id,
+        command,
         idempotency_key="approval-recovery",
         draft_service=setup.services.drafts,
     )

@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from helpers import ACCOUNT_MANAGER_JOB
+from helpers import ACCOUNT_MANAGER_JOB, approve_active_draft, validate_active_draft
 from helpers import working_claim as _working_claim
 
 import cv_engine.application.services.drafts as draft_service_module
@@ -53,7 +53,7 @@ def test_default_flow_stops_for_review_then_reaches_ready(services) -> None:
     assert markdown.is_file() and manifest.is_file()
     assert services.repository.get_application(app_id)["current_status"] == "saved"
     assert services.repository.artifact_versions(app_id) == []
-    approved = services.drafts.approve(app_id)
+    approved = approve_active_draft(services, app_id)
     assert approved.version == 1
     rendered = services.rendering.render(app_id)
     pdf_record = services.repository.latest_artifact_version(app_id, "resume_pdf")
@@ -158,7 +158,7 @@ def test_validate_extracts_safe_manual_markdown_wording(drafted_application) -> 
         encoding="utf-8",
     )
 
-    report = services.drafts.validate_working(app_id)
+    report = validate_active_draft(services, app_id).report
 
     assert report.passed, report.model_dump()
     assert _working_claim(services, app_id, "sales.metric.performance").claim_type == "canonical"
@@ -181,7 +181,7 @@ def test_validate_preserves_unsupported_manual_markdown_as_pending(drafted_appli
         encoding="utf-8",
     )
 
-    report = services.drafts.validate_working(app_id)
+    report = validate_active_draft(services, app_id).report
 
     assert report.passed
     synced = services.drafts.sync_working_claims(app_id)
@@ -302,7 +302,7 @@ def test_fast_orchestration_preserves_call_order_and_gate_messages(
             submit_draft=lambda _command, **_kwargs: (
                 calls.append("draft") or SimpleNamespace(id="draft-operation")
             ),
-            approve_idempotent=lambda _application_id, **_kwargs: (
+            approve_idempotent=lambda _command, **_kwargs: (
                 calls.append("approve")
                 or SimpleNamespace(
                     version=1,
@@ -318,7 +318,11 @@ def test_fast_orchestration_preserves_call_order_and_gate_messages(
             execute=lambda operation_id: operation_results[operation_id]
         ),
         repository=SimpleNamespace(
-            latest_validation_for_working_draft=lambda _draft_id: {"report": report("pre-render")},
+            latest_validation_for_working_draft=lambda _draft_id: {
+                "id": "validation-1",
+                "report": report("pre-render"),
+            },
+            working_draft=lambda draft_id: SimpleNamespace(id=draft_id, edit_version=1),
             artifact_version=lambda _artifact_id: {"metadata_json": "{}"},
             validation_for_artifact=lambda *_args: report("post-render"),
         ),
@@ -337,7 +341,7 @@ def test_cli_fast_mode_refuses_pre_render_validation_failure(
 ) -> None:
     from cv_engine.cli import main
 
-    real_validate = draft_service_module.validate_draft
+    real_validate = draft_service_module.run_draft_validation
 
     def fail_validation(*args, **kwargs) -> ValidationReport:
         report = real_validate(*args, **kwargs)
@@ -355,7 +359,10 @@ def test_cli_fast_mode_refuses_pre_render_validation_failure(
         )
 
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.setattr(draft_service_module, "validate_draft", fail_validation)
+    # The service imports the domain validator under its own name, because
+    # `validate_draft` is now the §15 application command as well. Patching the
+    # name the module actually binds is what keeps this test honest.
+    monkeypatch.setattr(draft_service_module, "run_draft_validation", fail_validation)
 
     result = main(
         [

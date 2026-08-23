@@ -11,7 +11,7 @@ import inspect
 from pathlib import Path
 
 import pytest
-from helpers import ACCOUNT_MANAGER_JOB, working_claim
+from helpers import ACCOUNT_MANAGER_JOB, approve_active_draft, working_claim
 from pydantic import BaseModel
 
 from cv_engine.application import errors
@@ -86,7 +86,7 @@ def test_commands_answer_with_named_results(services) -> None:
     assert isinstance(drafted, DraftResult)
     assert drafted.validation.passed, drafted.validation.model_dump()
 
-    approved = services.drafts.approve(ingested.application_id)
+    approved = approve_active_draft(services, ingested.application_id)
     assert isinstance(approved, ApprovalResult)
     assert approved.version == 1
 
@@ -154,7 +154,7 @@ def test_application_dtos_do_not_expose_filesystem_locations(services) -> None:
             selection_plan_id=analysed.selection_plan_id,
         )
     )
-    services.drafts.approve(ingested.application_id)
+    approve_active_draft(services, ingested.application_id)
 
     projection = services.queries.artifact_versions(ingested.application_id)
     serialized = projection.model_dump(mode="json")
@@ -303,7 +303,7 @@ def test_a_blocked_validation_carries_its_report(drafted_application) -> None:
     services.drafts.sync_working_claims(application_id)
 
     with pytest.raises(errors.ValidationBlocked) as raised:
-        services.drafts.approve(application_id)
+        approve_active_draft(services, application_id)
 
     assert raised.value.report is not None
     assert not raised.value.report.passed

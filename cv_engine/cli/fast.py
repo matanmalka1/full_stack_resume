@@ -12,7 +12,13 @@ import json
 from pathlib import Path
 from typing import Any
 
-from ..application.commands import AnalyzeCommand, DraftCommand, IngestCommand, RenderCommand
+from ..application.commands import (
+    AnalyzeCommand,
+    ApproveDraftCommand,
+    DraftCommand,
+    IngestCommand,
+    RenderCommand,
+)
 from ..application.errors import WorkflowError
 from ..runtime.composition import Services
 from ..util import new_id
@@ -46,6 +52,35 @@ def _latest_job_analysis_id(repository: Any, application_id: str) -> str:
 def _latest_selection_plan_id(repository: Any, application_id: str) -> str:
     """The immutable plan a legacy CLI signature meant when it named none."""
     return repository.latest_selection_plan(application_id).id
+
+
+def _active_working_draft(repository: Any, application_id: str):
+    """The draft a legacy CLI signature meant when it named none.
+
+    v2's draft commands take a WorkingDraft ID and an exact edit version. The
+    v1 signatures carry an Application ID, so the resolution happens here, at
+    the boundary where `active` is a query convenience rather than part of what
+    a command means.
+    """
+    return repository.active_working_draft(application_id)
+
+
+def _matching_validation_run(repository: Any, working) -> dict[str, Any] | None:
+    """The ValidationRun that describes this exact draft version, if there is one.
+
+    Approval takes a run ID, and it verifies the binding itself. Resolving the
+    run here is what lets `cv approve` keep its v1 signature: the CLI answers
+    "which run did the user mean" and refuses when the answer is none, instead
+    of approval quietly creating a run that could only ever agree with itself.
+    """
+    latest = repository.latest_validation_for_working_draft(working.id)
+    if (
+        latest is None
+        or latest["edit_version"] != working.edit_version
+        or latest["content_hash"] != working.content_hash
+    ):
+        return None
+    return latest
 
 
 def _fast(
@@ -121,8 +156,17 @@ def _fast(
         raise WorkflowError("draft Operation completed without a ValidationRun")
     if not draft_validation["report"].passed:
         raise WorkflowError("fast mode blocked by pre-render validation")
+    # The real ValidationRun the draft Operation just recorded, named
+    # explicitly. Approval verifies that this run describes the exact draft
+    # version it is about to freeze, so fast mode passes through the same
+    # binding check as any other approval rather than around it.
+    working = services.repository.working_draft(draft_outputs["working_draft"])
     approved = services.operations.approve_idempotent(
-        ingested.application_id,
+        ApproveDraftCommand(
+            working_draft_id=working.id,
+            expected_edit_version=working.edit_version,
+            validation_run_id=draft_validation["id"],
+        ),
         idempotency_key=new_id(),
         draft_service=services.drafts,
     )

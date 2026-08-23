@@ -228,8 +228,17 @@ class SqliteDraftRepository(SqliteRepositoryBase):
         expected_version: int,
         source: DraftDocument,
         *,
+        selection_plan_id: str | None = None,
         updated_at: str | None = None,
     ) -> WorkingDraft:
+        """One optimistic edit, optionally repointing the draft at a new plan.
+
+        `selection_plan_id` exists for `apply_selection_change`, which has to
+        create the immutable plan and move the draft onto it in one place: a
+        draft still naming the previous plan while carrying the new plan's
+        content would misdescribe its own lineage. Left unset, the draft keeps
+        the plan it already had, which is every autosave.
+        """
         now = updated_at or utc_now()
         with self.transaction() as connection:
             current = connection.execute(
@@ -237,24 +246,60 @@ class SqliteDraftRepository(SqliteRepositoryBase):
             ).fetchone()
             if current is None:
                 raise UnknownRecord(f"no working draft {working_draft_id}")
+            plan_id = selection_plan_id or current["selection_plan_id"]
             self._require_lineage(
                 connection,
                 current["application_id"],
                 current["job_analysis_id"],
-                current["selection_plan_id"],
+                plan_id,
                 source,
             )
             changed = connection.execute(
-                "UPDATE working_drafts SET source_json=?, edit_version=edit_version+1, "
-                "content_hash=?, updated_at=? "
+                "UPDATE working_drafts SET source_json=?, selection_plan_id=?, "
+                "edit_version=edit_version+1, content_hash=?, updated_at=? "
                 "WHERE id=? AND edit_version=? AND active=1",
                 (
                     canonical_json(source.model_dump(mode="json")),
+                    plan_id,
                     source.content_hash,
                     now,
                     working_draft_id,
                     expected_version,
                 ),
+            )
+            if changed.rowcount != 1:
+                raise StateConflict("working draft edit version mismatch")
+            row = connection.execute(
+                "SELECT * FROM working_drafts WHERE id=?", (working_draft_id,)
+            ).fetchone()
+        return self._record(row)
+
+    def deactivate_working_draft(
+        self,
+        working_draft_id: str,
+        expected_version: int,
+        *,
+        updated_at: str | None = None,
+    ) -> WorkingDraft:
+        """Clear the active pointer for one exact draft version.
+
+        The version is part of the WHERE clause for the same reason it is on an
+        edit: archiving a draft the caller has not seen the latest version of
+        would discard an edit that arrived in between. The row survives - it is
+        the historical record the ApprovedRevisions and ValidationRuns still
+        reference - so this deactivates rather than deletes.
+        """
+        now = updated_at or utc_now()
+        with self.transaction() as connection:
+            current = connection.execute(
+                "SELECT * FROM working_drafts WHERE id=?", (working_draft_id,)
+            ).fetchone()
+            if current is None:
+                raise UnknownRecord(f"no working draft {working_draft_id}")
+            changed = connection.execute(
+                "UPDATE working_drafts SET active=0, updated_at=? "
+                "WHERE id=? AND edit_version=? AND active=1",
+                (now, working_draft_id, expected_version),
             )
             if changed.rowcount != 1:
                 raise StateConflict("working draft edit version mismatch")

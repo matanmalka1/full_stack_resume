@@ -264,12 +264,41 @@ def seal_draft(draft: DraftDocument) -> tuple[DraftDocument, str, str]:
     return sealed, markdown, manifest
 
 
-def _claims(draft: DraftDocument) -> list[ClaimLine]:
+def draft_claims(draft: DraftDocument) -> list[ClaimLine]:
+    """Every claim in one document, headline and contacts included.
+
+    Public because the edit paths outside this module have to reason about the
+    same set: a caller that walked `sections` alone would silently ignore the
+    two claims that are not in one.
+    """
     return [
         draft.headline,
         *draft.contacts,
         *(claim for section in draft.sections for claim in section.claims),
     ]
+
+
+def manually_edited(draft: DraftDocument) -> bool:
+    """Whether this document carries wording a deterministic rebuild would lose.
+
+    Three markers, and each one is only ever set by a human edit path.
+    `superseded_by_manual_edit` says a claim was relinked to a fact the engine
+    did not choose. A `pending` claim is free text nothing could authorize, kept
+    rather than discarded. The extractive derivation is the one derivation
+    `apply_claim_edit` writes; presentation rules carry their own rule IDs, so
+    a draft the engine built alone matches none of the three.
+
+    Rebuilding such a document from a new SelectionPlan would silently replace
+    the user's wording with the engine's, which is why §14 sends that case to a
+    regeneration command instead of the deterministic path.
+    """
+    if draft.selection is not None and draft.selection.superseded_by_manual_edit:
+        return True
+    return any(
+        claim.claim_type == "pending"
+        or (claim.derivation_id, claim.derivation_version) == EXTRACTIVE_DERIVATION
+        for claim in draft_claims(draft)
+    )
 
 
 def _replace_claim(draft: DraftDocument, claim_id: str, replacement: ClaimLine) -> None:
@@ -289,7 +318,7 @@ def _replace_claim(draft: DraftDocument, claim_id: str, replacement: ClaimLine) 
 
 
 def _refresh_selection(draft: DraftDocument, facts: FactStore) -> DraftDocument:
-    selected = {fact_id for claim in _claims(draft) for fact_id in claim.fact_ids}
+    selected = {fact_id for claim in draft_claims(draft) for fact_id in claim.fact_ids}
     draft.selected_fact_ids = sorted(selected)
     if draft.selection is not None:
         # A manual edit may relink a claim to a different fact in the pool. The
@@ -424,7 +453,7 @@ def apply_claim_edit(
     template_version: str | None = None,
 ) -> DraftDocument:
     try:
-        current = next(claim for claim in _claims(draft) if claim.claim_id == claim_id)
+        current = next(claim for claim in draft_claims(draft) if claim.claim_id == claim_id)
     except StopIteration as exc:
         raise KeyError(claim_id) from exc
     if template_id is not None:

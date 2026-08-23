@@ -4,16 +4,25 @@ from __future__ import annotations
 
 import json
 
-from ..application.commands import AnalyzeCommand, DraftCommand, IngestCommand, RenderCommand
+from ..application.commands import (
+    AnalyzeCommand,
+    ApproveDraftCommand,
+    DraftCommand,
+    IngestCommand,
+    RenderCommand,
+    ValidateDraftCommand,
+)
 from ..application.errors import WorkflowError
 from ..application.operations import as_operation_view
 from ..util import new_id
 from .context import CommandContext, _command
 from .fast import (
+    _active_working_draft,
     _job_text,
     _latest_job_analysis_id,
     _latest_job_snapshot_id,
     _latest_selection_plan_id,
+    _matching_validation_run,
 )
 from .output import _print
 
@@ -128,16 +137,48 @@ def _draft(context: CommandContext) -> int:
 
 @_command("validate")
 def _validate(context: CommandContext) -> int:
-    report = context.built_services.drafts.validate_working(context.args.application_id)
-    _print(report.model_dump(mode="json"))
-    return 0 if report.passed else 1
+    """Validate the active draft and print the run ID approval will need."""
+    working = _active_working_draft(context.repository, context.args.application_id)
+    result = context.built_services.drafts.validate_draft(
+        ValidateDraftCommand(
+            working_draft_id=working.id,
+            expected_edit_version=working.edit_version,
+        )
+    )
+    _print(
+        {
+            "validation_run_id": result.validation_run_id,
+            "working_draft_id": result.working_draft_id,
+            "edit_version": result.edit_version,
+            **result.report.model_dump(mode="json"),
+        }
+    )
+    return 0 if result.passed else 1
 
 
 @_command("approve")
 def _approve(context: CommandContext) -> int:
+    """Approve the run the user already obtained, or refuse and name `cv validate`.
+
+    The resolution is the CLI's, not approval's. `cv approve` keeps its v1
+    signature, so the boundary answers which ValidationRun the user meant; when
+    no run describes the exact draft in front of them, the honest answer is to
+    say so rather than to manufacture one that agrees with itself.
+    """
     services = context.built_services
+    working = _active_working_draft(context.repository, context.args.application_id)
+    matching = _matching_validation_run(context.repository, working)
+    if matching is None:
+        raise WorkflowError(
+            f"no validation run describes working draft {working.id} at edit version "
+            f"{working.edit_version}; run 'cv validate {context.args.application_id}' first"
+        )
     approved = services.operations.approve_idempotent(
-        context.args.application_id,
+        ApproveDraftCommand(
+            working_draft_id=working.id,
+            expected_edit_version=working.edit_version,
+            validation_run_id=matching["id"],
+        ),
         idempotency_key=context.args.idempotency_key or new_id(),
         draft_service=services.drafts,
     )

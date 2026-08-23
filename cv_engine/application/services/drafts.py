@@ -1,33 +1,53 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 from ... import __version__
 from ...domain.analysis.approval import unresolved_approval_reasons
 from ...domain.draft_markdown import serialize_markdown, synchronize_markdown_claims
-from ...domain.drafts import apply_claim_edit, build_draft, seal_draft
+from ...domain.drafts import (
+    apply_claim_edit,
+    build_draft,
+    draft_claims,
+    manually_edited,
+    seal_draft,
+)
 from ...domain.knowledge import Knowledge
 from ...domain.models import (
     AuditRecord,
     DecisionRecord,
     DraftDocument,
     JobAnalysis,
+    SelectionPlan,
     ValidationReport,
     ValidationRunLineage,
     WorkingDraft,
 )
-from ...domain.validation import validate_draft
+from ...domain.validation import validate_draft as run_draft_validation
 from ...util import canonical_json, new_id, sha256_text, utc_now
 from ..commands import (
+    ApplySelectionChangeCommand,
     ApprovalResult,
+    ApproveDraftCommand,
+    ArchivedWorkingDraftResult,
+    ArchiveWorkingDraftCommand,
+    CreateSelectionPlanCommand,
     DecisionMarkdownExport,
     DraftCommand,
     DraftResult,
     EditResult,
+    ReplaceWorkingDraftCommand,
+    SelectionChangeResult,
+    UpdateWorkingDraftCommand,
+    ValidateDraftCommand,
+    ValidationRunResult,
+    WorkingDraftUpdateResult,
 )
 from ..errors import (
     # Re-exported: the v1 CLI and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
+    VALIDATION_STALE,
     InfrastructureFailure,
     LineageBroken,
     PreconditionFailed,
@@ -37,7 +57,10 @@ from ..errors import (
 )
 from ..ports import (
     DraftRepository,
+    PreparationRepository,
+    SnapshotPayload,
 )
+from .analysis import AnalysisService
 from .base import ServiceBase, bound_analysis, working_draft_record
 
 
@@ -65,6 +88,61 @@ class DraftService(ServiceBase[DraftRepository]):
             validator_versions={"draft": "2.0"},
         )
 
+    @staticmethod
+    def _compose(
+        *,
+        application_id: str,
+        job_snapshot_id: str,
+        job_analysis_id: str,
+        analysis: JobAnalysis,
+        plan: SelectionPlan,
+        knowledge: Knowledge,
+    ) -> DraftDocument:
+        """The deterministic document one analysis and one plan produce.
+
+        Shared by generation and by `apply_selection_change`, which has to
+        rebuild the same document against a different plan. A second call to
+        `build_draft` with its own argument list is how the two would drift.
+        """
+        try:
+            return build_draft(
+                application_id=application_id,
+                job_snapshot_id=job_snapshot_id,
+                job_analysis_id=job_analysis_id,
+                analysis=analysis,
+                profile=knowledge.profiles.get(analysis.profile),
+                facts=knowledge.facts,
+                policies=knowledge.policies,
+                candidate=knowledge.candidate,
+                presentations=knowledge.presentations,
+                selection=plan.plan,
+            )
+        except ValueError as exc:
+            raise PreconditionFailed(f"draft could not be built: {exc}") from exc
+
+    def _working(self, working_draft_id: str, expected_version: int) -> WorkingDraft:
+        """One exact draft version, named by ID, or the refusal that says why.
+
+        The version is checked here rather than only in the UPDATE clause so a
+        read-only command - validate, above all - refuses a stale client with
+        the same `409` a save would, instead of quietly reporting on content the
+        client is no longer looking at.
+        """
+        try:
+            working = self.repo.working_draft(working_draft_id)
+        except UnknownRecord as exc:
+            raise UnknownRecord(f"unknown working draft: {working_draft_id}") from exc
+        if not working.active:
+            raise PreconditionFailed(
+                f"working draft {working_draft_id} is no longer the active draft"
+            )
+        if working.edit_version != expected_version:
+            raise StateConflict(
+                f"working draft {working_draft_id} is at edit version "
+                f"{working.edit_version}, not {expected_version}"
+            )
+        return working
+
     def _commit_edit(self, working: WorkingDraft, source: DraftDocument) -> WorkingDraft:
         changed = self.repo.update_working_draft(
             working.id,
@@ -86,7 +164,7 @@ class DraftService(ServiceBase[DraftRepository]):
     def prepare(self, command: DraftCommand) -> PreparedDraft:
         """Build and validate the inputs for a draft without changing durable state."""
         knowledge = self.load_knowledge()
-        facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
+        profiles, policies = knowledge.profiles, knowledge.policies
         analysis_id = command.job_analysis_id
         try:
             record = self.repo.get_analysis(analysis_id)
@@ -145,23 +223,14 @@ class DraftService(ServiceBase[DraftRepository]):
                 f"job snapshot {latest_snapshot['id']} is newer than the analysis in hand; "
                 "analyze the new snapshot before drafting against it"
             )
-        profile = profiles.get(analysis.profile)
-        presentation_rules = knowledge.presentations
-        try:
-            draft = build_draft(
-                application_id=command.application_id,
-                job_snapshot_id=record["job_snapshot_id"],
-                job_analysis_id=analysis_id,
-                analysis=analysis,
-                profile=profile,
-                facts=facts,
-                policies=policies,
-                candidate=knowledge.candidate,
-                presentations=presentation_rules,
-                selection=plan.plan,
-            )
-        except ValueError as exc:
-            raise PreconditionFailed(f"draft could not be built: {exc}") from exc
+        draft = self._compose(
+            application_id=command.application_id,
+            job_snapshot_id=record["job_snapshot_id"],
+            job_analysis_id=analysis_id,
+            analysis=analysis,
+            plan=plan,
+            knowledge=knowledge,
+        )
         return PreparedDraft(
             source=draft,
             analysis=analysis,
@@ -189,7 +258,7 @@ class DraftService(ServiceBase[DraftRepository]):
             prepared.source,
         )
         stored = self.store_working_draft(working.source)
-        report = validate_draft(
+        report = run_draft_validation(
             working.source,
             stored.markdown,
             facts,
@@ -250,16 +319,38 @@ class DraftService(ServiceBase[DraftRepository]):
                 "import it with 'cv sync-draft' or regenerate the draft to discard it"
             )
 
-    def _validate_working(self, application_id: str) -> tuple[ValidationReport, str]:
+    def validate_draft(self, command: ValidateDraftCommand) -> ValidationRunResult:
+        """§15: validate one exact WorkingDraft version, always recording the run.
+
+        `passed=false` is an outcome, not an error: the run is written either
+        way, because a failed validation is exactly the evidence the user needs
+        and the state projection reads. Only a validator that could not execute
+        is a failure, and that surfaces as an infrastructure refusal rather than
+        as a report nobody produced.
+        """
+        working = self._working(command.working_draft_id, command.expected_edit_version)
         knowledge = self.load_knowledge()
+        report, validation_id = self._run_validation(working, knowledge)
+        return ValidationRunResult(
+            application_id=working.application_id,
+            working_draft_id=working.id,
+            validation_run_id=validation_id,
+            edit_version=working.edit_version,
+            content_hash=working.content_hash,
+            passed=report.passed,
+            report=report,
+        )
+
+    def _run_validation(
+        self, working: WorkingDraft, knowledge: Knowledge
+    ) -> tuple[ValidationReport, str]:
+        """Validate one loaded draft and record the immutable run for it."""
         facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
-        working = working_draft_record(self.repo, application_id)
         draft = working.source
-        _, analysis = bound_analysis(self.repo, application_id, draft, profiles, facts)
-        markdown = serialize_markdown(draft)
-        report = validate_draft(
+        _, analysis = bound_analysis(self.repo, working.application_id, draft, profiles, facts)
+        report = run_draft_validation(
             draft,
-            markdown,
+            serialize_markdown(draft),
             facts,
             profiles.get(draft.profile),
             analysis,
@@ -267,16 +358,12 @@ class DraftService(ServiceBase[DraftRepository]):
             presentations=knowledge.presentations,
         )
         validation_id = self.repo.record_validation(
-            application_id,
+            working.application_id,
             "pre-render",
             report,
             lineage=self._lineage(working, knowledge),
         )
         return report, validation_id
-
-    def validate_working(self, application_id: str) -> ValidationReport:
-        report, _validation_id = self._validate_working(application_id)
-        return report
 
     def edit_claim(
         self,
@@ -309,7 +396,7 @@ class DraftService(ServiceBase[DraftRepository]):
             raise PreconditionFailed(f"claim edit rejected: {exc}") from exc
         changed = self._commit_edit(working, updated)
         stored = self.store_working_draft(changed.source)
-        report = validate_draft(
+        report = run_draft_validation(
             changed.source,
             stored.markdown,
             facts,
@@ -350,7 +437,7 @@ class DraftService(ServiceBase[DraftRepository]):
             raise PreconditionFailed(f"working draft synchronization rejected: {exc}") from exc
         changed = self._commit_edit(working, updated)
         stored = self.store_working_draft(changed.source)
-        report = validate_draft(
+        report = run_draft_validation(
             changed.source,
             stored.markdown,
             facts,
@@ -372,20 +459,327 @@ class DraftService(ServiceBase[DraftRepository]):
             validation=report,
         )
 
-    def approve(self, application_id: str, *, revision_id: str | None = None) -> ApprovalResult:
+    def update_working_draft(self, command: UpdateWorkingDraftCommand) -> WorkingDraftUpdateResult:
+        """§14 autosave: apply one structured patch to one exact draft version.
+
+        The whole patch commits as a single edit. Applying each claim as its own
+        version would hand the client a version it never asked about and make a
+        half-applied patch indistinguishable from a completed one.
+
+        Nothing here validates. §15 owns ValidationRuns, and a run recorded on
+        every keystroke would fill the record with evidence nobody asked for and
+        make `validated` mean "recently saved" instead of "recently checked".
+        """
+        working = self._working(command.working_draft_id, command.expected_edit_version)
+        if working.content_hash != command.expected_content_hash:
+            raise StateConflict(
+                f"working draft {working.id} has content hash {working.content_hash}, "
+                f"not {command.expected_content_hash}"
+            )
+        knowledge = self.load_knowledge()
+        facts, profiles = knowledge.facts, knowledge.profiles
+        # The chain is checked before the edit, on the same terms as every other
+        # path that consumes a draft, so a draft whose lineage no longer holds is
+        # refused while nothing has been written.
+        bound_analysis(self.repo, working.application_id, working.source, profiles, facts)
+        patched = working.source
+        for edit in command.claim_edits:
+            try:
+                patched = apply_claim_edit(
+                    patched,
+                    edit.claim_id,
+                    list(edit.fact_ids),
+                    facts,
+                    text=edit.text,
+                    template_id=edit.template_id,
+                    template_version=edit.template_version,
+                )
+            except KeyError as exc:
+                raise UnknownRecord(f"unknown claim in the working draft: {edit.claim_id}") from exc
+            except ValueError as exc:
+                raise PreconditionFailed(f"claim edit rejected: {exc}") from exc
+        changed = self._commit_edit(working, patched)
+        self.store_working_draft(changed.source)
+        edited = {edit.claim_id for edit in command.claim_edits}
+        return WorkingDraftUpdateResult(
+            application_id=changed.application_id,
+            working_draft_id=changed.id,
+            edit_version=changed.edit_version,
+            content_hash=changed.content_hash,
+            selection_plan_id=changed.selection_plan_id,
+            pending_claim_ids=sorted(
+                claim.claim_id
+                for claim in draft_claims(changed.source)
+                if claim.claim_type == "pending" and claim.claim_id in edited
+            ),
+        )
+
+    def apply_selection_change(
+        self,
+        command: ApplySelectionChangeCommand,
+        *,
+        analysis_service: AnalysisService,
+    ) -> SelectionChangeResult:
+        """§14: a deterministic selection change, plan and draft committed together.
+
+        The new SelectionPlan and the draft that is built from it are one write.
+        A plan that landed without its draft would be a decision the document
+        does not reflect; a draft that landed without its plan would be content
+        with no record of what chose it.
+
+        A draft carrying manual wording takes the other branch §14 names. The
+        rebuild is deterministic, so it would replace the user's own sentences
+        with the engine's without asking - which is the definition of a change
+        that needs wording judgment.
+        """
+        working = self._working(command.working_draft_id, command.expected_edit_version)
+        if manually_edited(working.source):
+            raise PreconditionFailed(
+                "this draft carries manual wording that a deterministic rebuild would "
+                "discard; use regenerate_section or regenerate_claim to change its "
+                "selection"
+            )
+        knowledge = self.load_knowledge()
+        record = self.repo.get_analysis(working.job_analysis_id)
+        analysis: JobAnalysis = record["analysis"]
+        with self.repo.unit_of_work() as uow:
+            transaction = self.repo.bind(uow)
+            created = analysis_service.create_selection_plan(
+                CreateSelectionPlanCommand(
+                    application_id=working.application_id,
+                    job_analysis_id=working.job_analysis_id,
+                    pinned_fact_ids=list(command.pinned_fact_ids),
+                    excluded_fact_ids=list(command.excluded_fact_ids),
+                ),
+                cast(PreparationRepository, transaction),
+            )
+            source = self._compose(
+                application_id=working.application_id,
+                job_snapshot_id=record["job_snapshot_id"],
+                job_analysis_id=working.job_analysis_id,
+                analysis=analysis,
+                plan=created.plan,
+                knowledge=knowledge,
+            )
+            changed = transaction.update_working_draft(
+                working.id,
+                working.edit_version,
+                source,
+                selection_plan_id=created.selection_plan_id,
+            )
+            uow.commit()
+        self.store_working_draft(changed.source)
+        return SelectionChangeResult(
+            application_id=changed.application_id,
+            working_draft_id=changed.id,
+            edit_version=changed.edit_version,
+            content_hash=changed.content_hash,
+            selection_plan_id=changed.selection_plan_id,
+            plan=created.plan,
+        )
+
+    def materialize_draft_snapshot(self, working: WorkingDraft) -> SnapshotPayload:
+        """Write one WorkingDraft version as an immutable historical payload.
+
+        Filesystem first, registration second, exactly as approval does: a
+        registration that fails afterwards leaves a reconcilable orphan, whereas
+        a pointer written before its payload would name content that does not
+        exist.
+        """
+        _sealed, _markdown, structured_json = seal_draft(working.source)
+        try:
+            return self.revision_payloads.commit_draft_snapshot(
+                working.application_id,
+                working.id,
+                working.edit_version,
+                structured_json,
+            )
+        except FileExistsError as exc:
+            raise StateConflict(
+                f"working draft {working.id} version {working.edit_version} "
+                f"is already archived: {exc}"
+            ) from exc
+        except (OSError, ValueError) as exc:
+            raise InfrastructureFailure(f"could not archive the working draft: {exc}") from exc
+
+    def register_draft_snapshot(
+        self,
+        working: WorkingDraft,
+        payload: SnapshotPayload,
+        repository: DraftRepository,
+    ) -> str:
+        """Register one archived draft payload as an immutable artifact version."""
+        draft = working.source
+        return repository.register_artifact_version(
+            working.application_id,
+            "working_draft_snapshot",
+            "working-draft",
+            payload.reference,
+            payload.sha256,
+            "archived",
+            job_snapshot_id=draft.job_snapshot_id,
+            track=draft.track.value,
+            profile=draft.profile.value,
+            emphasis=draft.emphasis.value,
+            facts_version=draft.fact_store_version,
+            metadata={
+                "working_draft_id": working.id,
+                "edit_version": working.edit_version,
+                "content_hash": working.content_hash,
+                "job_analysis_id": working.job_analysis_id,
+                "selection_plan_id": working.selection_plan_id,
+            },
+        )
+
+    def archive_working_draft(
+        self, command: ArchiveWorkingDraftCommand
+    ) -> ArchivedWorkingDraftResult:
+        """§14: register the historical snapshot, then clear the active pointer.
+
+        The order is the contract. The pointer is cleared in the same
+        transaction as the registration, so the Application never reaches a
+        state where the draft is gone and nothing records what it said.
+        """
+        working = self._working(command.working_draft_id, command.expected_edit_version)
+        payload = self.materialize_draft_snapshot(working)
+        now = utc_now()
+        with self.repo.unit_of_work() as uow:
+            transaction = self.repo.bind(uow)
+            artifact_version_id = self.register_draft_snapshot(working, payload, transaction)
+            transaction.deactivate_working_draft(working.id, working.edit_version)
+            transaction.insert_audit(
+                AuditRecord(
+                    id=new_id(),
+                    application_id=working.application_id,
+                    action="archive_working_draft",
+                    entity_type="working_draft",
+                    entity_id=working.id,
+                    actor_type="user",
+                    client="cli",
+                    installation_id=self.installation_id,
+                    occurred_at=now,
+                    details={
+                        "artifact_version_id": artifact_version_id,
+                        "edit_version": working.edit_version,
+                    },
+                )
+            )
+            transaction.record_event(
+                working.application_id,
+                "working_draft_archived",
+                {
+                    "working_draft_id": working.id,
+                    "edit_version": working.edit_version,
+                    "artifact_version_id": artifact_version_id,
+                },
+            )
+            uow.commit()
+        return ArchivedWorkingDraftResult(
+            application_id=working.application_id,
+            working_draft_id=working.id,
+            edit_version=working.edit_version,
+            content_hash=working.content_hash,
+            artifact_version_id=artifact_version_id,
+        )
+
+    def prepare_replacement(self, command: ReplaceWorkingDraftCommand) -> WorkingDraft:
+        """§14: take the Keep decision before anything is replaced.
+
+        Replacement itself is the draft Operation, which commits the new
+        document over the same active record in one write - so nothing is
+        deleted before the replacement succeeds, and a failed Operation leaves
+        the existing draft exactly as it was. What has to happen first is Keep:
+        the historical snapshot is materialized here, and it stays true whether
+        or not the replacement that follows it succeeds.
+        """
+        working = self._working(command.working_draft_id, command.expected_edit_version)
+        if not command.keep_previous:
+            return working
+        payload = self.materialize_draft_snapshot(working)
+        with self.repo.unit_of_work() as uow:
+            transaction = self.repo.bind(uow)
+            artifact_version_id = self.register_draft_snapshot(working, payload, transaction)
+            transaction.insert_audit(
+                AuditRecord(
+                    id=new_id(),
+                    application_id=working.application_id,
+                    action="replace_working_draft",
+                    entity_type="working_draft",
+                    entity_id=working.id,
+                    actor_type="user",
+                    client="cli",
+                    installation_id=self.installation_id,
+                    occurred_at=utc_now(),
+                    details={
+                        "artifact_version_id": artifact_version_id,
+                        "edit_version": working.edit_version,
+                        "kept": True,
+                    },
+                )
+            )
+            uow.commit()
+        return working
+
+    def _require_binding_validation(
+        self, working: WorkingDraft, validation_run_id: str, knowledge: Knowledge
+    ) -> None:
+        """§15's four binding conditions, checked against a run approval did not create.
+
+        This is the whole point of taking the run ID as an argument. While
+        approval validated for itself, the four checks compared a run against
+        the draft that had just produced it, so they could not fail and proved
+        nothing. Against a run the user obtained earlier they are real: an edit
+        after validation moves the version, a re-seal moves the hash, and a run
+        from another draft names another draft.
+        """
+        try:
+            lineage = self.repo.validation_lineage(validation_run_id)
+            report = self.repo.validation_report(validation_run_id)
+        except UnknownRecord as exc:
+            raise UnknownRecord(f"unknown validation run: {validation_run_id}") from exc
+        mismatched = [
+            name
+            for name, recorded, current in (
+                ("working draft", lineage.working_draft_id, working.id),
+                ("edit version", lineage.edit_version, working.edit_version),
+                ("content hash", lineage.content_hash, working.content_hash),
+                (
+                    "knowledge context",
+                    lineage.knowledge_context_hash,
+                    sha256_text(canonical_json(knowledge.versions())),
+                ),
+            )
+            if recorded != current
+        ]
+        if mismatched:
+            raise PreconditionFailed(
+                f"validation run {validation_run_id} does not describe the draft being "
+                f"approved: {', '.join(mismatched)} differs; validate again",
+                code=VALIDATION_STALE,
+            )
+        if not report.passed:
+            raise ValidationBlocked("approval blocked by pre-render validation", report)
+
+    def approve_draft(
+        self, command: ApproveDraftCommand, *, revision_id: str | None = None
+    ) -> ApprovalResult:
+        """§15: approve exactly the content one named ValidationRun passed.
+
+        No validation runs here. Approval consumes evidence; it does not
+        manufacture it.
+        """
+        working = self._working(command.working_draft_id, command.expected_edit_version)
+        application_id = working.application_id
         quarantined = self.repo.quarantined_knowledge_mutations()
         if quarantined:
             raise PreconditionFailed(
                 f"approval blocked by quarantined Knowledge mutation {quarantined[0].id}"
             )
-        self._require_synced_projection(
-            application_id, working_draft_record(self.repo, application_id).source
-        )
-        report, validation_id = self._validate_working(application_id)
-        if not report.passed:
-            raise ValidationBlocked("approval blocked by pre-render validation", report)
-        facts, profiles, _ = self.knowledge()
-        working = working_draft_record(self.repo, application_id)
+        self._require_synced_projection(application_id, working.source)
+        knowledge = self.load_knowledge()
+        self._require_binding_validation(working, command.validation_run_id, knowledge)
+        validation_id = command.validation_run_id
+        facts, profiles = knowledge.facts, knowledge.profiles
         draft = working.source
         # SQLite is authoritative. Seal the exact stored document and commit its
         # immutable payloads before any revision row can become visible.

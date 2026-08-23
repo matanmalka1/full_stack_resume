@@ -10,7 +10,13 @@ from typing import Any
 
 import pytest
 from api_harness import api_with_worker
-from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB, CliRun, run_cli
+from helpers import (
+    ACCOUNT_MANAGER_JOB,
+    AMBIGUOUS_HEBREW_JOB,
+    CliRun,
+    approve_active_draft,
+    run_cli,
+)
 from seed import V2_IDENTITY_FACT, write_canonical_sources
 
 import cv_engine
@@ -323,7 +329,7 @@ def approved_application(drafted_application):
         job_text: str = ACCOUNT_MANAGER_JOB,
     ) -> WorkflowSetup:
         setup = drafted_application(company, role, job_text)
-        approved = setup.services.drafts.approve(setup.application_id)
+        approved = approve_active_draft(setup.services, setup.application_id)
         return replace(setup, approved=approved)
 
     return build

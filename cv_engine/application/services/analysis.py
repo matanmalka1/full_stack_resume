@@ -92,7 +92,12 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             )
         return selected
 
-    def _analysis_record(self, application_id: str, job_analysis_id: str) -> dict:
+    def _analysis_record(
+        self,
+        application_id: str,
+        job_analysis_id: str,
+        repository: PreparationRepository | None = None,
+    ) -> dict:
         """One named analysis, proven to belong to the named Application.
 
         Both IDs are explicit. Resolving the analysis from the Application would
@@ -100,7 +105,7 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         on something other than what the user was looking at.
         """
         try:
-            record = self.repo.get_analysis(job_analysis_id)
+            record = (repository or self.repo).get_analysis(job_analysis_id)
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown job analysis: {job_analysis_id}") from exc
         if record["application_id"] != application_id:
@@ -251,14 +256,24 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             analysis=prepared.result,
         )
 
-    def create_selection_plan(self, command: CreateSelectionPlanCommand) -> SelectionPlanResult:
+    def create_selection_plan(
+        self,
+        command: CreateSelectionPlanCommand,
+        repository: PreparationRepository | None = None,
+    ) -> SelectionPlanResult:
         """§13, deterministic form: synchronous, and it returns the plan itself.
 
         No provider call happens inside a synchronous request, so this path
         never needs one. The AI `propose_selection_plan` mode is the same
         command's asynchronous form and arrives with the rest of the AI tasks.
+
+        `repository` is the same escape `activate` takes: a caller that has to
+        commit this plan together with something else binds its own UnitOfWork
+        and passes the bound repository, so `apply_selection_change` gets one
+        implementation of the overlay rather than a second copy of it.
         """
-        record = self._analysis_record(command.application_id, command.job_analysis_id)
+        repo = repository or self.repo
+        record = self._analysis_record(command.application_id, command.job_analysis_id, repo)
         analysis: JobAnalysis = record["analysis"]
         knowledge = self.load_knowledge()
         self._refuse_moved_sources(command, knowledge)
@@ -280,7 +295,7 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             )
         except ValueError as exc:
             raise PreconditionFailed(f"selection plan could not be built: {exc}") from exc
-        plan = self.repo.create_selection_plan(
+        plan = repo.create_selection_plan(
             command.application_id,
             command.job_analysis_id,
             manifest,

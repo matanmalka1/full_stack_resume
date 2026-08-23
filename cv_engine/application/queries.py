@@ -6,7 +6,7 @@ import json
 from enum import StrEnum
 from typing import Any
 
-from ..domain.models import JobAnalysis
+from ..domain.models import DraftDocument, JobAnalysis
 from .commands import BoundaryDTO
 from .operations import OperationView
 
@@ -127,6 +127,34 @@ class ApplicationListItemView(ApplicationView, ApplicationStateView):
 
 class ApplicationListView(BoundaryDTO):
     items: list[ApplicationListItemView]
+
+
+class WorkingDraftView(BoundaryDTO):
+    """§20: the WorkingDraft a client edits, plus its optimistic token.
+
+    `edit_version` and `content_hash` are the two halves of the ETag. They are
+    carried as query fields rather than as a formatted token because the format
+    is HTTP's business: the application layer states what the version is, and
+    the transport decides how to spell it in a header.
+
+    `latest_validation_run_id` is what makes an approve reachable from a read.
+    Without it a client that has just seen `working_draft_state: validated`
+    would have to validate again to obtain the run ID approval requires.
+    """
+
+    id: str
+    application_id: str
+    job_analysis_id: str
+    selection_plan_id: str
+    parent_revision_id: str | None = None
+    source: DraftDocument
+    edit_version: int
+    content_hash: str
+    active: bool
+    created_at: str
+    updated_at: str
+    latest_validation_run_id: str | None = None
+    latest_validation_passed: bool | None = None
 
 
 class ArtifactVersionView(BoundaryDTO):

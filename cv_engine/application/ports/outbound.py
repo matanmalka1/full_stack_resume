@@ -84,6 +84,14 @@ class RevisionPayloadStore(SnapshotPayloadStore, Protocol):
         markdown: str,
     ) -> RevisionPayloads: ...
 
+    def commit_draft_snapshot(
+        self,
+        application_id: str,
+        working_draft_id: str,
+        edit_version: int,
+        structured_json: str,
+    ) -> SnapshotPayload: ...
+
     def render_targets(
         self,
         application_id: str,

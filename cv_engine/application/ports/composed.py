@@ -79,6 +79,15 @@ class DraftRepository(ApplicationStore, JobStore, ArtifactRegistry, WorkingDraft
         expected_version: int,
         source: DraftDocument,
         *,
+        selection_plan_id: str | None = None,
+        updated_at: str | None = None,
+    ) -> WorkingDraft: ...
+
+    def deactivate_working_draft(
+        self,
+        working_draft_id: str,
+        expected_version: int,
+        *,
         updated_at: str | None = None,
     ) -> WorkingDraft: ...
 
@@ -148,6 +157,8 @@ class QueryRepository(
     """Read sources used to build storage-neutral query projections."""
 
     def read_transaction(self) -> AbstractContextManager[Self]: ...
+
+    def working_draft(self, working_draft_id: str) -> WorkingDraft: ...
 
     def approved_revisions(self, application_id: str) -> list[ApprovedRevision]: ...
 

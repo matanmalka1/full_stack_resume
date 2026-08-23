@@ -3,7 +3,14 @@ from __future__ import annotations
 from typing import cast
 
 from ...util import canonical_json, new_id, sha256_file, sha256_text
-from ..commands import AnalyzeCommand, ApprovalResult, DraftCommand, RenderCommand
+from ..commands import (
+    AnalyzeCommand,
+    ApprovalResult,
+    ApproveDraftCommand,
+    DraftCommand,
+    RenderCommand,
+    ReplaceWorkingDraftCommand,
+)
 from ..errors import (
     IDEMPOTENCY_KEY_REUSED,
     ApplicationError,
@@ -367,6 +374,33 @@ class OperationService(ServiceBase[OperationRepository]):
             self.repo.create_operation(request, installation_id=self.installation_id)
         )
 
+    def submit_replacement_draft(
+        self,
+        command: ReplaceWorkingDraftCommand,
+        *,
+        idempotency_key: str,
+        draft_service: DraftService,
+    ) -> OperationView:
+        """§14 replace: the Keep decision, then the same draft Operation.
+
+        Replacement is generation against an Application that already has an
+        active draft, so it queues the same `CREATE_DRAFT` work and inherits its
+        frozen sources and `SOURCE_CHANGED` protection rather than growing a
+        second path that would have to repeat them. What replacement adds is the
+        two things generation has no opinion about: which exact draft version
+        the user meant to replace, and whether to keep it.
+        """
+        working = draft_service.prepare_replacement(command)
+        return self.submit_draft(
+            DraftCommand(
+                application_id=working.application_id,
+                job_analysis_id=command.job_analysis_id,
+                selection_plan_id=command.selection_plan_id,
+            ),
+            idempotency_key=idempotency_key,
+            draft_service=draft_service,
+        )
+
     def submit_render(
         self,
         command: RenderCommand,
@@ -444,9 +478,29 @@ class OperationService(ServiceBase[OperationRepository]):
             decision_record_id=decision["id"],
         )
 
+    def _approval_payload(self, command: ApproveDraftCommand) -> dict[str, object]:
+        """What the idempotency key is a key *for* (§15).
+
+        All three command arguments plus the draft's content hash. The hash is
+        not derivable from the other three - it is what the draft actually says
+        right now - so without it a key replayed after an edit would look like
+        the same request and return a revision of different content.
+        """
+        drafts = cast(DraftRepository, self.repo)
+        try:
+            working = drafts.working_draft(command.working_draft_id)
+        except UnknownRecord as exc:
+            raise UnknownRecord(f"unknown working draft: {command.working_draft_id}") from exc
+        return {
+            "working_draft_id": command.working_draft_id,
+            "expected_edit_version": command.expected_edit_version,
+            "validation_run_id": command.validation_run_id,
+            "content_hash": working.content_hash,
+        }
+
     def approve_idempotent(
         self,
-        application_id: str,
+        command: ApproveDraftCommand,
         *,
         idempotency_key: str,
         draft_service: DraftService,
@@ -458,9 +512,9 @@ class OperationService(ServiceBase[OperationRepository]):
             installation_id=self.installation_id,
         )
         if existing is not None:
-            if existing["payload"].get("application_id") != application_id:
+            if existing["payload"].get("working_draft_id") != command.working_draft_id:
                 raise StateConflict(
-                    "idempotency key already used for another application",
+                    "idempotency key already used for another working draft",
                     code=IDEMPOTENCY_KEY_REUSED,
                 )
             completed = self._approval_result(existing["reserved_entity_id"])
@@ -470,43 +524,23 @@ class OperationService(ServiceBase[OperationRepository]):
                         existing["id"], completed.model_dump(mode="json")
                     )
                 return completed
-            payload = existing["payload"]
-            try:
-                working = cast(DraftRepository, self.repo).active_working_draft(application_id)
-            except UnknownRecord as exc:
-                raise StateConflict("pending approval has no recoverable WorkingDraft") from exc
-            if payload != {
-                "application_id": application_id,
-                "working_draft_id": working.id,
-                "edit_version": working.edit_version,
-                "content_hash": working.content_hash,
-            }:
+            if existing["payload"] != self._approval_payload(command):
                 raise StateConflict(
                     "idempotency key already used for a different draft version",
                     code=IDEMPOTENCY_KEY_REUSED,
                 )
             receipt = existing
         else:
-            try:
-                working = cast(DraftRepository, self.repo).active_working_draft(application_id)
-            except UnknownRecord as exc:
-                raise UnknownRecord(f"no working draft for application: {application_id}") from exc
-            payload = {
-                "application_id": application_id,
-                "working_draft_id": working.id,
-                "edit_version": working.edit_version,
-                "content_hash": working.content_hash,
-            }
             receipt = self.repo.claim_idempotency_receipt(
                 command_type,
                 idempotency_key,
-                payload,
+                self._approval_payload(command),
                 installation_id=self.installation_id,
                 reserved_entity_id=new_id(),
             )
         try:
-            result = draft_service.approve(
-                application_id,
+            result = draft_service.approve_draft(
+                command,
                 revision_id=receipt["reserved_entity_id"],
             )
         except ApplicationError:

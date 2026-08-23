@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 import pytest
-from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB
+from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB, approve_active_draft
 
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
 from cv_engine.application.queries import PreparationState, WorkingDraftState
@@ -56,7 +56,7 @@ def test_application_projection_follows_the_preparation_lifecycle(services) -> N
     assert detail.recommended_action == "approve"
     assert "approve" in detail.available_actions
 
-    approved = services.drafts.approve(ingested.application_id)
+    approved = approve_active_draft(services, ingested.application_id)
     detail = services.queries.application_detail(ingested.application_id)
     assert detail.preparation_state is PreparationState.APPROVED
     assert detail.working_draft_state is WorkingDraftState.NONE

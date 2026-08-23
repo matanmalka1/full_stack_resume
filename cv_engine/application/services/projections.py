@@ -16,6 +16,7 @@ from ..queries import (
     ApplicationListView,
     ArtifactVersionsView,
     DecisionRecordView,
+    WorkingDraftView,
     analysis_view,
     application_list_item_view,
     application_view,
@@ -156,6 +157,32 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
             )
         except (TypeError, ValueError) as exc:
             raise InfrastructureFailure(f"stored artifact projection is invalid: {exc}") from exc
+
+    def working_draft(self, working_draft_id: str) -> WorkingDraftView:
+        """§20: one WorkingDraft by ID, with the token a client conditions on.
+
+        Read by ID rather than by Application: the client that is about to
+        `PATCH` one has to name the draft it is editing, and a read that
+        resolved `latest` for it could hand back a different draft than the one
+        the ETag it then sends was taken from.
+        """
+        try:
+            working = self.repo.working_draft(working_draft_id)
+        except UnknownRecord as exc:
+            raise UnknownRecord(f"unknown working draft: {working_draft_id}") from exc
+        latest = self.repo.latest_validation_for_working_draft(working_draft_id)
+        exact = (
+            latest
+            if latest is not None
+            and latest["edit_version"] == working.edit_version
+            and latest["content_hash"] == working.content_hash
+            else None
+        )
+        return WorkingDraftView(
+            **working.model_dump(mode="python"),
+            latest_validation_run_id=exact["id"] if exact else None,
+            latest_validation_passed=exact["report"].passed if exact else None,
+        )
 
     def latest_decision(self, application_id: str) -> DecisionRecordView:
         try:

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import patch
 
+from cv_engine.application.commands import ApproveDraftCommand, ValidateDraftCommand
 from cv_engine.cli import main as cli_main
 from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
@@ -52,6 +53,42 @@ PAYME_TECH_SALES_JOB = (
     "customers, and maintain Sales progress and follow-up tasks in our CRM system. "
     "Prefer inside Sales experience in a SaaS or tech-related industry."
 )
+
+
+def validate_active_draft(services: Services, application_id: str):
+    """Validate the Application's active draft and return the run result.
+
+    The v2 command takes a WorkingDraft ID and an exact edit version, so
+    resolving "the active one" is the caller's job. Every test that used to
+    call `validate_working(application_id)` resolves it the same way here
+    rather than each writing its own two lines.
+    """
+    working = services.repository.active_working_draft(application_id)
+    return services.drafts.validate_draft(
+        ValidateDraftCommand(
+            working_draft_id=working.id,
+            expected_edit_version=working.edit_version,
+        )
+    )
+
+
+def approve_active_draft(services: Services, application_id: str, *, revision_id=None):
+    """Validate, then approve exactly what that run passed.
+
+    This is what `cv approve` does at the CLI boundary, and it is what every
+    caller must now do: approval no longer validates for itself, so a test that
+    approves has to obtain the run first - which is the whole point of the
+    change.
+    """
+    validated = validate_active_draft(services, application_id)
+    return services.drafts.approve_draft(
+        ApproveDraftCommand(
+            working_draft_id=validated.working_draft_id,
+            expected_edit_version=validated.edit_version,
+            validation_run_id=validated.validation_run_id,
+        ),
+        revision_id=revision_id,
+    )
 
 
 def working_claim(services: Services, application_id: str, fact_id: str):

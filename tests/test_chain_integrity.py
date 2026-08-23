@@ -14,7 +14,7 @@ import uuid
 from pathlib import Path
 
 import pytest
-from helpers import ACCOUNT_MANAGER_JOB
+from helpers import ACCOUNT_MANAGER_JOB, approve_active_draft, validate_active_draft
 
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
 from cv_engine.application.errors import (
@@ -171,7 +171,7 @@ def test_newer_material_analysis_invalidates_the_working_draft(
     before = _persisted(services)
 
     with pytest.raises(WorkflowError, match="analysis"):
-        services.drafts.approve(app_id)
+        approve_active_draft(services, app_id)
 
     assert not (workspace_root / "artifacts" / app_id).exists()
     assert _persisted(services) == before
@@ -182,7 +182,7 @@ def test_newer_material_analysis_invalidates_the_working_draft(
     manifest = services.artifacts.working_paths(app_id).manifest
     assert drafted.validation.passed, drafted.validation.model_dump()
     assert parse_draft(manifest.read_text(encoding="utf-8")).job_analysis_id == newer.analysis_id
-    services.drafts.approve(app_id)
+    approve_active_draft(services, app_id)
     assert services.repository.latest_decision(app_id)["job_analysis_id"] == newer.analysis_id
 
 
@@ -225,7 +225,7 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
 
     monkeypatch.setattr(SqliteDraftRepository, "create_approved_revision", require_payloads_first)
 
-    approved = services.drafts.approve(app_id)
+    approved = approve_active_draft(services, app_id)
 
     decision = services.repository.latest_decision(app_id)
     assert decision["job_analysis_id"] == bound_analysis_id
@@ -317,7 +317,7 @@ def test_foreign_working_projection_cannot_replace_the_sqlite_source(
     # the projection disagrees with the stored draft, so a corrupted or
     # hand-copied working file cannot reach a revision at all.
     with pytest.raises(StateConflict, match="differs from the stored draft"):
-        services.drafts.approve(target.application_id)
+        approve_active_draft(services, target.application_id)
 
     assert _persisted(services) == before_target
     assert _persisted(services) == before_other
@@ -331,7 +331,7 @@ def test_foreign_working_projection_cannot_replace_the_sqlite_source(
     )
     restored = services.artifacts.load_working_draft(target.application_id)
     assert restored.application_id == target.application_id
-    approved = services.drafts.approve(target.application_id)
+    approved = approve_active_draft(services, target.application_id)
     assert approved.application_id == target.application_id
 
 
@@ -350,7 +350,7 @@ def test_approval_builds_typed_decision_and_artifacts_cannot_cross_applications(
         original_insert(repository, record)
 
     monkeypatch.setattr(SqliteArtifactRepository, "insert_decision", capture_insert)
-    approved = services.drafts.approve(owner.application_id)
+    approved = approve_active_draft(services, owner.application_id)
     owner_markdown = services.repository.latest_artifact_version(
         owner.application_id, "resume_markdown", "approved"
     )
@@ -433,7 +433,7 @@ def test_projection_manifest_changes_do_not_mutate_the_working_draft_record(
         payload = json.loads(original)
         payload[field] = value
         manifest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-        assert services.drafts.validate_working(app_id).passed
+        assert validate_active_draft(services, app_id).passed
         assert not (workspace_root / "artifacts" / app_id).exists()
         assert services.repository.active_working_draft(app_id) == authoritative
     manifest.write_text(original, encoding="utf-8")

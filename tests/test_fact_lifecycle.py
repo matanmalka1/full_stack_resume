@@ -5,6 +5,7 @@ import uuid
 from pathlib import Path
 
 import pytest
+from helpers import approve_active_draft
 from helpers import working_claim as _working_claim
 
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand
@@ -250,7 +251,7 @@ def test_quarantine_blocks_approval_but_keeps_history_readable(drafted_applicati
 
     assert services.knowledge_lifecycle.fact_history().events == []
     with pytest.raises(PreconditionFailed, match="approval blocked by quarantined Knowledge"):
-        services.drafts.approve(application_id)
+        approve_active_draft(services, application_id)
 
 
 def test_confirm_and_use_is_one_journaled_fact_profile_and_plan_command(
