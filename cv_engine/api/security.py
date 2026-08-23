@@ -77,9 +77,23 @@ class BodySizeLimitMiddleware:
         replayed = False
 
         async def replay() -> Message:
+            """Hand the buffered body over once, then get out of the way.
+
+            Everything after the replayed body must come from the real client
+            channel. Returning a fabricated `http.disconnect` here instead is
+            correct-looking and wrong: `StreamingResponse` runs
+            `listen_for_disconnect(receive)` concurrently with the send loop and
+            cancels the whole task group as soon as it sees a disconnect, so a
+            synthetic one arrives immediately and kills the response before a
+            single byte is written. A client then gets `200`, the right headers,
+            and an empty body.
+
+            No JSON response listens for disconnect, which is why this was
+            invisible from Stage A until the first streaming route existed.
+            """
             nonlocal replayed
             if replayed:
-                return {"type": "http.disconnect"}
+                return await receive()
             replayed = True
             return {"type": "http.request", "body": bytes(body), "more_body": False}
 

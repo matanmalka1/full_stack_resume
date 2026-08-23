@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 from fastapi import FastAPI, Request
+from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
 
 from cv_engine.api.app import API_PREFIX, DEFAULT_PORT, create_app
@@ -154,6 +155,37 @@ def test_a_body_within_the_limit_arrives_intact_at_the_route() -> None:
 
     assert response.status_code == 200
     assert response.json() == {"seen": "the exact bytes"}
+
+
+def test_a_streaming_response_survives_the_body_limit_middleware() -> None:
+    """The limit must not eat the *response* either, and once it did.
+
+    `StreamingResponse` runs `listen_for_disconnect(receive)` concurrently with
+    its send loop and cancels the whole task group the moment `receive()`
+    reports a disconnect. The middleware's replay channel used to fabricate one
+    as soon as the buffered body had been handed over, so every streamed
+    response was cancelled before a single byte was written: `200`, correct
+    headers, empty body.
+
+    No JSON response listens for disconnect, so this was invisible from Stage A
+    through Stage E and only surfaced when Stage F added the first streaming
+    route. The regression lives here, at the middleware, rather than on an
+    artifact route - the defect is not about artifacts, and a test on the
+    download endpoint would stop covering it the day that endpoint changed.
+    """
+    app = FastAPI()
+
+    @app.get("/stream")
+    def stream() -> StreamingResponse:
+        return StreamingResponse(iter([b"first-", b"second"]), media_type="text/plain")
+
+    app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=1024)
+
+    with TestClient(app) as client:
+        response = client.get("/stream")
+
+    assert response.status_code == 200
+    assert response.content == b"first-second"
 
 
 def _echo_app() -> FastAPI:
