@@ -9,6 +9,15 @@ save is allowed, what a validation means, or what approval requires.
 expected version in the body because they are actions on a resource rather than
 conditional replacements of it, and because an action that silently accepted
 `If-Match: *` would be exactly the lost update the header exists to prevent.
+
+Every command that writes provenance is told it is being called from the web.
+The application layer defaults to `cli` because the CLI is the older caller, so
+a router that stayed silent would record a browser's approval as a person at a
+terminal - permanently, in an immutable `decision_provenance`.
+
+Draft generation and replacement are not here. They are addressed to the
+Application, which owns the one active draft, and live beside `analyses` in the
+applications router.
 """
 
 from __future__ import annotations
@@ -20,7 +29,6 @@ from ...application.commands import (
     ApproveDraftCommand,
     ArchiveWorkingDraftCommand,
     ClaimPatch,
-    ReplaceWorkingDraftCommand,
     UpdateWorkingDraftCommand,
     ValidateDraftCommand,
 )
@@ -28,13 +36,11 @@ from ...util import new_id
 from ..dependencies import Services
 from ..etags import IfMatch, draft_etag, parse_draft_etag
 from ..headers import IdempotencyKey
-from ..responses import accepted_operation
 from ..schemas.drafts import (
     ApplySelectionChangeRequest,
     ApprovalResponse,
     ApproveDraftRequest,
     ArchivedWorkingDraftResponse,
-    ReplaceWorkingDraftRequest,
     SelectionChangeResponse,
     UpdateWorkingDraftRequest,
     ValidationRunResponse,
@@ -42,7 +48,6 @@ from ..schemas.drafts import (
     WorkingDraftUpdateResponse,
     WorkingDraftVersionRequest,
 )
-from ..schemas.operations import OperationResponse
 
 router = APIRouter(prefix="/working-drafts", tags=["working-drafts"])
 
@@ -138,40 +143,11 @@ def archive_working_draft(
         ArchiveWorkingDraftCommand(
             working_draft_id=working_draft_id,
             **request.model_dump(mode="python"),
+            actor_type="user",
+            client="web",
         )
     )
     return ArchivedWorkingDraftResponse.model_validate(result.model_dump(mode="json"))
-
-
-@router.post(
-    "/{working_draft_id}/replace",
-    response_model=OperationResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Replace the draft from an explicit compatible analysis and plan",
-)
-def replace_working_draft(
-    working_draft_id: str,
-    request: ReplaceWorkingDraftRequest,
-    services: Services,
-    response: Response,
-    idempotency_key: IdempotencyKey = None,
-) -> OperationResponse:
-    """`202` and a `Location`: replacement is the draft Operation (§14).
-
-    Nothing is deleted first. The Operation commits the new document over the
-    same active record, so a failure leaves the existing draft untouched, and
-    `keep_previous` materializes the historical snapshot before any of it
-    starts.
-    """
-    queued = services.operations.submit_replacement_draft(
-        ReplaceWorkingDraftCommand(
-            working_draft_id=working_draft_id,
-            **request.model_dump(mode="python"),
-        ),
-        idempotency_key=idempotency_key or new_id(),
-        draft_service=services.drafts,
-    )
-    return accepted_operation(response, queued)
 
 
 @router.post(
@@ -221,6 +197,8 @@ def approve_working_draft(
         ApproveDraftCommand(
             working_draft_id=working_draft_id,
             **request.model_dump(mode="python"),
+            actor_type="user",
+            client="web",
         ),
         idempotency_key=idempotency_key or new_id(),
         draft_service=services.drafts,

@@ -155,14 +155,26 @@ class ApplySelectionChangeCommand(SelectionOverlay):
 
 
 class ArchiveWorkingDraftCommand(BoundaryDTO):
-    """§14: materialize the historical snapshot, then clear the active pointer."""
+    """§14: materialize the historical snapshot, then clear the active pointer.
+
+    `actor_type` and `client` are carried rather than assumed, because this
+    command writes an audit record. A Web archive recorded as `cli` is a false
+    statement in the one place that exists to answer who did it.
+    """
 
     working_draft_id: str
     expected_edit_version: int
+    actor_type: Literal["user", "system"] = "user"
+    client: Literal["web", "cli", "worker"] = "cli"
 
 
 class ReplaceWorkingDraftCommand(BoundaryDTO):
     """§14: replace one exact draft from an explicit compatible analysis and plan.
+
+    `application_id` is stated by the caller rather than read off the draft. The
+    client says which Application it believes it is replacing a draft for, and a
+    draft that belongs to another one is a `412` naming the broken lineage -
+    the same rule Stage D applied to `apply_analysis_decisions`.
 
     `keep_previous` is the user's Keep decision. It materializes the immutable
     historical snapshot *before* the replacement is attempted, which is safe in
@@ -171,11 +183,14 @@ class ReplaceWorkingDraftCommand(BoundaryDTO):
     draft is committed.
     """
 
+    application_id: str
     working_draft_id: str
     expected_edit_version: int
     job_analysis_id: str
     selection_plan_id: str
     keep_previous: bool = False
+    actor_type: Literal["user", "system"] = "user"
+    client: Literal["web", "cli", "worker"] = "cli"
 
 
 class ValidateDraftCommand(BoundaryDTO):
@@ -191,11 +206,18 @@ class ApproveDraftCommand(BoundaryDTO):
     All three identities are the caller's. Approval re-checks the binding
     between them; it never runs its own validation, because a validation
     approval creates for itself can only ever agree with approval.
+
+    `actor_type` and `client` reach the ApprovedRevision's `decision_provenance`,
+    which is immutable. Getting them wrong is not a mislabelled log line: it is
+    a permanent record saying a person at a terminal approved something a
+    browser did.
     """
 
     working_draft_id: str
     expected_edit_version: int
     validation_run_id: str
+    actor_type: Literal["user", "system"] = "user"
+    client: Literal["web", "cli", "worker"] = "cli"
 
 
 class RenderCommand(BoundaryDTO):

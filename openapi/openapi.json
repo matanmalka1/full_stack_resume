@@ -2139,7 +2139,7 @@
       },
       "ReplaceWorkingDraftRequest": {
         "additionalProperties": false,
-        "description": "Replacement names its own compatible analysis and plan (§14).\n\n`keep_previous` is the Keep decision: it materializes the immutable\nhistorical snapshot before the replacement is attempted.",
+        "description": "Replacement names its own compatible analysis and plan (§14).\n\nThe route is `POST /applications/{id}/working-draft/replace`, so the path\ncarries the Application and the body carries the draft. Both are explicit\nand neither is inferred from the other: the client states which draft of\nwhich Application it means, and a pair that does not match is a `412`.\n\n`keep_previous` is the Keep decision: it materializes the immutable\nhistorical snapshot before the replacement is attempted.",
         "properties": {
           "expected_edit_version": {
             "title": "Expected Edit Version",
@@ -2157,10 +2157,15 @@
           "selection_plan_id": {
             "title": "Selection Plan Id",
             "type": "string"
+          },
+          "working_draft_id": {
+            "title": "Working Draft Id",
+            "type": "string"
           }
         },
         "required": [
           "expected_edit_version",
+          "working_draft_id",
           "job_analysis_id",
           "selection_plan_id"
         ],
@@ -3135,6 +3140,77 @@
         ]
       }
     },
+    "/api/v1/applications/{application_id}/working-draft/replace": {
+      "post": {
+        "description": "`202` and a `Location`: replacement is the draft Operation (§14).\n\nAddressed to the Application, beside `generate`, because the Application is\nwhat owns the one active draft. The body still names the exact draft and the\nexact version being replaced, and a draft belonging to another Application\nis a `412` naming the broken lineage rather than a replacement landing\nsomewhere nobody asked for.\n\nNothing is deleted first. The Operation commits the new document over the\nsame active record, so a failure leaves the existing draft untouched, and\n`keep_previous` materializes the historical snapshot before any of it\nstarts.",
+        "operationId": "replace_working_draft_api_v1_applications__application_id__working_draft_replace_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceWorkingDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Replace the active working draft from an explicit analysis and plan",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
     "/api/v1/health": {
       "get": {
         "operationId": "health_api_v1_health_get",
@@ -3579,77 +3655,6 @@
           }
         },
         "summary": "Archive the draft as an immutable historical snapshot",
-        "tags": [
-          "working-drafts"
-        ]
-      }
-    },
-    "/api/v1/working-drafts/{working_draft_id}/replace": {
-      "post": {
-        "description": "`202` and a `Location`: replacement is the draft Operation (§14).\n\nNothing is deleted first. The Operation commits the new document over the\nsame active record, so a failure leaves the existing draft untouched, and\n`keep_previous` materializes the historical snapshot before any of it\nstarts.",
-        "operationId": "replace_working_draft_api_v1_working_drafts__working_draft_id__replace_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "working_draft_id",
-            "required": true,
-            "schema": {
-              "title": "Working Draft Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does.",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does.",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReplaceWorkingDraftRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Replace the draft from an explicit compatible analysis and plan",
         "tags": [
           "working-drafts"
         ]

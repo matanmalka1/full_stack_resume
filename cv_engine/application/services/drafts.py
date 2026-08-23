@@ -654,8 +654,8 @@ class DraftService(ServiceBase[DraftRepository]):
                     action="archive_working_draft",
                     entity_type="working_draft",
                     entity_id=working.id,
-                    actor_type="user",
-                    client="cli",
+                    actor_type=command.actor_type,
+                    client=command.client,
                     installation_id=self.installation_id,
                     occurred_at=now,
                     details={
@@ -693,6 +693,11 @@ class DraftService(ServiceBase[DraftRepository]):
         or not the replacement that follows it succeeds.
         """
         working = self._working(command.working_draft_id, command.expected_edit_version)
+        if working.application_id != command.application_id:
+            raise LineageBroken(
+                f"working draft {working.id} does not belong to application "
+                f"{command.application_id}"
+            )
         if not command.keep_previous:
             return working
         payload = self.materialize_draft_snapshot(working)
@@ -706,8 +711,8 @@ class DraftService(ServiceBase[DraftRepository]):
                     action="replace_working_draft",
                     entity_type="working_draft",
                     entity_id=working.id,
-                    actor_type="user",
-                    client="cli",
+                    actor_type=command.actor_type,
+                    client=command.client,
                     installation_id=self.installation_id,
                     occurred_at=utc_now(),
                     details={
@@ -845,8 +850,8 @@ class DraftService(ServiceBase[DraftRepository]):
             f"{application['company']}."
         )
         decision_provenance = {
-            "actor_type": "user",
-            "client": "cli",
+            "actor_type": command.actor_type,
+            "client": command.client,
             "command": "approve_draft",
             "installation_id": self.installation_id,
         }
@@ -914,8 +919,8 @@ class DraftService(ServiceBase[DraftRepository]):
                     action="approve_draft",
                     entity_type="approved_revision",
                     entity_id=revision.id,
-                    actor_type="user",
-                    client="cli",
+                    actor_type=command.actor_type,
+                    client=command.client,
                     installation_id=self.installation_id,
                     occurred_at=now,
                     details={

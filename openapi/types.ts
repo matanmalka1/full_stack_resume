@@ -223,6 +223,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/applications/{application_id}/working-draft/replace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace the active working draft from an explicit analysis and plan
+         * @description `202` and a `Location`: replacement is the draft Operation (§14).
+         *
+         *     Addressed to the Application, beside `generate`, because the Application is
+         *     what owns the one active draft. The body still names the exact draft and the
+         *     exact version being replaced, and a draft belonging to another Application
+         *     is a `412` naming the broken lineage rather than a replacement landing
+         *     somewhere nobody asked for.
+         *
+         *     Nothing is deleted first. The Operation commits the new document over the
+         *     same active record, so a failure leaves the existing draft untouched, and
+         *     `keep_previous` materializes the historical snapshot before any of it
+         *     starts.
+         */
+        post: operations["replace_working_draft_api_v1_applications__application_id__working_draft_replace_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -395,31 +426,6 @@ export interface paths {
          * @description `200`: the snapshot is registered before the active pointer is cleared.
          */
         post: operations["archive_working_draft_api_v1_working_drafts__working_draft_id__archive_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/working-drafts/{working_draft_id}/replace": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Replace the draft from an explicit compatible analysis and plan
-         * @description `202` and a `Location`: replacement is the draft Operation (§14).
-         *
-         *     Nothing is deleted first. The Operation commits the new document over the
-         *     same active record, so a failure leaves the existing draft untouched, and
-         *     `keep_previous` materializes the historical snapshot before any of it
-         *     starts.
-         */
-        post: operations["replace_working_draft_api_v1_working_drafts__working_draft_id__replace_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1164,6 +1170,11 @@ export interface components {
          * ReplaceWorkingDraftRequest
          * @description Replacement names its own compatible analysis and plan (§14).
          *
+         *     The route is `POST /applications/{id}/working-draft/replace`, so the path
+         *     carries the Application and the body carries the draft. Both are explicit
+         *     and neither is inferred from the other: the client states which draft of
+         *     which Application it means, and a pair that does not match is a `412`.
+         *
          *     `keep_previous` is the Keep decision: it materializes the immutable
          *     historical snapshot before the replacement is attempted.
          */
@@ -1179,6 +1190,8 @@ export interface components {
             keep_previous: boolean;
             /** Selection Plan Id */
             selection_plan_id: string;
+            /** Working Draft Id */
+            working_draft_id: string;
         };
         /** SelectionChangeResponse */
         SelectionChangeResponse: {
@@ -1740,6 +1753,44 @@ export interface operations {
             };
         };
     };
+    replace_working_draft_api_v1_applications__application_id__working_draft_replace_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceWorkingDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     health_api_v1_health_get: {
         parameters: {
             query?: never;
@@ -2020,44 +2071,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ArchivedWorkingDraftResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    replace_working_draft_api_v1_working_drafts__working_draft_id__replace_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does. */
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                working_draft_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReplaceWorkingDraftRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OperationResponse"];
                 };
             };
             /** @description Validation Error */

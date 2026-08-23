@@ -389,11 +389,14 @@ class OperationService(ServiceBase[OperationRepository]):
         second path that would have to repeat them. What replacement adds is the
         two things generation has no opinion about: which exact draft version
         the user meant to replace, and whether to keep it.
+
+        `prepare_replacement` is what proves the named draft belongs to the
+        named Application before any of that starts.
         """
-        working = draft_service.prepare_replacement(command)
+        draft_service.prepare_replacement(command)
         return self.submit_draft(
             DraftCommand(
-                application_id=working.application_id,
+                application_id=command.application_id,
                 job_analysis_id=command.job_analysis_id,
                 selection_plan_id=command.selection_plan_id,
             ),

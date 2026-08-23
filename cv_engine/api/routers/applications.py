@@ -9,6 +9,7 @@ from ...application.commands import (
     DraftCommand,
     DuplicateCheckCommand,
     IngestCommand,
+    ReplaceWorkingDraftCommand,
 )
 from ...util import new_id
 from ..dependencies import Services
@@ -28,7 +29,7 @@ from ..schemas.applications import (
     DuplicateCheckRequest,
     DuplicateCheckResponse,
 )
-from ..schemas.drafts import GenerateWorkingDraftRequest
+from ..schemas.drafts import GenerateWorkingDraftRequest, ReplaceWorkingDraftRequest
 from ..schemas.operations import OperationResponse
 
 router = APIRouter(prefix="/applications", tags=["applications"])
@@ -178,6 +179,45 @@ def generate_working_draft(
         DraftCommand(
             application_id=application_id,
             **request.model_dump(mode="python"),
+        ),
+        idempotency_key=idempotency_key or new_id(),
+        draft_service=services.drafts,
+    )
+    return accepted_operation(response, queued)
+
+
+@router.post(
+    "/{application_id}/working-draft/replace",
+    response_model=OperationResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Replace the active working draft from an explicit analysis and plan",
+)
+def replace_working_draft(
+    application_id: str,
+    request: ReplaceWorkingDraftRequest,
+    services: Services,
+    response: Response,
+    idempotency_key: IdempotencyKey = None,
+) -> OperationResponse:
+    """`202` and a `Location`: replacement is the draft Operation (§14).
+
+    Addressed to the Application, beside `generate`, because the Application is
+    what owns the one active draft. The body still names the exact draft and the
+    exact version being replaced, and a draft belonging to another Application
+    is a `412` naming the broken lineage rather than a replacement landing
+    somewhere nobody asked for.
+
+    Nothing is deleted first. The Operation commits the new document over the
+    same active record, so a failure leaves the existing draft untouched, and
+    `keep_previous` materializes the historical snapshot before any of it
+    starts.
+    """
+    queued = services.operations.submit_replacement_draft(
+        ReplaceWorkingDraftCommand(
+            application_id=application_id,
+            **request.model_dump(mode="python"),
+            actor_type="user",
+            client="web",
         ),
         idempotency_key=idempotency_key or new_id(),
         draft_service=services.drafts,

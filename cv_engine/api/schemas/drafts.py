@@ -73,10 +73,16 @@ class WorkingDraftVersionRequest(HttpSchema):
 class ReplaceWorkingDraftRequest(WorkingDraftVersionRequest):
     """Replacement names its own compatible analysis and plan (§14).
 
+    The route is `POST /applications/{id}/working-draft/replace`, so the path
+    carries the Application and the body carries the draft. Both are explicit
+    and neither is inferred from the other: the client states which draft of
+    which Application it means, and a pair that does not match is a `412`.
+
     `keep_previous` is the Keep decision: it materializes the immutable
     historical snapshot before the replacement is attempted.
     """
 
+    working_draft_id: str
     job_analysis_id: str
     selection_plan_id: str
     keep_previous: bool = False
