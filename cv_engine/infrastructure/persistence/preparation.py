@@ -4,6 +4,12 @@ import json
 from pathlib import Path
 from typing import Any, Self
 
+from ...application.errors import (
+    LineageBroken,
+    PreconditionFailed,
+    StateConflict,
+    UnknownRecord,
+)
 from ...application.ports import UnitOfWork
 from ...domain.models import (
     JobAnalysis,
@@ -32,9 +38,9 @@ def _require_owned_snapshot(
         "SELECT application_id FROM job_snapshots WHERE id=?", (snapshot_id,)
     ).fetchone()
     if row is None:
-        raise ValueError(f"a {subject} cannot reference an unknown job snapshot: {snapshot_id}")
+        raise LineageBroken(f"a {subject} cannot reference an unknown job snapshot: {snapshot_id}")
     if row["application_id"] != application_id:
-        raise ValueError(
+        raise LineageBroken(
             f"a {subject} cannot reference a job snapshot belonging to another application"
         )
 
@@ -81,9 +87,9 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
         installation_id: str = "unconfigured-test-installation",
     ) -> tuple[str, str]:
         if not company.strip() or not target_role.strip():
-            raise ValueError("company and target role are required")
+            raise PreconditionFailed("company and target role are required")
         if not payload_path or not source_hash or not normalized_hash:
-            raise ValueError("snapshot payload path and hashes are required")
+            raise PreconditionFailed("snapshot payload path and hashes are required")
         app_id = application_id or new_id()
         snap_id = snapshot_id or new_id()
         now = captured_at or utc_now()
@@ -193,7 +199,7 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
                 (application_id,),
             ).fetchone()
             if prior is None:
-                raise KeyError(application_id)
+                raise UnknownRecord(application_id)
             resolved_snapshot_id = snapshot_id or new_id()
             connection.execute(
                 "INSERT INTO job_snapshots(id, application_id, version_number, payload_path, source_hash, normalized_hash, source_url, captured_at, source_metadata_json, content_hash, prior_snapshot_id) "
@@ -222,7 +228,7 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
                 (application_id,),
             ).fetchone()
         if row is None:
-            raise KeyError(f"no snapshot for application {application_id}")
+            raise UnknownRecord(f"no snapshot for application {application_id}")
         return dict(row)
 
     def get_snapshot(self, snapshot_id: str) -> dict[str, Any]:
@@ -232,7 +238,7 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
                 (snapshot_id,),
             ).fetchone()
         if row is None:
-            raise KeyError(f"no job snapshot {snapshot_id}")
+            raise UnknownRecord(f"no job snapshot {snapshot_id}")
         return dict(row)
 
     def save_analysis(
@@ -340,7 +346,7 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
                 }
                 actual = {key: getattr(stored, key) for key in expected}
                 if actual != expected:
-                    raise ValueError("selection plan identity already has different content")
+                    raise StateConflict("selection plan identity already has different content")
                 return stored
             self._insert_selection_plan(
                 connection,
@@ -378,7 +384,7 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
             "SELECT application_id FROM job_analyses WHERE id=?", (job_analysis_id,)
         ).fetchone()
         if analysis is None or analysis["application_id"] != application_id:
-            raise ValueError(
+            raise LineageBroken(
                 "a selection plan cannot reference a job analysis belonging to another application"
             )
         version = connection.execute(
@@ -410,7 +416,7 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
     @staticmethod
     def _selection_plan_record(row: Any) -> SelectionPlan:
         if row is None:
-            raise KeyError("selection plan does not exist")
+            raise UnknownRecord("selection plan does not exist")
         record = dict(row)
         return SelectionPlan(
             id=record["id"],
@@ -432,7 +438,7 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
                 "SELECT * FROM selection_plans WHERE id=?", (selection_plan_id,)
             ).fetchone()
         if row is None:
-            raise KeyError(f"no selection plan {selection_plan_id}")
+            raise UnknownRecord(f"no selection plan {selection_plan_id}")
         return self._selection_plan_record(row)
 
     def latest_selection_plan(self, application_id: str) -> SelectionPlan:
@@ -443,7 +449,7 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
                 (application_id,),
             ).fetchone()
         if row is None:
-            raise KeyError(f"no selection plan for application {application_id}")
+            raise UnknownRecord(f"no selection plan for application {application_id}")
         return self._selection_plan_record(row)
 
     @staticmethod
@@ -458,7 +464,7 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
                 "SELECT * FROM job_analyses WHERE id=?", (analysis_id,)
             ).fetchone()
         if row is None:
-            raise KeyError(f"no job analysis {analysis_id}")
+            raise UnknownRecord(f"no job analysis {analysis_id}")
         return self._analysis_record(row)
 
     def analyses(self, application_id: str) -> list[dict[str, Any]]:
@@ -477,5 +483,5 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
                 (application_id,),
             ).fetchone()
         if row is None:
-            raise KeyError(f"no analysis for application {application_id}")
+            raise UnknownRecord(f"no analysis for application {application_id}")
         return row["id"], JobAnalysis.model_validate_json(row["structured_json"])

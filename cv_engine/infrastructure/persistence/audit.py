@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ...application.errors import StateConflict
 from ...domain.models import AuditRecord
 from ...util import canonical_json, new_id, sha256_text, utc_now
 from .base import SqliteRepositoryBase
@@ -77,7 +78,7 @@ class SqliteAuditRepository(SqliteRepositoryBase):
             ).fetchone()
             if existing is not None:
                 if dict(existing) != values:
-                    raise ValueError("fact event identity already has different content")
+                    raise StateConflict("fact event identity already has different content")
                 return event_id
             connection.execute(
                 "INSERT INTO fact_events(id, fact_id, source_file, event_type, from_status, "

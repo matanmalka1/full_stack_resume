@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from ...application.errors import (
+    LineageBroken,
+    StateConflict,
+    UnknownRecord,
+)
 from ...util import canonical_json, new_id
 from .base import SqliteRepositoryBase
 
@@ -57,9 +62,9 @@ class SqliteTrackingRepository(SqliteRepositoryBase):
                 (application_id,),
             ).fetchone()
             if row is None:
-                raise KeyError(application_id)
+                raise UnknownRecord(application_id)
             if row["current_status"] != expected_current_status:
-                raise ValueError(
+                raise StateConflict(
                     "application status changed before commit: "
                     f"expected {expected_current_status}, found {row['current_status']}"
                 )
@@ -69,9 +74,9 @@ class SqliteTrackingRepository(SqliteRepositoryBase):
                     (corrects_event_id,),
                 ).fetchone()
                 if corrected is None:
-                    raise KeyError(corrects_event_id)
+                    raise UnknownRecord(corrects_event_id)
                 if corrected["application_id"] != application_id:
-                    raise ValueError("a correction cannot reference another application's event")
+                    raise LineageBroken("a correction cannot reference another application's event")
             connection.execute(
                 "UPDATE applications SET current_status=?, terminal_outcome=?, updated_at=? "
                 "WHERE id=?",
@@ -117,7 +122,7 @@ class SqliteTrackingRepository(SqliteRepositoryBase):
                 "SELECT current_status FROM applications WHERE id=?", (application_id,)
             ).fetchone()
             if row is None:
-                raise KeyError(application_id)
+                raise UnknownRecord(application_id)
             connection.execute(
                 "UPDATE applications SET next_action=?, next_action_date=?, updated_at=? WHERE id=?",
                 (next_action, next_action_date, occurred_at, application_id),
@@ -149,7 +154,7 @@ class SqliteTrackingRepository(SqliteRepositoryBase):
                 "SELECT * FROM recruitment_events WHERE id=?", (event_id,)
             ).fetchone()
         if row is None:
-            raise KeyError(event_id)
+            raise UnknownRecord(event_id)
         return dict(row)
 
     def recruitment_events(self, application_id: str) -> list[dict[str, Any]]:

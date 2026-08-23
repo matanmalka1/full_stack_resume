@@ -3,6 +3,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from ...application.errors import (
+    PreconditionFailed,
+    UnknownRecord,
+)
 from ...application.knowledge_mutations import (
     KnowledgeMutation,
     KnowledgeMutationState,
@@ -18,7 +22,7 @@ class SqliteKnowledgeMutationRepository(SqliteRepositoryBase):
     @staticmethod
     def _knowledge_mutation_record(row: Any) -> KnowledgeMutation:
         if row is None:
-            raise KeyError("knowledge mutation does not exist")
+            raise UnknownRecord("knowledge mutation does not exist")
         return KnowledgeMutation(
             id=row["id"],
             mutation_type=row["mutation_type"],
@@ -99,7 +103,7 @@ class SqliteKnowledgeMutationRepository(SqliteRepositoryBase):
                 (committed_at or utc_now(), mutation_id),
             )
             if cursor.rowcount != 1:
-                raise ValueError("knowledge mutation is not prepared")
+                raise PreconditionFailed("knowledge mutation is not prepared")
             row = connection.execute(
                 "SELECT * FROM knowledge_mutation_journal WHERE id=?", (mutation_id,)
             ).fetchone()
@@ -113,7 +117,7 @@ class SqliteKnowledgeMutationRepository(SqliteRepositoryBase):
         quarantined_at: str | None = None,
     ) -> KnowledgeMutation:
         if not reason.strip():
-            raise ValueError("knowledge mutation quarantine requires a reason")
+            raise PreconditionFailed("knowledge mutation quarantine requires a reason")
         with self.transaction() as connection:
             cursor = connection.execute(
                 "UPDATE knowledge_mutation_journal SET state='QUARANTINED', "
@@ -121,7 +125,7 @@ class SqliteKnowledgeMutationRepository(SqliteRepositoryBase):
                 (quarantined_at or utc_now(), reason, mutation_id),
             )
             if cursor.rowcount != 1:
-                raise ValueError("knowledge mutation is not prepared")
+                raise PreconditionFailed("knowledge mutation is not prepared")
             row = connection.execute(
                 "SELECT * FROM knowledge_mutation_journal WHERE id=?", (mutation_id,)
             ).fetchone()

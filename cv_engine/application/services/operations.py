@@ -5,6 +5,7 @@ from typing import cast
 from ...util import canonical_json, new_id, sha256_file, sha256_text
 from ..commands import AnalyzeCommand, ApprovalResult, DraftCommand, RenderCommand
 from ..errors import (
+    IDEMPOTENCY_KEY_REUSED,
     ApplicationError,
     DependencyUnavailable,
     InfrastructureFailure,
@@ -444,7 +445,10 @@ class OperationService(ServiceBase[OperationRepository]):
         )
         if existing is not None:
             if existing["payload"].get("application_id") != application_id:
-                raise StateConflict("IDEMPOTENCY_KEY_REUSED")
+                raise StateConflict(
+                    "idempotency key already used for another application",
+                    code=IDEMPOTENCY_KEY_REUSED,
+                )
             completed = self._approval_result(existing["reserved_entity_id"])
             if completed is not None:
                 if existing["status"] == "pending":
@@ -463,7 +467,10 @@ class OperationService(ServiceBase[OperationRepository]):
                 "edit_version": working.edit_version,
                 "content_hash": working.content_hash,
             }:
-                raise StateConflict("IDEMPOTENCY_KEY_REUSED")
+                raise StateConflict(
+                    "idempotency key already used for a different draft version",
+                    code=IDEMPOTENCY_KEY_REUSED,
+                )
             receipt = existing
         else:
             try:

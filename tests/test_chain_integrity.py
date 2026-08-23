@@ -17,7 +17,12 @@ import pytest
 from helpers import ACCOUNT_MANAGER_JOB
 
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
-from cv_engine.application.errors import StateConflict, WorkflowError
+from cv_engine.application.errors import (
+    LineageBroken,
+    StateConflict,
+    UnknownRecord,
+    WorkflowError,
+)
 from cv_engine.application.ready import qualify_ready_revision
 from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.domain.models import DecisionRecord
@@ -279,7 +284,7 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
         == revision.resume_json_reference
     )
     assert services.repository.working_draft(working.id).active is False
-    with pytest.raises(KeyError, match="active working draft"):
+    with pytest.raises(UnknownRecord, match="active working draft"):
         services.repository.active_working_draft(app_id)
 
     for statement in (
@@ -360,7 +365,7 @@ def test_approval_builds_typed_decision_and_artifacts_cannot_cross_applications(
     assert decision.id == approved.decision_record_id
     before = _persisted(services)
 
-    with pytest.raises(ValueError, match="application"):
+    with pytest.raises(LineageBroken, match="application"):
         services.repository.register_artifact_version(
             owner.application_id,
             "resume_markdown",
@@ -400,7 +405,7 @@ def test_invalid_classifications_are_rejected_before_any_persistence(services: S
             _analyze(services, app_id, **overrides)
         assert services.repository.get_application(app_id) == before_application
         assert _persisted(services) == before
-        with pytest.raises(KeyError):
+        with pytest.raises(UnknownRecord):
             services.repository.latest_analysis(app_id)
 
 

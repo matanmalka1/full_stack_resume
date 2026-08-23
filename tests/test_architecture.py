@@ -391,3 +391,50 @@ def test_validation_report_has_one_in_package_construction_authority() -> None:
         isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "cls"
         for node in ast.walk(factory)
     )
+
+
+def test_persistence_refuses_through_the_application_taxonomy() -> None:
+    """A repository refusal reaches a client as a typed error, not a bare builtin.
+
+    The API has to turn a refusal into an HTTP status, and only the raise site
+    knows which refusal it is: a missing row is `UnknownRecord` (404), an edit
+    version that moved is `StateConflict` (409), a source that belongs to
+    another application is `LineageBroken` (412). Mapping `ValueError` wholesale
+    at the boundary would collapse those three into one, so the classification
+    is made where the meaning is known and this check keeps it there.
+
+    The exemptions are contract violations by the caller rather than domain
+    refusals: passing a UnitOfWork built against another database, or a
+    non-positive lease. Those are bugs in calling code, and `ValueError` is the
+    right answer to a bug.
+    """
+    exempt = {
+        "base.py:UnitOfWork belongs to another database",
+        "preparation.py:UnitOfWork belongs to another database",
+        "operations.py:lease_seconds must be positive",
+    }
+    offenders: list[str] = []
+    seen: set[str] = set()
+    for path in sorted((ENGINE / "infrastructure/persistence").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Raise) or node.exc is None:
+                continue
+            call = node.exc
+            name = call.func if isinstance(call, ast.Call) else call
+            if not isinstance(name, ast.Name) or name.id not in {"KeyError", "ValueError"}:
+                continue
+            first = call.args[0] if isinstance(call, ast.Call) and call.args else None
+            literal = first.value if isinstance(first, ast.Constant) else None
+            key = f"{path.name}:{literal}"
+            seen.add(key)
+            if key in exempt:
+                continue
+            offenders.append(
+                f"{path.relative_to(ENGINE)}:{node.lineno} raises bare {name.id}; "
+                "use the application taxonomy so the API can classify it"
+            )
+    assert not offenders, offenders
+    # An exemption that stops matching a real raise is an exemption nobody is
+    # reading any more. Fail rather than let the list drift out of date.
+    assert not (exempt - seen), f"stale exemptions: {sorted(exempt - seen)}"

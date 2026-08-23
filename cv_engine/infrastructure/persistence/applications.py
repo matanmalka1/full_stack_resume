@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ...application.errors import UnknownRecord
 from ...domain.models import ApplicationStatus
 from ...util import canonical_json, new_id, utc_now
 from .base import SqliteRepositoryBase
@@ -60,7 +61,7 @@ class SqliteApplicationRepository(SqliteRepositoryBase):
                 "SELECT * FROM applications WHERE id=?", (application_id,)
             ).fetchone()
         if row is None:
-            raise KeyError(application_id)
+            raise UnknownRecord(application_id)
         return dict(row)
 
     def list_applications(self) -> list[dict[str, Any]]:
@@ -87,4 +88,4 @@ class SqliteApplicationRepository(SqliteRepositoryBase):
                 (normalized_role, utc_now(), application_id),
             )
             if result.rowcount != 1:
-                raise KeyError(application_id)
+                raise UnknownRecord(application_id)

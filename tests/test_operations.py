@@ -15,7 +15,12 @@ from cv_engine.application.commands import (
     IngestCommand,
     RenderCommand,
 )
-from cv_engine.application.errors import InfrastructureFailure, StateConflict
+from cv_engine.application.errors import (
+    IDEMPOTENCY_KEY_REUSED,
+    InfrastructureFailure,
+    StateConflict,
+    UnknownRecord,
+)
 from cv_engine.application.operation_runner import (
     OperationExecutionError,
     OperationRunner,
@@ -160,11 +165,14 @@ def test_sqlite_operation_rejects_idempotency_key_with_another_payload(services)
     )
     conflicting = request.model_copy(update={"payload": {"mode": "ai"}})
 
-    with pytest.raises(StateConflict, match="IDEMPOTENCY_KEY_REUSED"):
+    # Assert the contracted code rather than the prose: the code is what a client
+    # switches on, and the message is free to be rewritten for a human.
+    with pytest.raises(StateConflict) as raised:
         services.repository.create_operation(
             conflicting,
             installation_id=services.workspace.installation_id(),
         )
+    assert raised.value.code == IDEMPOTENCY_KEY_REUSED
 
 
 def test_terminal_operation_rows_cannot_be_rewritten_or_deleted(services) -> None:
@@ -716,7 +724,7 @@ def test_draft_operation_refuses_a_replaced_selection_plan(services) -> None:
 
     assert failed.status is OperationStatus.FAILED
     assert failed.failure_code is OperationFailureCode.SOURCE_CHANGED
-    with pytest.raises(KeyError):
+    with pytest.raises(UnknownRecord):
         services.repository.active_working_draft(ingested.application_id)
 
 
@@ -910,12 +918,13 @@ def test_approval_idempotency_key_cannot_cross_applications(drafted_application)
         draft_service=first.services.drafts,
     )
 
-    with pytest.raises(StateConflict, match="IDEMPOTENCY_KEY_REUSED"):
+    with pytest.raises(StateConflict) as raised:
         second.services.operations.approve_idempotent(
             second.application_id,
             idempotency_key="application-bound-approval",
             draft_service=second.services.drafts,
         )
+    assert raised.value.code == IDEMPOTENCY_KEY_REUSED
 
 
 def test_pending_approval_receipt_recovers_a_committed_revision(drafted_application) -> None:
@@ -1106,7 +1115,7 @@ def test_outputs_cannot_be_activated_once_the_operation_stops_running(services) 
     with pytest.raises(StateConflict, match="cannot be activated"):
         repository.activate_operation_output(operation.id, "analysis", "never-recorded")
 
-    with pytest.raises(KeyError):
+    with pytest.raises(UnknownRecord):
         repository.record_operation_output("no-such-operation", "analysis", "analysis-2")
 
     # Cancellation closes the window: an output may still be recorded, but not

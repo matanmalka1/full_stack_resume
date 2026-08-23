@@ -5,7 +5,7 @@ import sqlite3
 from datetime import datetime, timedelta
 from typing import Any
 
-from ...application.errors import StateConflict
+from ...application.errors import IDEMPOTENCY_KEY_REUSED, StateConflict, UnknownRecord
 from ...application.operations import (
     CreateOperation,
     OperationFailureCode,
@@ -37,7 +37,7 @@ class SqliteOperationRepository(SqliteRepositoryBase):
     @staticmethod
     def _operation_record(row: Any, outputs: list[Any]) -> PersistedOperation:
         if row is None:
-            raise KeyError("operation does not exist")
+            raise UnknownRecord("operation does not exist")
         record = dict(row)
         return PersistedOperation(
             id=record["id"],
@@ -104,7 +104,10 @@ class SqliteOperationRepository(SqliteRepositoryBase):
             ).fetchone()
             if existing is not None:
                 if existing["payload_hash"] != request.payload_hash:
-                    raise StateConflict("IDEMPOTENCY_KEY_REUSED")
+                    raise StateConflict(
+                        "idempotency key already used with a different Operation payload",
+                        code=IDEMPOTENCY_KEY_REUSED,
+                    )
                 return self._operation_record(
                     existing, self._outputs(connection, existing["id"])
                 )
@@ -189,7 +192,7 @@ class SqliteOperationRepository(SqliteRepositoryBase):
                 "SELECT * FROM operations WHERE id=?", (operation_id,)
             ).fetchone()
             if row is None:
-                raise KeyError("operation does not exist")
+                raise UnknownRecord("operation does not exist")
             if row["status"] != OperationStatus.QUEUED.value:
                 return None
             if row["next_attempt_at"] is not None and row["next_attempt_at"] > timestamp:
@@ -350,7 +353,7 @@ class SqliteOperationRepository(SqliteRepositoryBase):
                 "SELECT cancellation_requested_at FROM operations WHERE id=?", (operation_id,)
             ).fetchone()
         if row is None:
-            raise KeyError("operation does not exist")
+            raise UnknownRecord("operation does not exist")
         return row["cancellation_requested_at"] is not None
 
     def request_operation_cancellation(
@@ -362,7 +365,7 @@ class SqliteOperationRepository(SqliteRepositoryBase):
                 "SELECT * FROM operations WHERE id=?", (operation_id,)
             ).fetchone()
             if row is None:
-                raise KeyError("operation does not exist")
+                raise UnknownRecord("operation does not exist")
             if row["status"] == OperationStatus.QUEUED.value:
                 connection.execute(
                     "DELETE FROM operation_resource_leases WHERE operation_id=?", (operation_id,)
@@ -405,7 +408,7 @@ class SqliteOperationRepository(SqliteRepositoryBase):
                 (operation_id,),
             ).fetchone()
             if operation is None:
-                raise KeyError("operation does not exist")
+                raise UnknownRecord("operation does not exist")
             if active and (
                 operation["status"] != OperationStatus.RUNNING.value
                 or operation["cancellation_requested_at"] is not None
@@ -566,7 +569,10 @@ class SqliteOperationRepository(SqliteRepositoryBase):
             ).fetchone()
             if existing is not None:
                 if existing["payload_hash"] != payload_hash:
-                    raise StateConflict("IDEMPOTENCY_KEY_REUSED")
+                    raise StateConflict(
+                        "idempotency key already used with a different command payload",
+                        code=IDEMPOTENCY_KEY_REUSED,
+                    )
                 record = dict(existing)
                 record["payload"] = json.loads(record.pop("payload_json"))
                 result_json = record.pop("result_json")

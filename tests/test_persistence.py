@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from cv_engine.application.errors import PreconditionFailed, StateConflict, UnknownRecord
 from cv_engine.application.knowledge_mutations import (
     KnowledgeMutationState,
     PrepareKnowledgeMutation,
@@ -220,7 +221,7 @@ def test_connection_policy_unit_of_work_bind_and_foreign_keys(tmp_path: Path) ->
         rolled_back_id, _ = _create_application(
             bound, company="Rolled Back", target_role="Developer", text="Python"
         )
-    with pytest.raises(KeyError):
+    with pytest.raises(UnknownRecord):
         repository.get_application(rolled_back_id)
 
 
@@ -290,7 +291,7 @@ def test_knowledge_mutation_journal_has_one_guarded_terminal_transition(
 
     assert committed.state is KnowledgeMutationState.COMMITTED
     assert repository.prepared_knowledge_mutations() == []
-    with pytest.raises(ValueError, match="not prepared"):
+    with pytest.raises(PreconditionFailed, match="not prepared"):
         repository.commit_knowledge_mutation(prepared.id)
     with connect(repository.path) as connection:
         with pytest.raises(sqlite3.IntegrityError, match="invalid knowledge mutation transition"):
@@ -322,7 +323,7 @@ def test_knowledge_mutation_quarantine_requires_reason_and_unique_db_identity(
     )
     repository.prepare_knowledge_mutation(request)
 
-    with pytest.raises(ValueError, match="requires a reason"):
+    with pytest.raises(PreconditionFailed, match="requires a reason"):
         repository.quarantine_knowledge_mutation(request.mutation_id, " ")
     with pytest.raises(sqlite3.IntegrityError, match="UNIQUE constraint failed"):
         repository.prepare_knowledge_mutation(
@@ -628,7 +629,7 @@ def test_typed_preparation_records_round_trip_and_refuse_stale_edits(
     assert changed.edit_version == working.edit_version + 1
     assert changed.content_hash == "changed-hash"
 
-    with pytest.raises(ValueError, match="edit version mismatch"):
+    with pytest.raises(StateConflict, match="edit version mismatch"):
         repository.update_working_draft(
             working.id,
             working.edit_version,

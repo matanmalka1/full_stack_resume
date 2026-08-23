@@ -3,6 +3,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from ...application.errors import (
+    VALIDATION_STALE,
+    LineageBroken,
+    PreconditionFailed,
+    UnknownRecord,
+)
 from ...domain.models import DecisionRecord, ValidationReport, ValidationRunLineage
 from ...util import canonical_json, new_id, utc_now
 from .base import SqliteRepositoryBase
@@ -50,12 +56,12 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
                     (revision_id,),
                 ).fetchone()
                 if revision is None or revision["application_id"] != application_id:
-                    raise ValueError(
+                    raise LineageBroken(
                         "an artifact version cannot reference an approved revision "
                         "belonging to another application"
                     )
                 if job_snapshot_id is not None and revision["job_snapshot_id"] != job_snapshot_id:
-                    raise ValueError("an artifact version's revision and job snapshot must match")
+                    raise LineageBroken("an artifact version's revision and job snapshot must match")
             artifact = connection.execute(
                 "SELECT id FROM artifacts WHERE application_id IS ? "
                 "AND artifact_type=? AND logical_name=?",
@@ -118,7 +124,7 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
         with self.read_connection() as connection:
             row = connection.execute(query, params).fetchone()
         if row is None:
-            raise KeyError(f"no {artifact_type} artifact for application {application_id}")
+            raise UnknownRecord(f"no {artifact_type} artifact for application {application_id}")
         return dict(row)
 
     def artifact_versions(self, application_id: str) -> list[dict[str, Any]]:
@@ -140,7 +146,7 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
                 (artifact_version_id,),
             ).fetchone()
         if row is None:
-            raise KeyError(f"no artifact version {artifact_version_id}")
+            raise UnknownRecord(f"no artifact version {artifact_version_id}")
         return dict(row)
 
     def artifact_version_for_revision(
@@ -162,7 +168,7 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
         with self.read_connection() as connection:
             row = connection.execute(query, params).fetchone()
         if row is None:
-            raise KeyError(f"no {artifact_type} artifact for approved revision {revision_id}")
+            raise UnknownRecord(f"no {artifact_type} artifact for approved revision {revision_id}")
         return dict(row)
 
     def insert_decision(self, record: DecisionRecord) -> None:
@@ -190,7 +196,7 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
                 (application_id,),
             ).fetchone()
         if row is None:
-            raise KeyError(f"no decision record for application {application_id}")
+            raise UnknownRecord(f"no decision record for application {application_id}")
         return dict(row)
 
     def decision_for_artifact_version(self, artifact_version_id: str) -> dict[str, Any]:
@@ -201,7 +207,7 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
                 (artifact_version_id,),
             ).fetchone()
         if row is None:
-            raise KeyError(f"no decision record for artifact version {artifact_version_id}")
+            raise UnknownRecord(f"no decision record for artifact version {artifact_version_id}")
         return dict(row)
 
     def decision_for_revision(self, revision_id: str) -> dict[str, Any]:
@@ -214,7 +220,7 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
                 (revision_id,),
             ).fetchone()
         if row is None:
-            raise KeyError(f"no decision record for approved revision {revision_id}")
+            raise UnknownRecord(f"no decision record for approved revision {revision_id}")
         return dict(row)
 
     def record_generation_run(self, values: dict[str, Any]) -> str:
@@ -271,8 +277,9 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
                     or draft["content_hash"] != lineage.content_hash
                     or draft["job_snapshot_id"] != lineage.job_snapshot_id
                 ):
-                    raise ValueError(
-                        "validation lineage does not match the exact working draft context"
+                    raise PreconditionFailed(
+                        "validation lineage does not match the exact working draft context",
+                        code=VALIDATION_STALE,
                     )
             connection.execute(
                 "INSERT INTO validation_runs(id, application_id, artifact_version_id, "
@@ -308,7 +315,7 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
                 (validation_id,),
             ).fetchone()
         if row is None or row["working_draft_id"] is None:
-            raise KeyError(f"no validation lineage {validation_id}")
+            raise UnknownRecord(f"no validation lineage {validation_id}")
         return ValidationRunLineage(
             working_draft_id=row["working_draft_id"],
             edit_version=row["edit_version"],
@@ -350,7 +357,7 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
                 (application_id, phase, artifact_version_id),
             ).fetchone()
         if row is None:
-            raise KeyError(
+            raise UnknownRecord(
                 f"no {phase} validation references artifact version {artifact_version_id}"
             )
         return ValidationReport.model_validate_json(row["report_json"])
@@ -361,7 +368,7 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
                 "SELECT report_json FROM validation_runs WHERE id=?", (validation_id,)
             ).fetchone()
         if row is None:
-            raise KeyError(f"no validation report {validation_id}")
+            raise UnknownRecord(f"no validation report {validation_id}")
         return ValidationReport.model_validate_json(row["report_json"])
 
     def integrity_check(self) -> list[str]:

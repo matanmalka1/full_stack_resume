@@ -3,6 +3,14 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from ...application.errors import (
+    VALIDATION_STALE,
+    LineageBroken,
+    PreconditionFailed,
+    StateConflict,
+    UnknownRecord,
+    ValidationBlocked,
+)
 from ...domain.models import ApprovedRevision, DraftDocument, ValidationReport, WorkingDraft
 from ...util import canonical_json, new_id, utc_now
 from .base import SqliteRepositoryBase
@@ -14,7 +22,7 @@ class SqliteDraftRepository(SqliteRepositoryBase):
     @staticmethod
     def _record(row: Any) -> WorkingDraft:
         if row is None:
-            raise KeyError("working draft does not exist")
+            raise UnknownRecord("working draft does not exist")
         record = dict(row)
         return WorkingDraft(
             id=record["id"],
@@ -33,7 +41,7 @@ class SqliteDraftRepository(SqliteRepositoryBase):
     @staticmethod
     def _revision_record(row: Any) -> ApprovedRevision:
         if row is None:
-            raise KeyError("approved revision does not exist")
+            raise UnknownRecord("approved revision does not exist")
         record = dict(row)
         return ApprovedRevision(
             id=record["id"],
@@ -79,12 +87,14 @@ class SqliteDraftRepository(SqliteRepositoryBase):
             or plan["application_id"] != application_id
             or plan["job_analysis_id"] != job_analysis_id
         ):
-            raise ValueError(
+            raise LineageBroken(
                 "a working draft cannot reference a selection plan belonging to "
                 "another application or analysis"
             )
         if source.application_id != application_id or source.job_analysis_id != job_analysis_id:
-            raise ValueError("a working draft source must match its application and job analysis")
+            raise LineageBroken(
+                "a working draft source must match its application and job analysis"
+            )
 
     def create_working_draft(
         self,
@@ -199,7 +209,7 @@ class SqliteDraftRepository(SqliteRepositoryBase):
                 "SELECT * FROM working_drafts WHERE id=?", (working_draft_id,)
             ).fetchone()
         if row is None:
-            raise KeyError(f"no working draft {working_draft_id}")
+            raise UnknownRecord(f"no working draft {working_draft_id}")
         return self._record(row)
 
     def active_working_draft(self, application_id: str) -> WorkingDraft:
@@ -209,7 +219,7 @@ class SqliteDraftRepository(SqliteRepositoryBase):
                 (application_id,),
             ).fetchone()
         if row is None:
-            raise KeyError(f"no active working draft for application {application_id}")
+            raise UnknownRecord(f"no active working draft for application {application_id}")
         return self._record(row)
 
     def update_working_draft(
@@ -226,7 +236,7 @@ class SqliteDraftRepository(SqliteRepositoryBase):
                 "SELECT * FROM working_drafts WHERE id=?", (working_draft_id,)
             ).fetchone()
             if current is None:
-                raise KeyError(f"no working draft {working_draft_id}")
+                raise UnknownRecord(f"no working draft {working_draft_id}")
             self._require_lineage(
                 connection,
                 current["application_id"],
@@ -247,7 +257,7 @@ class SqliteDraftRepository(SqliteRepositoryBase):
                 ),
             )
             if changed.rowcount != 1:
-                raise ValueError("working draft edit version mismatch")
+                raise StateConflict("working draft edit version mismatch")
             row = connection.execute(
                 "SELECT * FROM working_drafts WHERE id=?", (working_draft_id,)
             ).fetchone()
@@ -292,15 +302,15 @@ class SqliteDraftRepository(SqliteRepositoryBase):
                 (validation_run_id, working_draft_id),
             ).fetchone()
             if row is None:
-                raise ValueError("approval requires an existing working draft and validation")
+                raise PreconditionFailed("approval requires an existing working draft and validation")
             if (
                 row["application_id"] != application_id
                 or row["plan_application_id"] != application_id
                 or row["validation_application_id"] != application_id
             ):
-                raise ValueError("approval lineage belongs to another application")
+                raise LineageBroken("approval lineage belongs to another application")
             if not row["active"]:
-                raise ValueError("approval requires the active working draft")
+                raise PreconditionFailed("approval requires the active working draft")
             if (
                 row["plan_job_analysis_id"] != row["job_analysis_id"]
                 or row["validation_working_draft_id"] != working_draft_id
@@ -310,9 +320,12 @@ class SqliteDraftRepository(SqliteRepositoryBase):
                 or row["validation_job_analysis_id"] != row["job_analysis_id"]
                 or row["validation_selection_plan_id"] != row["selection_plan_id"]
             ):
-                raise ValueError("approval validation does not match the exact working draft")
+                raise PreconditionFailed(
+                    "approval validation does not match the exact working draft",
+                    code=VALIDATION_STALE,
+                )
             if not ValidationReport.model_validate_json(row["report_json"]).passed:
-                raise ValueError("approval requires a passing validation run")
+                raise ValidationBlocked("approval requires a passing validation run")
 
             source = DraftDocument.model_validate_json(row["source_json"])
             version = connection.execute(
@@ -363,7 +376,7 @@ class SqliteDraftRepository(SqliteRepositoryBase):
                 (approved_at, working_draft_id),
             )
             if changed.rowcount != 1:
-                raise ValueError("working draft changed before approval committed")
+                raise StateConflict("working draft changed before approval committed")
             revision = connection.execute(
                 "SELECT * FROM approved_revisions WHERE id=?", (revision_id,)
             ).fetchone()
@@ -375,7 +388,7 @@ class SqliteDraftRepository(SqliteRepositoryBase):
                 "SELECT * FROM approved_revisions WHERE id=?", (revision_id,)
             ).fetchone()
         if row is None:
-            raise KeyError(f"no approved revision {revision_id}")
+            raise UnknownRecord(f"no approved revision {revision_id}")
         return self._revision_record(row)
 
     def latest_approved_revision(self, application_id: str) -> ApprovedRevision:
@@ -386,7 +399,7 @@ class SqliteDraftRepository(SqliteRepositoryBase):
                 (application_id,),
             ).fetchone()
         if row is None:
-            raise KeyError(f"no approved revision for application {application_id}")
+            raise UnknownRecord(f"no approved revision for application {application_id}")
         return self._revision_record(row)
 
     def approved_revisions(self, application_id: str) -> list[ApprovedRevision]:
