@@ -376,11 +376,110 @@ Nothing in Stage B's product code was reopened. Stage D has not begun.
 
 ### D — Analyze, review decisions, deterministic selection plans
 
-- [ ] `POST /applications/{id}/analyses` → 202. NeedsReview is a successful outcome.
-- [ ] **Verify first**, then record: does a successful analyze activation already commit the
-      initial deterministic SelectionPlan atomically? `PreparedAnalysis.plan_manifest`
-      suggests it does. If so this is evidence, not work.
-- [ ] `apply_analysis_decisions`; deterministic `create_selection_plan` (201).
+**Implemented, not closed.** Evidence has not been run. The commands to run it and the
+predicted numbers are below; nothing here is accepted until they come back.
+
+- [x] **The verification came first, and it held.** A successful analyze activation
+      already commits the JobAnalysis and its initial deterministic SelectionPlan
+      atomically, so this was evidence rather than work and no second mechanism was
+      built. `save_analysis` inserts the analysis, the plan, and the Application's
+      classification columns inside one `with self.transaction()`; under an Operation the
+      repository is bound to the runner's UnitOfWork, so `transaction()` yields that
+      connection and the whole activation - both records plus the Operation's own
+      completion - commits once. `AnalysisOperationHandler.activate` records both outputs
+      as active.
+
+      One thing is outside that transaction and is deliberately left there:
+      `set_normalized_role`, which the service calls after `save_analysis`. It is a
+      denormalized filing label on `applications`, not one of the two immutable records
+      §13 names, and it is recomputed by the next analysis. Under an Operation it joins
+      the same UnitOfWork anyway; only the direct CLI path writes it separately.
+
+      The claim is now a test rather than a paragraph. The happy path could not prove it -
+      it only shows both rows arrive - so the proof is a failure part-way through: with
+      the plan insert refused, no analysis row survives either.
+- [x] `POST /applications/{id}/analyses` → **202** through the existing
+      `accepted_operation` helper, with `Location` and an optional `Idempotency-Key`. No
+      second helper was added. NeedsReview is a successful outcome: the Operation
+      succeeds, both immutable records exist, and what needs deciding is reported by the
+      Application's review reasons, which name the command that resolves them.
+- [x] `apply_analysis_decisions`, at the application layer, branching on what actually
+      changed rather than on which fields the client filled in. Meaning changed → one new
+      immutable JobAnalysis with its initial deterministic plan, committed by the same
+      `save_analysis`. Only the fact overlay changed → one replacement SelectionPlan.
+      Both at once → refused, because the new analysis has its own initial plan built from
+      a candidate accounting the user has not seen. Neither → refused, because an empty
+      submission that created a second identical plan would put a decision in the history
+      that nobody made. No existing record is mutated on any branch.
+- [x] Deterministic `create_selection_plan` → **201**, synchronous, returning the plan
+      itself. The AI `propose_selection_plan` branch of the same route is Stage G and was
+      not started; the acceptance helper already sets its own status so that route can
+      answer 202 per request without changing shape.
+- [x] `POST /analyses/{id}/decisions` and `POST /analyses/{id}/selection-plans`, in a new
+      `api/routers/analyses.py`. `application_id` is in the body of both rather than
+      inferred from the analysis: the client states which Application it believes it is
+      deciding for, and a mismatch is a 412 naming the broken lineage instead of a
+      decision landing silently on another Application's analysis.
+- [x] `Idempotency-Key` moved to `api/headers.py` now that two routers accept it.
+
+**Two product questions were answered before any code was written**, because both fixed
+the shape of the OpenAPI contract:
+
+1. **`selected` is an outcome, not an input.** §13 names "selected/excluded/pinned facts";
+   the command takes `pinned_fact_ids` and `excluded_fact_ids` only. In a budgeted
+   deterministic engine "include this" can only be said as a hold, which is what a pin is,
+   and `SelectionManifest.selected_fact_ids` is what the resulting plan reports. The engine
+   still owns the final selection and still enforces section budgets, role-block floors and
+   required-tag rescue.
+2. **Accepting a gap or a low Fit takes the analysis branch.** It is a meaning decision,
+   recorded as the analysis override that `derive_review_reasons` already reads to clear
+   `LOW_FIT_REQUIRES_ACCEPTANCE` and `HARD_GAP_REQUIRES_DECISION`. No `accepted_gaps`
+   field was added to `SelectionManifest`; a second place recording the same state, read by
+   nothing, could only drift from the first.
+
+**The overlay is refused, never trimmed.** A fact the Profile never offered, a fact named
+on both sides, structure removed as if it were evidence, an exclusion that drops a role
+block below the floor it previously reached, and an exclusion that leaves a required tag
+with nothing to cover it each raise `SelectionError`, surfacing as 412. The floor and
+required-tag guards compare against what the same inputs reached *before* the exclusion
+rather than against the floor itself, so a Profile already short for reasons of its own
+behaves exactly as it did.
+
+**A third instance of Stage C's narrowing defect was found and fixed here.**
+`OperationService.submit_analysis`, `.submit_draft`, and `.submit_render` all returned
+`PersistedOperation`. `accepted_operation` builds `OperationResponse`, which forbids
+exactly the runner-only fields, so the first analyze submission over HTTP would have been
+refused by the API's own response model. Stage C found the same no-op narrowing in
+`as_operation_view` and in the SQLite adapter's `active_operation`; this is the third
+place, and it is the third time in M3 that the defect had a shape rather than a location.
+All three submits now narrow through the one function and the class docstring says why the
+narrowing belongs there. Every existing caller reads only `.id`, `.status`, and
+`.outputs`, all §11 query fields, so no CLI or test behaviour changes.
+
+Class B: `SelectionManifest.candidates[].reason` can now carry `excluded_by_user`, which it
+could not before. Both `build_selection` parameters default to empty and with them empty
+every path is the one that ran before, which the first overlay test asserts directly by
+comparing the selection and the manifest against a build with no parameters at all.
+
+Commits: `1da0003` (domain overlay), `335a476` (application commands), `ab1b9e4` (API
+routes and the narrowing repair), `16c4c96` (tests).
+
+OpenAPI and TypeScript were regenerated at `ab1b9e4`. The diff is additive and nothing
+moved: 3 paths added, 6 schemas added, 0 removed, 0 existing schemas changed.
+
+| Measure | Stage C | Stage D predicted | Delta |
+| --- | --- | --- | --- |
+| Non-browser suite | 282 passed, 4 deselected | **307 passed, 4 deselected** | +25 |
+
+The +25 is 16 from `test_api_analyses.py` (14 functions, two parametrised over 2) and 9
+from `test_selection.py` (8 functions, one parametrised over 2). Nothing else was added or
+removed. Same interpreter as every earlier M3 measurement: `.venv/bin/python`, Python
+3.14.2.
+
+Not done in Stage D, and deliberately: no CLI subcommand for either new command. Stage D's
+scope is the API surface, the CLI's own analyze path is unchanged, and the deterministic
+route still reaches its result with `OPENAI_API_KEY` unset. Stage E names the CLI changes
+it needs.
 
 ### E — WorkingDraft, ETag, and the corrected validate/approve contract
 
