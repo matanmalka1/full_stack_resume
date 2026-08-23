@@ -392,6 +392,11 @@ OmissionReason = Literal[
     "not_relevant_to_emphasis",
     "evicted_by_required_tag_rescue",
     "not_in_profile_pool",
+    # A user's explicit exclusion, carried in the review form that created this
+    # plan. Recorded rather than dropped: a fact the engine ranked out and a
+    # fact the user removed are different decisions, and the candidate
+    # accounting is the only place that can still tell them apart.
+    "excluded_by_user",
 ]
 
 SelectionOutcome = Literal["pinned", "selected", "rescued", "omitted"]
