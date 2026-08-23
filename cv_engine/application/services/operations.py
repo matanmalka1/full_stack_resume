@@ -413,11 +413,6 @@ class RegenerationOperationHandler(AITaskHandler):
         self._command_type = (
             RegenerateSectionCommand if task == "regenerate_section" else RegenerateClaimCommand
         )
-        self._prepare = (
-            service.prepare_section_regeneration
-            if task == "regenerate_section"
-            else service.prepare_claim_regeneration
-        )
 
     def _command(self, operation: PersistedOperation):
         return self._command_type.model_validate(operation.payload)
@@ -453,7 +448,16 @@ class RegenerationOperationHandler(AITaskHandler):
         if cancellation_requested():
             return PreparedOperation()
         try:
-            return self.prepared(self._prepare(self._command(operation), operation_id=operation.id))
+            command = self._command(operation)
+            if isinstance(command, RegenerateSectionCommand):
+                result = self.service.prepare_section_regeneration(
+                    command, operation_id=operation.id
+                )
+            elif isinstance(command, RegenerateClaimCommand):
+                result = self.service.prepare_claim_regeneration(command, operation_id=operation.id)
+            else:
+                raise TypeError("regeneration handler parsed an invalid command")
+            return self.prepared(result)
         except (
             DependencyUnavailable,
             InfrastructureFailure,

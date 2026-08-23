@@ -144,7 +144,7 @@ def apply_proposed_claims(
     refuse_facts_outside_the_pool(proposed_ids, allowed, task=task)
 
     known = {claim.claim_id for claim in draft_claims(draft)}
-    unknown = sorted({claim.claim_id for claim in proposed if claim.claim_id not in known})
+    unknown = sorted({str(claim.claim_id) for claim in proposed if claim.claim_id not in known})
     if unknown:
         raise ProposalRejected(
             f"{task} named claims that are not in this draft: {', '.join(unknown)}",

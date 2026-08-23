@@ -27,7 +27,7 @@ import os
 import time
 import urllib.error
 import urllib.request
-from typing import Any, Protocol, TypeVar
+from typing import Any, Protocol, TypeVar, cast
 
 from pydantic import BaseModel, ValidationError
 
@@ -417,22 +417,22 @@ class OpenAIProvider:
         self, context: JobAnalysisContext
     ) -> AIProposal[JobClassificationProposal]:
         proposal, provenance = self._run("propose_job_analysis", context)
-        return AIProposal(proposal=proposal, provenance=provenance)
+        return AIProposal(proposal=cast(JobClassificationProposal, proposal), provenance=provenance)
 
     def propose_selection_plan(
         self, context: SelectionPlanContext
     ) -> AIProposal[SelectionProposal]:
         proposal, provenance = self._run("propose_selection_plan", context)
-        return AIProposal(proposal=proposal, provenance=provenance)
+        return AIProposal(proposal=cast(SelectionProposal, proposal), provenance=provenance)
 
     def draft_resume(self, context: DraftResumeContext) -> AIProposal[DraftProposal]:
         proposal, provenance = self._run("draft_resume", context)
-        return AIProposal(proposal=proposal, provenance=provenance)
+        return AIProposal(proposal=cast(DraftProposal, proposal), provenance=provenance)
 
     def regenerate_section(self, context: RegenerateSectionContext) -> AIProposal[SectionProposal]:
         proposal, provenance = self._run("regenerate_section", context)
-        return AIProposal(proposal=proposal, provenance=provenance)
+        return AIProposal(proposal=cast(SectionProposal, proposal), provenance=provenance)
 
     def regenerate_claim(self, context: RegenerateClaimContext) -> AIProposal[ClaimProposal]:
         proposal, provenance = self._run("regenerate_claim", context)
-        return AIProposal(proposal=proposal, provenance=provenance)
+        return AIProposal(proposal=cast(ClaimProposal, proposal), provenance=provenance)

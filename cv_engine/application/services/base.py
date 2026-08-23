@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar, cast
 
 from ...domain.facts import FactStore
 from ...domain.knowledge import Knowledge
@@ -200,7 +200,7 @@ class ServiceBase(Generic[RepoT]):
             payload=payload,
             provenance=provenance,
         )
-        self.register_provider_response(self.repo, application_id, evidence)
+        self.register_provider_response(cast(ArtifactRegistry, self.repo), application_id, evidence)
         return evidence
 
     def preserve_provider_response(

@@ -202,7 +202,9 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                         "language": deterministic.language,
                     },
                     deterministic_gaps=[gap.model_dump(mode="json") for gap in deterministic.gaps],
-                    overrides=dict(deterministic.user_override),
+                    overrides={
+                        str(key): value for key, value in deterministic.user_override.items()
+                    },
                 )
             )
             evidence = self.preserve(
