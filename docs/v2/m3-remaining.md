@@ -235,11 +235,60 @@ remains the M3 boundary gate. Stage C has not begun.
 
 ### C — Operations surface
 
-- [ ] `GET /operations/{id}`, cancel, retry. Return `OperationView`, not
-      `PersistedOperation`.
-- [ ] One shared `202 + Location` helper for D, E, F, G.
-- [ ] Test harness running app and `OperationWorker` side by side. **Not** in `create_app`.
-- [ ] `ApplicationStateView.active_operation` typed as `OperationView | None`.
+- [x] `GET /operations/{id}`, cancel, retry, at `a0116cd`. They return
+      `OperationResponse`, which mirrors `OperationView`: the §11 query fields and nothing
+      wider. Cancel is `200` because the cancellation is recorded synchronously - running
+      work truthfully reports `running` with `cancellation_requested_at` set until it stops
+      at its next checkpoint. Retry is `202` with a `Location` naming the **new** Operation;
+      `Idempotency-Key` is an optional header, and reusing one returns the Operation it
+      already created instead of queueing a second attempt.
+- [x] The narrowing lives in the application layer, not the router, at `9d04cfe`.
+      `OperationService.get`, `.cancel`, and `.retry` return `OperationView`, produced by
+      one shared `as_operation_view`, so a field added to `PersistedOperation` cannot reach
+      a client by being added to the subclass. The SQLite adapter's `active_operation` uses
+      the same function rather than repeating the narrowing.
+
+      **Observable CLI change, and it is the point rather than a side effect.**
+      `cv operation show` and `cv operation cancel` print the client view, so payload,
+      sources, lease, attempts, and idempotency key have left that JSON; `cv operation
+      retry` narrows the foreground executor's record to the same shape so all three
+      subcommands print one shape. `PersistedOperation` has described itself as the
+      runner-facing record since M2 and the CLI is a query client, so this realizes the
+      documented contract instead of changing it. Everything §11 lists as an Operation query
+      field is unchanged.
+- [x] One shared `202 + Location` helper for D, E, F, G: `accepted_operation` in
+      `api/responses.py`. It sets the status itself rather than leaning on the route's
+      `status_code`, because `POST /analyses/{id}/selection-plans` is `201` deterministic
+      and `202` for AI proposal mode - one route, two statuses, decided per request. Its
+      body is the representation `GET /operations/{id}` returns, so a client can render
+      progress from the acceptance response without a second call.
+
+      `API_VERSION` and `API_PREFIX` moved to `api/versioning.py`, re-exported from
+      `app.py` so every existing spelling still resolves. The helper builds an Operation
+      URL, routers import the helper, and `app.py` imports the routers; two constants in
+      their own module break that cycle.
+- [x] Test harness running app and `OperationWorker` side by side, in `tests/api_harness.py`
+      with the `api_worker` fixture. **Not** in `create_app`, and not a second wiring
+      either: it starts the worker the composition root already built, so a passing test
+      proves the product's arrangement rather than the harness's. It polls the real
+      endpoint rather than the repository, because the polling surface is what a client
+      has. Its terminal-status set is derived from `TERMINAL_OPERATION_STATUSES`, so a new
+      terminal status cannot leave it waiting for work that has finished.
+- [x] `ApplicationStateView.active_operation` typed as `OperationView | None`. The
+      projection already received a view and flattened it back into an untyped dict. The
+      HTTP mirror is now `OperationResponse | None`, which is what moved the two schemas in
+      the OpenAPI diff.
+
+**Stage C is implemented and awaiting user evidence.** OpenAPI and TypeScript were
+regenerated; the entry-level diff is in `a0116cd`. Nothing in Stage B was reopened, and
+Stage D has not begun.
+
+Predicted next non-browser collection: **282** - Stage B's 270 plus the 12 cases in
+`test_api_operations.py` (9 functions, two of them parametrised over 3 and 2). No test was
+removed. Two existing assertions in `test_operations.py` moved with the contract without
+changing the count: the detail projection is compared against the view, and the
+cancel/retry immutability assertion reads the stored record once so it still compares the
+whole row.
 
 ### D — Analyze, review decisions, deterministic selection plans
 

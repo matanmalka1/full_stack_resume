@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from api_harness import api_with_worker
 from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB, CliRun, run_cli
 from seed import V2_IDENTITY_FACT, write_canonical_sources
 
@@ -558,3 +559,10 @@ def render_validator():
         return geometry, report
 
     return validate
+
+
+@pytest.fixture
+def api_worker(services: Services):
+    """The API and an Operation worker running together over one Workspace."""
+    with api_with_worker(services) as harness:
+        yield harness
