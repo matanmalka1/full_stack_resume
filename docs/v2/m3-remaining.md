@@ -761,8 +761,11 @@ Stage F has not begun.
 
 ### F — Render, artifacts, Ready
 
-**Stage F is closed**, at `2590559`, `9f98111`, `40e396d`, `1de0b4f`, `048090e`, and
-`3e84fe9`, on evidence the user ran and accepted.
+**Stage F is not closed.** It was marked closed at `dcd598b` on the evidence below, and
+then the user found a TOCTOU window in the delivery path while reading the diff. The
+repair is at `236762f`; the stage reopens until its third evidence round is accepted.
+The earlier rounds are kept below exactly as they were recorded - a round that happened
+is not rewritten because a later one found something.
 
 - [x] `POST /approved-revisions/{id}/render` → 202 through the existing
       `accepted_operation` helper, with `Location` and an optional `Idempotency-Key`. The
@@ -923,6 +926,42 @@ and it did that.
 The bound was set in advance because Stage E made a claim about its own CLI run that turned
 out to be wrong in exactly this way.
 
+#### The third round: a TOCTOU window between verification and delivery
+
+Found by the user reading the diff after the stage had been marked closed. No test would
+have caught it, and neither would any gate: every existing assertion consumed the stream
+immediately, so the window was never open long enough to observe.
+
+`open_artifact` hashed the payload at its path and then returned a factory that reopened
+that same path when the response began streaming. The verification and the delivery read
+different bytes whenever anything wrote in between:
+
+- **Substitution.** The client receives unverified content under the `ETag` and
+  `Content-Length` computed from the previous content - told it is receiving one document
+  and handed another, with a hash that matches neither.
+- **Deletion.** `FileNotFoundError` is raised from inside the response body, after the
+  status line and headers are already on the wire, where nothing can be reported to the
+  client.
+
+The payload is now read once and hashed over the bytes that were read, so the digest
+describes exactly what `chunks()` yields. Two reads collapse into one.
+
+**Holding an open file descriptor would not have fixed this**, and that is the detail worth
+keeping. `Path.write_bytes` truncates and rewrites the *same inode*, so a held handle reads
+the substituted content; only capturing the bytes makes the guarantee hold. A
+descriptor-based repair would pass a regression that renamed the file and fail silently
+against the case that actually occurs - so the regression substitutes in place,
+deliberately, because that is the case a plausible wrong fix survives.
+
+Buffering the whole payload is affordable and the reason is recorded rather than assumed:
+artifacts are one-page CV documents, screenshots and manifests this system produced itself,
+and architecture §14 admits no file uploads and no arbitrary paths, so no unbounded payload
+can reach the method.
+
+Three regressions, all deterministic: substitution inside the window, deletion inside the
+window, and stability across repeated iteration. The third is the property that makes
+handing a delivery onward before consuming it safe.
+
 #### What Stage F cost, worth carrying forward
 
 1. **A defect can be older than the stage that exposes it, and this is now the second time
@@ -940,6 +979,14 @@ out to be wrong in exactly this way.
    the middleware toggled on and off, not by reading `StreamingResponse`. Three plausible
    explanations were available - the explicit `Content-Length`, the generator, the ASGI
    replay - and only the isolation run distinguished them.
+4. **A green gate is not the same as a correct design, and the user found the difference
+   twice in M3.** Stage E's two product defects and Stage F's TOCTOU window were all found
+   by reading the diff, after the suite passed. The shape is consistent: each was a
+   property no assertion happened to hold - a route spelled differently from the
+   specification, a provenance value that was wrong rather than absent, a verification that
+   covered the wrong bytes. A suite proves what it was asked to prove, and lazily reopening
+   a verified path is invisible to every test that consumes the stream immediately, which
+   was all of them.
 
 Stage G has not begun.
 
