@@ -94,6 +94,7 @@ class JobStore(Protocol):
         source_url: str | None = ...,
         source_metadata: dict[str, Any] | None = ...,
         snapshot_id: str | None = ...,
+        captured_at: str | None = ...,
     ) -> str: ...
 
     def snapshot_for_content_hash(

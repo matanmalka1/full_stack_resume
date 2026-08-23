@@ -191,6 +191,7 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
         source_url: str | None = None,
         source_metadata: dict[str, Any] | None = None,
         snapshot_id: str | None = None,
+        captured_at: str | None = None,
     ) -> str:
         with self.transaction() as connection:
             prior = connection.execute(
@@ -212,7 +213,7 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
                     source_hash,
                     normalized_hash,
                     source_url,
-                    utc_now(),
+                    captured_at or utc_now(),
                     canonical_json(source_metadata or {}),
                     source_hash,
                     prior["id"],

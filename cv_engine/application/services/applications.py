@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import re
 
-from ...util import new_id, normalized_text, sha256_text
+from ...domain.models import AuditRecord
+from ...util import new_id, normalized_text, sha256_text, utc_now
 from ..commands import (
     CreatedJobSnapshot,
     CreateJobSnapshotCommand,
@@ -145,21 +146,45 @@ class ApplicationService(ServiceBase[PreparationRepository]):
         if self.repo.snapshot_for_content_hash(command.application_id, source_hash) is not None:
             raise StateConflict("the application already has a snapshot with this exact content")
         snapshot_id = new_id()
+        normalized_hash = sha256_text(normalized_text(command.job_text))
+        now = utc_now()
         try:
             payload = self.snapshot_payloads.commit_snapshot(
                 command.application_id,
                 snapshot_id,
                 command.job_text,
             )
-            created_id = self.repo.add_job_snapshot(
-                command.application_id,
-                payload.reference,
-                payload.sha256,
-                sha256_text(normalized_text(command.job_text)),
-                source_url=command.source_url,
-                source_metadata=command.source_metadata,
-                snapshot_id=snapshot_id,
-            )
+            with self.repo.unit_of_work() as uow:
+                transaction = self.repo.bind(uow)
+                created_id = transaction.add_job_snapshot(
+                    command.application_id,
+                    payload.reference,
+                    payload.sha256,
+                    normalized_hash,
+                    source_url=command.source_url,
+                    source_metadata=command.source_metadata,
+                    snapshot_id=snapshot_id,
+                    captured_at=now,
+                )
+                transaction.insert_audit(
+                    AuditRecord(
+                        id=new_id(),
+                        application_id=command.application_id,
+                        action="create_job_snapshot",
+                        entity_type="job_snapshot",
+                        entity_id=created_id,
+                        actor_type=command.actor_type,
+                        client=command.client,
+                        installation_id=self.installation_id,
+                        occurred_at=now,
+                        details={
+                            "source_hash": payload.sha256,
+                            "normalized_hash": normalized_hash,
+                            "source_url": command.source_url,
+                        },
+                    )
+                )
+                uow.commit()
         except ValueError as exc:
             raise PreconditionFailed(str(exc)) from exc
         except OSError as exc:

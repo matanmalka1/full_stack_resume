@@ -43,6 +43,8 @@ class CreateJobSnapshotCommand(BoundaryDTO):
     job_text: str
     source_url: str | None = None
     source_metadata: dict[str, Any] = {}
+    actor_type: Literal["user", "system"] = "user"
+    client: Literal["web", "cli", "worker"] = "cli"
 
 
 class CloseApplicationCommand(BoundaryDTO):

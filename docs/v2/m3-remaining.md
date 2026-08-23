@@ -201,14 +201,22 @@ Three rounds of evidence were needed, and what each cost is worth carrying forwa
       normalized-text hash, company/title heuristic. Each match reports which one matched.
 - [x] `IngestCommand` gains `client`, `actor_type`, `acknowledged_duplicates`; `ingest`
       stops hardcoding `client="cli"`.
-- [x] `create_job_snapshot`, `close_application`.
+- [x] `create_job_snapshot` records `actor_type`/`client` and appends its audit record in
+      the same SQLite transaction as snapshot metadata. `close_application` is complete.
 - [x] Duplicate acknowledgement: create always re-runs detection; matches plus
       `acknowledged_duplicates=false` is **412 `DUPLICATE_ACKNOWLEDGEMENT_REQUIRED`** with
       the matches in `context` and **nothing created**; the retry with the flag is 201 and
       still carries the warnings.
-- [x] Endpoints, including `POST /applications/{id}/close`. No command ships without one.
+- [x] Endpoints, enumerated so completeness is reviewable: application create/list/detail,
+      duplicate-check, job-snapshot creation, `GET /applications/{id}/artifacts`,
+      `GET /applications/{id}/decision`, and `POST /applications/{id}/close`. No command
+      ships without one.
 
-**Stage B is closed**, at `0374aa5`, on focused evidence the user ran and accepted.
+**The focused Stage B repair is implemented and awaiting new user evidence.** The earlier
+closure at `0374aa5` / `a0c3c34` was premature: its tests did not prove atomic snapshot
+audit, and the endpoint checklist was too general to reveal the missing artifact and
+decision reads. The accepted evidence remains truthful for what it ran, but it does not
+close these two gaps.
 
 | Evidence | Result |
 | --- | --- |
@@ -219,9 +227,11 @@ Three rounds of evidence were needed, and what each cost is worth carrying forwa
 | Pyright | **0 errors, 0 warnings, 0 informations** |
 | Diff whitespace check | passed |
 
-The 9 new cases live in `test_api_applications.py`, so the predicted next non-browser
-collection is **268**: Stage A's 259 plus exactly 9. That is a prediction, not a full-suite
-claim; the full non-browser suite remains the M3 boundary gate. Stage C has not begun.
+The repair adds 2 cases to `test_api_applications.py`: audit-insertion rollback and the two
+read endpoints. Its 11 cases make the predicted next non-browser collection **270**:
+Stage A's 259 plus Stage B's 11. OpenAPI/TypeScript have been regenerated. Stage B remains
+open until the user runs and accepts the focused handover; the full non-browser suite
+remains the M3 boundary gate. Stage C has not begun.
 
 ### C — Operations surface
 

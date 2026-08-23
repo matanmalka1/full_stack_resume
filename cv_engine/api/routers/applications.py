@@ -12,11 +12,13 @@ from ..dependencies import Services
 from ..schemas.applications import (
     ApplicationDetailResponse,
     ApplicationListResponse,
+    ArtifactVersionsResponse,
     CloseApplicationResponse,
     CreateApplicationRequest,
     CreateApplicationResponse,
     CreateJobSnapshotRequest,
     CreateJobSnapshotResponse,
+    DecisionRecordResponse,
     DuplicateCheckRequest,
     DuplicateCheckResponse,
 )
@@ -71,6 +73,26 @@ def application_detail(application_id: str, services: Services) -> ApplicationDe
     return ApplicationDetailResponse.model_validate(result.model_dump(mode="json"))
 
 
+@router.get(
+    "/{application_id}/artifacts",
+    response_model=ArtifactVersionsResponse,
+    summary="List registered artifact metadata for an application",
+)
+def artifact_versions(application_id: str, services: Services) -> ArtifactVersionsResponse:
+    result = services.queries.artifact_versions(application_id)
+    return ArtifactVersionsResponse.model_validate(result.model_dump(mode="json"))
+
+
+@router.get(
+    "/{application_id}/decision",
+    response_model=DecisionRecordResponse,
+    summary="Read the latest decision record for an application",
+)
+def latest_decision(application_id: str, services: Services) -> DecisionRecordResponse:
+    result = services.queries.latest_decision(application_id)
+    return DecisionRecordResponse.model_validate(result.model_dump(mode="json"))
+
+
 @router.post(
     "/{application_id}/job-snapshots",
     response_model=CreateJobSnapshotResponse,
@@ -86,6 +108,8 @@ def create_job_snapshot(
         CreateJobSnapshotCommand(
             application_id=application_id,
             **request.model_dump(mode="python"),
+            actor_type="user",
+            client="web",
         )
     )
     return CreateJobSnapshotResponse.model_validate(result.model_dump(mode="json"))

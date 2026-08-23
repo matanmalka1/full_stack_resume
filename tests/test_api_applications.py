@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from fastapi.testclient import TestClient
 
 from cv_engine.api.app import API_PREFIX, DEFAULT_PORT, create_app
@@ -15,8 +16,10 @@ from cv_engine.application.commands import (
 )
 from cv_engine.application.errors import (
     DuplicateAcknowledgementRequired,
+    InfrastructureFailure,
     StateConflict,
 )
+from cv_engine.infrastructure.persistence.audit import SqliteAuditRepository
 from cv_engine.runtime.composition import build_api_services
 
 ALLOWED_ORIGIN = f"http://127.0.0.1:{DEFAULT_PORT}"
@@ -134,6 +137,8 @@ def test_create_job_snapshot_preserves_exact_historical_payload_and_lineage(serv
             job_text=replacement_text,
             source_url="https://jobs.example/replacement",
             source_metadata={"source_label": "updated posting"},
+            actor_type="system",
+            client="worker",
         )
     )
 
@@ -152,6 +157,40 @@ def test_create_job_snapshot_preserves_exact_historical_payload_and_lineage(serv
     detail = services.queries.application_detail(created.application_id)
     assert detail.latest_snapshot.id == replacement.job_snapshot_id
     assert detail.latest_snapshot.job_text == replacement_text
+    audit = services.repository.audit_records(created.application_id)
+    assert len(audit) == 1
+    assert audit[0]["action"] == "create_job_snapshot"
+    assert audit[0]["entity_type"] == "job_snapshot"
+    assert audit[0]["entity_id"] == replacement.job_snapshot_id
+    assert audit[0]["actor_type"] == "system"
+    assert audit[0]["client"] == "worker"
+    assert audit[0]["occurred_at"] == latest["captured_at"]
+
+
+def test_job_snapshot_metadata_rolls_back_when_its_audit_insert_fails(
+    services, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    created = services.applications.ingest(
+        IngestCommand(company="Audit Rollback Co", target_role="Developer", job_text="Initial")
+    )
+    snapshots = services.workspace.artifacts_root / "snapshots" / created.application_id
+    files_before = sorted(snapshots.iterdir())
+
+    def refuse_audit(_repository, _record) -> None:
+        raise InfrastructureFailure("injected audit failure")
+
+    monkeypatch.setattr(SqliteAuditRepository, "insert_audit", refuse_audit)
+    with pytest.raises(InfrastructureFailure, match="injected audit failure"):
+        services.applications.create_job_snapshot(
+            CreateJobSnapshotCommand(
+                application_id=created.application_id,
+                job_text="Replacement",
+            )
+        )
+
+    assert services.repository.latest_snapshot(created.application_id)["version_number"] == 1
+    assert services.repository.audit_records(created.application_id) == []
+    assert len(list(snapshots.iterdir())) == len(files_before) + 1
 
 
 def test_repeating_exact_snapshot_content_is_refused_before_a_payload_write(services) -> None:
@@ -234,6 +273,10 @@ def test_application_http_create_read_snapshot_and_close_sequence(services) -> N
         )
         assert replacement.status_code == 201
         replacement_id = replacement.json()["job_snapshot_id"]
+        snapshot_audit = services.repository.audit_records(application_id)
+        assert snapshot_audit[-1]["action"] == "create_job_snapshot"
+        assert snapshot_audit[-1]["actor_type"] == "user"
+        assert snapshot_audit[-1]["client"] == "web"
 
         closed = api.post(
             f"{API_PREFIX}/applications/{application_id}/close",
@@ -247,6 +290,29 @@ def test_application_http_create_read_snapshot_and_close_sequence(services) -> N
         assert final.json()["latest_snapshot"]["id"] == replacement_id
         assert final.json()["latest_snapshot"]["prior_snapshot_id"] == snapshot_id
         assert final.json()["recruitment_status"] == "closed"
+
+
+def test_application_http_reads_artifact_metadata_and_latest_decision(
+    approved_application,
+) -> None:
+    setup = approved_application("HTTP Read Surfaces Co")
+    with TestClient(create_app(build_api_services(setup.services))) as api:
+        artifacts = api.get(f"{API_PREFIX}/applications/{setup.application_id}/artifacts")
+        decision = api.get(f"{API_PREFIX}/applications/{setup.application_id}/decision")
+        unknown_artifacts = api.get(f"{API_PREFIX}/applications/missing/artifacts")
+        unknown_decision = api.get(f"{API_PREFIX}/applications/missing/decision")
+
+    assert artifacts.status_code == 200
+    assert artifacts.json()["items"]
+    assert all(
+        "path" not in item and "metadata_json" not in item for item in artifacts.json()["items"]
+    )
+    assert decision.status_code == 200
+    assert decision.json()["id"] == setup.approved.decision_record_id
+    assert decision.json()["application_id"] == setup.application_id
+    assert "structured_json" not in decision.json()
+    assert unknown_artifacts.status_code == 404
+    assert unknown_decision.status_code == 404
 
 
 def test_application_http_duplicate_precheck_and_acknowledgement_contract(services) -> None:

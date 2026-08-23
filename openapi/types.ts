@@ -56,6 +56,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/applications/{application_id}/artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List registered artifact metadata for an application */
+        get: operations["artifact_versions_api_v1_applications__application_id__artifacts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/applications/{application_id}/close": {
         parameters: {
             query?: never;
@@ -67,6 +84,23 @@ export interface paths {
         put?: never;
         /** Close an application without deleting its history */
         post: operations["close_application_api_v1_applications__application_id__close_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the latest decision record for an application */
+        get: operations["latest_decision_api_v1_applications__application_id__decision_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -286,6 +320,50 @@ export interface components {
             /** Updated At */
             updated_at: string;
         };
+        /** ArtifactVersionResponse */
+        ArtifactVersionResponse: {
+            /** Approved At */
+            approved_at?: string | null;
+            /** Artifact Id */
+            artifact_id: string;
+            /** Artifact Type */
+            artifact_type: string;
+            /** Content Hash */
+            content_hash: string;
+            /** Created At */
+            created_at: string;
+            /** Emphasis */
+            emphasis?: string | null;
+            /** Facts Version */
+            facts_version?: string | null;
+            /** Id */
+            id: string;
+            /** Job Snapshot Id */
+            job_snapshot_id?: string | null;
+            /** Lifecycle Status */
+            lifecycle_status: string;
+            /** Logical Name */
+            logical_name: string;
+            /** Metadata */
+            metadata: {
+                [key: string]: unknown;
+            };
+            /** Profile */
+            profile?: string | null;
+            /** Revision Id */
+            revision_id?: string | null;
+            /** Submitted At */
+            submitted_at?: string | null;
+            /** Track */
+            track?: string | null;
+            /** Version Number */
+            version_number: number;
+        };
+        /** ArtifactVersionsResponse */
+        ArtifactVersionsResponse: {
+            /** Items */
+            items: components["schemas"]["ArtifactVersionResponse"][];
+        };
         /** BlockedActionResponse */
         BlockedActionResponse: {
             /** Action */
@@ -355,6 +433,27 @@ export interface components {
             application_id: string;
             /** Job Snapshot Id */
             job_snapshot_id: string;
+        };
+        /** DecisionRecordResponse */
+        DecisionRecordResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Artifact Version Id */
+            artifact_version_id?: string | null;
+            /** Created At */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Job Analysis Id */
+            job_analysis_id: string;
+            /** Job Snapshot Id */
+            job_snapshot_id: string;
+            /** Structured */
+            structured: {
+                [key: string]: unknown;
+            };
+            /** Summary */
+            summary: string;
         };
         /** DuplicateCheckRequest */
         DuplicateCheckRequest: {
@@ -634,6 +733,37 @@ export interface operations {
             };
         };
     };
+    artifact_versions_api_v1_applications__application_id__artifacts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactVersionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     close_application_api_v1_applications__application_id__close_post: {
         parameters: {
             query?: never;
@@ -652,6 +782,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CloseApplicationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    latest_decision_api_v1_applications__application_id__decision_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionRecordResponse"];
                 };
             };
             /** @description Validation Error */

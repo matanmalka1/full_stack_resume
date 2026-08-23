@@ -38,6 +38,12 @@ from .repositories import (
 class PreparationRepository(ApplicationStore, JobStore, Protocol):
     """Application identity plus immutable snapshot/analysis preparation."""
 
+    def insert_audit(self, record: AuditRecord) -> None: ...
+
+    def unit_of_work(self) -> UnitOfWork: ...
+
+    def bind(self, uow: UnitOfWork) -> Self: ...
+
 
 class DraftRepository(ApplicationStore, JobStore, ArtifactRegistry, WorkingDraftReader, Protocol):
     """The records needed to validate, approve, render, and qualify a draft."""

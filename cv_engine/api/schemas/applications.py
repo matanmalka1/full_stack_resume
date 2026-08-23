@@ -151,6 +151,41 @@ class ApplicationListResponse(HttpSchema):
     items: list[ApplicationListItemResponse]
 
 
+class ArtifactVersionResponse(HttpSchema):
+    id: str
+    artifact_id: str
+    revision_id: str | None = None
+    artifact_type: str
+    logical_name: str
+    version_number: int
+    lifecycle_status: str
+    content_hash: str
+    created_at: str
+    approved_at: str | None = None
+    submitted_at: str | None = None
+    track: str | None = None
+    profile: str | None = None
+    emphasis: str | None = None
+    facts_version: str | None = None
+    job_snapshot_id: str | None = None
+    metadata: dict[str, Any]
+
+
+class ArtifactVersionsResponse(HttpSchema):
+    items: list[ArtifactVersionResponse]
+
+
+class DecisionRecordResponse(HttpSchema):
+    id: str
+    application_id: str
+    artifact_version_id: str | None = None
+    job_snapshot_id: str
+    job_analysis_id: str
+    structured: dict[str, Any]
+    summary: str
+    created_at: str
+
+
 class CloseApplicationResponse(HttpSchema):
     application_id: str
     current_status: str

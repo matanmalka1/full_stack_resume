@@ -726,6 +726,166 @@
         "title": "ApplicationResponse",
         "type": "object"
       },
+      "ArtifactVersionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "artifact_id": {
+            "title": "Artifact Id",
+            "type": "string"
+          },
+          "artifact_type": {
+            "title": "Artifact Type",
+            "type": "string"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "emphasis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emphasis"
+          },
+          "facts_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facts Version"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Snapshot Id"
+          },
+          "lifecycle_status": {
+            "title": "Lifecycle Status",
+            "type": "string"
+          },
+          "logical_name": {
+            "title": "Logical Name",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile"
+          },
+          "revision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Id"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          },
+          "track": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track"
+          },
+          "version_number": {
+            "title": "Version Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "artifact_id",
+          "artifact_type",
+          "logical_name",
+          "version_number",
+          "lifecycle_status",
+          "content_hash",
+          "created_at",
+          "metadata"
+        ],
+        "title": "ArtifactVersionResponse",
+        "type": "object"
+      },
+      "ArtifactVersionsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactVersionResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ArtifactVersionsResponse",
+        "type": "object"
+      },
       "BlockedActionResponse": {
         "additionalProperties": false,
         "properties": {
@@ -942,6 +1102,62 @@
           "job_snapshot_id"
         ],
         "title": "CreateJobSnapshotResponse",
+        "type": "object"
+      },
+      "DecisionRecordResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "artifact_version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Version Id"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_analysis_id": {
+            "title": "Job Analysis Id",
+            "type": "string"
+          },
+          "job_snapshot_id": {
+            "title": "Job Snapshot Id",
+            "type": "string"
+          },
+          "structured": {
+            "additionalProperties": true,
+            "title": "Structured",
+            "type": "object"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "application_id",
+          "job_snapshot_id",
+          "job_analysis_id",
+          "structured",
+          "summary",
+          "created_at"
+        ],
+        "title": "DecisionRecordResponse",
         "type": "object"
       },
       "DuplicateCheckRequest": {
@@ -1505,6 +1721,48 @@
         ]
       }
     },
+    "/api/v1/applications/{application_id}/artifacts": {
+      "get": {
+        "operationId": "artifact_versions_api_v1_applications__application_id__artifacts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactVersionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List registered artifact metadata for an application",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
     "/api/v1/applications/{application_id}/close": {
       "post": {
         "operationId": "close_application_api_v1_applications__application_id__close_post",
@@ -1542,6 +1800,48 @@
           }
         },
         "summary": "Close an application without deleting its history",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/decision": {
+      "get": {
+        "operationId": "latest_decision_api_v1_applications__application_id__decision_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionRecordResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read the latest decision record for an application",
         "tags": [
           "applications"
         ]
