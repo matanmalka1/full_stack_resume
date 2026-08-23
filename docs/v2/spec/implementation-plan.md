@@ -252,16 +252,16 @@ large frontend.
 
 ### 5.4 M3 acceptance
 
-- [ ] Real FastAPI + worker + SQLite + filesystem test completes the API sequence
+- [x] Real FastAPI + worker + SQLite + filesystem test completes the API sequence
       Create -> Analyze -> Review if needed -> Draft -> Edit -> Validate -> Approve ->
       Render -> Ready.
-- [ ] The no-review path receives an initial SelectionPlan from Analyze and can
+- [x] The no-review path receives an initial SelectionPlan from Analyze and can
       auto-generate without another selection command.
-- [ ] NeedsReview and validation failure are successful outcomes.
-- [ ] Routers contain no business logic.
-- [ ] Commands use explicit source IDs; latest appears only in read/query helpers.
-- [ ] OpenAPI and generated TypeScript types have no drift.
-- [ ] Security, race, and failure-path tests pass.
+- [x] NeedsReview and validation failure are successful outcomes.
+- [x] Routers contain no business logic.
+- [x] Commands use explicit source IDs; latest appears only in read/query helpers.
+- [x] OpenAPI and generated TypeScript types have no drift.
+- [x] Security, race, and failure-path tests pass.
 
 Stable commit boundary: API vertical slice and failures green, no Dashboard endpoints
 required beyond foundational projections.

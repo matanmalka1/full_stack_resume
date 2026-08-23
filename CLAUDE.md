@@ -159,9 +159,9 @@ what remains. A hard failure is never relabelled as a warning.
 
 ## Documentation
 
-`docs/v2/m3-remaining.md` is the single record of state — what is done, what remains,
-what is blocked. Nothing else records state. The milestone tracker moves with the
-milestone: `docs/v2/m2-remaining.md` is M2's, closed and frozen. A record under
+`docs/v2/m3-remaining.md` is M3's closed state record. No M4 tracker exists until M4
+begins. The milestone tracker moves with the milestone: `docs/v2/m2-remaining.md` is
+M2's, closed and frozen. A record under
 `docs/v2/records/` is frozen when its boundary closes: it keeps its own evidence and is
 not updated with later state. Non-milestone cleanup items live in
 `docs/v2/cleanup-todos.md`.
@@ -183,3 +183,9 @@ Retired 2026-08-19: the **Migration safety** section and the v1 arm of Class C. 
 those rules ever fired — they guarded a migration that was then not performed. Replaced
 by three derived checks: the frozen schema fingerprint, `looks_legacy`, and
 `cv workspace backup`. Do not re-add them; see `docs/v2/m2-remaining.md`.
+
+M3 close 2026-08-23: **no control was retirable.** Every remaining control still guards
+an active failure mode, and M3 exercised several of them: fresh count reconciliation
+caught a stale baseline, the offline CLI exposed immutable-record omissions, and review
+found defects green tests did not. The two deliberately-empty exception sets were not
+considered candidates, as required.

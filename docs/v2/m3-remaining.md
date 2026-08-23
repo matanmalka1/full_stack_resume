@@ -1,7 +1,8 @@
 # M3 — remaining work
 
-Status tracker. Updated as boundaries close. Authority for scope remains
-`docs/v2/spec/implementation-plan.md` §5.1–§5.4; this file only tracks state.
+Status: **M3 closed** (2026-08-23). All §5.4 acceptance items passed. Authority for
+scope remains `docs/v2/spec/implementation-plan.md` §5.1–§5.4; the frozen evidence is
+`docs/v2/records/m3-acceptance.md`.
 
 Supersedes `docs/v2/m2-remaining.md`, which is M2's closed tracker and is not updated
 with later state.
@@ -1358,20 +1359,24 @@ proves the repository and HTTP surfaces both return the second decision. TODO 23
 the separate, non-blocking fact that golden hashes are browser-marked and therefore absent
 from the default non-browser selection.
 
-- [ ] Journeys §5.1–5.4 in full, plus **only the preparation half of §5.5**. §5.5's
+- [x] Journeys §5.1–5.4 in full, plus **only the preparation half of §5.5**. §5.5's
       submission bullet needs the submission endpoint and is **deferred to M5** — recorded,
       not quietly skipped.
-- [ ] Concurrency, Operations, security, and outcomes-as-data matrices.
-- [ ] The complete §6 AI matrix: strict schema generation, per-task Proposal parsing,
+- [x] Concurrency, Operations, security, and outcomes-as-data matrices.
+- [x] The complete §6 AI matrix: strict schema generation, per-task Proposal parsing,
       semantic support beyond fact IDs, refusal, invalid output, no silent fallback, raw
       sanitization and artifact registration, exact metadata, stateless/minimal context, one
       transient retry, **zero** retries for schema/business/unsupported-claim/conflict/stale
       source, and the five prompt-injection fixtures. The manual live OpenAI smoke is an M6
       §8.2 release item, not an M3 CI gate.
-- [ ] Tick the seven §5.4 boxes in `implementation-plan.md`.
-- [ ] Freeze a close-out record under `docs/v2/records/`; close this file out.
-- [ ] `CLAUDE.md`'s counterweight: name one control retired, or state why none was
+- [x] Tick the seven §5.4 boxes in `implementation-plan.md`.
+- [x] Freeze a close-out record under `docs/v2/records/`; close this file out.
+- [x] `CLAUDE.md`'s counterweight: name one control retired, or state why none was
       retirable. Not the two empty exception sets.
+
+**Stage H and M3 are closed.** Final evidence, assertion mapping, count reconciliation,
+the offline CLI run, and the explicit M5/M6 deferrals are frozen in
+`docs/v2/records/m3-acceptance.md`. M4 has not begun.
 
 ## Baseline
 
