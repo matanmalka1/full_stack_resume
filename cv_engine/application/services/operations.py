@@ -20,7 +20,9 @@ from ..operations import (
     OperationOutputReference,
     OperationSources,
     OperationType,
+    OperationView,
     PersistedOperation,
+    as_operation_view,
     is_terminal_operation,
 )
 from ..ports import (
@@ -397,8 +399,14 @@ class OperationService(ServiceBase[OperationRepository]):
         )
         return self.repo.create_operation(request, installation_id=self.installation_id)
 
-    def cancel(self, operation_id: str) -> PersistedOperation:
-        return self.repo.request_operation_cancellation(operation_id)
+    def cancel(self, operation_id: str) -> OperationView:
+        """Cancel queued work outright; ask running work to stop (§19).
+
+        The narrow view is the contract for every client of this service - the
+        CLI and the API alike. Only the runner reads the full record, and it
+        reads it from the repository rather than from here.
+        """
+        return as_operation_view(self.repo.request_operation_cancellation(operation_id))
 
     def _approval_result(self, revision_id: str) -> ApprovalResult | None:
         drafts = cast(DraftRepository, self.repo)
@@ -495,7 +503,12 @@ class OperationService(ServiceBase[OperationRepository]):
         self.repo.complete_idempotency_receipt(receipt["id"], result.model_dump(mode="json"))
         return result
 
-    def retry(self, operation_id: str, *, idempotency_key: str) -> PersistedOperation:
+    def retry(self, operation_id: str, *, idempotency_key: str) -> OperationView:
+        """Queue a new Operation carrying `retry_of_operation_id` (§19).
+
+        The original stays immutable, and reusing its idempotency key returns
+        the original rather than creating a second attempt.
+        """
         original = self.repo.operation(operation_id)
         if not is_terminal_operation(original.status):
             raise StateConflict("only a terminal Operation can be retried")
@@ -509,7 +522,10 @@ class OperationService(ServiceBase[OperationRepository]):
             model=original.model,
             retry_of_operation_id=original.id,
         )
-        return self.repo.create_operation(request, installation_id=self.installation_id)
+        return as_operation_view(
+            self.repo.create_operation(request, installation_id=self.installation_id)
+        )
 
-    def get(self, operation_id: str) -> PersistedOperation:
-        return self.repo.operation(operation_id)
+    def get(self, operation_id: str) -> OperationView:
+        """Operation status as a query contract (§20), never the runner record."""
+        return as_operation_view(self.repo.operation(operation_id))

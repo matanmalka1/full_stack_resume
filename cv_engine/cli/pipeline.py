@@ -6,6 +6,7 @@ import json
 
 from ..application.commands import AnalyzeCommand, DraftCommand, IngestCommand, RenderCommand
 from ..application.errors import WorkflowError
+from ..application.operations import as_operation_view
 from ..util import new_id
 from .context import CommandContext, _command
 from .fast import (
@@ -212,7 +213,10 @@ def _operation(context: CommandContext) -> int:
             args.operation_id,
             idempotency_key=args.idempotency_key,
         )
-        result = services.foreground_operations.execute(queued.id)
+        # The foreground executor is a runner host and hands back the full
+        # record; `show` and `cancel` print the client view, so this narrows to
+        # the same shape rather than printing a wider one for one subcommand.
+        result = as_operation_view(services.foreground_operations.execute(queued.id))
     _print(result)
     if args.operation_command == "retry" and result.status.value != "succeeded":
         return 1

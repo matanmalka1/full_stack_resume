@@ -37,6 +37,7 @@ from cv_engine.application.operations import (
     OperationStatus,
     OperationType,
     allows_automatic_retry,
+    as_operation_view,
     is_terminal_operation,
     require_operation_transition,
 )
@@ -150,8 +151,8 @@ def test_sqlite_operation_creation_is_idempotent_and_projects_active_work(servic
     assert services.repository.operation(created.id) == created
     assert services.repository.active_operation(ingested.application_id).id == created.id
     detail = services.queries.application_detail(ingested.application_id)
-    assert detail.active_operation["id"] == created.id
-    assert detail.active_operation["status"] == "queued"
+    assert detail.active_operation == as_operation_view(created)
+    assert detail.active_operation.status is OperationStatus.QUEUED
 
 
 def test_sqlite_operation_rejects_idempotency_key_with_another_payload(services) -> None:
@@ -848,6 +849,10 @@ def test_cancel_and_manual_retry_keep_the_old_operation_immutable(services) -> N
     operation = _operation_for_runner(services, "Manual Retry Co")
     cancelled = services.operations.cancel(operation.id)
     assert cancelled.status is OperationStatus.CANCELLED
+    # The service hands back the client view; the immutable record it narrows is
+    # read once here so the assertion below still compares the whole row.
+    cancelled_record = services.repository.operation(operation.id)
+    assert as_operation_view(cancelled_record) == cancelled
 
     retried = services.operations.retry(operation.id, idempotency_key="manual-retry-new")
     assert retried.id != operation.id
@@ -858,7 +863,7 @@ def test_cancel_and_manual_retry_keep_the_old_operation_immutable(services) -> N
         operation.id, idempotency_key=operation.idempotency_key
     )
     assert reused_old_key.id == operation.id
-    assert services.repository.operation(operation.id) == cancelled
+    assert services.repository.operation(operation.id) == cancelled_record
 
 
 def test_cli_operation_show_cancel_and_failed_retry_return_truthful_status(services) -> None:

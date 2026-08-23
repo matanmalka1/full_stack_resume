@@ -15,6 +15,7 @@ from ...application.operations import (
     OperationStatus,
     OperationView,
     PersistedOperation,
+    as_operation_view,
     required_operation_resources,
 )
 from ...util import canonical_json, new_id, sha256_text, utc_now
@@ -162,9 +163,8 @@ class SqliteOperationRepository(SqliteRepositoryBase):
             ).fetchone()
             if row is None:
                 return None
-            return OperationView.model_validate(
-                self._operation_record(row, self._outputs(connection, row["id"])),
-                from_attributes=True,
+            return as_operation_view(
+                self._operation_record(row, self._outputs(connection, row["id"]))
             )
 
     @staticmethod

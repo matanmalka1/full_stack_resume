@@ -224,6 +224,19 @@ class PersistedOperation(OperationView):
     technical_log_reference: str | None = None
 
 
+def as_operation_view(record: OperationView) -> OperationView:
+    """Narrow a runner record to what a query client is allowed to see.
+
+    `PersistedOperation` carries the payload, the frozen sources, the lease, and
+    the idempotency key. None of that belongs to a client: the payload is the
+    command the caller already sent, the lease is a runner concern, and the
+    idempotency key is a credential for replaying a write. Narrowing happens in
+    one function so a new runner-facing field cannot reach a client merely by
+    being added to the subclass.
+    """
+    return OperationView.model_validate(record, from_attributes=True)
+
+
 def required_operation_resources(request: CreateOperation) -> tuple[OperationResource, ...]:
     """Derive lock requirements so callers cannot weaken concurrency policy."""
     resources = [
