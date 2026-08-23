@@ -935,6 +935,104 @@
         "title": "ApproveDraftRequest",
         "type": "object"
       },
+      "ApprovedRevisionResponse": {
+        "additionalProperties": false,
+        "description": "One immutable ApprovedRevision and its re-derived Ready qualification.\n\n`ready_qualified` is a property of this revision's own stored evidence.\nWhether it is the *active* Ready milestone is `preparation_state` on\n`GET /applications/{id}`, and the two are separate on purpose: a revision\nstays qualified and downloadable after a newer JobSnapshot has moved the\nApplication off it.",
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "approved_at": {
+            "title": "Approved At",
+            "type": "string"
+          },
+          "decision_provenance": {
+            "additionalProperties": true,
+            "title": "Decision Provenance",
+            "type": "object"
+          },
+          "draft_content_hash": {
+            "title": "Draft Content Hash",
+            "type": "string"
+          },
+          "draft_edit_version": {
+            "title": "Draft Edit Version",
+            "type": "integer"
+          },
+          "facts_version": {
+            "title": "Facts Version",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_analysis_id": {
+            "title": "Job Analysis Id",
+            "type": "string"
+          },
+          "job_snapshot_id": {
+            "title": "Job Snapshot Id",
+            "type": "string"
+          },
+          "pdf_artifact_version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdf Artifact Version Id"
+          },
+          "ready_qualified": {
+            "title": "Ready Qualified",
+            "type": "boolean"
+          },
+          "ready_validation": {
+            "additionalProperties": true,
+            "title": "Ready Validation",
+            "type": "object"
+          },
+          "selection_plan_id": {
+            "title": "Selection Plan Id",
+            "type": "string"
+          },
+          "validation_run_id": {
+            "title": "Validation Run Id",
+            "type": "string"
+          },
+          "version_number": {
+            "title": "Version Number",
+            "type": "integer"
+          },
+          "working_draft_id": {
+            "title": "Working Draft Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "application_id",
+          "version_number",
+          "working_draft_id",
+          "job_snapshot_id",
+          "job_analysis_id",
+          "selection_plan_id",
+          "validation_run_id",
+          "draft_edit_version",
+          "draft_content_hash",
+          "facts_version",
+          "approved_at",
+          "decision_provenance",
+          "ready_qualified",
+          "ready_validation"
+        ],
+        "title": "ApprovedRevisionResponse",
+        "type": "object"
+      },
       "ArchivedWorkingDraftResponse": {
         "additionalProperties": false,
         "properties": {
@@ -967,6 +1065,177 @@
           "artifact_version_id"
         ],
         "title": "ArchivedWorkingDraftResponse",
+        "type": "object"
+      },
+      "ArtifactVersionDetailResponse": {
+        "additionalProperties": false,
+        "description": "Registered metadata plus verified download eligibility (§20).",
+        "properties": {
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "artifact_id": {
+            "title": "Artifact Id",
+            "type": "string"
+          },
+          "artifact_type": {
+            "title": "Artifact Type",
+            "type": "string"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "downloadable": {
+            "title": "Downloadable",
+            "type": "boolean"
+          },
+          "emphasis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emphasis"
+          },
+          "facts_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facts Version"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Snapshot Id"
+          },
+          "lifecycle_status": {
+            "title": "Lifecycle Status",
+            "type": "string"
+          },
+          "logical_name": {
+            "title": "Logical Name",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile"
+          },
+          "revision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Id"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          },
+          "track": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          },
+          "version_number": {
+            "title": "Version Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "artifact_id",
+          "artifact_type",
+          "logical_name",
+          "version_number",
+          "lifecycle_status",
+          "content_hash",
+          "created_at",
+          "metadata",
+          "downloadable"
+        ],
+        "title": "ArtifactVersionDetailResponse",
         "type": "object"
       },
       "ArtifactVersionResponse": {
@@ -2137,6 +2406,21 @@
         "title": "ReasonResponse",
         "type": "object"
       },
+      "RenderRevisionRequest": {
+        "additionalProperties": false,
+        "description": "The Application the client believes it is rendering for.\n\nExplicit rather than inferred from the revision, for the same reason\n`apply-decisions` states it: a client that names both is telling the server\nwhat it believes, and a mismatch is a `412` naming the broken lineage\ninstead of a render landing on another Application's revision.",
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "application_id"
+        ],
+        "title": "RenderRevisionRequest",
+        "type": "object"
+      },
       "ReplaceWorkingDraftRequest": {
         "additionalProperties": false,
         "description": "Replacement names its own compatible analysis and plan (§14).\n\nThe route is `POST /applications/{id}/working-draft/replace`, so the path\ncarries the Application and the body carries the draft. Both are explicit\nand neither is inferred from the other: the client states which draft of\nwhich Application it means, and a pair that does not match is a `412`.\n\n`keep_previous` is the Keep decision: it materializes the immutable\nhistorical snapshot before the replacement is attempted.",
@@ -3208,6 +3492,262 @@
         "summary": "Replace the active working draft from an explicit analysis and plan",
         "tags": [
           "applications"
+        ]
+      }
+    },
+    "/api/v1/approved-revisions/{approved_revision_id}": {
+      "get": {
+        "description": "`200` with the immutable record and a freshly re-derived qualification (§20).\n\nA revision superseded by a newer JobSnapshot still answers here, still\nreports `ready_qualified`, and is still exportable. What it stops being is\nthe Application's active `preparation_state`, which is a different question\nasked at a different resource.",
+        "operationId": "approved_revision_detail_api_v1_approved_revisions__approved_revision_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "approved_revision_id",
+            "required": true,
+            "schema": {
+              "title": "Approved Revision Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovedRevisionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read one approved revision and its Ready qualification",
+        "tags": [
+          "approved-revisions"
+        ]
+      }
+    },
+    "/api/v1/approved-revisions/{approved_revision_id}/recruiter-pdf": {
+      "get": {
+        "description": "`200` and the PDF; `412` when this exact pair is not Ready-qualified.\n\nBoth IDs are checked against each other before qualification is computed,\nso a PDF belonging to another revision is `412 LINEAGE_BROKEN` rather than\na qualification run against a mismatched pair.",
+        "operationId": "export_recruiter_pdf_api_v1_approved_revisions__approved_revision_id__recruiter_pdf_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "approved_revision_id",
+            "required": true,
+            "schema": {
+              "title": "Approved Revision Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The exact rendered PDF to export. Required and explicit: an export that resolved the latest PDF for itself could hand over a different document than the one the caller verified.",
+            "in": "query",
+            "name": "pdf_artifact_version_id",
+            "required": true,
+            "schema": {
+              "description": "The exact rendered PDF to export. Required and explicit: an export that resolved the latest PDF for itself could hand over a different document than the one the caller verified.",
+              "title": "Pdf Artifact Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The rendered PDF, named as a recruiter should see it."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export the exact Ready PDF under its recruiter-facing filename",
+        "tags": [
+          "approved-revisions"
+        ]
+      }
+    },
+    "/api/v1/approved-revisions/{approved_revision_id}/render": {
+      "post": {
+        "description": "`202` and a `Location`: rendering is a durable Operation (§16).\n\nA failed render leaves the ApprovedRevision approved. Nothing in the render\npath writes to the revision - it is immutable - so the failure is recorded\non the Operation and in a `rendered-invalid` artifact lifecycle, and the\nrevision is exactly as approvable-from as it was. Retrying is\n`POST /operations/{id}/retry`, which creates a *new* Operation rather than\nreopening the failed one.\n\nThe same `Idempotency-Key` with the same payload returns the Operation it\nalready created instead of queueing a second render.",
+        "operationId": "render_revision_api_v1_approved_revisions__approved_revision_id__render_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "approved_revision_id",
+            "required": true,
+            "schema": {
+              "title": "Approved Revision Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenderRevisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Render one exact approved revision",
+        "tags": [
+          "approved-revisions"
+        ]
+      }
+    },
+    "/api/v1/artifacts/{artifact_version_id}": {
+      "get": {
+        "description": "`200` with the registration and whether its payload verifies (§20).\n\n`downloadable` is answered by running the same verification the download\nruns, so the two cannot disagree.",
+        "operationId": "artifact_detail_api_v1_artifacts__artifact_version_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "artifact_version_id",
+            "required": true,
+            "schema": {
+              "title": "Artifact Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactVersionDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read one registered artifact's metadata and download eligibility",
+        "tags": [
+          "artifacts"
+        ]
+      }
+    },
+    "/api/v1/artifacts/{artifact_version_id}/download": {
+      "get": {
+        "description": "`200` and the bytes; `412` when the stored payload does not verify.\n\nA `404` means no such registration. A `412` means the registration exists\nand its payload failed containment, presence, or its hash - three separate\ncodes, because \"somebody moved it\" and \"somebody changed it\" are different\nfindings and a client should not have to guess which it hit.\n\n`Content-Length` is set from the size the store measured after verifying\nthe hash, so a client can show progress against a number that was true of\nthe exact bytes being sent.",
+        "operationId": "download_artifact_api_v1_artifacts__artifact_version_id__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "artifact_version_id",
+            "required": true,
+            "schema": {
+              "title": "Artifact Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The registered payload, under a safe delivery filename."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download one registered artifact by ID",
+        "tags": [
+          "artifacts"
         ]
       }
     },

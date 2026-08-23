@@ -14,8 +14,12 @@ statuses, decided per request.
 
 from __future__ import annotations
 
-from fastapi import Response, status
+import string
 
+from fastapi import Response, status
+from fastapi.responses import StreamingResponse
+
+from ..application.artifacts import ArtifactDelivery
 from ..application.operations import OperationView
 from .schemas.operations import OperationResponse
 from .versioning import API_PREFIX
@@ -41,3 +45,66 @@ def accepted_operation(response: Response, operation: OperationView) -> Operatio
     response.status_code = status.HTTP_202_ACCEPTED
     response.headers["Location"] = operation_location(operation.id)
     return operation_response(operation)
+
+
+#: RFC 3986 unreserved characters. Deliberately narrower than RFC 8187's
+#: `attr-char`: over-encoding an `ext-value` is always valid, under-encoding is
+#: not, and a narrow set has no edge cases to get wrong.
+_UNRESERVED = frozenset(string.ascii_letters + string.digits + "-._~")
+
+
+def _percent_encode(value: str) -> str:
+    return "".join(
+        character
+        if character in _UNRESERVED
+        else "".join(f"%{byte:02X}" for byte in character.encode("utf-8"))
+        for character in value
+    )
+
+
+def content_disposition(filename: str) -> str:
+    """`Content-Disposition` for one download, in both spellings a browser reads.
+
+    The candidate's filename may legitimately be Hebrew - `filename_language`
+    is `en` or `he` - and a bare `filename="..."` is defined over ASCII only, so
+    a non-Latin name would arrive mangled or dropped. RFC 6266 answers this with
+    two parameters: `filename` as an ASCII fallback and `filename*` as the
+    percent-encoded UTF-8 truth, with clients preferring the second.
+
+    Encoded here rather than with `urllib.parse.quote` because `urllib` is
+    forbidden inside `api` by the layer guard. The rule is aimed at provider
+    HTTP rather than at string escaping, but a guard that gets an exemption the
+    first time it is inconvenient stops being a guard - and the replacement is
+    ten lines with no network in them.
+
+    The name is already free of quotes, separators, and control characters when
+    it gets here: `application.artifacts.safe_filename` guarantees that before
+    the name reaches transport, so a filename cannot inject a second parameter.
+    """
+    ascii_fallback = filename.encode("ascii", "replace").decode("ascii").replace("?", "_")
+    return (
+        f"attachment; filename=\"{ascii_fallback}\"; filename*=UTF-8''{_percent_encode(filename)}"
+    )
+
+
+def artifact_response(delivery: ArtifactDelivery) -> StreamingResponse:
+    """The one place a verified delivery becomes an HTTP response.
+
+    Shared by the plain artifact download and the recruiter export so the two
+    cannot drift into sending the same bytes under different headers - which is
+    the same reason `accepted_operation` exists for `202`.
+
+    `Content-Length` is the size the store measured *after* verifying the hash,
+    so it describes the exact bytes being sent. The `ETag` is the registered
+    content hash: an immutable payload's hash is a perfect validator, and a
+    client that already holds it never needs the body again.
+    """
+    return StreamingResponse(
+        delivery.stream.chunks(),
+        media_type=delivery.media_type,
+        headers={
+            "Content-Disposition": content_disposition(delivery.filename),
+            "Content-Length": str(delivery.size),
+            "ETag": f'"{delivery.content_hash}"',
+        },
+    )

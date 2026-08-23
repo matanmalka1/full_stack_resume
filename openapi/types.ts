@@ -254,6 +254,137 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/approved-revisions/{approved_revision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one approved revision and its Ready qualification
+         * @description `200` with the immutable record and a freshly re-derived qualification (§20).
+         *
+         *     A revision superseded by a newer JobSnapshot still answers here, still
+         *     reports `ready_qualified`, and is still exportable. What it stops being is
+         *     the Application's active `preparation_state`, which is a different question
+         *     asked at a different resource.
+         */
+        get: operations["approved_revision_detail_api_v1_approved_revisions__approved_revision_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/approved-revisions/{approved_revision_id}/recruiter-pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export the exact Ready PDF under its recruiter-facing filename
+         * @description `200` and the PDF; `412` when this exact pair is not Ready-qualified.
+         *
+         *     Both IDs are checked against each other before qualification is computed,
+         *     so a PDF belonging to another revision is `412 LINEAGE_BROKEN` rather than
+         *     a qualification run against a mismatched pair.
+         */
+        get: operations["export_recruiter_pdf_api_v1_approved_revisions__approved_revision_id__recruiter_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/approved-revisions/{approved_revision_id}/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Render one exact approved revision
+         * @description `202` and a `Location`: rendering is a durable Operation (§16).
+         *
+         *     A failed render leaves the ApprovedRevision approved. Nothing in the render
+         *     path writes to the revision - it is immutable - so the failure is recorded
+         *     on the Operation and in a `rendered-invalid` artifact lifecycle, and the
+         *     revision is exactly as approvable-from as it was. Retrying is
+         *     `POST /operations/{id}/retry`, which creates a *new* Operation rather than
+         *     reopening the failed one.
+         *
+         *     The same `Idempotency-Key` with the same payload returns the Operation it
+         *     already created instead of queueing a second render.
+         */
+        post: operations["render_revision_api_v1_approved_revisions__approved_revision_id__render_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/artifacts/{artifact_version_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one registered artifact's metadata and download eligibility
+         * @description `200` with the registration and whether its payload verifies (§20).
+         *
+         *     `downloadable` is answered by running the same verification the download
+         *     runs, so the two cannot disagree.
+         */
+        get: operations["artifact_detail_api_v1_artifacts__artifact_version_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/artifacts/{artifact_version_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download one registered artifact by ID
+         * @description `200` and the bytes; `412` when the stored payload does not verify.
+         *
+         *     A `404` means no such registration. A `412` means the registration exists
+         *     and its payload failed containment, presence, or its hash - three separate
+         *     codes, because "somebody moved it" and "somebody changed it" are different
+         *     findings and a client should not have to guess which it hit.
+         *
+         *     `Content-Length` is set from the size the store measured after verifying
+         *     the hash, so a client can show progress against a number that was true of
+         *     the exact bytes being sent.
+         */
+        get: operations["download_artifact_api_v1_artifacts__artifact_version_id__download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -731,6 +862,54 @@ export interface components {
             /** Validation Run Id */
             validation_run_id: string;
         };
+        /**
+         * ApprovedRevisionResponse
+         * @description One immutable ApprovedRevision and its re-derived Ready qualification.
+         *
+         *     `ready_qualified` is a property of this revision's own stored evidence.
+         *     Whether it is the *active* Ready milestone is `preparation_state` on
+         *     `GET /applications/{id}`, and the two are separate on purpose: a revision
+         *     stays qualified and downloadable after a newer JobSnapshot has moved the
+         *     Application off it.
+         */
+        ApprovedRevisionResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Approved At */
+            approved_at: string;
+            /** Decision Provenance */
+            decision_provenance: {
+                [key: string]: unknown;
+            };
+            /** Draft Content Hash */
+            draft_content_hash: string;
+            /** Draft Edit Version */
+            draft_edit_version: number;
+            /** Facts Version */
+            facts_version: string;
+            /** Id */
+            id: string;
+            /** Job Analysis Id */
+            job_analysis_id: string;
+            /** Job Snapshot Id */
+            job_snapshot_id: string;
+            /** Pdf Artifact Version Id */
+            pdf_artifact_version_id?: string | null;
+            /** Ready Qualified */
+            ready_qualified: boolean;
+            /** Ready Validation */
+            ready_validation: {
+                [key: string]: unknown;
+            };
+            /** Selection Plan Id */
+            selection_plan_id: string;
+            /** Validation Run Id */
+            validation_run_id: string;
+            /** Version Number */
+            version_number: number;
+            /** Working Draft Id */
+            working_draft_id: string;
+        };
         /** ArchivedWorkingDraftResponse */
         ArchivedWorkingDraftResponse: {
             /** Application Id */
@@ -743,6 +922,54 @@ export interface components {
             edit_version: number;
             /** Working Draft Id */
             working_draft_id: string;
+        };
+        /**
+         * ArtifactVersionDetailResponse
+         * @description Registered metadata plus verified download eligibility (§20).
+         */
+        ArtifactVersionDetailResponse: {
+            /** Approved At */
+            approved_at?: string | null;
+            /** Artifact Id */
+            artifact_id: string;
+            /** Artifact Type */
+            artifact_type: string;
+            /** Content Hash */
+            content_hash: string;
+            /** Created At */
+            created_at: string;
+            /** Downloadable */
+            downloadable: boolean;
+            /** Emphasis */
+            emphasis?: string | null;
+            /** Facts Version */
+            facts_version?: string | null;
+            /** Id */
+            id: string;
+            /** Job Snapshot Id */
+            job_snapshot_id?: string | null;
+            /** Lifecycle Status */
+            lifecycle_status: string;
+            /** Logical Name */
+            logical_name: string;
+            /** Metadata */
+            metadata: {
+                [key: string]: unknown;
+            };
+            /** Profile */
+            profile?: string | null;
+            /** Revision Id */
+            revision_id?: string | null;
+            /** Size */
+            size?: number | null;
+            /** Submitted At */
+            submitted_at?: string | null;
+            /** Track */
+            track?: string | null;
+            /** Unavailable Reason */
+            unavailable_reason?: string | null;
+            /** Version Number */
+            version_number: number;
         };
         /** ArtifactVersionResponse */
         ArtifactVersionResponse: {
@@ -1165,6 +1392,19 @@ export interface components {
             };
             /** Message */
             message: string;
+        };
+        /**
+         * RenderRevisionRequest
+         * @description The Application the client believes it is rendering for.
+         *
+         *     Explicit rather than inferred from the revision, for the same reason
+         *     `apply-decisions` states it: a client that names both is telling the server
+         *     what it believes, and a mismatch is a `412` naming the broken lineage
+         *     instead of a render landing on another Application's revision.
+         */
+        RenderRevisionRequest: {
+            /** Application Id */
+            application_id: string;
         };
         /**
          * ReplaceWorkingDraftRequest
@@ -1778,6 +2018,171 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approved_revision_detail_api_v1_approved_revisions__approved_revision_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                approved_revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovedRevisionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_recruiter_pdf_api_v1_approved_revisions__approved_revision_id__recruiter_pdf_get: {
+        parameters: {
+            query: {
+                /** @description The exact rendered PDF to export. Required and explicit: an export that resolved the latest PDF for itself could hand over a different document than the one the caller verified. */
+                pdf_artifact_version_id: string;
+            };
+            header?: never;
+            path: {
+                approved_revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rendered PDF, named as a recruiter should see it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    render_revision_api_v1_approved_revisions__approved_revision_id__render_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                approved_revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenderRevisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    artifact_detail_api_v1_artifacts__artifact_version_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                artifact_version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactVersionDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_artifact_api_v1_artifacts__artifact_version_id__download_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                artifact_version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The registered payload, under a safe delivery filename. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
                 };
             };
             /** @description Validation Error */
