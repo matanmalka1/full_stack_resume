@@ -6,12 +6,19 @@ from ...domain.analysis.approval import merge_classification
 from ...domain.analysis.classification import classify_job
 from ...domain.models import (
     JobAnalysis,
+    OverrideKey,
+    Profile,
     SelectionManifest,
 )
+from ...domain.profiles import ProfileStore
 from ...domain.selection import build_selection
 from ..commands import (
+    AnalysisDecisionsResult,
     AnalysisResult,
     AnalyzeCommand,
+    ApplyAnalysisDecisionsCommand,
+    CreateSelectionPlanCommand,
+    SelectionPlanResult,
 )
 from ..errors import (
     # Re-exported: the v1 CLI and test suite catch WorkflowError from here, and
@@ -59,6 +66,48 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         """
         prepared = self.prepare(command)
         return self.activate(command, prepared)
+
+    @staticmethod
+    def _consistent_profile(analysis: JobAnalysis, profiles: ProfileStore) -> Profile:
+        """The Profile this classification names, or the refusal that it disagrees.
+
+        A Track, Profile, and Emphasis that disagree can never produce a draft,
+        so the combination is refused wherever it is about to be acted on rather
+        than only where it is about to be written.
+        """
+        try:
+            selected = profiles.get(analysis.profile)
+        except (KeyError, ValueError) as exc:
+            raise PreconditionFailed(f"analysis selected an unavailable Profile: {exc}") from exc
+        if analysis.track is not selected.track:
+            raise StateConflict(
+                f"classified Track {analysis.track.value} and Profile "
+                f"{analysis.profile.value} are inconsistent: {analysis.profile.value} "
+                f"belongs to Track {selected.track.value}"
+            )
+        if analysis.emphasis not in selected.allowed_emphases:
+            raise StateConflict(
+                f"Emphasis {analysis.emphasis.value} is not allowed for Profile "
+                f"{analysis.profile.value}"
+            )
+        return selected
+
+    def _analysis_record(self, application_id: str, job_analysis_id: str) -> dict:
+        """One named analysis, proven to belong to the named Application.
+
+        Both IDs are explicit. Resolving the analysis from the Application would
+        be `latest` inside a command, which is exactly what lets a decision land
+        on something other than what the user was looking at.
+        """
+        try:
+            record = self.repo.get_analysis(job_analysis_id)
+        except UnknownRecord as exc:
+            raise UnknownRecord(f"unknown job analysis: {job_analysis_id}") from exc
+        if record["application_id"] != application_id:
+            raise LineageBroken(
+                f"job analysis {job_analysis_id} does not belong to application {application_id}"
+            )
+        return record
 
     def prepare(self, command: AnalyzeCommand) -> PreparedAnalysis:
         """Validate and compute an analysis without mutating durable application state."""
@@ -134,21 +183,7 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         # and Emphasis disagree can never produce a draft, so persisting it would
         # only leave the application classified by a combination the engine
         # refuses to act on.
-        try:
-            selected_profile = profiles.get(result.profile)
-        except (KeyError, ValueError) as exc:
-            raise PreconditionFailed(f"analysis selected an unavailable Profile: {exc}") from exc
-        if result.track is not selected_profile.track:
-            raise StateConflict(
-                f"classified Track {result.track.value} and Profile {result.profile.value} "
-                f"are inconsistent: {result.profile.value} belongs to Track "
-                f"{selected_profile.track.value}"
-            )
-        if result.emphasis not in selected_profile.allowed_emphases:
-            raise StateConflict(
-                f"Emphasis {result.emphasis.value} is not allowed for Profile "
-                f"{result.profile.value}"
-            )
+        selected_profile = self._consistent_profile(result, profiles)
 
         try:
             _, plan_manifest = build_selection(
@@ -214,4 +249,178 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             analysis_id=analysis_id,
             selection_plan_id=selection_plan.id,
             analysis=prepared.result,
+        )
+
+    def create_selection_plan(self, command: CreateSelectionPlanCommand) -> SelectionPlanResult:
+        """§13, deterministic form: synchronous, and it returns the plan itself.
+
+        No provider call happens inside a synchronous request, so this path
+        never needs one. The AI `propose_selection_plan` mode is the same
+        command's asynchronous form and arrives with the rest of the AI tasks.
+        """
+        record = self._analysis_record(command.application_id, command.job_analysis_id)
+        analysis: JobAnalysis = record["analysis"]
+        knowledge = self.load_knowledge()
+        self._refuse_moved_sources(command, knowledge)
+        selected_profile = self._consistent_profile(analysis, knowledge.profiles)
+        try:
+            _, manifest = build_selection(
+                analysis=analysis,
+                profile=selected_profile,
+                policy=knowledge.policies.get(analysis.emphasis),
+                policy_store_version=knowledge.policies.version,
+                facts=knowledge.facts,
+                line_groups=(
+                    knowledge.presentations.line_groups(selected_profile, analysis.emphasis)
+                    if knowledge.presentations is not None
+                    else None
+                ),
+                pinned_fact_ids=frozenset(command.pinned_fact_ids),
+                excluded_fact_ids=frozenset(command.excluded_fact_ids),
+            )
+        except ValueError as exc:
+            raise PreconditionFailed(f"selection plan could not be built: {exc}") from exc
+        plan = self.repo.create_selection_plan(
+            command.application_id,
+            command.job_analysis_id,
+            manifest,
+            candidate_context_version=knowledge.candidate.context_version,
+            candidate_context_hash=knowledge.candidate.version_hash,
+            profile_version=knowledge.profiles.version,
+            selection_policy_version=knowledge.policies.version,
+            track_emphasis_dependencies={
+                "track": analysis.track.value,
+                "emphasis": analysis.emphasis.value,
+            },
+        )
+        return SelectionPlanResult(
+            application_id=command.application_id,
+            job_analysis_id=command.job_analysis_id,
+            selection_plan_id=plan.id,
+            plan=plan,
+        )
+
+    @staticmethod
+    def _refuse_moved_sources(command: CreateSelectionPlanCommand, knowledge) -> None:
+        """The optimistic check on what the user was looking at when they decided.
+
+        Each expectation is optional and checked only when the client states it.
+        A client that states nothing is planning against current Knowledge and
+        says so; a client that states a version which has since moved is
+        refused, because the candidate accounting it showed the user no longer
+        describes what this plan would contain.
+        """
+        expected = (
+            (
+                "candidate context",
+                command.expected_candidate_context_hash,
+                knowledge.candidate.version_hash,
+            ),
+            ("Profile store", command.expected_profile_version, knowledge.profiles.version),
+            (
+                "selection policy",
+                command.expected_selection_policy_version,
+                knowledge.policies.version,
+            ),
+        )
+        moved = [name for name, want, have in expected if want is not None and want != have]
+        if moved:
+            raise PreconditionFailed(
+                f"Knowledge moved since the decision was made: {', '.join(moved)}"
+            )
+
+    def apply_analysis_decisions(
+        self, command: ApplyAnalysisDecisionsCommand
+    ) -> AnalysisDecisionsResult:
+        """§13: one review-form submission, and the branch it actually takes.
+
+        Meaning changed -> one new immutable JobAnalysis carrying the overrides,
+        together with its initial deterministic SelectionPlan, committed
+        atomically by `save_analysis`. Only the fact overlay changed -> one
+        replacement SelectionPlan against the same analysis. Neither branch
+        touches the analysis or plan the user decided against; both remain
+        readable history.
+
+        Accepting a low Fit or a hard gap is a meaning decision, not a selection
+        one: the acceptance is recorded as the analysis override that the state
+        projection already reads to clear `LOW_FIT_REQUIRES_ACCEPTANCE` and
+        `HARD_GAP_REQUIRES_DECISION`. There is no second place that records it.
+
+        Decisions accumulate. The submission is merged over the overrides the
+        source analysis already carried, so a second decision does not silently
+        drop the first, and withholding a field is not a retraction of it.
+        """
+        record = self._analysis_record(command.application_id, command.job_analysis_id)
+        analysis: JobAnalysis = record["analysis"]
+
+        candidates: dict[OverrideKey, str | None] = {
+            "track": command.track_override,
+            "profile": command.profile_override,
+            "emphasis": command.emphasis_override,
+            "language": command.language_override,
+        }
+        submitted: dict[OverrideKey, str] = {
+            key: value for key, value in candidates.items() if value
+        }
+        if command.accept_low_fit:
+            submitted["fit"] = "accepted-low-fit"
+        merged = {**analysis.user_override, **submitted}
+        changes_meaning = merged != dict(analysis.user_override)
+        has_overlay = bool(command.pinned_fact_ids or command.excluded_fact_ids)
+
+        if changes_meaning and has_overlay:
+            # A classification decision produces a *new* analysis whose initial
+            # plan is the deterministic one for that classification. Applying
+            # this overlay to it would silently attach decisions the user made
+            # about the old candidate accounting to a new one they have not seen.
+            raise PreconditionFailed(
+                "a classification decision creates a new analysis with its own initial "
+                "SelectionPlan; apply the fact overlay to that analysis in a second command"
+            )
+
+        if changes_meaning:
+            # Deterministic re-derivation under the user's overrides. The new
+            # record names `deterministic` as its provider truthfully: it is
+            # what produced it, whatever produced the analysis being decided on.
+            result = self.analyze(
+                AnalyzeCommand(
+                    application_id=command.application_id,
+                    job_snapshot_id=record["job_snapshot_id"],
+                    track_override=merged.get("track"),
+                    profile_override=merged.get("profile"),
+                    emphasis_override=merged.get("emphasis"),
+                    language_override=merged.get("language"),
+                    accept_low_fit=merged.get("fit") == "accepted-low-fit",
+                )
+            )
+            return AnalysisDecisionsResult(
+                application_id=command.application_id,
+                job_analysis_id=result.analysis_id,
+                selection_plan_id=result.selection_plan_id,
+                created_analysis=True,
+                analysis=result.analysis,
+                plan=self.repo.selection_plan(result.selection_plan_id),
+            )
+
+        if not has_overlay:
+            # Refused rather than answered with the plan that already exists: an
+            # empty submission that created a second identical plan would put a
+            # decision in the history that nobody made.
+            raise PreconditionFailed("the submitted decisions change nothing")
+
+        created = self.create_selection_plan(
+            CreateSelectionPlanCommand(
+                application_id=command.application_id,
+                job_analysis_id=command.job_analysis_id,
+                pinned_fact_ids=list(command.pinned_fact_ids),
+                excluded_fact_ids=list(command.excluded_fact_ids),
+            )
+        )
+        return AnalysisDecisionsResult(
+            application_id=command.application_id,
+            job_analysis_id=command.job_analysis_id,
+            selection_plan_id=created.selection_plan_id,
+            created_analysis=False,
+            analysis=analysis,
+            plan=created.plan,
         )

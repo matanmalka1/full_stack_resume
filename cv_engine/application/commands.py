@@ -65,6 +65,51 @@ class AnalyzeCommand(BoundaryDTO):
     model: str = "rules-v1"
 
 
+class SelectionOverlay(BoundaryDTO):
+    """One user's explicit fact decisions, laid over the deterministic engine.
+
+    Two lists, not three. `selected` is what the plan reports, not what a client
+    asks for: in a budgeted deterministic selection the only way to say "include
+    this" is to hold it, which is what a pin is.
+    """
+
+    pinned_fact_ids: list[str] = []
+    excluded_fact_ids: list[str] = []
+
+
+class CreateSelectionPlanCommand(SelectionOverlay):
+    """The deterministic form of §13 `create_selection_plan`.
+
+    The `expected_*` versions are the optimistic check: they are what the client
+    had in front of it when the user decided. Left unset the plan is built
+    against whatever Knowledge currently says; set and no longer matching, the
+    command refuses rather than quietly planning against something the user never
+    saw.
+    """
+
+    application_id: str
+    job_analysis_id: str
+    expected_candidate_context_hash: str | None = None
+    expected_profile_version: str | None = None
+    expected_selection_policy_version: str | None = None
+
+
+class ApplyAnalysisDecisionsCommand(SelectionOverlay):
+    """One local review-form submission (§13).
+
+    Carries both kinds of decision because one form does. Which branch runs is
+    decided by what actually changes, not by which fields the client filled in.
+    """
+
+    application_id: str
+    job_analysis_id: str
+    track_override: str | None = None
+    profile_override: str | None = None
+    emphasis_override: str | None = None
+    language_override: str | None = None
+    accept_low_fit: bool = False
+
+
 class DraftCommand(BoundaryDTO):
     application_id: str
     job_analysis_id: str
@@ -152,6 +197,30 @@ class AnalysisResult(BoundaryDTO):
     analysis_id: str
     selection_plan_id: str
     analysis: JobAnalysis
+
+
+class SelectionPlanResult(BoundaryDTO):
+    application_id: str
+    job_analysis_id: str
+    selection_plan_id: str
+    plan: SelectionPlan
+
+
+class AnalysisDecisionsResult(BoundaryDTO):
+    """What the review form produced, and which of the two branches produced it.
+
+    `job_analysis_id` is the analysis in force *after* the command: the new one
+    when meaning changed, the original one when only the overlay did. The source
+    analysis is untouched either way, so `created_analysis` is what tells a
+    client whether it is now looking at a different record.
+    """
+
+    application_id: str
+    job_analysis_id: str
+    selection_plan_id: str
+    created_analysis: bool
+    analysis: JobAnalysis
+    plan: SelectionPlan
 
 
 class DraftResult(BoundaryDTO):
