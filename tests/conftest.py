@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 from api_harness import api_with_worker
+from fake_provider import FakeOpenAI
 from helpers import (
     ACCOUNT_MANAGER_JOB,
     AMBIGUOUS_HEBREW_JOB,
@@ -42,6 +43,7 @@ from cv_engine.domain.render_validation import RenderEvidence, RenderGeometry
 from cv_engine.domain.selection import EmphasisPolicyStore
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.infrastructure.knowledge import (
+    FileKnowledge,
     load_candidate_context,
     load_emphasis_policies,
     load_fact_store,
@@ -53,6 +55,7 @@ from cv_engine.infrastructure.persistence import Repository
 from cv_engine.infrastructure.rendering import render_pdf, validate_rendered
 from cv_engine.runtime.composition import Services, build_services
 from cv_engine.runtime.workspace import Workspace, create_workspace, load_workspace
+from cv_engine.util import new_id
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
 
@@ -167,6 +170,7 @@ class ProposalSetup:
     analysis_id: str
     analysis: JobAnalysis
     payload: dict[str, Any]
+    operation_id: str = ""
 
     def __iter__(self):
         yield self.services
@@ -229,6 +233,30 @@ def candidate_context(workspace_root: Path, fact_store: FactStore):
 @pytest.fixture
 def services(workspace: Workspace) -> Services:
     return build_services(workspace)
+
+
+@pytest.fixture
+def task_contracts(workspace: Workspace):
+    """The declared AI contracts, read the way every command reads them."""
+    return FileKnowledge(workspace.knowledge_root, workspace_root=workspace.root).task_contracts()
+
+
+@pytest.fixture
+def fake_openai(monkeypatch) -> FakeOpenAI:
+    """A scripted transport with the real adapter stack on top of it."""
+    return FakeOpenAI().install(monkeypatch)
+
+
+@pytest.fixture
+def ai_services(workspace: Workspace, fake_openai: FakeOpenAI, task_contracts) -> Services:
+    """Services whose AI provider is the real adapter over the fake transport.
+
+    `OPENAI_API_KEY` stays unset. The key is handed to the adapter directly, so
+    a test that forgets to script an answer fails on the missing script rather
+    than reaching the network, and the offline guarantee is not weakened by the
+    fixture that exercises AI.
+    """
+    return build_services(workspace, provider=fake_openai.provider(task_contracts))
 
 
 @pytest.fixture
@@ -511,8 +539,14 @@ def classification_proposal():
 
 
 @pytest.fixture
-def provider_analysis(services: Services, monkeypatch):
-    """Run `AnalysisService.analyze` end to end against a stubbed AI provider."""
+def provider_analysis(ai_services: Services, fake_openai: FakeOpenAI):
+    """Run one AI `propose_job_analysis` Operation end to end against the fake.
+
+    It goes through the Operation runner rather than calling the service,
+    because AI analysis has no synchronous form: the provider response has to
+    be preserved against an Operation ID, and a test that bypassed the runner
+    would be exercising a path the product does not have.
+    """
 
     def run(
         response: JobClassificationProposal,
@@ -522,24 +556,8 @@ def provider_analysis(services: Services, monkeypatch):
         role: str = "Account Manager",
         **analyze_kwargs,
     ) -> ProposalSetup:
-        captured: dict[str, Any] = {}
-
-        class _StubProvider:
-            name = "openai"
-
-            def __init__(self, **_kwargs):
-                pass
-
-            def run(self, task, payload, output_model):
-                assert task == "classify_job"
-                assert output_model is JobClassificationProposal
-                captured.update(payload)
-                return response, None
-
-        monkeypatch.setattr(
-            "cv_engine.infrastructure.providers.OpenAIResponsesProvider", _StubProvider
-        )
-        ingested = services.applications.ingest(
+        fake_openai.script("propose_job_analysis", response)
+        ingested = ai_services.applications.ingest(
             IngestCommand(
                 company=company,
                 target_role=role,
@@ -547,7 +565,7 @@ def provider_analysis(services: Services, monkeypatch):
                 acknowledged_duplicates=True,
             )
         )
-        analysed = services.analysis.analyze(
+        queued = ai_services.operations.submit_analysis(
             AnalyzeCommand(
                 application_id=ingested.application_id,
                 job_snapshot_id=ingested.job_snapshot_id,
@@ -559,14 +577,25 @@ def provider_analysis(services: Services, monkeypatch):
                 provider="openai",
                 model="gpt-test",
                 **analyze_kwargs,
-            )
+            ),
+            idempotency_key=new_id(),
+            analysis_service=ai_services.analysis,
         )
+        completed = ai_services.foreground_operations.execute(queued.id)
+        if completed.status.value != "succeeded":
+            raise AssertionError(
+                f"analysis Operation failed: {completed.failure_code} "
+                f"{completed.safe_failure_detail}"
+            )
+        outputs = {output.output_type: output.output_id for output in completed.outputs}
+        analysis_id = outputs["job_analysis"]
         return ProposalSetup(
-            services=services,
+            services=ai_services,
             application_id=ingested.application_id,
-            analysis_id=analysed.analysis_id,
-            analysis=analysed.analysis,
-            payload=captured,
+            analysis_id=analysis_id,
+            analysis=ai_services.repository.get_analysis(analysis_id)["analysis"],
+            payload=fake_openai.calls_for("propose_job_analysis")[-1].payload,
+            operation_id=completed.id,
         )
 
     return run
@@ -586,4 +615,11 @@ def render_validator():
 def api_worker(services: Services):
     """The API and an Operation worker running together over one Workspace."""
     with api_with_worker(services) as harness:
+        yield harness
+
+
+@pytest.fixture
+def ai_api_worker(ai_services: Services):
+    """The same arrangement, with the AI provider wired to the fake transport."""
+    with api_with_worker(ai_services) as harness:
         yield harness

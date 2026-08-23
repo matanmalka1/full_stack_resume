@@ -19,6 +19,7 @@ from cv_engine.application.commands import (
 from cv_engine.application.errors import (
     IDEMPOTENCY_KEY_REUSED,
     InfrastructureFailure,
+    ProviderTimeout,
     StateConflict,
     UnknownRecord,
 )
@@ -582,12 +583,21 @@ def test_analysis_handler_classifies_timeout_and_uses_its_single_retry(
     original_prepare = services.analysis.prepare
     attempts = 0
 
-    def prepare_with_timeout(_command):
+    def prepare_with_timeout(_command, *, operation_id=None):
+        """A timeout raised as its own class, not as a message to be searched.
+
+        `operation_id` is part of the signature because AI mode needs somewhere
+        to preserve the provider response, and a double that did not accept it
+        would pass while the real handler could not call it.
+        """
         nonlocal attempts
         attempts += 1
         if attempts == 1:
-            raise InfrastructureFailure("provider request timed out")
-        return original_prepare(_command.model_copy(update={"provider": "deterministic"}))
+            raise ProviderTimeout("provider request timed out")
+        return original_prepare(
+            _command.model_copy(update={"provider": "deterministic"}),
+            operation_id=operation_id,
+        )
 
     monkeypatch.setattr(services.analysis, "prepare", prepare_with_timeout)
     operation = services.operations.submit_analysis(
@@ -601,6 +611,49 @@ def test_analysis_handler_classifies_timeout_and_uses_its_single_retry(
     assert completed.status is OperationStatus.SUCCEEDED
     assert completed.attempts_completed == 2
     assert attempts == 2
+
+
+def test_an_unclassified_infrastructure_failure_is_terminal_and_not_retried(
+    services, monkeypatch
+) -> None:
+    """The default arm of the classification, pinned rather than assumed.
+
+    Only the four transient codes get their one retry. A failure that names
+    nothing more specific is `VALIDATION_EXECUTION_FAILED` and stops on the
+    first attempt - which is what stops a message that merely *reads* like a
+    timeout from buying a second provider call.
+    """
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company="Unclassified Co",
+            target_role="Account Manager",
+            job_text=ACCOUNT_MANAGER_JOB,
+        )
+    )
+    attempts = 0
+
+    def prepare_that_fails(_command, *, operation_id=None):
+        nonlocal attempts
+        attempts += 1
+        raise InfrastructureFailure("provider request timed out")
+
+    monkeypatch.setattr(services.analysis, "prepare", prepare_that_fails)
+    operation = services.operations.submit_analysis(
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+            provider="openai",
+            model="test-model",
+        ),
+        idempotency_key="unclassified-failure",
+        analysis_service=services.analysis,
+    )
+
+    completed = services.foreground_operations.execute(operation.id)
+
+    assert completed.status is OperationStatus.FAILED
+    assert completed.failure_code is OperationFailureCode.VALIDATION_EXECUTION_FAILED
+    assert attempts == 1
 
 
 def test_analysis_operation_fails_source_changed_when_a_new_snapshot_becomes_active(
