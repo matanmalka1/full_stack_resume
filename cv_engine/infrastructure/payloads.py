@@ -4,12 +4,22 @@ import json
 import os
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from ..application.ports import RenderTargets, RevisionPayloads, SnapshotPayload
+from ..application.errors import (
+    ArtifactContainmentRefused,
+    ArtifactHashMismatch,
+    ArtifactPayloadMissing,
+)
+from ..application.ports import (
+    ArtifactStream,
+    RenderTargets,
+    RevisionPayloads,
+    SnapshotPayload,
+)
 from ..util import new_id, sha256_file
 from .paths import relative_within, resolve_within
 
@@ -57,6 +67,9 @@ class PayloadStore:
 
     _OUTPUT_SUFFIXES = {".html", ".pdf", ".png"}
     _TEMP_DIRECTORY = "payloads"
+    #: Read size for streaming a payload outward. Bounded so a download
+    #: never holds a whole artifact in memory the way a `read_bytes` would.
+    _STREAM_CHUNK_BYTES = 64 * 1024
 
     def __init__(self, workspace: PayloadWorkspace):
         self._workspace_root = Path(workspace.root).resolve()
@@ -304,6 +317,50 @@ class PayloadStore:
             validate=self._valid_json,
         )
         return self._reference(stored)
+
+    def open_artifact(self, reference: str, expected_hash: str) -> ArtifactStream:
+        """Verify one registered immutable payload and hand back its bytes.
+
+        The order is the point. Containment first, through `resolve_within`,
+        which resolves symlinks before it compares - so a link inside the
+        artifact root pointing anywhere else is refused by the same check that
+        refuses `..`, rather than by a second rule that could disagree with it.
+        Then the approved-layout check, so a row pointing at a Workspace file
+        that is not an artifact payload cannot be served. Then the registered
+        hash, because a payload that no longer matches its registration is
+        evidence of tampering rather than something to hand to a client. Only
+        then are any bytes read.
+
+        The refusals are classified here because this is the only place that
+        knows which of the three checks failed, and each message names the
+        check rather than the path: what fails containment is exactly what must
+        not be echoed back to a client.
+
+        No `Path` leaves this method. What comes back is a size and a way to
+        read the bytes, which is what the application layer passes outward.
+        """
+        try:
+            approved = self._approved_destination(resolve_within(self._workspace_root, reference))
+        except ValueError as exc:
+            raise ArtifactContainmentRefused(
+                "the registered artifact path does not resolve to a contained "
+                "payload inside the artifact root"
+            ) from exc
+        if not approved.is_file():
+            raise ArtifactPayloadMissing("the registered artifact payload is not stored")
+        actual_hash = sha256_file(approved)
+        if actual_hash != expected_hash:
+            raise ArtifactHashMismatch(
+                f"artifact payload hash mismatch: expected {expected_hash}, got {actual_hash}"
+            )
+        size = approved.stat().st_size
+
+        def chunks() -> Iterator[bytes]:
+            with approved.open("rb") as handle:
+                while block := handle.read(self._STREAM_CHUNK_BYTES):
+                    yield block
+
+        return ArtifactStream(size=size, chunks=chunks)
 
     def read_snapshot(self, reference: str, expected_hash: str) -> str:
         candidate = resolve_within(self._workspace_root, reference)

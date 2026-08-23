@@ -24,6 +24,7 @@ from ..knowledge_mutations import (
     StagedKnowledgeFile,
 )
 from .values import (
+    ArtifactStream,
     DraftPaths,
     RenderTargets,
     RevisionPayloads,
@@ -73,6 +74,8 @@ class SnapshotPayloadStore(Protocol):
     ) -> SnapshotPayload: ...
 
     def read_snapshot(self, reference: str, expected_hash: str) -> str: ...
+
+    def open_artifact(self, reference: str, expected_hash: str) -> ArtifactStream: ...
 
 
 class RevisionPayloadStore(SnapshotPayloadStore, Protocol):

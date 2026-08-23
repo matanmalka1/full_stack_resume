@@ -37,6 +37,7 @@ from .repositories import (
     WorkingDraftReader,
 )
 from .values import (
+    ArtifactStream,
     DraftPaths,
     RenderTargets,
     RevisionPayloads,
@@ -49,6 +50,7 @@ __all__ = [
     "ApplicationStore",
     "ArtifactRegistry",
     "ArtifactStore",
+    "ArtifactStream",
     "ClassificationProvider",
     "DraftPaths",
     "DraftRepository",

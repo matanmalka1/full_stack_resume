@@ -69,6 +69,28 @@ class KnowledgeRejected(PreconditionFailed):
     """The fact lifecycle or knowledge policy refused a mutation."""
 
 
+# The three ways a registered artifact can fail its own integrity verification.
+# Separate classes rather than one, because only the store knows which check
+# failed and a client switching on `code` needs to be able to tell "somebody
+# moved the file" from "somebody changed it" from "the row points outside the
+# root". `404` stays reserved for an ID that is registered nowhere; each of
+# these names a record that exists and whose stored evidence does not check out.
+# Their codes are derived from the class names, so none of them can arrive
+# without one.
+
+
+class ArtifactContainmentRefused(PreconditionFailed):
+    """A registered artifact path resolves outside the artifact root."""
+
+
+class ArtifactPayloadMissing(PreconditionFailed):
+    """A registered artifact payload is no longer on disk."""
+
+
+class ArtifactHashMismatch(PreconditionFailed):
+    """A registered artifact payload no longer matches its registered hash."""
+
+
 class DependencyUnavailable(ApplicationError):
     """A required collaborator was not configured."""
 
