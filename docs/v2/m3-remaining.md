@@ -603,104 +603,77 @@ endpoint. They are AI Operations and belong to Stage G; §14 names them as the b
 `apply_selection_change` directs a manually edited draft to, and that refusal names them by
 command rather than by route.
 
-#### Handover — focused tests, in sub-stage order
+#### Two defects found in review, and repaired before any gate ran
 
-The user runs these. Predictions are stated first so an unexplained delta is a finding.
+Both were found by the user reading the diff, not by a test, and both are worth
+recording because neither would have failed anything that existed.
+
+1. **The replacement route was addressed to the draft, not to the Application.** It
+   shipped as `POST /working-drafts/{id}/replace`; the approved plan spells
+   `POST /applications/{id}/working-draft/replace`, beside `generate`, which §21 already
+   places under the Application. That is the right shape for the reason the plan gives -
+   the Application owns the one active draft, so the lifecycle pair belongs to it rather
+   than to the draft being retired. Explicit IDs are kept on both sides: the path names
+   the Application, the body names the draft, the version, the analysis and the plan, and
+   a draft belonging to another Application is `412 LINEAGE_BROKEN` raised *before*
+   anything is materialized. This is the second time in M3 that a route shipped with a
+   spelling the specification did not use; Stage D's was `f72dbd4`, and the same rule
+   applied - no alias, because the old spelling never reached a released contract.
+2. **Web commands recorded themselves as `cli`.** `archive_working_draft`,
+   `prepare_replacement`, and `approve_draft` hardcoded `actor_type="user"` and
+   `client="cli"`. Approval's predates Stage E and is the serious one: it reaches
+   `decision_provenance` on the **immutable** ApprovedRevision, so every browser approval
+   would have said permanently that a person at a terminal made it - a value the record
+   never carried, in the one field that exists to answer who acted. All three commands now
+   carry the pair, following the convention `IngestCommand` already set: the application
+   layer defaults to `cli`, the routers state `web`, and the CLI passes nothing.
+
+Repaired at `076cf80`, with the regressions at `06997bb`. The provenance regression reads
+the stored `decision_provenance` back rather than a response field: the response would have
+been just as wrong as the record, and the record is immutable, so a test that catches it
+later catches it too late.
+
+OpenAPI and TypeScript were regenerated at `076cf80` as well as at `91cc6db`. The second
+diff: 1 path added, 1 path removed, 1 schema changed (`ReplaceWorkingDraftRequest` gains
+`working_draft_id`), 0 schemas added or removed.
+
+#### Handover — the full Class C gate
+
+This is **Class C**: the archived-draft payload layout is a change to where immutable
+payloads live. `CLAUDE.md` sets the gate, and the earlier claim in this file that the
+browser suite was not required was wrong - it argued from what the change touches, but the
+class is what decides, and the class rule exists because a payload-layout change is exactly
+the kind that looks unreachable until it is not. The schema fingerprint is expected **not**
+to move: no migration, no table, no trigger.
+
+The user runs these, in order. Predictions are stated first so an unexplained delta is a
+finding rather than noise.
 
 | Order | Command | What it proves | Pass looks like |
 | --- | --- | --- | --- |
-| 1 | `.venv/bin/python -m pytest tests/test_api_working_drafts.py` | The whole Stage E surface: generation, ETag, patch, selection change, archive, replace, validate, approve, and the three CLI cases | **23 passed** |
+| 1 | `.venv/bin/python -m pytest tests/test_api_working_drafts.py` | The whole Stage E surface: generation, ETag, patch, selection change, archive, replace and its lineage pair, validate, approve, Web/CLI provenance, and the three CLI cases | **25 passed** |
 | 2 | `.venv/bin/python -m pytest tests/test_operations.py tests/test_integration.py tests/test_chain_integrity.py` | The blast radius of the approval signature change and of the renamed domain-validator import | **no failures**; these files gain and lose no cases |
-| 3 | `.venv/bin/python -m pytest tests/test_api_foundation.py tests/test_architecture.py` | OpenAPI/TypeScript drift against the regenerated contract, and that the new router imports no domain type | **29 passed** |
-| 4 | `.venv/bin/python -m pytest` | The Class B gate for the boundary | **330 passed, 4 deselected** |
-| 5 | `.venv/bin/python -m ruff check cv_engine tests && .venv/bin/python -m ruff format --check cv_engine tests && .venv/bin/python -m pyright` | Lint, format, and the port/adapter structural check | ruff clean; **0 errors, 0 warnings, 0 informations** |
-| 6 | Offline CLI, `OPENAI_API_KEY` unset, fresh Workspace: `ingest → analyze → draft → validate → approve → render → ready → reconcile` | That `cv approve` still reaches an ApprovedRevision after `cv validate`, and that `cv reconcile` verifies the new draft-snapshot payload layout | `validate` prints a `validation_run_id`; `approve` returns a revision whose `validation_run_id` is that one; `reconcile` passes |
+| 3 | `.venv/bin/python -m pytest tests/test_api_foundation.py tests/test_architecture.py` | OpenAPI/TypeScript drift against the twice-regenerated contract, and that the new router imports no domain type | **29 passed** |
+| 4 | `.venv/bin/python -m pytest` | The non-browser suite | **332 passed, 4 deselected** |
+| 5 | `.venv/bin/python -m pytest tests/test_database.py::test_sqlite_master_fingerprint_matches_the_recorded_schema -q` | That the Class C payload-layout change moved no schema | **1 passed**, fingerprint unchanged |
+| 6 | `env CV_REQUIRE_BROWSER=1 .venv/bin/python -m pytest -q -m ""` | The browser-complete suite the class requires | **336 passed** |
+| 7 | `.venv/bin/python -m ruff check cv_engine tests && .venv/bin/python -m ruff format --check cv_engine tests && .venv/bin/python -m pyright` | Lint, format, and the port/adapter structural check | ruff clean; **0 errors, 0 warnings, 0 informations** |
+| 8 | Offline CLI, `OPENAI_API_KEY` unset, fresh Workspace: `ingest → analyze → draft → validate → approve → render → ready → reconcile` | That `cv approve` still reaches an ApprovedRevision after `cv validate`, that the revision records `client: cli`, and that `cv reconcile` verifies the new draft-snapshot payload layout | `validate` prints a `validation_run_id`; `approve` returns a revision whose `validation_run_id` is that one; `reconcile` passes |
 
-The 330 is 307 + 23, and the 23 is exactly the function count of the new file - none of
-its cases are parametrised, and no test function was added or removed anywhere else. The 4
-deselected are still exactly the browser-marked tests. Same interpreter as every earlier
-M3 measurement: `.venv/bin/python`, Python 3.14.2.
+**Where every number comes from.** 332 is 307 + 25. The 25 is exactly the function count of
+`tests/test_api_working_drafts.py` - none of its cases are parametrised - and no test
+function was added or removed anywhere else: the 21 existing call sites that moved to the
+shared helpers changed bodies only, and the two CLI/archive/replace provenance assertions
+were added to cases that already existed rather than as new ones. The earlier prediction of
+330 was made before the review found the two defects and stands superseded by this one;
++2 is the two regressions at `06997bb`.
 
-The browser suite is not requested. Nothing in Stage E touches a rendering or browser path;
-the one flow that ends in a render, `cv fast`, is covered at the seam upstream of the
-renderer and its end-to-end case stays browser-marked where it already was.
+336 is 332 + 4, and the 4 are still exactly the browser-marked tests, which keeps the
+browser-complete figure internally consistent with the 236 / 240 baseline all the way
+through. Same interpreter as every earlier M3 measurement: `.venv/bin/python`, Python
+3.14.2.
 
-**Run by the agent, and stated as such:** ruff, ruff format, pyright, OpenAPI generation,
-and `npm run generate` were run while writing this. No pytest was run - the counts above
-are predictions derived from the source, not measurements.
-
-### F — Render, artifacts, Ready
-
-- [ ] `POST /approved-revisions/{id}/render` → 202.
-- [ ] `download_artifact` / `export_recruiter_pdf` as **application** use-cases returning a
-      stream descriptor and a safe filename. The router never sees a local path and never
-      calls `infrastructure/paths.py`; containment stays that module's single
-      implementation, reached through a port.
-- [ ] `GET /artifacts/{id}` and `/download`, **by ID only**.
-- [ ] Security: traversal, encoded traversal, symlink escape, unregistered ID, hash
-      mismatch.
-- [ ] The acceptance journey first passes end to end offline here.
-
-### G — AI tasks (§5.3)
-
-- [ ] New **`AIProvider` port in `application/ports/outbound.py`**, one method per
-      contracted task. `ClassificationProvider` retires into it — it is named for one task
-      and cannot carry five. The existing `AIProvider` protocol in
-      `infrastructure/providers.py` is transport, not an application contract, and is
-      renamed `StructuredOutputClient` to free the name.
-- [ ] `propose_job_analysis` under its contract name. The deterministic domain function
-      `classify_job` keeps its name — they are two different things, so there is no
-      conflict. Stored provenance names the contract that ran.
-- [ ] `propose_selection_plan`, `draft_resume`, `regenerate_section`, `regenerate_claim`
-      plus handler registration. The three `OperationType` values already exist and already
-      pass the DB CHECK; only registration is missing.
-- [ ] Task-contract drift: `ai/contracts/task_contracts.json` is read by nothing while the
-      same version is hardcoded in two places and persisted as provenance. Load it or delete
-      it.
-- [ ] Sanitized raw output as an immutable artifact. No silent fallback.
-
-### H — acceptance and close-out
-
-- [ ] Journeys §5.1–5.4 in full, plus **only the preparation half of §5.5**. §5.5's
-      submission bullet needs the submission endpoint and is **deferred to M5** — recorded,
-      not quietly skipped.
-- [ ] Concurrency, Operations, security, and outcomes-as-data matrices.
-- [ ] The complete §6 AI matrix: strict schema generation, per-task Proposal parsing,
-      semantic support beyond fact IDs, refusal, invalid output, no silent fallback, raw
-      sanitization and artifact registration, exact metadata, stateless/minimal context, one
-      transient retry, **zero** retries for schema/business/unsupported-claim/conflict/stale
-      source, and the five prompt-injection fixtures. The manual live OpenAI smoke is an M6
-      §8.2 release item, not an M3 CI gate.
-- [ ] Tick the seven §5.4 boxes in `implementation-plan.md`.
-- [ ] Freeze a close-out record under `docs/v2/records/`; close this file out.
-- [ ] `CLAUDE.md`'s counterweight: name one control retired, or state why none was
-      retirable. Not the two empty exception sets.
-
-## Baseline
-
-Established 2026-08-23, before Stage A implementation. A test count is only comparable to
-another count from the same interpreter, so the interpreter is part of the measurement.
-
-| Measure | Value |
-| --- | --- |
-| Interpreter | `/Users/matanmalka/Projects/resume_python-v2/.venv/bin/python`, Python 3.14.2 |
-| Non-browser suite | **236 passed, 4 deselected** |
-| Browser-complete suite | **240 passed** |
-
-The two are internally consistent: the 4 deselected are exactly the browser-marked tests,
-and 236 + 4 = 240.
-
-The previously recorded figures were 242 / 246. The −6 delta is fully reconciled by the
-intervening commits, so it is explained rather than merely noted:
-
-| Change | Delta |
-| --- | --- |
-| Migration and legacy retirement | −16 |
-| Backup coverage | +4 |
-| Net schema/migration cleanup | −1 |
-| Seed parity | +1 |
-| Immutability | +1 |
-| Operations coverage | +5 |
-| **Net** | **−6** |
-
-Every later prediction in M3 is made against 236 / 240, not against 242 / 246.
+**Run by the agent, and stated as such:** ruff, ruff format, pyright, `generate_openapi.py`,
+and `npm run generate`. **No pytest was run.** Every count above is a prediction derived
+from the source, not a measurement, and Stage E stays open until the user's run either
+confirms them or produces a delta that has to be explained.
