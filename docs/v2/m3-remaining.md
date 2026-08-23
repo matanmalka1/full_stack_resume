@@ -465,7 +465,7 @@ comparing the selection and the manifest against a build with no parameters at a
 Commits: `1da0003` (domain overlay), `335a476` (application commands), `ab1b9e4` (API
 routes and the narrowing repair), `16c4c96` (tests), `f72dbd4` (route rename).
 
-**One correction after the evidence run.** The decisions route shipped as
+**One correction, re-evidenced.** The decisions route shipped as
 `POST /analyses/{id}/decisions`; §21 spells it `apply-decisions`. §21 does allow final
 path names to be an internal design choice while resource identity, explicit source IDs
 and use-case semantics hold, so this was not a semantic deviation - but a path that
@@ -474,7 +474,16 @@ clause permits it. Renamed at `f72dbd4` with no alias: the old spelling never re
 released contract or a frozen record, and an alias the specification does not name would
 leave two spellings for one command in the generated types. The rename touches the route,
 its four test call sites, two parametrisation ID sets, the analyze route's description,
-and both generated files; it changes no schema and no test count.
+and both generated files. **OpenAPI and TypeScript were regenerated at `f72dbd4` as well
+as at `ab1b9e4`**: 1 path renamed, 1 shared path's description updated, 0 schemas added,
+removed, or changed.
+
+Stage D was first marked closed on evidence collected *before* `f72dbd4`, which was
+wrong: a rename that moves four test URLs and a route is not covered by a run that
+predates it, whatever the reasoning says it cannot have broken. The tables below are the
+re-run, after `f72dbd4`, and they are what closes this stage. A gate that already passed
+under different conditions is not fresh evidence - this file says so about other people's
+work, and it applies here.
 
 OpenAPI and TypeScript were regenerated at `ab1b9e4`. The diff is additive and nothing
 moved: 3 paths added, 6 schemas added, 0 removed, 0 existing schemas changed.
@@ -485,22 +494,30 @@ moved: 3 paths added, 6 schemas added, 0 removed, 0 existing schemas changed.
 
 The +25 is accounted for exactly: 16 from `test_api_analyses.py` (14 functions, two
 parametrised over 2) and 9 from `test_selection.py` (8 functions, one parametrised over
-2). Nothing else moved. The prediction of 307 was made before the evidence run and held.
+2). Nothing else moved. The prediction of 307 was made before the first evidence run, held
+there, and held again unchanged after the `f72dbd4` rename - which is what a rename that
+moves no assertion is supposed to do, and is now measured rather than asserted.
 The 4 deselected are still exactly the browser-marked tests, so 307 + 4 stays internally
 consistent with the 236 / 240 baseline. Same interpreter as every earlier M3 measurement:
 `.venv/bin/python`, Python 3.14.2.
 
-| Focused evidence | Result |
-| --- | --- |
-| `test_selection.py` — the overlay, its refusals, and no-overlay parity | **17 passed** |
-| `test_api_analyses.py` — the Stage D surface and the atomicity proof | **16 passed** |
-| `test_api_foundation.py` + `test_api_applications.py` + `test_api_operations.py` + `test_operations.py` — the narrowing change's blast radius | **91 passed** |
-| `test_architecture.py` — routers hold no domain types | **10 passed** |
-| Non-browser suite | **307 passed, 4 deselected** |
+| Focused evidence | Run | Result |
+| --- | --- | --- |
+| `test_selection.py` — the overlay, its refusals, and no-overlay parity | at `16c4c96` | **17 passed** |
+| `test_api_foundation.py` + `test_api_applications.py` + `test_api_operations.py` + `test_operations.py` — the narrowing change's blast radius | at `16c4c96` | **91 passed** |
+| `test_api_analyses.py` — the Stage D surface and the atomicity proof | **after `f72dbd4`** | **16 passed** |
+| `test_api_foundation.py` + `test_architecture.py` — OpenAPI drift and router layering | **after `f72dbd4`** | **29 passed** |
+| Non-browser suite | **after `f72dbd4`** | **307 passed, 4 deselected** |
 
 The 91 is 19 + 11 + 12 + 49, which confirms Stage A's, B's and C's API files unchanged and
-puts the whole Operation suite behind the `submit_*` narrowing. The browser suite was not
-run: no rendering or browser path is reachable from anything Stage D touched.
+puts the whole Operation suite behind the `submit_*` narrowing. The 29 is 19 + 10, and it
+is the pair that can actually fail on a renamed route: `test_api_foundation.py` holds the
+OpenAPI drift test, so it proves the regenerated contract matches the app after the
+rename rather than before it. The two rows measured at `16c4c96` cover files `f72dbd4`
+does not touch, and the post-rename non-browser suite contains both of them anyway.
+
+The browser suite was not run: no rendering or browser path is reachable from anything
+Stage D touched.
 
 **The first evidence run passed with no repair round**, which had not happened in M3
 before - Stage A needed three and Stage C needed two. The difference is where the work
