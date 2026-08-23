@@ -9,6 +9,7 @@ from ...domain.models import (
     OverrideKey,
     Profile,
     SelectionManifest,
+    SelectionProposal,
 )
 from ...domain.profiles import ProfileStore
 from ...domain.selection import build_selection
@@ -18,6 +19,7 @@ from ..commands import (
     AnalyzeCommand,
     ApplyAnalysisDecisionsCommand,
     CreateSelectionPlanCommand,
+    ProposeSelectionPlanCommand,
     SelectionPlanResult,
 )
 from ..errors import (
@@ -31,9 +33,18 @@ from ..errors import (
     UnknownRecord,
 )
 from ..ports import (
+    JobAnalysisContext,
     PreparationRepository,
+    SelectionPlanContext,
 )
 from .base import ServiceBase
+from .proposals import (
+    ProviderEvidence,
+    allowed_fact_pool,
+    evidence_attached,
+    fact_context,
+    refuse_facts_outside_the_pool,
+)
 
 
 @dataclass(frozen=True)
@@ -48,6 +59,22 @@ class PreparedAnalysis:
     selection_policy_version: str
     track_emphasis_dependencies: dict[str, str]
     normalized_role: str
+    evidence: ProviderEvidence | None = None
+
+
+@dataclass(frozen=True)
+class PreparedSelectionProposal:
+    """An AI `propose_selection_plan` result, reduced to a deterministic command.
+
+    The Proposal never becomes a plan directly. It becomes the same overlay a
+    user's review form submits, and activation runs `create_selection_plan`
+    over it - so the plan that lands passed the identical Profile, allowed-fact,
+    budget, and optimistic-source checks a deterministic plan passes (§13).
+    """
+
+    command: CreateSelectionPlanCommand
+    proposal: SelectionProposal
+    evidence: ProviderEvidence
 
 
 class AnalysisService(ServiceBase[PreparationRepository]):
@@ -114,8 +141,17 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             )
         return record
 
-    def prepare(self, command: AnalyzeCommand) -> PreparedAnalysis:
-        """Validate and compute an analysis without mutating durable application state."""
+    def prepare(
+        self, command: AnalyzeCommand, *, operation_id: str | None = None
+    ) -> PreparedAnalysis:
+        """Validate and compute an analysis without mutating durable application state.
+
+        `operation_id` is required in AI mode and unused otherwise. It is
+        where the sanitized provider response is preserved, and it is the
+        Operation's own ID rather than the analysis's, so a retry - which is
+        a second Operation - writes beside the first attempt's evidence
+        instead of colliding with it.
+        """
         try:
             snapshot = self.repo.get_snapshot(command.job_snapshot_id)
         except UnknownRecord as exc:
@@ -146,33 +182,35 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         used_provider, used_model = "deterministic", "rules-v1"
         knowledge = self.load_knowledge()
         profiles = knowledge.profiles
+        evidence: ProviderEvidence | None = None
         if command.provider == "openai":
-            if self._provider is None:
-                raise DependencyUnavailable(
-                    "AI classification was requested but no provider is configured"
+            if operation_id is None:
+                raise PreconditionFailed(
+                    "AI analysis runs as an Operation; there is no synchronous form"
                 )
             # The provider sees the full deterministic picture as context, but it
             # answers on the narrower proposal contract; deterministic policy decides
             # what survives.
-            proposal = self._provider.classify_job(
-                {
-                    "job_text": job_text,
-                    "deterministic_classification": {
+            answered = self.provider.propose_job_analysis(
+                JobAnalysisContext(
+                    job_text=job_text,
+                    deterministic_classification={
                         "track": deterministic.track.value,
                         "profile": deterministic.profile.value,
                         "emphasis": deterministic.emphasis.value,
                         "confidence": deterministic.confidence,
                         "language": deterministic.language,
                     },
-                    "deterministic_gaps": [
-                        gap.model_dump(mode="json") for gap in deterministic.gaps
-                    ],
-                    "overrides": deterministic.user_override,
-                },
-                model=command.model,
+                    deterministic_gaps=[gap.model_dump(mode="json") for gap in deterministic.gaps],
+                    overrides=dict(deterministic.user_override),
+                )
             )
-            result = merge_classification(deterministic, proposal, profiles)
-            used_provider, used_model = "openai", command.model
+            evidence = self.preserve(
+                command.application_id, operation_id, "propose_job_analysis", answered.provenance
+            )
+            result = merge_classification(deterministic, answered.proposal, profiles)
+            used_provider = answered.provenance.context.provider
+            used_model = answered.provenance.context.model
         elif command.provider != "deterministic":
             raise DependencyUnavailable(f"unsupported provider: {command.provider}")
 
@@ -220,6 +258,7 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                 "emphasis": result.emphasis.value,
             },
             normalized_role=selected_profile.normalized_role,
+            evidence=evidence,
         )
 
     def activate(
@@ -314,6 +353,109 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             selection_plan_id=plan.id,
             plan=plan,
         )
+
+    def prepare_selection_proposal(
+        self,
+        command: ProposeSelectionPlanCommand,
+        *,
+        operation_id: str,
+    ) -> PreparedSelectionProposal:
+        """§13, AI form: ask for an overlay, and refuse anything outside the pool.
+
+        No provider call happens inside a synchronous HTTP request, so this is
+        only ever reached from the Operation runner's execute phase. Nothing
+        durable is written here beyond the preserved response: the Proposal is
+        turned into a deterministic command and committed by `activate`, after
+        the runner's final source check.
+        """
+        record = self._analysis_record(command.application_id, command.job_analysis_id)
+        analysis: JobAnalysis = record["analysis"]
+        knowledge = self.load_knowledge()
+        profile = self._consistent_profile(analysis, knowledge.profiles)
+        allowed = allowed_fact_pool(profile)
+        deterministic, manifest = self._deterministic_selection(analysis, profile, knowledge)
+        del deterministic
+
+        answered = self.provider.propose_selection_plan(
+            SelectionPlanContext(
+                job_analysis={
+                    "track": analysis.track.value,
+                    "profile": analysis.profile.value,
+                    "emphasis": analysis.emphasis.value,
+                    "language": analysis.language,
+                    "keywords": list(analysis.keywords),
+                    "gaps": [gap.model_dump(mode="json") for gap in analysis.gaps],
+                },
+                allowed_facts=fact_context(knowledge.facts, sorted(allowed), analysis.language),
+                deterministic_selection={
+                    "selected_fact_ids": list(manifest.selected_fact_ids),
+                    "emphasis_policy_version": manifest.emphasis_policy_version,
+                },
+            )
+        )
+        evidence = self.preserve(
+            command.application_id,
+            operation_id,
+            "propose_selection_plan",
+            answered.provenance,
+        )
+        proposal = answered.proposal
+        with evidence_attached(evidence):
+            refuse_facts_outside_the_pool(
+                set(proposal.pinned_fact_ids) | set(proposal.excluded_fact_ids),
+                allowed,
+                task="propose_selection_plan",
+            )
+        return PreparedSelectionProposal(
+            command=CreateSelectionPlanCommand(
+                application_id=command.application_id,
+                job_analysis_id=command.job_analysis_id,
+                pinned_fact_ids=list(proposal.pinned_fact_ids),
+                excluded_fact_ids=list(proposal.excluded_fact_ids),
+                expected_candidate_context_hash=command.expected_candidate_context_hash,
+                expected_profile_version=command.expected_profile_version,
+                expected_selection_policy_version=command.expected_selection_policy_version,
+            ),
+            proposal=proposal,
+            evidence=evidence,
+        )
+
+    def activate_selection_proposal(
+        self,
+        prepared: PreparedSelectionProposal,
+        repository: PreparationRepository | None = None,
+    ) -> SelectionPlanResult:
+        """Commit the proposed overlay through the deterministic command.
+
+        Every check `create_selection_plan` makes runs again here, against
+        Knowledge as it is at activation - not as it was when the provider was
+        asked. That is the optimistic rule §13 requires, and it is why the AI
+        path cannot commit a plan the deterministic path would have refused.
+        """
+        repo = repository or self.repo
+        return self.create_selection_plan(prepared.command, repo)
+
+    def _deterministic_selection(self, analysis: JobAnalysis, profile: Profile, knowledge):
+        """The plan the rules would build, as context for a proposal.
+
+        Shared with nothing else on purpose: it is context, not a commit. The
+        plan that lands is built again at activation from current Knowledge.
+        """
+        try:
+            return build_selection(
+                analysis=analysis,
+                profile=profile,
+                policy=knowledge.policies.get(analysis.emphasis),
+                policy_store_version=knowledge.policies.version,
+                facts=knowledge.facts,
+                line_groups=(
+                    knowledge.presentations.line_groups(profile, analysis.emphasis)
+                    if knowledge.presentations is not None
+                    else None
+                ),
+            )
+        except ValueError as exc:
+            raise PreconditionFailed(f"selection plan could not be built: {exc}") from exc
 
     @staticmethod
     def _refuse_moved_sources(command: CreateSelectionPlanCommand, knowledge) -> None:

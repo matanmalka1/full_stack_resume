@@ -19,6 +19,7 @@ from ...domain.models import (
     DecisionRecord,
     DraftDocument,
     JobAnalysis,
+    ProposedClaim,
     SelectionPlan,
     ValidationReport,
     ValidationRunLineage,
@@ -37,6 +38,9 @@ from ..commands import (
     DraftCommand,
     DraftResult,
     EditResult,
+    RegenerateClaimCommand,
+    RegenerateSectionCommand,
+    RegenerationResult,
     ReplaceWorkingDraftCommand,
     SelectionChangeResult,
     UpdateWorkingDraftCommand,
@@ -51,17 +55,28 @@ from ..errors import (
     InfrastructureFailure,
     LineageBroken,
     PreconditionFailed,
+    ProposalRejected,
     StateConflict,
     UnknownRecord,
     ValidationBlocked,
 )
 from ..ports import (
     DraftRepository,
+    DraftResumeContext,
     PreparationRepository,
+    RegenerateClaimContext,
+    RegenerateSectionContext,
     SnapshotPayload,
 )
 from .analysis import AnalysisService
 from .base import ServiceBase, bound_analysis, working_draft_record
+from .proposals import (
+    ProviderEvidence,
+    allowed_fact_pool,
+    apply_proposed_claims,
+    evidence_attached,
+    fact_context,
+)
 
 
 @dataclass(frozen=True)
@@ -70,6 +85,41 @@ class PreparedDraft:
     analysis: JobAnalysis
     plan_id: str
     knowledge: Knowledge
+    evidence: ProviderEvidence | None = None
+
+
+@dataclass(frozen=True)
+class DeterministicRun:
+    """What produced a draft when no provider was involved.
+
+    `none` rather than a contract and prompt version, which is what this record
+    carried before Stage G. The deterministic composer runs under no AI task
+    contract and reads no prompt, so naming one was a value the run never had -
+    and it was typed in beside a contract file nothing read, so it could not
+    even be wrong consistently. The column is `NOT NULL`, so the honest answer
+    is a literal that says there was none.
+    """
+
+    provider: str = "deterministic"
+    model: str = "rules-v1"
+    task_contract_version: str = "none"
+    prompt_version: str = "none"
+
+
+@dataclass(frozen=True)
+class PreparedRegeneration:
+    """One accepted regeneration, computed but not yet committed.
+
+    The document already carries the proposed wording: it passed
+    `apply_proposed_claims`, which is the same authority a manual edit passes,
+    so anything unsupported was refused before this value could exist. What is
+    left is the optimistic commit against the exact version that was frozen.
+    """
+
+    working: WorkingDraft
+    source: DraftDocument
+    claim_ids: list[str]
+    evidence: ProviderEvidence
 
 
 class DraftService(ServiceBase[DraftRepository]):
@@ -161,8 +211,14 @@ class DraftService(ServiceBase[DraftRepository]):
         prepared = self.prepare(command)
         return self.activate(command, prepared)
 
-    def prepare(self, command: DraftCommand) -> PreparedDraft:
-        """Build and validate the inputs for a draft without changing durable state."""
+    def prepare(self, command: DraftCommand, *, operation_id: str | None = None) -> PreparedDraft:
+        """Build and validate the inputs for a draft without changing durable state.
+
+        `operation_id` is required in AI mode and unused otherwise: it is where
+        the sanitized provider response is preserved. The deterministic branch
+        never reaches a provider, which is what keeps generation working with
+        `OPENAI_API_KEY` unset.
+        """
         knowledge = self.load_knowledge()
         profiles, policies = knowledge.profiles, knowledge.policies
         analysis_id = command.job_analysis_id
@@ -231,12 +287,88 @@ class DraftService(ServiceBase[DraftRepository]):
             plan=plan,
             knowledge=knowledge,
         )
+        evidence: ProviderEvidence | None = None
+        if command.provider == "openai":
+            if operation_id is None:
+                raise PreconditionFailed(
+                    "AI generation runs as an Operation; there is no synchronous form"
+                )
+            draft, evidence = self._propose_wording(
+                command.application_id, operation_id, draft, analysis, knowledge
+            )
         return PreparedDraft(
             source=draft,
             analysis=analysis,
             plan_id=plan.id,
             knowledge=knowledge,
+            evidence=evidence,
         )
+
+    def _propose_wording(
+        self,
+        application_id: str,
+        operation_id: str,
+        draft: DraftDocument,
+        analysis: JobAnalysis,
+        knowledge: Knowledge,
+    ) -> tuple[DraftDocument, ProviderEvidence]:
+        """`draft_resume`: ask for wording over a document the engine composed.
+
+        The provider never decides *which* facts appear - the SelectionPlan
+        already did, and the document handed to it is the plan's own. It
+        proposes how the selected facts are worded, and every line comes back
+        through `apply_claim_edit`. Wording its own facts do not support is
+        refused as `ProposalRejected`, not saved as a pending claim: §14's
+        pending rule is for a person mid-edit, not for a wrong answer.
+        """
+        profile = knowledge.profiles.get(analysis.profile)
+        allowed = allowed_fact_pool(profile)
+        selected = sorted(
+            {
+                fact_id
+                for section in draft.sections
+                for claim in section.claims
+                for fact_id in claim.fact_ids
+            }
+        )
+        answered = self.provider.draft_resume(
+            DraftResumeContext(
+                job_analysis={
+                    "track": analysis.track.value,
+                    "profile": analysis.profile.value,
+                    "emphasis": analysis.emphasis.value,
+                    "language": analysis.language,
+                    "keywords": list(analysis.keywords),
+                },
+                language=draft.language,
+                sections=[
+                    {
+                        "section": section.name,
+                        "claims": [
+                            {
+                                "claim_id": claim.claim_id,
+                                "text": claim.text,
+                                "fact_ids": list(claim.fact_ids),
+                            }
+                            for claim in section.claims
+                        ],
+                    }
+                    for section in draft.sections
+                ],
+                allowed_facts=fact_context(knowledge.facts, selected, draft.language),
+            )
+        )
+        evidence = self.preserve(application_id, operation_id, "draft_resume", answered.provenance)
+        del allowed
+        with evidence_attached(evidence):
+            updated = apply_proposed_claims(
+                draft,
+                answered.proposal.claims,
+                knowledge.facts,
+                set(selected),
+                task="draft_resume",
+            )
+        return updated, evidence
 
     def activate(
         self,
@@ -273,6 +405,16 @@ class DraftService(ServiceBase[DraftRepository]):
             report,
             lineage=self._lineage(working, knowledge),
         )
+        # One source for the three version strings. The deterministic branch
+        # names its own engine and the contract file it ran under; the AI branch
+        # names the provider execution that produced the wording. Neither is
+        # typed in here, which is what stopped the file from disagreeing with
+        # the record.
+        run_context = (
+            prepared.evidence.provenance.context
+            if prepared.evidence is not None
+            else self._deterministic_run_context()
+        )
         repo.record_generation_run(
             {
                 "application_id": command.application_id,
@@ -284,10 +426,10 @@ class DraftService(ServiceBase[DraftRepository]):
                     else "1.0.0"
                 ),
                 "facts_version": facts.version,
-                "ai_provider": "deterministic",
-                "ai_model": "rules-v1",
-                "task_contract_version": "1.0.0",
-                "prompt_version": "system-v1",
+                "ai_provider": run_context.provider,
+                "ai_model": run_context.model,
+                "task_contract_version": run_context.task_contract_version,
+                "prompt_version": run_context.prompt_version,
                 "job_analysis_version": analysis.analysis_version,
                 "instruction_overrides": analysis.user_override,
                 "status": "completed" if report.passed else "validation-failed",
@@ -301,6 +443,10 @@ class DraftService(ServiceBase[DraftRepository]):
             edit_version=working.edit_version,
             validation=report,
         )
+
+    @staticmethod
+    def _deterministic_run_context() -> DeterministicRun:
+        return DeterministicRun()
 
     def _require_synced_projection(self, application_id: str, draft: DraftDocument) -> None:
         """Refuse to approve while the projection holds edits SQLite has not imported.
@@ -512,6 +658,228 @@ class DraftService(ServiceBase[DraftRepository]):
                 for claim in draft_claims(changed.source)
                 if claim.claim_type == "pending" and claim.claim_id in edited
             ),
+        )
+
+    def _regeneration_target(
+        self,
+        application_id: str,
+        working_draft_id: str,
+        expected_edit_version: int,
+        expected_content_hash: str,
+        job_analysis_id: str,
+        selection_plan_id: str,
+    ) -> tuple[WorkingDraft, Knowledge, JobAnalysis]:
+        """The exact draft version a regeneration named, or the refusal that says why.
+
+        All three parts of the draft's identity are checked, plus the analysis
+        and plan the client stated. §14 requires regeneration to receive exact
+        WorkingDraft ID, version, and hash - so a regeneration launched against
+        one version and activated against another is a `409`, not a silent
+        overwrite of whatever the draft became in between.
+        """
+        working = self._working(working_draft_id, expected_edit_version)
+        if working.application_id != application_id:
+            raise LineageBroken(
+                f"working draft {working.id} does not belong to application {application_id}"
+            )
+        if working.content_hash != expected_content_hash:
+            raise StateConflict(
+                f"working draft {working.id} has content hash {working.content_hash}, "
+                f"not {expected_content_hash}"
+            )
+        if working.job_analysis_id != job_analysis_id:
+            raise LineageBroken(
+                f"working draft {working.id} was built from analysis "
+                f"{working.job_analysis_id}, not {job_analysis_id}"
+            )
+        if working.selection_plan_id != selection_plan_id:
+            raise LineageBroken(
+                f"working draft {working.id} was built from selection plan "
+                f"{working.selection_plan_id}, not {selection_plan_id}"
+            )
+        knowledge = self.load_knowledge()
+        record = self.repo.get_analysis(working.job_analysis_id)
+        return working, knowledge, record["analysis"]
+
+    def prepare_section_regeneration(
+        self,
+        command: RegenerateSectionCommand,
+        *,
+        operation_id: str,
+    ) -> PreparedRegeneration:
+        """§14 `regenerate_section`: propose replacement wording for one section."""
+        working, knowledge, analysis = self._regeneration_target(
+            command.application_id,
+            command.working_draft_id,
+            command.expected_edit_version,
+            command.expected_content_hash,
+            command.job_analysis_id,
+            command.selection_plan_id,
+        )
+        draft = working.source
+        section = next(
+            (item for item in draft.sections if item.name == command.section),
+            None,
+        )
+        if section is None:
+            raise UnknownRecord(f"unknown section in the working draft: {command.section}")
+        allowed = sorted({fact_id for claim in section.claims for fact_id in claim.fact_ids})
+        answered = self.provider.regenerate_section(
+            RegenerateSectionContext(
+                section=section.name,
+                language=draft.language,
+                job_analysis=self._analysis_context(analysis),
+                current_claims=[
+                    {
+                        "claim_id": claim.claim_id,
+                        "text": claim.text,
+                        "fact_ids": list(claim.fact_ids),
+                    }
+                    for claim in section.claims
+                ],
+                allowed_facts=fact_context(knowledge.facts, allowed, draft.language),
+                instruction=command.instruction,
+            )
+        )
+        evidence = self.preserve(
+            command.application_id, operation_id, "regenerate_section", answered.provenance
+        )
+        proposed = answered.proposal
+        with evidence_attached(evidence):
+            if proposed.section != section.name:
+                raise ProposalRejected(
+                    f"regenerate_section answered for section {proposed.section!r}, "
+                    f"not {section.name!r}"
+                )
+            updated = apply_proposed_claims(
+                draft,
+                proposed.claims,
+                knowledge.facts,
+                set(allowed),
+                task="regenerate_section",
+            )
+        return PreparedRegeneration(
+            working=working,
+            source=updated,
+            claim_ids=[str(claim.claim_id) for claim in proposed.claims],
+            evidence=evidence,
+        )
+
+    def prepare_claim_regeneration(
+        self,
+        command: RegenerateClaimCommand,
+        *,
+        operation_id: str,
+    ) -> PreparedRegeneration:
+        """§14 `regenerate_claim`: propose replacement wording for one claim."""
+        working, knowledge, analysis = self._regeneration_target(
+            command.application_id,
+            command.working_draft_id,
+            command.expected_edit_version,
+            command.expected_content_hash,
+            command.job_analysis_id,
+            command.selection_plan_id,
+        )
+        draft = working.source
+        located = next(
+            (
+                (section, claim)
+                for section in draft.sections
+                for claim in section.claims
+                if claim.claim_id == command.claim_id
+            ),
+            None,
+        )
+        if located is None:
+            raise UnknownRecord(f"unknown claim in the working draft: {command.claim_id}")
+        section, claim = located
+        allowed = sorted(claim.fact_ids)
+        answered = self.provider.regenerate_claim(
+            RegenerateClaimContext(
+                claim_id=claim.claim_id,
+                section=section.name,
+                language=draft.language,
+                job_analysis=self._analysis_context(analysis),
+                current_text=claim.text,
+                allowed_facts=fact_context(knowledge.facts, allowed, draft.language),
+                instruction=command.instruction,
+            )
+        )
+        evidence = self.preserve(
+            command.application_id, operation_id, "regenerate_claim", answered.provenance
+        )
+        proposed = answered.proposal
+        with evidence_attached(evidence):
+            if proposed.claim_id != claim.claim_id:
+                raise ProposalRejected(
+                    f"regenerate_claim answered for claim {proposed.claim_id!r}, "
+                    f"not {claim.claim_id!r}"
+                )
+            updated = apply_proposed_claims(
+                draft,
+                [
+                    ProposedClaim(
+                        section=section.name,
+                        claim_id=proposed.claim_id,
+                        text=proposed.text,
+                        fact_ids=list(proposed.fact_ids),
+                    )
+                ],
+                knowledge.facts,
+                set(allowed),
+                task="regenerate_claim",
+            )
+        return PreparedRegeneration(
+            working=working,
+            source=updated,
+            claim_ids=[proposed.claim_id],
+            evidence=evidence,
+        )
+
+    @staticmethod
+    def _analysis_context(analysis: JobAnalysis) -> dict:
+        """The narrow analysis view a wording task needs.
+
+        Not the analysis record. Requirements, Fit, approval routing, and
+        overrides decide policy, and a task that does not receive them cannot
+        be argued into changing them by the job text it is given.
+        """
+        return {
+            "track": analysis.track.value,
+            "profile": analysis.profile.value,
+            "emphasis": analysis.emphasis.value,
+            "language": analysis.language,
+            "keywords": list(analysis.keywords),
+        }
+
+    def activate_regeneration(
+        self,
+        prepared: PreparedRegeneration,
+        repository: DraftRepository | None = None,
+    ) -> RegenerationResult:
+        """Commit regenerated wording against the exact version that was frozen.
+
+        The update carries `expected_edit_version`, so a save that happened
+        while the Operation ran makes this commit fail rather than overwrite it.
+        The provider evidence is registered in the same transaction as the
+        wording it produced.
+        """
+        repo = repository or self.repo
+        working = prepared.working
+        changed = repo.update_working_draft(
+            working.id,
+            working.edit_version,
+            prepared.source,
+        )
+        self.store_working_draft(changed.source)
+        return RegenerationResult(
+            application_id=changed.application_id,
+            working_draft_id=changed.id,
+            edit_version=changed.edit_version,
+            content_hash=changed.content_hash,
+            selection_plan_id=changed.selection_plan_id,
+            regenerated_claim_ids=list(prepared.claim_ids),
+            provider_artifact_version_id=prepared.evidence.artifact_version_id,
         )
 
     def apply_selection_change(

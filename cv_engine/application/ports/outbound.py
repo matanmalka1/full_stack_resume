@@ -7,15 +7,22 @@ against local adapters with no AI key present.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Generic, Protocol, TypeVar
 
 from ...domain.knowledge import Knowledge
 from ...domain.models import (
     CandidateContext,
+    ClaimProposal,
     DraftDocument,
+    DraftProposal,
     JobClassificationProposal,
     Profile,
+    ProviderTaskResult,
+    SectionProposal,
+    SelectionProposal,
+    StrictModel,
     ValidationReport,
 )
 from ..knowledge_mutations import (
@@ -30,6 +37,7 @@ from .values import (
     RevisionPayloads,
     SnapshotPayload,
     StoredDraft,
+    TaskContracts,
 )
 
 
@@ -95,6 +103,14 @@ class RevisionPayloadStore(SnapshotPayloadStore, Protocol):
         structured_json: str,
     ) -> SnapshotPayload: ...
 
+    def commit_provider_response(
+        self,
+        application_id: str,
+        operation_id: str,
+        artifact_id: str,
+        sanitized_json: str,
+    ) -> SnapshotPayload: ...
+
     def render_targets(
         self,
         application_id: str,
@@ -116,6 +132,8 @@ class KnowledgeStore(Protocol):
     def load(self) -> Knowledge: ...
 
     def facts(self) -> Any: ...
+
+    def task_contracts(self) -> TaskContracts: ...
 
     def stage_create_fact(
         self,
@@ -195,7 +213,113 @@ class Renderer(Protocol):
     def filename_for(self, normalized_role: str, candidate: CandidateContext) -> str: ...
 
 
-class ClassificationProvider(Protocol):
-    """An AI provider's one v1 task, as a proposal the core may refuse."""
+ProposalT = TypeVar("ProposalT", bound=StrictModel)
 
-    def classify_job(self, payload: dict[str, Any], *, model: str) -> JobClassificationProposal: ...
+
+@dataclass(frozen=True)
+class AIProposal(Generic[ProposalT]):
+    """What every AI task returns: a Proposal, and proof of what produced it.
+
+    The two travel together because they are useless apart. A Proposal with no
+    provenance cannot be audited, and provenance for a Proposal that was
+    discarded records an execution nobody can point at.
+    """
+
+    proposal: ProposalT
+    provenance: ProviderTaskResult
+
+
+class JobAnalysisContext(StrictModel):
+    """`propose_job_analysis`: this snapshot and what the rules already decided.
+
+    The deterministic classification is supplied as context so the provider
+    answers against what the engine found rather than from nothing. It cannot
+    override it: the proposal contract is narrower than `JobAnalysis`, and
+    `merge_classification` decides what survives.
+    """
+
+    job_text: str
+    deterministic_classification: dict[str, Any]
+    deterministic_gaps: list[dict[str, Any]] = []
+    overrides: dict[str, str] = {}
+
+
+class SelectionPlanContext(StrictModel):
+    """`propose_selection_plan`: the analysis, and only the allowed facts.
+
+    `allowed_facts` is the Profile's pool for this analysis, not the fact
+    store. A provider that never sees a fact cannot select it, which is a
+    stronger guarantee than checking afterwards that it did not.
+    """
+
+    job_analysis: dict[str, Any]
+    allowed_facts: list[dict[str, Any]]
+    deterministic_selection: dict[str, Any]
+
+
+class DraftResumeContext(StrictModel):
+    """`draft_resume`: the composed sections and the facts each one selected."""
+
+    job_analysis: dict[str, Any]
+    language: str
+    sections: list[dict[str, Any]]
+    allowed_facts: list[dict[str, Any]]
+
+
+class RegenerateSectionContext(StrictModel):
+    """`regenerate_section`: one named section of one exact draft version."""
+
+    section: str
+    language: str
+    job_analysis: dict[str, Any]
+    current_claims: list[dict[str, Any]]
+    allowed_facts: list[dict[str, Any]]
+    instruction: str = ""
+
+
+class RegenerateClaimContext(StrictModel):
+    """`regenerate_claim`: one named claim of one exact draft version."""
+
+    claim_id: str
+    section: str
+    language: str
+    job_analysis: dict[str, Any]
+    current_text: str
+    allowed_facts: list[dict[str, Any]]
+    instruction: str = ""
+
+
+class AIProvider(Protocol):
+    """The five contracted AI tasks, as the application declares them.
+
+    One method per task rather than one `run(task, payload)`, because the five
+    take different inputs and return different Proposal types, and a single
+    stringly-typed entry point makes that invisible at the call site. The
+    transport - strict Structured Outputs over the Responses API - is an
+    infrastructure concern behind `StructuredOutputClient`, and no rule in this
+    layer may depend on it.
+
+    Every method takes one explicit, minimal context and returns a Proposal
+    with its provenance. Nothing here can save state: an implementation is
+    handed no repository, no payload store, and no Workspace, so activation
+    stays a decision the application commits (invariant 13).
+
+    Calls are stateless. No method takes a conversation, a prior response ID,
+    or anything that would make a second call depend on a first.
+    """
+
+    def propose_job_analysis(
+        self, context: JobAnalysisContext
+    ) -> AIProposal[JobClassificationProposal]: ...
+
+    def propose_selection_plan(
+        self, context: SelectionPlanContext
+    ) -> AIProposal[SelectionProposal]: ...
+
+    def draft_resume(self, context: DraftResumeContext) -> AIProposal[DraftProposal]: ...
+
+    def regenerate_section(
+        self, context: RegenerateSectionContext
+    ) -> AIProposal[SectionProposal]: ...
+
+    def regenerate_claim(self, context: RegenerateClaimContext) -> AIProposal[ClaimProposal]: ...

@@ -1,11 +1,49 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
+  "prompt": {
+    "version": "system-v2",
+    "file": "ai/prompts/system-v2.md"
+  },
   "tasks": {
-    "classify_job": {"output": "JobAnalysis", "critical_state": true},
-    "analyze_gaps": {"output": "JobAnalysis", "critical_state": true},
-    "select_relevant_facts": {"output": "fact_ids_and_omissions", "critical_state": true},
-    "draft_resume": {"output": "claim_lines_with_fact_ids", "critical_state": true},
-    "extract_claims": {"output": "claim_lines_with_fact_ids", "critical_state": true},
-    "explain_decisions": {"output": "decision_summary", "critical_state": false}
+    "propose_job_analysis": {
+      "version": "2.0.0",
+      "input": "JobAnalysisContext",
+      "input_schema_version": "2.0.0",
+      "output": "JobClassificationProposal",
+      "output_schema_version": "2.0.0",
+      "critical_state": true
+    },
+    "propose_selection_plan": {
+      "version": "2.0.0",
+      "input": "SelectionPlanContext",
+      "input_schema_version": "2.0.0",
+      "output": "SelectionProposal",
+      "output_schema_version": "2.0.0",
+      "critical_state": true
+    },
+    "draft_resume": {
+      "version": "2.0.0",
+      "input": "DraftResumeContext",
+      "input_schema_version": "2.0.0",
+      "output": "DraftProposal",
+      "output_schema_version": "2.0.0",
+      "critical_state": true
+    },
+    "regenerate_section": {
+      "version": "2.0.0",
+      "input": "RegenerateSectionContext",
+      "input_schema_version": "2.0.0",
+      "output": "SectionProposal",
+      "output_schema_version": "2.0.0",
+      "critical_state": true
+    },
+    "regenerate_claim": {
+      "version": "2.0.0",
+      "input": "RegenerateClaimContext",
+      "input_schema_version": "2.0.0",
+      "output": "ClaimProposal",
+      "output_schema_version": "2.0.0",
+      "critical_state": true
+    }
   }
 }

@@ -9,7 +9,7 @@ domain types directly would be a router doing domain work.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -46,7 +46,21 @@ class SelectionOverlayRequest(HttpSchema):
 
 
 class CreateSelectionPlanRequest(SelectionOverlayRequest):
+    """What `POST /analyses/{id}/selection-plans` accepts, in both modes.
+
+    `mode` is what makes the route answer `201` or `202`. It is explicit and has
+    no `auto` value (§12): the deterministic form commits a plan inside the
+    request, the AI form queues an Operation, and a client is never left
+    guessing which of the two it got.
+
+    The overlay lists are the user's own decisions and belong to the
+    deterministic form. In AI mode the provider proposes the overlay, so
+    sending both would be two answers to the same question - which is why the
+    router refuses that combination rather than silently preferring one.
+    """
+
     application_id: str
+    mode: Literal["deterministic", "ai"] = "deterministic"
     expected_candidate_context_hash: str | None = None
     expected_profile_version: str | None = None
     expected_selection_policy_version: str | None = None

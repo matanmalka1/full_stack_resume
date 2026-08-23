@@ -29,6 +29,8 @@ from ...application.commands import (
     ApproveDraftCommand,
     ArchiveWorkingDraftCommand,
     ClaimPatch,
+    RegenerateClaimCommand,
+    RegenerateSectionCommand,
     UpdateWorkingDraftCommand,
     ValidateDraftCommand,
 )
@@ -36,11 +38,14 @@ from ...util import new_id
 from ..dependencies import Services
 from ..etags import IfMatch, draft_etag, parse_draft_etag
 from ..headers import IdempotencyKey
+from ..responses import accepted_operation
 from ..schemas.drafts import (
     ApplySelectionChangeRequest,
     ApprovalResponse,
     ApproveDraftRequest,
     ArchivedWorkingDraftResponse,
+    RegenerateClaimRequest,
+    RegenerateSectionRequest,
     SelectionChangeResponse,
     UpdateWorkingDraftRequest,
     ValidationRunResponse,
@@ -48,6 +53,7 @@ from ..schemas.drafts import (
     WorkingDraftUpdateResponse,
     WorkingDraftVersionRequest,
 )
+from ..schemas.operations import OperationResponse
 
 router = APIRouter(prefix="/working-drafts", tags=["working-drafts"])
 
@@ -126,6 +132,70 @@ def apply_selection_change(
     )
     response.headers["ETag"] = draft_etag(result.edit_version, result.content_hash)
     return SelectionChangeResponse.model_validate(result.model_dump(mode="json"))
+
+
+@router.post(
+    "/{working_draft_id}/regenerate-section",
+    response_model=OperationResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Regenerate one section's wording from the analysis and plan",
+)
+def regenerate_section(
+    working_draft_id: str,
+    request: RegenerateSectionRequest,
+    services: Services,
+    response: Response,
+    idempotency_key: IdempotencyKey = None,
+) -> OperationResponse:
+    """`202` and a `Location`: regeneration is an AI Operation (§14).
+
+    The exact draft version and content hash are frozen onto the Operation, so
+    an autosave that lands while the provider is answering makes activation
+    fail as `SOURCE_CHANGED` instead of overwriting the user's edit.
+
+    A provider failure never falls back to a deterministic rebuild. The draft is
+    left exactly as it was, and continuing deterministically is
+    `apply-selection-change`, which the user issues themselves.
+    """
+    queued = services.operations.submit_regeneration(
+        RegenerateSectionCommand(
+            working_draft_id=working_draft_id,
+            **request.model_dump(mode="python"),
+        ),
+        idempotency_key=idempotency_key or new_id(),
+        draft_service=services.drafts,
+    )
+    return accepted_operation(response, queued)
+
+
+@router.post(
+    "/{working_draft_id}/regenerate-claim",
+    response_model=OperationResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Regenerate one claim's wording from its own supporting facts",
+)
+def regenerate_claim(
+    working_draft_id: str,
+    request: RegenerateClaimRequest,
+    services: Services,
+    response: Response,
+    idempotency_key: IdempotencyKey = None,
+) -> OperationResponse:
+    """`202` and a `Location`, on the same contract as section regeneration (§14).
+
+    The claim is the unit: the provider is given that claim's own supporting
+    facts and nothing else, so a proposal cannot reach for a fact this line was
+    never built from.
+    """
+    queued = services.operations.submit_regeneration(
+        RegenerateClaimCommand(
+            working_draft_id=working_draft_id,
+            **request.model_dump(mode="python"),
+        ),
+        idempotency_key=idempotency_key or new_id(),
+        draft_service=services.drafts,
+    )
+    return accepted_operation(response, queued)
 
 
 @router.post(

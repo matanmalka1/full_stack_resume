@@ -99,6 +99,97 @@ class InfrastructureFailure(ApplicationError):
     """A configured persistence, provider, browser, or filesystem dependency failed."""
 
 
+# How a provider call failed, as classes rather than as words in a message.
+#
+# The Operation runner has to decide two things from a provider failure: which
+# `OperationFailureCode` to record, and whether one automatic retry is allowed.
+# Until Stage G that decision was made by case-folding the exception message and
+# looking for "429", "timeout", and "http 5" - so a reworded message silently
+# reclassified a failure, and a provider refusal that happened to contain the
+# digits 429 would have been retried. The class is what carries the meaning now,
+# and the mapping lives in one table beside the codes.
+
+
+class ProviderFailure(InfrastructureFailure):
+    """Base class for a classified AI provider execution failure.
+
+    `provenance` is present when the provider answered and the answer was
+    refused - a schema violation above all. Product specification §6 invariant
+    15 lets a refused output exist as inactive immutable evidence, so the
+    sanitized bytes travel with the refusal rather than being dropped at the
+    raise site, which is the only place they still exist.
+
+    It carries the whole `ProviderTaskResult`, not just the bytes, because a
+    refusal is exactly when the question "which model, under which contract,
+    refused this" has to be answerable. The parsed output is empty; everything
+    else is as real as it is on a successful call.
+
+    Typed loosely for the same reason `ProposalRejected.evidence` is: the value
+    is a domain type, and the taxonomy is what the layers that own those types
+    depend on.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str | None = None,
+        provenance: Any = None,
+    ):
+        super().__init__(message, code=code)
+        self.provenance = provenance
+
+
+class ProviderTimeout(ProviderFailure):
+    """The provider did not answer within the configured timeout."""
+
+
+class ProviderRateLimited(ProviderFailure):
+    """The provider answered 429."""
+
+
+class ProviderUnavailable(ProviderFailure):
+    """The provider answered 5xx, or the request never reached it."""
+
+
+class ProviderRefused(ProviderFailure):
+    """The provider declined to answer the task."""
+
+
+class ProviderSchemaViolation(ProviderFailure):
+    """The provider returned output that is not the requested schema."""
+
+
+class ProviderInvalidOutput(ProviderFailure):
+    """The provider returned a well-formed schema whose content cannot be used."""
+
+
+class ProposalRejected(PreconditionFailed):
+    """A Proposal failed deterministic policy or semantic support validation.
+
+    Not a transport failure: the provider answered, and the answer is refused.
+    It is separate from `ProviderInvalidOutput` because the two mean different
+    things to a reader of the Operation record - a malformed answer, versus an
+    answer that claims support it does not have (invariant 12). Neither is ever
+    retried, and neither is silently dropped.
+
+    `unsupported` names the claims that failed semantic support, so the failure
+    detail can say which lines were refused rather than only that something
+    was. The wording itself is not echoed: it is provider text, and it is
+    already preserved in the sanitized response artifact.
+    """
+
+    def __init__(self, message: str, *, unsupported: list[str] | None = None):
+        super().__init__(message)
+        self.unsupported = list(unsupported or [])
+        # Set by the service that already preserved the response this refusal is
+        # about, so the handler can register it as inactive evidence instead of
+        # leaving an orphaned payload behind. Typed loosely because the value is
+        # an application-services type and nothing in the taxonomy may import
+        # one - the taxonomy is what those services depend on.
+        self.evidence: Any = None
+
+
 # Codes the specification names directly (`state-and-use-cases.md` §22). They are
 # contracted strings rather than derived ones, so they are declared in one place
 # instead of being retyped at each raise site.

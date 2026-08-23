@@ -1754,6 +1754,7 @@
       },
       "CreateSelectionPlanRequest": {
         "additionalProperties": false,
+        "description": "What `POST /analyses/{id}/selection-plans` accepts, in both modes.\n\n`mode` is what makes the route answer `201` or `202`. It is explicit and has\nno `auto` value (§12): the deterministic form commits a plan inside the\nrequest, the AI form queues an Operation, and a client is never left\nguessing which of the two it got.\n\nThe overlay lists are the user's own decisions and belong to the\ndeterministic form. In AI mode the provider proposes the overlay, so\nsending both would be two answers to the same question - which is why the\nrouter refuses that combination rather than silently preferring one.",
         "properties": {
           "application_id": {
             "title": "Application Id",
@@ -1799,6 +1800,15 @@
               }
             ],
             "title": "Expected Selection Policy Version"
+          },
+          "mode": {
+            "default": "deterministic",
+            "enum": [
+              "deterministic",
+              "ai"
+            ],
+            "title": "Mode",
+            "type": "string"
           },
           "pinned_fact_ids": {
             "default": [],
@@ -2000,6 +2010,15 @@
         "properties": {
           "job_analysis_id": {
             "title": "Job Analysis Id",
+            "type": "string"
+          },
+          "provider": {
+            "default": "deterministic",
+            "enum": [
+              "deterministic",
+              "openai"
+            ],
+            "title": "Provider",
             "type": "string"
           },
           "selection_plan_id": {
@@ -2406,6 +2425,100 @@
         "title": "ReasonResponse",
         "type": "object"
       },
+      "RegenerateClaimRequest": {
+        "additionalProperties": false,
+        "description": "What `POST /working-drafts/{id}/regenerate-claim` accepts (§14).",
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "claim_id": {
+            "maxLength": 200,
+            "title": "Claim Id",
+            "type": "string"
+          },
+          "expected_content_hash": {
+            "title": "Expected Content Hash",
+            "type": "string"
+          },
+          "expected_edit_version": {
+            "title": "Expected Edit Version",
+            "type": "integer"
+          },
+          "instruction": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Instruction",
+            "type": "string"
+          },
+          "job_analysis_id": {
+            "title": "Job Analysis Id",
+            "type": "string"
+          },
+          "selection_plan_id": {
+            "title": "Selection Plan Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "application_id",
+          "expected_edit_version",
+          "expected_content_hash",
+          "job_analysis_id",
+          "selection_plan_id",
+          "claim_id"
+        ],
+        "title": "RegenerateClaimRequest",
+        "type": "object"
+      },
+      "RegenerateSectionRequest": {
+        "additionalProperties": false,
+        "description": "What `POST /working-drafts/{id}/regenerate-section` accepts (§14).\n\nThe draft's exact version and content hash are in the body rather than in\n`If-Match`, on the same reasoning as `validate` and `approve`: this is an\naction on a resource, not a conditional replacement of it, and an action\nthat accepted `If-Match: *` would be the lost update the header exists to\nprevent.\n\nThe analysis and plan are explicit. A regeneration that resolved them for\nitself could rewrite a section against a plan the user never saw.",
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "expected_content_hash": {
+            "title": "Expected Content Hash",
+            "type": "string"
+          },
+          "expected_edit_version": {
+            "title": "Expected Edit Version",
+            "type": "integer"
+          },
+          "instruction": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Instruction",
+            "type": "string"
+          },
+          "job_analysis_id": {
+            "title": "Job Analysis Id",
+            "type": "string"
+          },
+          "section": {
+            "maxLength": 200,
+            "title": "Section",
+            "type": "string"
+          },
+          "selection_plan_id": {
+            "title": "Selection Plan Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "application_id",
+          "expected_edit_version",
+          "expected_content_hash",
+          "job_analysis_id",
+          "selection_plan_id",
+          "section"
+        ],
+        "title": "RegenerateSectionRequest",
+        "type": "object"
+      },
       "RenderRevisionRequest": {
         "additionalProperties": false,
         "description": "The Application the client believes it is rendering for.\n\nExplicit rather than inferred from the revision, for the same reason\n`apply-decisions` states it: a client that names both is telling the server\nwhat it believes, and a mismatch is a `412` naming the broken lineage\ninstead of a render landing on another Application's revision.",
@@ -2437,6 +2550,15 @@
             "default": false,
             "title": "Keep Previous",
             "type": "boolean"
+          },
+          "provider": {
+            "default": "deterministic",
+            "enum": [
+              "deterministic",
+              "openai"
+            ],
+            "title": "Provider",
+            "type": "string"
           },
           "selection_plan_id": {
             "title": "Selection Plan Id",
@@ -2910,7 +3032,7 @@
     },
     "/api/v1/analyses/{analysis_id}/selection-plans": {
       "post": {
-        "description": "`201` and the plan itself: the deterministic form is synchronous (§13).\n\nThe AI `propose_selection_plan` mode is the same route answering `202` with\na `Location`, decided per request rather than per route, which is why the\nshared acceptance helper sets its own status.",
+        "description": "`201` and the plan itself in deterministic mode; `202` in AI mode (§13).\n\nOne route, two statuses, decided per request rather than per route - which\nis why the acceptance helper sets its own status instead of the decorator\ndoing it. `201` means the immutable plan exists and is in the body; `202`\nmeans a provider will be asked and the `Location` is what to poll.\n\nNo provider call happens inside this request in either branch. That is the\n§13 rule, and it is why the AI branch queues an Operation rather than\nawaiting an answer.",
         "operationId": "create_selection_plan_api_v1_analyses__analysis_id__selection_plans_post",
         "parameters": [
           {
@@ -2920,6 +3042,24 @@
             "schema": {
               "title": "Analysis Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does.",
+              "title": "Idempotency-Key"
             }
           }
         ],
@@ -2938,7 +3078,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreateSelectionPlanResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/CreateSelectionPlanResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OperationResponse"
+                    }
+                  ],
+                  "title": "Response Create Selection Plan Api V1 Analyses  Analysis Id  Selection Plans Post"
                 }
               }
             },
@@ -4195,6 +4343,148 @@
           }
         },
         "summary": "Archive the draft as an immutable historical snapshot",
+        "tags": [
+          "working-drafts"
+        ]
+      }
+    },
+    "/api/v1/working-drafts/{working_draft_id}/regenerate-claim": {
+      "post": {
+        "description": "`202` and a `Location`, on the same contract as section regeneration (§14).\n\nThe claim is the unit: the provider is given that claim's own supporting\nfacts and nothing else, so a proposal cannot reach for a fact this line was\nnever built from.",
+        "operationId": "regenerate_claim_api_v1_working_drafts__working_draft_id__regenerate_claim_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "working_draft_id",
+            "required": true,
+            "schema": {
+              "title": "Working Draft Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegenerateClaimRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Regenerate one claim's wording from its own supporting facts",
+        "tags": [
+          "working-drafts"
+        ]
+      }
+    },
+    "/api/v1/working-drafts/{working_draft_id}/regenerate-section": {
+      "post": {
+        "description": "`202` and a `Location`: regeneration is an AI Operation (§14).\n\nThe exact draft version and content hash are frozen onto the Operation, so\nan autosave that lands while the provider is answering makes activation\nfail as `SOURCE_CHANGED` instead of overwriting the user's edit.\n\nA provider failure never falls back to a deterministic rebuild. The draft is\nleft exactly as it was, and continuing deterministically is\n`apply-selection-change`, which the user issues themselves.",
+        "operationId": "regenerate_section_api_v1_working_drafts__working_draft_id__regenerate_section_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "working_draft_id",
+            "required": true,
+            "schema": {
+              "title": "Working Draft Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegenerateSectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Regenerate one section's wording from the analysis and plan",
         "tags": [
           "working-drafts"
         ]

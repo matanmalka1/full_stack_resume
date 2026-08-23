@@ -110,10 +110,73 @@ class ApplyAnalysisDecisionsCommand(SelectionOverlay):
     accept_low_fit: bool = False
 
 
+class ProposeSelectionPlanCommand(SelectionOverlay):
+    """The AI form of §13 `create_selection_plan`.
+
+    Carries the same optimistic `expected_*` versions as the deterministic
+    form, because activation runs the deterministic command: a Proposal built
+    against Knowledge that has since moved is refused there, not here.
+
+    It inherits the overlay lists but does not use them as input - the provider
+    proposes the overlay. They are inherited rather than removed so a client
+    cannot send them under a name the command silently ignores: an overlay sent
+    here is a `422` from the HTTP schema, which declares only what this command
+    reads.
+    """
+
+    application_id: str
+    job_analysis_id: str
+    expected_candidate_context_hash: str | None = None
+    expected_profile_version: str | None = None
+    expected_selection_policy_version: str | None = None
+    model: str | None = None
+
+
 class DraftCommand(BoundaryDTO):
+    """§14 `create_draft`, in either mode.
+
+    `provider` is explicit and has no `auto` value (§12). Deterministic is the
+    default because the deterministic workflow must reach Ready with no key
+    configured; asking for `openai` without a configured provider is a refusal,
+    never a silent fall back to the default.
+    """
+
     application_id: str
     job_analysis_id: str
     selection_plan_id: str
+    provider: Literal["deterministic", "openai"] = "deterministic"
+
+
+class RegenerateSectionCommand(BoundaryDTO):
+    """§14 `regenerate_section`: one exact draft version, one named section.
+
+    The draft's identity is stated in all three parts the specification names -
+    ID, `edit_version`, and content hash - because that is what the Operation
+    freezes. A regeneration that named only the ID could activate over content
+    the user changed while it was running.
+    """
+
+    application_id: str
+    working_draft_id: str
+    expected_edit_version: int
+    expected_content_hash: str
+    job_analysis_id: str
+    selection_plan_id: str
+    section: str
+    instruction: str = ""
+
+
+class RegenerateClaimCommand(BoundaryDTO):
+    """§14 `regenerate_claim`: one exact draft version, one named claim."""
+
+    application_id: str
+    working_draft_id: str
+    expected_edit_version: int
+    expected_content_hash: str
+    job_analysis_id: str
+    selection_plan_id: str
+    claim_id: str
+    instruction: str = ""
 
 
 class ClaimPatch(BoundaryDTO):
@@ -189,6 +252,7 @@ class ReplaceWorkingDraftCommand(BoundaryDTO):
     job_analysis_id: str
     selection_plan_id: str
     keep_previous: bool = False
+    provider: Literal["deterministic", "openai"] = "deterministic"
     actor_type: Literal["user", "system"] = "user"
     client: Literal["web", "cli", "worker"] = "cli"
 
@@ -357,6 +421,23 @@ class WorkingDraftUpdateResult(BoundaryDTO):
     content_hash: str
     selection_plan_id: str
     pending_claim_ids: list[str] = []
+
+
+class RegenerationResult(BoundaryDTO):
+    """What one AI regeneration committed, and what produced it.
+
+    `provider_artifact_version_id` names the registered sanitized response, so a
+    client - and a later reader of the record - can reach the exact evidence for
+    the wording that landed without going through the Operation's outputs.
+    """
+
+    application_id: str
+    working_draft_id: str
+    edit_version: int
+    content_hash: str
+    selection_plan_id: str
+    regenerated_claim_ids: list[str]
+    provider_artifact_version_id: str
 
 
 class SelectionChangeResult(BoundaryDTO):

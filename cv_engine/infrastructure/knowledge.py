@@ -5,11 +5,13 @@ import os
 from collections.abc import Callable
 from pathlib import Path
 
+from ..application.errors import KnowledgeRejected
 from ..application.knowledge_mutations import (
     KnowledgeFileState,
     KnowledgeMutation,
     StagedKnowledgeFile,
 )
+from ..application.ports import TaskContract, TaskContracts
 from ..domain.candidate import CANDIDATE_FILE, CandidateContextError, build_candidate_context
 from ..domain.facts import (
     FACT_SOURCE_NAMES,
@@ -28,8 +30,80 @@ from ..domain.models import CandidateContext, Fact, FactSource, FactStatus, Prof
 from ..domain.presentations import PresentationError, PresentationStore
 from ..domain.profiles import ProfileStore, ProfileStoreError, attach_fact_to_section
 from ..domain.selection import EmphasisPolicyStore, SelectionError
-from ..util import sha256_file, utc_now
+from ..util import sha256_file, sha256_text, utc_now
 from .paths import relative_within, resolve_within
+
+TASK_CONTRACTS_FILE = Path("ai") / "contracts" / "task_contracts.json"
+
+
+def load_task_contracts(knowledge_root: Path) -> TaskContracts:
+    """Read the declared AI task contracts and the prompt they name.
+
+    The file is Knowledge (architecture §6.3), so it is read here with the
+    facts, profiles, and policies rather than by the provider adapter. Missing,
+    unparseable, or self-inconsistent is refused rather than defaulted: a task
+    that ran under an invented contract version would record provenance nobody
+    can trace back to a file.
+    """
+    path = knowledge_root / TASK_CONTRACTS_FILE
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise KnowledgeRejected(f"AI task contracts are missing: {TASK_CONTRACTS_FILE}") from exc
+    except (json.JSONDecodeError, OSError) as exc:
+        raise KnowledgeRejected(f"AI task contracts are unreadable: {exc}") from exc
+    if not isinstance(document, dict):
+        raise KnowledgeRejected("AI task contracts must be an object")
+    prompt = document.get("prompt")
+    tasks = document.get("tasks")
+    version = document.get("version")
+    if not isinstance(version, str) or not isinstance(prompt, dict) or not isinstance(tasks, dict):
+        raise KnowledgeRejected("AI task contracts must declare version, prompt, and tasks")
+    prompt_version = prompt.get("version")
+    prompt_file = prompt.get("file")
+    if not isinstance(prompt_version, str) or not isinstance(prompt_file, str):
+        raise KnowledgeRejected("the AI prompt contract must declare a version and a file")
+    prompt_path = resolve_within(knowledge_root, knowledge_root / prompt_file)
+    try:
+        prompt_text = prompt_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise KnowledgeRejected(f"the declared AI prompt is unreadable: {prompt_file}") from exc
+    declared: dict[str, TaskContract] = {}
+    for name, entry in tasks.items():
+        if not isinstance(entry, dict):
+            raise KnowledgeRejected(f"AI task contract {name} must be an object")
+        task_version = entry.get("version", version)
+        # The input and output schema versions default to the task's own version
+        # rather than to a literal, so a task that declares one version declares
+        # all three consistently and cannot end up with an invented default.
+        fields = {
+            "input": entry.get("input"),
+            "input_schema_version": entry.get("input_schema_version", task_version),
+            "output": entry.get("output"),
+            "output_schema_version": entry.get("output_schema_version", task_version),
+        }
+        missing = sorted(key for key, value in fields.items() if not isinstance(value, str))
+        if not isinstance(task_version, str) or missing:
+            raise KnowledgeRejected(
+                f"AI task contract {name} must declare a version, input, and output: "
+                f"missing {', '.join(missing) or 'version'}"
+            )
+        declared[name] = TaskContract(
+            name=name,
+            version=task_version,
+            critical_state=bool(entry.get("critical_state", True)),
+            model=entry.get("model"),
+            **fields,
+        )
+    if not declared:
+        raise KnowledgeRejected("AI task contracts declare no tasks")
+    return TaskContracts(
+        version=version,
+        prompt_version=prompt_version,
+        prompt_hash=sha256_text(prompt_text),
+        prompt_text=prompt_text,
+        tasks=declared,
+    )
 
 
 def read_fact_source(path: Path) -> FactSource:
@@ -141,6 +215,9 @@ class FileKnowledge:
         if self._has_prepared_mutation is not None and self._has_prepared_mutation():
             raise FactStoreError("Knowledge has an uncommitted prepared mutation")
         return load_fact_store(self.base_dir)
+
+    def task_contracts(self) -> TaskContracts:
+        return load_task_contracts(self.knowledge_root)
 
     def load(self) -> Knowledge:
         facts = self.facts()

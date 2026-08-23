@@ -6,7 +6,7 @@ the receiving side change what the caller believes it sent.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -82,3 +82,45 @@ class ArtifactStream:
 
     size: int
     chunks: Callable[[], Iterator[bytes]]
+
+
+@dataclass(frozen=True)
+class TaskContract:
+    """One AI task's declared identity, as the contract file states it."""
+
+    name: str
+    version: str
+    input: str
+    input_schema_version: str
+    output: str
+    output_schema_version: str
+    critical_state: bool
+    model: str | None = None
+
+
+@dataclass(frozen=True)
+class TaskContracts:
+    """The single source for contract version, prompt version, and prompt text.
+
+    `ai/contracts/task_contracts.json` and the prompt it names are Knowledge
+    files (architecture §6.3), so they load through the Knowledge port like
+    every other version-controlled input. Before Stage G the same two strings
+    were typed into the provider adapter and into the deterministic
+    generation-run record while the file was read by nothing: three places that
+    could disagree about what ran. There is now one.
+
+    `prompt_hash` is the exact identity. The version is the label a human
+    reads; the hash is what proves which bytes the provider was given.
+    """
+
+    version: str
+    prompt_version: str
+    prompt_hash: str
+    prompt_text: str
+    tasks: Mapping[str, TaskContract]
+
+    def get(self, name: str) -> TaskContract:
+        try:
+            return self.tasks[name]
+        except KeyError as exc:
+            raise KeyError(f"no task contract is declared for {name}") from exc

@@ -319,6 +319,37 @@ class PayloadStore:
         )
         return self._reference(stored)
 
+    def commit_provider_response(
+        self,
+        application_id: str,
+        operation_id: str,
+        artifact_id: str,
+        sanitized_json: str,
+    ) -> SnapshotPayload:
+        """Preserve one sanitized provider response as an immutable payload.
+
+        The layout - `provider/{application_id}/{operation_id}/{artifact_id}.json`
+        - is the one architecture §6.2 already approves, and it was already the
+        one `_approved_destination` accepts; Stage G is the first caller. The
+        Operation ID is in the path so a retry, which is a second Operation,
+        cannot land on the first one's evidence.
+
+        The bytes are sanitized before they arrive. This method does not inspect
+        them for secrets, because a store that re-derived that rule could
+        disagree with the adapter that applied it; it validates that they parse
+        as JSON, which is what the approved layout promises about the file.
+
+        Registration in SQLite stays with the caller, exactly as it does for
+        revisions and archived drafts: a failure there leaves a reconcilable
+        filesystem orphan rather than a pointer to nothing.
+        """
+        stored = self.commit(
+            self.provider_path(application_id, operation_id, artifact_id),
+            write=lambda path: path.write_bytes(sanitized_json.encode("utf-8")),
+            validate=self._valid_json,
+        )
+        return self._reference(stored)
+
     def open_artifact(self, reference: str, expected_hash: str) -> ArtifactStream:
         """Verify one registered immutable payload and hand back exactly those bytes.
 

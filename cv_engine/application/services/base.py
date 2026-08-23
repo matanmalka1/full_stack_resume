@@ -8,10 +8,12 @@ from ...domain.models import (
     CandidateContext,
     DraftDocument,
     JobAnalysis,
+    ProviderTaskResult,
     WorkingDraft,
 )
 from ...domain.profiles import ProfileStore
 from ...domain.selection import EmphasisPolicyStore
+from ...util import new_id
 from ..chain import ChainError, check_draft_chain
 from ..errors import (
     # Re-exported: the v1 CLI and test suite catch WorkflowError from here, and
@@ -23,14 +25,18 @@ from ..errors import (
     UnknownRecord,
 )
 from ..ports import (
+    AIProvider,
+    ArtifactRegistry,
     ArtifactStore,
-    ClassificationProvider,
     DraftRepository,
     KnowledgeStore,
     Renderer,
     RevisionPayloadStore,
+    SnapshotPayload,
+    TaskContracts,
     WorkingDraftReader,
 )
+from .proposals import ProviderEvidence
 
 RepoT = TypeVar("RepoT")
 
@@ -50,7 +56,7 @@ class ServiceBase(Generic[RepoT]):
         knowledge: KnowledgeStore,
         artifacts: ArtifactStore,
         renderer: Renderer | None = None,
-        provider: ClassificationProvider | None = None,
+        provider: AIProvider | None = None,
         snapshots: RevisionPayloadStore | None = None,
         installation_id: str = "unconfigured-test-installation",
     ):
@@ -130,6 +136,134 @@ class ServiceBase(Generic[RepoT]):
         if self._renderer is None:
             raise DependencyUnavailable("this command needs a renderer and none was configured")
         return self._renderer
+
+    @property
+    def provider(self) -> AIProvider:
+        """The AI provider, or the refusal that names it as the missing piece.
+
+        Refusing here rather than falling back is invariant 14: an AI command
+        that quietly ran deterministically would hand back a result the user did
+        not ask for, under provenance that says `deterministic`, with nothing to
+        distinguish it from a run they chose. Continuing deterministically is a
+        separate command the user issues.
+        """
+        if self._provider is None:
+            raise DependencyUnavailable("AI mode was requested but no provider is configured")
+        return self._provider
+
+    def task_contracts(self) -> TaskContracts:
+        """The declared AI task contracts, re-read per command like Knowledge.
+
+        Read through the Knowledge port for the same reason facts are: a cached
+        copy could disagree with the file a later command reads, and the
+        contract version it carries is written into a permanent record.
+        """
+        try:
+            return self._knowledge.task_contracts()
+        except OSError as exc:
+            raise InfrastructureFailure(f"could not read the AI task contracts: {exc}") from exc
+
+    def preserve(
+        self,
+        application_id: str,
+        operation_id: str,
+        task: str,
+        provenance: ProviderTaskResult,
+    ) -> ProviderEvidence:
+        """Preserve and register one provider response, in the execute phase.
+
+        **Registration happens here, not at activation.** A response registered
+        inside the activation transaction does not exist at all when the
+        Operation is cancelled or its sources moved between execution and
+        activation - the payload is on disk with no `ArtifactVersion` naming it
+        and no Operation output referring to it. Product specification §18
+        requires the opposite: "a completed output after cancellation is
+        recorded as inactive evidence".
+
+        So the row is written in the same phase as the file it points at, and
+        *activation* is expressed where the specification puts it - on the
+        Operation output's `active` flag, which the runner sets only after a
+        successful commit. Output existence and output activation are separate
+        (§6 invariant 15), and this is the seam where they separate.
+
+        There is exactly one `lifecycle_status`, `provider-output`. Whether the
+        answer was used is already recorded twice - by the Operation's status
+        and by its output's `active` flag - and a third copy in the artifact row
+        would be a third thing that can disagree.
+        """
+        artifact_version_id, payload = self.preserve_provider_response(
+            application_id, operation_id, provenance.sanitized_response
+        )
+        evidence = ProviderEvidence(
+            task=task,
+            artifact_version_id=artifact_version_id,
+            payload=payload,
+            provenance=provenance,
+        )
+        self.register_provider_response(self.repo, application_id, evidence)
+        return evidence
+
+    def preserve_provider_response(
+        self,
+        application_id: str,
+        operation_id: str,
+        sanitized_response: str,
+    ) -> tuple[str, SnapshotPayload]:
+        """Write one sanitized provider response, before anything is registered.
+
+        Filesystem first, SQLite second - the order every immutable payload in
+        this system uses. A registration that fails afterwards leaves a
+        reconcilable orphan; a row written first would name content that does
+        not exist.
+
+        The artifact version ID is minted here because it is also the filename,
+        so the registered row and the payload it points at are the same identity
+        rather than two that have to be kept in step.
+        """
+        artifact_version_id = new_id()
+        try:
+            payload = self.revision_payloads.commit_provider_response(
+                application_id,
+                operation_id,
+                artifact_version_id,
+                sanitized_response,
+            )
+        except (OSError, ValueError, FileExistsError) as exc:
+            raise InfrastructureFailure(f"could not preserve the provider response: {exc}") from exc
+        return artifact_version_id, payload
+
+    @staticmethod
+    def register_provider_response(
+        repository: ArtifactRegistry,
+        application_id: str,
+        evidence: ProviderEvidence,
+    ) -> str:
+        """Register one preserved response as an immutable artifact version.
+
+        The metadata is provenance, not content: provider, model, contract,
+        prompt, and input/output schema versions and hashes, response ID, usage,
+        latency, and the three payload hashes. Never a key, never a header,
+        never hidden reasoning - none of which exists in `ProviderContext` to
+        occupy a field in the first place.
+        """
+        provenance = evidence.provenance
+        metadata: dict[str, Any] = {
+            "task": evidence.task,
+            **provenance.context.model_dump(mode="json"),
+            "input_hash": provenance.input_hash,
+            "output_hash": provenance.output_hash,
+            "raw_output_hash": provenance.raw_output_hash,
+        }
+        return repository.register_artifact_version(
+            application_id,
+            "provider_response",
+            evidence.task,
+            evidence.payload.reference,
+            evidence.payload.sha256,
+            "provider-output",
+            metadata=metadata,
+            artifact_version_id=evidence.artifact_version_id,
+        )
 
 
 def working_draft_record(repo: WorkingDraftReader, application_id: str) -> WorkingDraft:

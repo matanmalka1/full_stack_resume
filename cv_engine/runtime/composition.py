@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,9 +11,9 @@ from ..api.app import API_VERSION
 from ..application.operation_runner import OperationRunner
 from ..application.operations import OperationType
 from ..application.ports import (
+    AIProvider,
     ApplicationRepository,
     ArtifactStore,
-    ClassificationProvider,
     KnowledgeStore,
     Renderer,
     RevisionPayloadStore,
@@ -26,7 +27,9 @@ from ..application.services.operations import (
     AnalysisOperationHandler,
     DraftOperationHandler,
     OperationService,
+    RegenerationOperationHandler,
     RenderOperationHandler,
+    SelectionPlanOperationHandler,
 )
 from ..application.services.projections import ApplicationQueryService
 from ..application.services.rendering import RenderingService
@@ -36,12 +39,17 @@ from ..infrastructure.knowledge import FileKnowledge
 from ..infrastructure.operation_logging import OperationFailureLogger
 from ..infrastructure.payloads import PayloadStore
 from ..infrastructure.persistence import Repository, current_schema_version
-from ..infrastructure.providers import OpenAIClassificationProvider
+from ..infrastructure.providers import OpenAIProvider
 from ..infrastructure.rendering import PlaywrightRenderer
 from ..util import new_id
-from .config import API_MAX_BODY_BYTES_DEFAULT, RuntimeConfig
+from .config import API_MAX_BODY_BYTES_DEFAULT, RuntimeConfig, resolve_config
 from .execution import ForegroundOperationExecutor, OperationWorker
 from .workspace import Workspace
+
+
+def _default_config() -> RuntimeConfig:
+    """The settings a caller that passed none is implicitly asking for."""
+    return resolve_config(env=os.environ)
 
 
 @dataclass(frozen=True)
@@ -76,7 +84,8 @@ def build_services(
     artifacts: ArtifactStore | None = None,
     payloads: RevisionPayloadStore | None = None,
     renderer: Renderer | None = None,
-    provider: ClassificationProvider | None = None,
+    provider: AIProvider | None = None,
+    config: RuntimeConfig | None = None,
 ) -> Services:
     """The manual composition root.
 
@@ -94,9 +103,17 @@ def build_services(
     resolved_artifacts = artifacts or FilesystemArtifactStore(workspace)
     resolved_payloads = payloads or PayloadStore(workspace)
     resolved_renderer = renderer or PlaywrightRenderer(workspace.knowledge_root)
-    resolved_provider = provider or OpenAIClassificationProvider(
-        workspace.knowledge_root / "ai" / "prompts" / "system-v1.md"
-    )
+    # Built only when a key is configured. The deterministic workflow must
+    # reach Ready with `OPENAI_API_KEY` unset, so constructing an adapter that
+    # refuses at import time would break the offline path for every command,
+    # including the ones that never call a provider. `None` here is what the
+    # services turn into an explicit refusal when AI mode is *requested*.
+    resolved_provider = provider
+    if resolved_provider is None and os.environ.get("OPENAI_API_KEY"):
+        resolved_provider = OpenAIProvider(
+            resolved_knowledge.task_contracts(),
+            default_model=str((config or _default_config()).get("model")),
+        )
     shared = {
         "repository": resolved_repository,
         "knowledge": resolved_knowledge,
@@ -115,7 +132,14 @@ def build_services(
         resolved_repository,
         {
             OperationType.ANALYZE_JOB: AnalysisOperationHandler(analysis_service),
+            OperationType.PROPOSE_SELECTION_PLAN: SelectionPlanOperationHandler(analysis_service),
             OperationType.CREATE_DRAFT: DraftOperationHandler(draft_service),
+            OperationType.REGENERATE_SECTION: RegenerationOperationHandler(
+                draft_service, task="regenerate_section"
+            ),
+            OperationType.REGENERATE_CLAIM: RegenerationOperationHandler(
+                draft_service, task="regenerate_claim"
+            ),
             OperationType.RENDER_REVISION: RenderOperationHandler(rendering_service),
         },
         runner_id=f"local-{new_id()}",

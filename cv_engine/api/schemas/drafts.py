@@ -11,7 +11,7 @@ token is a header, which is what makes it usable by a conditional request.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -29,6 +29,41 @@ class GenerateWorkingDraftRequest(HttpSchema):
 
     job_analysis_id: str
     selection_plan_id: str
+    provider: Literal["deterministic", "openai"] = "deterministic"
+
+
+class RegenerateSectionRequest(HttpSchema):
+    """What `POST /working-drafts/{id}/regenerate-section` accepts (§14).
+
+    The draft's exact version and content hash are in the body rather than in
+    `If-Match`, on the same reasoning as `validate` and `approve`: this is an
+    action on a resource, not a conditional replacement of it, and an action
+    that accepted `If-Match: *` would be the lost update the header exists to
+    prevent.
+
+    The analysis and plan are explicit. A regeneration that resolved them for
+    itself could rewrite a section against a plan the user never saw.
+    """
+
+    application_id: str
+    expected_edit_version: int
+    expected_content_hash: str
+    job_analysis_id: str
+    selection_plan_id: str
+    section: str = Field(max_length=200)
+    instruction: str = Field(default="", max_length=2000)
+
+
+class RegenerateClaimRequest(HttpSchema):
+    """What `POST /working-drafts/{id}/regenerate-claim` accepts (§14)."""
+
+    application_id: str
+    expected_edit_version: int
+    expected_content_hash: str
+    job_analysis_id: str
+    selection_plan_id: str
+    claim_id: str = Field(max_length=200)
+    instruction: str = Field(default="", max_length=2000)
 
 
 class ClaimPatchRequest(HttpSchema):
@@ -86,6 +121,7 @@ class ReplaceWorkingDraftRequest(WorkingDraftVersionRequest):
     job_analysis_id: str
     selection_plan_id: str
     keep_previous: bool = False
+    provider: Literal["deterministic", "openai"] = "deterministic"
 
 
 class ApproveDraftRequest(WorkingDraftVersionRequest):
