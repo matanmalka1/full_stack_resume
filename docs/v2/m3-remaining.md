@@ -280,7 +280,7 @@ remains the M3 boundary gate. Stage C has not begun.
       the OpenAPI diff.
 
 **The first evidence run failed, and it found two defects - one introduced here and one
-older.** Repaired at `a7c3425` and `b1b2171`; Stage C is awaiting a clean run.
+older.** Repaired at `a7c3425` and `b1b2171`.
 
 1. **`as_operation_view` did not narrow anything.** It handed the record to
    `OperationView.model_validate(record, from_attributes=True)`. A `PersistedOperation`
@@ -321,22 +321,40 @@ Worth carrying forward: the assertion that caught the first defect compared the 
 field set against `OperationResponse.model_fields` rather than against a hand-written list.
 A list would have been written from the same wrong belief that the narrowing worked.
 
-The collection prediction held exactly. The second run collected **282** and reported
-`1 failed, 281 passed, 4 deselected`, against a predicted 282 and a baseline of 236 / 240;
-the single failure was defect 2's second helper and nothing else moved. `test_api_*`
-passed in full at that run: 61 for the Stage C pair and 30 for the Stage A/B pair.
+**Stage C is closed**, at `9d04cfe`, `a0116cd`, `a6d917b`, `a7c3425`, and `b1b2171`, on
+evidence the user ran and accepted.
 
-OpenAPI and TypeScript were regenerated; the entry-level diff is in `a0116cd`, and neither
-repair moves either file. Nothing in Stage B's product code was reopened, and Stage D has
-not begun.
+| Measure | Baseline | Stage A | Stage C | Delta |
+| --- | --- | --- | --- | --- |
+| Non-browser suite | 236 passed, 4 deselected | 259 passed | **282 passed, 4 deselected** | +23 |
+| Collection | 236 | 259 | 282 | +23 |
 
-Predicted next non-browser collection: **282** - Stage B's 270 plus the 12 cases in
-`test_api_operations.py` (9 functions, two of them parametrised over 3 and 2). No test was
-removed, and the repair adds no case: it changed one helper and one assertion inside
-existing tests. Two existing assertions in `test_operations.py` moved with the contract
-without changing the count either: the detail projection is compared against the view, and
-the cancel/retry immutability assertion reads the stored record once so it still compares
-the whole row.
+The +23 against Stage A is +11 for Stage B and +12 for Stage C, and the +12 is accounted
+for exactly: 9 functions in `test_api_operations.py`, two of them parametrised over 3 and
+2. Nothing else moved. The prediction of 282 was made before the first evidence run and
+held through both repairs, because neither added or removed a case - they changed one
+helper, one narrowing, and one assertion inside tests that already existed. The 4
+deselected are still exactly the browser-marked tests, so 282 + 4 is internally
+consistent with the 236 / 240 baseline. Same interpreter throughout:
+`.venv/bin/python`, Python 3.14.2.
+
+The full non-browser suite is Stage C's whole gate. It contains all 61 focused cases from
+the two API files, both of which passed at the previous run, so the focused commands were
+not repeated. OpenAPI and TypeScript were regenerated at `a0116cd`; neither repair moves
+either file, and the drift test passes inside the suite above.
+
+Two rounds of evidence were needed, and what each cost is worth carrying forward:
+
+1. A narrowing that narrowed nothing, because `model_validate` returns a subclass instance
+   untouched. It had been shipping the runner record to HTTP clients since before this
+   stage, and only typing the field could expose it.
+2. The same helper defect in two places, repaired one at a time because the traceback named
+   one. **This is the second time in M3 that a name-driven audit found a subset.** Both
+   times the fix was to derive the set from the AST instead. The pattern is now explicit
+   enough to expect: when a defect has a shape rather than a location, look for its shape
+   everywhere before repairing the instance in front of you.
+
+Nothing in Stage B's product code was reopened. Stage D has not begun.
 
 ### D — Analyze, review decisions, deterministic selection plans
 
