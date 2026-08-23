@@ -280,7 +280,7 @@ remains the M3 boundary gate. Stage C has not begun.
       the OpenAPI diff.
 
 **The first evidence run failed, and it found two defects - one introduced here and one
-older.** Both are repaired at `<repair>`; Stage C is awaiting a second run.
+older.** Both are repaired at `a7c3425`; Stage C is awaiting a second run.
 
 1. **`as_operation_view` did not narrow anything.** It handed the record to
    `OperationView.model_validate(record, from_attributes=True)`. A `PersistedOperation`
