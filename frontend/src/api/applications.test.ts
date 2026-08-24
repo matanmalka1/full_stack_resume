@@ -5,6 +5,7 @@ import {
   applicationDetailQueryOptions,
   duplicateMatchesFromProblem,
   startAnalysis,
+  startDraftGeneration,
 } from "./applications";
 import { OPERATION_POLL_INTERVAL_MS } from "./operations";
 import { ApiProblem, type ProblemDetails } from "./client";
@@ -138,6 +139,40 @@ describe("startAnalysis", () => {
 
     await expect(startAnalysis("app-1", "snap-1", "key-1")).rejects.toThrow(
       "Accepted response did not identify its queued Operation",
+    );
+  });
+});
+
+/* §21: the no-review continuation. The `202`/`Location` obligation is `queuedOperation`'s
+   and is covered once above; what is this command's own is that both sources travel
+   explicitly. */
+describe("startDraftGeneration", () => {
+  it("names the exact analysis and selection plan rather than letting the server resolve them", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(operation({ operation_type: "create_draft" })), {
+        status: 202,
+        headers: {
+          "Content-Type": "application/json",
+          Location: "/api/v1/operations/op-1",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const queued = await startDraftGeneration("app 1", "analysis-1", "plan-1", "key-2");
+
+    expect(queued.operationPath).toBe("/operations/op-1");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "/api/v1/applications/app%201/working-draft/generate",
+    );
+    /* `provider` is absent on purpose: `deterministic` is the server's default, and the
+       deterministic path has to stay reachable with no key configured. */
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      job_analysis_id: "analysis-1",
+      selection_plan_id: "plan-1",
+    });
+    expect((fetchMock.mock.calls[0]?.[1]?.headers as Headers).get("Idempotency-Key")).toBe(
+      "key-2",
     );
   });
 });

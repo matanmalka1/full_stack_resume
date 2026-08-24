@@ -10,6 +10,7 @@ import type {
   DuplicateCheckResult,
   DuplicateMatch,
   DuplicateMatchReason,
+  GenerateWorkingDraftRequest,
   Operation,
 } from "./contracts";
 import {
@@ -114,6 +115,9 @@ const applicationPath = (applicationId: string): ApiPath =>
 const analysesPath = (applicationId: string): ApiPath =>
   `/api/v1/applications/${encodeURIComponent(applicationId)}/analyses`;
 
+const generateWorkingDraftPath = (applicationId: string): ApiPath =>
+  `/api/v1/applications/${encodeURIComponent(applicationId)}/working-draft/generate`;
+
 /* The one read the application context screen is built on. §9 computes the whole
    projection in one read transaction, so it arrives as one answer and is rendered as
    one; nothing here recombines it into a second view of the same state.
@@ -160,6 +164,36 @@ export const startAnalysis = async (
 
   return queuedOperation(
     await apiRequest<Operation>(analysesPath(applicationId), {
+      method: "POST",
+      body,
+      idempotencyKey,
+    }),
+  );
+};
+
+/* §14 and §21: the no-review continuation. A successful analysis commits the JobAnalysis
+   and its initial deterministic SelectionPlan together, which is exactly what lets Draft
+   be called with explicit source IDs; both are named by the caller here rather than
+   resolved server-side, so a plan the user never saw cannot become the one that is
+   drafted from. The Operation freezes them, and a source that moves before activation
+   fails as `SOURCE_CHANGED` instead of drafting from something else.
+
+   `provider` is omitted for the same reason `startAnalysis` omits it: `deterministic` is
+   the server's default, and restating it here would be a second copy of a policy this
+   client does not own. */
+export const startDraftGeneration = async (
+  applicationId: string,
+  jobAnalysisId: string,
+  selectionPlanId: string,
+  idempotencyKey: string,
+): Promise<QueuedOperation> => {
+  const body: Pick<GenerateWorkingDraftRequest, "job_analysis_id" | "selection_plan_id"> = {
+    job_analysis_id: jobAnalysisId,
+    selection_plan_id: selectionPlanId,
+  };
+
+  return queuedOperation(
+    await apiRequest<Operation>(generateWorkingDraftPath(applicationId), {
       method: "POST",
       body,
       idempotencyKey,

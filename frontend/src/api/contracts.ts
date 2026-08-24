@@ -27,3 +27,4 @@ export type Warning = ApiSchemas["WarningResponse"];
 export type BlockedAction = ApiSchemas["BlockedActionResponse"];
 
 export type CreateAnalysisRequest = ApiSchemas["CreateAnalysisRequest"];
+export type GenerateWorkingDraftRequest = ApiSchemas["GenerateWorkingDraftRequest"];

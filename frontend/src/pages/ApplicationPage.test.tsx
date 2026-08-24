@@ -8,6 +8,7 @@ import { ApplicationPage } from "./ApplicationPage";
 
 const DETAIL_PATH = "/api/v1/applications/app-1";
 const ANALYSES_PATH = "/api/v1/applications/app-1/analyses";
+const GENERATE_PATH = "/api/v1/applications/app-1/working-draft/generate";
 
 const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail => ({
   recruitment_status: "saved",
@@ -156,8 +157,85 @@ describe("ApplicationPage", () => {
       vi.fn().mockResolvedValue(
         jsonResponse(
           detail({
+            preparation_state: "draft_in_progress",
+            working_draft_state: "editing",
+            active_analysis_id: "analysis-1",
+            active_selection_plan_id: "plan-1",
+            active_working_draft_id: "draft-1",
+            available_actions: ["analyze", "create_draft", "validate"],
+            recommended_action: "validate",
+          }),
+        ),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("הפעולה המומלצת כעת היא אימות הטיוטה")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "אימות הטיוטה" })).not.toBeInTheDocument();
+    /* Analysis is still available, but it is no longer the emphasized action and it says
+       what a second analysis does. */
+    expect(screen.getByRole("button", { name: "ניתוח מחדש של המשרה" })).toBeInTheDocument();
+    expect(
+      screen.getByText(/ניתוח מחדש יוצר ניתוח חדש ונפרד/, { exact: false }),
+    ).toBeInTheDocument();
+  });
+
+  /* §21: the no-review continuation. Analyze commits the JobAnalysis and its initial
+     SelectionPlan together, and both IDs are sent explicitly so the draft cannot be built
+     from a plan the user never saw. */
+  it("generates the draft from the exact analysis and plan the projection names", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(
+          detail({
             preparation_state: "ready_to_draft",
+            active_analysis_id: "analysis-1",
+            active_selection_plan_id: "plan-1",
             available_actions: ["analyze", "create_draft"],
+            recommended_action: "create_draft",
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(acceptedResponse(queued({ id: "op-2", operation_type: "create_draft" })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "יצירת טיוטה" }));
+
+    expect(await screen.findByRole("heading", { name: "מצב הפעולה" })).toBeInTheDocument();
+
+    const request = fetchMock.mock.calls[1];
+    expect(request?.[0]).toBe(GENERATE_PATH);
+    expect(request?.[1]).toEqual(expect.objectContaining({ method: "POST" }));
+    expect(JSON.parse(String(request?.[1]?.body))).toEqual({
+      job_analysis_id: "analysis-1",
+      selection_plan_id: "plan-1",
+    });
+    expect((request?.[1]?.headers as Headers).get("Idempotency-Key")).not.toBeNull();
+  });
+
+  /* §14: generate writes over the one active WorkingDraft. Discarding a working copy is a
+     choice, and the command that carries it is `replace_working_draft`; this screen offers
+     no button that would make that choice silently. */
+  it("does not offer a generation that would overwrite an active working draft", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          detail({
+            preparation_state: "ready_to_draft",
+            working_draft_state: "stale",
+            active_analysis_id: "analysis-1",
+            active_selection_plan_id: "plan-1",
+            active_working_draft_id: "draft-1",
+            available_actions: [
+              "analyze",
+              "create_draft",
+              "archive_working_draft",
+              "replace_working_draft",
+            ],
             recommended_action: "create_draft",
           }),
         ),
@@ -168,11 +246,8 @@ describe("ApplicationPage", () => {
 
     expect(await screen.findByText("הפעולה המומלצת כעת היא יצירת טיוטה")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "יצירת טיוטה" })).not.toBeInTheDocument();
-    /* Analysis is still available, but it is no longer the emphasized action and it says
-       what a second analysis does. */
-    expect(screen.getByRole("button", { name: "ניתוח מחדש של המשרה" })).toBeInTheDocument();
     expect(
-      screen.getByText(/ניתוח מחדש יוצר ניתוח חדש ונפרד/, { exact: false }),
+      screen.getByText(/כותבת על הטיוטה הפעילה/, { exact: false }),
     ).toBeInTheDocument();
   });
 

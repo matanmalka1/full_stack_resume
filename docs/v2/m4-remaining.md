@@ -564,7 +564,41 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
       which analysis is active. The consequence is stated in a line beside the button
       instead. A.1 reserves dialogs for choices that are destructive to the working copy;
       this is not one.
-- [ ] No-review continuation using Analyze's explicit initial SelectionPlan ID.
+- [x] No-review continuation using Analyze's explicit initial SelectionPlan ID. **Closed on
+      the complete Class A gate.**
+
+      The application context screen performs `create_draft` beside `analyze`. It posts to
+      `POST /api/v1/applications/{id}/working-draft/generate` with the `active_analysis_id`
+      and `active_selection_plan_id` the §9 projection named — exactly the pair a successful
+      analysis commits together (§13), which is what §21 means by the no-review path calling
+      `create_draft` with explicit source IDs. Neither ID is resolved server-side, so a plan
+      the user never saw cannot become the one that is drafted from, and a source that moves
+      before activation fails the Operation's own check as `SOURCE_CHANGED`.
+
+      The request carries no `provider`, on the same reasoning `startAnalysis` omits it:
+      `deterministic` is the server's default, and restating it here would be a second copy
+      of a policy this client does not own. That is also what keeps the path reachable with
+      no AI key.
+
+      Both queueing commands now share one `followQueued` — seed the accepted representation
+      into the Operation cache, then navigate. The idempotency key is one per source pair,
+      the same shape as analyze's one-per-snapshot: a resent generate for the same analysis
+      and plan is the same command.
+
+      **One availability rule is the screen's rather than the projection's, and it is
+      deliberate.** `generate` writes over the one active WorkingDraft (§14), so the button
+      appears only when `working_draft_state` is `none` — when there is nothing to discard.
+      The projection can report `create_draft` as available *and recommended* while a draft
+      exists: a source-stale draft is `ready_to_draft` with `create_draft` recommended, and a
+      button there would have silently overwritten the user's working copy. Discarding it is
+      a choice, and the command carrying that choice is `replace_working_draft`, with the
+      exact `edit_version` and the Keep decision. That screen is Stage D. Until then the
+      recommendation is named with the true reason its button is absent, not with the generic
+      "not built yet" sentence, and the existing draft is left exactly as it is.
+
+      There is still no automatic chaining. Auto-generation when review is not required is a
+      Workspace setting that belongs to Settings (Stage E), so the continuation stays an
+      explicit action; nothing on this screen runs itself.
 - [ ] Review-reason form and one Apply Decisions commit.
 - [ ] Provider failure, retry, deterministic continuation, cancellation, and
       `SOURCE_CHANGED` presentation.
@@ -603,9 +637,10 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
 
 ## Current next action
 
-**Stage B is closed. Stage C bullets 1 and 2 are closed on their applicable gates.** The
-next slice is bullet 3, the no-review continuation using Analyze's explicit initial
-SelectionPlan ID.
+**Stage B is closed. Stage C bullets 1 and 2 are closed on their applicable gates.**
+
+**Stage C bullets 1, 2, and 3 are closed on their applicable gates.** The next slice is
+bullet 4, the review-reason form and its one Apply Decisions commit.
 
 **The Known gap recorded here is closed.** A terminal Operation screen was a dead end: it
 reported that the Operation had finished and offered no way forward, and the destination
@@ -752,3 +787,39 @@ reconcile passed with exactly five artifact versions, 87 canonical facts, and no
 One A.4 surface is deliberately not a primitive: the sandboxed preview frame. Its direction
 isolation and refresh behavior depend on the render contract, so it is built in Stage D with
 the screen that owns it rather than guessed at now.
+
+## Stage C bullet 3 — gate closed 2026-08-24
+
+The change is **Class A** and frontend-only. No Python module, migration, artifact path,
+callable signature, or contracted message changed, and `openapi/` was not regenerated:
+`GenerateWorkingDraftRequest` already existed, so the new call consumes a schema the
+backend had published since M3. The gate is therefore the focused tests and the non-browser
+suite once.
+
+User-run evidence on 2026-08-24. Every command passed and every count matched its
+prediction with no unexplained delta.
+
+| Command | Proves | Observed |
+| --- | --- | --- |
+| `cd frontend && npm run test` | the generate call's explicit sources, and that no button is offered where generation would overwrite a working copy | **58 passed, 6 files** |
+| `cd frontend && npm run build` | typecheck, the derived design-token guard, and the production build | **passed**; guard reported **16 color, 2 radius, 1 shadow** |
+| `cd frontend && npm run e2e` | the RTL shell, the landmark, route focus, and the New Application screen with axe | **5 passed** |
+| `pytest -m "not browser"` | the whole non-browser suite is green on this tree | **451 passed, 4 deselected** in 85.98s |
+
+Predicted deltas from the Stage C bullet 2 baseline of **55 Vitest tests in 6 files**:
+
+- `applications.test.ts` 12 → **13**: one `startDraftGeneration` case covering the encoded
+  path, both explicit source IDs, the absent `provider`, and the idempotency key. The
+  `202`/`Location` obligation is `queuedOperation`'s and is already covered once, so it was
+  not duplicated;
+- `ApplicationPage.test.tsx` 7 → **9**: generating from the exact analysis and plan the
+  projection names, and refusing to offer a generation that would overwrite an active
+  working draft. The existing "names a recommended action it cannot perform" case was
+  repointed from `create_draft` to `validate` rather than added to — `create_draft` is now
+  built, so it could no longer stand as the example of an unbuilt one;
+- the other four files keep **10**, **4**, **10**, and **12**.
+
+Playwright stayed at **5** and the token counts did not move: no screen was added and the
+theme was not touched. The Python **451** was predicted to be unchanged from the bullet 2
+run, because nothing this slice touched is observable from Python, and it was.
+
