@@ -102,6 +102,18 @@ or weaken an existing acceptance gate.
       `DraftServiceBase`, with `DraftService` assembled from them in `service.py`. No
       method body changed and the import path did not move.
 
+      `application/services/operations.py` is done. It was listed at 518 lines and had
+      reached 985, holding two subjects with different collaborators: the six Operation
+      handlers (a new Operation type touches only these) and `OperationService` (an
+      idempotency or submission change touches only this). It is now a package,
+      `application/services/operations/` — `handlers.py`, `service.py`, `failures.py`
+      for the failure-code table, `common.py` for the two source hashes both halves
+      compare — re-exported from `__init__.py`, so `runtime/composition.py` and
+      `api/services.py` are unchanged. No handler needed a mixin: they were already
+      separate classes. No body changed, verified by AST comparison against the old
+      module, and no test patches a module-level binding in it, verified by grep before
+      the split — the failure mode the drafts split found.
+
 - [ ] **TODO 19 — open question, not a task.** The port hierarchy was left unflattened
       during the `ports` split. `DraftRepository -> ReadinessRepository ->
       TrackingRepository -> ApplicationRepository` is linear and each level adds its own
