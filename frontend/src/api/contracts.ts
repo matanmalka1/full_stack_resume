@@ -8,6 +8,7 @@ export type ApplicationDetail = ApiSchemas["ApplicationDetailResponse"];
 export type Operation = ApiSchemas["OperationResponse"];
 export type OperationStatus = ApiSchemas["OperationStatus"];
 export type OperationPhase = ApiSchemas["OperationPhase"];
+export type OperationFailureCode = ApiSchemas["OperationFailureCode"];
 export type WorkingDraft = ApiSchemas["WorkingDraftResponse"];
 
 export type ApplicationIntake = ApiSchemas["DuplicateCheckRequest"];

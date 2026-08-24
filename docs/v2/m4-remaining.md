@@ -601,8 +601,8 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
       explicit action; nothing on this screen runs itself.
 - [x] Review-reason form and one Apply Decisions commit. **Closed on the complete Class B
       gate.**
-- [ ] Provider failure, retry, deterministic continuation, cancellation, and
-      `SOURCE_CHANGED` presentation.
+- [x] Provider failure, retry, deterministic continuation, cancellation, and
+      `SOURCE_CHANGED` presentation. **Closed on the complete Class A gate.**
 
 ## D — Draft Editor and preview
 
@@ -640,10 +640,8 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
 
 **Stage B is closed. Stage C bullets 1 and 2 are closed on their applicable gates.**
 
-**Stage C bullets 1, 2, and 3 are closed on their applicable gates.** Bullet 4 is
-implemented and awaiting the remainder of its Class B gate. The next slice is bullet 5,
-provider failure, retry, deterministic continuation, cancellation, and `SOURCE_CHANGED`
-presentation.
+**Stage C is closed.** All five bullets are closed on their applicable gates. The next
+slice is Stage D, Draft Editor and preview.
 
 **The Known gap recorded here is closed.** A terminal Operation screen was a dead end: it
 reported that the Operation had finished and offered no way forward, and the destination
@@ -965,3 +963,40 @@ was observed:
   review screen needs a real projection carrying review reasons, so its axe scan belongs to
   the central E2E the F gate owns. The M4 gate item "axe passes on Analysis Review" stays
   open. The token counts did not move; the theme was not touched.
+
+## Stage C bullet 5 — closed
+
+The Operation screen now translates every stable failure code into a plain-language title
+and safe next-step explanation while retaining the backend's `safe_failure_detail` and
+keeping the code inside Technical details. Provider timeout, rate limiting, unavailability,
+refusal, invalid output, and schema failure all say explicitly that no silent deterministic
+fallback occurred. `OperationFailureCode` is re-exported from the generated contract and the
+presentation map is exhaustive over it, so a new code fails the frontend build until its
+meaning is presented.
+
+There is deliberately no `המשך במצב דטרמיניסטי` control. The backend-derived
+`OperationAction` contract exposes exactly `cancel | retry`, and no separate deterministic
+continuation endpoint exists in this tree. The screen therefore follows A.4 literally: it
+offers that action only where the backend exposes it, rather than deriving permission from
+`operation_type` or inventing a route. Provider failures explain that returning to the
+Application exposes any alternative the application projection permits; retry remains the
+explicit new immutable Operation.
+
+`SOURCE_CHANGED` is not presented as an ordinary provider retry. The screen explains that
+activation did not happen and the prior state remains active, warns that retry freezes the
+same stale sources and can fail again, keeps the backend-permitted retry visible, and makes
+return to the Application the emphasized action so the current projection owns what follows.
+
+Cancellation now has both observable states. A running Operation whose
+`cancellation_requested_at` is set announces the change through the polite live region,
+explains best-effort cancellation, and promises only that a later result will not activate.
+A terminal cancelled Operation states that no new result became active. The controls still
+come only from `available_actions`; the presentation does not recreate lifecycle permission
+from status strings.
+
+The user reported the ordered Class A gate green on 2026-08-24 after receiving the exact
+predictions: `OperationPage.test.tsx` **10 -> 13**, the full Vitest suite **72 -> 75 tests
+in 8 files**, Playwright unchanged at **5**, and Python unchanged at **300 passed, 3
+deselected**. No delta was reported. Typecheck and the production build were also reported
+green. No Playwright spec, token, backend contract, golden output, or Python test item
+changed.

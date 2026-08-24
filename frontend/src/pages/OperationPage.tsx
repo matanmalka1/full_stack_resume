@@ -3,7 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { ApiProblem } from "../api/client";
-import type { Operation, OperationPhase, OperationStatus } from "../api/contracts";
+import type {
+  Operation,
+  OperationFailureCode,
+  OperationPhase,
+  OperationStatus,
+} from "../api/contracts";
 import { isTerminalOperation, operationQueryOptions } from "../api/operations";
 import { Callout } from "../ui/Callout";
 import { Card } from "../ui/Card";
@@ -104,12 +109,76 @@ const failureTones: Partial<Record<OperationStatus, StatusTone>> = {
   interrupted: "warning",
 };
 
-/* A.5: the live region announces a status or phase change, never a polling tick. The
-   dependencies are the two values themselves, so an identical tick re-renders without
-   re-running the effect. */
+interface FailurePresentation {
+  title: string;
+  guidance: string;
+}
+
+const providerRetryGuidance =
+  "לא בוצע מעבר אוטומטי למצב דטרמיניסטי. אפשר ליצור ניסיון חדש, או לחזור למועמדות ולבחור באפשרות המשך אחרת כאשר השרת מציע אותה.";
+const providerOutputGuidance =
+  "התשובה לא הופעלה ולא הוחלפה בשקט בתוצאה דטרמיניסטית. אפשר ליצור ניסיון חדש, או לחזור למועמדות ולבחור באפשרות המשך אחרת כאשר השרת מציע אותה.";
+
+/* Failure codes are decisions a person must be able to distinguish, not technical
+   decoration. This map is exhaustive over the generated union: adding a backend code
+   fails the build until the screen says what it means and what remains safe. The
+   backend-authored safe detail is still shown verbatim; this copy explains the next
+   choice without exposing logs, paths, or provider text. */
+const failurePresentations: Record<OperationFailureCode, FailurePresentation> = {
+  SOURCE_CHANGED: {
+    title: "המקור השתנה בזמן הפעולה",
+    guidance:
+      "התוצאה לא הופעלה והמצב הקיים נשמר. ניסיון חוזר משתמש שוב במקורות שהוקפאו לפעולה הזו ועלול להיכשל מאותה סיבה; חזרה למועמדות מציגה את הפעולות שמותר לבצע מול המקור העדכני.",
+  },
+  PROVIDER_TIMEOUT: {
+    title: "ספק הבינה המלאכותית לא השיב בזמן",
+    guidance: providerRetryGuidance,
+  },
+  PROVIDER_RATE_LIMITED: {
+    title: "ספק הבינה המלאכותית הגביל את הבקשה",
+    guidance: providerRetryGuidance,
+  },
+  PROVIDER_UNAVAILABLE: {
+    title: "ספק הבינה המלאכותית אינו זמין",
+    guidance: providerRetryGuidance,
+  },
+  PROVIDER_REFUSED: {
+    title: "ספק הבינה המלאכותית סירב לבקשה",
+    guidance: providerRetryGuidance,
+  },
+  INVALID_OUTPUT: {
+    title: "הצעת הספק לא הייתה בטוחה לשימוש",
+    guidance: providerOutputGuidance,
+  },
+  SCHEMA_VIOLATION: {
+    title: "תשובת הספק לא הייתה במבנה הנדרש",
+    guidance: providerOutputGuidance,
+  },
+  RENDER_FAILED: {
+    title: "יצירת קובץ קורות החיים נכשלה",
+    guidance: "הגרסה שאושרה נשמרה. אפשר ליצור ניסיון חדש בלי לשנות אותה.",
+  },
+  BROWSER_START_FAILED: {
+    title: "מנוע יצירת הקובץ לא התחיל",
+    guidance: "הגרסה שאושרה נשמרה. אפשר ליצור ניסיון חדש בלי לשנות אותה.",
+  },
+  VALIDATION_EXECUTION_FAILED: {
+    title: "לא ניתן להשלים את בדיקות הפעולה",
+    guidance: "המצב שהיה פעיל לפני הפעולה נשמר. אפשר ליצור ניסיון חדש או לחזור למועמדות.",
+  },
+  CANCELLED_BEFORE_ACTIVATION: {
+    title: "הפעולה בוטלה לפני הפעלת התוצאה",
+    guidance: "תוצאה שהושלמה לאחר בקשת הביטול נשמרת כראיה לא פעילה ואינה מחליפה את המצב הקיים.",
+  },
+};
+
+/* A.5: the live region announces a status, phase, or cancellation-request change, never
+   a polling tick. The dependencies are those values themselves, so an identical tick
+   re-renders without re-running the effect. */
 const usePhaseAnnouncement = (
   status: OperationStatus | undefined,
   phase: OperationPhase | undefined,
+  cancellationRequestedAt: string | null | undefined,
 ): string => {
   const [announcement, setAnnouncement] = useState("");
   const lastAnnounced = useRef<string | undefined>(undefined);
@@ -119,13 +188,15 @@ const usePhaseAnnouncement = (
       return;
     }
 
-    const spoken = `${statusLabels[status]}. ${phaseLabels[phase]}.`;
+    const cancellation =
+      cancellationRequestedAt == null ? "" : " בקשת הביטול התקבלה.";
+    const spoken = `${statusLabels[status]}. ${phaseLabels[phase]}.${cancellation}`;
 
     if (lastAnnounced.current !== spoken) {
       lastAnnounced.current = spoken;
       setAnnouncement(spoken);
     }
-  }, [phase, status]);
+  }, [cancellationRequestedAt, phase, status]);
 
   return announcement;
 };
@@ -141,8 +212,14 @@ export const OperationPage = () => {
 
   const query = useQuery(operationQueryOptions(operationId));
   const operation = query.data;
-  const announcement = usePhaseAnnouncement(operation?.status, operation?.phase);
+  const announcement = usePhaseAnnouncement(
+    operation?.status,
+    operation?.phase,
+    operation?.cancellation_requested_at,
+  );
   const terminal = isTerminalOperation(operation);
+  const failure =
+    operation?.failure_code == null ? null : failurePresentations[operation.failure_code];
 
   return (
     <Card aria-labelledby="route-heading">
@@ -202,15 +279,35 @@ export const OperationPage = () => {
             </p>
           )}
 
-          {operation.safe_failure_detail == null ? null : (
+          {failure === null && operation.safe_failure_detail == null ? null : (
             <Callout
               role="alert"
-              title={statusLabels[operation.status]}
+              title={failure?.title ?? statusLabels[operation.status]}
               tone={failureTones[operation.status] ?? "warning"}
             >
-              {operation.safe_failure_detail}
+              {operation.safe_failure_detail == null ? null : (
+                <p dir="auto">{operation.safe_failure_detail}</p>
+              )}
+              {failure === null ? null : (
+                <p className="mt-2" dir="auto">
+                  {failure.guidance}
+                </p>
+              )}
             </Callout>
           )}
+
+          {operation.cancellation_requested_at != null && !operation.is_terminal ? (
+            <Callout title="בקשת הביטול התקבלה" tone="neutral">
+              הביטול של פעולה שכבר התחילה הוא מיטבי. גם אם העבודה החיצונית תסתיים,
+              התוצאה שלה לא תופעל; העמוד ימשיך להתעדכן עד שיירשם המצב הסופי.
+            </Callout>
+          ) : null}
+
+          {operation.status === "cancelled" && failure === null ? (
+            <Callout title="הפעולה בוטלה" tone="neutral">
+              לא הופעלה תוצאה חדשה והמצב שהיה פעיל לפני הפעולה נשמר.
+            </Callout>
+          ) : null}
 
           <SummaryList items={progressItems(operation)} />
 

@@ -87,6 +87,7 @@ describe("OperationPage", () => {
             phase: "executing",
             failure_code: "PROVIDER_TIMEOUT",
             safe_failure_detail: "The provider did not answer in time.",
+            available_actions: ["retry"],
           }),
         ),
       ),
@@ -97,7 +98,80 @@ describe("OperationPage", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("חסימה");
     expect(alert).toHaveTextContent("The provider did not answer in time.");
+    expect(alert).toHaveTextContent("לא בוצע מעבר אוטומטי למצב דטרמיניסטי");
+    expect(
+      screen.queryByRole("button", { name: "המשך במצב דטרמיניסטי" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("נכשלה");
+  });
+
+  it("sends SOURCE_CHANGED back to the current application context without hiding retry", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          operation({
+            status: "failed",
+            is_terminal: true,
+            phase: "completed",
+            failure_code: "SOURCE_CHANGED",
+            safe_failure_detail: "Operation sources changed.",
+            available_actions: ["retry"],
+          }),
+        ),
+      ),
+    );
+
+    renderPage(<OperationPage />);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("המקור השתנה בזמן הפעולה");
+    expect(alert).toHaveTextContent("התוצאה לא הופעלה והמצב הקיים נשמר");
+    expect(screen.getByRole("link", { name: "חזרה למועמדות" })).toHaveClass("bg-cv-accent");
+    expect(screen.getByRole("button", { name: "ניסיון חוזר" })).toBeInTheDocument();
+  });
+
+  it("explains best-effort cancellation while the Operation is still running", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          operation({
+            cancellation_requested_at: "2026-08-24T07:01:00Z",
+            available_actions: [],
+          }),
+        ),
+      ),
+    );
+
+    renderPage(<OperationPage />);
+
+    expect(
+      await screen.findByText("בקשת הביטול התקבלה", { selector: "span" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("בקשת הביטול התקבלה");
+    expect(screen.getByText(/התוצאה שלה לא תופעל/)).toBeInTheDocument();
+  });
+
+  it("states that a completed cancellation activated no new result", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          operation({
+            status: "cancelled",
+            is_terminal: true,
+            phase: "completed",
+            available_actions: ["retry"],
+          }),
+        ),
+      ),
+    );
+
+    renderPage(<OperationPage />);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "בוטלה" })).toBeInTheDocument();
+    expect(screen.getByText(/לא הופעלה תוצאה חדשה/)).toBeInTheDocument();
   });
 
   it("explains a Problem Details failure with its safe detail", async () => {

@@ -47,6 +47,10 @@ export const OperationActions = ({ operation }: OperationActionsProps) => {
   const error = cancel.error ?? retry.error;
   const canCancel = operation.available_actions.includes("cancel");
   const canRetry = operation.available_actions.includes("retry");
+  /* SOURCE_CHANGED says the frozen command no longer describes the active context.
+     Retry remains visible because the backend permits it, but the application projection
+     is the safe primary route to actions over the current source. */
+  const returnRecommended = operation.failure_code === "SOURCE_CHANGED";
   /* A finished Operation used to be a dead end: it reported that the work was over and
      offered nowhere to go. The way on is not this screen's to invent - which action
      follows depends on the application projection (A.1) - so it hands the user back to
@@ -84,12 +88,16 @@ export const OperationActions = ({ operation }: OperationActionsProps) => {
           <Button
             disabled={cancel.isPending || retry.isPending}
             onClick={() => retry.mutate()}
+            variant={returnRecommended ? "secondary" : "primary"}
           >
             {retry.isPending ? "יוצר ניסיון חדש…" : "ניסיון חוזר"}
           </Button>
         ) : null}
         {operation.is_terminal ? (
-          <Link className={buttonClasses(canRetry ? "secondary" : "primary")} to={returnPath}>
+          <Link
+            className={buttonClasses(canRetry && !returnRecommended ? "secondary" : "primary")}
+            to={returnPath}
+          >
             חזרה למועמדות
           </Link>
         ) : null}
