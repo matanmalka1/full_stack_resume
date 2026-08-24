@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail, ApprovedRevision, Operation, Settings, ValidationRun, WorkingDraft } from "../api/contracts";
 import { ApprovalPage } from "./ApprovalPage";
@@ -74,6 +74,24 @@ const renderRoute = (entry: string, path: string, element: ReactElement) => {
     <Route element={<h1>אימות</h1>} path="/applications/:applicationId/validation" />
   </Routes></MemoryRouter></QueryClientProvider>);
 };
+
+beforeEach(() => {
+  /* jsdom exposes HTMLDialogElement but does not implement its modal methods. Mirror
+     the observable native state so the shared Dialog component can be exercised. */
+  Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
+    configurable: true,
+    value: vi.fn(function (this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+    }),
+  });
+  Object.defineProperty(HTMLDialogElement.prototype, "close", {
+    configurable: true,
+    value: vi.fn(function (this: HTMLDialogElement) {
+      this.removeAttribute("open");
+      this.dispatchEvent(new Event("close"));
+    }),
+  });
+});
 
 afterEach(() => { vi.unstubAllGlobals(); sessionStorage.clear(); });
 
@@ -192,7 +210,7 @@ describe("SettingsPage", () => {
   });
 
   it("saves all product settings under the read ETag", async () => {
-    const fetchMock = vi.fn(() =>
+    const fetchMock = vi.fn((_input: string | URL | Request, _init?: RequestInit) =>
       Promise.resolve(json(settings({ edit_version: 1 }), 200, { ETag: '"settings-1"' })),
     );
     vi.stubGlobal("fetch", fetchMock);

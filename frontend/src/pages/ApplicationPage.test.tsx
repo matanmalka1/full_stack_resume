@@ -92,7 +92,10 @@ const deterministicSettings: Settings = {
 const renderPage = (settings: Settings = deterministicSettings) => {
   const client = new QueryClient({
     defaultOptions: {
-      queries: { retry: false, refetchInterval: false, gcTime: 0 },
+      /* Settings is shell-owned in production and deliberately seeded here. Keep that
+         cache entry alive until the isolated page subscribes to it; gcTime zero can
+         collect it in the gap between setQueryData and the child render. */
+      queries: { retry: false, refetchInterval: false, gcTime: Infinity },
       mutations: { retry: false },
     },
   });
