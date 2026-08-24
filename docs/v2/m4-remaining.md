@@ -426,7 +426,57 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
 
 ## C — Intake, analysis, and review
 
-- [ ] New Application form, local `.txt` read, duplicate precheck/override, and creation.
+- [x] New Application form, local `.txt` read, duplicate precheck/override, and creation.
+      The A.4 frame 1 screen is now the root route, so `/` is the New Application form
+      rather than a foundation placeholder. `src/api/applications.ts` holds the two
+      intake calls and nothing else: `duplicateCheck`, `createApplication`, and
+      `duplicateMatchesFromProblem`.
+
+      Duplicate detection runs twice by design (product spec §8): once before creation
+      for the user, and again inside the create command. The screen treats the second
+      one as the authority — a `412 DUPLICATE_ACKNOWLEDGEMENT_REQUIRED` is read back
+      out of the Problem Details `context.matches` and presented as the *same*
+      non-blocking duplicate choice, not as a failed request. `null` and `[]` are
+      different answers there: an empty list means the server refused without naming
+      candidates, and the explicit create-anyway path still has to be offered.
+
+      Both duplicate answers are derived from the one mutation's `data`/`error` rather
+      than mirrored into component state, so there is no second copy to leave stale.
+      The precheck is skipped once the user has acknowledged, so the acknowledgement is
+      not immediately re-questioned by the finding it answered. Editing any intake field
+      withdraws the decision, because an acknowledgement belongs to the exact text it was
+      shown for; it can never be carried onto text the user changed afterwards.
+
+      The `.txt` read is local: `File.text()` fills the text area, nothing is uploaded,
+      and both the Vitest and the Playwright case assert that no request is made. A file
+      that is not text is refused in Hebrew, and a file larger than 1 MiB is refused
+      before the read. That size is the one intake limit the frontend keeps, and it is
+      not a second policy: the server revalidates size, control characters, and URL
+      syntax and stays authoritative. Reading a multi-hundred-megabyte file into the tab
+      before the server can refuse it would freeze the browser, which the server cannot
+      prevent from where it sits. The label/URL lengths are `maxLength` attributes only,
+      and the only client-side refusals are the three empty required fields.
+
+      The URL is provenance: its hint says the system neither opens it nor imports from
+      it, and it is an A.3 LTR island inside the RTL shell. The job text is never
+      trimmed — it is the exact content of the immutable JobSnapshot — while the company
+      and role labels are.
+
+      Creation navigates to `applications/:applicationId/analysis`, because A.4 makes
+      `ניתוח המשרה` a separate action and creation never implies an AI call. Opening an
+      existing duplicate navigates to a new `applications/:applicationId` route, which is
+      a `RoutePlaceholder` until the Stage C continuation builds the surface that owns
+      the application projection. That is deliberate: an existing Application can be
+      anywhere in its lifecycle, and routing it from this screen would be exactly the
+      second workflow state machine A.1 forbids.
+
+      Two supporting changes. `TextInput`/`TextArea` are typed as `ComponentProps` rather
+      than the attribute types alone, so they carry `ref` and React Hook Form can bind an
+      uncontrolled field to the primitive. And the axe scan moved out of `shell.spec.ts`
+      into `e2e/new-application.spec.ts`: it was already scanning this screen once `/`
+      became the form, and naming it where it belongs means a later change to the root
+      route cannot quietly move what the shell spec is proving. The M4 gate's
+      "axe passes on New Application" is therefore closed.
 - [ ] Explicit Analyze action and Operation Progress.
 - [ ] No-review continuation using Analyze's explicit initial SelectionPlan ID.
 - [ ] Review-reason form and one Apply Decisions commit.
@@ -467,7 +517,8 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
 
 ## Current next action
 
-**Stage B is closed; Stage C is next.**
+**Stage B is closed. Stage C is open: its first bullet, the New Application slice, is
+implemented and awaiting evidence.**
 
 **Known gap, deliberately not filled here.** A terminal Operation screen is a dead end: it
 reports that the Operation finished and offers no way forward. The destination is not this
@@ -480,7 +531,7 @@ Operation screen ships to a real user before it does.
 Running the Playwright suite on a fresh checkout needs its browser binary first:
 `npx playwright install chromium`.
 
-The Operation steering slice is implemented and awaiting its Class B gate. The backend
+The Operation steering slice is closed on user-run evidence (commit `5270163`). The backend
 now derives `OperationResponse.available_actions`; queued/running work exposes `cancel`
 until cancellation is requested, and terminal work exposes `retry`. The frontend renders
 only those actions, records cancellation synchronously, and replaces the cached Operation
@@ -497,12 +548,31 @@ typecheck passed; and the production build passed after the design-token guard r
 16 color, 2 radius, and 1 shadow tokens. The Python prediction was 124. The exact +1 is
 the concurrently added `test_infrastructure_does_not_import_its_composition_root`, which
 moved `test_architecture.py` from 10 to 11 items; no Operation test count was unexplained.
-The remaining Class B gate is the full non-browser suite, golden hashes, and one fresh
-offline CLI sequence.
+Its remaining Class B gate — the full non-browser suite, golden hashes, and one fresh
+offline CLI sequence — was reported green by the user before that commit landed, so
+nothing from that slice is outstanding.
 
-After that gate, the next slice is the Stage C New Application form, local `.txt` read,
-duplicate precheck/override, and creation. Do not implement Dashboard navigation or
-tracking endpoints.
+The New Application slice is closed on user-run evidence accepted on 2026-08-24:
+`npm run typecheck` passed, `npm run test` passed **29 tests in 3 files**,
+`npm run build` passed with the design-token guard reporting 16 color, 2 radius, and 1
+shadow tokens, and `npm run e2e` passed **5 tests**. Both counts matched the prediction
+exactly: Vitest 19 -> 29 is the ten new `NewApplicationPage` cases and nothing else, and
+Playwright 3 -> 5 is three new screen cases against `shell.spec.ts` losing the axe scan
+that moved. The token counts are unchanged because the theme was not touched.
+
+No Python run is owed. The slice is Class A and frontend-only: no Python module,
+migration, artifact path, callable signature, or contracted message changed, and
+`openapi/` was not regenerated because every schema it consumes —
+`DuplicateCheckRequest`, `DuplicateCheckResponse`, `DuplicateMatchResponse`,
+`CreateApplicationRequest`, `CreateApplicationResponse` — already existed. The one
+supporting edit outside the new files is `TextInput`/`TextArea` moving to
+`ComponentProps`, and the axe scan moving from `shell.spec.ts` to its own screen spec.
+
+The next slice is the explicit `ניתוח המשרה` action and its Operation Progress, which is
+also the surface that owns the application projection. It is what closes both open
+continuations: the terminal Operation dead end named above, and the
+`applications/:applicationId` placeholder this slice routes an opened duplicate to. Do not
+implement Dashboard navigation or tracking endpoints.
 
 One A.4 surface is deliberately not a primitive: the sandboxed preview frame. Its direction
 isolation and refresh behavior depend on the render contract, so it is built in Stage D with

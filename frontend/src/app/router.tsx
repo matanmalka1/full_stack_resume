@@ -1,6 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 
 import { App } from "../App";
+import { NewApplicationPage } from "../pages/NewApplicationPage";
 import { OperationPage } from "../pages/OperationPage";
 import { RoutePlaceholder } from "../pages/RoutePlaceholder";
 import { RouteErrorBoundary } from "./RouteErrorBoundary";
@@ -13,12 +14,14 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: (
-          <RoutePlaceholder
-            description="מעטפת React בעברית הוגדרה. מסך יצירת המועמדות והחיבור ל־API יתווספו בשלבים הבאים."
-            title="סביבת העבודה מוכנה לבניית התהליך"
-          />
-        ),
+        element: <NewApplicationPage />,
+      },
+      {
+        /* Where an existing duplicate is opened. The screen that reads the application
+           projection arrives with the Stage C continuation; until then the route exists
+           so the choice is a real destination rather than a dead link. */
+        path: "applications/:applicationId",
+        element: <RoutePlaceholder title="מועמדות קיימת" />,
       },
       {
         path: "applications/:applicationId/analysis",
