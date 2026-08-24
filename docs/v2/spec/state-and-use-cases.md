@@ -321,8 +321,10 @@ An Operation may be failed/cancelled while owning an inactive immutable output. 
 existence and output activation are separate.
 
 Operation query fields include status, phase, message, timestamps, failure code, safe
-failure detail, retry reference, cancellation state, and output references. The UI polls
-every one to two seconds. It does not display fabricated percentages.
+failure detail, retry reference, cancellation state, output references, and the
+backend-derived Operation actions currently accepted. The UI polls every one to two
+seconds. It does not display fabricated percentages or re-derive lifecycle permissions
+from status strings.
 
 ## 12. Application commands
 

@@ -131,6 +131,7 @@ def test_cancelling_queued_work_is_recorded_and_the_work_never_runs(services) ->
     assert cancelled.status_code == 200
     assert "Location" not in cancelled.headers
     assert cancelled.json()["status"] == "cancelled"
+    assert cancelled.json()["available_actions"] == ["retry"]
     assert cancelled.json()["cancellation_requested_at"] is not None
     assert read_back.json() == cancelled.json()
     assert services.repository.analyses(operation.application_id) == []
@@ -157,6 +158,7 @@ def test_retry_accepts_with_a_location_and_leaves_the_original_immutable(service
     assert retried.headers["Location"] == f"{API_PREFIX}/operations/{queued_id}"
     assert retried.json()["retry_of_operation_id"] == operation.id
     assert retried.json()["status"] == "queued"
+    assert retried.json()["available_actions"] == ["cancel"]
     assert followed.status_code == 200
     assert followed.json() == retried.json()
     assert services.repository.operation(operation.id).status.value == "cancelled"

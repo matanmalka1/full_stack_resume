@@ -1406,6 +1406,11 @@ export interface components {
             profiles: string;
         };
         /**
+         * OperationAction
+         * @enum {string}
+         */
+        OperationAction: "cancel" | "retry";
+        /**
          * OperationFailureCode
          * @enum {string}
          */
@@ -1449,7 +1454,8 @@ export interface components {
          *     re-derives it keeps a second copy of that rule, and the copy is what goes
          *     stale when the lifecycle gains a status.
          *
-         *     `is_terminal` is computed from `status` rather than accepted as a field.
+         *     `is_terminal` and `available_actions` are computed from lifecycle state rather
+         *     than accepted as fields.
          *     This representation is built from two places - `operation_response` and the
          *     `active_operation` of an application projection - and a field would have to
          *     be supplied correctly at both. A computed value has no second place to
@@ -1458,6 +1464,11 @@ export interface components {
         OperationResponse: {
             /** Application Id */
             application_id: string;
+            /**
+             * Available Actions
+             * @description Commands currently accepted, derived by the application layer.
+             */
+            readonly available_actions: components["schemas"]["OperationAction"][];
             /** Cancellation Requested At */
             cancellation_requested_at?: string | null;
             /** Created At */

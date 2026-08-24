@@ -2246,6 +2246,14 @@
         "title": "KnowledgeVersions",
         "type": "object"
       },
+      "OperationAction": {
+        "enum": [
+          "cancel",
+          "retry"
+        ],
+        "title": "OperationAction",
+        "type": "string"
+      },
       "OperationFailureCode": {
         "enum": [
           "SOURCE_CHANGED",
@@ -2306,11 +2314,20 @@
       },
       "OperationResponse": {
         "additionalProperties": false,
-        "description": "The §11 Operation query fields, and nothing wider.\n\nThis mirrors `OperationView`, not `PersistedOperation`. The payload, the\nfrozen sources, the lease, and the idempotency key stay inside the runner.\n\n`message` is a safe progress line and `safe_failure_detail` a safe failure\nline; neither carries a path, a provider response, or a key. There is no\npercentage field, because the specification forbids fabricating one.\n\nThe closed sets are typed as the application enums rather than flattened to\n`str`, so the generated TypeScript is a real union instead of `string`, and\n`is_terminal` is reported rather than left to the client. Which statuses end\nan Operation is a lifecycle rule this layer already owns; a client that\nre-derives it keeps a second copy of that rule, and the copy is what goes\nstale when the lifecycle gains a status.\n\n`is_terminal` is computed from `status` rather than accepted as a field.\nThis representation is built from two places - `operation_response` and the\n`active_operation` of an application projection - and a field would have to\nbe supplied correctly at both. A computed value has no second place to\nforget.",
+        "description": "The §11 Operation query fields, and nothing wider.\n\nThis mirrors `OperationView`, not `PersistedOperation`. The payload, the\nfrozen sources, the lease, and the idempotency key stay inside the runner.\n\n`message` is a safe progress line and `safe_failure_detail` a safe failure\nline; neither carries a path, a provider response, or a key. There is no\npercentage field, because the specification forbids fabricating one.\n\nThe closed sets are typed as the application enums rather than flattened to\n`str`, so the generated TypeScript is a real union instead of `string`, and\n`is_terminal` is reported rather than left to the client. Which statuses end\nan Operation is a lifecycle rule this layer already owns; a client that\nre-derives it keeps a second copy of that rule, and the copy is what goes\nstale when the lifecycle gains a status.\n\n`is_terminal` and `available_actions` are computed from lifecycle state rather\nthan accepted as fields.\nThis representation is built from two places - `operation_response` and the\n`active_operation` of an application projection - and a field would have to\nbe supplied correctly at both. A computed value has no second place to\nforget.",
         "properties": {
           "application_id": {
             "title": "Application Id",
             "type": "string"
+          },
+          "available_actions": {
+            "description": "Commands currently accepted, derived by the application layer.",
+            "items": {
+              "$ref": "#/components/schemas/OperationAction"
+            },
+            "readOnly": true,
+            "title": "Available Actions",
+            "type": "array"
           },
           "cancellation_requested_at": {
             "anyOf": [
@@ -2421,7 +2438,8 @@
           "message",
           "created_at",
           "outputs",
-          "is_terminal"
+          "is_terminal",
+          "available_actions"
         ],
         "title": "OperationResponse",
         "type": "object"

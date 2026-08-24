@@ -3,10 +3,12 @@ from __future__ import annotations
 from pydantic import computed_field
 
 from ...application.operations import (
+    OperationAction,
     OperationFailureCode,
     OperationPhase,
     OperationStatus,
     OperationType,
+    available_operation_actions,
     is_terminal_operation,
 )
 from .health import HttpSchema
@@ -42,7 +44,8 @@ class OperationResponse(HttpSchema):
     re-derives it keeps a second copy of that rule, and the copy is what goes
     stale when the lifecycle gains a status.
 
-    `is_terminal` is computed from `status` rather than accepted as a field.
+    `is_terminal` and `available_actions` are computed from lifecycle state rather
+    than accepted as fields.
     This representation is built from two places - `operation_response` and the
     `active_operation` of an application projection - and a field would have to
     be supplied correctly at both. A computed value has no second place to
@@ -69,3 +72,9 @@ class OperationResponse(HttpSchema):
     def is_terminal(self) -> bool:
         """Derived from the same predicate the runner uses."""
         return is_terminal_operation(self.status)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def available_actions(self) -> list[OperationAction]:
+        """Commands currently accepted, derived by the application layer."""
+        return list(available_operation_actions(self.status, self.cancellation_requested_at))

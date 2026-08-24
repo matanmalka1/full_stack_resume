@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -17,6 +17,7 @@ const operation = (overrides: Partial<Operation> = {}): Operation => ({
   message: "",
   created_at: "2026-08-24T07:00:00Z",
   outputs: [],
+  available_actions: ["cancel"],
   ...overrides,
 });
 
@@ -30,7 +31,10 @@ const jsonResponse = (body: unknown, status = 200): Response =>
    its own unit tests, and a live timer here would make every assertion racy. */
 const renderPage = (children: ReactNode) => {
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false, refetchInterval: false, gcTime: 0 } },
+    defaultOptions: {
+      queries: { retry: false, refetchInterval: false, gcTime: 0 },
+      mutations: { retry: false },
+    },
   });
 
   return render(
@@ -126,5 +130,141 @@ describe("OperationPage", () => {
     renderPage(<OperationPage />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("לא ניתן לטעון את מצב הפעולה");
+  });
+
+  it("cancels only when the backend exposes the action and keeps the returned state", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(operation()))
+      .mockResolvedValueOnce(
+        jsonResponse(
+          operation({
+            status: "cancelled",
+            is_terminal: true,
+            phase: "completed",
+            available_actions: ["retry"],
+          }),
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage(<OperationPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "ביטול הפעולה" }));
+
+    expect(await screen.findByRole("button", { name: "ניסיון חוזר" })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/operations/op-1/cancel",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("follows a retry to the new Operation named by the accepted response", async () => {
+    const terminal = operation({
+      status: "failed",
+      is_terminal: true,
+      phase: "completed",
+      available_actions: ["retry"],
+    });
+    const queued = operation({
+      id: "op-2",
+      status: "queued",
+      phase: "queued",
+      retry_of_operation_id: "op-1",
+      available_actions: ["cancel"],
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(terminal))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(queued), {
+          status: 202,
+          headers: {
+            "Content-Type": "application/json",
+            Location: "/api/v1/operations/op-2",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(queued));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage(<OperationPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "ניסיון חוזר" }));
+
+    expect(await screen.findByRole("button", { name: "ביטול הפעולה" })).toBeInTheDocument();
+    await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2));
+    const retryRequest = fetchMock.mock.calls[1];
+    expect(retryRequest?.[0]).toBe("/api/v1/operations/op-1/retry");
+    expect(retryRequest?.[1]).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.any(Headers),
+      }),
+    );
+    expect((retryRequest?.[1]?.headers as Headers).get("Idempotency-Key")).not.toBeNull();
+  });
+
+  it("keeps the safe Operation visible when retry is refused with a conflict", async () => {
+    const conflictResponse = () =>
+      jsonResponse(
+        {
+          type: "about:blank#state-conflict",
+          title: "State conflict",
+          status: 409,
+          code: "STATE_CONFLICT",
+          detail: "לא ניתן ליצור ניסיון חוזר במצב הנוכחי.",
+        },
+        409,
+      );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(
+          operation({
+            status: "failed",
+            is_terminal: true,
+            phase: "completed",
+            available_actions: ["retry"],
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(conflictResponse())
+      .mockResolvedValueOnce(conflictResponse());
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage(<OperationPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "ניסיון חוזר" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "לא ניתן ליצור ניסיון חוזר במצב הנוכחי.",
+    );
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("נכשלה");
+
+    const firstKey = (fetchMock.mock.calls[1]?.[1]?.headers as Headers).get("Idempotency-Key");
+    fireEvent.click(screen.getByRole("button", { name: "ניסיון חוזר" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    const secondKey = (fetchMock.mock.calls[2]?.[1]?.headers as Headers).get("Idempotency-Key");
+    expect(secondKey).toBe(firstKey);
+  });
+
+  it("does not invent an action when the backend exposes none", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          operation({
+            status: "running",
+            cancellation_requested_at: "2026-08-24T07:01:00Z",
+            available_actions: [],
+          }),
+        ),
+      ),
+    );
+
+    renderPage(<OperationPage />);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "מתבצעת" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "ביטול הפעולה" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "ניסיון חוזר" })).not.toBeInTheDocument();
   });
 });

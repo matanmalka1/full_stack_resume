@@ -19,6 +19,7 @@ const operation = (overrides: Partial<Operation> = {}): Operation => ({
   message: "",
   created_at: "2026-08-24T07:00:00Z",
   outputs: [],
+  available_actions: ["cancel"],
   ...overrides,
 });
 

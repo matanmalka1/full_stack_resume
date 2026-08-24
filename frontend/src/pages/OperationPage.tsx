@@ -14,6 +14,7 @@ import { StatusBadge } from "../ui/StatusBadge";
 import { type StatusTone } from "../ui/status";
 import { SummaryList, type SummaryItem } from "../ui/SummaryList";
 import { TechnicalDetails } from "../ui/TechnicalDetails";
+import { OperationActions } from "./OperationActions";
 
 /* Keyed by the generated unions, so a status or phase added to the backend lifecycle
    fails the frontend build instead of reaching the screen untranslated. */
@@ -216,6 +217,8 @@ export const OperationPage = () => {
           <TechnicalDetails>
             <SummaryList items={technicalItems(operation)} />
           </TechnicalDetails>
+
+          <OperationActions operation={operation} />
         </div>
       )}
     </Card>

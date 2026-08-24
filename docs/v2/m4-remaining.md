@@ -478,10 +478,31 @@ The Stage C surface that owns the application projection adds the continuation, 
 Operation screen ships to a real user before it does.
 
 Running the Playwright suite on a fresh checkout needs its browser binary first:
-`npx playwright install chromium`. Operation cancel and retry are the first slice of Stage
-C, since they are mutations and need the `409`/`202`-plus-`Location` behavior the polling
-slice does not touch, and they close the dead-end gap described above. Do not implement Dashboard navigation, tracking endpoints, or the Stage C intake
-flow yet.
+`npx playwright install chromium`.
+
+The Operation steering slice is implemented and awaiting its Class B gate. The backend
+now derives `OperationResponse.available_actions`; queued/running work exposes `cancel`
+until cancellation is requested, and terminal work exposes `retry`. The frontend renders
+only those actions, records cancellation synchronously, and replaces the cached Operation
+with the returned representation. Retry keeps one idempotency key per original Operation,
+requires the contracted `202 + Location`, primes the new Operation cache, and navigates to
+the newly queued Operation. A refused mutation preserves the last safe representation and
+shows its safe Problem Details; mutations never retry automatically. The OpenAPI entry-level
+diff is one new two-value `OperationAction` enum and one required read-only array on
+`OperationResponse`.
+
+Focused user-run evidence passed on 2026-08-24: the Operation/API/foundation/architecture
+selection passed **125 tests** in 16.53s; Vitest passed **19 tests in 2 files**; frontend
+typecheck passed; and the production build passed after the design-token guard reported
+16 color, 2 radius, and 1 shadow tokens. The Python prediction was 124. The exact +1 is
+the concurrently added `test_infrastructure_does_not_import_its_composition_root`, which
+moved `test_architecture.py` from 10 to 11 items; no Operation test count was unexplained.
+The remaining Class B gate is the full non-browser suite, golden hashes, and one fresh
+offline CLI sequence.
+
+After that gate, the next slice is the Stage C New Application form, local `.txt` read,
+duplicate precheck/override, and creation. Do not implement Dashboard navigation or
+tracking endpoints.
 
 One A.4 surface is deliberately not a primitive: the sandboxed preview frame. Its direction
 isolation and refresh behavior depend on the render contract, so it is built in Stage D with

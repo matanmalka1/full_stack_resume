@@ -28,6 +28,11 @@ class OperationStatus(StrEnum):
     INTERRUPTED = "interrupted"
 
 
+class OperationAction(StrEnum):
+    CANCEL = "cancel"
+    RETRY = "retry"
+
+
 TERMINAL_OPERATION_STATUSES = frozenset(
     {
         OperationStatus.SUCCEEDED,
@@ -36,6 +41,23 @@ TERMINAL_OPERATION_STATUSES = frozenset(
         OperationStatus.INTERRUPTED,
     }
 )
+
+
+def available_operation_actions(
+    status: OperationStatus,
+    cancellation_requested_at: str | None,
+) -> tuple[OperationAction, ...]:
+    """Derive the commands the Operation API currently accepts.
+
+    The client must not reproduce lifecycle policy from status strings. A queued
+    or running Operation can be cancelled until cancellation has been requested;
+    every terminal Operation can be retried as a new immutable Operation.
+    """
+    if status in {OperationStatus.QUEUED, OperationStatus.RUNNING}:
+        return (OperationAction.CANCEL,) if cancellation_requested_at is None else ()
+    if status in TERMINAL_OPERATION_STATUSES:
+        return (OperationAction.RETRY,)
+    raise OperationContractError(f"operation action policy does not cover status {status}")
 
 
 class OperationType(StrEnum):

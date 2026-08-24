@@ -12,6 +12,8 @@ export const isTerminalOperation = (operation: Operation | undefined): boolean =
    the Operation reaches a terminal status. */
 export const OPERATION_POLL_INTERVAL_MS = 1500;
 
+export const operationQueryKey = (operationId: string) => ["operation", operationId] as const;
+
 /* 408 and 429 are 4xx that say "later", not "never": they stay retryable. Everything
    else in the 4xx range is the request itself being wrong, and repeating it cannot
    change the answer. A 5xx, a timeout, and a dropped connection are all transient as
@@ -29,7 +31,7 @@ export const isPermanentFailure = (error: unknown): boolean => {
 
 export const operationQueryOptions = (operationId: string) =>
   queryOptions({
-    queryKey: ["operation", operationId],
+    queryKey: operationQueryKey(operationId),
     queryFn: async ({ signal }) => {
       const response = await apiRequest<Operation>(
         `/api/v1/operations/${operationId}`,
@@ -46,3 +48,36 @@ export const operationQueryOptions = (operationId: string) =>
         ? false
         : OPERATION_POLL_INTERVAL_MS,
   });
+
+export const cancelOperation = async (operationId: string): Promise<Operation> => {
+  const response = await apiRequest<Operation>(
+    `/api/v1/operations/${operationId}/cancel`,
+    { method: "POST" },
+  );
+  return response.data;
+};
+
+export interface RetryOperationResult {
+  operation: Operation;
+  operationPath: string;
+}
+
+export const retryOperation = async (
+  operationId: string,
+  idempotencyKey: string,
+): Promise<RetryOperationResult> => {
+  const response = await apiRequest<Operation>(
+    `/api/v1/operations/${operationId}/retry`,
+    { method: "POST", idempotencyKey },
+  );
+  const expectedLocation = `/api/v1/operations/${response.data.id}`;
+
+  if (response.status !== 202 || response.location !== expectedLocation) {
+    throw new Error("Retry response did not identify its queued Operation");
+  }
+
+  return {
+    operation: response.data,
+    operationPath: `/operations/${encodeURIComponent(response.data.id)}`,
+  };
+};

@@ -31,6 +31,7 @@ from cv_engine.application.operation_runner import (
 )
 from cv_engine.application.operations import (
     CreateOperation,
+    OperationAction,
     OperationContractError,
     OperationFailureCode,
     OperationOutputReference,
@@ -40,6 +41,7 @@ from cv_engine.application.operations import (
     OperationType,
     allows_automatic_retry,
     as_operation_view,
+    available_operation_actions,
     is_terminal_operation,
     require_operation_transition,
 )
@@ -71,6 +73,27 @@ def test_terminal_operations_are_immutable(terminal) -> None:
     for target in OperationStatus:
         with pytest.raises(OperationContractError):
             require_operation_transition(terminal, target)
+
+
+_OPERATION_ACTION_CASES = [
+    (OperationStatus.QUEUED, None, (OperationAction.CANCEL,)),
+    (OperationStatus.RUNNING, None, (OperationAction.CANCEL,)),
+    (OperationStatus.RUNNING, "2026-08-24T07:01:00Z", ()),
+    (OperationStatus.FAILED, None, (OperationAction.RETRY,)),
+    (OperationStatus.SUCCEEDED, None, (OperationAction.RETRY,)),
+    (OperationStatus.CANCELLED, None, (OperationAction.RETRY,)),
+    (OperationStatus.INTERRUPTED, None, (OperationAction.RETRY,)),
+]
+
+
+@pytest.mark.parametrize(
+    ("status", "cancellation_requested_at", "expected"), _OPERATION_ACTION_CASES
+)
+def test_operation_actions_are_derived_by_the_lifecycle(
+    status, cancellation_requested_at, expected
+) -> None:
+    assert {case[0] for case in _OPERATION_ACTION_CASES} == set(OperationStatus)
+    assert available_operation_actions(status, cancellation_requested_at) == expected
 
 
 def test_operation_payload_hash_is_canonical_and_secret_fields_are_refused() -> None:
