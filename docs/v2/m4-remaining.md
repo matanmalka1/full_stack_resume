@@ -354,6 +354,17 @@ production-build evidence accepted on 2026-08-24.
       trap, inert background, and focus restoration without a dialog dependency; Escape is
       refused when `dismissible` is false. User-run `npm run typecheck` and `npm run build`
       both passed on the first set of primitives.
+- [x] Add a derived design-token guard, `frontend/scripts/check-design-tokens.mjs`, wired
+      into `npm run build` as `lint:tokens`. It reads the token names out of the `@theme`
+      block in `styles.css` rather than a hand-kept list, so a renamed token fails instead of
+      producing a class Tailwind never generates. It refuses literal colors, raw Tailwind
+      palette utilities, `outline-none`/`outline-hidden`, and any unknown `cv-` color,
+      radius, or shadow token. Its exception list is deliberately empty. The guard was
+      proven to fail: a probe component carrying one violation of each rule produced five
+      errors and exit 1, and the tree returned to green when the probe was removed.
+- [ ] Add shared Operation polling without WebSocket or SSE.
+- [ ] Add Vitest, React Testing Library, Playwright Web E2E, and axe foundations without
+      blanket DOM snapshots.
 
 ## C — Intake, analysis, and review
 

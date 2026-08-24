@@ -8,7 +8,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "npm run typecheck && vite build",
+    "build": "npm run typecheck && npm run lint:tokens && vite build",
+    "lint:tokens": "node scripts/check-design-tokens.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -b"
   },
