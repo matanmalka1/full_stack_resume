@@ -23,6 +23,7 @@ from ...domain.models import (
 from ..knowledge_mutations import (
     KnowledgeMutation,
 )
+from ..settings import SettingsRepository
 from .repositories import (
     ApplicationStore,
     ArtifactRegistry,
@@ -234,6 +235,7 @@ class ApplicationRepository(
     TrackingRepository,
     KnowledgeAuditRepository,
     OperationRepository,
+    SettingsRepository,
     Protocol,
 ):
     """Composition-root view of the adapter; services use focused ports above."""

@@ -58,6 +58,7 @@ class Services:
     """Everything a client needs, already wired to one Workspace."""
 
     workspace: Workspace
+    database_path: Path
     repository: ApplicationRepository
     knowledge: KnowledgeStore
     artifacts: ArtifactStore
@@ -95,7 +96,8 @@ def build_services(
     Callers may substitute any of them — that is how tests replace the browser
     and the AI provider without the application layer knowing either exists.
     """
-    resolved_repository = repository or Repository(database_path or workspace.database_path)
+    resolved_database_path = Path(database_path or workspace.database_path).resolve()
+    resolved_repository = repository or Repository(resolved_database_path)
     resolved_knowledge = knowledge or FileKnowledge(
         workspace.knowledge_root,
         workspace_root=workspace.root,
@@ -156,6 +158,7 @@ def build_services(
     )
     return Services(
         workspace=workspace,
+        database_path=resolved_database_path,
         repository=resolved_repository,
         knowledge=resolved_knowledge,
         artifacts=resolved_artifacts,
@@ -214,7 +217,7 @@ def build_api_services(
             # None before `cv init` has run. Reported as-is rather than
             # invented: a health probe that claims a schema version for a
             # database that has none is worse than one that says so.
-            schema_version=current_schema_version(services.workspace.database_path) or "",
+            schema_version=current_schema_version(services.database_path) or "",
         ),
         limits=ApiLimits(max_body_bytes=max_body_bytes, dev_origin=dev_origin),
     )

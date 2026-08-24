@@ -72,6 +72,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--db", type=Path)
     sub = parser.add_subparsers(dest="command", required=True)
 
+    web = sub.add_parser("web", help="start the local Web UI, API, and Operation worker")
+    web.add_argument("--no-open", action="store_true", help="do not open the default browser")
+    web.add_argument("--port", type=int, help="preferred loopback port; defaults to 8765")
+
     workspace = sub.add_parser("workspace", help="create and inspect the local Workspace")
     workspace_sub = workspace.add_subparsers(dest="workspace_command", required=True)
     workspace_init = workspace_sub.add_parser(

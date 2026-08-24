@@ -14,6 +14,7 @@ import sys
 from ..application.errors import WorkflowError
 from ..infrastructure.persistence import SchemaError
 from ..runtime.backup import BackupError
+from ..runtime.web import WebRuntimeError
 from ..runtime.workspace import WorkspaceError
 
 # Imported for their registration side effect: each module's @_command
@@ -22,6 +23,7 @@ from . import claims as _claims  # noqa: F401
 from . import facts as _facts  # noqa: F401
 from . import pipeline as _pipeline  # noqa: F401
 from . import queries as _queries  # noqa: F401
+from . import web as _web_module  # noqa: F401
 from . import workspace as _workspace_module  # noqa: F401
 from .context import _HANDLERS, CommandContext, Handler, _build_context, _resolve_root
 from .fast import _fast, _latest_job_analysis_id, _latest_job_snapshot_id
@@ -61,6 +63,7 @@ def main(argv: list[str] | None = None) -> int:
         WorkspaceError,
         BackupError,
         SchemaError,
+        WebRuntimeError,
     ) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

@@ -28,6 +28,7 @@ Backend/runtime:
 - Pydantic for serialized domain documents, AI contracts, application boundary DTOs,
   and HTTP schemas
 - FastAPI for the local HTTP API and production static-asset serving
+- Uvicorn as the supervised loopback ASGI server
 - standard-library `sqlite3`
 - Jinja2 for resume HTML
 - Playwright-managed Chromium for rendering and render validation

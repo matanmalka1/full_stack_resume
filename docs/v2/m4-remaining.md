@@ -822,6 +822,22 @@ Focused evidence on 2026-08-24, run by the implementing agent against the workin
 
 ## F — M4 gate
 
+The reusable local Web host was pulled forward from M6 at the user's direction so this gate
+can exercise the deployed shape rather than a Vite-only surrogate. `cv web` now supervises
+FastAPI and the Operation worker over one validated Workspace, serves the production React
+build same-origin on loopback, reuses a matching existing instance, avoids a foreign process
+with a free port, honors `--no-open`, and shuts both hosts down together. M6 still owns bundled
+package data, Open Logs Folder, and release hardening; none of those is claimed here.
+
+Focused runtime evidence on 2026-08-24:
+
+| Command | Observed | What it proves |
+| --- | --- | --- |
+| `pytest tests/test_api_foundation.py tests/test_web_runtime.py tests/test_architecture.py` | **32 passed** — 15 API foundation, 6 runtime, and 11 architecture | real loopback HTTP, production frontend delivery, a queued Analyze completed by the supervised worker, matching-instance reuse, foreign-port fallback, missing-build refusal, clean Ctrl+C shutdown, static/API routing, and preserved layer/containment guards |
+| targeted Ruff and Pyright over the changed runtime/CLI/port files | **passed; 0 type errors** | the new host satisfies formatting, import, and repository port contracts |
+| `python -m pip check` | **passed** | the added Uvicorn runtime dependency is consistent with the environment |
+| manual `cv web --no-open --port 18765` against a fresh test Workspace | **passed** | health reported schema `0002`, FastAPI served the built React root, and Ctrl+C stopped Uvicorn and the worker without a traceback |
+
 - [ ] A real built-Web E2E completes Create through Ready against FastAPI, worker, SQLite,
       filesystem, and renderer without mocking application services or projections.
 - [ ] The journey covers review-required and no-review paths.
