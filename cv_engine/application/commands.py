@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..domain.models import Fact, JobAnalysis, SelectionPlan, ValidationReport
 
@@ -207,7 +207,25 @@ class UpdateWorkingDraftCommand(BoundaryDTO):
     working_draft_id: str
     expected_edit_version: int
     expected_content_hash: str
-    claim_edits: list[ClaimPatch] = Field(min_length=1)
+    claim_edits: list[ClaimPatch] = []
+    claim_removals: list[str] = []
+
+    @model_validator(mode="after")
+    def validate_patch(self) -> UpdateWorkingDraftCommand:
+        """A patch has to change something, and may not contradict itself.
+
+        Removal rides on this command rather than on one of its own because
+        product-spec §10 makes removal one of the three ways an unsupported
+        claim is resolved, and §14 commits an autosave patch as a single edit
+        against a single expected version. A separate command would need its own
+        token and could interleave with the save the user is already making.
+        """
+        if not self.claim_edits and not self.claim_removals:
+            raise ValueError("a working draft patch must edit or remove at least one claim")
+        both = {edit.claim_id for edit in self.claim_edits} & set(self.claim_removals)
+        if both:
+            raise ValueError(f"a patch cannot both edit and remove the same claim: {sorted(both)}")
+        return self
 
 
 class ApplySelectionChangeCommand(SelectionOverlay):

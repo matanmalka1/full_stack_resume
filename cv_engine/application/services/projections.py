@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import cast
 
+from ...domain.models import WorkingDraft
 from ..artifacts import verify_artifact
 from ..errors import (
     # Re-exported: the v1 CLI and test suite catch WorkflowError from here, and
@@ -21,6 +22,8 @@ from ..queries import (
     ArtifactVersionDetailView,
     ArtifactVersionsView,
     DecisionRecordView,
+    DraftPreviewView,
+    WorkingDraftFactsView,
     WorkingDraftView,
     analysis_view,
     application_list_item_view,
@@ -28,6 +31,8 @@ from ..queries import (
     approved_revision_view,
     artifact_version_view,
     decision_view,
+    draft_facts_view,
+    draft_outline_view,
     snapshot_view,
 )
 from ..ready import qualify_ready_revision
@@ -221,10 +226,7 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
         resolved `latest` for it could hand back a different draft than the one
         the ETag it then sends was taken from.
         """
-        try:
-            working = self.repo.working_draft(working_draft_id)
-        except UnknownRecord as exc:
-            raise UnknownRecord(f"unknown working draft: {working_draft_id}") from exc
+        working = self._working_draft(working_draft_id)
         latest = self.repo.latest_validation_for_working_draft(working_draft_id)
         exact = (
             latest
@@ -235,8 +237,48 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
         )
         return WorkingDraftView(
             **working.model_dump(mode="python"),
+            outline=draft_outline_view(working.source),
             latest_validation_run_id=exact["id"] if exact else None,
             latest_validation_passed=exact["report"].passed if exact else None,
+        )
+
+    def _working_draft(self, working_draft_id: str) -> WorkingDraft:
+        try:
+            return self.repo.working_draft(working_draft_id)
+        except UnknownRecord as exc:
+            raise UnknownRecord(f"unknown working draft: {working_draft_id}") from exc
+
+    def working_draft_facts(self, working_draft_id: str) -> WorkingDraftFactsView:
+        """§20 candidate accounting for one draft, in the draft's own language.
+
+        Read here rather than derived in a client: the fact renderings are
+        Knowledge, and a browser that had to name facts by ID could only show
+        the identifiers the M4 gate says a user must never need.
+        """
+        working = self._working_draft(working_draft_id)
+        return draft_facts_view(
+            working.id,
+            working.application_id,
+            working.selection_plan_id,
+            working.source,
+            self.fact_store(),
+        )
+
+    def working_draft_preview(self, working_draft_id: str) -> DraftPreviewView:
+        """§20/architecture §13: this exact draft version rendered to HTML.
+
+        The same composition the approved render uses, so what a user checks
+        before approving is what the approval renders. No browser is started and
+        nothing is written: a preview refreshes on every save, and neither
+        belongs on that path.
+        """
+        working = self._working_draft(working_draft_id)
+        return DraftPreviewView(
+            working_draft_id=working.id,
+            edit_version=working.edit_version,
+            content_hash=working.content_hash,
+            language=working.source.language,
+            html=self.renderer.preview_html(working.source, self.candidate()),
         )
 
     def latest_decision(self, application_id: str) -> DecisionRecordView:

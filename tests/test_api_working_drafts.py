@@ -98,6 +98,14 @@ def _patch(harness, working_draft_id: str, etag: str, claim_edits: list[dict]):
     )
 
 
+def _remove(harness, working_draft_id: str, etag: str, claim_removals: list[str]):
+    return harness.client.patch(
+        f"{API_PREFIX}/working-drafts/{working_draft_id}",
+        json={"claim_removals": claim_removals},
+        headers={**MUTATION_HEADERS, "If-Match": etag},
+    )
+
+
 def _state(harness, application_id: str) -> dict:
     response = harness.client.get(f"{API_PREFIX}/applications/{application_id}")
     assert response.status_code == 200, response.text
@@ -207,6 +215,204 @@ def test_free_text_no_fact_authorizes_is_kept_as_a_pending_claim(api_worker) -> 
     assert saved["claim_type"] == "pending"
     assert saved["text"] == UNSUPPORTED_WORDING
     assert saved["pending_reason"]
+
+
+# --- M4 Stage D: the editor's read, its preview, and claim removal -----------
+
+
+def test_the_draft_read_carries_an_outline_the_editor_can_address(api_worker) -> None:
+    """The outline is derived from the same document `source` carries.
+
+    Asserted against `source` rather than against a fixture, because the claim
+    that matters is that the two cannot disagree: the outline is computed per
+    read from that object, not stored beside it.
+    """
+    application_id, working_draft_id, _sources = _drafted(api_worker, "Outline Co")
+    body = _read(api_worker, working_draft_id).json()
+    outline, source = body["outline"], body["source"]
+
+    assert outline["headline"]["claim_id"] == source["headline"]["claim_id"]
+    assert [claim["claim_id"] for claim in outline["contacts"]] == [
+        claim["claim_id"] for claim in source["contacts"]
+    ]
+    assert [section["name"] for section in outline["sections"]] == [
+        section["name"] for section in source["sections"]
+    ]
+    outlined = {
+        claim["claim_id"]: claim for section in outline["sections"] for claim in section["claims"]
+    }
+    stored = {
+        claim["claim_id"]: claim for section in source["sections"] for claim in section["claims"]
+    }
+    assert set(outlined) == set(stored)
+    for claim_id, claim in outlined.items():
+        assert (claim["text"], claim["claim_type"], claim["style"]) == (
+            stored[claim_id]["text"],
+            stored[claim_id]["claim_type"],
+            stored[claim_id]["style"],
+        )
+        assert claim["fact_ids"] == stored[claim_id]["fact_ids"]
+
+
+def test_the_facts_read_is_the_union_of_linked_facts_and_plan_candidates(api_worker) -> None:
+    """Neither set covers the other, which is the whole reason for this read.
+
+    Contacts come from the candidate context and appear in no SelectionPlan; an
+    omitted candidate appears in no claim. A read that returned only one of them
+    would leave the editor unable to say either what backs a line or what could
+    be added to one.
+    """
+    application_id, working_draft_id, _sources = _drafted(api_worker, "Fact Union Co")
+    draft = _read(api_worker, working_draft_id).json()
+    response = api_worker.client.get(f"{API_PREFIX}/working-drafts/{working_draft_id}/facts")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["language"] == draft["source"]["language"]
+    rows = {row["fact_id"]: row for row in body["facts"]}
+
+    contact_fact = draft["source"]["contacts"][0]["fact_ids"][0]
+    assert contact_fact in rows, "a contact's fact is linked but is not a plan candidate"
+    assert rows[contact_fact]["outcome"] is None
+    assert rows[contact_fact]["linked_claim_ids"] == [draft["source"]["contacts"][0]["claim_id"]]
+
+    omitted = next(
+        candidate["fact_id"]
+        for candidate in draft["source"]["selection"]["candidates"]
+        if candidate["outcome"] == "omitted"
+    )
+    assert omitted in rows, "an omitted candidate is in no claim and must still be offered"
+    assert rows[omitted]["linked_claim_ids"] == []
+    assert rows[omitted]["reason"]
+
+    # Every row a claim links names that claim, and reads as text rather than
+    # as the identifier the M4 gate says a user must never need.
+    for section in draft["source"]["sections"]:
+        for claim in section["claims"]:
+            for fact_id in claim["fact_ids"]:
+                assert claim["claim_id"] in rows[fact_id]["linked_claim_ids"]
+                assert rows[fact_id]["text"]
+
+    # And nothing beyond the union. The whole canonical fact pool is not what
+    # this read is: `omitted_facts` spans every canonical fact minus the
+    # selected ones, and handing that to a browser would be the general
+    # Knowledge manager the product spec excludes.
+    linked_ids = {
+        fact_id
+        for claim in [
+            draft["source"]["headline"],
+            *draft["source"]["contacts"],
+            *(claim for section in draft["source"]["sections"] for claim in section["claims"]),
+        ]
+        for fact_id in claim["fact_ids"]
+    }
+    candidate_ids = {
+        candidate["fact_id"] for candidate in draft["source"]["selection"]["candidates"]
+    }
+    assert set(rows) == linked_ids | candidate_ids
+
+
+def test_the_preview_is_the_rendered_draft_and_is_safe_to_frame(api_worker) -> None:
+    """architecture §13: server-rendered HTML for an isolated iframe.
+
+    The headers are the assertion, not decoration. The document is framed with
+    `sandbox` by the client, but a preview that depended on the client
+    remembering to would be one forgotten attribute away from running whatever
+    the response contained.
+    """
+    application_id, working_draft_id, _sources = _drafted(api_worker, "Preview Co")
+    read = _read(api_worker, working_draft_id)
+
+    response = api_worker.client.get(f"{API_PREFIX}/working-drafts/{working_draft_id}/preview")
+
+    assert response.status_code == 200, response.text
+    assert response.headers["Content-Type"].startswith("text/html")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["Cache-Control"] == "no-store"
+    assert "default-src 'none'" in response.headers["Content-Security-Policy"]
+    assert "style-src 'unsafe-inline'" in response.headers["Content-Security-Policy"]
+    # The version is named, so a client can tell which edit it framed.
+    assert response.headers["ETag"] == read.headers["ETag"]
+    assert "<script" not in response.text
+    first_claim = read.json()["outline"]["sections"][0]["claims"][0]["text"]
+    assert first_claim.split()[0] in response.text
+
+
+def test_removing_a_pending_claim_is_the_resolution_no_other_command_reaches(
+    api_worker,
+) -> None:
+    """product-spec §10: removal is one of the three resolutions for free text.
+
+    The three arms are one item because they are one rule: the patch removes an
+    unauthorized claim, refuses one the fact selection authorizes, and refuses
+    the structural claims outright.
+    """
+    application_id, working_draft_id, _sources = _drafted(api_worker, "Removal Co")
+    edit = _unsupported_edit(api_worker, application_id)
+    pending = _patch(
+        api_worker, working_draft_id, _read(api_worker, working_draft_id).headers["ETag"], [edit]
+    )
+    assert pending.status_code == 200, pending.text
+    assert pending.json()["pending_claim_ids"] == [edit["claim_id"]]
+
+    read = _read(api_worker, working_draft_id)
+    body = read.json()
+    authorized = next(
+        claim["claim_id"]
+        for section in body["outline"]["sections"]
+        for claim in section["claims"]
+        if claim["claim_type"] != "pending" and claim["fact_ids"]
+    )
+
+    refused = _remove(api_worker, working_draft_id, read.headers["ETag"], [authorized])
+    assert refused.status_code == 412, refused.text
+    assert "apply_selection_change" in refused.json()["detail"]
+
+    structural = _remove(
+        api_worker,
+        working_draft_id,
+        read.headers["ETag"],
+        [body["outline"]["headline"]["claim_id"]],
+    )
+    assert structural.status_code == 412, structural.text
+    assert "structural" in structural.json()["detail"]
+
+    removed = _remove(api_worker, working_draft_id, read.headers["ETag"], [edit["claim_id"]])
+
+    assert removed.status_code == 200, removed.text
+    after = _read(api_worker, working_draft_id).json()
+    assert edit["claim_id"] not in {
+        claim["claim_id"] for section in after["outline"]["sections"] for claim in section["claims"]
+    }
+    # The two refusals above changed nothing, so this is the only version bump.
+    assert after["edit_version"] == body["edit_version"] + 1
+    # A section left empty keeps its heading: removing a line is not permission
+    # to restructure the document.
+    assert [section["name"] for section in after["outline"]["sections"]] == [
+        section["name"] for section in body["outline"]["sections"]
+    ]
+
+
+def test_a_patch_that_says_nothing_or_contradicts_itself_is_refused(api_worker) -> None:
+    """`422`, before anything is applied. An empty patch is not a save."""
+    application_id, working_draft_id, _sources = _drafted(api_worker, "Empty Patch Co")
+    etag = _read(api_worker, working_draft_id).headers["ETag"]
+    edit = _unsupported_edit(api_worker, application_id)
+
+    empty = api_worker.client.patch(
+        f"{API_PREFIX}/working-drafts/{working_draft_id}",
+        json={"claim_edits": [], "claim_removals": []},
+        headers={**MUTATION_HEADERS, "If-Match": etag},
+    )
+    assert empty.status_code == 422, empty.text
+
+    contradictory = api_worker.client.patch(
+        f"{API_PREFIX}/working-drafts/{working_draft_id}",
+        json={"claim_edits": [edit], "claim_removals": [edit["claim_id"]]},
+        headers={**MUTATION_HEADERS, "If-Match": etag},
+    )
+    assert contradictory.status_code == 422, contradictory.text
+    assert _read(api_worker, working_draft_id).headers["ETag"] == etag
 
 
 # --- E3: selection change, archive, replace ----------------------------------

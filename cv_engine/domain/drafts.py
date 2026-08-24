@@ -524,6 +524,44 @@ def apply_claim_edit(
     return _refresh_selection(draft, facts)
 
 
+def remove_claim(draft: DraftDocument, claim_id: str, facts: FactStore) -> DraftDocument:
+    """Remove one unauthorized section claim, and reseal.
+
+    product-spec §10 lists removal as one of the three resolutions for free text
+    nothing could authorize, and it is the only one of the three that no other
+    command can reach: a `pending` claim has no fact to exclude, and its very
+    presence makes `manually_edited` true, which is what refuses the
+    deterministic selection path.
+
+    So the removal is narrow on purpose. It refuses anything a fact selection
+    authorizes, because removing such a claim here would leave the SelectionPlan
+    asserting a fact the document no longer carries - that decision belongs to
+    `apply_selection_change`, which rewrites both together. It refuses the
+    headline and the contacts because they are structural: the model requires a
+    headline, and contacts come from the candidate context rather than from any
+    selection, so a rebuild reproduces them.
+
+    A section left with no claims keeps its heading. Removing a line is not
+    permission to restructure the document.
+    """
+    if draft.headline.claim_id == claim_id:
+        raise ValueError("the headline is structural and cannot be removed")
+    if any(claim.claim_id == claim_id for claim in draft.contacts):
+        raise ValueError("a contact line is structural and cannot be removed")
+    for section in draft.sections:
+        for index, claim in enumerate(section.claims):
+            if claim.claim_id != claim_id:
+                continue
+            if claim.claim_type != "pending" and claim.fact_ids:
+                raise ValueError(
+                    "this claim is authorized by the fact selection; remove it by "
+                    "excluding its facts through apply_selection_change"
+                )
+            del section.claims[index]
+            return _refresh_selection(draft, facts)
+    raise KeyError(claim_id)
+
+
 def register_linked_claim(
     draft: DraftDocument,
     claim_id: str,

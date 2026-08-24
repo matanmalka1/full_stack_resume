@@ -1900,6 +1900,203 @@
         "title": "DecisionRecordResponse",
         "type": "object"
       },
+      "DraftClaimResponse": {
+        "additionalProperties": false,
+        "description": "One editable line: what a claim edit addresses, plus what it currently is.\n\n`claim_type` and `style` are the domain's closed sets rather than `str`, so\na client's status labels stay exhaustive over them and a claim type added\nhere fails that client's build instead of reaching a screen untranslated.",
+        "properties": {
+          "claim_id": {
+            "title": "Claim Id",
+            "type": "string"
+          },
+          "claim_type": {
+            "enum": [
+              "canonical",
+              "composite",
+              "derived",
+              "pending",
+              "headline"
+            ],
+            "title": "Claim Type",
+            "type": "string"
+          },
+          "fact_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fact Ids",
+            "type": "array"
+          },
+          "pending_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Reason"
+          },
+          "style": {
+            "enum": [
+              "paragraph",
+              "heading",
+              "date",
+              "bullet",
+              "item",
+              "contact",
+              "headline"
+            ],
+            "title": "Style",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "claim_id",
+          "style",
+          "text",
+          "claim_type",
+          "fact_ids"
+        ],
+        "title": "DraftClaimResponse",
+        "type": "object"
+      },
+      "DraftFactResponse": {
+        "additionalProperties": false,
+        "description": "One fact this draft uses, or one its SelectionPlan considered.\n\n`text` is nullable: a fact the store can no longer resolve is already\nreported as a stale reason by the state projection, and a read that raised\nover it would turn an explainable staleness into a `500`.\n\n`outcome` is null for a fact no SelectionPlan ranked - a contact, or a fact\na manual relink attached. That null is what says no include/exclude decision\napplies to it, so no second flag is needed to say the same thing.",
+        "properties": {
+          "fact_id": {
+            "title": "Fact Id",
+            "type": "string"
+          },
+          "linked_claim_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Linked Claim Ids",
+            "type": "array"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pinned",
+                  "selected",
+                  "rescued",
+                  "omitted"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "below_section_budget",
+                  "not_relevant_to_emphasis",
+                  "evicted_by_required_tag_rescue",
+                  "not_in_profile_pool",
+                  "excluded_by_user"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "required": [
+          "fact_id"
+        ],
+        "title": "DraftFactResponse",
+        "type": "object"
+      },
+      "DraftOutlineResponse": {
+        "additionalProperties": false,
+        "description": "The document's editable structure, derived from `source` on every read.\n\nNot a competing copy of the draft: it stores nothing, it is computed from\nthe same object `source` carries, and it holds only what an edit can\naddress. `source` remains the whole versioned document for anything that\nneeds more than the editor does.",
+        "properties": {
+          "contacts": {
+            "items": {
+              "$ref": "#/components/schemas/DraftClaimResponse"
+            },
+            "title": "Contacts",
+            "type": "array"
+          },
+          "headline": {
+            "$ref": "#/components/schemas/DraftClaimResponse"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/DraftSectionResponse"
+            },
+            "title": "Sections",
+            "type": "array"
+          }
+        },
+        "required": [
+          "headline",
+          "contacts",
+          "sections"
+        ],
+        "title": "DraftOutlineResponse",
+        "type": "object"
+      },
+      "DraftSectionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "claims": {
+            "items": {
+              "$ref": "#/components/schemas/DraftClaimResponse"
+            },
+            "title": "Claims",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "claims"
+        ],
+        "title": "DraftSectionResponse",
+        "type": "object"
+      },
       "DuplicateCheckRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2809,20 +3006,26 @@
       },
       "UpdateWorkingDraftRequest": {
         "additionalProperties": false,
-        "description": "The structured patch `PATCH /working-drafts/{id}` applies as one edit.",
+        "description": "The structured patch `PATCH /working-drafts/{id}` applies as one edit.\n\nRemovals travel with the edits rather than in a command of their own.\nProduct spec §10 makes removal one of the three resolutions for free text\nnothing could authorize, and §14 commits an autosave patch as a single edit\nagainst a single expected version - a second command would need its own\ntoken and could interleave with the save already in flight.\n\nOnly one of the two lists has to be non-empty. Requiring both would make\n\"remove this line\" impossible to express without also rewriting one.",
         "properties": {
           "claim_edits": {
+            "default": [],
             "items": {
               "$ref": "#/components/schemas/ClaimPatchRequest"
             },
-            "minItems": 1,
             "title": "Claim Edits",
+            "type": "array"
+          },
+          "claim_removals": {
+            "default": [],
+            "description": "Claims to delete outright. Only an unauthorized section claim may be removed this way; a claim the fact selection authorizes is a 412 naming apply-selection-change, and the headline and contacts are structural.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Claim Removals",
             "type": "array"
           }
         },
-        "required": [
-          "claim_edits"
-        ],
         "title": "UpdateWorkingDraftRequest",
         "type": "object"
       },
@@ -2939,6 +3142,44 @@
         "title": "WarningResponse",
         "type": "object"
       },
+      "WorkingDraftFactsResponse": {
+        "additionalProperties": false,
+        "description": "§20 candidate accounting: the union of linked facts and plan candidates.\n\nNeither set covers the other. Contacts come from the candidate context and\nappear in no SelectionPlan; an omitted candidate appears in no claim. The\neditor needs both - one to say what backs a line, the other to say what\ncould be added to one.",
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/DraftFactResponse"
+            },
+            "title": "Facts",
+            "type": "array"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
+          },
+          "selection_plan_id": {
+            "title": "Selection Plan Id",
+            "type": "string"
+          },
+          "working_draft_id": {
+            "title": "Working Draft Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "working_draft_id",
+          "application_id",
+          "selection_plan_id",
+          "language",
+          "facts"
+        ],
+        "title": "WorkingDraftFactsResponse",
+        "type": "object"
+      },
       "WorkingDraftResponse": {
         "additionalProperties": false,
         "properties": {
@@ -2992,6 +3233,9 @@
             ],
             "title": "Latest Validation Run Id"
           },
+          "outline": {
+            "$ref": "#/components/schemas/DraftOutlineResponse"
+          },
           "parent_revision_id": {
             "anyOf": [
               {
@@ -3023,6 +3267,7 @@
           "job_analysis_id",
           "selection_plan_id",
           "source",
+          "outline",
           "edit_version",
           "content_hash",
           "active",
@@ -4241,7 +4486,7 @@
         ]
       },
       "patch": {
-        "description": "`200` and the new `ETag`; a mismatch is `409` and changes nothing (§14).\n\nThe header is parsed into the two arguments the command declares rather\nthan handed through as a string, so the application layer is never asked to\nunderstand an HTTP header.",
+        "description": "`200` and the new `ETag`; a mismatch is `409` and changes nothing (§14).\n\nThe header is parsed into the two arguments the command declares rather\nthan handed through as a string, so the application layer is never asked to\nunderstand an HTTP header.\n\nEdits and removals are one patch and one version bump. Product spec §10\nmakes removal one of the three resolutions for unsupported free text, and it\nis the only one no other command can reach - a `pending` claim has no fact\nfor `apply-selection-change` to exclude, and its presence is what refuses\nthat command in the first place.",
         "operationId": "update_working_draft_api_v1_working_drafts__working_draft_id__patch",
         "parameters": [
           {
@@ -4475,6 +4720,92 @@
           }
         },
         "summary": "Archive the draft as an immutable historical snapshot",
+        "tags": [
+          "working-drafts"
+        ]
+      }
+    },
+    "/api/v1/working-drafts/{working_draft_id}/facts": {
+      "get": {
+        "description": "`200` with one row per fact, in the draft's own language (§20).\n\nThe renderings are here rather than left to the client because a browser\nthat had to name a fact by its ID could only show the identifier the M4 gate\nsays a user must never need.",
+        "operationId": "read_working_draft_facts_api_v1_working_drafts__working_draft_id__facts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "working_draft_id",
+            "required": true,
+            "schema": {
+              "title": "Working Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkingDraftFactsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read the facts this draft links and the candidates its plan considered",
+        "tags": [
+          "working-drafts"
+        ]
+      }
+    },
+    "/api/v1/working-drafts/{working_draft_id}/preview": {
+      "get": {
+        "description": "`200` and the document itself (architecture §13).\n\nThe response is built to be framed and nothing else. The CSP allows the one\ninline stylesheet every CV template carries and refuses every other source,\nso a preview cannot run a script or fetch anything; `nosniff` keeps it from\nbeing interpreted as another type; `no-store` keeps a superseded edit out of\nthe browser cache. The client frames it with `sandbox` and no\n`allow-same-origin`, which is what puts it in an opaque origin - but the\nresponse does not depend on the client remembering to.",
+        "operationId": "preview_working_draft_api_v1_working_drafts__working_draft_id__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "working_draft_id",
+            "required": true,
+            "schema": {
+              "title": "Working Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The draft rendered by the same composition the approved render uses."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Render this exact draft version to HTML for an isolated preview",
         "tags": [
           "working-drafts"
         ]

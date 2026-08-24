@@ -6,7 +6,18 @@ import json
 from enum import StrEnum
 from typing import Any
 
-from ..domain.models import ApprovedRevision, DraftDocument, JobAnalysis, ValidationReport
+from ..domain.drafts import draft_claims
+from ..domain.facts import FactStore
+from ..domain.models import (
+    ApprovedRevision,
+    ClaimStyle,
+    ClaimType,
+    DraftDocument,
+    JobAnalysis,
+    OmissionReason,
+    SelectionOutcome,
+    ValidationReport,
+)
 from .commands import BoundaryDTO
 from .operations import OperationView
 
@@ -129,6 +140,96 @@ class ApplicationListView(BoundaryDTO):
     items: list[ApplicationListItemView]
 
 
+class DraftClaimView(BoundaryDTO):
+    """One editable line, as the editor needs to see it.
+
+    Exactly the fields a claim edit addresses, plus the two that say what the
+    claim currently is. `claim_type` and `style` are the domain's own closed
+    sets rather than `str`, so a client's status labels stay exhaustive over
+    them.
+    """
+
+    claim_id: str
+    style: ClaimStyle
+    text: str
+    claim_type: ClaimType
+    fact_ids: list[str]
+    pending_reason: str | None = None
+
+
+class DraftSectionView(BoundaryDTO):
+    name: str
+    claims: list[DraftClaimView]
+
+
+class DraftOutlineView(BoundaryDTO):
+    """The document's editable structure, derived per read.
+
+    Not a second copy of `DraftDocument`: it is computed from the same object on
+    each read, it stores nothing, and it deliberately carries only what an edit
+    can address. The document itself stays available as `source`, versioned and
+    whole, for anything that needs more than this.
+
+    Headline and contacts are here because `draft_claims` includes them and the
+    editor has to show them - marked as the structural claims they are, not as
+    lines a user may remove.
+    """
+
+    headline: DraftClaimView
+    contacts: list[DraftClaimView]
+    sections: list[DraftSectionView]
+
+
+class DraftFactView(BoundaryDTO):
+    """One fact this draft either uses or considered.
+
+    `text` is nullable because a fact the store can no longer resolve is a state
+    the projection already reports as a stale reason; a read that raised instead
+    would turn an explainable staleness into a 500.
+
+    `outcome` is null for a fact that is not a SelectionPlan candidate - a
+    contact, or a fact a manual relink attached. That null is what says no
+    include/exclude decision applies to it, so nothing needs a second flag.
+    """
+
+    fact_id: str
+    text: str | None = None
+    linked_claim_ids: list[str] = []
+    section: str | None = None
+    outcome: SelectionOutcome | None = None
+    reason: OmissionReason | None = None
+
+
+class WorkingDraftFactsView(BoundaryDTO):
+    """§20 candidate accounting: every fact the draft links, and every candidate.
+
+    The union of the two, because neither covers the other. Contacts come from
+    the candidate context and never appear in a SelectionPlan, while an omitted
+    candidate appears in no claim - and the editor needs both to show what backs
+    a line and what could be added to one.
+    """
+
+    working_draft_id: str
+    application_id: str
+    selection_plan_id: str
+    language: str
+    facts: list[DraftFactView]
+
+
+class DraftPreviewView(BoundaryDTO):
+    """The HTML for one exact draft version.
+
+    The version travels with the document so a caller can tell which edit it is
+    looking at, rather than inferring it from when the request was made.
+    """
+
+    working_draft_id: str
+    edit_version: int
+    content_hash: str
+    language: str
+    html: str
+
+
 class WorkingDraftView(BoundaryDTO):
     """§20: the WorkingDraft a client edits, plus its optimistic token.
 
@@ -148,6 +249,7 @@ class WorkingDraftView(BoundaryDTO):
     selection_plan_id: str
     parent_revision_id: str | None = None
     source: DraftDocument
+    outline: DraftOutlineView
     edit_version: int
     content_hash: str
     active: bool
@@ -249,6 +351,89 @@ class DecisionRecordView(BoundaryDTO):
 
 def application_view(record: dict[str, Any]) -> ApplicationView:
     return ApplicationView.model_validate(record)
+
+
+def _claim_view(claim: Any) -> DraftClaimView:
+    return DraftClaimView(
+        claim_id=claim.claim_id,
+        style=claim.style,
+        text=claim.text,
+        claim_type=claim.claim_type,
+        fact_ids=list(claim.fact_ids),
+        pending_reason=claim.pending_reason,
+    )
+
+
+def draft_outline_view(draft: DraftDocument) -> DraftOutlineView:
+    """The editable structure of one draft, derived from the draft itself."""
+    return DraftOutlineView(
+        headline=_claim_view(draft.headline),
+        contacts=[_claim_view(claim) for claim in draft.contacts],
+        sections=[
+            DraftSectionView(
+                name=section.name,
+                claims=[_claim_view(claim) for claim in section.claims],
+            )
+            for section in draft.sections
+        ],
+    )
+
+
+def draft_facts_view(
+    working_draft_id: str,
+    application_id: str,
+    selection_plan_id: str,
+    draft: DraftDocument,
+    facts: FactStore,
+) -> WorkingDraftFactsView:
+    """Every fact this draft links, plus every candidate its plan considered.
+
+    Walked through `draft_claims` rather than `sections`, so the headline's
+    support and the contacts - which no SelectionPlan contains - are accounted
+    for alongside the candidates that can still be included or excluded.
+
+    `draft.omitted_facts` is deliberately not a third source. It spans every
+    canonical fact the store holds minus the selected ones, so reading it here
+    would hand the browser the whole fact pool - the general Knowledge manager
+    the product spec excludes - rather than this draft's accounting.
+    """
+    linked: dict[str, list[str]] = {}
+    for claim in draft_claims(draft):
+        for fact_id in claim.fact_ids:
+            linked.setdefault(fact_id, []).append(claim.claim_id)
+
+    candidates = {
+        candidate.fact_id: candidate
+        for candidate in (draft.selection.candidates if draft.selection is not None else [])
+    }
+
+    def rendering(fact_id: str) -> str | None:
+        try:
+            return facts.rendering(fact_id, draft.language)
+        except (KeyError, ValueError):
+            # A fact the store can no longer resolve is exactly what the
+            # projection reports as a stale reason. It is reported as
+            # unreadable, not raised: the editor still has to render the line
+            # that depends on it.
+            return None
+
+    return WorkingDraftFactsView(
+        working_draft_id=working_draft_id,
+        application_id=application_id,
+        selection_plan_id=selection_plan_id,
+        language=draft.language,
+        facts=[
+            DraftFactView(
+                fact_id=fact_id,
+                text=rendering(fact_id),
+                linked_claim_ids=linked.get(fact_id, []),
+                section=candidates[fact_id].section if fact_id in candidates else None,
+                outcome=candidates[fact_id].outcome if fact_id in candidates else None,
+                reason=candidates[fact_id].reason if fact_id in candidates else None,
+            )
+            for fact_id in sorted(set(linked) | set(candidates))
+        ],
+    )
 
 
 def application_list_item_view(

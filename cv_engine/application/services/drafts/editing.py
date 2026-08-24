@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ....domain.draft_markdown import synchronize_markdown_claims
-from ....domain.drafts import apply_claim_edit, draft_claims
+from ....domain.drafts import apply_claim_edit, draft_claims, remove_claim
 from ....domain.validation import validate_draft as run_draft_validation
 from ...commands import EditResult, UpdateWorkingDraftCommand, WorkingDraftUpdateResult
 from ...errors import (
@@ -153,6 +153,16 @@ class DraftEditing(DraftServiceBase):
                 raise UnknownRecord(f"unknown claim in the working draft: {edit.claim_id}") from exc
             except ValueError as exc:
                 raise PreconditionFailed(f"claim edit rejected: {exc}") from exc
+        # After the edits, so a patch that rewrites one claim and removes
+        # another is applied in the order the user meant: the removal decides
+        # about a line as it stands after this patch, not before it.
+        for claim_id in command.claim_removals:
+            try:
+                patched = remove_claim(patched, claim_id, facts)
+            except KeyError as exc:
+                raise UnknownRecord(f"unknown claim in the working draft: {claim_id}") from exc
+            except ValueError as exc:
+                raise PreconditionFailed(f"claim removal rejected: {exc}") from exc
         changed = self._commit_edit(working, patched)
         self.store_working_draft(changed.source)
         edited = {edit.claim_id for edit in command.claim_edits}

@@ -57,9 +57,14 @@ def _contact_html(claim: Any, rtl: bool, candidate: CandidateContext) -> Markup:
     return Markup(f'<a href="{html.escape(href)}">{_bidi(text, rtl)}</a>')
 
 
-def render_html(
-    draft: DraftDocument, repo: Path, output_path: Path, candidate: CandidateContext
-) -> Path:
+def compose_html(draft: DraftDocument, repo: Path, candidate: CandidateContext) -> str:
+    """The rendered document itself, before anything decides where it lives.
+
+    Split out of `render_html` so the editor's preview and the approved render
+    are the same document produced the same way. A preview that composed its own
+    HTML would be a second renderer, and the thing a user checked before
+    approving would not be the thing that was approved.
+    """
     rtl = draft.language == "he"
     if draft.track.value == "development":
         template_name = "development_ltr.html.j2"
@@ -82,13 +87,19 @@ def render_html(
         }
         for section in draft.sections
     ]
-    rendered = template.render(
+    return template.render(
         name=draft.name,
         headline=_bidi(draft.headline.text, rtl),
         headline_text=draft.headline.text,
         contacts=[_contact_html(claim, rtl, candidate) for claim in draft.contacts],
         sections=sections,
     )
+
+
+def render_html(
+    draft: DraftDocument, repo: Path, output_path: Path, candidate: CandidateContext
+) -> Path:
+    rendered = compose_html(draft, repo, candidate)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_path.exists():
         raise FileExistsError(f"refusing to overwrite rendered HTML: {output_path}")
@@ -272,6 +283,14 @@ class PlaywrightRenderer:
         self, draft: DraftDocument, output_path: Path, candidate: CandidateContext
     ) -> Path:
         return render_html(draft, self.knowledge_root, output_path, candidate)
+
+    def preview_html(self, draft: DraftDocument, candidate: CandidateContext) -> str:
+        """The same document, returned rather than written.
+
+        No path and no browser: a preview refresh happens on every save, and
+        neither a temp file nor Chromium belongs on that path.
+        """
+        return compose_html(draft, self.knowledge_root, candidate)
 
     def render_pdf(self, html_path: Path, pdf_path: Path, screenshot_path: Path) -> dict[str, Any]:
         return render_pdf(html_path, pdf_path, screenshot_path)

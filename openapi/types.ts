@@ -506,6 +506,12 @@ export interface paths {
          *     The header is parsed into the two arguments the command declares rather
          *     than handed through as a string, so the application layer is never asked to
          *     understand an HTTP header.
+         *
+         *     Edits and removals are one patch and one version bump. Product spec §10
+         *     makes removal one of the three resolutions for unsupported free text, and it
+         *     is the only one no other command can reach - a `pending` claim has no fact
+         *     for `apply-selection-change` to exclude, and its presence is what refuses
+         *     that command in the first place.
          */
         patch: operations["update_working_draft_api_v1_working_drafts__working_draft_id__patch"];
         trace?: never;
@@ -572,6 +578,58 @@ export interface paths {
          * @description `200`: the snapshot is registered before the active pointer is cleared.
          */
         post: operations["archive_working_draft_api_v1_working_drafts__working_draft_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/working-drafts/{working_draft_id}/facts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the facts this draft links and the candidates its plan considered
+         * @description `200` with one row per fact, in the draft's own language (§20).
+         *
+         *     The renderings are here rather than left to the client because a browser
+         *     that had to name a fact by its ID could only show the identifier the M4 gate
+         *     says a user must never need.
+         */
+        get: operations["read_working_draft_facts_api_v1_working_drafts__working_draft_id__facts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/working-drafts/{working_draft_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Render this exact draft version to HTML for an isolated preview
+         * @description `200` and the document itself (architecture §13).
+         *
+         *     The response is built to be framed and nothing else. The CSP allows the one
+         *     inline stylesheet every CV template carries and refuses every other source,
+         *     so a preview cannot run a script or fetch anything; `nosniff` keeps it from
+         *     being interpreted as another type; `no-store` keeps a superseded edit out of
+         *     the browser cache. The client frames it with `sandbox` and no
+         *     `allow-same-origin`, which is what puts it in an opaque origin - but the
+         *     response does not depend on the client remembering to.
+         */
+        get: operations["preview_working_draft_api_v1_working_drafts__working_draft_id__preview_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1275,6 +1333,86 @@ export interface components {
             /** Summary */
             summary: string;
         };
+        /**
+         * DraftClaimResponse
+         * @description One editable line: what a claim edit addresses, plus what it currently is.
+         *
+         *     `claim_type` and `style` are the domain's closed sets rather than `str`, so
+         *     a client's status labels stay exhaustive over them and a claim type added
+         *     here fails that client's build instead of reaching a screen untranslated.
+         */
+        DraftClaimResponse: {
+            /** Claim Id */
+            claim_id: string;
+            /**
+             * Claim Type
+             * @enum {string}
+             */
+            claim_type: "canonical" | "composite" | "derived" | "pending" | "headline";
+            /** Fact Ids */
+            fact_ids: string[];
+            /** Pending Reason */
+            pending_reason?: string | null;
+            /**
+             * Style
+             * @enum {string}
+             */
+            style: "paragraph" | "heading" | "date" | "bullet" | "item" | "contact" | "headline";
+            /** Text */
+            text: string;
+        };
+        /**
+         * DraftFactResponse
+         * @description One fact this draft uses, or one its SelectionPlan considered.
+         *
+         *     `text` is nullable: a fact the store can no longer resolve is already
+         *     reported as a stale reason by the state projection, and a read that raised
+         *     over it would turn an explainable staleness into a `500`.
+         *
+         *     `outcome` is null for a fact no SelectionPlan ranked - a contact, or a fact
+         *     a manual relink attached. That null is what says no include/exclude decision
+         *     applies to it, so no second flag is needed to say the same thing.
+         */
+        DraftFactResponse: {
+            /** Fact Id */
+            fact_id: string;
+            /**
+             * Linked Claim Ids
+             * @default []
+             */
+            linked_claim_ids: string[];
+            /** Outcome */
+            outcome?: ("pinned" | "selected" | "rescued" | "omitted") | null;
+            /** Reason */
+            reason?: ("below_section_budget" | "not_relevant_to_emphasis" | "evicted_by_required_tag_rescue" | "not_in_profile_pool" | "excluded_by_user") | null;
+            /** Section */
+            section?: string | null;
+            /** Text */
+            text?: string | null;
+        };
+        /**
+         * DraftOutlineResponse
+         * @description The document's editable structure, derived from `source` on every read.
+         *
+         *     Not a competing copy of the draft: it stores nothing, it is computed from
+         *     the same object `source` carries, and it holds only what an edit can
+         *     address. `source` remains the whole versioned document for anything that
+         *     needs more than the editor does.
+         */
+        DraftOutlineResponse: {
+            /** Contacts */
+            contacts: components["schemas"]["DraftClaimResponse"][];
+            headline: components["schemas"]["DraftClaimResponse"];
+            /** Sections */
+            sections: components["schemas"]["DraftSectionResponse"][];
+        };
+        /** DraftSectionResponse */
+        DraftSectionResponse: {
+            /** Claims */
+            claims: components["schemas"]["DraftClaimResponse"][];
+            /** Name */
+            name: string;
+        };
         /** DuplicateCheckRequest */
         DuplicateCheckRequest: {
             /** Company */
@@ -1696,10 +1834,28 @@ export interface components {
         /**
          * UpdateWorkingDraftRequest
          * @description The structured patch `PATCH /working-drafts/{id}` applies as one edit.
+         *
+         *     Removals travel with the edits rather than in a command of their own.
+         *     Product spec §10 makes removal one of the three resolutions for free text
+         *     nothing could authorize, and §14 commits an autosave patch as a single edit
+         *     against a single expected version - a second command would need its own
+         *     token and could interleave with the save already in flight.
+         *
+         *     Only one of the two lists has to be non-empty. Requiring both would make
+         *     "remove this line" impossible to express without also rewriting one.
          */
         UpdateWorkingDraftRequest: {
-            /** Claim Edits */
+            /**
+             * Claim Edits
+             * @default []
+             */
             claim_edits: components["schemas"]["ClaimPatchRequest"][];
+            /**
+             * Claim Removals
+             * @description Claims to delete outright. Only an unauthorized section claim may be removed this way; a claim the fact selection authorizes is a 412 naming apply-selection-change, and the headline and contacts are structural.
+             * @default []
+             */
+            claim_removals: string[];
         };
         /** ValidationError */
         ValidationError: {
@@ -1747,6 +1903,27 @@ export interface components {
             /** Message */
             message: string;
         };
+        /**
+         * WorkingDraftFactsResponse
+         * @description §20 candidate accounting: the union of linked facts and plan candidates.
+         *
+         *     Neither set covers the other. Contacts come from the candidate context and
+         *     appear in no SelectionPlan; an omitted candidate appears in no claim. The
+         *     editor needs both - one to say what backs a line, the other to say what
+         *     could be added to one.
+         */
+        WorkingDraftFactsResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Facts */
+            facts: components["schemas"]["DraftFactResponse"][];
+            /** Language */
+            language: string;
+            /** Selection Plan Id */
+            selection_plan_id: string;
+            /** Working Draft Id */
+            working_draft_id: string;
+        };
         /** WorkingDraftResponse */
         WorkingDraftResponse: {
             /** Active */
@@ -1767,6 +1944,7 @@ export interface components {
             latest_validation_passed?: boolean | null;
             /** Latest Validation Run Id */
             latest_validation_run_id?: string | null;
+            outline: components["schemas"]["DraftOutlineResponse"];
             /** Parent Revision Id */
             parent_revision_id?: string | null;
             /** Selection Plan Id */
@@ -2698,6 +2876,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ArchivedWorkingDraftResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_working_draft_facts_api_v1_working_drafts__working_draft_id__facts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                working_draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkingDraftFactsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_working_draft_api_v1_working_drafts__working_draft_id__preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                working_draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The draft rendered by the same composition the approved render uses. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
                 };
             };
             /** @description Validation Error */

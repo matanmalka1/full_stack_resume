@@ -1,4 +1,4 @@
-"""The WorkingDraft surface: read, autosave, selection, lifecycle, validate, approve.
+"""The WorkingDraft surface: read, preview, autosave, selection, lifecycle, approve.
 
 Every route here is one application command or one application query. The
 router parses the transport - the ETag, the idempotency key, the path ID - and
@@ -23,6 +23,7 @@ applications router.
 from __future__ import annotations
 
 from fastapi import APIRouter, Response, status
+from fastapi.responses import HTMLResponse
 
 from ...application.commands import (
     ApplySelectionChangeCommand,
@@ -49,6 +50,7 @@ from ..schemas.drafts import (
     SelectionChangeResponse,
     UpdateWorkingDraftRequest,
     ValidationRunResponse,
+    WorkingDraftFactsResponse,
     WorkingDraftResponse,
     WorkingDraftUpdateResponse,
     WorkingDraftVersionRequest,
@@ -72,6 +74,60 @@ def read_working_draft(
     return WorkingDraftResponse.model_validate(result.model_dump(mode="json"))
 
 
+@router.get(
+    "/{working_draft_id}/facts",
+    response_model=WorkingDraftFactsResponse,
+    summary="Read the facts this draft links and the candidates its plan considered",
+)
+def read_working_draft_facts(
+    working_draft_id: str, services: Services
+) -> WorkingDraftFactsResponse:
+    """`200` with one row per fact, in the draft's own language (§20).
+
+    The renderings are here rather than left to the client because a browser
+    that had to name a fact by its ID could only show the identifier the M4 gate
+    says a user must never need.
+    """
+    result = services.queries.working_draft_facts(working_draft_id)
+    return WorkingDraftFactsResponse.model_validate(result.model_dump(mode="json"))
+
+
+@router.get(
+    "/{working_draft_id}/preview",
+    summary="Render this exact draft version to HTML for an isolated preview",
+    response_class=HTMLResponse,
+    responses={
+        200: {
+            "description": "The draft rendered by the same composition the approved render uses.",
+            "content": {"text/html": {"schema": {"type": "string"}}},
+        }
+    },
+)
+def preview_working_draft(working_draft_id: str, services: Services) -> HTMLResponse:
+    """`200` and the document itself (architecture §13).
+
+    The response is built to be framed and nothing else. The CSP allows the one
+    inline stylesheet every CV template carries and refuses every other source,
+    so a preview cannot run a script or fetch anything; `nosniff` keeps it from
+    being interpreted as another type; `no-store` keeps a superseded edit out of
+    the browser cache. The client frames it with `sandbox` and no
+    `allow-same-origin`, which is what puts it in an opaque origin - but the
+    response does not depend on the client remembering to.
+    """
+    result = services.queries.working_draft_preview(working_draft_id)
+    return HTMLResponse(
+        content=result.html,
+        headers={
+            "Content-Security-Policy": (
+                "default-src 'none'; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'"
+            ),
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-store",
+            "ETag": draft_etag(result.edit_version, result.content_hash),
+        },
+    )
+
+
 @router.patch(
     "/{working_draft_id}",
     response_model=WorkingDraftUpdateResponse,
@@ -89,6 +145,12 @@ def update_working_draft(
     The header is parsed into the two arguments the command declares rather
     than handed through as a string, so the application layer is never asked to
     understand an HTTP header.
+
+    Edits and removals are one patch and one version bump. Product spec §10
+    makes removal one of the three resolutions for unsupported free text, and it
+    is the only one no other command can reach - a `pending` claim has no fact
+    for `apply-selection-change` to exclude, and its presence is what refuses
+    that command in the first place.
     """
     token = parse_draft_etag(if_match)
     result = services.drafts.update_working_draft(
@@ -99,6 +161,7 @@ def update_working_draft(
             claim_edits=[
                 ClaimPatch(**edit.model_dump(mode="python")) for edit in request.claim_edits
             ],
+            claim_removals=list(request.claim_removals),
         )
     )
     response.headers["ETag"] = draft_etag(result.edit_version, result.content_hash)
