@@ -314,7 +314,11 @@ production-build evidence accepted on 2026-08-24.
       generated schemas are imported from `openapi/types.ts`, and the client handles safe
       Problem Details, ETag, Idempotency-Key, and `Location`. Frontend functions use arrow
       syntax throughout. User-run `npm run typecheck` and `npm run build` both passed.
-- [ ] Add the RTL shell, semantic design tokens, focus/error boundary, and route skeletons.
+- [x] Add the RTL shell, semantic design tokens, focus/error boundary, and route skeletons.
+      The existing shell hosts nested routes through `Outlet`, navigation moves focus to the
+      route heading, the error boundary exposes only safe messages, and skeletons cover the M4
+      path through Ready. The visual design remained unchanged. User-run `npm run typecheck`
+      and `npm run build` both passed.
 - [ ] Add Vite proxy development flow and serve the production build from FastAPI.
 - [ ] Add shared Operation polling without WebSocket or SSE.
 - [ ] Add Vitest, React Testing Library, Playwright Web E2E, and axe foundations without
@@ -363,6 +367,6 @@ production-build evidence accepted on 2026-08-24.
 
 ## Current next action
 
-Add the RTL shell's focus/error boundary and route skeletons without changing the visual
-design. Do not implement Dashboard navigation, tracking endpoints, or the Stage C intake flow
-yet.
+Add the Vite development proxy and the FastAPI production static-serving path. Do not change
+the visual design, or implement Dashboard navigation, tracking endpoints, or the Stage C
+intake flow yet.

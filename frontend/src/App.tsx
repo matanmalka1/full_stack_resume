@@ -1,22 +1,27 @@
+import { Link, Outlet } from "react-router-dom";
+
+import { RouteFocusManager } from "./app/RouteFocusManager";
+
 const workflowSteps = ["משרה חדשה", "ניתוח", "טיוטה", "אימות", "מוכן"];
 
 export const App = () => {
   return (
     <div className="min-h-screen bg-cv-canvas text-cv-text">
+      <RouteFocusManager />
       <header className="border-b border-cv-border bg-cv-surface">
         <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-6 px-6">
-          <a
+          <Link
             className="rounded-sm text-lg font-semibold text-cv-text outline-none focus-visible:ring-2 focus-visible:ring-cv-focus focus-visible:ring-offset-2"
-            href="/"
+            to="/"
           >
             סביבת קורות החיים
-          </a>
-          <button
-            className="min-h-11 rounded-md border border-cv-border bg-cv-surface px-4 text-sm font-medium text-cv-text outline-none hover:bg-cv-surface-muted focus-visible:ring-2 focus-visible:ring-cv-focus focus-visible:ring-offset-2"
-            type="button"
+          </Link>
+          <Link
+            className="inline-flex min-h-11 items-center rounded-md border border-cv-border bg-cv-surface px-4 text-sm font-medium text-cv-text outline-none hover:bg-cv-surface-muted focus-visible:ring-2 focus-visible:ring-cv-focus focus-visible:ring-offset-2"
+            to="/settings"
           >
             הגדרות
-          </button>
+          </Link>
         </div>
       </header>
 
@@ -42,19 +47,7 @@ export const App = () => {
       </nav>
 
       <main className="mx-auto max-w-5xl px-6 py-12">
-        <section
-          aria-labelledby="foundation-heading"
-          className="rounded-xl border border-cv-border bg-cv-surface p-8"
-        >
-          <p className="mb-2 text-sm font-semibold text-cv-accent">M4 · תשתית הממשק</p>
-          <h1 className="text-3xl font-semibold tracking-tight" id="foundation-heading">
-            סביבת העבודה מוכנה לבניית התהליך
-          </h1>
-          <p className="mt-4 max-w-2xl leading-7 text-cv-text-muted">
-            מעטפת React בעברית הוגדרה. מסך יצירת המועמדות והחיבור ל־API יתווספו בשלבים
-            הבאים.
-          </p>
-        </section>
+        <Outlet />
       </main>
     </div>
   );
