@@ -17,6 +17,7 @@ import {
   workingDraftQueryKey,
   workingDraftQueryOptions,
 } from "../api/drafts";
+import { aiRegenerationAvailable, settingsQueryOptions } from "../api/settings";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { Button, buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
@@ -66,6 +67,8 @@ export const DraftEditorPage = () => {
   }
 
   const applicationQuery = useQuery(applicationDetailQueryOptions(applicationId));
+  const settingsQuery = useQuery({ ...settingsQueryOptions, enabled: false });
+  const regenerationAvailable = aiRegenerationAvailable(settingsQuery.data?.settings);
   const detail = applicationQuery.data;
   useWorkflowStage(detail === undefined ? "unknown" : detail.preparation_state);
 
@@ -315,7 +318,7 @@ export const DraftEditorPage = () => {
                       onEdit={editClaim}
                       onRegenerate={(claim) => regeneration.mutate({ claimId: claim.claim_id })}
                       onRemove={removeClaim}
-                      unsaved={unsaved || regeneration.isPending}
+                      unsaved={unsaved || regeneration.isPending || !regenerationAvailable}
                     />
                     {draft.outline.contacts.map((contact) => (
                       <DraftClaimCard
@@ -327,7 +330,7 @@ export const DraftEditorPage = () => {
                         onEdit={editClaim}
                         onRegenerate={(claim) => regeneration.mutate({ claimId: claim.claim_id })}
                         onRemove={removeClaim}
-                        unsaved={unsaved || regeneration.isPending}
+                        unsaved={unsaved || regeneration.isPending || !regenerationAvailable}
                       />
                     ))}
                   </ul>
@@ -339,7 +342,7 @@ export const DraftEditorPage = () => {
                           {section.name}
                         </h3>
                         <Button
-                          disabled={unsaved || regeneration.isPending}
+                          disabled={unsaved || regeneration.isPending || !regenerationAvailable}
                           onClick={() => regeneration.mutate({ section: section.name })}
                           variant="secondary"
                         >
@@ -364,7 +367,7 @@ export const DraftEditorPage = () => {
                                 regeneration.mutate({ claimId: claim.claim_id })
                               }
                               onRemove={removeClaim}
-                              unsaved={unsaved || regeneration.isPending}
+                              unsaved={unsaved || regeneration.isPending || !regenerationAvailable}
                             />
                           ))}
                         </ul>
@@ -372,6 +375,15 @@ export const DraftEditorPage = () => {
                     </div>
                   ))}
                 </section>
+
+                {regenerationAvailable ? null : (
+                  <Callout title="יצירה מחדש באמצעות AI אינה זמינה" tone="neutral">
+                    יש להגדיר ספק ולהפעיל AI במסך ההגדרות. לא יתבצע מעבר דטרמיניסטי שקט.
+                    <div className="mt-3">
+                      <Link className={buttonClasses("secondary")} to="/settings">מעבר להגדרות</Link>
+                    </div>
+                  </Callout>
+                )}
 
                 {regeneration.error === null ? null : (
                   <Callout role="alert" title="היצירה מחדש לא הופעלה" tone="blocker">

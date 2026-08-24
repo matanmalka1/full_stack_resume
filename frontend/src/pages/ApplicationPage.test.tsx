@@ -3,7 +3,8 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { ApplicationDetail, Operation } from "../api/contracts";
+import type { ApplicationDetail, Operation, Settings } from "../api/contracts";
+import { settingsQueryKey } from "../api/settings";
 import { ApplicationPage } from "./ApplicationPage";
 
 const DETAIL_PATH = "/api/v1/applications/app-1";
@@ -75,13 +76,16 @@ const acceptedResponse = (operation: Operation): Response =>
 
 /* Retries and the projection poll are off inside the test client: the interval is
    covered by its own unit test, and a live timer here would make every assertion racy. */
-const renderPage = () => {
+const renderPage = (settings?: Settings) => {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, refetchInterval: false, gcTime: 0 },
       mutations: { retry: false },
     },
   });
+  if (settings !== undefined) {
+    client.setQueryData(settingsQueryKey, { settings, etag: '"settings-1"' });
+  }
 
   return render(
     <QueryClientProvider client={client}>
@@ -132,6 +136,30 @@ describe("ApplicationPage", () => {
     expect((request?.[1]?.headers as Headers).get("Idempotency-Key")).not.toBeNull();
   });
 
+  it("uses the effective manual AI mode without changing the deterministic default", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(detail())).mockResolvedValueOnce(acceptedResponse(queued()));
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage({
+      edit_version: 1,
+      auto_generate_when_review_not_required: false,
+      ai_enabled: true,
+      ai_enabled_override: true,
+      default_execution_mode: "ai",
+      open_browser_on_launch: true,
+      provider_configured: true,
+      ui_density: "comfortable",
+      ui_text_size: "normal",
+      updated_at: null,
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "ניתוח המשרה" }));
+
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+      job_snapshot_id: "snap-1",
+      provider: "openai",
+    });
+  });
+
   it("refuses to follow an accepted response that does not name its queued Operation", async () => {
     vi.stubGlobal(
       "fetch",
@@ -162,8 +190,8 @@ describe("ApplicationPage", () => {
             active_analysis_id: "analysis-1",
             active_selection_plan_id: "plan-1",
             active_working_draft_id: "draft-1",
-            available_actions: ["analyze", "create_draft", "validate"],
-            recommended_action: "validate",
+            available_actions: ["analyze", "create_draft", "archive_working_draft"],
+            recommended_action: "archive_working_draft",
           }),
         ),
       ),
@@ -171,14 +199,56 @@ describe("ApplicationPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("הפעולה המומלצת כעת היא אימות הטיוטה")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "אימות הטיוטה" })).not.toBeInTheDocument();
+    expect(await screen.findByText("הפעולה המומלצת כעת היא העברת הטיוטה לארכיון")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "העברת הטיוטה לארכיון" })).not.toBeInTheDocument();
     /* Analysis is still available, but it is no longer the emphasized action and it says
        what a second analysis does. */
     expect(screen.getByRole("button", { name: "ניתוח מחדש של המשרה" })).toBeInTheDocument();
     expect(
       screen.getByText(/ניתוח מחדש יוצר ניתוח חדש ונפרד/, { exact: false }),
     ).toBeInTheDocument();
+  });
+
+  it("links validation and approval only when the projection exposes them", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail({
+      preparation_state: "ready_for_approval",
+      working_draft_state: "validated",
+      active_working_draft_id: "draft-1",
+      available_actions: ["validate", "approve"],
+      recommended_action: "approve",
+    }))));
+
+    renderPage();
+
+    expect(await screen.findByRole("link", { name: "אישור הגרסה" })).toHaveAttribute("href", "/applications/app-1/approval");
+    expect(screen.getByRole("link", { name: "אימות הטיוטה" })).toHaveAttribute("href", "/applications/app-1/validation");
+  });
+
+  it("links render to the exact approved revision named by the projection", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail({
+      preparation_state: "approved",
+      latest_approved_revision_id: "revision 1",
+      available_actions: ["render"],
+      recommended_action: "render",
+    }))));
+
+    renderPage();
+
+    expect(await screen.findByRole("link", { name: "יצירת קובץ קורות החיים" })).toHaveAttribute("href", "/approved-revisions/revision%201/render");
+  });
+
+  it("keeps an older Ready revision reachable from its explicit projection ID", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail({
+      preparation_state: "draft_in_progress",
+      latest_ready_revision_id: "ready-1",
+      newer_draft_in_progress: true,
+      available_actions: ["update_working_draft"],
+    }))));
+
+    renderPage();
+
+    expect(await screen.findByRole("link", { name: "צפייה בגרסה המוכנה" })).toHaveAttribute("href", "/approved-revisions/ready-1/ready");
+    expect(screen.getByText("קיימת טיוטה חדשה יותר מהגרסה שאושרה")).toBeInTheDocument();
   });
 
   /* §21: the no-review continuation. Analyze commits the JobAnalysis and its initial

@@ -16,6 +16,10 @@ const destinations: Record<string, (applicationId: string) => string> = {
      at, and a separate destination would ask them to find it twice. */
   update_working_draft: (applicationId) =>
     `/applications/${encodeURIComponent(applicationId)}/draft`,
+  validate: (applicationId) =>
+    `/applications/${encodeURIComponent(applicationId)}/validation`,
+  approve: (applicationId) =>
+    `/applications/${encodeURIComponent(applicationId)}/approval`,
 };
 
 export const actionDestination = (action: string, applicationId: string): string | null =>

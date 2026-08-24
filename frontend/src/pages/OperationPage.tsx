@@ -1,7 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
+import { applicationDetailQueryOptions, startDraftGeneration } from "../api/applications";
 import { ApiProblem } from "../api/client";
 import type {
   Operation,
@@ -10,6 +11,8 @@ import type {
   OperationStatus,
 } from "../api/contracts";
 import { isTerminalOperation, operationQueryOptions } from "../api/operations";
+import { operationQueryKey } from "../api/operations";
+import { settingsQueryOptions } from "../api/settings";
 import { Callout } from "../ui/Callout";
 import { Card } from "../ui/Card";
 import { LiveRegion } from "../ui/LiveRegion";
@@ -20,6 +23,7 @@ import { type StatusTone } from "../ui/status";
 import { SummaryList, type SummaryItem } from "../ui/SummaryList";
 import { TechnicalDetails } from "../ui/TechnicalDetails";
 import { OperationActions } from "./OperationActions";
+import { autoDraftSources } from "./autoDraft";
 
 /* Keyed by the generated unions, so a status or phase added to the backend lifecycle
    fails the frontend build instead of reaching the screen untranslated. */
@@ -201,6 +205,10 @@ const usePhaseAnnouncement = (
   return announcement;
 };
 
+const autoDraftInFlight = new Set<string>();
+
+const autoDraftStorageKey = (operationId: string): string => `stage-e:auto-draft:${operationId}`;
+
 export const OperationPage = () => {
   const { operationId } = useParams();
 
@@ -212,6 +220,43 @@ export const OperationPage = () => {
 
   const query = useQuery(operationQueryOptions(operationId));
   const operation = query.data;
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const analyzeSucceeded = operation?.operation_type === "analyze_job" && operation.status === "succeeded";
+  const settingsQuery = useQuery({ ...settingsQueryOptions, enabled: analyzeSucceeded });
+  const applicationQuery = useQuery({
+    ...applicationDetailQueryOptions(operation?.application_id ?? ""),
+    enabled: analyzeSucceeded,
+  });
+  const autoDraft = useMutation({
+    mutationFn: async ({ applicationId, analysisId, planId }: { applicationId: string; analysisId: string; planId: string }) =>
+      startDraftGeneration(
+        applicationId,
+        analysisId,
+        planId,
+        `auto-draft:${operationId}:${analysisId}:${planId}`,
+      ),
+    onSuccess: ({ operation: queued, operationPath }) => {
+      sessionStorage.setItem(autoDraftStorageKey(operationId), "accepted");
+      autoDraftInFlight.delete(operationId);
+      queryClient.setQueryData(operationQueryKey(queued.id), queued);
+      void navigate(operationPath);
+    },
+    onError: () => autoDraftInFlight.delete(operationId),
+  });
+
+  useEffect(() => {
+    const sources = autoDraftSources(
+      operation,
+      settingsQuery.data?.settings,
+      applicationQuery.data,
+      sessionStorage.getItem(autoDraftStorageKey(operationId)) === "accepted",
+      autoDraftInFlight.has(operationId),
+    );
+    if (sources === null) return;
+    autoDraftInFlight.add(operationId);
+    autoDraft.mutate(sources);
+  }, [applicationQuery.data, operation, operationId, settingsQuery.data]);
   const announcement = usePhaseAnnouncement(
     operation?.status,
     operation?.phase,
@@ -316,6 +361,13 @@ export const OperationPage = () => {
           </TechnicalDetails>
 
           <OperationActions operation={operation} />
+          {autoDraft.error === null ? null : (
+            <Callout role="alert" title="הטיוטה האוטומטית לא הופעלה" tone="blocker">
+              {autoDraft.error instanceof ApiProblem
+                ? autoDraft.error.problem.detail
+                : "אפשר לחזור למועמדות ולהפעיל יצירת טיוטה ידנית."}
+            </Callout>
+          )}
         </div>
       )}
     </Card>

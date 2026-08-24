@@ -124,6 +124,23 @@ describe("startAnalysis", () => {
     );
   });
 
+  it("sends the configured AI provider only for a manual AI-mode command", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(operation()), {
+        status: 202,
+        headers: { "Content-Type": "application/json", Location: "/api/v1/operations/op-1" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await startAnalysis("app-1", "snap-1", "key-1", "openai");
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      job_snapshot_id: "snap-1",
+      provider: "openai",
+    });
+  });
+
   /* §13 answers `202` and a `Location` naming the queued Operation. Anything else is not
      an Operation this client may follow, so it is refused rather than navigated to. */
   it("refuses an accepted body that does not name its queued Operation", async () => {
@@ -174,6 +191,28 @@ describe("startDraftGeneration", () => {
     expect((fetchMock.mock.calls[0]?.[1]?.headers as Headers).get("Idempotency-Key")).toBe(
       "key-2",
     );
+  });
+
+  it("names an approved parent and AI provider only when the caller explicitly supplies them", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(operation({ operation_type: "create_draft" })), {
+        status: 202,
+        headers: { "Content-Type": "application/json", Location: "/api/v1/operations/op-1" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await startDraftGeneration("app-1", "analysis-1", "plan-1", "key-2", {
+      parentRevisionId: "revision-1",
+      provider: "openai",
+    });
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      job_analysis_id: "analysis-1",
+      selection_plan_id: "plan-1",
+      parent_revision_id: "revision-1",
+      provider: "openai",
+    });
   });
 });
 

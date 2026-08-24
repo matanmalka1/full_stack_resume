@@ -5,8 +5,13 @@ import { ApplicationPage } from "../pages/ApplicationPage";
 import { DraftEditorPage } from "../pages/DraftEditorPage";
 import { NewApplicationPage } from "../pages/NewApplicationPage";
 import { OperationPage } from "../pages/OperationPage";
+import { ApprovalPage } from "../pages/ApprovalPage";
+import { ReadyPage } from "../pages/ReadyPage";
+import { RenderPage } from "../pages/RenderPage";
 import { ReviewPage } from "../pages/ReviewPage";
 import { RoutePlaceholder } from "../pages/RoutePlaceholder";
+import { SettingsPage } from "../pages/SettingsPage";
+import { ValidationPage } from "../pages/ValidationPage";
 import { RouteErrorBoundary } from "./RouteErrorBoundary";
 
 export const router = createBrowserRouter([
@@ -40,23 +45,23 @@ export const router = createBrowserRouter([
       },
       {
         path: "applications/:applicationId/validation",
-        element: <RoutePlaceholder title="תוצאות האימות" />,
+        element: <ValidationPage />,
       },
       {
         path: "applications/:applicationId/approval",
-        element: <RoutePlaceholder title="אישור הגרסה" />,
+        element: <ApprovalPage />,
       },
       {
         path: "approved-revisions/:approvedRevisionId/render",
-        element: <RoutePlaceholder title="יצירת קובץ קורות החיים" />,
+        element: <RenderPage />,
       },
       {
         path: "approved-revisions/:approvedRevisionId/ready",
-        element: <RoutePlaceholder title="קורות החיים מוכנים" />,
+        element: <ReadyPage />,
       },
       {
         path: "settings",
-        element: <RoutePlaceholder title="הגדרות" />,
+        element: <SettingsPage />,
       },
       {
         path: "*",

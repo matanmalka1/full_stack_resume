@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail, WorkingDraft, WorkingDraftFacts } from "../api/contracts";
+import { settingsQueryKey } from "../api/settings";
 import { DraftEditorPage } from "./DraftEditorPage";
 
 const DETAIL_PATH = "/api/v1/applications/app-1";
@@ -157,12 +158,27 @@ const stubReads = (
   return fetchMock;
 };
 
-const renderPage = () => {
+const renderPage = (aiEnabled = true) => {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, refetchInterval: false, gcTime: 0 },
       mutations: { retry: false },
     },
+  });
+  client.setQueryData(settingsQueryKey, {
+    settings: {
+      edit_version: 0,
+      auto_generate_when_review_not_required: false,
+      ai_enabled: aiEnabled,
+      ai_enabled_override: aiEnabled,
+      default_execution_mode: "deterministic",
+      open_browser_on_launch: true,
+      provider_configured: aiEnabled,
+      ui_density: "comfortable",
+      ui_text_size: "normal",
+      updated_at: null,
+    },
+    etag: '"settings-0"',
   });
 
   return render(
@@ -183,6 +199,16 @@ afterEach(() => {
 });
 
 describe("DraftEditorPage", () => {
+  it("gates AI regeneration through effective Settings without offering a silent fallback", async () => {
+    stubReads({});
+
+    renderPage(false);
+
+    expect(await screen.findByText("יצירה מחדש באמצעות AI אינה זמינה")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "מעבר להגדרות" })).toHaveAttribute("href", "/settings");
+    expect(screen.getByRole("button", { name: "יצירה מחדש של הפרק" })).toBeDisabled();
+  });
+
   it("renders the outline the projection named, with each claim's status in Hebrew", async () => {
     stubReads({});
 

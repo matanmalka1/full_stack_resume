@@ -10,6 +10,14 @@ export type OperationStatus = ApiSchemas["OperationStatus"];
 export type OperationPhase = ApiSchemas["OperationPhase"];
 export type OperationFailureCode = ApiSchemas["OperationFailureCode"];
 export type WorkingDraft = ApiSchemas["WorkingDraftResponse"];
+export type ValidationRun = ApiSchemas["ValidationRunResponse"];
+export type ValidationReport = ApiSchemas["ValidationReportResponse"];
+export type ValidationIssue = ApiSchemas["ValidationIssueResponse"];
+export type Approval = ApiSchemas["ApprovalResponse"];
+export type ApprovedRevision = ApiSchemas["ApprovedRevisionResponse"];
+export type Settings = ApiSchemas["SettingsResponse"];
+export type UpdateSettingsRequest = ApiSchemas["UpdateSettingsRequest"];
+export type ExecutionMode = Settings["default_execution_mode"];
 
 export type ApplicationIntake = ApiSchemas["DuplicateCheckRequest"];
 export type CreateApplicationRequest = ApiSchemas["CreateApplicationRequest"];
@@ -29,6 +37,9 @@ export type BlockedAction = ApiSchemas["BlockedActionResponse"];
 
 export type CreateAnalysisRequest = ApiSchemas["CreateAnalysisRequest"];
 export type GenerateWorkingDraftRequest = ApiSchemas["GenerateWorkingDraftRequest"];
+export type WorkingDraftVersionRequest = ApiSchemas["WorkingDraftVersionRequest"];
+export type ApproveDraftRequest = ApiSchemas["ApproveDraftRequest"];
+export type RenderRevisionRequest = ApiSchemas["RenderRevisionRequest"];
 
 /* §13 `apply_analysis_decisions`: one synchronous commit, not an Operation. The four
    classification overrides are real unions rather than `string`, so the Hebrew option

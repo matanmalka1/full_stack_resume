@@ -1,10 +1,11 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { startAnalysis, startDraftGeneration } from "../api/applications";
 import { ApiProblem } from "../api/client";
 import type { ApplicationDetail } from "../api/contracts";
+import { executionProvider, settingsQueryOptions } from "../api/settings";
 import { type QueuedOperation, operationQueryKey } from "../api/operations";
 import { ActionBar } from "../ui/ActionBar";
 import { Button, buttonClasses } from "../ui/Button";
@@ -30,6 +31,11 @@ const mutationMessage = (error: unknown): string =>
 export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  /* App owns the live settings read. This subscription consumes that cache without
+     opening one request per action panel; isolated renders retain the safe deterministic
+     default until a shell-provided value exists. */
+  const settings = useQuery({ ...settingsQueryOptions, enabled: false }).data?.settings;
+  const provider = executionProvider(settings);
   const snapshotId = detail.active_job_snapshot_id;
   const analysisId = detail.active_analysis_id ?? null;
   const selectionPlanId = detail.active_selection_plan_id ?? null;
@@ -49,7 +55,7 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
   };
 
   const analyze = useMutation({
-    mutationFn: () => startAnalysis(detail.application.id, snapshotId, analyzeKey),
+    mutationFn: () => startAnalysis(detail.application.id, snapshotId, analyzeKey, provider),
     onSuccess: followQueued,
   });
 
@@ -60,7 +66,7 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
       if (analysisId === null || selectionPlanId === null) {
         throw new Error("create_draft was offered without an active analysis and selection plan");
       }
-      return startDraftGeneration(detail.application.id, analysisId, selectionPlanId, draftKey);
+      return startDraftGeneration(detail.application.id, analysisId, selectionPlanId, draftKey, { provider });
     },
     onSuccess: followQueued,
   });
@@ -95,6 +101,18 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
     ? actionDestination("update_working_draft", detail.application.id)
     : null;
   const editRecommended = recommended === "update_working_draft";
+  const validationHref = detail.available_actions.includes("validate")
+    ? actionDestination("validate", detail.application.id)
+    : null;
+  const approvalHref = detail.available_actions.includes("approve")
+    ? actionDestination("approve", detail.application.id)
+    : null;
+  const renderHref = detail.available_actions.includes("render") && detail.latest_approved_revision_id != null
+    ? `/approved-revisions/${encodeURIComponent(detail.latest_approved_revision_id)}/render`
+    : null;
+  const readyHref = detail.latest_ready_revision_id == null
+    ? null
+    : `/approved-revisions/${encodeURIComponent(detail.latest_ready_revision_id)}/ready`;
 
   const handledHere = new Set<string>();
   if (canAnalyze) {
@@ -109,6 +127,9 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
   if (editHref !== null) {
     handledHere.add("update_working_draft");
   }
+  if (validationHref !== null) handledHere.add("validate");
+  if (approvalHref !== null) handledHere.add("approve");
+  if (renderHref !== null) handledHere.add("render");
 
   /* "Its screen is not built" is a claim about existence, not about availability, so it
      is answered by the same route table the reason callouts ask. Gating it on
@@ -171,6 +192,12 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
       {draft.isPending ? "יוצר טיוטה…" : "יצירת טיוטה"}
     </Button>
   ) : null;
+  const routeButton = (key: string, href: string | null, label: string, emphasized: boolean) =>
+    href === null ? null : <Link className={buttonClasses(emphasized ? "primary" : "secondary")} key={key} to={href}>{label}</Link>;
+  const validationButton = routeButton("validate", validationHref, "אימות הטיוטה", recommended === "validate");
+  const approvalButton = routeButton("approve", approvalHref, "אישור הגרסה", recommended === "approve");
+  const renderButton = routeButton("render", renderHref, "יצירת קובץ קורות החיים", recommended === "render");
+  const readyButton = routeButton("ready", readyHref, "צפייה בגרסה המוכנה", detail.preparation_state === "ready");
 
   return (
     <div className="flex flex-col gap-4">
@@ -216,7 +243,7 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
         /* One emphasized primary (A.1). Review outranks the draft while a decision is
            still owed, editing an existing draft outranks building another one, and
            analyze stays the fallback when nothing else is offered. */
-        const ordered = [reviewButton, editButton, draftButton, analyzeButton].filter(
+        const ordered = [approvalButton, renderButton, readyButton, validationButton, reviewButton, editButton, draftButton, analyzeButton].filter(
           (button) => button !== null,
         );
         return ordered.length === 0 ? null : (

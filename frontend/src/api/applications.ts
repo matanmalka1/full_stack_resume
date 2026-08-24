@@ -145,21 +145,22 @@ export const applicationDetailQueryOptions = (applicationId: string) =>
    source could classify something other than what the user was looking at, so the ID
    comes from the projection the screen is showing rather than from a default.
 
-   The request sends nothing else. `provider` and `model` default to `deterministic` and
-   `rules-v1` server-side, which is what keeps this path reachable with no AI key; the
-   overrides belong to the review form, not to starting an analysis.
+   Manual Web actions may name `openai` when the effective Settings say AI; otherwise
+   `provider` and `model` remain omitted and the server's deterministic defaults keep
+   the path reachable with no AI key.
 */
 export const startAnalysis = async (
   applicationId: string,
   jobSnapshotId: string,
   idempotencyKey: string,
+  provider?: "openai",
 ): Promise<QueuedOperation> => {
-  /* Only the source. `provider` and `model` are omitted rather than sent as
-     `deterministic`/`rules-v1`: those are the server's defaults, and spelling them here
-     would be a second copy of a policy this client does not own. The `Pick` still binds
-     the field name to the generated request contract. */
-  const body: Pick<CreateAnalysisRequest, "job_snapshot_id"> = {
+  /* The source is always explicit. Provider is conditional and never spells out the
+     deterministic default; the `Pick`s bind both field names to the generated contract. */
+  const body: Pick<CreateAnalysisRequest, "job_snapshot_id"> &
+    Partial<Pick<CreateAnalysisRequest, "provider">> = {
     job_snapshot_id: jobSnapshotId,
+    ...(provider === undefined ? {} : { provider }),
   };
 
   return queuedOperation(
@@ -178,18 +179,23 @@ export const startAnalysis = async (
    drafted from. The Operation freezes them, and a source that moves before activation
    fails as `SOURCE_CHANGED` instead of drafting from something else.
 
-   `provider` is omitted for the same reason `startAnalysis` omits it: `deterministic` is
-   the server's default, and restating it here would be a second copy of a policy this
-   client does not own. */
+   Manual AI mode may name `openai`; auto-generation deliberately leaves provider absent
+   so that path stays deterministic and offline. */
 export const startDraftGeneration = async (
   applicationId: string,
   jobAnalysisId: string,
   selectionPlanId: string,
   idempotencyKey: string,
+  options: { parentRevisionId?: string; provider?: "openai" } = {},
 ): Promise<QueuedOperation> => {
-  const body: Pick<GenerateWorkingDraftRequest, "job_analysis_id" | "selection_plan_id"> = {
+  const body: Pick<GenerateWorkingDraftRequest, "job_analysis_id" | "selection_plan_id"> &
+    Partial<Pick<GenerateWorkingDraftRequest, "parent_revision_id" | "provider">> = {
     job_analysis_id: jobAnalysisId,
     selection_plan_id: selectionPlanId,
+    ...(options.parentRevisionId === undefined
+      ? {}
+      : { parent_revision_id: options.parentRevisionId }),
+    ...(options.provider === undefined ? {} : { provider: options.provider }),
   };
 
   return queuedOperation(

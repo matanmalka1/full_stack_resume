@@ -50,9 +50,43 @@ const renderPage = (children: ReactNode) => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  sessionStorage.clear();
 });
 
 describe("OperationPage", () => {
+  it("auto-generates once per successful Analyze and persists acceptance across remounts", async () => {
+    const analyzed = operation({ status: "succeeded", is_terminal: true, phase: "completed", available_actions: [] });
+    const generated = operation({ id: "op-draft", operation_type: "create_draft", status: "queued", phase: "queued" });
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") {
+        return Promise.resolve(new Response(JSON.stringify(generated), { status: 202, headers: { "Content-Type": "application/json", Location: "/api/v1/operations/op-draft" } }));
+      }
+      if (url === "/api/v1/settings") {
+        return Promise.resolve(jsonResponse({ auto_generate_when_review_not_required: true }));
+      }
+      if (url === "/api/v1/applications/app-1") {
+        return Promise.resolve(jsonResponse({
+          application: { id: "app-1" }, review_reasons: [], working_draft_state: "none", active_operation: null,
+          active_analysis_id: "analysis-1", active_selection_plan_id: "plan-1",
+        }));
+      }
+      return Promise.resolve(jsonResponse(url.endsWith("op-draft") ? generated : analyzed));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const first = renderPage(<OperationPage />);
+    await waitFor(() => expect(sessionStorage.getItem("stage-e:auto-draft:op-1")).toBe("accepted"));
+    const firstPosts = fetchMock.mock.calls.filter((call) => call[1]?.method === "POST");
+    expect(firstPosts).toHaveLength(1);
+    expect(JSON.parse(String(firstPosts[0]?.[1]?.body))).toEqual({ job_analysis_id: "analysis-1", selection_plan_id: "plan-1" });
+    first.unmount();
+
+    renderPage(<OperationPage />);
+    await screen.findByRole("heading", { level: 1, name: "הושלמה" });
+    await waitFor(() => expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1));
+  });
+
   it("names the status in Hebrew and reports the phase", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(operation())));
 

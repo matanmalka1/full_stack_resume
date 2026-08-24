@@ -60,6 +60,18 @@ body {
   margin: 0;
 }
 
+[data-text-size="large"] {
+  --text-support: 1rem;
+  --text-body: 1.125rem;
+  --text-heading-sm: 1.375rem;
+  --text-heading-md: 1.625rem;
+  --text-heading-lg: 2.125rem;
+}
+
+[data-density="compact"] {
+  --spacing: 0.2rem;
+}
+
 button,
 input,
 optgroup,
