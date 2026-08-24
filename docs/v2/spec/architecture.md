@@ -41,6 +41,7 @@ Frontend:
 - TanStack Query
 - React Hook Form
 - Tailwind CSS
+- `lucide-react` for the icon set
 - generated TypeScript types from OpenAPI
 - selective Radix primitives only when an accessible complex primitive is warranted
 
