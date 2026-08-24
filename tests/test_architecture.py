@@ -381,6 +381,23 @@ def test_path_containment_has_one_implementation() -> None:
     ]
     assert not offenders, offenders
 
+    # Approved HTML is a different transport policy over the existing verified
+    # artifact delivery, not a second verifier in the router or service. Keep
+    # these two delegation edges explicit: Stage B previously regressed when an
+    # API helper reimplemented storage checks beside the application service.
+    approved_router = (ENGINE / "api/routers/approved_revisions.py").read_text(
+        encoding="utf-8"
+    )
+    rendering_service = (ENGINE / "application/services/rendering.py").read_text(
+        encoding="utf-8"
+    )
+    assert "services.rendering.preview_approved_html(" in approved_router
+    assert "return self.download_artifact(html_artifact_version_id)" in rendering_service
+    assert not any(
+        token in approved_router
+        for token in ("content_hash", ".resolve(", ".read_bytes(", ".is_file(")
+    )
+
 
 def test_numbered_migrations_are_registered_once() -> None:
     migration_dir = ENGINE / "infrastructure/persistence/migrations"

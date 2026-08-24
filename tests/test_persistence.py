@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from cv_engine.application.errors import PreconditionFailed, StateConflict, UnknownRecord
+from cv_engine.application.settings import UpdateSettings
 from cv_engine.application.knowledge_mutations import (
     KnowledgeMutationState,
     PrepareKnowledgeMutation,
@@ -55,6 +56,7 @@ MUTABLE_TABLES = frozenset(
         "knowledge_mutation_journal",  # permits one prepared-to-terminal transition
         "schema_meta",  # bookkeeping
         "schema_migrations",  # bookkeeping
+        "workspace_settings",  # safe mutable Web preferences, guarded by edit_version
     }
 )
 
@@ -146,6 +148,155 @@ def test_numbered_migration_application_reapplication_and_version_gates(
     empty.touch()
     Repository(empty)
     assert current_schema_version(empty) == HEAD_VERSION
+
+
+def test_0001_database_requires_explicit_upgrade_and_preserves_existing_state(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "0001.sqlite3"
+    baseline = (MIGRATIONS_DIR / "0001_baseline.sql").read_text(encoding="utf-8")
+    from cv_engine.infrastructure.persistence.schema import migrations
+
+    first = migrations()[0]
+    with connect(path) as connection:
+        connection.executescript(baseline)
+        connection.execute(
+            "CREATE TABLE schema_migrations (version TEXT PRIMARY KEY, name TEXT NOT NULL, "
+            "checksum TEXT NOT NULL, applied_at TEXT NOT NULL)"
+        )
+        connection.execute(
+            "INSERT INTO schema_migrations(version, name, checksum, applied_at) "
+            "VALUES(?, ?, ?, '2026-08-24T00:00:00+00:00')",
+            (first.version, first.name, first.checksum),
+        )
+        connection.execute(
+            "INSERT INTO schema_meta(key, value) VALUES('preserved-test-value', 'unchanged')"
+        )
+        connection.commit()
+
+    with pytest.raises(SchemaVersionError, match=r"run `cv workspace upgrade` explicitly"):
+        Repository(path)
+    with connect(path) as connection:
+        assert connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='workspace_settings'"
+        ).fetchone() is None
+
+    assert apply_migrations(path) == "0002"
+    with connect(path) as connection:
+        assert connection.execute(
+            "SELECT value FROM schema_meta WHERE key='preserved-test-value'"
+        ).fetchone()[0] == "unchanged"
+        assert [
+            row["version"]
+            for row in connection.execute(
+                "SELECT version FROM schema_migrations ORDER BY version"
+            )
+        ] == ["0001", "0002"]
+        assert connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='workspace_settings'"
+        ).fetchone() is not None
+
+    preexisting = tmp_path / "preexisting-settings.sqlite3"
+    with connect(preexisting) as connection:
+        connection.executescript(baseline)
+        connection.execute(
+            "CREATE TABLE schema_migrations (version TEXT PRIMARY KEY, name TEXT NOT NULL, "
+            "checksum TEXT NOT NULL, applied_at TEXT NOT NULL)"
+        )
+        connection.execute(
+            "INSERT INTO schema_migrations(version, name, checksum, applied_at) "
+            "VALUES(?, ?, ?, '2026-08-24T00:00:00+00:00')",
+            (first.version, first.name, first.checksum),
+        )
+        connection.execute("CREATE TABLE workspace_settings(untrusted_value TEXT)")
+        connection.commit()
+    with pytest.raises(sqlite3.OperationalError, match="workspace_settings.*already exists"):
+        apply_migrations(preexisting)
+    assert current_schema_version(preexisting) == "0001"
+    with connect(preexisting) as connection:
+        assert [
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(workspace_settings)")
+        ] == ["untrusted_value"]
+
+
+def test_workspace_settings_schema_rejects_non_singleton_and_invalid_values(
+    application_repo,
+) -> None:
+    columns = (
+        "singleton_id, edit_version, auto_generate_when_review_not_required, "
+        "ai_enabled_override, default_execution_mode, open_browser_on_launch, "
+        "ui_density, ui_text_size, updated_at"
+    )
+    valid = (1, 1, 0, None, "deterministic", 1, "comfortable", "normal", "2026")
+    with connect(application_repo.path) as connection:
+        connection.execute(
+            f"INSERT INTO workspace_settings({columns}) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            valid,
+        )
+        connection.commit()
+        invalid_rows = [
+            (2, *valid[1:]),
+            (1, 0, *valid[2:]),
+            (1, 1, 2, *valid[3:]),
+            (1, 1, 0, 2, *valid[4:]),
+            (1, 1, 0, None, "automatic", *valid[5:]),
+            (1, 1, 0, None, "deterministic", 2, *valid[6:]),
+            (1, 1, 0, None, "deterministic", 1, "dense", *valid[7:]),
+            (1, 1, 0, None, "deterministic", 1, "comfortable", "huge", valid[8]),
+        ]
+        for row in invalid_rows:
+            with pytest.raises(sqlite3.IntegrityError):
+                connection.execute(
+                    f"INSERT OR REPLACE INTO workspace_settings({columns}) "
+                    "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    row,
+                )
+
+
+def test_workspace_settings_default_read_is_pure(application_repo) -> None:
+    assert application_repo.workspace_settings().model_dump(mode="python") == {
+        "edit_version": 0,
+        "auto_generate_when_review_not_required": False,
+        "ai_enabled_override": None,
+        "default_execution_mode": "deterministic",
+        "open_browser_on_launch": True,
+        "ui_density": "comfortable",
+        "ui_text_size": "normal",
+        "updated_at": None,
+    }
+    with connect(application_repo.path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM workspace_settings").fetchone()[0] == 0
+
+
+def test_workspace_settings_updates_are_optimistic_and_atomic(application_repo) -> None:
+    first = application_repo.update_workspace_settings(
+        0,
+        UpdateSettings(
+            auto_generate_when_review_not_required=True,
+            ai_enabled_override=False,
+            default_execution_mode="deterministic",
+            open_browser_on_launch=False,
+            ui_density="compact",
+            ui_text_size="large",
+        ),
+    )
+    assert first.edit_version == 1
+    assert first.ui_density == "compact"
+
+    with pytest.raises(StateConflict, match="changed from version 0 to 1"):
+        application_repo.update_workspace_settings(
+            0,
+            UpdateSettings(
+                auto_generate_when_review_not_required=False,
+                ai_enabled_override=None,
+                default_execution_mode="deterministic",
+                open_browser_on_launch=True,
+                ui_density="comfortable",
+                ui_text_size="normal",
+            ),
+        )
+    assert application_repo.workspace_settings() == first
 
 
 def test_verified_baseline_adoption_and_difference_reporting(tmp_path: Path) -> None:

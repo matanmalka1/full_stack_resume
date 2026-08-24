@@ -407,6 +407,77 @@ def test_backup_restores_into_a_new_workspace_that_opens(tmp_path: Path) -> None
     assert (restored.artifacts_root / "app-1/resume.md").read_text(encoding="utf-8") == "# resume\n"
 
 
+def test_backup_and_restore_include_workspace_settings(tmp_path: Path) -> None:
+    from cv_engine.application.settings import UpdateSettings
+    from cv_engine.infrastructure.persistence import Repository
+
+    workspace = _seeded_workspace(tmp_path / "ws")
+    configured_database = workspace.state_root / "configured.sqlite3"
+    Repository(configured_database).update_workspace_settings(
+        0,
+        UpdateSettings(
+            auto_generate_when_review_not_required=True,
+            ai_enabled_override=False,
+            default_execution_mode="deterministic",
+            open_browser_on_launch=False,
+            ui_density="compact",
+            ui_text_size="large",
+        ),
+    )
+
+    status = run_cli(
+        "--workspace",
+        str(workspace.root),
+        "workspace",
+        "status",
+        env={"CV_DATABASE": configured_database.name},
+    )
+    assert status.returncode == 0, status.stderr
+    assert json.loads(status.stdout)["database"] == str(configured_database)
+
+    upgraded = run_cli(
+        "--workspace",
+        str(workspace.root),
+        "workspace",
+        "upgrade",
+        env={"CV_DATABASE": configured_database.name},
+    )
+    assert upgraded.returncode == 0, upgraded.stderr
+    assert json.loads(upgraded.stdout) == {
+        **workspace.describe(),
+        "database": str(configured_database),
+        "schema_version_before": "0002",
+        "schema_version": "0002",
+        "upgraded": False,
+    }
+
+    backup_root = tmp_path / "backup"
+    backed_up = run_cli(
+        "--workspace",
+        str(workspace.root),
+        "workspace",
+        "backup",
+        "--into",
+        str(backup_root),
+        env={"CV_DATABASE": configured_database.name},
+    )
+    assert backed_up.returncode == 0, backed_up.stderr
+    report = json.loads(backed_up.stdout)
+    restored = restore_workspace(backup_root, tmp_path / "restored")
+    restored_database = restored.state_root / configured_database.name
+    assert report["database"] == str(
+        backup_root / configured_database.relative_to(workspace.root)
+    )
+    assert restored_database.is_file()
+    settings = Repository(restored_database).workspace_settings()
+
+    assert settings.edit_version == 1
+    assert settings.auto_generate_when_review_not_required is True
+    assert settings.ai_enabled_override is False
+    assert settings.open_browser_on_launch is False
+    assert (settings.ui_density, settings.ui_text_size) == ("compact", "large")
+
+
 def test_backup_and_restore_refuse_to_overlay_existing_directories(tmp_path: Path) -> None:
     workspace = _seeded_workspace(tmp_path / "ws")
 

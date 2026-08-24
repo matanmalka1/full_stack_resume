@@ -15,6 +15,7 @@ from cv_engine.infrastructure.persistence.schema import (
 from cv_engine.util import normalized_text, sha256_text
 
 SCHEMA_FIXTURE = Path(__file__).parent / "fixtures/schema_sqlite_master.tsv"
+HEAD_SCHEMA_FIXTURE = Path(__file__).parent / "fixtures/schema_head_sqlite_master.tsv"
 
 
 def _create(repo, *, company: str, target_role: str, text: str):
@@ -123,6 +124,28 @@ def test_database_is_at_registered_head_schema(application_repo) -> None:
     # fails here rather than at the first query that needs a missing table.
     registered_head = registered_migration_names()[-1].split("_", 1)[0]
     assert current_schema_version(application_repo.path) == registered_head
+
+
+def test_head_schema_fingerprint_adds_only_workspace_settings(tmp_path: Path) -> None:
+    head_path = tmp_path / "head.sqlite3"
+    from cv_engine.infrastructure.persistence import Repository
+
+    Repository(head_path)
+    baseline_rows = [
+        tuple(line.split("\t", 3))
+        for line in SCHEMA_FIXTURE.read_text(encoding="utf-8").splitlines()
+    ]
+    head_additions = [
+        tuple(line.split("\t", 3))
+        for line in HEAD_SCHEMA_FIXTURE.read_text(encoding="utf-8").splitlines()
+    ]
+    expected = sorted([*baseline_rows, *head_additions], key=lambda row: (row[0], row[1]))
+    actual = _sqlite_master_fingerprint(head_path)
+    assert actual == expected
+
+    assert head_additions == [next(row for row in actual if row[1] == "workspace_settings")]
+    assert set(actual) - set(baseline_rows) == set(head_additions)
+    assert set(baseline_rows) - set(actual) == set()
 
 
 def test_ready_is_not_persisted_and_submission_storage_commits_atomically(

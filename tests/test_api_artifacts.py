@@ -172,6 +172,108 @@ def test_every_rendered_artifact_type_downloads_as_what_it_is(
         assert int(response.headers["content-length"]) == len(response.content)
 
 
+def test_approved_html_preview_streams_the_exact_bound_artifact_inline(
+    api_worker, approved_application, deterministic_renderer
+) -> None:
+    setup, outputs = _rendered(api_worker, approved_application, "Approved Preview Co")
+    html_id = outputs["resume_html"]
+    stored = setup.services.artifacts.resolve(
+        setup.services.repository.artifact_version(html_id)["path"]
+    ).read_bytes()
+
+    detail = _get(api_worker, f"/approved-revisions/{setup.approved.revision_id}")
+    response = _get(
+        api_worker,
+        f"/approved-revisions/{setup.approved.revision_id}/preview"
+        f"?html_artifact_version_id={html_id}",
+    )
+
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["html_artifact_version_id"] == html_id
+    assert response.status_code == 200, response.text
+    assert response.content == stored
+    assert response.headers["Content-Type"].startswith("text/html")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["Cache-Control"] == "no-store"
+    assert "default-src 'none'" in response.headers["Content-Security-Policy"]
+    assert "style-src 'unsafe-inline'" in response.headers["Content-Security-Policy"]
+    assert "Content-Disposition" not in response.headers
+    assert response.headers["ETag"].strip('"') == sha256_bytes(response.content)
+
+
+def test_approved_html_preview_refuses_an_artifact_from_another_revision(
+    api_worker, approved_application, deterministic_renderer
+) -> None:
+    first, _first_outputs = _rendered(api_worker, approved_application, "Preview Owner Co")
+    second, second_outputs = _rendered(
+        api_worker, approved_application, "Preview Other Revision Co"
+    )
+
+    response = _get(
+        api_worker,
+        f"/approved-revisions/{first.approved.revision_id}/preview"
+        f"?html_artifact_version_id={second_outputs['resume_html']}",
+    )
+
+    assert response.status_code == 412, response.text
+    assert response.json()["code"] == "LINEAGE_BROKEN"
+    assert first.approved.revision_id != second.approved.revision_id
+
+
+def test_approved_html_preview_reuses_all_artifact_verification_failure_codes(
+    api_worker, approved_application, deterministic_renderer
+) -> None:
+    missing_setup, missing_outputs = _rendered(
+        api_worker, approved_application, "Missing Preview Co"
+    )
+    missing_id = missing_outputs["resume_html"]
+    missing_setup.services.artifacts.resolve(
+        missing_setup.services.repository.artifact_version(missing_id)["path"]
+    ).unlink()
+    missing = _get(
+        api_worker,
+        f"/approved-revisions/{missing_setup.approved.revision_id}/preview"
+        f"?html_artifact_version_id={missing_id}",
+    )
+    assert missing.status_code == 412, missing.text
+    assert missing.json()["code"] == "ARTIFACT_PAYLOAD_MISSING"
+
+    changed_setup, changed_outputs = _rendered(
+        api_worker, approved_application, "Changed Preview Co"
+    )
+    changed_id = changed_outputs["resume_html"]
+    changed_setup.services.artifacts.resolve(
+        changed_setup.services.repository.artifact_version(changed_id)["path"]
+    ).write_bytes(b"<!doctype html><title>tampered</title>")
+    changed = _get(
+        api_worker,
+        f"/approved-revisions/{changed_setup.approved.revision_id}/preview"
+        f"?html_artifact_version_id={changed_id}",
+    )
+    assert changed.status_code == 412, changed.text
+    assert changed.json()["code"] == "ARTIFACT_HASH_MISMATCH"
+
+    escaped_setup = approved_application("Escaped Preview Co")
+    escaped_id = escaped_setup.services.repository.register_artifact_version(
+        escaped_setup.application_id,
+        "resume_html",
+        "escaped-preview",
+        "../../../../etc/passwd",
+        "0" * 64,
+        "rendered",
+        revision_id=escaped_setup.approved.revision_id,
+        job_snapshot_id=escaped_setup.snapshot_id,
+    )
+    escaped = _get(
+        api_worker,
+        f"/approved-revisions/{escaped_setup.approved.revision_id}/preview"
+        f"?html_artifact_version_id={escaped_id}",
+    )
+    assert escaped.status_code == 412, escaped.text
+    assert escaped.json()["code"] == "ARTIFACT_CONTAINMENT_REFUSED"
+    assert "etc/passwd" not in escaped.text
+
+
 # --- security and failure paths ----------------------------------------------
 
 

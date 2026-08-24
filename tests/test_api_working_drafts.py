@@ -25,6 +25,7 @@ from helpers import ACCOUNT_MANAGER_JOB, run_cli, working_claim
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import IngestCommand
+from cv_engine.domain.models import ValidationIssue, ValidationReport
 
 UNSUPPORTED_WORDING = "Delivered 30% improvement in direct SaaS Sales."
 
@@ -130,6 +131,76 @@ def _unsupported_edit(harness, application_id: str) -> dict:
 
 
 # --- E1: generation ----------------------------------------------------------
+
+
+def test_generation_records_the_explicit_parent_approved_revision(api_worker) -> None:
+    application_id, working_draft_id, sources = _drafted(api_worker, "Parent Revision Co")
+    validated = _validated(api_worker, working_draft_id)
+    approved = _post(
+        api_worker,
+        f"/working-drafts/{working_draft_id}/approve",
+        {
+            "expected_edit_version": validated["edit_version"],
+            "validation_run_id": validated["validation_run_id"],
+        },
+    )
+    assert approved.status_code == 201, approved.text
+
+    queued = _post(
+        api_worker,
+        f"/applications/{application_id}/working-draft/generate",
+        {
+            "job_analysis_id": sources["job_analysis"],
+            "selection_plan_id": sources["selection_plan"],
+            "parent_revision_id": approved.json()["revision_id"],
+        },
+    )
+    assert queued.status_code == 202, queued.text
+    finished = api_worker.wait_for_operation(queued.json()["id"])
+    assert finished["status"] == "succeeded", finished
+    draft_id = next(
+        output["output_id"]
+        for output in finished["outputs"]
+        if output["output_type"] == "working_draft"
+    )
+    assert _read(api_worker, draft_id).json()["parent_revision_id"] == approved.json()[
+        "revision_id"
+    ]
+
+
+def test_generation_refuses_a_parent_revision_owned_by_another_application(
+    api_worker,
+) -> None:
+    first_id, first_draft, _first_sources = _drafted(api_worker, "Parent Owner Co")
+    validated = _validated(api_worker, first_draft)
+    approved = _post(
+        api_worker,
+        f"/working-drafts/{first_draft}/approve",
+        {
+            "expected_edit_version": validated["edit_version"],
+            "validation_run_id": validated["validation_run_id"],
+        },
+    )
+    assert approved.status_code == 201, approved.text
+
+    second_id = _application(api_worker.services, "Parent Intruder Co")
+    second_sources = _analyze(api_worker, second_id)
+    queued = _post(
+        api_worker,
+        f"/applications/{second_id}/working-draft/generate",
+        {
+            "job_analysis_id": second_sources["job_analysis"],
+            "selection_plan_id": second_sources["selection_plan"],
+            "parent_revision_id": approved.json()["revision_id"],
+        },
+    )
+
+    assert queued.status_code == 412, queued.text
+    assert queued.json()["code"] == "LINEAGE_BROKEN"
+    assert api_worker.services.repository.approved_revision(
+        approved.json()["revision_id"]
+    ).application_id == first_id
+    assert _state(api_worker, second_id)["active_working_draft_id"] is None
 
 
 # --- E2: read, ETag, and optimistic update -----------------------------------
@@ -592,6 +663,78 @@ def test_a_failed_validation_is_a_successful_outcome_with_its_run_recorded(api_w
     )
     assert stale.status_code == 409, stale.text
     assert stale.json()["code"] == "STATE_CONFLICT"
+
+
+def test_validation_run_read_remains_historical_after_the_draft_moves(api_worker) -> None:
+    application_id, working_draft_id, _sources = _drafted(api_worker, "Historical Run Co")
+    validated = _validated(api_worker, working_draft_id)
+
+    read = _read(api_worker, working_draft_id)
+    claim = working_claim(api_worker.services, application_id, "sales.metric.performance")
+    moved = _patch(
+        api_worker,
+        working_draft_id,
+        read.headers["ETag"],
+        [{"claim_id": claim.claim_id, "fact_ids": claim.fact_ids, "text": claim.text}],
+    )
+    assert moved.status_code == 200, moved.text
+    assert moved.json()["edit_version"] > validated["edit_version"]
+
+    historical = api_worker.client.get(
+        f"{API_PREFIX}/validation-runs/{validated['validation_run_id']}"
+    )
+    assert historical.status_code == 200, historical.text
+    assert historical.json() == validated
+    assert historical.json()["edit_version"] < moved.json()["edit_version"]
+
+
+def test_validation_run_http_projection_preserves_unknown_groups_and_issue_codes(
+    api_worker,
+) -> None:
+    application_id, working_draft_id, _sources = _drafted(
+        api_worker, "Forward Compatible Report Co"
+    )
+    ordinary = _validated(api_worker, working_draft_id)
+    lineage = api_worker.services.repository.validation_lineage(
+        ordinary["validation_run_id"]
+    )
+    report = ValidationReport.from_findings(
+        {"content": True, "future-validator-group": False},
+        [
+            ValidationIssue(
+                group="future-validator-group",
+                code="future-issue-code",
+                message="A validator added later supplied this issue.",
+                hard=False,
+            )
+        ],
+        evidence={"future-evidence": {"kept": [1, "two", False]}},
+    )
+    run_id = api_worker.services.repository.record_validation(
+        application_id,
+        "pre-render",
+        report,
+        lineage=lineage,
+    )
+
+    response = api_worker.client.get(f"{API_PREFIX}/validation-runs/{run_id}")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["report"] == api_worker.services.repository.validation_report(
+        run_id
+    ).model_dump(mode="json")
+    assert response.json()["report"]["groups"]["future-validator-group"] is False
+    assert response.json()["report"]["issues"] == [
+        {
+            "group": "future-validator-group",
+            "code": "future-issue-code",
+            "message": "A validator added later supplied this issue.",
+            "hard": False,
+        }
+    ]
+    assert response.json()["report"]["evidence"]["future-evidence"] == {
+        "kept": [1, "two", False]
+    }
 
 
 # --- E5: approval ------------------------------------------------------------
