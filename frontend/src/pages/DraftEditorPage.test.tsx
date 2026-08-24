@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -122,11 +122,24 @@ const jsonResponse = (body: unknown, status = 200): Response =>
 /* One route per read, so a test states which answer it is giving rather than depending on
    the order the screen happens to request them in. */
 const stubReads = (
-  answers: Partial<Record<"detail" | "draft" | "facts", () => Response>>,
+  answers: Partial<Record<"detail" | "draft" | "facts" | "selectionChange", () => Response>>,
 ): ReturnType<typeof vi.fn> => {
   const fetchMock = vi.fn((input: unknown) => {
     const url = String(input);
 
+    if (url.endsWith("/apply-selection-change")) {
+      return Promise.resolve(
+        answers.selectionChange?.() ??
+          jsonResponse({
+            application_id: "app-1",
+            working_draft_id: "wd-1",
+            edit_version: 5,
+            content_hash: "hash-5",
+            selection_plan_id: "sp-2",
+            plan: {},
+          }),
+      );
+    }
     if (url.startsWith(`${DRAFT_PATH}/facts`)) {
       return Promise.resolve(answers.facts?.() ?? jsonResponse(facts()));
     }
@@ -212,9 +225,7 @@ describe("DraftEditorPage", () => {
 
     expect(await screen.findByText("Delivered 30% growth.")).toBeInTheDocument();
     expect(screen.getByText("ללא ביסוס")).toBeInTheDocument();
-    expect(
-      screen.getByText("no canonical fact authorizes this wording"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("no canonical fact authorizes this wording")).toBeInTheDocument();
   });
 
   it("presents the projection's own review reason rather than inventing an approval rule", async () => {
@@ -251,7 +262,9 @@ describe("DraftEditorPage", () => {
     renderPage();
 
     expect(await screen.findByText("אין כרגע טיוטה פעילה למועמדות הזו")).toBeInTheDocument();
-    expect(fetchMock.mock.calls.every((call) => !String(call[0]).startsWith(DRAFT_PATH))).toBe(true);
+    expect(fetchMock.mock.calls.every((call) => !String(call[0]).startsWith(DRAFT_PATH))).toBe(
+      true,
+    );
   });
 
   it("states why a structural line stays instead of offering a removal that would be refused", async () => {
@@ -261,6 +274,100 @@ describe("DraftEditorPage", () => {
 
     expect(
       await screen.findByText("שורת הכותרת היא חלק ממבנה המסמך ואינה נמחקת."),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("DraftEditorPage selection changes", () => {
+  const omittedFacts = (): WorkingDraftFacts => ({
+    ...facts(),
+    facts: [
+      ...facts().facts,
+      {
+        fact_id: "f-pinned",
+        text: "Built the reporting pipeline.",
+        linked_claim_ids: ["c-9"],
+        section: "Core Skills",
+        outcome: "pinned",
+        reason: null,
+      },
+      {
+        fact_id: "f-out",
+        text: "Ran the partner onboarding programme.",
+        linked_claim_ids: [],
+        section: "Core Skills",
+        outcome: "omitted",
+        reason: "below_section_budget",
+      },
+    ],
+  });
+
+  it("includes an omitted fact as a pin, carrying every decision already recorded", async () => {
+    const fetchMock = stubReads({ facts: () => jsonResponse(omittedFacts()) });
+
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "הכללת העובדה" }));
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/apply-selection-change")),
+      ).toBe(true),
+    );
+    const call = fetchMock.mock.calls.find((entry) =>
+      String(entry[0]).endsWith("/apply-selection-change"),
+    );
+    /* Absolute lists: the existing pin is resent alongside the new one, because the plan
+       is built from the overlay alone. */
+    expect(JSON.parse(String((call?.[1] as RequestInit).body))).toEqual({
+      expected_edit_version: 4,
+      pinned_fact_ids: ["f-pinned", "f-out"],
+      excluded_fact_ids: [],
+    });
+  });
+
+  it("removes a fact-backed line by excluding its facts, not by patching the claim", async () => {
+    const fetchMock = stubReads({ facts: () => jsonResponse(omittedFacts()) });
+
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "הסרת השורה" }));
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/apply-selection-change")),
+      ).toBe(true),
+    );
+    const call = fetchMock.mock.calls.find((entry) =>
+      String(entry[0]).endsWith("/apply-selection-change"),
+    );
+    expect(JSON.parse(String((call?.[1] as RequestInit).body)).excluded_fact_ids).toEqual(["f-1"]);
+    expect(
+      fetchMock.mock.calls.some((entry) => (entry[1] as RequestInit)?.method === "PATCH"),
+    ).toBe(false);
+  });
+
+  it("presents the manual-wording refusal as the backend states it", async () => {
+    stubReads({
+      facts: () => jsonResponse(omittedFacts()),
+      selectionChange: () =>
+        jsonResponse(
+          {
+            type: "about:blank#precondition_failed",
+            title: "Precondition Failed",
+            status: 412,
+            code: "PRECONDITION_FAILED",
+            detail: "this draft carries manual wording that a deterministic rebuild would discard",
+          },
+          412,
+        ),
+    });
+
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "הכללת העובדה" }));
+
+    expect(
+      await screen.findByText(
+        "this draft carries manual wording that a deterministic rebuild would discard",
+      ),
     ).toBeInTheDocument();
   });
 });

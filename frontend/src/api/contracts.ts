@@ -59,3 +59,6 @@ export type OmissionReason = NonNullable<DraftFact["reason"]>;
 export type UpdateWorkingDraftRequest = ApiSchemas["UpdateWorkingDraftRequest"];
 export type ClaimPatch = ApiSchemas["ClaimPatchRequest"];
 export type WorkingDraftUpdate = ApiSchemas["WorkingDraftUpdateResponse"];
+
+export type ApplySelectionChangeRequest = ApiSchemas["ApplySelectionChangeRequest"];
+export type SelectionChange = ApiSchemas["SelectionChangeResponse"];

@@ -2,8 +2,10 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { type ApiPath, apiRequest } from "./client";
 import type {
+  ApplySelectionChangeRequest,
   ClaimPatch,
   DraftClaim,
+  SelectionChange,
   WorkingDraft,
   WorkingDraftFacts,
   WorkingDraftUpdate,
@@ -94,4 +96,43 @@ export const updateWorkingDraft = async (
   });
 
   return { update: response.data, etag: response.etag };
+};
+
+/* The overlay the next SelectionPlan is built from. Both lists are absolute, not deltas:
+   `apply_selection_change` hands them to `create_selection_plan`, which plans from them
+   alone, so a change that sent only what moved would silently drop every earlier
+   decision. They are read back out of the accounting rather than remembered in component
+   state, which is what keeps them true after a reload. */
+export const selectionOverlay = (
+  facts: WorkingDraftFacts,
+): { pinned_fact_ids: string[]; excluded_fact_ids: string[] } => ({
+  pinned_fact_ids: facts.facts
+    .filter((fact) => fact.outcome === "pinned")
+    .map((fact) => fact.fact_id),
+  excluded_fact_ids: facts.facts
+    .filter((fact) => fact.reason === "excluded_by_user")
+    .map((fact) => fact.fact_id),
+});
+
+/* §14: a deterministic re-selection. `201` because the change creates an immutable
+   SelectionPlan and rebuilds the draft from it in one write - there is no Operation to
+   poll and no `Location` to verify.
+
+   A draft carrying manual wording is a `412`: a deterministic rebuild would replace the
+   user's own sentences with the engine's, which is the case §14 sends to regeneration. */
+export const applySelectionChange = async (
+  workingDraftId: string,
+  expectedEditVersion: number,
+  overlay: { pinned_fact_ids: string[]; excluded_fact_ids: string[] },
+): Promise<SelectionChange> => {
+  const body: ApplySelectionChangeRequest = {
+    expected_edit_version: expectedEditVersion,
+    ...overlay,
+  };
+  const response = await apiRequest<SelectionChange>(
+    `${workingDraftPath(workingDraftId)}/apply-selection-change` as ApiPath,
+    { method: "POST", body },
+  );
+
+  return response.data;
 };

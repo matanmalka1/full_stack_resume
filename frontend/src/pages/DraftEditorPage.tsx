@@ -1,12 +1,14 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { applicationDetailQueryKey, applicationDetailQueryOptions } from "../api/applications";
 import { ApiProblem } from "../api/client";
-import type { DraftClaim, WorkingDraftUpdate } from "../api/contracts";
+import type { DraftClaim, DraftFact, WorkingDraftUpdate } from "../api/contracts";
 import {
   type DraftRead,
+  applySelectionChange,
+  selectionOverlay,
   workingDraftFactsQueryKey,
   workingDraftFactsQueryOptions,
   workingDraftQueryKey,
@@ -22,6 +24,7 @@ import { StatusBadge } from "../ui/StatusBadge";
 import { TechnicalDetails } from "../ui/TechnicalDetails";
 import { DraftClaimCard } from "./DraftClaimCard";
 import { DraftConflictDialog } from "./DraftConflictDialog";
+import { DraftFactPanel } from "./DraftFactPanel";
 import { DraftSaveState } from "./DraftSaveState";
 import { removability } from "./claimRemoval";
 import { useDraftAutosave } from "./useDraftAutosave";
@@ -116,14 +119,47 @@ export const DraftEditorPage = () => {
       text,
     });
 
-  /* Which command removes a line is `removability`'s answer, not a guess made here. The
-     patch takes the unauthorized ones; the deterministic exclusion arrives with the
-     selection controls. */
+  /* §14: the overlay is absolute, so every change starts from what the accounting
+     currently reports and adds one decision to it. Sending only what moved would drop
+     every pin and exclusion the user made before. */
+  const selection = useMutation({
+    mutationFn: async (change: { pinned?: string[]; excluded?: string[] }) => {
+      if (draft === undefined || facts === undefined) {
+        throw new Error("a selection change was offered before the draft and its facts arrived");
+      }
+      const overlay = selectionOverlay(facts);
+      return applySelectionChange(draft.id, draft.edit_version, {
+        pinned_fact_ids: [...new Set([...overlay.pinned_fact_ids, ...(change.pinned ?? [])])],
+        excluded_fact_ids: [...new Set([...overlay.excluded_fact_ids, ...(change.excluded ?? [])])],
+      });
+    },
+    onSuccess: () => {
+      /* The plan and the document changed together, and the ETag with them. Nothing from
+         the response is seeded: the refreshed reads report the version that now exists. */
+      onSaved({} as WorkingDraftUpdate, null);
+    },
+  });
+
+  /* Which command removes a line is `removability`'s answer, not a guess made here: the
+     patch takes the unauthorized claims, and a fact-authorized one is removed by
+     excluding the facts behind it. */
   const removeClaim = (claim: DraftClaim) => {
-    if (draft !== undefined && removability(claim, draft, facts).route === "patch") {
+    if (draft === undefined) {
+      return;
+    }
+    const route = removability(claim, draft, facts).route;
+
+    if (route === "patch") {
       autosave.queueRemoval(claim.claim_id);
     }
+    if (route === "selection") {
+      selection.mutate({ excluded: claim.fact_ids });
+    }
   };
+
+  /* Including an omitted fact is a pin: in a budgeted deterministic selection, holding it
+     is the only way to say "keep this one". */
+  const includeFact = (fact: DraftFact) => selection.mutate({ pinned: [fact.fact_id] });
 
   return (
     <Card aria-labelledby="route-heading">
@@ -256,6 +292,22 @@ export const DraftEditorPage = () => {
                 </div>
               ))}
             </section>
+
+            {selection.error === null ? null : (
+              <Callout role="alert" title="שינוי הבחירה לא בוצע" tone="blocker">
+                {problemMessage(
+                  selection.error,
+                  "לא ניתן היה לשנות את בחירת העובדות. הטיוטה נשמרה כפי שהיא.",
+                )}
+                {selection.error instanceof ApiProblem ? (
+                  <TechnicalDetails className="mt-3">
+                    <LtrText>{selection.error.problem.code}</LtrText>
+                  </TechnicalDetails>
+                ) : null}
+              </Callout>
+            )}
+
+            <DraftFactPanel busy={selection.isPending} facts={facts} onInclude={includeFact} />
 
             <div>
               <Link className={buttonClasses("secondary")} to={applicationHref}>
