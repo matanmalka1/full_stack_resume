@@ -102,6 +102,33 @@ or weaken an existing acceptance gate.
       `DraftServiceBase`, with `DraftService` assembled from them in `service.py`. No
       method body changed and the import path did not move.
 
+      `application/services/knowledge.py` is done, and only the part that needed doing.
+      The interesting cut was not "which command": lines 73-269 were a two-phase commit
+      over Knowledge files plus SQLite - stage, prepare, activate, commit, mark, discard -
+      with quarantine and crash recovery, written as private helpers of a command class,
+      which is why nothing tested it directly. It is now
+      `application/services/knowledge/mutations.py` (217 lines),
+      `KnowledgeMutationEngine`, with the lifecycle commands and reads left in
+      `service.py` (554). The import path did not move.
+
+      It is a base class, not a collaborator the service holds. That was decided by the
+      grep the drafts split taught us to run first, and the answer was not the one the
+      drafts split gave. Nothing patches a module-level binding here; what
+      `tests/test_fact_lifecycle.py:127,161,169,182` patches is `_complete_prepared` on
+      the service *instance*, to simulate a crash inside `add_fact`. `add_fact` reaches
+      it through `_run_fact_mutation`, so a delegation split would have moved that call
+      onto an object the tests never touch and the four crash-recovery windows would
+      have stopped being exercised. A base class keeps every internal call going through
+      `self`, so the seam is where the tests already put it, and the engine is still
+      constructible on its own - it needs only a repository and a Knowledge store - which
+      is what makes it testable without the eight commands.
+
+      22 methods before and after, no body or decorator changed, verified by AST
+      comparison against the module loaded out of Git, and no method defined in two
+      modules. The lifecycle/read split inside `service.py` was deliberately not done:
+      it is a second subject boundary, not part of this one, and `service.py` stays
+      above 500 lines until it is decided on its own.
+
       `application/services/operations.py` is done. It was listed at 518 lines and had
       reached 985, holding two subjects with different collaborators: the six Operation
       handlers (a new Operation type touches only these) and `OperationService` (an
