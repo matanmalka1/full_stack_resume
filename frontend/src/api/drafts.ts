@@ -1,7 +1,13 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { type ApiPath, apiRequest } from "./client";
-import type { DraftClaim, WorkingDraft, WorkingDraftFacts } from "./contracts";
+import type {
+  ClaimPatch,
+  DraftClaim,
+  WorkingDraft,
+  WorkingDraftFacts,
+  WorkingDraftUpdate,
+} from "./contracts";
 
 /* The draft and the token that authorizes writing to it, kept together.
 
@@ -61,3 +67,31 @@ export const outlineClaims = (draft: WorkingDraft): DraftClaim[] => [
   ...draft.outline.contacts,
   ...draft.outline.sections.flatMap((section) => section.claims),
 ];
+
+export interface DraftPatch {
+  claim_edits: ClaimPatch[];
+  claim_removals: string[];
+}
+
+export interface DraftUpdate {
+  update: WorkingDraftUpdate;
+  etag: string | null;
+}
+
+/* §14 autosave. The ETag is the caller's, and the caller's obligation is that it came
+   from the read whose content the user was editing - `If-Match: *` is refused by the
+   server precisely because a save that matched anything is the lost update the header
+   exists to prevent. */
+export const updateWorkingDraft = async (
+  workingDraftId: string,
+  etag: string,
+  patch: DraftPatch,
+): Promise<DraftUpdate> => {
+  const response = await apiRequest<WorkingDraftUpdate>(workingDraftPath(workingDraftId), {
+    method: "PATCH",
+    body: patch,
+    etag,
+  });
+
+  return { update: response.data, etag: response.etag };
+};
