@@ -317,7 +317,7 @@ def test_latest_decision_uses_revision_order_when_approvals_share_a_timestamp(
     """
     fixed_approval_time = "2026-08-23T12:34:56Z"
     monkeypatch.setattr(
-        "cv_engine.application.services.drafts.utc_now", lambda: fixed_approval_time
+        "cv_engine.application.services.drafts.approval.utc_now", lambda: fixed_approval_time
     )
 
     setup = drafted_application("Decision Language")

@@ -9,7 +9,7 @@ import pytest
 from helpers import ACCOUNT_MANAGER_JOB, approve_active_draft, validate_active_draft
 from helpers import working_claim as _working_claim
 
-import cv_engine.application.services.drafts as draft_service_module
+import cv_engine.application.services.drafts.generation as draft_generation_module
 from cv_engine.application.commands import (
     AnalyzeCommand,
     DraftCommand,
@@ -341,7 +341,7 @@ def test_cli_fast_mode_refuses_pre_render_validation_failure(
 ) -> None:
     from cv_engine.cli import main
 
-    real_validate = draft_service_module.run_draft_validation
+    real_validate = draft_generation_module.run_draft_validation
 
     def fail_validation(*args, **kwargs) -> ValidationReport:
         report = real_validate(*args, **kwargs)
@@ -361,8 +361,10 @@ def test_cli_fast_mode_refuses_pre_render_validation_failure(
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     # The service imports the domain validator under its own name, because
     # `validate_draft` is now the §15 application command as well. Patching the
-    # name the module actually binds is what keeps this test honest.
-    monkeypatch.setattr(draft_service_module, "run_draft_validation", fail_validation)
+    # name the module actually binds is what keeps this test honest - and the
+    # module that binds it for the run fast mode reads is `generation`, where
+    # the draft Operation records its pre-render ValidationRun.
+    monkeypatch.setattr(draft_generation_module, "run_draft_validation", fail_validation)
 
     result = main(
         [
