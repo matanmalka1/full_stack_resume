@@ -74,18 +74,29 @@ const acceptedResponse = (operation: Operation): Response =>
     },
   });
 
+const deterministicSettings: Settings = {
+  edit_version: 0,
+  auto_generate_when_review_not_required: false,
+  ai_enabled: false,
+  ai_enabled_override: null,
+  default_execution_mode: "deterministic",
+  open_browser_on_launch: true,
+  provider_configured: false,
+  ui_density: "comfortable",
+  ui_text_size: "normal",
+  updated_at: null,
+};
+
 /* Retries and the projection poll are off inside the test client: the interval is
    covered by its own unit test, and a live timer here would make every assertion racy. */
-const renderPage = (settings?: Settings) => {
+const renderPage = (settings: Settings = deterministicSettings) => {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, refetchInterval: false, gcTime: 0 },
       mutations: { retry: false },
     },
   });
-  if (settings !== undefined) {
-    client.setQueryData(settingsQueryKey, { settings, etag: '"settings-1"' });
-  }
+  client.setQueryData(settingsQueryKey, { settings, etag: '"settings-1"' });
 
   return render(
     <QueryClientProvider client={client}>

@@ -464,11 +464,12 @@ def test_backup_and_restore_include_workspace_settings(tmp_path: Path) -> None:
     assert backed_up.returncode == 0, backed_up.stderr
     report = json.loads(backed_up.stdout)
     restored = restore_workspace(backup_root, tmp_path / "restored")
-    restored_database = restored.state_root / configured_database.name
+    restored_database = restored.database_path
     assert report["database"] == str(
-        backup_root / configured_database.relative_to(workspace.root)
+        backup_root / workspace.database_path.relative_to(workspace.root)
     )
     assert restored_database.is_file()
+    assert not (restored.state_root / configured_database.name).exists()
     settings = Repository(restored_database).workspace_settings()
 
     assert settings.edit_version == 1

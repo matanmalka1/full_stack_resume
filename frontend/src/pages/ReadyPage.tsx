@@ -6,6 +6,7 @@ import { applicationDetailQueryOptions, startDraftGeneration } from "../api/appl
 import { ApiProblem } from "../api/client";
 import { operationQueryKey } from "../api/operations";
 import { approvedPreviewSrc, approvedRevisionQueryOptions, recruiterPdfHref } from "../api/revisions";
+import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { Button, buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { Card } from "../ui/Card";
@@ -26,7 +27,12 @@ export const ReadyPage = () => {
     enabled: revision !== undefined,
   });
   const detail = applicationQuery.data;
-  const newDraftKey = useMemo(() => `revision-draft:${approvedRevisionId}`, [approvedRevisionId]);
+  useWorkflowStage(detail === undefined ? "unknown" : detail.preparation_state);
+  const newDraftKey = useMemo(
+    () =>
+      `revision-draft:${approvedRevisionId}:${detail?.active_analysis_id ?? "none"}:${detail?.active_selection_plan_id ?? "none"}`,
+    [approvedRevisionId, detail?.active_analysis_id, detail?.active_selection_plan_id],
+  );
   const newDraft = useMutation({
     mutationFn: async () => {
       if (revision === undefined || detail?.active_analysis_id == null || detail.active_selection_plan_id == null) {
@@ -53,6 +59,13 @@ export const ReadyPage = () => {
         קורות החיים מוכנים
       </PageHeading>
       <div className="mt-6 flex flex-col gap-6">
+        {revisionQuery.error === null && applicationQuery.error === null ? null : (
+          <Callout role="alert" title="לא ניתן לטעון את הגרסה המוכנה" tone="blocker">
+            {(revisionQuery.error ?? applicationQuery.error) instanceof ApiProblem
+              ? ((revisionQuery.error ?? applicationQuery.error) as ApiProblem).problem.detail
+              : "הפנייה לשרת נכשלה."}
+          </Callout>
+        )}
         {detail?.warnings.map((warning) => (
           <Callout key={warning.code} title={warning.message} tone="warning" />
         ))}

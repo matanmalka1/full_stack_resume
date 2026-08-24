@@ -11,6 +11,7 @@ export type OperationPhase = ApiSchemas["OperationPhase"];
 export type OperationFailureCode = ApiSchemas["OperationFailureCode"];
 export type WorkingDraft = ApiSchemas["WorkingDraftResponse"];
 export type ValidationRun = ApiSchemas["ValidationRunResponse"];
+export type ValidationRunDetail = ApiSchemas["ValidationRunDetailResponse"];
 export type ValidationReport = ApiSchemas["ValidationReportResponse"];
 export type ValidationIssue = ApiSchemas["ValidationIssueResponse"];
 export type Approval = ApiSchemas["ApprovalResponse"];

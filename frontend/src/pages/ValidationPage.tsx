@@ -7,7 +7,6 @@ import { ApiProblem } from "../api/client";
 import { workingDraftQueryOptions } from "../api/drafts";
 import {
   validateWorkingDraft,
-  validationRunQueryKey,
   validationRunQueryOptions,
 } from "../api/validation";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
@@ -43,7 +42,6 @@ export const ValidationPage = () => {
       return validateWorkingDraft(draft.id, draft.edit_version);
     },
     onSuccess: (run) => {
-      queryClient.setQueryData(validationRunQueryKey(run.validation_run_id), run);
       void queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
       void navigate(
         `/applications/${encodeURIComponent(applicationId)}/validation?validation_run_id=${encodeURIComponent(run.validation_run_id)}`,
@@ -52,6 +50,13 @@ export const ValidationPage = () => {
     },
   });
   const run = validation.data ?? runQuery.data;
+  const exactPassingRun =
+    run?.passed === true &&
+    draft !== undefined &&
+    run.application_id === applicationId &&
+    run.working_draft_id === draft.id &&
+    run.edit_version === draft.edit_version &&
+    run.content_hash === draft.content_hash;
   useEffect(() => {
     if (validation.data !== undefined) summaryRef.current?.focus();
   }, [validation.data]);
@@ -80,17 +85,17 @@ export const ValidationPage = () => {
         {run === undefined ? null : (
           <section aria-labelledby="validation-summary">
             <h2 className="mb-4 text-heading-sm font-semibold" id="validation-summary" ref={summaryRef} tabIndex={-1}>
-              {run.passed ? "הטיוטה עברה אימות" : "האימות מצא חסימות"}
+              {run.passed ? "הטיוטה עברה אימות" : "הטיוטה לא עברה אימות"}
             </h2>
             <ValidationReportView report={run.report} />
           </section>
         )}
         <LiveRegion>
-          {validation.data === undefined ? "" : validation.data.passed ? "האימות הושלם בהצלחה." : "האימות הושלם ונמצאו חסימות."}
+          {validation.data === undefined ? "" : validation.data.passed ? "האימות הושלם בהצלחה." : "האימות הושלם והטיוטה לא עברה."}
         </LiveRegion>
         <ActionBar
           primary={
-            run?.passed === true && draft !== undefined && run.edit_version === draft.edit_version ? (
+            exactPassingRun ? (
               <Link
                 className={buttonClasses("primary")}
                 to={`/applications/${encodeURIComponent(applicationId)}/approval?validation_run_id=${encodeURIComponent(run.validation_run_id)}`}

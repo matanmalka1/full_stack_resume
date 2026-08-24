@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiProblem } from "../api/client";
 import { operationQueryKey } from "../api/operations";
 import { approvedRevisionQueryOptions, renderApprovedRevision } from "../api/revisions";
+import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { Button, buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { Card } from "../ui/Card";
@@ -18,6 +19,9 @@ export const RenderPage = () => {
   if (approvedRevisionId === undefined) throw new Error("RenderPage requires approvedRevisionId");
   const revisionQuery = useQuery(approvedRevisionQueryOptions(approvedRevisionId));
   const revision = revisionQuery.data;
+  useWorkflowStage(
+    revision === undefined ? "unknown" : revision.ready_qualified ? "ready" : "approved",
+  );
   const renderKey = useMemo(() => `render:${approvedRevisionId}`, [approvedRevisionId]);
   const render = useMutation({
     mutationFn: async () => {

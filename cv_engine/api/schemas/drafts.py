@@ -295,7 +295,10 @@ class ValidationIssueResponse(HttpSchema):
 
 
 class ValidationReportResponse(HttpSchema):
-    report_schema_version: str | None = None
+    report_schema_version: str | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
     passed: bool
     groups: dict[str, bool]
     issues: list[ValidationIssueResponse]

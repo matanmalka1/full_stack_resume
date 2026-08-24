@@ -20,7 +20,9 @@ class SqliteSettingsRepository(SqliteRepositoryBase):
                 row["auto_generate_when_review_not_required"]
             ),
             ai_enabled_override=(
-                None if row["ai_enabled_override"] is None else bool(row["ai_enabled_override"])
+                None
+                if row["ai_enabled_override"] is None
+                else bool(row["ai_enabled_override"])
             ),
             default_execution_mode=row["default_execution_mode"],
             open_browser_on_launch=bool(row["open_browser_on_launch"]),
@@ -47,7 +49,11 @@ class SqliteSettingsRepository(SqliteRepositoryBase):
             values = (
                 next_version,
                 int(settings.auto_generate_when_review_not_required),
-                None if settings.ai_enabled_override is None else int(settings.ai_enabled_override),
+                (
+                    None
+                    if settings.ai_enabled_override is None
+                    else int(settings.ai_enabled_override)
+                ),
                 settings.default_execution_mode,
                 int(settings.open_browser_on_launch),
                 settings.ui_density,
@@ -70,4 +76,15 @@ class SqliteSettingsRepository(SqliteRepositoryBase):
                     "ui_text_size=?, updated_at=? WHERE singleton_id=1",
                     values,
                 )
-        return self.workspace_settings()
+        return StoredSettings(
+            edit_version=next_version,
+            auto_generate_when_review_not_required=(
+                settings.auto_generate_when_review_not_required
+            ),
+            ai_enabled_override=settings.ai_enabled_override,
+            default_execution_mode=settings.default_execution_mode,
+            open_browser_on_launch=settings.open_browser_on_launch,
+            ui_density=settings.ui_density,
+            ui_text_size=settings.ui_text_size,
+            updated_at=now,
+        )

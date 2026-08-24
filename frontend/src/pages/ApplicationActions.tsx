@@ -34,7 +34,8 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
   /* App owns the live settings read. This subscription consumes that cache without
      opening one request per action panel; isolated renders retain the safe deterministic
      default until a shell-provided value exists. */
-  const settings = useQuery({ ...settingsQueryOptions, enabled: false }).data?.settings;
+  const settingsQuery = useQuery({ ...settingsQueryOptions, enabled: false });
+  const settings = settingsQuery.data?.settings;
   const provider = executionProvider(settings);
   const snapshotId = detail.active_job_snapshot_id;
   const analysisId = detail.active_analysis_id ?? null;
@@ -141,13 +142,13 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
     actionDestination(recommended, detail.application.id) === null
       ? recommended
       : null;
-  const error = analyze.error ?? draft.error;
+  const error = settingsQuery.error ?? analyze.error ?? draft.error;
 
   /* Keyed because the bar renders them from an array: with more than one secondary
      action, React needs each to be identifiable across renders. */
   const analyzeButton = canAnalyze ? (
     <Button
-      disabled={analyze.isPending}
+      disabled={settings === undefined || analyze.isPending}
       key="analyze"
       onClick={() => analyze.mutate()}
       variant={analyzeRecommended ? "primary" : "secondary"}
@@ -184,7 +185,7 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
 
   const draftButton = canDraft ? (
     <Button
-      disabled={draft.isPending}
+      disabled={settings === undefined || draft.isPending}
       key="draft"
       onClick={() => draft.mutate()}
       variant={draftRecommended ? "primary" : "secondary"}

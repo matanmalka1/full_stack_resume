@@ -684,8 +684,10 @@ def test_validation_run_read_remains_historical_after_the_draft_moves(api_worker
         f"{API_PREFIX}/validation-runs/{validated['validation_run_id']}"
     )
     assert historical.status_code == 200, historical.text
-    assert historical.json() == validated
-    assert historical.json()["edit_version"] < moved.json()["edit_version"]
+    historical_body = historical.json()
+    assert historical_body.pop("created_at")
+    assert historical_body == validated
+    assert historical_body["edit_version"] < moved.json()["edit_version"]
 
 
 def test_validation_run_http_projection_preserves_unknown_groups_and_issue_codes(
@@ -698,9 +700,10 @@ def test_validation_run_http_projection_preserves_unknown_groups_and_issue_codes
     lineage = api_worker.services.repository.validation_lineage(
         ordinary["validation_run_id"]
     )
-    report = ValidationReport.from_findings(
-        {"content": True, "future-validator-group": False},
-        [
+    report = ValidationReport(
+        passed=False,
+        groups={"content": True, "future-validator-group": False},
+        issues=[
             ValidationIssue(
                 group="future-validator-group",
                 code="future-issue-code",

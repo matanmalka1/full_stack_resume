@@ -4,8 +4,9 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 
 import { applicationDetailQueryKey, applicationDetailQueryOptions } from "../api/applications";
 import { ApiProblem } from "../api/client";
-import { workingDraftQueryOptions } from "../api/drafts";
+import { workingDraftQueryKey, workingDraftQueryOptions } from "../api/drafts";
 import { approveWorkingDraft, validationRunQueryOptions } from "../api/validation";
+import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { ActionBar } from "../ui/ActionBar";
 import { Button, buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
@@ -27,6 +28,7 @@ export const ApprovalPage = () => {
 
   const application = useQuery(applicationDetailQueryOptions(applicationId));
   const detail = application.data;
+  useWorkflowStage(detail === undefined ? "unknown" : detail.preparation_state);
   const draftId = detail?.active_working_draft_id ?? null;
   const draftQuery = useQuery({ ...workingDraftQueryOptions(draftId ?? ""), enabled: draftId !== null });
   const draft = draftQuery.data?.draft;
@@ -51,11 +53,20 @@ export const ApprovalPage = () => {
     onError: (error) => {
       if (error instanceof ApiProblem && error.problem.code === "VALIDATION_STALE") {
         void queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
+        if (draft !== undefined) {
+          void queryClient.invalidateQueries({ queryKey: workingDraftQueryKey(draft.id) });
+        }
         void navigate(`/applications/${encodeURIComponent(applicationId)}/validation?reason=stale`, { replace: true });
       }
     },
   });
-  const exactPassingRun = run?.passed === true && draft !== undefined && run.edit_version === draft.edit_version;
+  const exactPassingRun =
+    run?.passed === true &&
+    draft !== undefined &&
+    run.application_id === applicationId &&
+    run.working_draft_id === draft.id &&
+    run.edit_version === draft.edit_version &&
+    run.content_hash === draft.content_hash;
 
   return (
     <Card aria-labelledby="route-heading">
@@ -99,9 +110,16 @@ export const ApprovalPage = () => {
       >
         <p>האישור יוצר רשומה קבועה מהטיוטה ומריצת האימות המוצגות כאן.</p>
         {warnings.length === 0 ? null : (
-          <Checkbox checked={acknowledged} className="mt-4" onChange={(event) => setAcknowledged(event.currentTarget.checked)}>
-            קראתי את האזהרות ואני רוצה להמשיך באישור
-          </Checkbox>
+          <Callout className="mt-4" title="נותרו אזהרות לא חוסמות" tone="warning">
+            <ul className="mb-3 list-disc ps-5">
+              {warnings.map((warning, index) => (
+                <li dir="auto" key={`${warning.code}-${index}`}>{warning.message}</li>
+              ))}
+            </ul>
+            <Checkbox checked={acknowledged} onChange={(event) => setAcknowledged(event.currentTarget.checked)}>
+              קראתי את האזהרות ואני רוצה להמשיך באישור
+            </Checkbox>
+          </Callout>
         )}
       </Dialog>
     </Card>

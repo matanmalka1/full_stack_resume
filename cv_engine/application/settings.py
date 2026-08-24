@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal, Protocol
 
 from .commands import BoundaryDTO
-from .errors import PreconditionFailed, StateConflict
+from .errors import PreconditionFailed
 
 
 ExecutionMode = Literal["deterministic", "ai"]
@@ -86,8 +86,5 @@ class SettingsService:
             raise PreconditionFailed(
                 "AI cannot be the default execution mode until it is enabled and configured"
             )
-        try:
-            stored = self.repo.update_workspace_settings(expected_edit_version, command)
-        except StateConflict:
-            raise
+        stored = self.repo.update_workspace_settings(expected_edit_version, command)
         return self._view(stored)

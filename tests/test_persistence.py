@@ -269,7 +269,9 @@ def test_workspace_settings_default_read_is_pure(application_repo) -> None:
         assert connection.execute("SELECT COUNT(*) FROM workspace_settings").fetchone()[0] == 0
 
 
-def test_workspace_settings_updates_are_optimistic_and_atomic(application_repo) -> None:
+def test_workspace_settings_updates_are_optimistic_and_atomic(
+    application_repo, monkeypatch
+) -> None:
     first = application_repo.update_workspace_settings(
         0,
         UpdateSettings(
@@ -297,6 +299,24 @@ def test_workspace_settings_updates_are_optimistic_and_atomic(application_repo) 
             ),
         )
     assert application_repo.workspace_settings() == first
+
+    def refuse_post_commit_reread() -> None:
+        raise AssertionError("an update response must describe its own committed write")
+
+    monkeypatch.setattr(application_repo, "workspace_settings", refuse_post_commit_reread)
+    second = application_repo.update_workspace_settings(
+        1,
+        UpdateSettings(
+            auto_generate_when_review_not_required=False,
+            ai_enabled_override=None,
+            default_execution_mode="deterministic",
+            open_browser_on_launch=True,
+            ui_density="comfortable",
+            ui_text_size="normal",
+        ),
+    )
+    assert second.edit_version == 2
+    assert Repository(application_repo.path).workspace_settings() == second
 
 
 def test_verified_baseline_adoption_and_difference_reporting(tmp_path: Path) -> None:

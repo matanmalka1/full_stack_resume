@@ -5,6 +5,7 @@ import type {
   Approval,
   ApproveDraftRequest,
   ValidationRun,
+  ValidationRunDetail,
   WorkingDraftVersionRequest,
 } from "./contracts";
 
@@ -18,7 +19,7 @@ export const validationRunQueryOptions = (validationRunId: string) =>
   queryOptions({
     queryKey: validationRunQueryKey(validationRunId),
     queryFn: async ({ signal }) => {
-      const response = await apiRequest<ValidationRun>(
+      const response = await apiRequest<ValidationRunDetail>(
         `/api/v1/validation-runs/${encodeURIComponent(validationRunId)}`,
         { signal },
       );
