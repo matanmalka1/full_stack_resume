@@ -20,10 +20,17 @@ test.describe("the New Application screen", () => {
   });
 
   test("reads a local .txt file into the job text area without uploading it", async ({ page }) => {
-    const requests: string[] = [];
+    const unexpectedApiRequests: string[] = [];
     page.on("request", (request) => {
-      if (request.url().includes("/api/")) {
-        requests.push(request.url());
+      const url = new URL(request.url());
+      /* Stage E makes one shell-owned Settings read. The file-input contract is that
+         choosing a local file starts no command and sends no file contents; permit only
+         that read-only shell request and report every other API request. */
+      if (
+        url.pathname.startsWith("/api/") &&
+        !(request.method() === "GET" && url.pathname === "/api/v1/settings")
+      ) {
+        unexpectedApiRequests.push(`${request.method()} ${url.pathname}`);
       }
     });
 
@@ -36,7 +43,7 @@ test.describe("the New Application screen", () => {
 
     await expect(page.getByLabel("טקסט המשרה")).toHaveValue("Senior Backend Engineer\nTel Aviv");
     await expect(page.getByRole("status")).toContainText("job.txt");
-    expect(requests).toEqual([]);
+    expect(unexpectedApiRequests).toEqual([]);
   });
 
   test("has no automatically detectable accessibility violations", async ({ page }) => {
