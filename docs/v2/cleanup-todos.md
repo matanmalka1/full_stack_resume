@@ -90,10 +90,17 @@ or weaken an existing acceptance gate.
 
 - [ ] **TODO 18:** the remaining files over 500 lines, in descending order:
       `application/services/knowledge.py` (723, grew in §4.5), `domain/models.py` (676),
-      `application/services/drafts.py` (646), `infrastructure/persistence/operations.py`
-      (639), `application/state.py` (528), `domain/drafts.py` (524),
-      `application/services/operations.py` (518). Take them one at a time and only where
-      a file holds more than one subject; size alone is not a defect.
+      `infrastructure/persistence/operations.py` (639), `application/state.py` (528),
+      `domain/drafts.py` (524), `application/services/operations.py` (518). Take them one
+      at a time and only where a file holds more than one subject; size alone is not a
+      defect.
+
+      `application/services/drafts.py` is done. It was listed at 646 lines and had reached
+      1412, holding eight subjects: generation, editing, validation, selection change,
+      regeneration, archival, approval, and the decision export. It is now a package,
+      `application/services/drafts/`, one module per subject over a shared
+      `DraftServiceBase`, with `DraftService` assembled from them in `service.py`. No
+      method body changed and the import path did not move.
 
 - [ ] **TODO 19 — open question, not a task.** The port hierarchy was left unflattened
       during the `ports` split. `DraftRepository -> ReadinessRepository ->
