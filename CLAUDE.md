@@ -159,9 +159,8 @@ what remains. A hard failure is never relabelled as a warning.
 
 ## Documentation
 
-`docs/v2/m3-remaining.md` is M3's closed state record. No M4 tracker exists until M4
-begins. The milestone tracker moves with the milestone: `docs/v2/m2-remaining.md` is
-M2's, closed and frozen. A record under
+`docs/v2/m4-remaining.md` is the active M4 state record. `docs/v2/m3-remaining.md` and
+`docs/v2/m2-remaining.md` are their milestones' closed, frozen trackers. A record under
 `docs/v2/records/` is frozen when its boundary closes: it keeps its own evidence and is
 not updated with later state. Non-milestone cleanup items live in
 `docs/v2/cleanup-todos.md`.

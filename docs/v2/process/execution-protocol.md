@@ -159,7 +159,7 @@ Reporting follows `CLAUDE.md`: passed / failed / remaining, with command evidenc
    This is not the re-run section 9 warns against — no lane produces a full-suite run, and
    the merged tree is not the tree any lane tested. It is the boundary's only full run, and
    the first one over the code as it will actually ship.
-5. Update the current milestone tracker — `docs/v2/m3-remaining.md` — with what landed and
+5. Update the current milestone tracker — `docs/v2/m4-remaining.md` — with what landed and
    what remains. It is the only record of state; the tracker moves with the milestone, and
    a document under `docs/v2/records/` is frozen evidence for a closed boundary that is
    never updated with later state.
