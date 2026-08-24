@@ -294,6 +294,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/approved-revisions/{approved_revision_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview one exact verified rendered HTML artifact */
+        get: operations["preview_approved_revision_api_v1_approved_revisions__approved_revision_id__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/approved-revisions/{approved_revision_id}/recruiter-pdf": {
         parameters: {
             query?: never;
@@ -476,6 +493,41 @@ export interface paths {
          *     be retried; retrying a live one is a `409`.
          */
         post: operations["retry_operation_api_v1_operations__operation_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read safe Workspace settings */
+        get: operations["read_settings_api_v1_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update safe Workspace settings */
+        patch: operations["update_settings_api_v1_settings_patch"];
+        trace?: never;
+    };
+    "/api/v1/validation-runs/{validation_run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one immutable ValidationRun, including stale historical evidence */
+        get: operations["validation_run_api_v1_validation_runs__validation_run_id__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1011,6 +1063,8 @@ export interface components {
             draft_edit_version: number;
             /** Facts Version */
             facts_version: string;
+            /** Html Artifact Version Id */
+            html_artifact_version_id?: string | null;
             /** Id */
             id: string;
             /** Job Analysis Id */
@@ -1021,10 +1075,7 @@ export interface components {
             pdf_artifact_version_id?: string | null;
             /** Ready Qualified */
             ready_qualified: boolean;
-            /** Ready Validation */
-            ready_validation: {
-                [key: string]: unknown;
-            };
+            ready_validation: components["schemas"]["ValidationReportResponse"];
             /** Selection Plan Id */
             selection_plan_id: string;
             /** Validation Run Id */
@@ -1457,6 +1508,8 @@ export interface components {
         GenerateWorkingDraftRequest: {
             /** Job Analysis Id */
             job_analysis_id: string;
+            /** Parent Revision Id */
+            parent_revision_id?: string | null;
             /**
              * Provider
              * @default deterministic
@@ -1826,11 +1879,67 @@ export interface components {
             /** Version Number */
             version_number: number;
         };
+        /** SettingsResponse */
+        SettingsResponse: {
+            /** Ai Enabled */
+            ai_enabled: boolean;
+            /** Ai Enabled Override */
+            ai_enabled_override?: boolean | null;
+            /** Auto Generate When Review Not Required */
+            auto_generate_when_review_not_required: boolean;
+            /**
+             * Default Execution Mode
+             * @enum {string}
+             */
+            default_execution_mode: "deterministic" | "ai";
+            /** Edit Version */
+            edit_version: number;
+            /** Open Browser On Launch */
+            open_browser_on_launch: boolean;
+            /** Provider Configured */
+            provider_configured: boolean;
+            /**
+             * Ui Density
+             * @enum {string}
+             */
+            ui_density: "comfortable" | "compact";
+            /**
+             * Ui Text Size
+             * @enum {string}
+             */
+            ui_text_size: "normal" | "large";
+            /** Updated At */
+            updated_at?: string | null;
+        };
         /**
          * Track
          * @enum {string}
          */
         Track: "development" | "sales" | "tech-sales";
+        /** UpdateSettingsRequest */
+        UpdateSettingsRequest: {
+            /** Ai Enabled Override */
+            ai_enabled_override?: boolean | null;
+            /** Auto Generate When Review Not Required */
+            auto_generate_when_review_not_required: boolean;
+            /**
+             * Default Execution Mode
+             * @enum {string}
+             */
+            default_execution_mode: "deterministic" | "ai";
+            /** Open Browser On Launch */
+            open_browser_on_launch: boolean;
+            /**
+             * Ui Density
+             * @enum {string}
+             */
+            ui_density: "comfortable" | "compact";
+            /**
+             * Ui Text Size
+             * @enum {string}
+             */
+            ui_text_size: "normal" | "large";
+        };
         /**
          * UpdateWorkingDraftRequest
          * @description The structured patch `PATCH /working-drafts/{id}` applies as one edit.
@@ -1870,6 +1979,34 @@ export interface components {
             /** Error Type */
             type: string;
         };
+        /** ValidationIssueResponse */
+        ValidationIssueResponse: {
+            /** Code */
+            code: string;
+            /** Group */
+            group: string;
+            /** Hard */
+            hard: boolean;
+            /** Message */
+            message: string;
+        };
+        /** ValidationReportResponse */
+        ValidationReportResponse: {
+            /** Evidence */
+            evidence: {
+                [key: string]: unknown;
+            };
+            /** Groups */
+            groups: {
+                [key: string]: boolean;
+            };
+            /** Issues */
+            issues: components["schemas"]["ValidationIssueResponse"][];
+            /** Passed */
+            passed: boolean;
+            /** Report Schema Version */
+            report_schema_version?: string | null;
+        };
         /**
          * ValidationRunResponse
          * @description A ValidationRun as data. `passed=false` arrives as `200` (§22).
@@ -1879,14 +2016,13 @@ export interface components {
             application_id: string;
             /** Content Hash */
             content_hash: string;
+            /** Created At */
+            created_at?: string | null;
             /** Edit Version */
             edit_version: number;
             /** Passed */
             passed: boolean;
-            /** Report */
-            report: {
-                [key: string]: unknown;
-            };
+            report: components["schemas"]["ValidationReportResponse"];
             /** Validation Run Id */
             validation_run_id: string;
             /** Working Draft Id */
@@ -2462,6 +2598,39 @@ export interface operations {
             };
         };
     };
+    preview_approved_revision_api_v1_approved_revisions__approved_revision_id__preview_get: {
+        parameters: {
+            query: {
+                html_artifact_version_id: string;
+            };
+            header?: never;
+            path: {
+                approved_revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The exact approved HTML, safe to frame in an isolated iframe. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     export_recruiter_pdf_api_v1_approved_revisions__approved_revision_id__recruiter_pdf_get: {
         parameters: {
             query: {
@@ -2699,6 +2868,93 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_settings_api_v1_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsResponse"];
+                };
+            };
+        };
+    };
+    update_settings_api_v1_settings_patch: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required. The ETag returned by the matching settings read. */
+                "If-Match": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validation_run_api_v1_validation_runs__validation_run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                validation_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationRunResponse"];
                 };
             };
             /** @description Validation Error */

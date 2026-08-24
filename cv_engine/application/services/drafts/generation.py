@@ -97,6 +97,18 @@ class DraftGeneration(DraftServiceBase):
                 f"selection plan {plan.id} does not belong to application "
                 f"{command.application_id} and analysis {analysis_id}"
             )
+        if command.parent_revision_id is not None:
+            try:
+                parent = self.repo.approved_revision(command.parent_revision_id)
+            except UnknownRecord as exc:
+                raise UnknownRecord(
+                    f"unknown parent approved revision: {command.parent_revision_id}"
+                ) from exc
+            if parent.application_id != command.application_id:
+                raise LineageBroken(
+                    f"approved revision {parent.id} does not belong to application "
+                    f"{command.application_id}"
+                )
         # The plan froze the knowledge it selected under. Re-using it against a
         # changed Profile or selection policy would re-derive the sectioning from
         # knowledge the plan never saw, so the draft would not be the plan's
@@ -246,6 +258,7 @@ class DraftGeneration(DraftServiceBase):
             command.job_analysis_id,
             prepared.plan_id,
             prepared.source,
+            parent_revision_id=command.parent_revision_id,
         )
         stored = self.store_working_draft(working.source)
         report = run_draft_validation(

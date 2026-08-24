@@ -25,7 +25,7 @@ from ...application.commands import RenderCommand
 from ...util import new_id
 from ..dependencies import Services
 from ..headers import IdempotencyKey
-from ..responses import accepted_operation, artifact_response
+from ..responses import accepted_operation, artifact_response, inline_html_response
 from ..schemas.artifacts import ApprovedRevisionResponse, RenderRevisionRequest
 from ..schemas.operations import OperationResponse
 
@@ -49,6 +49,28 @@ def approved_revision_detail(
     """
     result = services.queries.approved_revision(approved_revision_id)
     return ApprovedRevisionResponse.model_validate(result.model_dump(mode="json"))
+
+
+@router.get(
+    "/{approved_revision_id}/preview",
+    summary="Preview one exact verified rendered HTML artifact",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "description": "The exact approved HTML, safe to frame in an isolated iframe.",
+            "content": {"text/html": {"schema": {"type": "string"}}},
+        }
+    },
+)
+def preview_approved_revision(
+    approved_revision_id: str,
+    services: Services,
+    html_artifact_version_id: str = Query(),
+) -> StreamingResponse:
+    delivery = services.rendering.preview_approved_html(
+        approved_revision_id, html_artifact_version_id
+    )
+    return inline_html_response(delivery)
 
 
 @router.post(

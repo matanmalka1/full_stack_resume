@@ -25,6 +25,7 @@ from ..queries import (
     DraftPreviewView,
     WorkingDraftFactsView,
     WorkingDraftView,
+    ValidationRunView,
     analysis_view,
     application_list_item_view,
     application_view,
@@ -240,6 +241,20 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
             outline=draft_outline_view(working.source),
             latest_validation_run_id=exact["id"] if exact else None,
             latest_validation_passed=exact["report"].passed if exact else None,
+        )
+
+    def validation_run(self, validation_run_id: str) -> ValidationRunView:
+        record = self.repo.validation_run(validation_run_id)
+        report = record["report"]
+        return ValidationRunView(
+            application_id=record["application_id"],
+            working_draft_id=record["working_draft_id"],
+            validation_run_id=record["id"],
+            edit_version=record["edit_version"],
+            content_hash=record["content_hash"],
+            passed=report.passed,
+            report=report,
+            created_at=record["created_at"],
         )
 
     def _working_draft(self, working_draft_id: str) -> WorkingDraft:

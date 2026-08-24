@@ -22,6 +22,7 @@ from ..application.services.operations import OperationService
 from ..application.services.projections import ApplicationQueryService
 from ..application.services.rendering import RenderingService
 from ..application.services.tracking import TrackingService
+from ..application.settings import SettingsService
 
 
 @dataclass(frozen=True)
@@ -64,5 +65,6 @@ class ApiServices:
     tracking: TrackingService
     knowledge: KnowledgeService
     operations: OperationService
+    settings: SettingsService
     identity: InstanceIdentity
     limits: ApiLimits

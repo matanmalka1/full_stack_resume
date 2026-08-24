@@ -655,6 +655,7 @@ class ReadyQualification(StrictModel):
     application_id: str
     approved_revision_id: str
     pdf_artifact_version_id: str | None = None
+    html_artifact_version_id: str | None = None
     ready_qualified: bool
     validation: ValidationReport
 
@@ -664,6 +665,8 @@ class ReadyQualification(StrictModel):
             raise ValueError("ready_qualified must be derived from its validation evidence")
         if self.ready_qualified and self.pdf_artifact_version_id is None:
             raise ValueError("ready_qualified requires an exact PDF artifact version")
+        if self.ready_qualified and self.html_artifact_version_id is None:
+            raise ValueError("ready_qualified requires an exact HTML artifact version")
         return self
 
 

@@ -356,6 +356,27 @@ class RenderingService(ServiceBase[ReadinessRepository]):
             self.revision_payloads, artifact_version_view(record), record["path"]
         )
 
+    def preview_approved_html(
+        self, approved_revision_id: str, html_artifact_version_id: str
+    ) -> ArtifactDelivery:
+        """Return one verified rendered HTML artifact bound to one revision.
+
+        Presence, containment, and hash verification remain in `download_artifact`;
+        this method adds only the lineage/type checks required by the revision route.
+        """
+        record = self._artifact_record(html_artifact_version_id)
+        try:
+            revision = self.repo.approved_revision(approved_revision_id)
+        except UnknownRecord as exc:
+            raise UnknownRecord(f"unknown approved revision: {approved_revision_id}") from exc
+        if record["artifact_type"] != "resume_html" or record["lifecycle_status"] != "rendered":
+            raise LineageBroken(
+                f"artifact {html_artifact_version_id} is not rendered resume HTML"
+            )
+        if record["revision_id"] != revision.id:
+            raise LineageBroken("the named HTML does not belong to the named approved revision")
+        return self.download_artifact(html_artifact_version_id)
+
     def _artifact_record(self, artifact_version_id: str) -> dict[str, Any]:
         try:
             return self.repo.artifact_version(artifact_version_id)

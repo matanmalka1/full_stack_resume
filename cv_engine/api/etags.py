@@ -31,6 +31,18 @@ def draft_etag(edit_version: int, content_hash: str) -> str:
     return f'"{edit_version}-{content_hash}"'
 
 
+def settings_etag(edit_version: int) -> str:
+    return f'"settings-{edit_version}"'
+
+
+def parse_settings_etag(value: str) -> int:
+    candidate = value.strip().strip('"')
+    prefix, separator, version = candidate.partition("-")
+    if prefix != "settings" or not separator or not version.isdigit():
+        raise PreconditionFailed("If-Match must be the ETag returned by the settings read")
+    return int(version)
+
+
 def parse_draft_etag(value: str) -> DraftToken:
     """The version and hash inside one `If-Match` value.
 
@@ -60,5 +72,13 @@ IfMatch = Annotated[
             "value that no longer describes the stored draft is a 409 and "
             "changes nothing."
         ),
+    ),
+]
+
+SettingsIfMatch = Annotated[
+    str,
+    Header(
+        alias="If-Match",
+        description="Required. The ETag returned by the matching settings read.",
     ),
 ]

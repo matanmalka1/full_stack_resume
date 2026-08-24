@@ -252,6 +252,7 @@ def qualify_ready_revision(
                     f"the selected PDF's {field} does not match the approved revision",
                 )
 
+    html_version: dict[str, Any] | None = None
     for artifact_type, label in (("resume_html", "html"), ("visual_evidence", "visual")):
         try:
             version = repo.artifact_version_for_revision(revision.id, artifact_type, "rendered")
@@ -263,6 +264,8 @@ def qualify_ready_revision(
             )
             continue
         rendered_versions.append((version, label))
+        if artifact_type == "resume_html":
+            html_version = version
         if version["application_id"] != application_id:
             fail(
                 "revision_binding",
@@ -314,6 +317,7 @@ def qualify_ready_revision(
         application_id=application_id,
         approved_revision_id=revision.id,
         pdf_artifact_version_id=(pdf_version or {}).get("id"),
+        html_artifact_version_id=(html_version or {}).get("id"),
         ready_qualified=report.passed,
         validation=report,
     )

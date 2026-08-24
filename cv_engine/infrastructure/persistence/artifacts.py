@@ -375,6 +375,20 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
             raise UnknownRecord(f"no validation report {validation_id}")
         return ValidationReport.model_validate_json(row["report_json"])
 
+    def validation_run(self, validation_id: str) -> dict[str, Any]:
+        """Read immutable validation evidence by ID, irrespective of current draft state."""
+        with self.read_connection() as connection:
+            row = connection.execute(
+                "SELECT id, application_id, working_draft_id, edit_version, content_hash, "
+                "report_json, created_at FROM validation_runs WHERE id=? AND phase='pre-render'",
+                (validation_id,),
+            ).fetchone()
+        if row is None:
+            raise UnknownRecord(f"no validation run {validation_id}")
+        record = dict(row)
+        record["report"] = ValidationReport.model_validate_json(record.pop("report_json"))
+        return record
+
     def integrity_check(self) -> list[str]:
         problems: list[str] = []
         with self.read_connection() as connection:

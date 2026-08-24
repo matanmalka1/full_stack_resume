@@ -89,6 +89,9 @@ def build_parser() -> argparse.ArgumentParser:
     workspace_sub.add_parser(
         "status", help="show Workspace identity, roots, and resolved configuration"
     )
+    workspace_sub.add_parser(
+        "upgrade", help="explicitly apply pending registered SQLite migrations"
+    )
     workspace_backup = workspace_sub.add_parser(
         "backup", help="copy this Workspace's durable state into a new directory"
     )

@@ -259,6 +259,17 @@ class WorkingDraftView(BoundaryDTO):
     latest_validation_passed: bool | None = None
 
 
+class ValidationRunView(BoundaryDTO):
+    application_id: str
+    working_draft_id: str
+    validation_run_id: str
+    edit_version: int
+    content_hash: str
+    passed: bool
+    report: ValidationReport
+    created_at: str
+
+
 class ArtifactVersionView(BoundaryDTO):
     id: str
     artifact_id: str
@@ -335,6 +346,7 @@ class ApprovedRevisionView(BoundaryDTO):
     decision_provenance: dict[str, Any]
     ready_qualified: bool
     pdf_artifact_version_id: str | None = None
+    html_artifact_version_id: str | None = None
     ready_validation: ValidationReport
 
 
@@ -506,6 +518,7 @@ def approved_revision_view(
         decision_provenance=revision.decision_provenance,
         ready_qualified=qualification.ready_qualified,
         pdf_artifact_version_id=qualification.pdf_artifact_version_id,
+        html_artifact_version_id=qualification.html_artifact_version_id,
         ready_validation=qualification.validation,
     )
 

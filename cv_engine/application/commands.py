@@ -144,6 +144,7 @@ class DraftCommand(BoundaryDTO):
     application_id: str
     job_analysis_id: str
     selection_plan_id: str
+    parent_revision_id: str | None = None
     provider: Literal["deterministic", "openai"] = "deterministic"
 
 

@@ -108,3 +108,20 @@ def artifact_response(delivery: ArtifactDelivery) -> StreamingResponse:
             "ETag": f'"{delivery.content_hash}"',
         },
     )
+
+
+def inline_html_response(delivery: ArtifactDelivery) -> StreamingResponse:
+    """Frame verified HTML without duplicating artifact verification or download policy."""
+    return StreamingResponse(
+        delivery.stream.chunks(),
+        media_type="text/html; charset=utf-8",
+        headers={
+            "Content-Length": str(delivery.size),
+            "ETag": f'"{delivery.content_hash}"',
+            "Content-Security-Policy": (
+                "default-src 'none'; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'"
+            ),
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-store",
+        },
+    )

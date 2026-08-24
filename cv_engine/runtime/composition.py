@@ -34,6 +34,7 @@ from ..application.services.operations import (
 from ..application.services.projections import ApplicationQueryService
 from ..application.services.rendering import RenderingService
 from ..application.services.tracking import TrackingService
+from ..application.settings import SettingsService
 from ..infrastructure.artifacts import FilesystemArtifactStore
 from ..infrastructure.knowledge import FileKnowledge
 from ..infrastructure.operation_logging import OperationFailureLogger
@@ -73,6 +74,7 @@ class Services:
     operation_runner: OperationRunner
     foreground_operations: ForegroundOperationExecutor
     operation_worker: OperationWorker
+    settings: SettingsService
 
 
 def build_services(
@@ -149,6 +151,9 @@ def build_services(
     worker = OperationWorker(resolved_repository, runner)
     knowledge_service = KnowledgeService(**shared)
     knowledge_service.recover_knowledge_mutations()
+    settings_service = SettingsService(
+        resolved_repository, provider_configured=resolved_provider is not None
+    )
     return Services(
         workspace=workspace,
         repository=resolved_repository,
@@ -167,6 +172,7 @@ def build_services(
         operation_runner=runner,
         foreground_operations=foreground,
         operation_worker=worker,
+        settings=settings_service,
     )
 
 
@@ -199,6 +205,7 @@ def build_api_services(
         tracking=services.tracking,
         knowledge=services.knowledge_lifecycle,
         operations=services.operations,
+        settings=services.settings,
         identity=InstanceIdentity(
             installation_id=services.workspace.installation_id(),
             workspace_id=services.workspace.workspace_id,

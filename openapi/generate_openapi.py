@@ -42,6 +42,7 @@ def schema_only_services() -> ApiServices:
         tracking=placeholder,
         knowledge=placeholder,
         operations=placeholder,
+        settings=placeholder,
         identity=InstanceIdentity(
             installation_id="schema-only",
             workspace_id="schema-only",

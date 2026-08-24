@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 from .applications import ArtifactVersionResponse
+from .drafts import ValidationReportResponse
 from .health import HttpSchema
 
 
@@ -63,6 +64,7 @@ class ApprovedRevisionResponse(HttpSchema):
     decision_provenance: dict[str, Any]
     ready_qualified: bool
     pdf_artifact_version_id: str | None = None
+    html_artifact_version_id: str | None = None
     # `dict`, matching `ValidationRunResponse.report`: reports are one shape
     # across the API, and giving this one a typed model would make two.
-    ready_validation: dict[str, Any]
+    ready_validation: ValidationReportResponse

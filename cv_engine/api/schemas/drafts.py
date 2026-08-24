@@ -30,6 +30,7 @@ class GenerateWorkingDraftRequest(HttpSchema):
 
     job_analysis_id: str
     selection_plan_id: str
+    parent_revision_id: str | None = None
     provider: Literal["deterministic", "openai"] = "deterministic"
 
 
@@ -286,6 +287,21 @@ class ArchivedWorkingDraftResponse(HttpSchema):
     artifact_version_id: str
 
 
+class ValidationIssueResponse(HttpSchema):
+    group: str
+    code: str
+    message: str
+    hard: bool
+
+
+class ValidationReportResponse(HttpSchema):
+    report_schema_version: str | None = None
+    passed: bool
+    groups: dict[str, bool]
+    issues: list[ValidationIssueResponse]
+    evidence: dict[str, Any]
+
+
 class ValidationRunResponse(HttpSchema):
     """A ValidationRun as data. `passed=false` arrives as `200` (§22)."""
 
@@ -295,7 +311,8 @@ class ValidationRunResponse(HttpSchema):
     edit_version: int
     content_hash: str
     passed: bool
-    report: dict[str, Any]
+    report: ValidationReportResponse
+    created_at: str | None = None
 
 
 class ApprovalResponse(HttpSchema):

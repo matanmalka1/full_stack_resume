@@ -1,0 +1,20 @@
+-- Safe Web preferences are durable Workspace state (§16), not runtime
+-- configuration.  The singleton row is created lazily so a read can derive
+-- provider-dependent defaults without writing during a query.
+CREATE TABLE IF NOT EXISTS workspace_settings (
+    singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+    edit_version INTEGER NOT NULL CHECK (edit_version > 0),
+    auto_generate_when_review_not_required INTEGER NOT NULL
+        CHECK (auto_generate_when_review_not_required IN (0, 1)),
+    ai_enabled_override INTEGER
+        CHECK (ai_enabled_override IS NULL OR ai_enabled_override IN (0, 1)),
+    default_execution_mode TEXT NOT NULL
+        CHECK (default_execution_mode IN ('deterministic', 'ai')),
+    open_browser_on_launch INTEGER NOT NULL
+        CHECK (open_browser_on_launch IN (0, 1)),
+    ui_density TEXT NOT NULL
+        CHECK (ui_density IN ('comfortable', 'compact')),
+    ui_text_size TEXT NOT NULL
+        CHECK (ui_text_size IN ('normal', 'large')),
+    updated_at TEXT NOT NULL
+);

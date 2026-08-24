@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 from typing import Any
 
-from ..infrastructure.persistence import current_schema_version, initialize
+from ..infrastructure.persistence import apply_migrations, current_schema_version, initialize
 from ..runtime.backup import backup_workspace, restore_workspace
 from ..runtime.workspace import Workspace, create_workspace, load_workspace
 from .context import CommandContext, _command, _workspace_config
@@ -47,6 +47,19 @@ def workspace_command(
         opened = opened or load_workspace(root)
         _print(backup_workspace(opened, args.into.resolve()).describe())
         return 0
+    if args.workspace_command == "upgrade":
+        opened = opened or load_workspace(root)
+        before = current_schema_version(opened.database_path)
+        after = apply_migrations(opened.database_path)
+        _print(
+            {
+                **opened.describe(),
+                "schema_version_before": before,
+                "schema_version": after,
+                "upgraded": before != after,
+            }
+        )
+        return 0
     if args.workspace_command == "restore":
         # Restore runs before the restored Workspace exists, so it opens the
         # backup rather than the selected root. Reporting the schema version
@@ -66,7 +79,7 @@ def workspace_command(
 @_command("workspace", needs="root")
 def _workspace(context: CommandContext) -> int:
     args = context.args
-    if args.workspace_command != "status":
+    if args.workspace_command not in {"status", "upgrade"}:
         return workspace_command(context.root, context.config, args)
     workspace = load_workspace(context.root)
     return workspace_command(

@@ -28,6 +28,8 @@ from .routers import (
     artifacts,
     health,
     operations,
+    settings,
+    validation_runs,
     working_drafts,
 )
 from .security import BodySizeLimitMiddleware, OriginPolicyMiddleware, allowed_origins
@@ -82,6 +84,8 @@ def create_app(
     app.include_router(approved_revisions.router, prefix=API_PREFIX)
     app.include_router(artifacts.router, prefix=API_PREFIX)
     app.include_router(operations.router, prefix=API_PREFIX)
+    app.include_router(settings.router, prefix=API_PREFIX)
+    app.include_router(validation_runs.router, prefix=API_PREFIX)
     if frontend_dist is not None:
         # Added last, so it runs first. It handles only safe static GET/HEAD
         # requests and passes every API path through to the existing transport
