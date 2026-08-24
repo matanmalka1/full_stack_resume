@@ -4,6 +4,16 @@ import { LtrText } from "../ui/LtrText";
 import { SummaryList } from "../ui/SummaryList";
 import { TechnicalDetails } from "../ui/TechnicalDetails";
 
+const blockerResolution = (code: string): string => {
+  if (code === "unlinked-claim" || code === "pending-claim") {
+    return "חזרו לעריכה וקשרו את הטענה לעובדה מאושרת, השלימו את מחזור אישור העובדה, או הסירו את הטענה; לאחר מכן הריצו אימות מחדש.";
+  }
+  if (code === "low-fit" || code === "classification-approval-required") {
+    return "חזרו למסך המועמדות והשלימו את החלטת הסקירה הנדרשת לפני אימות מחדש.";
+  }
+  return "חזרו לעריכה, תקנו את הבעיה המתוארת והריצו אימות מחדש. האישור נשאר חסום עד לאימות שעובר.";
+};
+
 export const ValidationReportView = ({ report }: { report: ValidationReport }) => {
   const hard = report.issues.filter((issue) => issue.hard);
   const warnings = report.issues.filter((issue) => !issue.hard);
@@ -11,14 +21,17 @@ export const ValidationReportView = ({ report }: { report: ValidationReport }) =
   return (
     <div className="flex flex-col gap-4">
       {hard.map((issue, index) => (
-        <Callout key={`${issue.code}-${index}`} title={issue.message} tone="blocker">
+        <Callout key={`${issue.code}-${index}`} title="חסימת אימות" tone="blocker">
+          <p dir="auto">{issue.message}</p>
+          <p className="mt-2">{blockerResolution(issue.code)}</p>
           <TechnicalDetails className="mt-3">
             <LtrText>{`${issue.group} · ${issue.code}`}</LtrText>
           </TechnicalDetails>
         </Callout>
       ))}
       {warnings.map((issue, index) => (
-        <Callout key={`${issue.code}-${index}`} title={issue.message} tone="warning">
+        <Callout key={`${issue.code}-${index}`} title="אזהרת אימות לא חוסמת" tone="warning">
+          <p dir="auto">{issue.message}</p>
           <TechnicalDetails className="mt-3">
             <LtrText>{`${issue.group} · ${issue.code}`}</LtrText>
           </TechnicalDetails>

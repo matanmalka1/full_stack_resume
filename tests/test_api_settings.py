@@ -84,6 +84,22 @@ def test_ai_enabled_is_derived_from_provider_until_an_override_is_stored(
     assert disabled.json()["ai_enabled"] is False
 
 
+def test_stored_true_override_does_not_report_ai_enabled_without_a_provider(
+    api_worker,
+) -> None:
+    initial = api_worker.client.get(f"{API_PREFIX}/settings")
+    stored = _patch(
+        api_worker,
+        initial.headers["ETag"],
+        _update_body(ai_enabled_override=True),
+    )
+
+    assert stored.status_code == 200, stored.text
+    assert stored.json()["provider_configured"] is False
+    assert stored.json()["ai_enabled_override"] is True
+    assert stored.json()["ai_enabled"] is False
+
+
 def test_settings_patch_updates_live_and_rejects_a_stale_etag_without_writing(
     api_worker,
 ) -> None:

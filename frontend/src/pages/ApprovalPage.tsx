@@ -87,7 +87,7 @@ export const ApprovalPage = () => {
             <ValidationReportView report={run.report} />
           </>
         )}
-        {approval.error === null || (approval.error instanceof ApiProblem && approval.error.problem.code === "VALIDATION_STALE") ? null : (
+        {open || approval.error === null || (approval.error instanceof ApiProblem && approval.error.problem.code === "VALIDATION_STALE") ? null : (
           <Callout role="alert" title="האישור לא בוצע" tone="blocker">
             {approval.error instanceof ApiProblem ? approval.error.problem.detail : "הפנייה לשרת נכשלה."}
           </Callout>
@@ -108,7 +108,23 @@ export const ApprovalPage = () => {
         open={open}
         title="אישור גרסה קבועה"
       >
-        <p>האישור יוצר רשומה קבועה מהטיוטה ומריצת האימות המוצגות כאן.</p>
+        <p>האישור יוצר רשומה קבועה מהטיוטה ומריצת האימות המדויקות הבאות.</p>
+        {detail === undefined || draft === undefined || run === undefined ? null : (
+          <SummaryList
+            items={[
+              { term: "חברה", value: detail.application.company },
+              { term: "תפקיד", value: detail.application.target_role },
+              { term: "גרסת טיוטה", value: draft.edit_version, ltr: true },
+              { term: "תוצאת אימות", value: run.passed ? "עברה" : "נכשלה" },
+              { term: "מזהה ריצת האימות", value: run.validation_run_id, ltr: true },
+            ]}
+          />
+        )}
+        {approval.error === null || (approval.error instanceof ApiProblem && approval.error.problem.code === "VALIDATION_STALE") ? null : (
+          <Callout className="mt-4" role="alert" title="האישור לא בוצע" tone="blocker">
+            {approval.error instanceof ApiProblem ? approval.error.problem.detail : "הפנייה לשרת נכשלה."}
+          </Callout>
+        )}
         {warnings.length === 0 ? null : (
           <Callout className="mt-4" title="נותרו אזהרות לא חוסמות" tone="warning">
             <ul className="mb-3 list-disc ps-5">

@@ -60,11 +60,7 @@ class SettingsService:
         self.provider_configured = provider_configured
 
     def _view(self, stored: StoredSettings) -> SettingsView:
-        enabled = (
-            self.provider_configured
-            if stored.ai_enabled_override is None
-            else stored.ai_enabled_override
-        )
+        enabled = self.provider_configured and stored.ai_enabled_override is not False
         return SettingsView(
             **stored.model_dump(mode="python"),
             ai_enabled=enabled,
@@ -75,11 +71,7 @@ class SettingsService:
         return self._view(self.repo.workspace_settings())
 
     def update(self, expected_edit_version: int, command: UpdateSettings) -> SettingsView:
-        enabled = (
-            self.provider_configured
-            if command.ai_enabled_override is None
-            else command.ai_enabled_override
-        )
+        enabled = self.provider_configured and command.ai_enabled_override is not False
         if command.default_execution_mode == "ai" and not (
             self.provider_configured and enabled
         ):

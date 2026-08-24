@@ -787,12 +787,38 @@ integrity problems.
 
 ## E — Validate, approve, render, and Ready
 
-- [ ] Validation outcomes, blocker/warning hierarchy, edit/revalidate path.
-- [ ] Explicit approval confirmation bound to the exact eligible ValidationRun.
-- [ ] Render Operation, failure/retry, and preservation of Approved state.
-- [ ] Ready preview, exact PDF download, validation/provenance, and New Draft.
-- [ ] Old Ready plus newer draft and historical-context warning presentation.
-- [ ] Minimal Settings within the approved safe surface.
+- [x] Validation outcomes, blocker/warning hierarchy, edit/revalidate path.
+- [x] Explicit approval confirmation bound to the exact eligible ValidationRun.
+- [x] Render Operation, failure/retry, and preservation of Approved state.
+- [x] Ready preview, exact PDF download, validation/provenance, and New Draft.
+- [x] Old Ready plus newer draft and historical-context warning presentation.
+- [x] Minimal Settings within the approved safe surface.
+
+**Stage E is closed on its applicable Class C gate.** After the focused review below, the
+user confirmed that every remaining required gate passed against the completed Stage E tree:
+the frontend checks, non-browser suite, golden hashes, architecture guard, offline CLI
+workflow, browser suite, and frozen schema fingerprint. The closing confirmation did not
+include per-command counts or interpreter details, so none are invented here; it reported no
+failure, unexplained delta, or remaining Stage E work.
+
+The closing review corrected four behavior gaps. Effective AI execution now requires both
+configured provider availability and effective enablement, so a persisted `ai` default cannot
+queue doomed provider work after the key disappears. The non-dismissible approval dialog names
+the exact company, role, draft version, and ValidationRun it will approve and keeps non-stale
+mutation errors inside the modal focus boundary. Ready derives historical context from the
+displayed ApprovedRevision rather than from the Application's latest Ready revision, preserving
+download eligibility while labeling the exact old snapshot or analysis in Hebrew. Validation
+blockers retain the validator evidence and code but add a Hebrew safe-resolution instruction,
+including the link/confirm/remove choices for unsupported claims.
+
+Focused evidence on 2026-08-24, run by the implementing agent against the working tree after
+`6d22df5`:
+
+| Command | Observed | What it proves |
+| --- | --- | --- |
+| `pytest tests/test_api_settings.py` | **6 passed** | effective provider/AI state, safe surface, ETag conflict, and persistence behavior |
+| `cd frontend && npx vitest run src/api/settingsBehavior.test.ts src/pages/StageEPages.test.tsx src/pages/ValidationReportView.test.tsx` | **21 passed in 3 files** | deterministic fallback, exact approval modal/error behavior, displayed-revision historical warning, validation resolution copy, and the existing Stage E page contracts |
+| `git diff --check` | **passed** | the working patch has no whitespace errors |
 
 ## F — M4 gate
 
@@ -809,8 +835,9 @@ integrity problems.
 
 ## Current next action
 
-**Stages B, C, and D are closed on their applicable gates.** The next slice is Stage E:
-validation outcomes, blocker/warning hierarchy, and the edit/revalidate path.
+**Stages B, C, and D are closed on their applicable gates. Stage E implementation is complete
+and closed on its applicable Class C gate.** The next product boundary is Stage F's real
+built-Web journey and central failure matrix.
 
 **The Known gap recorded here is closed.** A terminal Operation screen was a dead end: it
 reported that the Operation had finished and offered no way forward, and the destination

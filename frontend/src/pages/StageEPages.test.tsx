@@ -139,12 +139,31 @@ describe("ApprovalPage", () => {
     const openApproval = await screen.findByRole("button", { name: "פתיחת אישור" });
     await waitFor(() => expect(openApproval).toBeEnabled());
     fireEvent.click(openApproval);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("Acme");
+    expect(dialog).toHaveTextContent("Engineer");
+    expect(dialog).toHaveTextContent("4");
+    expect(dialog).toHaveTextContent("run-1");
     const approve = await screen.findByRole("button", { name: "אישור הגרסה" });
     expect(approve).toBeDisabled();
     fireEvent.click(screen.getByRole("checkbox")); fireEvent.click(approve);
     await screen.findByRole("heading", { name: "רינדור" });
     const request = fetchMock.mock.calls.find((call) => call[1]?.method === "POST");
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({ expected_edit_version: 4, validation_run_id: "run-1" });
+  });
+
+  it("shows a non-stale approval failure inside the open trust-boundary dialog", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: string | URL | Request, init?: RequestInit) => init?.method === "POST"
+      ? Promise.resolve(json({ type: "about:blank", title: "Conflict", status: 409, code: "STATE_CONFLICT", detail: "approval changed" }, 409))
+      : Promise.resolve(json(String(input).includes("validation-runs") ? validation() : String(input).includes("working-drafts") ? draft() : detail()))));
+    renderRoute("/applications/app-1/approval", "/applications/:applicationId/approval", <ApprovalPage />);
+    const openApproval = await screen.findByRole("button", { name: "פתיחת אישור" });
+    await waitFor(() => expect(openApproval).toBeEnabled());
+    fireEvent.click(openApproval);
+    fireEvent.click(await screen.findByRole("button", { name: "אישור הגרסה" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("approval changed");
+    expect(dialog).toHaveAttribute("open");
   });
 
   it("returns VALIDATION_STALE to validation without retrying automatically", async () => {
@@ -184,6 +203,24 @@ describe("RenderPage and ReadyPage", () => {
     expect(frame).toHaveAttribute("sandbox", "");
     expect(frame).toHaveAttribute("src", "/api/v1/approved-revisions/revision-1/preview?html_artifact_version_id=html-1");
     expect(screen.getByRole("link", { name: "הורדת PDF" })).toHaveAttribute("href", "/api/v1/approved-revisions/revision-1/recruiter-pdf?pdf_artifact_version_id=pdf-1");
+  });
+
+  it("labels the displayed Ready revision historical even when the latest Ready is current", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: string | URL | Request) => Promise.resolve(json(
+      String(input).includes("applications")
+        ? detail({
+            preparation_state: "ready",
+            active_job_snapshot_id: "snapshot-2",
+            active_analysis_id: "analysis-2",
+            latest_ready_revision_id: "revision-2",
+            warnings: [],
+          })
+        : revision({ job_snapshot_id: "snapshot-1", job_analysis_id: "analysis-1" }),
+    ))));
+    renderRoute("/approved-revisions/revision-1/ready", "/approved-revisions/:approvedRevisionId/ready", <ReadyPage />);
+    expect(await screen.findByText("הגרסה היסטורית בהקשר הפעיל")).toBeInTheDocument();
+    expect(screen.getByText(/תצלום משרה ישן יותר/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "הורדת PDF" })).toBeInTheDocument();
   });
 
   it("creates a child draft from explicit active sources without a provider", async () => {

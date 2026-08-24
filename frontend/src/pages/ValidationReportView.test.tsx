@@ -25,6 +25,15 @@ describe("ValidationReportView", () => {
     ] })} />);
     expect(screen.getByText("Blocked").closest(".rounded-surface")).toHaveTextContent("חסימה");
     expect(screen.getByText("Review").closest(".rounded-surface")).toHaveTextContent("אזהרה");
+    expect(screen.getByText("Blocked").closest(".rounded-surface")).toHaveTextContent("הריצו אימות מחדש");
+  });
+
+  it("gives unsupported claims their specific safe resolution", () => {
+    render(<ValidationReportView report={report({ passed: false, issues: [
+      { group: "content", code: "unlinked-claim", hard: true, message: "Unsupported text" },
+    ] })} />);
+    expect(screen.getByText(/קשרו את הטענה לעובדה מאושרת/)).toBeInTheDocument();
+    expect(screen.getByText(/או הסירו את הטענה/)).toBeInTheDocument();
   });
 
   it("preserves unknown group and issue codes in technical details", () => {

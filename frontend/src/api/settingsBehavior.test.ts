@@ -18,6 +18,11 @@ describe("effective Settings behavior", () => {
     expect(executionProvider(settings({ default_execution_mode: "ai" }))).toBe("openai");
   });
 
+  it("falls back to deterministic execution when AI is disabled or unconfigured", () => {
+    expect(executionProvider(settings({ default_execution_mode: "ai", ai_enabled: false }))).toBeUndefined();
+    expect(executionProvider(settings({ default_execution_mode: "ai", provider_configured: false }))).toBeUndefined();
+  });
+
   it("requires both provider configuration and effective AI enablement for regeneration", () => {
     expect(aiRegenerationAvailable(settings())).toBe(true);
     expect(aiRegenerationAvailable(settings({ provider_configured: false }))).toBe(false);

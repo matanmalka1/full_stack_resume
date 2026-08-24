@@ -52,6 +52,19 @@ export const ReadyPage = () => {
     },
   });
   const hasSources = detail?.active_analysis_id != null && detail.active_selection_plan_id != null;
+  const historicalContext =
+    revision === undefined || detail === undefined
+      ? null
+      : revision.job_snapshot_id !== detail.active_job_snapshot_id
+        ? "הגרסה המוכנה שייכת לתצלום משרה ישן יותר מהתצלום הפעיל. הקבצים שלה נשארים תקינים וזמינים להורדה."
+        : revision.job_analysis_id !== detail.active_analysis_id
+          ? "הגרסה המוכנה שייכת לניתוח ישן יותר מהניתוח הפעיל. הקבצים שלה נשארים תקינים וזמינים להורדה."
+          : null;
+  const otherWarnings = detail?.warnings.filter(
+    (warning) =>
+      warning.code !== "READY_REVISION_FOR_OLDER_SNAPSHOT" &&
+      warning.code !== "READY_REVISION_FOR_OLDER_ANALYSIS",
+  );
 
   return (
     <Card aria-labelledby="route-heading">
@@ -66,7 +79,12 @@ export const ReadyPage = () => {
               : "הפנייה לשרת נכשלה."}
           </Callout>
         )}
-        {detail?.warnings.map((warning) => (
+        {historicalContext === null ? null : (
+          <Callout title="הגרסה היסטורית בהקשר הפעיל" tone="warning">
+            {historicalContext}
+          </Callout>
+        )}
+        {otherWarnings?.map((warning) => (
           <Callout key={warning.code} title={warning.message} tone="warning" />
         ))}
         {detail?.newer_draft_in_progress ? (
