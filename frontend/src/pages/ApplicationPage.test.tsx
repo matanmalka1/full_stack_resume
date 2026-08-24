@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -110,6 +110,12 @@ const renderPage = (settings: Settings = deterministicSettings) => {
   );
 };
 
+const clickEnabledButton = async (name: string) => {
+  const button = await screen.findByRole("button", { name });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+};
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -134,7 +140,7 @@ describe("ApplicationPage", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "ניתוח המשרה" }));
+    await clickEnabledButton("ניתוח המשרה");
 
     expect(await screen.findByRole("heading", { name: "מצב הפעולה" })).toBeInTheDocument();
 
@@ -163,7 +169,7 @@ describe("ApplicationPage", () => {
       updated_at: null,
     });
 
-    fireEvent.click(await screen.findByRole("button", { name: "ניתוח המשרה" }));
+    await clickEnabledButton("ניתוח המשרה");
 
     expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
       job_snapshot_id: "snap-1",
@@ -181,7 +187,7 @@ describe("ApplicationPage", () => {
     );
 
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "ניתוח המשרה" }));
+    await clickEnabledButton("ניתוח המשרה");
 
     expect(await screen.findByRole("alert")).toHaveTextContent("הפעולה לא בוצעה");
     expect(screen.queryByRole("heading", { name: "מצב הפעולה" })).not.toBeInTheDocument();
@@ -285,7 +291,7 @@ describe("ApplicationPage", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "יצירת טיוטה" }));
+    await clickEnabledButton("יצירת טיוטה");
 
     expect(await screen.findByRole("heading", { name: "מצב הפעולה" })).toBeInTheDocument();
 

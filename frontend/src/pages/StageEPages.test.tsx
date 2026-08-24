@@ -99,7 +99,9 @@ describe("ValidationPage", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/applications/app-1/validation", "/applications/:applicationId/validation", <ValidationPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "אימות הטיוטה" }));
+    const validate = await screen.findByRole("button", { name: "אימות הטיוטה" });
+    await waitFor(() => expect(validate).toBeEnabled());
+    fireEvent.click(validate);
     expect(await screen.findByRole("link", { name: "מעבר לאישור" })).toBeInTheDocument();
     const request = fetchMock.mock.calls.find((call) => call[1]?.method === "POST");
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({ expected_edit_version: 4 });
@@ -116,8 +118,10 @@ describe("ApprovalPage", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/applications/app-1/approval?validation_run_id=run-1", "/applications/:applicationId/approval", <ApprovalPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "פתיחת אישור" }));
-    const approve = screen.getByRole("button", { name: "אישור הגרסה" });
+    const openApproval = await screen.findByRole("button", { name: "פתיחת אישור" });
+    await waitFor(() => expect(openApproval).toBeEnabled());
+    fireEvent.click(openApproval);
+    const approve = await screen.findByRole("button", { name: "אישור הגרסה" });
     expect(approve).toBeDisabled();
     fireEvent.click(screen.getByRole("checkbox")); fireEvent.click(approve);
     await screen.findByRole("heading", { name: "רינדור" });
@@ -131,7 +135,10 @@ describe("ApprovalPage", () => {
       : Promise.resolve(json(String(input).includes("validation-runs") ? validation() : String(input).includes("working-drafts") ? draft() : detail())));
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/applications/app-1/approval", "/applications/:applicationId/approval", <ApprovalPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "פתיחת אישור" })); fireEvent.click(screen.getByRole("button", { name: "אישור הגרסה" }));
+    const openApproval = await screen.findByRole("button", { name: "פתיחת אישור" });
+    await waitFor(() => expect(openApproval).toBeEnabled());
+    fireEvent.click(openApproval);
+    fireEvent.click(await screen.findByRole("button", { name: "אישור הגרסה" }));
     expect(await screen.findByRole("heading", { name: "אימות" })).toBeInTheDocument();
     expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1);
   });
@@ -144,7 +151,9 @@ describe("RenderPage and ReadyPage", () => {
       : Promise.resolve(json(revision({ ready_qualified: false, html_artifact_version_id: null, pdf_artifact_version_id: null }))));
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/approved-revisions/revision-1/render", "/approved-revisions/:approvedRevisionId/render", <RenderPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "יצירת HTML ו־PDF" }));
+    const renderButton = await screen.findByRole("button", { name: "יצירת HTML ו־PDF" });
+    await waitFor(() => expect(renderButton).toBeEnabled());
+    fireEvent.click(renderButton);
     expect(await screen.findByRole("heading", { name: "פעולה" })).toBeInTheDocument();
     const request = fetchMock.mock.calls.find((call) => call[1]?.method === "POST");
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({ application_id: "app-1" });
@@ -166,6 +175,9 @@ describe("RenderPage and ReadyPage", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/approved-revisions/revision-1/ready", "/approved-revisions/:approvedRevisionId/ready", <ReadyPage />);
     fireEvent.click(await screen.findByRole("button", { name: "יצירת טיוטה חדשה" }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some((call) => call[1]?.method === "POST")).toBe(true),
+    );
     const request = fetchMock.mock.calls.find((call) => call[1]?.method === "POST");
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({ job_analysis_id: "analysis-1", selection_plan_id: "plan-1", parent_revision_id: "revision-1" });
   });
@@ -180,7 +192,9 @@ describe("SettingsPage", () => {
   });
 
   it("saves all product settings under the read ETag", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(json(settings({ edit_version: 1 }), 200, { ETag: '"settings-1"' }));
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(json(settings({ edit_version: 1 }), 200, { ETag: '"settings-1"' })),
+    );
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/settings", "/settings", <SettingsPage />);
     fireEvent.click(await screen.findByRole("button", { name: "שמירת הגדרות" }));

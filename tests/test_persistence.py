@@ -320,21 +320,26 @@ def test_workspace_settings_updates_are_optimistic_and_atomic(
 
 
 def test_verified_baseline_adoption_and_difference_reporting(tmp_path: Path) -> None:
-    # The baseline is the only migration, so an "adoptable" database created by
-    # running its raw SQL directly (bypassing the runner, as an existing database
-    # with no schema_migrations bookkeeping would) is already at head. Adoption
-    # is expected to succeed silently rather than demand `cv workspace upgrade`.
+    # An unstamped database may be adopted only when it is the exact frozen 0001
+    # shape. Adoption records 0001 but must not silently apply later migrations:
+    # the normal open fails closed until the explicit upgrade command runs.
     sql = (MIGRATIONS_DIR / "0001_baseline.sql").read_text(encoding="utf-8")
     adoptable = tmp_path / "adoptable.sqlite3"
     with connect(adoptable) as connection:
         connection.executescript(sql)
     with connect(adoptable) as connection:
         before = sqlite_master_fingerprint(connection)
-    Repository(adoptable)
+    with pytest.raises(SchemaVersionError, match=r"run `cv workspace upgrade` explicitly"):
+        Repository(adoptable)
     with connect(adoptable) as connection:
         assert sqlite_master_fingerprint(connection) == before == baseline_fingerprint()
         assert connection.execute("SELECT version FROM schema_migrations").fetchone()[0] == "0001"
-    assert current_schema_version(adoptable) == HEAD_VERSION
+        assert connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='workspace_settings'"
+        ).fetchone() is None
+    assert current_schema_version(adoptable) == "0001"
+
+    assert apply_migrations(adoptable) == HEAD_VERSION
 
     fresh = tmp_path / "fresh-head.sqlite3"
     Repository(fresh)

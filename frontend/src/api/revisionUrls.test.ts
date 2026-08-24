@@ -8,7 +8,11 @@ describe("approved artifact URLs", () => {
   });
 
   it("names the exact HTML artifact in the preview query", () => {
-    expect(approvedPreviewSrc("revision-1", "html/1")).toEndWith("html_artifact_version_id=html%2F1");
+    expect(
+      approvedPreviewSrc("revision-1", "html/1").endsWith(
+        "html_artifact_version_id=html%2F1",
+      ),
+    ).toBe(true);
   });
 
   it("names the exact PDF artifact without resolving a latest version", () => {
