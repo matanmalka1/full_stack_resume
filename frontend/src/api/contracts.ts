@@ -6,4 +6,6 @@ export type ApiSchemas = components["schemas"];
 
 export type ApplicationDetail = ApiSchemas["ApplicationDetailResponse"];
 export type Operation = ApiSchemas["OperationResponse"];
+export type OperationStatus = ApiSchemas["OperationStatus"];
+export type OperationPhase = ApiSchemas["OperationPhase"];
 export type WorkingDraft = ApiSchemas["WorkingDraftResponse"];

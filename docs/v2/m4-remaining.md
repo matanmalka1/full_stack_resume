@@ -362,7 +362,23 @@ production-build evidence accepted on 2026-08-24.
       radius, or shadow token. Its exception list is deliberately empty. The guard was
       proven to fail: a probe component carrying one violation of each rule produced five
       errors and exit 1, and the tree returned to green when the probe was removed.
-- [ ] Add shared Operation polling without WebSocket or SSE.
+- [ ] Add shared Operation polling without WebSocket or SSE. `operationQueryOptions` in
+      `src/api/operations.ts` polls `GET /api/v1/operations/{id}` every 1500ms through
+      TanStack Query and returns `false` from `refetchInterval` once the Operation reports
+            `is_terminal`, so a finished Operation is never polled again. A transient failure -
+      a 5xx, a timeout, a dropped connection, a 408 or a 429 - keeps the interval alive, so
+      a momentary backend hiccup does not end the poll, while any other 4xx stops it: a
+      404 `UNKNOWN_RECORD` will not start existing, and repeating that request every 1.5s
+      forever is a request loop the user can neither see nor stop. `OperationPage` renders status, phase, the safe message, and
+      `safe_failure_detail` through the existing primitives, announces status and phase
+      changes through `LiveRegion` but never a tick, formats timestamps for reading while
+      keeping the raw ISO values under `TechnicalDetails`, and shows a safe fallback for a
+      transport error that is not a Problem Details. Backend-authored text carries
+      `dir="auto"` per A.3 rather than inheriting the RTL shell, applied in `Callout`,
+      `PageHeading`, and `SummaryList` rather than at each call site, since those three
+      primitives are where backend strings reach the DOM; failure codes remain explicit
+      LTR islands. No percentage is shown, because the
+      Operation contract has no such field. Cancel and retry are not in this slice.
 - [ ] **Contract change (Class B): `OperationResponse` reports `is_terminal` and stops
       flattening its closed sets to `str`.** The first draft of the frontend kept its own
       copy of `TERMINAL_OPERATION_STATUSES`, because the HTTP schema typed `status` as a
@@ -429,10 +445,21 @@ production-build evidence accepted on 2026-08-24.
 
 ## Current next action
 
-The design system is closed. Add shared Operation polling through TanStack Query without
-WebSocket, SSE, synthetic percentages, or automatic mutation retries, rendering it with the
-existing primitives. Do not implement Dashboard navigation, tracking endpoints, or the
-Stage C intake flow yet.
+Polling is implemented and awaiting its gate.
+
+**Known gap, deliberately not filled here.** A terminal Operation screen is a dead end: it
+reports that the Operation finished and offers no way forward. The destination is not this
+screen's to invent. Which action follows an Operation depends on the application projection
+(`recommended_action`, `available_actions`), and A.1 forbids the frontend inferring a second
+workflow state machine — a hardcoded `operation_type` to route map would be exactly that.
+The Stage C surface that owns the application projection adds the continuation, and no
+Operation screen ships to a real user before it does.
+
+The Stage B remainder is then the test foundation: Vitest, React Testing Library, Playwright Web E2E, and axe, without blanket DOM
+snapshots. Operation cancel and retry are the first slice after that, since they are
+mutations and need the `409`/`202`-plus-`Location` behavior the polling slice does not
+touch. Do not implement Dashboard navigation, tracking endpoints, or the Stage C intake
+flow yet.
 
 One A.4 surface is deliberately not a primitive: the sandboxed preview frame. Its direction
 isolation and refresh behavior depend on the render contract, so it is built in Stage D with

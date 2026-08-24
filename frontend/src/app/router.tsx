@@ -1,6 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 
 import { App } from "../App";
+import { OperationPage } from "../pages/OperationPage";
 import { RoutePlaceholder } from "../pages/RoutePlaceholder";
 import { RouteErrorBoundary } from "./RouteErrorBoundary";
 
@@ -25,7 +26,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "operations/:operationId",
-        element: <RoutePlaceholder title="הפעולה מתבצעת" />,
+        element: <OperationPage />,
       },
       {
         path: "applications/:applicationId/review",
