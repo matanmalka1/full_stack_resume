@@ -606,13 +606,135 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
 
 ## D — Draft Editor and preview
 
+**All six bullets are implemented and none is closed.** The stage gate has not been run:
+the commands and their exact predictions are handed over under *Stage D — gate awaiting
+evidence* below, and nothing here is marked closed until those numbers come back. The
+boxes stay unticked deliberately.
+
 - [ ] Structured claims/sections, linked facts, warnings, blockers, and deterministic
-      selection changes.
-- [ ] Debounced/blur autosave with ETag and explicit conflict resolution.
-- [ ] Section/claim regeneration Operations and safe failure behavior.
+      selection changes. *Implemented in `36e83b4`, `f7ba86d`, `8eb6b9d`.*
+- [ ] Debounced/blur autosave with ETag and explicit conflict resolution. *Implemented in
+      `5bf9c19`.*
+- [ ] Section/claim regeneration Operations and safe failure behavior. *Implemented in
+      `686d872`.*
 - [ ] Unsupported free text preserved as pending/unlinked and blocked from approval.
+      *Implemented in `36e83b4`, `f7ba86d`, `5bf9c19`.*
 - [ ] Isolated server-rendered HTML preview with Hebrew, English, and mixed direction.
-- [ ] Desktop split and responsive single-view fallback.
+      *Implemented in `36e83b4`, `4ed3ea3`.*
+- [ ] Desktop split and responsive single-view fallback. *Implemented in `4ed3ea3`.*
+
+### What the stage changed, and why
+
+Three things Stage D needed did not exist on the HTTP surface, and each is a **Class B**
+contract addition rather than a screen working around its absence.
+
+**The preview endpoint.** `architecture.md` §13 requires the HTML preview to be rendered by
+the backend and shown in an isolated iframe, and §12 of the test plan budgets a refresh
+under one second. `render_html` only ever wrote a file during an approved-revision render,
+so a draft could not be previewed at all. `compose_html` was split out of it — `render_html`
+now writes what `compose_html` returns — and `GET /working-drafts/{id}/preview` returns that
+same composition as `text/html`. The editor's preview and the approved render are therefore
+one composition: what a user checks before approving is what approval renders. Golden hashes
+are what prove the split moved no output.
+
+**The facts read.** `SelectionCandidate` carries a fact ID and scores, never text, and
+contacts come from `contacts_for_track` rather than from any SelectionPlan. A browser could
+name a fact only by its identifier, which the M4 gate forbids.
+`GET /working-drafts/{id}/facts` answers the union of the facts claims actually link —
+walked through `draft_claims`, so the headline and contacts are included — and the plan's
+candidates, each with its rendering in the draft's language. `outcome` is null for a fact no
+plan ranked, which is what says no include/exclude decision applies to it; no second flag
+repeats it. `draft.omitted_facts` is deliberately **not** a third source: it spans every
+canonical fact minus the selected ones, and returning it would hand the browser the general
+Knowledge manager the product spec excludes.
+
+**Claim removal.** `product-spec.md:306` makes removal one of the three resolutions for
+unsupported free text — "linked through an allowed deterministic path, converted into a
+canonical fact lifecycle, or removed" — and it was the one resolution no command could
+reach. A `pending` claim has no fact for `apply_selection_change` to exclude, and its
+presence is exactly what makes `manually_edited` true and refuses that command. So the
+autosave patch gained `claim_removals`, committed as one edit against one expected version,
+and `remove_claim` refuses everything else in the domain: a claim the fact selection
+authorizes (naming `apply_selection_change`, because removing it through the patch would
+leave the plan asserting a fact the document no longer carries), the headline, and the
+contacts. An empty section keeps its heading.
+
+`WorkingDraftResponse` also gained `outline`, the editable structure derived from `source`
+on every read. It is not a second copy of the versioned document — `source` stays whole and
+opaque, as `JobAnalysisResponse.analysis` does — and it exists so `claim_type` and `style`
+reach the client as the closed sets they are rather than as `string`, the same change
+`is_terminal` and `preparation_state` took.
+
+### Two rules are the screen's rather than the server's, and are labelled as such
+
+`removability` answers, per claim, which command removes it. Three of its answers restate
+the backend's own refusals so the control is absent instead of offered and refused. Two are
+the screen's and are **stricter than the server on purpose**: nothing stops
+`apply_selection_change` excluding a shared fact or the fact behind a `heading`/`date` line
+— it would simply do it, and change a line the user was not looking at. Sharing is checked
+per fact, not per claim: one shared fact is enough, because exclusion acts on the fact.
+
+### Autosave is serialised, not merely debounced
+
+Debounce alone lets two saves overlap, and an older response then installs an older ETag
+over a newer one, so the next save conflicts against a token the server has already moved
+past. `useDraftAutosave` keeps at most one `PATCH` open, buffers what arrives while one is
+running, coalesces that buffer by claim, and builds the next request against the token the
+previous response returned. Everything that must not race is a ref, because component state
+would be read at the value it held when the callback was created — the stale token this
+exists to prevent. A `409` stops the queue, keeps the buffer, and hands the choice to a
+non-dismissible dialog; an ordinary failure keeps the text and does not retry itself.
+
+### Deliberately not in this stage
+
+- No Stage E work. Validation results, approval, render, Ready, and Settings remain
+  placeholders. `validate` is what the projection recommends from the editor, and it is
+  reported as a screen that does not exist yet.
+- No `confirm_and_use_fact` control: no knowledge route exists, so that resolution action is
+  named as belonging elsewhere rather than given a control that cannot work.
+- **No new Playwright spec, so "axe passes on Draft Editor" in the F gate stays open.** The
+  editor needs a real projection and a real draft, so its axe scan belongs to the central
+  E2E the F gate owns. Playwright stays at 5.
+
+## Stage D — gate awaiting evidence
+
+The stage is **Class B**: two new routes, a new `Renderer` port method, a new projection
+field, a changed request schema, and regenerated `openapi/`. The gate is therefore Class A
+plus golden hashes, the architecture test, and one offline CLI run — **and one addition**:
+`render_html`'s internals moved, which is a rendering path, so the three browser-marked
+items are not "cannot be affected" and are asked for once.
+
+**Run by the agent** (authoring checks, not test evidence): `npm run typecheck` and
+`node scripts/check-design-tokens.mjs` passed on the final tree, the guard reporting
+**16 color, 2 radius, 1 shadow**. `python openapi/generate_openapi.py` and the
+`openapi-typescript` regeneration were run as build steps. **No test suite was run by the
+agent.**
+
+| # | Command | Proves | Prediction |
+| --- | --- | --- | --- |
+| 1 | `cd frontend && npm run typecheck` | the generated unions reach the label maps and every `Record` over `ClaimType`, `SelectionOutcome`, and `OmissionReason` is exhaustive | passes |
+| 2 | `cd frontend && npm run test` | the editor's read, the serialised autosave queue, the removability rules, the selection overlay, regeneration, and the sandboxed preview | **100 passed, 11 files** |
+| 3 | `cd frontend && npm run build` | typecheck, the derived token guard, production build | passes; **16 color, 2 radius, 1 shadow** |
+| 4 | `cd frontend && npm run e2e` | the shell, landmark, route focus, and New Application with axe are unaffected | **5 passed**, unchanged |
+| 5 | `pytest -m "not browser"` | the whole non-browser suite, including the OpenAPI drift test against the regenerated contract | **305 passed, 3 deselected** |
+| 6 | `pytest tests/test_golden.py tests/test_architecture.py` | the `compose_html` split moved no rendered output, and `api -> application` layering still holds with the new `domain` import in `api/schemas/` | passes |
+| 7 | `pytest -m browser` | the rendering path still renders after the split | **3 passed** |
+| 8 | offline `ingest → analyze → draft → validate → approve → render → ready → reconcile`, `OPENAI_API_KEY` unset, fresh Workspace | the deterministic path still reaches Ready after the patch-schema and renderer changes | passes |
+
+Predicted deltas, and where each comes from:
+
+- **Vitest 75 → 100 in 8 → 11 files.** The eight existing files keep 6, 13, 10, 4, 10, 12,
+  13, and 7 — that is exactly the recorded 75, and none of them was edited. The three new
+  files are `claimRemoval.test.ts` **+6**, `useDraftAutosave.test.ts` **+6**, and
+  `DraftEditorPage.test.tsx` **+13**.
+- **Python 300 → 305, 3 deselected unchanged.** Five test functions were added to
+  `tests/test_api_working_drafts.py` and no other Python item changed. The refusal arms
+  inside the removal case are inner assertions, not separate items. No test is
+  browser-marked, so the deselected count does not move.
+- **Playwright unchanged at 5** and **token counts unchanged**: no spec was added and the
+  theme was not touched.
+
+Any difference from these numbers is a finding, not noise.
 
 ## E — Validate, approve, render, and Ready
 
