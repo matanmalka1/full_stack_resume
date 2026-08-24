@@ -31,6 +31,14 @@ ALLOWED_INTERNAL = {
     # package as a whole and forbidden inside `routers/`, which is checked
     # separately below.
     "api": {"domain", "application", "api", "util"},
+    # An adapter implements the ports the inner layers declare; it does not
+    # import the composition root that builds it. `runtime` is the layer that
+    # wires adapters together, so an `infrastructure -> runtime` import makes
+    # the two packages mutually dependent and puts a real import cycle one
+    # module away. Where an adapter needs part of a runtime object, it declares
+    # the members it uses as a local Protocol, as `PayloadStore` and
+    # `FilesystemArtifactStore` both do.
+    "infrastructure": {"domain", "application", "infrastructure", "util"},
 }
 
 # Known boundary debt from docs/v2/records/architecture-audit.md. New entries are not
@@ -287,6 +295,29 @@ def test_domain_and_application_dependencies_point_inward() -> None:
                 if any(name in line for name in storage_layout_names)
             )
 
+    assert not offenders, offenders
+
+
+def test_infrastructure_does_not_import_its_composition_root() -> None:
+    """Adapters point inward only: no `infrastructure -> runtime / api / cli`.
+
+    The inward test above iterates `domain`, `application`, and `api`, because
+    its other half asserts storage purity and `infrastructure` is the layer
+    that legitimately owns storage. That left infrastructure's own outbound
+    edges unchecked, which is how `FilesystemArtifactStore` came to import
+    `runtime.workspace`. This check is the import half alone, derived from the
+    package tree rather than a file list, and it carries no exception set: a
+    new outward edge fails here rather than arriving with an allowlist.
+    """
+    allowed = ALLOWED_INTERNAL["infrastructure"] | {"__own_package__"}
+    internal_layers = {"domain", "application", "infrastructure", "api", "runtime", "cli"}
+
+    offenders = [
+        f"{path.relative_to(ENGINE)}:{line} imports {name}"
+        for path in _layer_modules("infrastructure")
+        for name, line in _imports(path)
+        if name in internal_layers and name not in allowed
+    ]
     assert not offenders, offenders
 
 

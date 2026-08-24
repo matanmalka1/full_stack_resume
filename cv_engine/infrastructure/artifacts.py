@@ -2,12 +2,32 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
+from typing import Protocol
 
 from ..application.ports import DraftPaths, StoredDraft
 from ..domain.draft_markdown import parse_draft
 from ..domain.drafts import seal_draft
 from ..domain.models import DraftDocument
-from ..runtime.workspace import Workspace
+
+
+class ArtifactWorkspace(Protocol):
+    """The three Workspace members this store actually uses.
+
+    Declared here, as `PayloadStore` declares `PayloadWorkspace`, so an adapter
+    does not import the composition layer that builds it. `relative` stays on
+    the protocol rather than being replaced by a direct `relative_within` call:
+    it carries the "must be absolute" check and the `WorkspaceError` that
+    artifact rows depend on, and `relative_within` alone would raise
+    `ValueError`.
+    """
+
+    @property
+    def root(self) -> Path: ...
+
+    @property
+    def artifacts_root(self) -> Path: ...
+
+    def relative(self, path: Path) -> str: ...
 
 
 class FilesystemArtifactStore:
@@ -21,7 +41,7 @@ class FilesystemArtifactStore:
     MARKDOWN = "resume.md"
     MANIFEST = "resume.claims.json"
 
-    def __init__(self, workspace: Workspace):
+    def __init__(self, workspace: ArtifactWorkspace):
         self._workspace = workspace
         self._root = workspace.artifacts_root
 
