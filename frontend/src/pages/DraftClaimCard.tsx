@@ -15,7 +15,12 @@ interface DraftClaimCardProps {
   facts: WorkingDraftFacts | undefined;
   onBlur: () => void;
   onEdit: (claim: DraftClaim, text: string) => void;
+  onRegenerate: (claim: DraftClaim) => void;
   onRemove: (claim: DraftClaim) => void;
+  /* True while an unsaved edit is in the autosave buffer. A regeneration freezes the
+     saved version, so offering one now would regenerate away from what the user is
+     looking at. */
+  unsaved: boolean;
 }
 
 const factRow = (fact: DraftFact) => (
@@ -33,7 +38,9 @@ export const DraftClaimCard = ({
   facts,
   onBlur,
   onEdit,
+  onRegenerate,
   onRemove,
+  unsaved,
 }: DraftClaimCardProps) => {
   const linked = (facts?.facts ?? []).filter((fact) => claim.fact_ids.includes(fact.fact_id));
   const removal = removability(claim, draft, facts);
@@ -52,11 +59,16 @@ export const DraftClaimCard = ({
         <StatusBadge tone={claimTypeTones[claim.claim_type]}>
           {claimTypeLabels[claim.claim_type]}
         </StatusBadge>
-        {removal.route === "none" ? null : (
-          <Button onClick={() => onRemove(claim)} variant="secondary">
-            הסרת השורה
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={unsaved} onClick={() => onRegenerate(claim)} variant="secondary">
+            יצירה מחדש של השורה
           </Button>
-        )}
+          {removal.route === "none" ? null : (
+            <Button onClick={() => onRemove(claim)} variant="secondary">
+              הסרת השורה
+            </Button>
+          )}
+        </div>
       </div>
 
       <Field className="mt-3" label="טקסט השורה">

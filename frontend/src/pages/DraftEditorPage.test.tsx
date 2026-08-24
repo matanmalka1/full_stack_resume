@@ -122,11 +122,16 @@ const jsonResponse = (body: unknown, status = 200): Response =>
 /* One route per read, so a test states which answer it is giving rather than depending on
    the order the screen happens to request them in. */
 const stubReads = (
-  answers: Partial<Record<"detail" | "draft" | "facts" | "selectionChange", () => Response>>,
+  answers: Partial<
+    Record<"detail" | "draft" | "facts" | "selectionChange" | "regenerate", () => Response>
+  >,
 ): ReturnType<typeof vi.fn> => {
   const fetchMock = vi.fn((input: unknown) => {
     const url = String(input);
 
+    if (url.includes("/regenerate-")) {
+      return Promise.resolve(answers.regenerate?.() ?? jsonResponse({}, 500));
+    }
     if (url.endsWith("/apply-selection-change")) {
       return Promise.resolve(
         answers.selectionChange?.() ??
@@ -166,6 +171,7 @@ const renderPage = () => {
         <Routes>
           <Route element={<DraftEditorPage />} path="/applications/:applicationId/draft" />
           <Route element={<h1>מועמדות</h1>} path="/applications/:applicationId" />
+          <Route element={<h1>מצב הפעולה</h1>} path="/operations/:operationId" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -369,5 +375,69 @@ describe("DraftEditorPage selection changes", () => {
         "this draft carries manual wording that a deterministic rebuild would discard",
       ),
     ).toBeInTheDocument();
+  });
+});
+
+describe("DraftEditorPage regeneration", () => {
+  const accepted = (): Response =>
+    new Response(
+      JSON.stringify({
+        id: "op-7",
+        application_id: "app-1",
+        operation_type: "regenerate_claim",
+        status: "queued",
+        is_terminal: false,
+        phase: "queued",
+        message: "",
+        created_at: "2026-08-24T07:00:00Z",
+        outputs: [],
+        available_actions: ["cancel"],
+      }),
+      {
+        status: 202,
+        headers: { "Content-Type": "application/json", Location: "/api/v1/operations/op-7" },
+      },
+    );
+
+  it("freezes the exact saved version and follows the queued Operation", async () => {
+    const fetchMock = stubReads({ regenerate: () => accepted() });
+
+    renderPage();
+    fireEvent.click((await screen.findAllByRole("button", { name: "יצירה מחדש של השורה" }))[0]!);
+
+    expect(await screen.findByRole("heading", { name: "מצב הפעולה" })).toBeInTheDocument();
+    const call = fetchMock.mock.calls.find((entry) =>
+      String(entry[0]).endsWith("/regenerate-claim"),
+    );
+    /* All three parts of the draft's identity: that is what makes a save landing mid
+       flight fail as SOURCE_CHANGED instead of overwriting the user's edit. */
+    expect(JSON.parse(String((call?.[1] as RequestInit).body))).toEqual({
+      application_id: "app-1",
+      expected_edit_version: 4,
+      expected_content_hash: "hash-4",
+      job_analysis_id: "an-1",
+      selection_plan_id: "sp-1",
+      claim_id: "c-headline",
+    });
+    expect(((call?.[1] as RequestInit).headers as Headers).get("Idempotency-Key")).toBe(
+      "wd-1:4:c-headline",
+    );
+  });
+
+  it("withholds regeneration while an edit is still unsaved, and says why", async () => {
+    stubReads({});
+
+    renderPage();
+    const editors = await screen.findAllByLabelText("טקסט השורה");
+    fireEvent.change(editors[0]!, { target: { value: "typed but not saved" } });
+
+    expect(
+      await screen.findByText(
+        "יצירה מחדש מוקפאת על הגרסה השמורה של הטיוטה, ולכן היא זמינה רק אחרי שהשמירה הסתיימה.",
+      ),
+    ).toBeInTheDocument();
+    for (const button of screen.getAllByRole("button", { name: "יצירה מחדש של השורה" })) {
+      expect(button).toBeDisabled();
+    }
   });
 });

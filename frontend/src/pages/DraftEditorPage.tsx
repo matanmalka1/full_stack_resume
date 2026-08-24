@@ -1,13 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { applicationDetailQueryKey, applicationDetailQueryOptions } from "../api/applications";
 import { ApiProblem } from "../api/client";
+import { type QueuedOperation, operationQueryKey } from "../api/operations";
 import type { DraftClaim, DraftFact, WorkingDraftUpdate } from "../api/contracts";
 import {
   type DraftRead,
   applySelectionChange,
+  regenerateClaim,
+  regenerateSection,
   selectionOverlay,
   workingDraftFactsQueryKey,
   workingDraftFactsQueryOptions,
@@ -15,7 +18,7 @@ import {
   workingDraftQueryOptions,
 } from "../api/drafts";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
-import { buttonClasses } from "../ui/Button";
+import { Button, buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { Card } from "../ui/Card";
 import { LtrText } from "../ui/LtrText";
@@ -77,6 +80,7 @@ export const DraftEditorPage = () => {
   const facts = factsQuery.data;
   const applicationHref = `/applications/${encodeURIComponent(applicationId)}`;
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   /* A save changes the draft, so the read that produced it is stale by definition. The
      new token is installed directly - it is the one the response returned for the version
@@ -160,6 +164,39 @@ export const DraftEditorPage = () => {
   /* Including an omitted fact is a pin: in a budgeted deterministic selection, holding it
      is the only way to say "keep this one". */
   const includeFact = (fact: DraftFact) => selection.mutate({ pinned: [fact.fact_id] });
+
+  /* §14 regeneration is an Operation, so it leaves this screen for the one that owns
+     Operation progress, failure, and retry. The accepted representation is seeded there
+     rather than fetched again, exactly as analyze and generate do. */
+  const followQueued = ({ operation, operationPath }: QueuedOperation) => {
+    queryClient.setQueryData(operationQueryKey(operation.id), operation);
+    void navigate(operationPath);
+  };
+
+  const regeneration = useMutation({
+    mutationFn: async (target: { claimId?: string; section?: string }) => {
+      if (draft === undefined) {
+        throw new Error("a regeneration was offered before the draft arrived");
+      }
+      /* One key per target and version: a resent regeneration of the same line at the
+         same version is the same command, and a different version is a different one. */
+      const key = `${draft.id}:${draft.edit_version}:${target.claimId ?? target.section ?? ""}`;
+
+      return target.claimId === undefined
+        ? regenerateSection(draft, target.section ?? "", key)
+        : regenerateClaim(draft, target.claimId, key);
+    },
+    onSuccess: followQueued,
+  });
+
+  /* The version and hash sent are the ones the read returned, so an unsaved edit would
+     be regenerated away from. Autosave settles first, and until it does the control says
+     so rather than freezing a version the user has already moved past. */
+  const unsaved =
+    autosave.status === "saving" ||
+    autosave.status === "conflict" ||
+    autosave.pending.length > 0 ||
+    autosave.pendingRemovals.length > 0;
 
   return (
     <Card aria-labelledby="route-heading">
@@ -250,7 +287,9 @@ export const DraftEditorPage = () => {
                   facts={facts}
                   onBlur={autosave.flush}
                   onEdit={editClaim}
+                  onRegenerate={(claim) => regeneration.mutate({ claimId: claim.claim_id })}
                   onRemove={removeClaim}
+                  unsaved={unsaved || regeneration.isPending}
                 />
                 {draft.outline.contacts.map((contact) => (
                   <DraftClaimCard
@@ -260,16 +299,27 @@ export const DraftEditorPage = () => {
                     key={contact.claim_id}
                     onBlur={autosave.flush}
                     onEdit={editClaim}
+                    onRegenerate={(claim) => regeneration.mutate({ claimId: claim.claim_id })}
                     onRemove={removeClaim}
+                    unsaved={unsaved || regeneration.isPending}
                   />
                 ))}
               </ul>
 
               {draft.outline.sections.map((section) => (
                 <div className="flex flex-col gap-3" key={section.name}>
-                  <h3 className="text-body font-semibold text-cv-text" dir="auto">
-                    {section.name}
-                  </h3>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h3 className="text-body font-semibold text-cv-text" dir="auto">
+                      {section.name}
+                    </h3>
+                    <Button
+                      disabled={unsaved || regeneration.isPending}
+                      onClick={() => regeneration.mutate({ section: section.name })}
+                      variant="secondary"
+                    >
+                      יצירה מחדש של הפרק
+                    </Button>
+                  </div>
                   {section.claims.length === 0 ? (
                     <p className="text-support leading-6 text-cv-text-muted">
                       אין כרגע שורות בסעיף הזה.
@@ -284,7 +334,9 @@ export const DraftEditorPage = () => {
                           key={claim.claim_id}
                           onBlur={autosave.flush}
                           onEdit={editClaim}
+                          onRegenerate={(claim) => regeneration.mutate({ claimId: claim.claim_id })}
                           onRemove={removeClaim}
+                          unsaved={unsaved || regeneration.isPending}
                         />
                       ))}
                     </ul>
@@ -292,6 +344,26 @@ export const DraftEditorPage = () => {
                 </div>
               ))}
             </section>
+
+            {regeneration.error === null ? null : (
+              <Callout role="alert" title="היצירה מחדש לא הופעלה" tone="blocker">
+                {problemMessage(
+                  regeneration.error,
+                  "לא ניתן היה להפעיל יצירה מחדש. הטיוטה נשמרה כפי שהיא.",
+                )}
+                {regeneration.error instanceof ApiProblem ? (
+                  <TechnicalDetails className="mt-3">
+                    <LtrText>{regeneration.error.problem.code}</LtrText>
+                  </TechnicalDetails>
+                ) : null}
+              </Callout>
+            )}
+
+            {unsaved ? (
+              <p className="text-support leading-6 text-cv-text-muted">
+                יצירה מחדש מוקפאת על הגרסה השמורה של הטיוטה, ולכן היא זמינה רק אחרי שהשמירה הסתיימה.
+              </p>
+            ) : null}
 
             {selection.error === null ? null : (
               <Callout role="alert" title="שינוי הבחירה לא בוצע" tone="blocker">

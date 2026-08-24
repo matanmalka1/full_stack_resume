@@ -62,3 +62,6 @@ export type WorkingDraftUpdate = ApiSchemas["WorkingDraftUpdateResponse"];
 
 export type ApplySelectionChangeRequest = ApiSchemas["ApplySelectionChangeRequest"];
 export type SelectionChange = ApiSchemas["SelectionChangeResponse"];
+
+export type RegenerateSectionRequest = ApiSchemas["RegenerateSectionRequest"];
+export type RegenerateClaimRequest = ApiSchemas["RegenerateClaimRequest"];

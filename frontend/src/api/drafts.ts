@@ -1,10 +1,14 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { type ApiPath, apiRequest } from "./client";
+import { type QueuedOperation, queuedOperation } from "./operations";
 import type {
   ApplySelectionChangeRequest,
   ClaimPatch,
   DraftClaim,
+  Operation,
+  RegenerateClaimRequest,
+  RegenerateSectionRequest,
   SelectionChange,
   WorkingDraft,
   WorkingDraftFacts,
@@ -136,3 +140,60 @@ export const applySelectionChange = async (
 
   return response.data;
 };
+
+/* §14 regeneration: an AI Operation over one exact draft version.
+
+   All three parts of the draft's identity are sent - ID, `edit_version`, and content hash
+   - because that is what the Operation freezes. An autosave that lands while the provider
+   is answering makes activation fail as `SOURCE_CHANGED` rather than overwriting the
+   user's edit, and that is the behaviour these arguments buy.
+
+   The analysis and the plan are explicit for the same reason `create_draft` names them: a
+   regeneration that resolved them for itself could rewrite a section against a plan the
+   user never saw. `provider` is omitted, as everywhere else, because the server owns that
+   default. */
+const regenerate = async (
+  path: ApiPath,
+  /* `instruction` is omitted rather than sent empty: the server defaults it, and
+     restating a default here would be a second copy of a policy this client does not
+     own. The `Omit` still binds every field name to the generated contract. */
+  body: Omit<RegenerateSectionRequest, "instruction"> | Omit<RegenerateClaimRequest, "instruction">,
+  idempotencyKey: string,
+): Promise<QueuedOperation> =>
+  queuedOperation(await apiRequest<Operation>(path, { method: "POST", body, idempotencyKey }));
+
+export const regenerateSection = async (
+  draft: WorkingDraft,
+  section: string,
+  idempotencyKey: string,
+): Promise<QueuedOperation> =>
+  regenerate(
+    `${workingDraftPath(draft.id)}/regenerate-section` as ApiPath,
+    {
+      application_id: draft.application_id,
+      expected_edit_version: draft.edit_version,
+      expected_content_hash: draft.content_hash,
+      job_analysis_id: draft.job_analysis_id,
+      selection_plan_id: draft.selection_plan_id,
+      section,
+    },
+    idempotencyKey,
+  );
+
+export const regenerateClaim = async (
+  draft: WorkingDraft,
+  claimId: string,
+  idempotencyKey: string,
+): Promise<QueuedOperation> =>
+  regenerate(
+    `${workingDraftPath(draft.id)}/regenerate-claim` as ApiPath,
+    {
+      application_id: draft.application_id,
+      expected_edit_version: draft.edit_version,
+      expected_content_hash: draft.content_hash,
+      job_analysis_id: draft.job_analysis_id,
+      selection_plan_id: draft.selection_plan_id,
+      claim_id: claimId,
+    },
+    idempotencyKey,
+  );
