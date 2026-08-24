@@ -88,12 +88,36 @@ or weaken an existing acceptance gate.
 
       Two importers changed: `runtime/composition.py` and `tests/test_operations.py`.
 
-- [ ] **TODO 18:** the remaining files over 500 lines, in descending order:
-      `application/services/knowledge.py` (723, grew in §4.5), `domain/models.py` (676),
-      `infrastructure/persistence/operations.py` (639), `application/state.py` (528),
-      `domain/drafts.py` (524), `application/services/operations.py` (518). Take them one
-      at a time and only where a file holds more than one subject; size alone is not a
-      defect.
+- [x] **TODO 18 — completed:** audited the remaining files over 500 lines by subject,
+      not by line count. The three files that held separable subjects were split as
+      recorded below. A fresh `wc -l` scan still finds twelve files over the threshold,
+      but none has a split that relieves coupling or creates a safer ownership seam:
+
+      - `domain/models.py` (774) is the domain-model registry;
+        `application/commands.py` (602) is the command/result DTO family.
+      - `domain/selection.py` (611) owns selection; `application/state.py` (535) is one
+        projection pipeline; and `domain/drafts.py` (553) is the pure draft-domain
+        operation set. Splitting those by function would add module boundaries without
+        separating state or collaborators.
+      - `application/services/analysis.py` (585) keeps analysis and selection planning
+        over the same Knowledge and repository boundary. They are distinguishable
+        phases, but separating them would not remove a collaborator or a patch seam.
+      - `infrastructure/persistence/operations.py` (641) is one Operation repository
+        aggregate. It owns both `operations` and their resource-lease rows, so “one
+        table” is not the reason to keep it together; their transactional lifecycle is.
+      - `application/services/knowledge/service.py` (554) is the fact lifecycle and its
+        reads after the two-phase mutation engine was extracted; and
+        `application/services/operations/handlers.py` (502) is the already-separated
+        Operation-handler half. A second size-only split in either would undo the subject
+        boundaries the first split established.
+      - `infrastructure/payloads.py` (525),
+        `infrastructure/persistence/preparation.py` (515), and
+        `infrastructure/knowledge.py` (505) respectively own immutable payload storage,
+        the preparation repository boundary, and file-backed Knowledge. Each is one
+        infrastructure subject.
+
+      The threshold has therefore done its job as an audit trigger. Growth alone is not
+      a defect, and no further split remains justified under this item.
 
       `application/services/drafts.py` is done. It was listed at 646 lines and had reached
       1412, holding eight subjects: generation, editing, validation, selection change,
@@ -197,7 +221,29 @@ or weaken an existing acceptance gate.
       clock. A regression fixes two approvals to the same timestamp and proves both the
       repository query and HTTP read return the second revision's decision. No migration
       or schema change was required.
-- [ ] **TODO 23:** `tests/test_golden.py` is marked `browser`, so the golden-hash test is
-      excluded from the default non-browser suite even though its hash comparison is a
-      Class B gate. This is cleanup only and did not block M3; do not reorganize the test
-      selection as part of M3 close-out.
+- [x] **TODO 23 — completed:** the golden hash comparison now runs in the default
+      non-browser suite. The item said the file was marked `browser`; only one of its two
+      tests was, and not by a marker. `BROWSER_FIXTURES` in `tests/conftest.py` marks any
+      test that requests `render_validator`, and that one test mixed two subjects in one
+      body: the golden hashes and HTML content assertions, then PDF geometry and the
+      ATS/layout report.
+
+      Split by subject, not by marker.
+      `test_representative_profiles_match_their_golden_ready_outputs` keeps
+      classification, Markdown, selection, the `markdown_body_sha256`/`html_sha256`
+      comparison, and the HTML assertions — it drops the `render_validator` fixture, so
+      collection stops marking it and the Class B gate is in the default run.
+      `test_golden_outputs_pass_render_validation` is new and holds only what needs
+      Chromium.
+
+      The browser half re-asserts `case["snapshot"]["html_sha256"]` on the document it
+      renders before validating it. Without that, the two halves could hash one document
+      and validate another; with it, the report is evidence about the exact bytes the
+      hash test pinned. Both build through `_build_case`, so the fixture setup cannot
+      drift between them.
+
+      No golden fixture, hash, or assertion changed — the assertions were partitioned,
+      not rewritten. Test count moves by exactly +1: the default non-browser suite gains
+      one test, the browser suite still collects one from this file.
+      `test_persisted_plan_reproduces_the_computed_selection` was already in the default
+      suite and is untouched.

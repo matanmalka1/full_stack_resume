@@ -23,24 +23,39 @@ def _front_matter_and_body(markdown: str) -> tuple[str, str]:
     return front, body
 
 
+def _golden_cases() -> list[tuple[Path, dict]]:
+    return [
+        (fixture, json.loads(fixture.read_text(encoding="utf-8")))
+        for fixture in sorted(GOLDEN_DIR.glob("*.json"))
+    ]
+
+
+def _build_case(draft_factory, case: dict):
+    overrides = case.get("overrides", {})
+    return draft_factory(
+        case["job"],
+        track_override=overrides.get("track"),
+        profile_override=overrides.get("profile"),
+        emphasis_override=overrides.get("emphasis"),
+        application_id="00000000-0000-0000-0000-000000000001",
+        job_snapshot_id="00000000-0000-0000-0000-000000000002",
+    )
+
+
 def test_representative_profiles_match_their_golden_ready_outputs(
     workspace_root: Path,
     tmp_path: Path,
     draft_factory,
-    render_validator,
 ) -> None:
-    for fixture in sorted(GOLDEN_DIR.glob("*.json")):
-        case = json.loads(fixture.read_text(encoding="utf-8"))
-        overrides = case.get("overrides", {})
-        setup = draft_factory(
-            case["job"],
-            track_override=overrides.get("track"),
-            profile_override=overrides.get("profile"),
-            emphasis_override=overrides.get("emphasis"),
-            application_id="00000000-0000-0000-0000-000000000001",
-            job_snapshot_id="00000000-0000-0000-0000-000000000002",
-        )
-        facts, profile, analysis, draft = setup.facts, setup.profile, setup.analysis, setup.draft
+    """Pin content: classification, Markdown, selection, and the rendered HTML.
+
+    Nothing here needs a browser. `render_html` writes the document itself; only
+    PDF geometry and the ATS/layout report below it need Chromium, and they are
+    a separate test so this hash comparison runs in the default suite.
+    """
+    for fixture, case in _golden_cases():
+        setup = _build_case(draft_factory, case)
+        facts, analysis, draft = setup.facts, setup.analysis, setup.draft
         candidate = setup.candidate
         assert analysis.track.value == case["track"], fixture.stem
         assert analysis.profile.value == case["profile"], fixture.stem
@@ -80,6 +95,30 @@ def test_representative_profiles_match_their_golden_ready_outputs(
         if case["language"] == "he":
             assert '<html lang="he" dir="rtl">' in html_text
             assert '<bdi dir="ltr">B2B</bdi>' in html_text
+
+
+def test_golden_outputs_pass_render_validation(
+    workspace_root: Path,
+    tmp_path: Path,
+    draft_factory,
+    render_validator,
+) -> None:
+    """The same documents must survive PDF rendering and the layout/ATS report.
+
+    Browser-marked through `render_validator`. It re-asserts the golden
+    `html_sha256` before validating, so this proves the report was produced from
+    the exact bytes the hash test pinned rather than from a document that drifted.
+    """
+    for fixture, case in _golden_cases():
+        setup = _build_case(draft_factory, case)
+        draft, profile, candidate = setup.draft, setup.profile, setup.candidate
+
+        target = tmp_path / fixture.stem
+        target.mkdir()
+        html = render_html(draft, workspace_root, target / "resume.html", candidate)
+        assert sha256_text(html.read_text(encoding="utf-8")) == case["snapshot"]["html_sha256"], (
+            fixture.stem
+        )
 
         pdf = target / normalized_role_filename(profile.normalized_role, candidate)
         screenshot = target / "visual.png"
