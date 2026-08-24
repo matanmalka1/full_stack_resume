@@ -5,6 +5,17 @@ field, the same way `JobAnalysisResponse` already carries one. They are domain
 documents with their own versioned schema; a second hand-written copy of that
 schema in the HTTP layer could only drift from it, and a router that named the
 domain types directly would be a router doing domain work.
+
+The classification *overrides* are the opposite case and are typed. A closed
+vocabulary of four string sets is not a versioned document being restated: it
+is the constraint the request is already subject to, enforced today only after
+the value has left this layer. Flattened to `str` it cost twice - the generated
+TypeScript was `string`, so a client had to keep its own copy of the sets, and
+a value outside them reached `ProfileName(...)` as a bare `ValueError` and
+surfaced to the user as a 500. Naming the enums here refuses it as a 422 before
+a command is built. The architecture rule allows `domain` inside `api` and
+forbids it inside `routers/`, which is where a domain type would mean a router
+doing domain work; these are schemas.
 """
 
 from __future__ import annotations
@@ -13,10 +24,29 @@ from typing import Any, Literal
 
 from pydantic import Field
 
+from ...domain.models import Emphasis, Language, ProfileName, Track
 from .health import HttpSchema
 
 
-class CreateAnalysisRequest(HttpSchema):
+class ClassificationOverrides(HttpSchema):
+    """The four explicit decisions a user may impose on a classification.
+
+    Shared because both requests that accept them accept exactly the same four,
+    and a second declaration is a second place to forget one.
+
+    Every field is optional and withholding one is not a retraction: the
+    application layer merges a submission over the overrides already recorded,
+    so a blank field keeps whatever was decided before rather than clearing it.
+    """
+
+    track_override: Track | None = None
+    profile_override: ProfileName | None = None
+    emphasis_override: Emphasis | None = None
+    language_override: Language | None = None
+    accept_low_fit: bool = False
+
+
+class CreateAnalysisRequest(ClassificationOverrides):
     """What `POST /applications/{id}/analyses` accepts.
 
     `job_snapshot_id` is explicit: an analyze command that picked its own source
@@ -24,11 +54,6 @@ class CreateAnalysisRequest(HttpSchema):
     """
 
     job_snapshot_id: str
-    track_override: str | None = Field(default=None, max_length=100)
-    profile_override: str | None = Field(default=None, max_length=100)
-    emphasis_override: str | None = Field(default=None, max_length=100)
-    language_override: str | None = Field(default=None, max_length=10)
-    accept_low_fit: bool = False
     provider: str = Field(default="deterministic", max_length=50)
     model: str = Field(default="rules-v1", max_length=100)
 
@@ -66,13 +91,14 @@ class CreateSelectionPlanRequest(SelectionOverlayRequest):
     expected_selection_policy_version: str | None = None
 
 
-class ApplyAnalysisDecisionsRequest(SelectionOverlayRequest):
+class ApplyAnalysisDecisionsRequest(SelectionOverlayRequest, ClassificationOverrides):
+    """One review-form submission (§13).
+
+    Carries both kinds of decision because one form does, and which branch runs
+    is decided by what actually changes rather than by which fields arrived.
+    """
+
     application_id: str
-    track_override: str | None = Field(default=None, max_length=100)
-    profile_override: str | None = Field(default=None, max_length=100)
-    emphasis_override: str | None = Field(default=None, max_length=100)
-    language_override: str | None = Field(default=None, max_length=10)
-    accept_low_fit: bool = False
 
 
 class SelectionPlanResponse(HttpSchema):

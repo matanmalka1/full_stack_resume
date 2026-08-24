@@ -14,6 +14,7 @@ import { StatusBadge } from "../ui/StatusBadge";
 import { SummaryList, type SummaryItem } from "../ui/SummaryList";
 import { TechnicalDetails } from "../ui/TechnicalDetails";
 import { ApplicationActions } from "./ApplicationActions";
+import { actionDestination } from "./actionDestinations";
 import {
   actionLabel,
   preparationStateLabels,
@@ -47,21 +48,50 @@ const identifiers = (detail: ApplicationDetail): SummaryItem[] => {
 
 /* Review reasons and stale reasons carry the same shape, and both frame a backend
    sentence rather than replacing it: the message is the server's plain-language
-   explanation and the code stays collapsed (A.2). */
-const ReasonCallout = ({ reason, title, tone }: { reason: Reason; title: string; tone: "blocker" | "warning" }) => (
-  <Callout title={title} tone={tone}>
-    <p dir="auto">{reason.message}</p>
-    {reason.allowed_resolution_actions.length === 0 ? null : (
-      <p className="mt-2">
-        הפעולה שפותרת אותה: {reason.allowed_resolution_actions.map(actionLabel).join(" · ")}.
-        המסך שלה מגיע בפרוסה הבאה.
-      </p>
-    )}
-    <TechnicalDetails className="mt-3">
-      <LtrText>{reason.code}</LtrText>
-    </TechnicalDetails>
-  </Callout>
-);
+   explanation and the code stays collapsed (A.2).
+
+   Whether the resolving action has a screen is asked of `actionDestination` rather than
+   asserted here, so a reason cannot go on promising a screen that now exists. */
+const ReasonCallout = ({
+  applicationId,
+  reason,
+  title,
+  tone,
+}: {
+  applicationId: string;
+  reason: Reason;
+  title: string;
+  tone: "blocker" | "warning";
+}) => {
+  const resolution = reason.allowed_resolution_actions
+    .map((action) => ({ action, href: actionDestination(action, applicationId) }))
+    .find((candidate) => candidate.href !== null);
+
+  return (
+    <Callout
+      action={
+        resolution?.href == null ? undefined : (
+          <Link className={buttonClasses("secondary")} to={resolution.href}>
+            {actionLabel(resolution.action)}
+          </Link>
+        )
+      }
+      title={title}
+      tone={tone}
+    >
+      <p dir="auto">{reason.message}</p>
+      {reason.allowed_resolution_actions.length === 0 || resolution !== undefined ? null : (
+        <p className="mt-2">
+          הפעולה שפותרת אותה: {reason.allowed_resolution_actions.map(actionLabel).join(" · ")}.
+          המסך שלה מגיע בפרוסה הבאה.
+        </p>
+      )}
+      <TechnicalDetails className="mt-3">
+        <LtrText>{reason.code}</LtrText>
+      </TechnicalDetails>
+    </Callout>
+  );
+};
 
 /* A.1: the fixed context screen for one Application. It is not a redirect that routes by
    stage - an existing Application can be anywhere in its lifecycle, and choosing a
@@ -150,11 +180,18 @@ export const ApplicationPage = () => {
           )}
 
           {detail.review_reasons.map((reason) => (
-            <ReasonCallout key={reason.code} reason={reason} title="נדרשת החלטה לפני המשך" tone="blocker" />
+            <ReasonCallout
+              applicationId={detail.application.id}
+              key={reason.code}
+              reason={reason}
+              title="נדרשת החלטה לפני המשך"
+              tone="blocker"
+            />
           ))}
 
           {detail.stale_reasons.map((reason) => (
             <ReasonCallout
+              applicationId={detail.application.id}
               key={reason.code}
               reason={reason}
               title="הטיוטה אינה מעודכנת מול המקורות שלה"

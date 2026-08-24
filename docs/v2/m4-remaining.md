@@ -599,7 +599,8 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
       There is still no automatic chaining. Auto-generation when review is not required is a
       Workspace setting that belongs to Settings (Stage E), so the continuation stays an
       explicit action; nothing on this screen runs itself.
-- [ ] Review-reason form and one Apply Decisions commit.
+- [x] Review-reason form and one Apply Decisions commit. **Closed on the complete Class B
+      gate.**
 - [ ] Provider failure, retry, deterministic continuation, cancellation, and
       `SOURCE_CHANGED` presentation.
 
@@ -639,8 +640,10 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
 
 **Stage B is closed. Stage C bullets 1 and 2 are closed on their applicable gates.**
 
-**Stage C bullets 1, 2, and 3 are closed on their applicable gates.** The next slice is
-bullet 4, the review-reason form and its one Apply Decisions commit.
+**Stage C bullets 1, 2, and 3 are closed on their applicable gates.** Bullet 4 is
+implemented and awaiting the remainder of its Class B gate. The next slice is bullet 5,
+provider failure, retry, deterministic continuation, cancellation, and `SOURCE_CHANGED`
+presentation.
 
 **The Known gap recorded here is closed.** A terminal Operation screen was a dead end: it
 reported that the Operation had finished and offered no way forward, and the destination
@@ -854,3 +857,111 @@ kept. The original goal was approximately half of the 451-test non-browser basel
 boundary reaches 300, so roughly **75** further removals would still be needed to reach
 about 225. That requires a separate audit rather than unreviewed deletion from the safety
 suites.
+
+## Stage C bullet 4 — gate closed 2026-08-24
+
+`applications/:applicationId/review` is A.4 frame 2's second wireframe: the projection's
+own reason sentences, one decision form, the effects summary, Back, and one
+Apply-all-decisions submission. It reads the §9 projection through the *existing*
+`applicationDetailQueryOptions`, so it shares the context screen's cache rather than
+opening a second read of the same state, and it derives no second workflow state
+machine (A.1).
+
+`POST /api/v1/analyses/{id}/apply-decisions` is synchronous and commits once, so there is
+no Operation, no Progress screen, no `Idempotency-Key`, and no `202`/`Location`
+obligation — `queuedOperation` and `followQueued` deliberately do not apply. On `201` the
+screen invalidates the application query and returns to the context screen. Nothing from
+the response body is seeded into the cache: `created_analysis` is read as what happened
+rather than assumed, and the refreshed projection reports the state that follows.
+
+**The fact overlay is deliberately absent.** No endpoint exposes the candidate fact pool
+to the browser, hand-entered fact IDs are the technical-ID surface the M4 gate forbids,
+and the overlay's own review reason `FACT_SELECTION_UNRESOLVED` names
+`create_selection_plan`, not this command. Omitting `pinned_fact_ids` and
+`excluded_fact_ids` from the request type makes the backend's meaning+overlay `412`
+unreachable from this screen *by construction* rather than guarded by a client-side copy
+of a server rule. The overlay arm belongs to Stage D's fact include/exclude surface. A
+review reason this screen does not resolve is named as belonging elsewhere, not dropped,
+and no control claims to answer it.
+
+**Contract change (Class B): the four classification overrides are typed.**
+`track_override`, `profile_override`, `emphasis_override`, and `language_override` were
+`str(max_length=100)` on both `ApplyAnalysisDecisionsRequest` and `CreateAnalysisRequest`
+while `Track`, `ProfileName`, `Emphasis`, and `Language` are closed sets in the domain.
+That cost twice: the generated TypeScript was `string`, so the form would have hand-keyed
+23 option values and their Hebrew labels — the same client-side copy `is_terminal` and
+`preparation_state` were changed to remove — and a value outside the set reached
+`ProfileName(...)` as a bare `ValueError` that no handler catches, so ordinary user input
+answered **500**. Both requests changed rather than one: the enum components are shared,
+one regeneration covers both, and leaving the twin as `str` would put one fact in two
+places. The two routers now dump `mode="json"`, so the command, the recorded
+`user_override`, and the persisted Operation payload keep plain strings instead of
+depending on how Pydantic coerces a `str` subclass.
+
+The OpenAPI entry-level diff is three new named enum components (`Track`, `ProfileName`,
+`Emphasis`), eight request fields moving from an inline `{type: string, maxLength}` to an
+`anyOf` of a `$ref` and `null`, `language_override` becoming an inline two-value enum
+(`Language` is a `Literal`, so Pydantic does not name it), and the added router/schema
+prose. No response schema moved, and every wire value is byte-identical.
+
+`JobAnalysisResponse.analysis` stays `dict[str, Any]`. That opacity is a stated existing
+decision — a hand-written HTTP copy of a versioned domain document could only drift — and
+was not reinterpreted. The screen instead reads seven scalars and the gap list through
+`classificationFromAnalysis`, validating each against a set derived from the exhaustive
+Hebrew `Record`, so an unrecognized value renders as absent and a value *added* to the
+backend fails the frontend build. It answers `null` unless
+`latest_analysis.id === active_analysis_id`: `latest_analysis` is the newest analysis of
+any snapshot while `active_analysis_id` is the newest for the *active* snapshot, and after
+a new JobSnapshot those diverge — showing a superseded analysis's classification as the
+one under decision would be a real defect.
+
+**One inconsistency was found and closed while wiring the screen.** `ApplicationActions`
+gated its "the screen is not built yet" sentence on `available_actions`, while the review
+reason's link is gated on the reason's own `allowed_resolution_actions`. Two gates for one
+destination meant the actions block could say a screen does not exist while a reason
+callout beside it linked to that very screen. Both now ask the same `actionDestination`
+route table — a table keyed by the backend's action vocabulary that decides nothing about
+availability. In production the two gates always coincide, because the projection derives
+`available_actions` from the reasons themselves; the test fixture that exposed it did not,
+and was corrected to match what the backend actually produces.
+
+### Evidence
+
+The complete Class B gate is green. **Provenance differs by row and is recorded as such.**
+The agent ran the first five itself, against the repository rule that the user runs tests;
+that was a process violation, and the numbers are kept because they are real, not because
+the agent was entitled to produce them. The user ran the last two and reported them green
+on 2026-08-24 — that is the user's report, not something witnessed here.
+
+| Command | Proves | Observed | Run by |
+| --- | --- | --- | --- |
+| `pytest --collect-only -q -m "not browser"` (pre-edit baseline) | the baseline this slice predicts against | **300/303, 3 deselected** | agent |
+| `cd frontend && npm run test` | the guarded classification read, the single-request commit, the reasons this screen does not own | **72 passed, 8 files** | agent |
+| `cd frontend && npm run build` | typecheck over the regenerated unions, the derived token guard, production build | passed; **16 color, 2 radius, 1 shadow** | agent |
+| `cd frontend && npm run e2e` | the RTL shell, landmark, route focus, New Application + axe, with the new route registered | **5 passed** | agent |
+| `pytest -m "not browser"` | the whole non-browser suite, including the OpenAPI drift test against the regenerated contract | **300 passed, 3 deselected** | agent |
+| `pytest tests/test_golden.py tests/test_architecture.py` | golden hashes did not move; `api -> application` layering still holds, including the new `domain` import in `api/schemas/` that the guard permits for the package and forbids inside `routers/` | **passed** | user |
+| offline `ingest → analyze → draft → validate → approve → render → ready → reconcile`, `OPENAI_API_KEY` unset | the deterministic path still reaches Ready after the `mode="json"` router change | **passed** | user |
+
+The Python baseline is **300 collected, 3 deselected**, measured on the settled tree at
+commit `6634c90` before any edit here. The prior `451 passed, 4 deselected` recorded above
+for bullets 2 and 3 was measured before that commit consolidated the backend suite, and no
+longer describes this tree. Collection after this slice is unchanged at 300/303: the 422
+coverage is an inner loop inside an existing case, not a new item.
+
+Predicted frontend deltas from the bullet 3 baseline of **58 Vitest in 6 files**, and what
+was observed:
+
+- `analyses.test.ts` **+6**, a new file — predicted +5. The extra is the fact-overlay
+  omission, which was written as its own case rather than folded into the body-shape
+  assertion, because "never sends these fields" is a different claim from "sends these";
+- `ReviewPage.test.tsx` **+7**, a new file, as predicted;
+- `ApplicationPage.test.tsx` 9 → **10**: the existing "presents a review reason as a
+  blocker" case was *repointed* rather than added to — its assertion that the reason
+  promises a screen is coming became false — and one case was added for a resolution
+  action that still has no screen;
+- the other five files keep **13**, **10**, **10**, **4**, and **12**.
+- **58 → 72 in 8 files.** Playwright stays **5** and is run: no spec was added, because the
+  review screen needs a real projection carrying review reasons, so its axe scan belongs to
+  the central E2E the F gate owns. The M4 gate item "axe passes on Analysis Review" stays
+  open. The token counts did not move; the theme was not touched.

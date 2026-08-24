@@ -21,6 +21,11 @@ export interface paths {
          *     client states which Application it believes it is deciding for, and a
          *     mismatch is a `412` naming the broken lineage instead of a decision landing
          *     silently on another Application's analysis.
+         *
+         *     Dumped as JSON, not Python: the override fields are `StrEnum` members on the
+         *     schema, and the command, the recorded `user_override`, and the stored
+         *     analysis all hold plain strings. Handing the member across would make the
+         *     stored value's exact type depend on how Pydantic coerces a `str` subclass.
          */
         post: operations["apply_analysis_decisions_api_v1_analyses__analysis_id__apply_decisions_post"];
         delete?: never;
@@ -128,6 +133,11 @@ export interface paths {
          *     SelectionPlan were both committed; what needs deciding is reported by the
          *     Application's review reasons, and is resolved through
          *     `POST /analyses/{id}/apply-decisions`.
+         *
+         *     Dumped as JSON, not Python: the override fields are `StrEnum` members on the
+         *     schema, and this command is persisted as the Operation's request payload. A
+         *     payload holding enum members rather than plain strings would depend on how
+         *     Pydantic coerces a `str` subclass to survive the round trip.
          */
         post: operations["create_analysis_api_v1_applications__application_id__analyses_post"];
         delete?: never;
@@ -836,7 +846,13 @@ export interface components {
             /** Updated At */
             updated_at: string;
         };
-        /** ApplyAnalysisDecisionsRequest */
+        /**
+         * ApplyAnalysisDecisionsRequest
+         * @description One review-form submission (§13).
+         *
+         *     Carries both kinds of decision because one form does, and which branch runs
+         *     is decided by what actually changes rather than by which fields arrived.
+         */
         ApplyAnalysisDecisionsRequest: {
             /**
              * Accept Low Fit
@@ -845,24 +861,21 @@ export interface components {
             accept_low_fit: boolean;
             /** Application Id */
             application_id: string;
-            /** Emphasis Override */
-            emphasis_override?: string | null;
+            emphasis_override?: components["schemas"]["Emphasis"] | null;
             /**
              * Excluded Fact Ids
              * @default []
              */
             excluded_fact_ids: string[];
             /** Language Override */
-            language_override?: string | null;
+            language_override?: ("en" | "he") | null;
             /**
              * Pinned Fact Ids
              * @default []
              */
             pinned_fact_ids: string[];
-            /** Profile Override */
-            profile_override?: string | null;
-            /** Track Override */
-            track_override?: string | null;
+            profile_override?: components["schemas"]["ProfileName"] | null;
+            track_override?: components["schemas"]["Track"] | null;
         };
         /**
          * ApplySelectionChangeRequest
@@ -1125,26 +1138,23 @@ export interface components {
              * @default false
              */
             accept_low_fit: boolean;
-            /** Emphasis Override */
-            emphasis_override?: string | null;
+            emphasis_override?: components["schemas"]["Emphasis"] | null;
             /** Job Snapshot Id */
             job_snapshot_id: string;
             /** Language Override */
-            language_override?: string | null;
+            language_override?: ("en" | "he") | null;
             /**
              * Model
              * @default rules-v1
              */
             model: string;
-            /** Profile Override */
-            profile_override?: string | null;
+            profile_override?: components["schemas"]["ProfileName"] | null;
             /**
              * Provider
              * @default deterministic
              */
             provider: string;
-            /** Track Override */
-            track_override?: string | null;
+            track_override?: components["schemas"]["Track"] | null;
         };
         /** CreateApplicationRequest */
         CreateApplicationRequest: {
@@ -1292,6 +1302,11 @@ export interface components {
             /** Target Role */
             target_role: string;
         };
+        /**
+         * Emphasis
+         * @enum {string}
+         */
+        Emphasis: "development-balanced" | "development-backend" | "development-ai" | "new-business" | "account-growth" | "leadership" | "tech-consultative-sales" | "balanced-sales";
         /**
          * GenerateWorkingDraftRequest
          * @description What `POST /applications/{id}/working-draft/generate` accepts.
@@ -1508,6 +1523,11 @@ export interface components {
          * @enum {string}
          */
         PreparationState: "needs_analysis" | "needs_review" | "ready_to_draft" | "draft_in_progress" | "ready_for_approval" | "approved" | "ready";
+        /**
+         * ProfileName
+         * @enum {string}
+         */
+        ProfileName: "development" | "field-sales" | "account-manager" | "key-account-manager" | "sdr-bdr" | "account-executive" | "business-development" | "sales-management" | "tech-sales" | "pre-sales-solutions-consultant";
         /** ReasonResponse */
         ReasonResponse: {
             /** Allowed Resolution Actions */
@@ -1668,6 +1688,11 @@ export interface components {
             /** Version Number */
             version_number: number;
         };
+        /**
+         * Track
+         * @enum {string}
+         */
+        Track: "development" | "sales" | "tech-sales";
         /**
          * UpdateWorkingDraftRequest
          * @description The structured patch `PATCH /working-drafts/{id}` applies as one edit.

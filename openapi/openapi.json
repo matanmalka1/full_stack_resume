@@ -760,6 +760,7 @@
       },
       "ApplyAnalysisDecisionsRequest": {
         "additionalProperties": false,
+        "description": "One review-form submission (§13).\n\nCarries both kinds of decision because one form does, and which branch runs\nis decided by what actually changes rather than by which fields arrived.",
         "properties": {
           "accept_low_fit": {
             "default": false,
@@ -773,14 +774,12 @@
           "emphasis_override": {
             "anyOf": [
               {
-                "maxLength": 100,
-                "type": "string"
+                "$ref": "#/components/schemas/Emphasis"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Emphasis Override"
+            ]
           },
           "excluded_fact_ids": {
             "default": [],
@@ -793,7 +792,10 @@
           "language_override": {
             "anyOf": [
               {
-                "maxLength": 10,
+                "enum": [
+                  "en",
+                  "he"
+                ],
                 "type": "string"
               },
               {
@@ -813,26 +815,22 @@
           "profile_override": {
             "anyOf": [
               {
-                "maxLength": 100,
-                "type": "string"
+                "$ref": "#/components/schemas/ProfileName"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Profile Override"
+            ]
           },
           "track_override": {
             "anyOf": [
               {
-                "maxLength": 100,
-                "type": "string"
+                "$ref": "#/components/schemas/Track"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Track Override"
+            ]
           }
         },
         "required": [
@@ -1547,14 +1545,12 @@
           "emphasis_override": {
             "anyOf": [
               {
-                "maxLength": 100,
-                "type": "string"
+                "$ref": "#/components/schemas/Emphasis"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Emphasis Override"
+            ]
           },
           "job_snapshot_id": {
             "title": "Job Snapshot Id",
@@ -1563,7 +1559,10 @@
           "language_override": {
             "anyOf": [
               {
-                "maxLength": 10,
+                "enum": [
+                  "en",
+                  "he"
+                ],
                 "type": "string"
               },
               {
@@ -1581,14 +1580,12 @@
           "profile_override": {
             "anyOf": [
               {
-                "maxLength": 100,
-                "type": "string"
+                "$ref": "#/components/schemas/ProfileName"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Profile Override"
+            ]
           },
           "provider": {
             "default": "deterministic",
@@ -1599,14 +1596,12 @@
           "track_override": {
             "anyOf": [
               {
-                "maxLength": 100,
-                "type": "string"
+                "$ref": "#/components/schemas/Track"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Track Override"
+            ]
           }
         },
         "required": [
@@ -1999,6 +1994,20 @@
         ],
         "title": "DuplicateMatchResponse",
         "type": "object"
+      },
+      "Emphasis": {
+        "enum": [
+          "development-balanced",
+          "development-backend",
+          "development-ai",
+          "new-business",
+          "account-growth",
+          "leadership",
+          "tech-consultative-sales",
+          "balanced-sales"
+        ],
+        "title": "Emphasis",
+        "type": "string"
       },
       "GenerateWorkingDraftRequest": {
         "additionalProperties": false,
@@ -2477,6 +2486,22 @@
         "title": "PreparationState",
         "type": "string"
       },
+      "ProfileName": {
+        "enum": [
+          "development",
+          "field-sales",
+          "account-manager",
+          "key-account-manager",
+          "sdr-bdr",
+          "account-executive",
+          "business-development",
+          "sales-management",
+          "tech-sales",
+          "pre-sales-solutions-consultant"
+        ],
+        "title": "ProfileName",
+        "type": "string"
+      },
       "ReasonResponse": {
         "additionalProperties": false,
         "properties": {
@@ -2772,6 +2797,15 @@
         ],
         "title": "SelectionPlanResponse",
         "type": "object"
+      },
+      "Track": {
+        "enum": [
+          "development",
+          "sales",
+          "tech-sales"
+        ],
+        "title": "Track",
+        "type": "string"
       },
       "UpdateWorkingDraftRequest": {
         "additionalProperties": false,
@@ -3077,7 +3111,7 @@
   "paths": {
     "/api/v1/analyses/{analysis_id}/apply-decisions": {
       "post": {
-        "description": "`201`: both branches create an immutable record and neither mutates one.\n\n`application_id` is in the body rather than inferred from the analysis. The\nclient states which Application it believes it is deciding for, and a\nmismatch is a `412` naming the broken lineage instead of a decision landing\nsilently on another Application's analysis.",
+        "description": "`201`: both branches create an immutable record and neither mutates one.\n\n`application_id` is in the body rather than inferred from the analysis. The\nclient states which Application it believes it is deciding for, and a\nmismatch is a `412` naming the broken lineage instead of a decision landing\nsilently on another Application's analysis.\n\nDumped as JSON, not Python: the override fields are `StrEnum` members on the\nschema, and the command, the recorded `user_override`, and the stored\nanalysis all hold plain strings. Handing the member across would make the\nstored value's exact type depend on how Pydantic coerces a `str` subclass.",
         "operationId": "apply_analysis_decisions_api_v1_analyses__analysis_id__apply_decisions_post",
         "parameters": [
           {
@@ -3352,7 +3386,7 @@
     },
     "/api/v1/applications/{application_id}/analyses": {
       "post": {
-        "description": "`202` and a `Location`: analysis is a durable Operation (§13).\n\nNeedsReview is not an error here or anywhere else. An analysis that needs a\ndecision is a *successful* Operation whose JobAnalysis and initial\nSelectionPlan were both committed; what needs deciding is reported by the\nApplication's review reasons, and is resolved through\n`POST /analyses/{id}/apply-decisions`.",
+        "description": "`202` and a `Location`: analysis is a durable Operation (§13).\n\nNeedsReview is not an error here or anywhere else. An analysis that needs a\ndecision is a *successful* Operation whose JobAnalysis and initial\nSelectionPlan were both committed; what needs deciding is reported by the\nApplication's review reasons, and is resolved through\n`POST /analyses/{id}/apply-decisions`.\n\nDumped as JSON, not Python: the override fields are `StrEnum` members on the\nschema, and this command is persisted as the Operation's request payload. A\npayload holding enum members rather than plain strings would depend on how\nPydantic coerces a `str` subclass to survive the round trip.",
         "operationId": "create_analysis_api_v1_applications__application_id__analyses_post",
         "parameters": [
           {

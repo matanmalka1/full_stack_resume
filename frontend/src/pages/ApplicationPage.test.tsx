@@ -259,6 +259,9 @@ describe("ApplicationPage", () => {
           detail({
             preparation_state: "needs_review",
             recommended_action: "apply_analysis_decisions",
+            /* The projection derives availability from the reasons themselves, so a
+               review reason always makes its resolution action available. */
+            available_actions: ["analyze", "apply_analysis_decisions"],
             review_reasons: [
               {
                 code: "LOW_FIT_REQUIRES_ACCEPTANCE",
@@ -278,10 +281,42 @@ describe("ApplicationPage", () => {
     expect(
       screen.getByText("Low fit requires explicit acceptance before drafting."),
     ).toHaveAttribute("dir", "auto");
-    expect(
-      screen.getByText(/הפעולה שפותרת אותה: החלת החלטות הסקירה/),
-    ).toBeInTheDocument();
+    /* The resolving action has a screen now, so the reason offers it instead of
+       promising one is coming. */
+    expect(screen.getByRole("link", { name: "החלת החלטות הסקירה" })).toHaveAttribute(
+      "href",
+      "/applications/app-1/review",
+    );
+    expect(screen.queryByText(/מגיע בפרוסה הבאה/)).not.toBeInTheDocument();
     expect(screen.getByText("LOW_FIT_REQUIRES_ACCEPTANCE")).toBeInTheDocument();
+  });
+
+  it("still names a resolution action that has no screen instead of linking to one", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          detail({
+            preparation_state: "needs_review",
+            review_reasons: [
+              {
+                code: "PENDING_FACT_REQUIRES_RESOLUTION",
+                message: "A claim in the active draft depends on a pending fact.",
+                entity_references: { working_draft_id: "draft-1" },
+                allowed_resolution_actions: ["confirm_and_use_fact", "update_working_draft"],
+              },
+            ],
+          }),
+        ),
+      ),
+    );
+
+    renderPage();
+
+    expect(
+      await screen.findByText(/הפעולה שפותרת אותה: אישור עובדה ושימוש בה · עריכת הטיוטה/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "אישור עובדה ושימוש בה" })).not.toBeInTheDocument();
   });
 
   it("links to the Operation the projection reports as already running", async () => {

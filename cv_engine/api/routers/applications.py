@@ -144,11 +144,16 @@ def create_analysis(
     SelectionPlan were both committed; what needs deciding is reported by the
     Application's review reasons, and is resolved through
     `POST /analyses/{id}/apply-decisions`.
+
+    Dumped as JSON, not Python: the override fields are `StrEnum` members on the
+    schema, and this command is persisted as the Operation's request payload. A
+    payload holding enum members rather than plain strings would depend on how
+    Pydantic coerces a `str` subclass to survive the round trip.
     """
     queued = services.operations.submit_analysis(
         AnalyzeCommand(
             application_id=application_id,
-            **request.model_dump(mode="python"),
+            **request.model_dump(mode="json"),
         ),
         idempotency_key=idempotency_key or new_id(),
         analysis_service=services.analysis,

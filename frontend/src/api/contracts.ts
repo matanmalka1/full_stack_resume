@@ -28,3 +28,14 @@ export type BlockedAction = ApiSchemas["BlockedActionResponse"];
 
 export type CreateAnalysisRequest = ApiSchemas["CreateAnalysisRequest"];
 export type GenerateWorkingDraftRequest = ApiSchemas["GenerateWorkingDraftRequest"];
+
+/* §13 `apply_analysis_decisions`: one synchronous commit, not an Operation. The four
+   classification overrides are real unions rather than `string`, so the Hebrew option
+   maps keyed by them stay exhaustive and an added Track fails the build. */
+export type ApplyAnalysisDecisionsRequest = ApiSchemas["ApplyAnalysisDecisionsRequest"];
+export type AnalysisDecisions = ApiSchemas["AnalysisDecisionsResponse"];
+export type JobAnalysisRecord = ApiSchemas["JobAnalysisResponse"];
+export type Track = ApiSchemas["Track"];
+export type ProfileName = ApiSchemas["ProfileName"];
+export type Emphasis = ApiSchemas["Emphasis"];
+export type Language = NonNullable<ApplyAnalysisDecisionsRequest["language_override"]>;

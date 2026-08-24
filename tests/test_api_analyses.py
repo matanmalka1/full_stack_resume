@@ -208,10 +208,21 @@ def test_a_fact_overlay_alone_creates_a_replacement_plan_for_the_same_analysis(
     assert api_worker.services.repository.selection_plan(outputs["selection_plan"]) == original
 
 
-def test_a_submission_carrying_both_kinds_of_decision_is_refused(api_worker) -> None:
-    """The new analysis has its own initial plan, built from accounting the user
-    has not seen. Carrying the overlay across would attach their decision to a
-    different candidate set, so the client is told to send it separately."""
+def test_the_api_refuses_decision_submissions_it_cannot_act_on(api_worker) -> None:
+    """Three refusals of a classification submission, none of which is a 500.
+
+    Both kinds at once: the new analysis has its own initial plan, built from
+    accounting the user has not seen. Carrying the overlay across would attach
+    their decision to a different candidate set, so the client is told to send
+    it separately.
+
+    Nothing at all: an empty form would create a second identical plan, putting
+    a decision in the history that nobody made.
+
+    A value outside its closed set: refused as a request error before a command
+    is built. Untyped, it reached `ProfileName(...)` as a bare `ValueError` that
+    no handler catches, so ordinary user input answered with a 500.
+    """
     application_id = _application(
         api_worker.services, "Both Branches Co", job_text=AMBIGUOUS_HEBREW_JOB
     )
@@ -240,6 +251,24 @@ def test_a_submission_carrying_both_kinds_of_decision_is_refused(api_worker) -> 
     )
 
     assert empty.status_code == 412, empty.text
+
+    # Both routes that accept a classification override, so neither can be
+    # typed and the other left open.
+    snapshot_id = _state(api_worker, application_id)["active_job_snapshot_id"]
+    outside_the_set = [
+        (
+            f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
+            {"application_id": application_id, "profile_override": "not-a-profile"},
+        ),
+        (
+            f"{API_PREFIX}/applications/{application_id}/analyses",
+            {"job_snapshot_id": snapshot_id, "profile_override": "not-a-profile"},
+        ),
+    ]
+    for path, payload in outside_the_set:
+        refused = api_worker.client.post(path, json=payload, headers=MUTATION_HEADERS)
+
+        assert refused.status_code == 422, (path, refused.text)
 
 
 # --- POST /analyses/{id}/selection-plans -------------------------------------

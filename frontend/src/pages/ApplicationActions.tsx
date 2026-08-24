@@ -1,16 +1,17 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { startAnalysis, startDraftGeneration } from "../api/applications";
 import { ApiProblem } from "../api/client";
 import type { ApplicationDetail } from "../api/contracts";
 import { type QueuedOperation, operationQueryKey } from "../api/operations";
 import { ActionBar } from "../ui/ActionBar";
-import { Button } from "../ui/Button";
+import { Button, buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { LtrText } from "../ui/LtrText";
 import { TechnicalDetails } from "../ui/TechnicalDetails";
+import { actionDestination } from "./actionDestinations";
 import { actionLabel } from "./applicationLabels";
 
 interface ApplicationActionsProps {
@@ -80,15 +81,34 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
   const canDraft = draftAvailable && !draftWouldReplace;
   const draftRecommended = recommended === "create_draft";
 
-  const performedHere = new Set<string>();
+  /* An action this screen can take the user to is as "built" as one it performs: the
+     review decision is committed on its own screen, not here. */
+  const reviewHref = detail.available_actions.includes("apply_analysis_decisions")
+    ? actionDestination("apply_analysis_decisions", detail.application.id)
+    : null;
+  const reviewRecommended = recommended === "apply_analysis_decisions";
+
+  const handledHere = new Set<string>();
   if (canAnalyze) {
-    performedHere.add("analyze");
+    handledHere.add("analyze");
   }
   if (canDraft) {
-    performedHere.add("create_draft");
+    handledHere.add("create_draft");
+  }
+  if (reviewHref !== null) {
+    handledHere.add("apply_analysis_decisions");
   }
 
-  const unbuilt = recommended !== null && !performedHere.has(recommended) ? recommended : null;
+  /* "Its screen is not built" is a claim about existence, not about availability, so it
+     is answered by the same route table the reason callouts ask. Gating it on
+     availability instead would let this block say a screen does not exist while a
+     review reason beside it links to that very screen. */
+  const unbuilt =
+    recommended !== null &&
+    !handledHere.has(recommended) &&
+    actionDestination(recommended, detail.application.id) === null
+      ? recommended
+      : null;
   const error = analyze.error ?? draft.error;
 
   const analyzeButton = canAnalyze ? (
@@ -104,6 +124,13 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
           : "ניתוח מחדש של המשרה"}
     </Button>
   ) : null;
+
+  const reviewButton =
+    reviewHref === null ? null : (
+      <Link className={buttonClasses(reviewRecommended ? "primary" : "secondary")} to={reviewHref}>
+        החלטות הסקירה
+      </Link>
+    );
 
   const draftButton = canDraft ? (
     <Button
@@ -155,12 +182,19 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
         </p>
       ) : null}
 
-      {draftButton === null && analyzeButton === null ? null : (
-        <ActionBar
-          primary={draftButton ?? analyzeButton}
-          secondary={draftButton === null ? undefined : (analyzeButton ?? undefined)}
-        />
-      )}
+      {(() => {
+        /* One emphasized primary (A.1). Review outranks drafting while a decision is
+           still owed, and analyze stays the fallback when nothing else is offered. */
+        const ordered = [reviewButton, draftButton, analyzeButton].filter(
+          (button) => button !== null,
+        );
+        return ordered.length === 0 ? null : (
+          <ActionBar
+            primary={ordered[0]}
+            secondary={ordered.length === 1 ? undefined : ordered.slice(1)}
+          />
+        );
+      })()}
     </div>
   );
 };

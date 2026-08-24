@@ -40,11 +40,16 @@ def apply_analysis_decisions(
     client states which Application it believes it is deciding for, and a
     mismatch is a `412` naming the broken lineage instead of a decision landing
     silently on another Application's analysis.
+
+    Dumped as JSON, not Python: the override fields are `StrEnum` members on the
+    schema, and the command, the recorded `user_override`, and the stored
+    analysis all hold plain strings. Handing the member across would make the
+    stored value's exact type depend on how Pydantic coerces a `str` subclass.
     """
     result = services.analysis.apply_analysis_decisions(
         ApplyAnalysisDecisionsCommand(
             job_analysis_id=analysis_id,
-            **request.model_dump(mode="python"),
+            **request.model_dump(mode="json"),
         )
     )
     return AnalysisDecisionsResponse.model_validate(result.model_dump(mode="json"))

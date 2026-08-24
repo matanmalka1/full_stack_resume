@@ -4,6 +4,7 @@ import { App } from "../App";
 import { ApplicationPage } from "../pages/ApplicationPage";
 import { NewApplicationPage } from "../pages/NewApplicationPage";
 import { OperationPage } from "../pages/OperationPage";
+import { ReviewPage } from "../pages/ReviewPage";
 import { RoutePlaceholder } from "../pages/RoutePlaceholder";
 import { RouteErrorBoundary } from "./RouteErrorBoundary";
 
@@ -30,7 +31,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "applications/:applicationId/review",
-        element: <RoutePlaceholder title="סקירת הניתוח" />,
+        element: <ReviewPage />,
       },
       {
         path: "applications/:applicationId/draft",
