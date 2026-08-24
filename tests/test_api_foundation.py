@@ -17,6 +17,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
 
+from cv_engine.api import FrontendBuildError
 from cv_engine.api.app import API_PREFIX, DEFAULT_PORT, create_app
 from cv_engine.api.problems import PROBLEM_CONTENT_TYPE, status_for
 from cv_engine.api.security import BodySizeLimitMiddleware
@@ -258,7 +259,7 @@ def test_cors_is_never_a_wildcard(api) -> None:
 
 
 def test_the_development_origin_is_one_origin_and_only_when_configured(services) -> None:
-    vite = "http://localhost:5173"
+    vite = "http://127.0.0.1:5173"
     base = build_api_services(services)
     without = create_app(base)
     with TestClient(without) as client:
@@ -269,6 +270,76 @@ def test_the_development_origin_is_one_origin_and_only_when_configured(services)
     with TestClient(create_app(with_vite)) as client:
         accepted = client.post(f"{API_PREFIX}/does-not-exist", json={}, headers={"Origin": vite})
     assert accepted.status_code == 404
+
+
+# --- production frontend ---------------------------------------------------
+
+
+def test_the_production_frontend_serves_assets_and_browser_routes_without_shadowing_api(
+    services, tmp_path: Path
+) -> None:
+    dist = tmp_path / "dist"
+    assets = dist / "assets"
+    assets.mkdir(parents=True)
+    (dist / "index.html").write_text("<main>frontend-entry</main>", encoding="utf-8")
+    (assets / "app.js").write_text("globalThis.frontendLoaded = true;", encoding="utf-8")
+
+    app = create_app(build_api_services(services), frontend_dist=dist)
+    with TestClient(app) as client:
+        root = client.get("/", headers={"Accept": "text/html"})
+        nested = client.get(
+            "/applications/application-id/draft", headers={"Accept": "text/html"}
+        )
+        asset = client.get("/assets/app.js")
+        health = client.get(f"{API_PREFIX}/health", headers={"Accept": "text/html"})
+        unknown_api = client.get(
+            f"{API_PREFIX}/does-not-exist", headers={"Accept": "text/html"}
+        )
+        missing_asset = client.get("/assets/missing.js")
+
+    assert root.status_code == 200
+    assert nested.status_code == 200
+    assert root.text == nested.text == "<main>frontend-entry</main>"
+    assert root.headers["cache-control"] == "no-cache"
+    assert asset.status_code == 200
+    assert asset.text == "globalThis.frontendLoaded = true;"
+    assert health.status_code == 200
+    assert health.headers["content-type"].startswith("application/json")
+    assert unknown_api.status_code == 404
+    assert "frontend-entry" not in unknown_api.text
+    assert missing_asset.status_code == 404
+    assert "frontend-entry" not in missing_asset.text
+
+
+def test_the_production_frontend_refuses_a_missing_or_incomplete_build(
+    services, tmp_path: Path
+) -> None:
+    missing = tmp_path / "missing"
+    incomplete = tmp_path / "dist"
+    incomplete.mkdir()
+
+    for build in (missing, incomplete):
+        with pytest.raises(FrontendBuildError) as exc_info:
+            create_app(build_api_services(services), frontend_dist=build)
+        assert str(exc_info.value)
+
+
+def test_the_production_frontend_never_serves_a_symlink_outside_its_build_root(
+    services, tmp_path: Path
+) -> None:
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<main>frontend-entry</main>", encoding="utf-8")
+    secret = tmp_path / "secret.txt"
+    secret.write_text("must-not-leak", encoding="utf-8")
+    (dist / "leak.txt").symlink_to(secret)
+
+    app = create_app(build_api_services(services), frontend_dist=dist)
+    with TestClient(app) as client:
+        response = client.get("/leak.txt", headers={"Accept": "text/plain"})
+
+    assert response.status_code == 404
+    assert "must-not-leak" not in response.text
 
 
 # --- contract drift ---------------------------------------------------------

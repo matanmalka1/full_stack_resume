@@ -10,6 +10,8 @@ supervisor will make.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -17,6 +19,7 @@ from starlette.requests import Request
 
 from ..application.errors import ApplicationError
 from .dependencies import install_services
+from .frontend import FrontendAssetsMiddleware, validate_frontend_build
 from .problems import application_error_handler, problem
 from .routers import (
     analyses,
@@ -42,6 +45,7 @@ def create_app(
     *,
     host: str = DEFAULT_HOST,
     port: int = DEFAULT_PORT,
+    frontend_dist: Path | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title="CV Engine local API",
@@ -78,6 +82,14 @@ def create_app(
     app.include_router(approved_revisions.router, prefix=API_PREFIX)
     app.include_router(artifacts.router, prefix=API_PREFIX)
     app.include_router(operations.router, prefix=API_PREFIX)
+    if frontend_dist is not None:
+        # Added last, so it runs first. It handles only safe static GET/HEAD
+        # requests and passes every API path through to the existing transport
+        # security and routers unchanged.
+        app.add_middleware(
+            FrontendAssetsMiddleware,
+            build_dir=validate_frontend_build(frontend_dist),
+        )
     return app
 
 

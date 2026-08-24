@@ -319,7 +319,15 @@ production-build evidence accepted on 2026-08-24.
       route heading, the error boundary exposes only safe messages, and skeletons cover the M4
       path through Ready. The visual design remained unchanged. User-run `npm run typecheck`
       and `npm run build` both passed.
-- [ ] Add Vite proxy development flow and serve the production build from FastAPI.
+- [x] Add Vite proxy development flow and serve the production build from FastAPI.
+      Implemented without visual changes: Vite binds a strict `127.0.0.1:5173` and proxies
+      `/api` to the default FastAPI endpoint; production receives an explicit `frontend_dist`,
+      fails immediately when the build is incomplete, serves contained files and SPA routes,
+      and never shadows `/api/v1` or a missing asset. The first backend run reported
+      **34 passed, 1 failed**: the architecture guard correctly found a second path-containment
+      implementation in `api/frontend.py`. The local predicate was removed in favor of
+      Starlette `StaticFiles`; the guard was not weakened and the focused rerun passed
+      **35 tests**. User-run `npm run typecheck` and `npm run build` also passed.
 - [ ] Add shared Operation polling without WebSocket or SSE.
 - [ ] Add Vitest, React Testing Library, Playwright Web E2E, and axe foundations without
       blanket DOM snapshots.
@@ -367,6 +375,6 @@ production-build evidence accepted on 2026-08-24.
 
 ## Current next action
 
-Add the Vite development proxy and the FastAPI production static-serving path. Do not change
-the visual design, or implement Dashboard navigation, tracking endpoints, or the Stage C
-intake flow yet.
+Add shared Operation polling through TanStack Query without WebSocket, SSE, synthetic
+percentages, or automatic mutation retries. Do not change the visual design, or implement
+Dashboard navigation, tracking endpoints, or the Stage C intake flow yet.
