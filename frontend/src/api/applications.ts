@@ -5,6 +5,7 @@ import type {
   CreatedApplication,
   DuplicateCheckResult,
   DuplicateMatch,
+  DuplicateMatchReason,
 } from "./contracts";
 
 /* The only intake limit this module keeps. It is not a second copy of the intake
@@ -38,6 +39,18 @@ export const createApplication = async (
   return response.data;
 };
 
+/* Exhaustive over the generated union, so a detection reason added to the backend fails
+   the build here rather than arriving as a key nothing can translate. The runtime set is
+   derived from it rather than written a second time. */
+const duplicateMatchReasons: Record<DuplicateMatchReason, true> = {
+  source_url: true,
+  normalized_text: true,
+  company_title: true,
+};
+
+const isDuplicateMatchReason = (value: unknown): value is DuplicateMatchReason =>
+  typeof value === "string" && Object.hasOwn(duplicateMatchReasons, value);
+
 const isDuplicateMatch = (value: unknown): value is DuplicateMatch => {
   if (typeof value !== "object" || value === null) {
     return false;
@@ -50,7 +63,7 @@ const isDuplicateMatch = (value: unknown): value is DuplicateMatch => {
     typeof candidate.company === "string" &&
     typeof candidate.target_role === "string" &&
     Array.isArray(candidate.matched_on) &&
-    candidate.matched_on.every((reason) => typeof reason === "string")
+    candidate.matched_on.every(isDuplicateMatchReason)
   );
 };
 
@@ -68,3 +81,15 @@ export const duplicateMatchesFromProblem = (error: unknown): DuplicateMatch[] | 
 
   return Array.isArray(matches) ? matches.filter(isDuplicateMatch) : [];
 };
+
+const intakeFingerprint = (intake: ApplicationIntake): string =>
+  JSON.stringify([intake.company, intake.target_role, intake.job_text, intake.source_url]);
+
+/* An acknowledgement is an answer about one exact intake, so it may only be sent with
+   that same intake. The precheck is asynchronous and the form stays editable while it
+   runs, so the text that was answered for and the text about to be created are two
+   different values that have to be compared rather than assumed equal. */
+export const acknowledgementApplies = (
+  answered: ApplicationIntake | undefined,
+  current: ApplicationIntake,
+): boolean => answered !== undefined && intakeFingerprint(answered) === intakeFingerprint(current);

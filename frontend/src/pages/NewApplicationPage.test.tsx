@@ -274,6 +274,53 @@ describe("NewApplicationPage", () => {
     expect(screen.queryByText("חסימה")).not.toBeInTheDocument();
   });
 
+  /* The precheck is asynchronous and the form stays editable while it runs, so an answer
+     can arrive describing text that is no longer on screen. Acting on it would send an
+     acknowledgement for one posting together with the text of another. */
+  it("does not apply a duplicate answer that arrives after the intake changed", async () => {
+    let answer!: (response: Response) => void;
+    const inFlight = new Promise<Response>((resolve) => {
+      answer = resolve;
+    });
+    vi.stubGlobal("fetch", vi.fn(() => inFlight));
+
+    renderPage();
+    fillIntake();
+    submitForm();
+
+    fireEvent.change(screen.getByLabelText("טקסט המשרה"), {
+      target: { value: "A completely different posting" },
+    });
+    answer(jsonResponse({ matches: [match()] }));
+
+    expect(await screen.findByText("הקלט השתנה מאז הבדיקה")).toBeInTheDocument();
+    expect(screen.queryByText("נמצאו מועמדויות דומות")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "יצירה בכל זאת" })).not.toBeInTheDocument();
+  });
+
+  it("clears the stale-answer notice once the intake is edited again", async () => {
+    let answer!: (response: Response) => void;
+    const inFlight = new Promise<Response>((resolve) => {
+      answer = resolve;
+    });
+    vi.stubGlobal("fetch", vi.fn(() => inFlight));
+
+    renderPage();
+    fillIntake();
+    submitForm();
+
+    fireEvent.change(screen.getByLabelText("טקסט המשרה"), { target: { value: "Second text" } });
+    answer(jsonResponse({ matches: [match()] }));
+
+    expect(await screen.findByText("הקלט השתנה מאז הבדיקה")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("טקסט המשרה"), { target: { value: "Third text" } });
+
+    await waitFor(() => {
+      expect(screen.queryByText("הקלט השתנה מאז הבדיקה")).not.toBeInTheDocument();
+    });
+  });
+
   it("withdraws the duplicate choice when the intake is edited", async () => {
     stubFetch({
       [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [match()] })],

@@ -426,7 +426,13 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
 
 ## C — Intake, analysis, and review
 
-- [x] New Application form, local `.txt` read, duplicate precheck/override, and creation.
+- [ ] New Application form, local `.txt` read, duplicate precheck/override, and creation.
+      **Built, reviewed, and green on its full Class A gate; still not closed.** The
+      form, the local read, the precheck, the override, and creation are implemented and
+      covered. What remains is not evidence but a destination: opening an existing
+      duplicate reaches a placeholder, so the choice the screen offers does not yet open
+      anything. The bullet closes when that destination exists.
+
       The A.4 frame 1 screen is now the root route, so `/` is the New Application form
       rather than a foundation placeholder. `src/api/applications.ts` holds the two
       intake calls and nothing else: `duplicateCheck`, `createApplication`, and
@@ -443,9 +449,21 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
       Both duplicate answers are derived from the one mutation's `data`/`error` rather
       than mirrored into component state, so there is no second copy to leave stale.
       The precheck is skipped once the user has acknowledged, so the acknowledgement is
-      not immediately re-questioned by the finding it answered. Editing any intake field
-      withdraws the decision, because an acknowledgement belongs to the exact text it was
-      shown for; it can never be carried onto text the user changed afterwards.
+      not immediately re-questioned by the finding it answered.
+
+      An acknowledgement belongs to the exact intake it was shown for, and that is now
+      enforced by comparison rather than by assumption. Review found the hole: the
+      precheck is asynchronous and the form stays editable while it runs, so an answer
+      could arrive describing text the user had already replaced, and pressing
+      `יצירה בכל זאת` would then have sent the *new* text with
+      `acknowledged_duplicates=true` — suppressing the server's own second check on text
+      nothing had ever checked. `acknowledgementApplies` compares the answered intake
+      with the current one; a mismatched answer is not shown as a choice, the screen says
+      the input moved and asks for another check, and the acknowledgement flag is
+      computed from that same comparison rather than from the button that was pressed.
+      Editing while an answer is already on screen still withdraws it through the form
+      subscription; the comparison covers the in-flight case, where there is nothing to
+      withdraw yet.
 
       The `.txt` read is local: `File.text()` fills the text area, nothing is uploaded,
       and both the Vitest and the Playwright case assert that no request is made. A file
@@ -469,6 +487,10 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
       the application projection. That is deliberate: an existing Application can be
       anywhere in its lifecycle, and routing it from this screen would be exactly the
       second workflow state machine A.1 forbids.
+
+      The duplicate list and the local-file control are their own components,
+      `DuplicateChoices` and `JobTextFileField`; the file component owns the whole
+      local-read outcome so the form only ever receives text.
 
       Two supporting changes. `TextInput`/`TextArea` are typed as `ComponentProps` rather
       than the attribute types alone, so they carry `ref` and React Hook Form can bind an
@@ -517,8 +539,8 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
 
 ## Current next action
 
-**Stage B is closed. Stage C is open: its first bullet, the New Application slice, is
-implemented and awaiting evidence.**
+**Stage B is closed. Stage C is open: its first bullet is built and reviewed, and is
+not closed — see the bullet for what remains.**
 
 **Known gap, deliberately not filled here.** A terminal Operation screen is a dead end: it
 reports that the Operation finished and offers no way forward. The destination is not this
@@ -548,31 +570,64 @@ typecheck passed; and the production build passed after the design-token guard r
 16 color, 2 radius, and 1 shadow tokens. The Python prediction was 124. The exact +1 is
 the concurrently added `test_infrastructure_does_not_import_its_composition_root`, which
 moved `test_architecture.py` from 10 to 11 items; no Operation test count was unexplained.
-Its remaining Class B gate — the full non-browser suite, golden hashes, and one fresh
-offline CLI sequence — was reported green by the user before that commit landed, so
-nothing from that slice is outstanding.
+Its commit message records the user reporting the remaining Class B gate — the full
+non-browser suite, golden hashes, and one fresh offline CLI sequence — as green. That is
+the commit's own claim, not evidence witnessed here; it is recorded as the reason nothing
+from that slice is tracked as outstanding.
 
-The New Application slice is closed on user-run evidence accepted on 2026-08-24:
-`npm run typecheck` passed, `npm run test` passed **29 tests in 3 files**,
+The New Application slice ran its frontend gate twice. The first run, on user-run
+evidence at commit `892796c`, passed typecheck, **29 Vitest tests in 3 files**, the
+production build, and **5 Playwright tests**; it is superseded, because the review fixes
+below changed the code it was taken against.
+
+The full Class A gate is green on user-run evidence accepted on 2026-08-24 against the
+current tree: `npm run typecheck` passed, `npm run test` passed **38 tests in 4 files**,
 `npm run build` passed with the design-token guard reporting 16 color, 2 radius, and 1
-shadow tokens, and `npm run e2e` passed **5 tests**. Both counts matched the prediction
-exactly: Vitest 19 -> 29 is the ten new `NewApplicationPage` cases and nothing else, and
-Playwright 3 -> 5 is three new screen cases against `shell.spec.ts` losing the axe scan
-that moved. The token counts are unchanged because the theme was not touched.
+shadow tokens, `npm run e2e` passed **5 tests**, and `pytest -m "not browser"` passed
+**450, 4 deselected** in 160.48s. The tree that run covered was `1e47e5e` — this slice
+plus the `DraftService` split merged into `v2-main` at 11:54 — and not the
+`services/operations.py` package split that was still being written when it finished.
 
-No Python run is owed. The slice is Class A and frontend-only: no Python module,
-migration, artifact path, callable signature, or contracted message changed, and
-`openapi/` was not regenerated because every schema it consumes —
-`DuplicateCheckRequest`, `DuplicateCheckResponse`, `DuplicateMatchResponse`,
-`CreateApplicationRequest`, `CreateApplicationResponse` — already existed. The one
-supporting edit outside the new files is `TextInput`/`TextArea` moving to
+Every count matched its prediction with no unexplained delta. Vitest 29 -> 38 is the
+seven cases of the new `applications.test.ts` plus the two race regressions; Playwright
+stayed at 5 because no screen was added; the token counts are unchanged because the
+theme was not touched. The Python 450 was derived rather than measured — the last
+recorded baseline was Stage B's 442, plus the seven parametrized cases of
+`test_operation_actions_are_derived_by_the_lifecycle` and the one architecture test added
+since, with `test_api_operations.py` having gained assertions rather than items — and the
+run returned exactly that.
+
+Review on 2026-08-24 found one defect and two smaller ones, all fixed and covered by the
+run above:
+
+- the duplicate-answer race described in the bullet above, which could have sent an
+  acknowledgement for one posting together with the text of another;
+- the `matched_on` type guard accepted any string while the value is used as a key of a
+  closed union, so an unrecognized reason would have rendered `undefined`. Membership is
+  now checked against a set derived from a `Record` that is exhaustive over the union,
+  so a reason added to the backend fails the build rather than the screen;
+- the page had grown to 374 lines and was split into `DuplicateChoices` and
+  `JobTextFileField`.
+
+The slice is Class A and frontend-only: no Python module, migration, artifact path,
+callable signature, or contracted message changed, and `openapi/` was not regenerated
+because every schema it consumes — `DuplicateCheckRequest`, `DuplicateCheckResponse`,
+`DuplicateMatchResponse`, `CreateApplicationRequest`, `CreateApplicationResponse` —
+already existed. No Python test can observe the change: the frontend-serving tests build
+their own `dist` under `tmp_path` rather than reading the real one. The non-browser suite
+was run anyway, because the Class A gate names it at the boundary and it proves the tree
+is green — not that this change did anything.
+
+The one supporting edit outside the new files is `TextInput`/`TextArea` moving to
 `ComponentProps`, and the axe scan moving from `shell.spec.ts` to its own screen spec.
 
 The next slice is the explicit `ניתוח המשרה` action and its Operation Progress, which is
 also the surface that owns the application projection. It is what closes both open
 continuations: the terminal Operation dead end named above, and the
-`applications/:applicationId` placeholder this slice routes an opened duplicate to. Do not
-implement Dashboard navigation or tracking endpoints.
+`applications/:applicationId` placeholder this slice routes an opened duplicate to. That
+second one is also what closes the first Stage C bullet, which stays open until opening an
+existing duplicate actually opens it. Do not implement Dashboard navigation or tracking
+endpoints.
 
 One A.4 surface is deliberately not a primitive: the sandboxed preview frame. Its direction
 isolation and refresh behavior depend on the render contract, so it is built in Stage D with

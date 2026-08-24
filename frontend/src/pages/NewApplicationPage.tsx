@@ -1,43 +1,32 @@
 import { useMutation } from "@tanstack/react-query";
-import { type ChangeEvent, useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 
 import {
-  JOB_TEXT_MAX_BYTES,
+  acknowledgementApplies,
   createApplication,
   duplicateCheck,
   duplicateMatchesFromProblem,
 } from "../api/applications";
 import { ApiProblem } from "../api/client";
-import type {
-  ApplicationIntake,
-  DuplicateMatch,
-  DuplicateMatchReason,
-} from "../api/contracts";
+import type { ApplicationIntake, DuplicateMatch } from "../api/contracts";
 import { useAppForm } from "../forms/useAppForm";
 import { ActionBar } from "../ui/ActionBar";
-import { Button, buttonClasses } from "../ui/Button";
+import { Button } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { Card } from "../ui/Card";
 import { Field } from "../ui/Field";
-import { LiveRegion } from "../ui/LiveRegion";
 import { LtrText } from "../ui/LtrText";
 import { PageHeading } from "../ui/PageHeading";
 import { TechnicalDetails } from "../ui/TechnicalDetails";
 import { TextArea, TextInput } from "../ui/TextInput";
+import { DuplicateChoices } from "./DuplicateChoices";
+import { JobTextFileField } from "./JobTextFileField";
 
 /* Native input affordances, not a second validation policy: they stop the user typing
    past a limit the server would refuse anyway. The refusal itself stays the server's. */
 const LABEL_MAX_CHARACTERS = 500;
 const SOURCE_URL_MAX_CHARACTERS = 2048;
-
-/* Keyed by the generated union, so a detection reason added to the backend fails the
-   frontend build instead of reaching the screen as an untranslated code. */
-const matchReasonLabels: Record<DuplicateMatchReason, string> = {
-  source_url: "אותה כתובת מקור",
-  normalized_text: "טקסט משרה זהה",
-  company_title: "אותה חברה ואותו תפקיד",
-};
 
 interface NewApplicationFields {
   company: string;
@@ -76,27 +65,22 @@ type SubmitResult =
   | { kind: "duplicates"; matches: DuplicateMatch[] }
   | { kind: "created"; applicationId: string };
 
-const isLocalTextFile = (file: File): boolean =>
-  file.type === "text/plain" || /\.txt$/i.test(file.name);
-
 export const NewApplicationPage = () => {
   const navigate = useNavigate();
   const {
     formState: { errors },
+    getValues,
     handleSubmit,
     register,
     setValue,
     watch,
   } = useAppForm<NewApplicationFields>({ defaultValues: emptyFields });
 
-  const [loadedFileName, setLoadedFileName] = useState<string | null>(null);
-  const [fileError, setFileError] = useState<string | undefined>(undefined);
-
   const submit = useMutation<SubmitResult, Error, SubmitInput>({
     mutationFn: async ({ acknowledged, intake }) => {
       /* Detection runs before creation for the user and again inside the create
          command. Once the user has acknowledged, the precheck is skipped so the
-         acknowledgement is not immediately re-questioned by the same finding. */
+         acknowledgement is not immediately re-questioned by the finding it answered. */
       if (!acknowledged) {
         const matches = await duplicateCheck(intake);
 
@@ -130,9 +114,9 @@ export const NewApplicationPage = () => {
     };
   });
 
-  /* A duplicate decision belongs to the exact intake it was shown for. Editing any
-     field withdraws it, so an acknowledgement can never be carried onto text the user
-     changed after the candidates were listed. */
+  /* A duplicate decision belongs to the exact intake it was shown for. Editing a field
+     while an answer is on screen withdraws it here; an answer still in flight when the
+     edit happens has nothing to withdraw yet, and is caught by the comparison below. */
   useEffect(() => {
     const subscription = watch(() => {
       if (submitStateRef.current.hasResult) {
@@ -143,49 +127,32 @@ export const NewApplicationPage = () => {
     return () => subscription.unsubscribe();
   }, [watch]);
 
-  const readLocalFile = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-
-    if (file === undefined) {
-      return;
-    }
-
-    setLoadedFileName(null);
-
-    if (!isLocalTextFile(file)) {
-      setFileError("ניתן לבחור קובץ טקסט בלבד, עם סיומת txt.");
-      return;
-    }
-
-    if (file.size > JOB_TEXT_MAX_BYTES) {
-      setFileError("הקובץ גדול מדי. ניתן להדביק את הטקסט הרלוונטי ישירות לשדה שלמטה.");
-      return;
-    }
-
-    try {
-      const text = await file.text();
-
-      setFileError(undefined);
-      setValue("job_text", text, { shouldDirty: true, shouldValidate: true });
-      setLoadedFileName(file.name);
-    } catch {
-      setFileError("קריאת הקובץ נכשלה. ניתן להדביק את הטקסט ידנית לשדה שלמטה.");
-    }
-  };
-
-  const runSubmit = (acknowledged: boolean) =>
+  const runSubmit = (acknowledgedIntake: ApplicationIntake | undefined) =>
     handleSubmit((fields) => {
-      submit.mutate({ acknowledged, intake: intakeFrom(fields) });
+      const intake = intakeFrom(fields);
+
+      submit.mutate({
+        /* Never assumed: an acknowledgement is sent only when the text it was given for
+           is still the text being created. */
+        acknowledged: acknowledgementApplies(acknowledgedIntake, intake),
+        intake,
+      });
     });
 
   /* Two sources for the same answer: the precheck result, and the create command's own
      refusal. Neither is a failure of the request, so both leave the failure slot empty.
-     Both are read off the one mutation rather than mirrored into component state, so a
-     new submit withdraws the previous answer by itself and there is no second copy to
-     leave stale. */
+     Both are read off the one mutation rather than mirrored into component state, so
+     there is no second copy to leave stale. */
+  const answeredIntake = submit.variables?.intake;
   const acknowledgementRequired = duplicateMatchesFromProblem(submit.error);
-  const precheckMatches = submit.data?.kind === "duplicates" ? submit.data.matches : null;
-  const duplicates = acknowledgementRequired ?? precheckMatches;
+  const settledMatches =
+    acknowledgementRequired ?? (submit.data?.kind === "duplicates" ? submit.data.matches : null);
+  /* The form stays editable while the precheck runs, so an answer can arrive describing
+     text the user has already replaced. It is an answer about a different intake, and
+     therefore not an answer about this one. */
+  const answerIsCurrent = acknowledgementApplies(answeredIntake, intakeFrom(getValues()));
+  const duplicates = answerIsCurrent ? settledMatches : null;
+  const staleAnswer = !answerIsCurrent && settledMatches !== null;
   const failure = acknowledgementRequired === null ? submit.error : null;
 
   return (
@@ -197,7 +164,7 @@ export const NewApplicationPage = () => {
         משרה חדשה
       </PageHeading>
 
-      <form className="mt-8 flex flex-col gap-6" noValidate onSubmit={runSubmit(false)}>
+      <form className="mt-8 flex flex-col gap-6" noValidate onSubmit={runSubmit(undefined)}>
         <div className="grid gap-6 md:grid-cols-2">
           <Field error={errors.company?.message} label="שם החברה">
             {(control) => (
@@ -244,29 +211,9 @@ export const NewApplicationPage = () => {
           )}
         </Field>
 
-        <Field
-          error={fileError}
-          hint="הקובץ נקרא בדפדפן וממלא את שדה טקסט המשרה. שום קובץ אינו נשלח לשרת."
-          label="קריאת קובץ טקסט מהמחשב (לא חובה)"
-        >
-          {(control) => (
-            <input
-              {...control}
-              accept=".txt,text/plain"
-              className="block w-full text-support text-cv-text file:me-3 file:min-h-11 file:rounded-control file:border file:border-cv-border-strong file:bg-cv-surface-muted file:px-4 file:text-support file:font-medium file:text-cv-text"
-              onChange={(event) => {
-                void readLocalFile(event);
-              }}
-              type="file"
-            />
-          )}
-        </Field>
-
-        {loadedFileName === null ? null : (
-          <LiveRegion className="text-support text-cv-text-muted" visuallyHidden={false}>
-            הטקסט מהקובץ <LtrText>{loadedFileName}</LtrText> נטען לשדה טקסט המשרה.
-          </LiveRegion>
-        )}
+        <JobTextFileField
+          onText={(text) => setValue("job_text", text, { shouldDirty: true, shouldValidate: true })}
+        />
 
         <Field error={errors.job_text?.message} label="טקסט המשרה">
           {(control) => (
@@ -283,68 +230,26 @@ export const NewApplicationPage = () => {
         </Field>
 
         {duplicates === null ? null : (
-          <Callout
-            action={
-              <Button
-                disabled={submit.isPending}
-                onClick={() => {
-                  void runSubmit(true)();
-                }}
-                variant="secondary"
-              >
-                יצירה בכל זאת
-              </Button>
-            }
-            role="alert"
-            title="נמצאו מועמדויות דומות"
-            tone="warning"
-          >
-            <p>
-              זו אזהרה בלבד ואינה חוסמת. אפשר לפתוח מועמדות קיימת, או ליצור מועמדות נוספת
-              עם הטקסט שהוזן באמצעות הכפתור שבהמשך.
-            </p>
-
-            {duplicates.length === 0 ? (
-              <p className="mt-3">השרת ביקש אישור מפורש אך לא החזיר פירוט של המועמדויות הדומות.</p>
-            ) : (
-              <ul className="mt-3 flex flex-col gap-3">
-                {duplicates.map((match) => (
-                  <li
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-cv-border bg-cv-surface p-3"
-                    key={match.application_id}
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium text-cv-text" dir="auto">
-                        {match.company}
-                      </p>
-                      <p className="text-cv-text-muted" dir="auto">
-                        {match.target_role}
-                      </p>
-                      <p className="text-cv-text-muted">
-                        {match.matched_on
-                          .map((reason) => matchReasonLabels[reason])
-                          .join(" · ")}
-                      </p>
-                    </div>
-                    <Link
-                      className={buttonClasses("secondary")}
-                      to={`/applications/${encodeURIComponent(match.application_id)}`}
-                    >
-                      פתיחת המועמדות הקיימת
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Callout>
+          <DuplicateChoices
+            matches={duplicates}
+            onCreateAnyway={() => {
+              void runSubmit(answeredIntake)();
+            }}
+            pending={submit.isPending}
+          />
         )}
+
+        {staleAnswer ? (
+          <Callout role="status" title="הקלט השתנה מאז הבדיקה" tone="neutral">
+            בדיקת הכפילויות רצה על טקסט קודם, ולכן התשובה שלה אינה חלה על מה שמופיע עכשיו.
+            יש ללחוץ שוב על יצירת מועמדות כדי לבדוק את הקלט הנוכחי.
+          </Callout>
+        ) : null}
 
         {failure === null ? null : (
           <Callout
             role="alert"
-            title={
-              failure instanceof ApiProblem ? failure.problem.title : "יצירת המועמדות נכשלה"
-            }
+            title={failure instanceof ApiProblem ? failure.problem.title : "יצירת המועמדות נכשלה"}
             tone="blocker"
           >
             {failure instanceof ApiProblem
