@@ -40,9 +40,13 @@ export const PageHeading = ({
           {eyebrow}
         </p>
       )}
+      {/* A.3: a heading is usually a Hebrew constant, but the route error boundary
+          passes a backend title and detail through here, so each picks its own
+          direction rather than inheriting the RTL shell. */}
       <h1
         className="text-heading-lg font-semibold tracking-tight"
         data-route-heading
+        dir="auto"
         id={id}
         ref={headingRef}
         tabIndex={-1}
@@ -50,7 +54,9 @@ export const PageHeading = ({
         {children}
       </h1>
       {description === undefined ? null : (
-        <p className="mt-4 max-w-2xl text-body text-cv-text-muted">{description}</p>
+        <p className="mt-4 max-w-2xl text-body text-cv-text-muted" dir="auto">
+          {description}
+        </p>
       )}
     </>
   );

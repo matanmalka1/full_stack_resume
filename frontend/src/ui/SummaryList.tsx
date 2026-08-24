@@ -21,7 +21,9 @@ export const SummaryList = ({ className, items }: SummaryListProps) => {
       {items.map((item, index) => (
         <div className="contents" key={index}>
           <dt className="text-support font-medium text-cv-text-muted">{item.term}</dt>
-          <dd className="text-support text-cv-text">
+          {/* An LTR island isolates itself; any other value may be Hebrew or backend
+              English, so it picks its own direction. */}
+          <dd className="text-support text-cv-text" dir={item.ltr === true ? undefined : "auto"}>
             {item.ltr === true ? <LtrText>{item.value}</LtrText> : item.value}
           </dd>
         </div>

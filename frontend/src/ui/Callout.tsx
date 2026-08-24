@@ -44,10 +44,17 @@ export const Callout = ({ action, children, className, role, title, tone }: Call
         <div className="min-w-0 flex-1">
           <p className="text-support leading-6">
             <span className={cx("font-semibold", toneIconClasses[tone])}>{label}</span>{" "}
-            <span className="text-cv-text">{title}</span>
+            {/* A.3: the tone label is Hebrew, but a callout usually carries a backend
+                title and detail that may be English. dir="auto" lets each run pick its
+                own direction instead of being forced into the RTL shell. */}
+            <span className="text-cv-text" dir="auto">
+              {title}
+            </span>
           </p>
           {children === undefined ? null : (
-            <div className="mt-2 text-support leading-6 text-cv-text">{children}</div>
+            <div className="mt-2 text-support leading-6 text-cv-text" dir="auto">
+              {children}
+            </div>
           )}
           {action === undefined ? null : <div className="mt-3">{action}</div>}
         </div>
