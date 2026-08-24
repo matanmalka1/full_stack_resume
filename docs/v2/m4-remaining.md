@@ -606,22 +606,22 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
 
 ## D — Draft Editor and preview
 
-**All six bullets are implemented and none is closed.** The stage gate has not been run:
-the commands and their exact predictions are handed over under *Stage D — gate awaiting
-evidence* below, and nothing here is marked closed until those numbers come back. The
-boxes stay unticked deliberately.
+**Stage D is closed on the complete Class B gate.** All predicted counts matched, the
+rendering-specific browser addition passed, and the fresh offline deterministic workflow
+reached Ready and reconciled without problems. The evidence is recorded under
+*Stage D — gate closed* below.
 
-- [ ] Structured claims/sections, linked facts, warnings, blockers, and deterministic
+- [x] Structured claims/sections, linked facts, warnings, blockers, and deterministic
       selection changes. *Implemented in `36e83b4`, `f7ba86d`, `8eb6b9d`.*
-- [ ] Debounced/blur autosave with ETag and explicit conflict resolution. *Implemented in
+- [x] Debounced/blur autosave with ETag and explicit conflict resolution. *Implemented in
       `5bf9c19`.*
-- [ ] Section/claim regeneration Operations and safe failure behavior. *Implemented in
+- [x] Section/claim regeneration Operations and safe failure behavior. *Implemented in
       `686d872`.*
-- [ ] Unsupported free text preserved as pending/unlinked and blocked from approval.
+- [x] Unsupported free text preserved as pending/unlinked and blocked from approval.
       *Implemented in `36e83b4`, `f7ba86d`, `5bf9c19`.*
-- [ ] Isolated server-rendered HTML preview with Hebrew, English, and mixed direction.
+- [x] Isolated server-rendered HTML preview with Hebrew, English, and mixed direction.
       *Implemented in `36e83b4`, `4ed3ea3`.*
-- [ ] Desktop split and responsive single-view fallback. *Implemented in `4ed3ea3`.*
+- [x] Desktop split and responsive single-view fallback. *Implemented in `4ed3ea3`.*
 
 ### What the stage changed, and why
 
@@ -696,7 +696,7 @@ non-dismissible dialog; an ordinary failure keeps the text and does not retry it
   editor needs a real projection and a real draft, so its axe scan belongs to the central
   E2E the F gate owns. Playwright stays at 5.
 
-## Stage D — gate awaiting evidence
+## Stage D — gate closed 2026-08-24
 
 The stage is **Class B**: two new routes, a new `Renderer` port method, a new projection
 field, a changed request schema, and regenerated `openapi/`. The gate is therefore Class A
@@ -757,6 +757,34 @@ from an array. Each button now carries a key.
 Neither fix touches a count. **Rerun from command 1**; the predictions above stand, with
 `npm run test` now expected to pass all **100**.
 
+### Final gate evidence — 2026-08-24
+
+The user supplied the complete gate evidence after `0afe407`. The automated test and build
+commands are user-run; the offline workflow is recorded from the executing agent's
+transcript supplied by the user. Every command passed and every observed count matched its
+prediction; there is no unexplained delta.
+
+| Command | Observed | Provenance |
+| --- | --- | --- |
+| `cd frontend && npm run typecheck` | **passed** | user |
+| `cd frontend && npm run test` | **100 passed, 11 files** | user |
+| `cd frontend && npm run build` | **passed**; guard reported **16 color, 2 radius, 1 shadow** | user |
+| `cd frontend && npm run e2e` | **5 passed** | user |
+| `pytest -m "not browser"` | **305 passed, 3 deselected** in 62.71s | user |
+| `pytest tests/test_golden.py tests/test_architecture.py` | **13 passed, 1 deselected** in 4.45s | user |
+| `pytest -m browser` | **3 passed, 305 deselected** in 16.73s | user |
+| offline `ingest → analyze → draft → validate → approve → render → ready → reconcile` | **passed** with `OPENAI_API_KEY` unset against a fresh disposable Workspace | executing agent; transcript supplied by user |
+
+The offline run used Workspace
+`/private/tmp/claude-501/-Users-matanmalka-Projects-resume-python-v2/adc007bf-d604-4c99-9dff-00f23ff4b5bb/scratchpad/cv-staged-f0VSk4`,
+initialized with `purpose=development` and `data_class=copy`. It created Application
+`91fb3916-1a49-4c78-94b2-b9ec542732b4` and ApprovedRevision
+`24b4829d-2bca-4127-978a-ffaf635129ae`. Draft and validation completed with 29 claims and
+28 selected facts. The rendered document was one LTR page with no geometry offenders and
+ATS claim coverage 1.0. Ready passed all six groups with no issues. Reconcile checked five
+artifact versions and 87 canonical facts, with no artifact, fact-lifecycle, journal, or
+integrity problems.
+
 ## E — Validate, approve, render, and Ready
 
 - [ ] Validation outcomes, blocker/warning hierarchy, edit/revalidate path.
@@ -781,10 +809,8 @@ Neither fix touches a count. **Rerun from command 1**; the predictions above sta
 
 ## Current next action
 
-**Stage B is closed. Stage C bullets 1 and 2 are closed on their applicable gates.**
-
-**Stage C is closed.** All five bullets are closed on their applicable gates. The next
-slice is Stage D, Draft Editor and preview.
+**Stages B, C, and D are closed on their applicable gates.** The next slice is Stage E:
+validation outcomes, blocker/warning hierarchy, and the edit/revalidate path.
 
 **The Known gap recorded here is closed.** A terminal Operation screen was a dead end: it
 reported that the Operation had finished and offered no way forward, and the destination
