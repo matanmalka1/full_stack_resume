@@ -313,8 +313,10 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
 
 ## B — Frontend foundation
 
-**Stage B is in progress.** The frontend scaffold is closed on user-run typecheck and
-production-build evidence accepted on 2026-08-24.
+**Stage B is complete.** Every bullet below is closed on user-run evidence accepted on
+2026-08-24: typecheck and production build throughout, then `npm run test` (15 passed) and
+`npm run e2e` (3 passed) for the test foundation, and `pytest -m "not browser"` (442 passed,
+4 deselected) for the Operation contract change.
 
 - [x] Create `frontend/` with React, TypeScript, Vite, and Tailwind. It includes a Hebrew RTL
       document, semantic design tokens, a minimal accessible shell, development/production
@@ -362,7 +364,7 @@ production-build evidence accepted on 2026-08-24.
       radius, or shadow token. Its exception list is deliberately empty. The guard was
       proven to fail: a probe component carrying one violation of each rule produced five
       errors and exit 1, and the tree returned to green when the probe was removed.
-- [ ] Add shared Operation polling without WebSocket or SSE. `operationQueryOptions` in
+- [x] Add shared Operation polling without WebSocket or SSE. `operationQueryOptions` in
       `src/api/operations.ts` polls `GET /api/v1/operations/{id}` every 1500ms through
       TanStack Query and returns `false` from `refetchInterval` once the Operation reports
             `is_terminal`, so a finished Operation is never polled again. A transient failure -
@@ -379,7 +381,7 @@ production-build evidence accepted on 2026-08-24.
       primitives are where backend strings reach the DOM; failure codes remain explicit
       LTR islands. No percentage is shown, because the
       Operation contract has no such field. Cancel and retry are not in this slice.
-- [ ] **Contract change (Class B): `OperationResponse` reports `is_terminal` and stops
+- [x] **Contract change (Class B): `OperationResponse` reports `is_terminal` and stops
       flattening its closed sets to `str`.** The first draft of the frontend kept its own
       copy of `TERMINAL_OPERATION_STATUSES`, because the HTTP schema typed `status` as a
       plain string. Which statuses end an Operation is a lifecycle rule the application
@@ -399,8 +401,28 @@ production-build evidence accepted on 2026-08-24.
       rather than an untranslated value on screen. `openapi/openapi.json` and
       `openapi/types.ts` were regenerated; the entry-level diff is four `$ref`s replacing
       inline strings, three new enum components, and one added required boolean.
-- [ ] Add Vitest, React Testing Library, Playwright Web E2E, and axe foundations without
-      blanket DOM snapshots.
+- [x] Add Vitest, React Testing Library, Playwright Web E2E, and axe foundations without
+      blanket DOM snapshots. Vitest runs in `jsdom` with `globals: false`, so a test file
+      imports `describe`/`it`/`expect` like any other module and Testing Library's teardown
+      is explicit rather than absent. The first tests are the two claims that were carried
+      as unverified: `operations.test.ts` covers every poll stop condition - terminal,
+      permanent 4xx, retryable `408`/`429`, `5xx`, transport error, and no data yet - and
+      `OperationPage.test.tsx` covers the Hebrew status naming, `dir="auto"` on backend
+      text, a safe failure detail presented as a blocker, a Problem Details failure, and
+      the transport error that used to render nothing. No blanket DOM snapshot is used;
+      each test names the behavior it asserts. Playwright serves the production build
+      through `vite preview`, never the dev server, and `e2e/shell.spec.ts` asserts the RTL
+      document, the workflow landmark, focus moving to the heading after a route change,
+      and a clean axe scan over `wcag2a`/`wcag2aa`/`wcag21a`/`wcag21aa`.
+      `tsconfig.node.json` now covers `playwright.config.ts` and `e2e/`, so the gate
+      typechecks them.
+
+      Two things are deliberately not here. The specification's central E2E runs against
+      real FastAPI, a real worker, and a real Workspace; the shell is the only screen that
+      exists without a backend, so that suite arrives with the Stage C screens that drive
+      it. And the axe coverage the specification lists by screen - New Application,
+      Analysis Review, Draft Editor, Validation, Ready - is added per screen, not stubbed
+      ahead of the screens.
 
 ## C — Intake, analysis, and review
 
@@ -445,7 +467,7 @@ production-build evidence accepted on 2026-08-24.
 
 ## Current next action
 
-Polling is implemented and awaiting its gate.
+**Stage B is closed; Stage C is next.**
 
 **Known gap, deliberately not filled here.** A terminal Operation screen is a dead end: it
 reports that the Operation finished and offers no way forward. The destination is not this
@@ -455,10 +477,10 @@ workflow state machine — a hardcoded `operation_type` to route map would be ex
 The Stage C surface that owns the application projection adds the continuation, and no
 Operation screen ships to a real user before it does.
 
-The Stage B remainder is then the test foundation: Vitest, React Testing Library, Playwright Web E2E, and axe, without blanket DOM
-snapshots. Operation cancel and retry are the first slice after that, since they are
-mutations and need the `409`/`202`-plus-`Location` behavior the polling slice does not
-touch. Do not implement Dashboard navigation, tracking endpoints, or the Stage C intake
+Running the Playwright suite on a fresh checkout needs its browser binary first:
+`npx playwright install chromium`. Operation cancel and retry are the first slice of Stage
+C, since they are mutations and need the `409`/`202`-plus-`Location` behavior the polling
+slice does not touch, and they close the dead-end gap described above. Do not implement Dashboard navigation, tracking endpoints, or the Stage C intake
 flow yet.
 
 One A.4 surface is deliberately not a primitive: the sandboxed preview frame. Its direction
