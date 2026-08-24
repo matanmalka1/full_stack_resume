@@ -736,6 +736,27 @@ Predicted deltas, and where each comes from:
 
 Any difference from these numbers is a finding, not noise.
 
+### Run 1 — frontend, 2026-08-24
+
+`npm run typecheck` passed. `npm run test` reported **100 tests in 11 files**, which is the
+predicted count exactly, with **1 failed / 99 passed**. The failure was this stage's own
+doing and is fixed in `0afe407`; commands 3 onward were not reached in that run.
+
+`ApplicationPage`'s "still names a resolution action that has no screen" case used
+`PENDING_FACT_REQUIRES_RESOLUTION`, whose resolutions are `confirm_and_use_fact` and
+`update_working_draft`. Building the Draft Editor gave the second one a destination, so the
+callout correctly rendered a link where the test expected the sentence: **the test's premise
+became false, not its subject.** It is repointed to `FACT_SELECTION_UNRESOLVED` and
+`create_selection_plan`, which still has no screen — the same repoint this case took when
+`create_draft` was built in Stage C bullet 3. The assertion is unchanged in kind.
+
+The run also surfaced a React key warning from `ActionBar`: adding the editor button made
+its secondary group hold more than one child for the first time, and the group is assembled
+from an array. Each button now carries a key.
+
+Neither fix touches a count. **Rerun from command 1**; the predictions above stand, with
+`npm run test` now expected to pass all **100**.
+
 ## E — Validate, approve, render, and Ready
 
 - [ ] Validation outcomes, blocker/warning hierarchy, edit/revalidate path.
