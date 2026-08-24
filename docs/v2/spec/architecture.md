@@ -47,10 +47,10 @@ Frontend:
 
 Testing additions:
 
-- Vitest
-- React Testing Library
+- Vitest, with `jsdom` as its DOM environment
+- React Testing Library, with `@testing-library/jest-dom` matchers
 - Playwright Web E2E
-- axe checks on the central screens
+- axe checks on the central screens, through `@axe-core/playwright`
 
 SQLAlchemy, Alembic, Redux, a full component framework, Celery, Redis, WebSockets, SSE,
 and a DI framework are not part of v2.0.
