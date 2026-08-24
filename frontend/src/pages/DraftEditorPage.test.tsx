@@ -441,3 +441,31 @@ describe("DraftEditorPage regeneration", () => {
     }
   });
 });
+
+describe("DraftEditorPage preview", () => {
+  it("frames the server-rendered draft in an isolated sandbox, marked as a draft", async () => {
+    stubReads({});
+
+    renderPage();
+
+    const frame = await screen.findByTitle("תצוגה מקדימה של הטיוטה");
+    expect(frame).toHaveAttribute("src", "/api/v1/working-drafts/wd-1/preview?v=4");
+    /* An empty sandbox is the point: no allow-same-origin and no allow-scripts, so the
+       document renders in an opaque origin and cannot reach this page. */
+    expect(frame).toHaveAttribute("sandbox", "");
+    expect(screen.getByText("טיוטה")).toBeInTheDocument();
+  });
+
+  it("keeps both panes mounted so switching views does not discard unsaved text", async () => {
+    stubReads({});
+
+    renderPage();
+    const editors = await screen.findAllByLabelText("טקסט השורה");
+    fireEvent.change(editors[0]!, { target: { value: "typed then switched away" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "תצוגה" }));
+
+    expect(screen.getAllByLabelText("טקסט השורה")[0]).toHaveValue("typed then switched away");
+    expect(screen.getByTitle("תצוגה מקדימה של הטיוטה")).toBeInTheDocument();
+  });
+});

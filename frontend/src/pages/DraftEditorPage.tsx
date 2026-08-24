@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { applicationDetailQueryKey, applicationDetailQueryOptions } from "../api/applications";
@@ -20,14 +20,17 @@ import {
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { Button, buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
+import { cx } from "../ui/cx";
 import { Card } from "../ui/Card";
 import { LtrText } from "../ui/LtrText";
 import { PageHeading } from "../ui/PageHeading";
 import { StatusBadge } from "../ui/StatusBadge";
 import { TechnicalDetails } from "../ui/TechnicalDetails";
+import { ViewSwitch } from "../ui/ViewSwitch";
 import { DraftClaimCard } from "./DraftClaimCard";
 import { DraftConflictDialog } from "./DraftConflictDialog";
 import { DraftFactPanel } from "./DraftFactPanel";
+import { DraftPreview } from "./DraftPreview";
 import { DraftSaveState } from "./DraftSaveState";
 import { removability } from "./claimRemoval";
 import { useDraftAutosave } from "./useDraftAutosave";
@@ -81,6 +84,10 @@ export const DraftEditorPage = () => {
   const applicationHref = `/applications/${encodeURIComponent(applicationId)}`;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  /* A.4's responsive fallback. Both panes stay mounted and one is hidden, rather than one
+     being unmounted: switching views must not discard text the user has typed, and an
+     unmounted editor would take its visible text with it. */
+  const [view, setView] = useState<"editor" | "preview">("editor");
 
   /* A save changes the draft, so the read that produced it is stale by definition. The
      new token is installed directly - it is the one the response returned for the version
@@ -272,119 +279,152 @@ export const DraftEditorPage = () => {
           )
         ) : (
           <div className="flex flex-col gap-6">
-            <section aria-labelledby="draft-structure-heading" className="flex flex-col gap-4">
-              <h2
-                className="text-heading-sm font-semibold text-cv-text"
-                id="draft-structure-heading"
+            <div className="lg:hidden">
+              <ViewSwitch
+                label="מעבר בין העריכה לתצוגה"
+                onChange={setView}
+                options={[
+                  { label: "עריכה", value: "editor" },
+                  { label: "תצוגה", value: "preview" },
+                ]}
+                value={view}
+              />
+            </div>
+
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+              <div
+                className={cx(
+                  "flex flex-col gap-6 lg:flex-1 lg:basis-3/5",
+                  view === "editor" ? undefined : "hidden lg:flex",
+                )}
               >
-                מבנה המסמך
-              </h2>
+                <section aria-labelledby="draft-structure-heading" className="flex flex-col gap-4">
+                  <h2
+                    className="text-heading-sm font-semibold text-cv-text"
+                    id="draft-structure-heading"
+                  >
+                    מבנה המסמך
+                  </h2>
 
-              <ul className="flex flex-col gap-3">
-                <DraftClaimCard
-                  claim={draft.outline.headline}
-                  draft={draft}
-                  facts={facts}
-                  onBlur={autosave.flush}
-                  onEdit={editClaim}
-                  onRegenerate={(claim) => regeneration.mutate({ claimId: claim.claim_id })}
-                  onRemove={removeClaim}
-                  unsaved={unsaved || regeneration.isPending}
-                />
-                {draft.outline.contacts.map((contact) => (
-                  <DraftClaimCard
-                    claim={contact}
-                    draft={draft}
-                    facts={facts}
-                    key={contact.claim_id}
-                    onBlur={autosave.flush}
-                    onEdit={editClaim}
-                    onRegenerate={(claim) => regeneration.mutate({ claimId: claim.claim_id })}
-                    onRemove={removeClaim}
-                    unsaved={unsaved || regeneration.isPending}
-                  />
-                ))}
-              </ul>
+                  <ul className="flex flex-col gap-3">
+                    <DraftClaimCard
+                      claim={draft.outline.headline}
+                      draft={draft}
+                      facts={facts}
+                      onBlur={autosave.flush}
+                      onEdit={editClaim}
+                      onRegenerate={(claim) => regeneration.mutate({ claimId: claim.claim_id })}
+                      onRemove={removeClaim}
+                      unsaved={unsaved || regeneration.isPending}
+                    />
+                    {draft.outline.contacts.map((contact) => (
+                      <DraftClaimCard
+                        claim={contact}
+                        draft={draft}
+                        facts={facts}
+                        key={contact.claim_id}
+                        onBlur={autosave.flush}
+                        onEdit={editClaim}
+                        onRegenerate={(claim) => regeneration.mutate({ claimId: claim.claim_id })}
+                        onRemove={removeClaim}
+                        unsaved={unsaved || regeneration.isPending}
+                      />
+                    ))}
+                  </ul>
 
-              {draft.outline.sections.map((section) => (
-                <div className="flex flex-col gap-3" key={section.name}>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h3 className="text-body font-semibold text-cv-text" dir="auto">
-                      {section.name}
-                    </h3>
-                    <Button
-                      disabled={unsaved || regeneration.isPending}
-                      onClick={() => regeneration.mutate({ section: section.name })}
-                      variant="secondary"
-                    >
-                      יצירה מחדש של הפרק
-                    </Button>
-                  </div>
-                  {section.claims.length === 0 ? (
-                    <p className="text-support leading-6 text-cv-text-muted">
-                      אין כרגע שורות בסעיף הזה.
-                    </p>
-                  ) : (
-                    <ul className="flex flex-col gap-3">
-                      {section.claims.map((claim) => (
-                        <DraftClaimCard
-                          claim={claim}
-                          draft={draft}
-                          facts={facts}
-                          key={claim.claim_id}
-                          onBlur={autosave.flush}
-                          onEdit={editClaim}
-                          onRegenerate={(claim) => regeneration.mutate({ claimId: claim.claim_id })}
-                          onRemove={removeClaim}
-                          unsaved={unsaved || regeneration.isPending}
-                        />
-                      ))}
-                    </ul>
-                  )}
+                  {draft.outline.sections.map((section) => (
+                    <div className="flex flex-col gap-3" key={section.name}>
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <h3 className="text-body font-semibold text-cv-text" dir="auto">
+                          {section.name}
+                        </h3>
+                        <Button
+                          disabled={unsaved || regeneration.isPending}
+                          onClick={() => regeneration.mutate({ section: section.name })}
+                          variant="secondary"
+                        >
+                          יצירה מחדש של הפרק
+                        </Button>
+                      </div>
+                      {section.claims.length === 0 ? (
+                        <p className="text-support leading-6 text-cv-text-muted">
+                          אין כרגע שורות בסעיף הזה.
+                        </p>
+                      ) : (
+                        <ul className="flex flex-col gap-3">
+                          {section.claims.map((claim) => (
+                            <DraftClaimCard
+                              claim={claim}
+                              draft={draft}
+                              facts={facts}
+                              key={claim.claim_id}
+                              onBlur={autosave.flush}
+                              onEdit={editClaim}
+                              onRegenerate={(claim) =>
+                                regeneration.mutate({ claimId: claim.claim_id })
+                              }
+                              onRemove={removeClaim}
+                              unsaved={unsaved || regeneration.isPending}
+                            />
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </section>
+
+                {regeneration.error === null ? null : (
+                  <Callout role="alert" title="היצירה מחדש לא הופעלה" tone="blocker">
+                    {problemMessage(
+                      regeneration.error,
+                      "לא ניתן היה להפעיל יצירה מחדש. הטיוטה נשמרה כפי שהיא.",
+                    )}
+                    {regeneration.error instanceof ApiProblem ? (
+                      <TechnicalDetails className="mt-3">
+                        <LtrText>{regeneration.error.problem.code}</LtrText>
+                      </TechnicalDetails>
+                    ) : null}
+                  </Callout>
+                )}
+
+                {unsaved ? (
+                  <p className="text-support leading-6 text-cv-text-muted">
+                    יצירה מחדש מוקפאת על הגרסה השמורה של הטיוטה, ולכן היא זמינה רק אחרי שהשמירה
+                    הסתיימה.
+                  </p>
+                ) : null}
+
+                {selection.error === null ? null : (
+                  <Callout role="alert" title="שינוי הבחירה לא בוצע" tone="blocker">
+                    {problemMessage(
+                      selection.error,
+                      "לא ניתן היה לשנות את בחירת העובדות. הטיוטה נשמרה כפי שהיא.",
+                    )}
+                    {selection.error instanceof ApiProblem ? (
+                      <TechnicalDetails className="mt-3">
+                        <LtrText>{selection.error.problem.code}</LtrText>
+                      </TechnicalDetails>
+                    ) : null}
+                  </Callout>
+                )}
+
+                <DraftFactPanel busy={selection.isPending} facts={facts} onInclude={includeFact} />
+
+                <div>
+                  <Link className={buttonClasses("secondary")} to={applicationHref}>
+                    חזרה למועמדות
+                  </Link>
                 </div>
-              ))}
-            </section>
+              </div>
 
-            {regeneration.error === null ? null : (
-              <Callout role="alert" title="היצירה מחדש לא הופעלה" tone="blocker">
-                {problemMessage(
-                  regeneration.error,
-                  "לא ניתן היה להפעיל יצירה מחדש. הטיוטה נשמרה כפי שהיא.",
+              <div
+                className={cx(
+                  "lg:flex-1 lg:basis-2/5",
+                  view === "preview" ? undefined : "hidden lg:block",
                 )}
-                {regeneration.error instanceof ApiProblem ? (
-                  <TechnicalDetails className="mt-3">
-                    <LtrText>{regeneration.error.problem.code}</LtrText>
-                  </TechnicalDetails>
-                ) : null}
-              </Callout>
-            )}
-
-            {unsaved ? (
-              <p className="text-support leading-6 text-cv-text-muted">
-                יצירה מחדש מוקפאת על הגרסה השמורה של הטיוטה, ולכן היא זמינה רק אחרי שהשמירה הסתיימה.
-              </p>
-            ) : null}
-
-            {selection.error === null ? null : (
-              <Callout role="alert" title="שינוי הבחירה לא בוצע" tone="blocker">
-                {problemMessage(
-                  selection.error,
-                  "לא ניתן היה לשנות את בחירת העובדות. הטיוטה נשמרה כפי שהיא.",
-                )}
-                {selection.error instanceof ApiProblem ? (
-                  <TechnicalDetails className="mt-3">
-                    <LtrText>{selection.error.problem.code}</LtrText>
-                  </TechnicalDetails>
-                ) : null}
-              </Callout>
-            )}
-
-            <DraftFactPanel busy={selection.isPending} facts={facts} onInclude={includeFact} />
-
-            <div>
-              <Link className={buttonClasses("secondary")} to={applicationHref}>
-                חזרה למועמדות
-              </Link>
+              >
+                <DraftPreview draft={draft} />
+              </div>
             </div>
 
             <TechnicalDetails>
