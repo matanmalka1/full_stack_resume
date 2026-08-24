@@ -309,8 +309,11 @@ production-build evidence accepted on 2026-08-24.
       document, semantic design tokens, a minimal accessible shell, development/production
       scripts, and a locked dependency graph. User-run `npm run typecheck` and
       `npm run build` both passed.
-- [ ] Add React Router, TanStack Query, React Hook Form, generated OpenAPI type consumption,
-      and a small handwritten client.
+- [x] Add React Router, TanStack Query, React Hook Form, generated OpenAPI type consumption,
+      and a small handwritten client. Providers and the root route wrap the existing shell,
+      generated schemas are imported from `openapi/types.ts`, and the client handles safe
+      Problem Details, ETag, Idempotency-Key, and `Location`. Frontend functions use arrow
+      syntax throughout. User-run `npm run typecheck` and `npm run build` both passed.
 - [ ] Add the RTL shell, semantic design tokens, focus/error boundary, and route skeletons.
 - [ ] Add Vite proxy development flow and serve the production build from FastAPI.
 - [ ] Add shared Operation polling without WebSocket or SSE.
@@ -360,6 +363,6 @@ production-build evidence accepted on 2026-08-24.
 
 ## Current next action
 
-Add React Router, TanStack Query, React Hook Form, generated OpenAPI type consumption, and the
-handwritten client. Keep route content skeletal and do not implement Dashboard navigation,
-tracking endpoints, or the Stage C intake flow yet.
+Add the RTL shell's focus/error boundary and route skeletons without changing the visual
+design. Do not implement Dashboard navigation, tracking endpoints, or the Stage C intake flow
+yet.

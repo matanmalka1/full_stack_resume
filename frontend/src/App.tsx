@@ -1,6 +1,6 @@
 const workflowSteps = ["משרה חדשה", "ניתוח", "טיוטה", "אימות", "מוכן"];
 
-export function App() {
+export const App = () => {
   return (
     <div className="min-h-screen bg-cv-canvas text-cv-text">
       <header className="border-b border-cv-border bg-cv-surface">
@@ -58,4 +58,4 @@ export function App() {
       </main>
     </div>
   );
-}
+};
