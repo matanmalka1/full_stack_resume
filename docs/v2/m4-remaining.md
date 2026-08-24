@@ -302,7 +302,13 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
 
 ## B — Frontend foundation
 
-- [ ] Create `frontend/` with React, TypeScript, Vite, and Tailwind.
+**Stage B is in progress.** The frontend scaffold is closed on user-run typecheck and
+production-build evidence accepted on 2026-08-24.
+
+- [x] Create `frontend/` with React, TypeScript, Vite, and Tailwind. It includes a Hebrew RTL
+      document, semantic design tokens, a minimal accessible shell, development/production
+      scripts, and a locked dependency graph. User-run `npm run typecheck` and
+      `npm run build` both passed.
 - [ ] Add React Router, TanStack Query, React Hook Form, generated OpenAPI type consumption,
       and a small handwritten client.
 - [ ] Add the RTL shell, semantic design tokens, focus/error boundary, and route skeletons.
@@ -354,7 +360,6 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
 
 ## Current next action
 
-Implement Stage B as the first code boundary: scaffold the approved frontend baseline, wire
-generated API types plus the handwritten client, add the RTL shell and route skeletons, and
-establish the development/production serving paths. Do not implement Dashboard navigation or
-tracking endpoints.
+Add React Router, TanStack Query, React Hook Form, generated OpenAPI type consumption, and the
+handwritten client. Keep route content skeletal and do not implement Dashboard navigation,
+tracking endpoints, or the Stage C intake flow yet.
