@@ -1,7 +1,7 @@
 -- Safe Web preferences are durable Workspace state (§16), not runtime
 -- configuration.  The singleton row is created lazily so a read can derive
 -- provider-dependent defaults without writing during a query.
-CREATE TABLE IF NOT EXISTS workspace_settings (
+CREATE TABLE workspace_settings (
     singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
     edit_version INTEGER NOT NULL CHECK (edit_version > 0),
     auto_generate_when_review_not_required INTEGER NOT NULL

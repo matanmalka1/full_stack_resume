@@ -10,14 +10,42 @@ from ..schemas.settings import SettingsResponse, UpdateSettingsRequest
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 
-@router.get("", response_model=SettingsResponse, summary="Read safe Workspace settings")
+@router.get(
+    "",
+    response_model=SettingsResponse,
+    summary="Read safe Workspace settings",
+    responses={
+        200: {
+            "headers": {
+                "ETag": {
+                    "description": "Strong validator required by the next settings update.",
+                    "schema": {"type": "string"},
+                }
+            }
+        }
+    },
+)
 def read_settings(services: Services, response: Response) -> SettingsResponse:
     result = services.settings.read()
     response.headers["ETag"] = settings_etag(result.edit_version)
     return SettingsResponse.model_validate(result.model_dump(mode="json"))
 
 
-@router.patch("", response_model=SettingsResponse, summary="Update safe Workspace settings")
+@router.patch(
+    "",
+    response_model=SettingsResponse,
+    summary="Update safe Workspace settings",
+    responses={
+        200: {
+            "headers": {
+                "ETag": {
+                    "description": "Strong validator required by the next settings update.",
+                    "schema": {"type": "string"},
+                }
+            }
+        }
+    },
+)
 def update_settings(
     request: UpdateSettingsRequest,
     services: Services,

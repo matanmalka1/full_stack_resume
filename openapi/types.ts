@@ -2007,6 +2007,24 @@ export interface components {
             /** Report Schema Version */
             report_schema_version?: string | null;
         };
+        /** ValidationRunDetailResponse */
+        ValidationRunDetailResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Content Hash */
+            content_hash: string;
+            /** Created At */
+            created_at: string;
+            /** Edit Version */
+            edit_version: number;
+            /** Passed */
+            passed: boolean;
+            report: components["schemas"]["ValidationReportResponse"];
+            /** Validation Run Id */
+            validation_run_id: string;
+            /** Working Draft Id */
+            working_draft_id: string;
+        };
         /**
          * ValidationRunResponse
          * @description A ValidationRun as data. `passed=false` arrives as `200` (§22).
@@ -2016,8 +2034,6 @@ export interface components {
             application_id: string;
             /** Content Hash */
             content_hash: string;
-            /** Created At */
-            created_at?: string | null;
             /** Edit Version */
             edit_version: number;
             /** Passed */
@@ -2893,6 +2909,8 @@ export interface operations {
             /** @description Successful Response */
             200: {
                 headers: {
+                    /** @description Strong validator required by the next settings update. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2920,6 +2938,8 @@ export interface operations {
             /** @description Successful Response */
             200: {
                 headers: {
+                    /** @description Strong validator required by the next settings update. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2954,7 +2974,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationRunResponse"];
+                    "application/json": components["schemas"]["ValidationRunDetailResponse"];
                 };
             };
             /** @description Validation Error */

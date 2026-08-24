@@ -12,6 +12,7 @@ from __future__ import annotations
 import sys
 
 from ..application.errors import WorkflowError
+from ..infrastructure.persistence import SchemaError
 from ..runtime.backup import BackupError
 from ..runtime.workspace import WorkspaceError
 
@@ -59,6 +60,7 @@ def main(argv: list[str] | None = None) -> int:
         WorkflowError,
         WorkspaceError,
         BackupError,
+        SchemaError,
     ) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

@@ -3305,6 +3305,54 @@
         "title": "ValidationReportResponse",
         "type": "object"
       },
+      "ValidationRunDetailResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "edit_version": {
+            "title": "Edit Version",
+            "type": "integer"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "report": {
+            "$ref": "#/components/schemas/ValidationReportResponse"
+          },
+          "validation_run_id": {
+            "title": "Validation Run Id",
+            "type": "string"
+          },
+          "working_draft_id": {
+            "title": "Working Draft Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "application_id",
+          "working_draft_id",
+          "validation_run_id",
+          "edit_version",
+          "content_hash",
+          "passed",
+          "report",
+          "created_at"
+        ],
+        "title": "ValidationRunDetailResponse",
+        "type": "object"
+      },
       "ValidationRunResponse": {
         "additionalProperties": false,
         "description": "A ValidationRun as data. `passed=false` arrives as `200` (§22).",
@@ -3316,17 +3364,6 @@
           "content_hash": {
             "title": "Content Hash",
             "type": "string"
-          },
-          "created_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created At"
           },
           "edit_version": {
             "title": "Edit Version",
@@ -4751,7 +4788,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "ETag": {
+                "description": "Strong validator required by the next settings update.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         },
         "summary": "Read safe Workspace settings",
@@ -4793,7 +4838,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "ETag": {
+                "description": "Strong validator required by the next settings update.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -4831,7 +4884,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationRunResponse"
+                  "$ref": "#/components/schemas/ValidationRunDetailResponse"
                 }
               }
             },

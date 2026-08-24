@@ -375,6 +375,8 @@ class RenderingService(ServiceBase[ReadinessRepository]):
             )
         if record["revision_id"] != revision.id:
             raise LineageBroken("the named HTML does not belong to the named approved revision")
+        if record["application_id"] != revision.application_id:
+            raise LineageBroken("the named HTML does not belong to the revision's Application")
         return self.download_artifact(html_artifact_version_id)
 
     def _artifact_record(self, artifact_version_id: str) -> dict[str, Any]:

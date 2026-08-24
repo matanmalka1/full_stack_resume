@@ -312,7 +312,10 @@ class ValidationRunResponse(HttpSchema):
     content_hash: str
     passed: bool
     report: ValidationReportResponse
-    created_at: str | None = None
+
+
+class ValidationRunDetailResponse(ValidationRunResponse):
+    created_at: str
 
 
 class ApprovalResponse(HttpSchema):

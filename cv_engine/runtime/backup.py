@@ -17,6 +17,7 @@ Workspace, and reconcile.
 from __future__ import annotations
 
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -62,7 +63,27 @@ def _require_empty_target(target: Path, what: str) -> None:
         )
 
 
-def backup_workspace(workspace: Workspace, target: Path) -> BackupReport:
+def _durable_tree_ignore(database_path: Path) -> Callable[[str, list[str]], set[str]]:
+    database_files = {
+        database_path,
+        Path(f"{database_path}-shm"),
+        Path(f"{database_path}-wal"),
+    }
+
+    def ignore(directory: str, names: list[str]) -> set[str]:
+        directory_path = Path(directory).resolve()
+        ignored = set(shutil.ignore_patterns("*.sqlite3*")(directory, names))
+        ignored.update(
+            name for name in names if directory_path / name in database_files
+        )
+        return ignored
+
+    return ignore
+
+
+def backup_workspace(
+    workspace: Workspace, target: Path, *, database_path: Path | None = None
+) -> BackupReport:
     """Copy a Workspace's durable state into a new directory.
 
     The database goes through the SQLite backup API rather than a file copy, so
@@ -70,6 +91,9 @@ def backup_workspace(workspace: Workspace, target: Path) -> BackupReport:
     use. Everything else is plain files and copies as such.
     """
     target = Path(target).resolve()
+    source_database = Path(database_path or workspace.database_path).resolve()
+    if not is_within(workspace.root, source_database):
+        raise BackupError(f"database to back up escapes its Workspace: {source_database}")
     if is_within(workspace.root, target):
         raise BackupError(f"a backup may not be written inside its own Workspace: {target}")
     _require_empty_target(target, "backup")
@@ -89,11 +113,20 @@ def backup_workspace(workspace: Workspace, target: Path) -> BackupReport:
         if not source.is_dir():
             continue
         relative = source.relative_to(workspace.root)
-        shutil.copytree(source, target / relative, ignore=shutil.ignore_patterns("*.sqlite3*"))
+        shutil.copytree(
+            source,
+            target / relative,
+            ignore=_durable_tree_ignore(source_database),
+        )
         copied.append(relative.as_posix())
 
+    # A CLI/environment database override is not durable Workspace metadata,
+    # and the root config file is intentionally outside the copied knowledge
+    # directories. Normalize the consistent SQLite snapshot to the Workspace's
+    # default database location so every restore opens the protected state
+    # without needing the process that made the backup to reproduce an override.
     database = target / workspace.database_path.relative_to(workspace.root)
-    backup_database(workspace.database_path, database)
+    backup_database(source_database, database)
 
     return BackupReport(
         root=target,

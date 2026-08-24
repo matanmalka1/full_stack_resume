@@ -114,6 +114,19 @@ class OperationService(ServiceBase[OperationRepository]):
             or plan.job_analysis_id != command.job_analysis_id
         ):
             raise LineageBroken("draft sources do not belong to the named Application")
+        if command.parent_revision_id is not None:
+            readiness = cast(ReadinessRepository, self.repo)
+            try:
+                parent = readiness.approved_revision(command.parent_revision_id)
+            except UnknownRecord as exc:
+                raise UnknownRecord(
+                    f"unknown parent approved revision: {command.parent_revision_id}"
+                ) from exc
+            if parent.application_id != command.application_id:
+                raise LineageBroken(
+                    f"approved revision {parent.id} does not belong to application "
+                    f"{command.application_id}"
+                )
         knowledge_hash = sha256_text(canonical_json(draft_service.load_knowledge().versions()))
         request = CreateOperation(
             application_id=command.application_id,
