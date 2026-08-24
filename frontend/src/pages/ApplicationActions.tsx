@@ -122,9 +122,12 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
       : null;
   const error = analyze.error ?? draft.error;
 
+  /* Keyed because the bar renders them from an array: with more than one secondary
+     action, React needs each to be identifiable across renders. */
   const analyzeButton = canAnalyze ? (
     <Button
       disabled={analyze.isPending}
+      key="analyze"
       onClick={() => analyze.mutate()}
       variant={analyzeRecommended ? "primary" : "secondary"}
     >
@@ -138,14 +141,22 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
 
   const reviewButton =
     reviewHref === null ? null : (
-      <Link className={buttonClasses(reviewRecommended ? "primary" : "secondary")} to={reviewHref}>
+      <Link
+        className={buttonClasses(reviewRecommended ? "primary" : "secondary")}
+        key="review"
+        to={reviewHref}
+      >
         החלטות הסקירה
       </Link>
     );
 
   const editButton =
     editHref === null ? null : (
-      <Link className={buttonClasses(editRecommended ? "primary" : "secondary")} to={editHref}>
+      <Link
+        className={buttonClasses(editRecommended ? "primary" : "secondary")}
+        key="edit"
+        to={editHref}
+      >
         עריכת הטיוטה
       </Link>
     );
@@ -153,6 +164,7 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
   const draftButton = canDraft ? (
     <Button
       disabled={draft.isPending}
+      key="draft"
       onClick={() => draft.mutate()}
       variant={draftRecommended ? "primary" : "secondary"}
     >
@@ -186,8 +198,8 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
           is active, so the consequence is stated rather than confirmed away. */}
       {canAnalyze && !analyzeRecommended ? (
         <p className="text-support leading-6 text-cv-text-muted">
-          ניתוח מחדש יוצר ניתוח חדש ונפרד לאותו תצלום משרה. הטיוטה הפעילה נשמרת כפי שהיא,
-          אך תסומן כלא מעודכנת מולו.
+          ניתוח מחדש יוצר ניתוח חדש ונפרד לאותו תצלום משרה. הטיוטה הפעילה נשמרת כפי שהיא, אך תסומן
+          כלא מעודכנת מולו.
         </p>
       ) : null}
 
@@ -195,8 +207,8 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
           plan the screen is showing, and neither of them is changed by building from it. */}
       {canDraft ? (
         <p className="text-support leading-6 text-cv-text-muted">
-          הטיוטה נוצרת מהניתוח ומתוכנית הבחירה הפעילים של המועמדות. שניהם רשומות שאינן
-          משתנות, ואין כעת טיוטה פעילה שהיצירה כותבת עליה.
+          הטיוטה נוצרת מהניתוח ומתוכנית הבחירה הפעילים של המועמדות. שניהם רשומות שאינן משתנות, ואין
+          כעת טיוטה פעילה שהיצירה כותבת עליה.
         </p>
       ) : null}
 

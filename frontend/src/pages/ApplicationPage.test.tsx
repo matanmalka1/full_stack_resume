@@ -198,7 +198,9 @@ describe("ApplicationPage", () => {
           }),
         ),
       )
-      .mockResolvedValueOnce(acceptedResponse(queued({ id: "op-2", operation_type: "create_draft" })));
+      .mockResolvedValueOnce(
+        acceptedResponse(queued({ id: "op-2", operation_type: "create_draft" })),
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage();
@@ -246,9 +248,7 @@ describe("ApplicationPage", () => {
 
     expect(await screen.findByText("הפעולה המומלצת כעת היא יצירת טיוטה")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "יצירת טיוטה" })).not.toBeInTheDocument();
-    expect(
-      screen.getByText(/כותבת על הטיוטה הפעילה/, { exact: false }),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/כותבת על הטיוטה הפעילה/, { exact: false })).toBeInTheDocument();
   });
 
   it("presents a review reason as a blocker with the action that resolves it", async () => {
@@ -300,10 +300,10 @@ describe("ApplicationPage", () => {
             preparation_state: "needs_review",
             review_reasons: [
               {
-                code: "PENDING_FACT_REQUIRES_RESOLUTION",
-                message: "A claim in the active draft depends on a pending fact.",
-                entity_references: { working_draft_id: "draft-1" },
-                allowed_resolution_actions: ["confirm_and_use_fact", "update_working_draft"],
+                code: "FACT_SELECTION_UNRESOLVED",
+                message: "The active analysis has no active SelectionPlan.",
+                entity_references: { job_analysis_id: "an-1" },
+                allowed_resolution_actions: ["create_selection_plan"],
               },
             ],
           }),
@@ -313,18 +313,20 @@ describe("ApplicationPage", () => {
 
     renderPage();
 
-    expect(
-      await screen.findByText(/הפעולה שפותרת אותה: אישור עובדה ושימוש בה · עריכת הטיוטה/),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "אישור עובדה ושימוש בה" })).not.toBeInTheDocument();
+    expect(await screen.findByText(/הפעולה שפותרת אותה: בחירת העובדות/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "בחירת העובדות" })).not.toBeInTheDocument();
   });
 
   it("links to the Operation the projection reports as already running", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        jsonResponse(detail({ active_operation: queued({ status: "running", phase: "executing" }) })),
-      ),
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse(
+            detail({ active_operation: queued({ status: "running", phase: "executing" }) }),
+          ),
+        ),
     );
 
     renderPage();
