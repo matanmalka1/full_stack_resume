@@ -12,11 +12,10 @@ change that splits the two writes fails instead of being argued about.
 from __future__ import annotations
 
 import pytest
-from api_harness import MUTATION_HEADERS
+from api_harness import MUTATION_HEADERS, OPERATION_RESPONSE_FIELDS
 from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB
 
 from cv_engine.api.app import API_PREFIX
-from cv_engine.api.schemas.operations import OperationResponse
 from cv_engine.application.commands import IngestCommand
 
 
@@ -145,7 +144,7 @@ def test_analyze_is_accepted_as_an_operation_the_client_polls(api_worker) -> Non
     # Compared against the response model rather than a hand-written list: a
     # list would be written from the same belief that the narrowing works, which
     # is what let the runner record reach a client before Stage C.
-    assert set(body) == set(OperationResponse.model_fields)
+    assert set(body) == OPERATION_RESPONSE_FIELDS
 
     assert api_worker.wait_for_operation(body["id"])["status"] == "succeeded"
 

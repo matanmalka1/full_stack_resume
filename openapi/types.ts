@@ -1406,6 +1406,11 @@ export interface components {
             profiles: string;
         };
         /**
+         * OperationFailureCode
+         * @enum {string}
+         */
+        OperationFailureCode: "SOURCE_CHANGED" | "PROVIDER_TIMEOUT" | "PROVIDER_RATE_LIMITED" | "PROVIDER_UNAVAILABLE" | "PROVIDER_REFUSED" | "INVALID_OUTPUT" | "SCHEMA_VIOLATION" | "RENDER_FAILED" | "BROWSER_START_FAILED" | "VALIDATION_EXECUTION_FAILED" | "CANCELLED_BEFORE_ACTIVATION";
+        /**
          * OperationOutputResponse
          * @description One immutable output an Operation produced.
          *
@@ -1422,6 +1427,11 @@ export interface components {
             output_type: string;
         };
         /**
+         * OperationPhase
+         * @enum {string}
+         */
+        OperationPhase: "queued" | "waiting_for_application" | "waiting_for_render_slot" | "waiting_for_ai_slot" | "pre_execution_check" | "executing" | "retry_wait" | "pre_activation_check" | "activating" | "completed";
+        /**
          * OperationResponse
          * @description The §11 Operation query fields, and nothing wider.
          *
@@ -1431,6 +1441,19 @@ export interface components {
          *     `message` is a safe progress line and `safe_failure_detail` a safe failure
          *     line; neither carries a path, a provider response, or a key. There is no
          *     percentage field, because the specification forbids fabricating one.
+         *
+         *     The closed sets are typed as the application enums rather than flattened to
+         *     `str`, so the generated TypeScript is a real union instead of `string`, and
+         *     `is_terminal` is reported rather than left to the client. Which statuses end
+         *     an Operation is a lifecycle rule this layer already owns; a client that
+         *     re-derives it keeps a second copy of that rule, and the copy is what goes
+         *     stale when the lifecycle gains a status.
+         *
+         *     `is_terminal` is computed from `status` rather than accepted as a field.
+         *     This representation is built from two places - `operation_response` and the
+         *     `active_operation` of an application projection - and a field would have to
+         *     be supplied correctly at both. A computed value has no second place to
+         *     forget.
          */
         OperationResponse: {
             /** Application Id */
@@ -1439,29 +1462,40 @@ export interface components {
             cancellation_requested_at?: string | null;
             /** Created At */
             created_at: string;
-            /** Failure Code */
-            failure_code?: string | null;
+            failure_code?: components["schemas"]["OperationFailureCode"] | null;
             /** Finished At */
             finished_at?: string | null;
             /** Id */
             id: string;
+            /**
+             * Is Terminal
+             * @description Derived from the same predicate the runner uses.
+             */
+            readonly is_terminal: boolean;
             /** Message */
             message: string;
-            /** Operation Type */
-            operation_type: string;
+            operation_type: components["schemas"]["OperationType"];
             /** Outputs */
             outputs: components["schemas"]["OperationOutputResponse"][];
-            /** Phase */
-            phase: string;
+            phase: components["schemas"]["OperationPhase"];
             /** Retry Of Operation Id */
             retry_of_operation_id?: string | null;
             /** Safe Failure Detail */
             safe_failure_detail?: string | null;
             /** Started At */
             started_at?: string | null;
-            /** Status */
-            status: string;
+            status: components["schemas"]["OperationStatus"];
         };
+        /**
+         * OperationStatus
+         * @enum {string}
+         */
+        OperationStatus: "queued" | "running" | "succeeded" | "failed" | "cancelled" | "interrupted";
+        /**
+         * OperationType
+         * @enum {string}
+         */
+        OperationType: "analyze_job" | "propose_selection_plan" | "create_draft" | "regenerate_section" | "regenerate_claim" | "render_revision";
         /** ReasonResponse */
         ReasonResponse: {
             /** Allowed Resolution Actions */

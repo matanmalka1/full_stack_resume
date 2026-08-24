@@ -2246,6 +2246,23 @@
         "title": "KnowledgeVersions",
         "type": "object"
       },
+      "OperationFailureCode": {
+        "enum": [
+          "SOURCE_CHANGED",
+          "PROVIDER_TIMEOUT",
+          "PROVIDER_RATE_LIMITED",
+          "PROVIDER_UNAVAILABLE",
+          "PROVIDER_REFUSED",
+          "INVALID_OUTPUT",
+          "SCHEMA_VIOLATION",
+          "RENDER_FAILED",
+          "BROWSER_START_FAILED",
+          "VALIDATION_EXECUTION_FAILED",
+          "CANCELLED_BEFORE_ACTIVATION"
+        ],
+        "title": "OperationFailureCode",
+        "type": "string"
+      },
       "OperationOutputResponse": {
         "additionalProperties": false,
         "description": "One immutable output an Operation produced.\n\nExistence and activation are separate (§11): a failed or cancelled Operation\nmay own an output that was registered as inactive evidence, so `active` is\nreported rather than inferred from the status.",
@@ -2271,9 +2288,25 @@
         "title": "OperationOutputResponse",
         "type": "object"
       },
+      "OperationPhase": {
+        "enum": [
+          "queued",
+          "waiting_for_application",
+          "waiting_for_render_slot",
+          "waiting_for_ai_slot",
+          "pre_execution_check",
+          "executing",
+          "retry_wait",
+          "pre_activation_check",
+          "activating",
+          "completed"
+        ],
+        "title": "OperationPhase",
+        "type": "string"
+      },
       "OperationResponse": {
         "additionalProperties": false,
-        "description": "The §11 Operation query fields, and nothing wider.\n\nThis mirrors `OperationView`, not `PersistedOperation`. The payload, the\nfrozen sources, the lease, and the idempotency key stay inside the runner.\n\n`message` is a safe progress line and `safe_failure_detail` a safe failure\nline; neither carries a path, a provider response, or a key. There is no\npercentage field, because the specification forbids fabricating one.",
+        "description": "The §11 Operation query fields, and nothing wider.\n\nThis mirrors `OperationView`, not `PersistedOperation`. The payload, the\nfrozen sources, the lease, and the idempotency key stay inside the runner.\n\n`message` is a safe progress line and `safe_failure_detail` a safe failure\nline; neither carries a path, a provider response, or a key. There is no\npercentage field, because the specification forbids fabricating one.\n\nThe closed sets are typed as the application enums rather than flattened to\n`str`, so the generated TypeScript is a real union instead of `string`, and\n`is_terminal` is reported rather than left to the client. Which statuses end\nan Operation is a lifecycle rule this layer already owns; a client that\nre-derives it keeps a second copy of that rule, and the copy is what goes\nstale when the lifecycle gains a status.\n\n`is_terminal` is computed from `status` rather than accepted as a field.\nThis representation is built from two places - `operation_response` and the\n`active_operation` of an application projection - and a field would have to\nbe supplied correctly at both. A computed value has no second place to\nforget.",
         "properties": {
           "application_id": {
             "title": "Application Id",
@@ -2297,13 +2330,12 @@
           "failure_code": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/OperationFailureCode"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Failure Code"
+            ]
           },
           "finished_at": {
             "anyOf": [
@@ -2320,13 +2352,18 @@
             "title": "Id",
             "type": "string"
           },
+          "is_terminal": {
+            "description": "Derived from the same predicate the runner uses.",
+            "readOnly": true,
+            "title": "Is Terminal",
+            "type": "boolean"
+          },
           "message": {
             "title": "Message",
             "type": "string"
           },
           "operation_type": {
-            "title": "Operation Type",
-            "type": "string"
+            "$ref": "#/components/schemas/OperationType"
           },
           "outputs": {
             "items": {
@@ -2336,8 +2373,7 @@
             "type": "array"
           },
           "phase": {
-            "title": "Phase",
-            "type": "string"
+            "$ref": "#/components/schemas/OperationPhase"
           },
           "retry_of_operation_id": {
             "anyOf": [
@@ -2373,8 +2409,7 @@
             "title": "Started At"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/OperationStatus"
           }
         },
         "required": [
@@ -2385,10 +2420,35 @@
           "phase",
           "message",
           "created_at",
-          "outputs"
+          "outputs",
+          "is_terminal"
         ],
         "title": "OperationResponse",
         "type": "object"
+      },
+      "OperationStatus": {
+        "enum": [
+          "queued",
+          "running",
+          "succeeded",
+          "failed",
+          "cancelled",
+          "interrupted"
+        ],
+        "title": "OperationStatus",
+        "type": "string"
+      },
+      "OperationType": {
+        "enum": [
+          "analyze_job",
+          "propose_selection_plan",
+          "create_draft",
+          "regenerate_section",
+          "regenerate_claim",
+          "render_revision"
+        ],
+        "title": "OperationType",
+        "type": "string"
       },
       "ReasonResponse": {
         "additionalProperties": false,

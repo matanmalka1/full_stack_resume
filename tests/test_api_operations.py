@@ -9,12 +9,11 @@ under test are the ones that report and steer it.
 from __future__ import annotations
 
 import pytest
-from api_harness import MUTATION_HEADERS
+from api_harness import MUTATION_HEADERS, OPERATION_RESPONSE_FIELDS
 from fastapi.testclient import TestClient
 from helpers import ACCOUNT_MANAGER_JOB
 
 from cv_engine.api.app import API_PREFIX, create_app
-from cv_engine.api.schemas.operations import OperationResponse
 from cv_engine.application.commands import AnalyzeCommand, IngestCommand
 from cv_engine.runtime.composition import build_api_services
 
@@ -77,7 +76,7 @@ def test_the_operation_response_carries_no_runner_only_field(api_worker) -> None
     operation = _queued_analysis(api_worker.services, "Narrowing Co")
     body = api_worker.wait_for_operation(operation.id)
 
-    assert set(body) == set(OperationResponse.model_fields)
+    assert set(body) == OPERATION_RESPONSE_FIELDS
     assert not {
         "payload",
         "payload_hash",
@@ -111,7 +110,7 @@ def test_active_operation_is_projected_as_the_same_operation_representation(serv
 
     assert polled.status_code == 200
     assert detail.status_code == 200
-    assert set(detail.json()["active_operation"]) == set(OperationResponse.model_fields)
+    assert set(detail.json()["active_operation"]) == OPERATION_RESPONSE_FIELDS
     assert detail.json()["active_operation"] == polled.json()
 
 

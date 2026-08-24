@@ -23,6 +23,7 @@ from typing import Any
 from fastapi.testclient import TestClient
 
 from cv_engine.api.app import API_PREFIX, DEFAULT_PORT, create_app
+from cv_engine.api.schemas.operations import OperationResponse
 from cv_engine.application.operations import TERMINAL_OPERATION_STATUSES
 from cv_engine.runtime.composition import Services, build_api_services
 
@@ -32,6 +33,17 @@ MUTATION_HEADERS = {"Origin": ALLOWED_ORIGIN}
 #: Derived from the lifecycle contract rather than restated, so a new terminal
 #: status cannot leave the harness waiting forever for work that has finished.
 TERMINAL_STATUSES = frozenset(status.value for status in TERMINAL_OPERATION_STATUSES)
+
+#: What the Operation representation actually publishes, for the several tests that
+#: assert the wire carries the schema and nothing wider. `model_fields` alone is not
+#: that set: `is_terminal` is a computed field, so it appears on the wire and in the
+#: OpenAPI schema while living in `model_computed_fields`. The union keeps those
+#: assertions exact in both directions - a runner-only field leaking onto the wire is
+#: in neither collection and still fails - and it lives here rather than in each test
+#: module so the three call sites cannot drift apart.
+OPERATION_RESPONSE_FIELDS = frozenset(OperationResponse.model_fields) | frozenset(
+    OperationResponse.model_computed_fields
+)
 
 WORKER_STOP_TIMEOUT_SECONDS = 5.0
 OPERATION_TIMEOUT_SECONDS = 20.0

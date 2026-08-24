@@ -363,6 +363,26 @@ production-build evidence accepted on 2026-08-24.
       proven to fail: a probe component carrying one violation of each rule produced five
       errors and exit 1, and the tree returned to green when the probe was removed.
 - [ ] Add shared Operation polling without WebSocket or SSE.
+- [ ] **Contract change (Class B): `OperationResponse` reports `is_terminal` and stops
+      flattening its closed sets to `str`.** The first draft of the frontend kept its own
+      copy of `TERMINAL_OPERATION_STATUSES`, because the HTTP schema typed `status` as a
+      plain string. Which statuses end an Operation is a lifecycle rule the application
+      layer already owns in `is_terminal_operation`, so the client copy could only go stale.
+      `OperationResponse.is_terminal` is a computed field over that same predicate, and
+      `operation_type`, `status`, `phase`, and `failure_code` are typed as the application
+      enums, so `openapi/types.ts` carries real unions.
+
+      It was first written as an ordinary field supplied by `operation_response`, and the
+      non-browser suite failed on
+      `test_active_operation_is_projected_as_the_same_operation_representation`: the same
+      representation is also built as the `active_operation` of an application projection,
+      which does not go through that helper. The test caught the exact class of defect it
+      was written for. Making the value computed removed the second place to forget rather
+      than adding the field to the second caller. The frontend keys its Hebrew label
+      maps by those unions, which turns a new backend status into a failed frontend build
+      rather than an untranslated value on screen. `openapi/openapi.json` and
+      `openapi/types.ts` were regenerated; the entry-level diff is four `$ref`s replacing
+      inline strings, three new enum components, and one added required boolean.
 - [ ] Add Vitest, React Testing Library, Playwright Web E2E, and axe foundations without
       blanket DOM snapshots.
 
