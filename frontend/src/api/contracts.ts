@@ -16,3 +16,14 @@ export type CreatedApplication = ApiSchemas["CreateApplicationResponse"];
 export type DuplicateCheckResult = ApiSchemas["DuplicateCheckResponse"];
 export type DuplicateMatch = ApiSchemas["DuplicateMatchResponse"];
 export type DuplicateMatchReason = DuplicateMatch["matched_on"][number];
+
+/* The §9 action policy projection. The two lifecycle states are real unions rather
+   than `string`, so a label map keyed by them stays exhaustive; the action fields are
+   `string` at the boundary and are treated as open here on purpose. */
+export type PreparationState = ApiSchemas["PreparationState"];
+export type WorkingDraftState = ApiSchemas["WorkingDraftState"];
+export type Reason = ApiSchemas["ReasonResponse"];
+export type Warning = ApiSchemas["WarningResponse"];
+export type BlockedAction = ApiSchemas["BlockedActionResponse"];
+
+export type CreateAnalysisRequest = ApiSchemas["CreateAnalysisRequest"];

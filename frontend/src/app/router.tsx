@@ -1,6 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 
 import { App } from "../App";
+import { ApplicationPage } from "../pages/ApplicationPage";
 import { NewApplicationPage } from "../pages/NewApplicationPage";
 import { OperationPage } from "../pages/OperationPage";
 import { RoutePlaceholder } from "../pages/RoutePlaceholder";
@@ -17,15 +18,11 @@ export const router = createBrowserRouter([
         element: <NewApplicationPage />,
       },
       {
-        /* Where an existing duplicate is opened. The screen that reads the application
-           projection arrives with the Stage C continuation; until then the route exists
-           so the choice is a real destination rather than a dead link. */
+        /* The one destination for an existing Application, whether it was just created or
+           opened from a duplicate. It is a fixed context screen rather than a redirect by
+           stage: analysis is an action on it, not a screen of its own. */
         path: "applications/:applicationId",
-        element: <RoutePlaceholder title="מועמדות קיימת" />,
-      },
-      {
-        path: "applications/:applicationId/analysis",
-        element: <RoutePlaceholder title="ניתוח המשרה" />,
+        element: <ApplicationPage />,
       },
       {
         path: "operations/:operationId",

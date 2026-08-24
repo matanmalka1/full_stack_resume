@@ -266,5 +266,34 @@ describe("OperationPage", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "מתבצעת" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "ביטול הפעולה" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "ניסיון חוזר" })).not.toBeInTheDocument();
+    /* The way back belongs to a finished Operation. While one is still running, leaving
+       is the browser's job, not an action this screen offers. */
+    expect(screen.queryByRole("link", { name: "חזרה למועמדות" })).not.toBeInTheDocument();
+  });
+
+  /* A finished Operation used to be a dead end. What follows it depends on the
+     application projection (A.1), so the screen hands the user back to the screen that
+     owns it instead of routing by operation_type. */
+  it("hands a finished Operation back to the application that owns it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          operation({
+            status: "succeeded",
+            is_terminal: true,
+            phase: "completed",
+            available_actions: ["retry"],
+          }),
+        ),
+      ),
+    );
+
+    renderPage(<OperationPage />);
+
+    expect(await screen.findByRole("link", { name: "חזרה למועמדות" })).toHaveAttribute(
+      "href",
+      "/applications/app-1",
+    );
   });
 });

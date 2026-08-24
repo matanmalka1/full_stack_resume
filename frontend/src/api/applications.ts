@@ -1,12 +1,23 @@
-import { ApiProblem, apiRequest } from "./client";
+import { queryOptions } from "@tanstack/react-query";
+
+import { ApiProblem, type ApiPath, apiRequest } from "./client";
 import type {
+  ApplicationDetail,
   ApplicationIntake,
+  CreateAnalysisRequest,
   CreateApplicationRequest,
   CreatedApplication,
   DuplicateCheckResult,
   DuplicateMatch,
   DuplicateMatchReason,
+  Operation,
 } from "./contracts";
+import {
+  OPERATION_POLL_INTERVAL_MS,
+  isTerminalOperation,
+  type QueuedOperation,
+  queuedOperation,
+} from "./operations";
 
 /* The only intake limit this module keeps. It is not a second copy of the intake
    policy - the server revalidates size, control characters, and URL syntax and stays
@@ -93,3 +104,65 @@ export const acknowledgementApplies = (
   answered: ApplicationIntake | undefined,
   current: ApplicationIntake,
 ): boolean => answered !== undefined && intakeFingerprint(answered) === intakeFingerprint(current);
+
+export const applicationDetailQueryKey = (applicationId: string) =>
+  ["application", applicationId] as const;
+
+const applicationPath = (applicationId: string): ApiPath =>
+  `/api/v1/applications/${encodeURIComponent(applicationId)}`;
+
+const analysesPath = (applicationId: string): ApiPath =>
+  `/api/v1/applications/${encodeURIComponent(applicationId)}/analyses`;
+
+/* The one read the application context screen is built on. §9 computes the whole
+   projection in one read transaction, so it arrives as one answer and is rendered as
+   one; nothing here recombines it into a second view of the same state.
+
+   It refetches on the Operation interval while the projection itself reports live work.
+   The condition is the backend's own `is_terminal`, not a status this module reads: an
+   Operation that has finished stops the poll, and a projection with no active Operation
+   never starts one. */
+export const applicationDetailQueryOptions = (applicationId: string) =>
+  queryOptions({
+    queryKey: applicationDetailQueryKey(applicationId),
+    queryFn: async ({ signal }) => {
+      const response = await apiRequest<ApplicationDetail>(applicationPath(applicationId), {
+        signal,
+      });
+      return response.data;
+    },
+    refetchInterval: (query) => {
+      const active = query.state.data?.active_operation;
+      return active == null || isTerminalOperation(active) ? false : OPERATION_POLL_INTERVAL_MS;
+    },
+  });
+
+/* §13: the snapshot is named by the caller. An analyze command that picked its own
+   source could classify something other than what the user was looking at, so the ID
+   comes from the projection the screen is showing rather than from a default.
+
+   The request sends nothing else. `provider` and `model` default to `deterministic` and
+   `rules-v1` server-side, which is what keeps this path reachable with no AI key; the
+   overrides belong to the review form, not to starting an analysis.
+*/
+export const startAnalysis = async (
+  applicationId: string,
+  jobSnapshotId: string,
+  idempotencyKey: string,
+): Promise<QueuedOperation> => {
+  /* Only the source. `provider` and `model` are omitted rather than sent as
+     `deterministic`/`rules-v1`: those are the server's defaults, and spelling them here
+     would be a second copy of a policy this client does not own. The `Pick` still binds
+     the field name to the generated request contract. */
+  const body: Pick<CreateAnalysisRequest, "job_snapshot_id"> = {
+    job_snapshot_id: jobSnapshotId,
+  };
+
+  return queuedOperation(
+    await apiRequest<Operation>(analysesPath(applicationId), {
+      method: "POST",
+      body,
+      idempotencyKey,
+    }),
+  );
+};

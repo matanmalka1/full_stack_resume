@@ -95,9 +95,10 @@ export const NewApplicationPage = () => {
     },
     onSuccess: (result) => {
       if (result.kind === "created") {
-        /* Creation never implies an AI call: the analysis screen is where the explicit
-           `ניתוח המשרה` action lives, and it reads the application projection itself. */
-        void navigate(`/applications/${encodeURIComponent(result.applicationId)}/analysis`);
+        /* Creation never implies an AI call. The application context screen is where the
+           explicit `ניתוח המשרה` action lives, and it reads the projection itself, so a
+           newly created Application and one opened from a duplicate reach the same place. */
+        void navigate(`/applications/${encodeURIComponent(result.applicationId)}`);
       }
     },
   });

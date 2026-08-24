@@ -1,18 +1,8 @@
 import { Link, Outlet } from "react-router-dom";
 
 import { RouteFocusManager } from "./app/RouteFocusManager";
+import { WorkflowLandmark } from "./app/WorkflowLandmark";
 import { buttonClasses } from "./ui/Button";
-import { type WorkflowStep, WorkflowSteps } from "./ui/WorkflowSteps";
-
-/* Placeholder shape until the backend projection drives the landmark; the component
-   already renders completed, current, and future stages. */
-const workflowSteps: WorkflowStep[] = [
-  { label: "משרה חדשה", state: "current" },
-  { label: "ניתוח", state: "upcoming" },
-  { label: "טיוטה", state: "upcoming" },
-  { label: "אימות", state: "upcoming" },
-  { label: "מוכן", state: "upcoming" },
-];
 
 export const App = () => {
   return (
@@ -29,11 +19,13 @@ export const App = () => {
         </div>
       </header>
 
-      <WorkflowSteps label="שלבי הכנת קורות החיים" steps={workflowSteps} />
-
-      <main className="mx-auto max-w-5xl px-6 py-12">
-        <Outlet />
-      </main>
+      {/* The landmark reads the stage the current screen published from its projection
+          rather than a constant the shell keeps. */}
+      <WorkflowLandmark>
+        <main className="mx-auto max-w-5xl px-6 py-12">
+          <Outlet />
+        </main>
+      </WorkflowLandmark>
     </div>
   );
 };

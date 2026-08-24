@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { ApiProblem } from "../api/client";
 import type { Operation } from "../api/contracts";
@@ -9,7 +9,7 @@ import {
   operationQueryKey,
   retryOperation,
 } from "../api/operations";
-import { Button } from "../ui/Button";
+import { Button, buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { LtrText } from "../ui/LtrText";
 import { TechnicalDetails } from "../ui/TechnicalDetails";
@@ -47,8 +47,13 @@ export const OperationActions = ({ operation }: OperationActionsProps) => {
   const error = cancel.error ?? retry.error;
   const canCancel = operation.available_actions.includes("cancel");
   const canRetry = operation.available_actions.includes("retry");
+  /* A finished Operation used to be a dead end: it reported that the work was over and
+     offered nowhere to go. The way on is not this screen's to invent - which action
+     follows depends on the application projection (A.1) - so it hands the user back to
+     the screen that owns that projection and lets it say what comes next. */
+  const returnPath = `/applications/${encodeURIComponent(operation.application_id)}`;
 
-  if (!canCancel && !canRetry && error === null) {
+  if (!canCancel && !canRetry && !operation.is_terminal && error === null) {
     return null;
   }
 
@@ -82,6 +87,11 @@ export const OperationActions = ({ operation }: OperationActionsProps) => {
           >
             {retry.isPending ? "יוצר ניסיון חדש…" : "ניסיון חוזר"}
           </Button>
+        ) : null}
+        {operation.is_terminal ? (
+          <Link className={buttonClasses(canRetry ? "secondary" : "primary")} to={returnPath}>
+            חזרה למועמדות
+          </Link>
         ) : null}
       </div>
     </div>

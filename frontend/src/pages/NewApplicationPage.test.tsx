@@ -86,7 +86,8 @@ const renderPage = () => {
       <MemoryRouter initialEntries={["/"]}>
         <Routes>
           <Route element={<NewApplicationPage />} path="/" />
-          <Route element={<h1>מסך הניתוח</h1>} path="/applications/:applicationId/analysis" />
+          {/* One destination for both outcomes: a newly created Application and one
+              opened from a duplicate reach the same context screen. */}
           <Route element={<h1>מועמדות קיימת</h1>} path="/applications/:applicationId" />
         </Routes>
       </MemoryRouter>
@@ -177,7 +178,7 @@ describe("NewApplicationPage", () => {
     fillIntake();
     submitForm();
 
-    expect(await screen.findByRole("heading", { name: "מסך הניתוח" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "מועמדות קיימת" })).toBeInTheDocument();
     expect(calls).toEqual([
       {
         path: DUPLICATE_CHECK_PATH,
@@ -244,7 +245,7 @@ describe("NewApplicationPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "יצירה בכל זאת" }));
 
-    expect(await screen.findByRole("heading", { name: "מסך הניתוח" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "מועמדות קיימת" })).toBeInTheDocument();
     expect(calls.map((call) => call.path)).toEqual([DUPLICATE_CHECK_PATH, CREATE_PATH]);
     expect(calls[1].body).toMatchObject({ acknowledged_duplicates: true });
   });

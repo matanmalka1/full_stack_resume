@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 from pydantic import Field
 
+from ...application.queries import PreparationState, WorkingDraftState
 from .health import HttpSchema
 from .operations import OperationResponse
 
@@ -94,10 +95,26 @@ class BlockedActionResponse(HttpSchema):
 
 
 class ApplicationStateResponse(HttpSchema):
+    """The §9 action policy projection, and nothing wider.
+
+    The two lifecycle states are typed as the application enums rather than
+    flattened to `str`, the same way `OperationResponse` spells its closed sets.
+    `preparation_state` drives the workflow landmark and the Hebrew label a user
+    reads; flattened to `string` the generated TypeScript cannot key a label map
+    by it, so a state added to the projection would reach a screen untranslated
+    instead of failing the frontend build.
+
+    The action fields stay `str` deliberately. They are not a closed set at this
+    boundary the way the states are - `available_actions` mixes preparation
+    commands with review-reason resolution actions - and a client that meets an
+    action it has no screen for reports exactly that, which is a correct
+    presentation rather than a failure.
+    """
+
     recruitment_status: str
     terminal_outcome: str | None = None
-    preparation_state: str
-    working_draft_state: str
+    preparation_state: PreparationState
+    working_draft_state: WorkingDraftState
     review_reasons: list[ReasonResponse]
     stale_reasons: list[ReasonResponse]
     primary_stale_reason: str | None = None

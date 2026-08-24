@@ -426,12 +426,12 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
 
 ## C — Intake, analysis, and review
 
-- [ ] New Application form, local `.txt` read, duplicate precheck/override, and creation.
-      **Built, reviewed, and green on its full Class A gate; still not closed.** The
-      form, the local read, the precheck, the override, and creation are implemented and
-      covered. What remains is not evidence but a destination: opening an existing
-      duplicate reaches a placeholder, so the choice the screen offers does not yet open
-      anything. The bullet closes when that destination exists.
+- [x] New Application form, local `.txt` read, duplicate precheck/override, and creation.
+      **Closed.** It was built, reviewed, and green on its full Class A gate, and then
+      held open for one missing destination: opening an existing duplicate reached a
+      placeholder, so the choice the screen offers opened nothing. The Analyze slice below
+      built that destination. `applications/:applicationId` is now the application context
+      screen, and both duplicate choices and creation itself lead to it.
 
       The A.4 frame 1 screen is now the root route, so `/` is the New Application form
       rather than a foundation placeholder. `src/api/applications.ts` holds the two
@@ -480,13 +480,13 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
       trimmed — it is the exact content of the immutable JobSnapshot — while the company
       and role labels are.
 
-      Creation navigates to `applications/:applicationId/analysis`, because A.4 makes
-      `ניתוח המשרה` a separate action and creation never implies an AI call. Opening an
-      existing duplicate navigates to a new `applications/:applicationId` route, which is
-      a `RoutePlaceholder` until the Stage C continuation builds the surface that owns
-      the application projection. That is deliberate: an existing Application can be
-      anywhere in its lifecycle, and routing it from this screen would be exactly the
-      second workflow state machine A.1 forbids.
+      Creation and `פתיחת המועמדות הקיימת` navigate to the same place,
+      `applications/:applicationId`. There is no separate analysis route: A.4 makes
+      `ניתוח המשרה` a separate *action*, not a separate screen, and creation never implies
+      an AI call. Choosing a destination by lifecycle from this screen would be exactly the
+      second workflow state machine A.1 forbids — an existing Application can be anywhere
+      in its lifecycle — so this screen names one destination and the projection there
+      decides what follows.
 
       The duplicate list and the local-file control are their own components,
       `DuplicateChoices` and `JobTextFileField`; the file component owns the whole
@@ -499,7 +499,71 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
       became the form, and naming it where it belongs means a later change to the root
       route cannot quietly move what the shell spec is proving. The M4 gate's
       "axe passes on New Application" is therefore closed.
-- [ ] Explicit Analyze action and Operation Progress.
+- [x] Explicit Analyze action and Operation Progress. **Closed on the complete Class B
+      gate.**
+
+      `applications/:applicationId` is a fixed context screen, not a redirect by stage. It
+      reads `GET /api/v1/applications/{id}` once and renders that §9 projection:
+      `preparation_state` and `working_draft_state` as two Hebrew status badges,
+      `active_operation` as a link to the Operation screen, `review_reasons` as blockers,
+      `stale_reasons` and `warnings` and `newer_draft_in_progress` as warnings, and
+      `blocked_actions` in a collapsed disclosure beside the identifier list. It derives no
+      second state machine (A.1): every action it offers is one the projection named.
+
+      **Contract change (Class B): `ApplicationStateResponse` stops flattening the two
+      lifecycle states.** `preparation_state` and `working_draft_state` are typed as
+      `PreparationState` and `WorkingDraftState` rather than `str`, which is the same
+      change `OperationResponse` took in `27136ae` and for the same reason:
+      `preparation_state` drives the workflow landmark and the Hebrew label a user reads,
+      and as `string` the frontend could only key that label map by hand. A state added to
+      the projection now fails the frontend build instead of reaching a screen
+      untranslated. The OpenAPI entry-level diff is two new enum components and four
+      `$ref`s replacing inline strings — `ApplicationDetailResponse` and
+      `ApplicationListItemResponse`, two fields each. The wire values are byte-identical:
+      both are `StrEnum`, so every existing Python assertion compares the same strings.
+
+      **The action fields deliberately did not get the same treatment.** `available_actions`,
+      `recommended_action`, and `blocked_actions[].action` stay `str`. They are not one
+      closed set at that boundary — `available_actions` mixes preparation commands with
+      review-reason resolution actions — and this slice implements exactly one of them.
+      An action with no Hebrew name falls back to reporting itself, and a *recommended*
+      action this slice cannot perform is named and stated as not yet built. That is a
+      correct presentation, not a failure, so no `PreparationAction` enum was invented.
+
+      `ניתוח המשרה` posts to `POST /api/v1/applications/{id}/analyses` with the
+      `active_job_snapshot_id` the projection named, an `Idempotency-Key` keyed to that
+      snapshot, and the same `202 + Location` verification `retryOperation` already
+      required. That verification is now one function, `queuedOperation`, which both
+      callers share: every command that queues durable work carries the same obligation,
+      and the second copy is the one that goes stale. The request body carries the snapshot
+      ID and nothing else — `provider` and `model` are the server's `deterministic` /
+      `rules-v1` defaults, and restating them in the client would be a second copy of a
+      policy it does not own, so the path stays reachable with no AI key.
+
+      **The terminal-Operation dead end is closed.** A finished Operation offers
+      `חזרה למועמדות`, a link to the application context screen, primary when there is no
+      retry to emphasize and secondary when there is. There is no `operation_type` to route
+      map: what follows an Operation comes from the projection on the screen it returns to.
+      A running Operation still offers no way out, because leaving one is the browser's job.
+
+      **The workflow landmark is derived.** `App.tsx` no longer holds a constant array.
+      `WorkflowLandmark` owns the five A.4 stages and a `Record<PreparationState, Stage>`
+      that is exhaustive over the generated union; a screen publishes the stage it is
+      showing through `useWorkflowStage`, and a screen with no projection leaves the intake
+      default in place. The map is a display position and decides nothing: no stage is
+      navigable, and the actions come from `available_actions`. Two states are distinguished
+      on purpose — `intake` is the screen that exists before an Application does, and
+      `unknown` is an Application whose projection has not arrived, which marks the intake
+      complete and claims no current stage rather than drawing the landmark as intake.
+
+      Two omissions are deliberate, so bullet 2 does not swallow 3–5. There is no automatic
+      continuation into Review or Draft: the screen shows the recommended action and says
+      plainly when its screen is not built. And re-analysis is offered without a
+      confirmation dialog, because it destroys nothing — the existing JobAnalysis and any
+      active draft are immutable records that stay exactly as they are, and what changes is
+      which analysis is active. The consequence is stated in a line beside the button
+      instead. A.1 reserves dialogs for choices that are destructive to the working copy;
+      this is not one.
 - [ ] No-review continuation using Analyze's explicit initial SelectionPlan ID.
 - [ ] Review-reason form and one Apply Decisions commit.
 - [ ] Provider failure, retry, deterministic continuation, cancellation, and
@@ -539,16 +603,16 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
 
 ## Current next action
 
-**Stage B is closed. Stage C is open: its first bullet is built and reviewed, and is
-not closed — see the bullet for what remains.**
+**Stage B is closed. Stage C bullets 1 and 2 are closed on their applicable gates.** The
+next slice is bullet 3, the no-review continuation using Analyze's explicit initial
+SelectionPlan ID.
 
-**Known gap, deliberately not filled here.** A terminal Operation screen is a dead end: it
-reports that the Operation finished and offers no way forward. The destination is not this
-screen's to invent. Which action follows an Operation depends on the application projection
-(`recommended_action`, `available_actions`), and A.1 forbids the frontend inferring a second
-workflow state machine — a hardcoded `operation_type` to route map would be exactly that.
-The Stage C surface that owns the application projection adds the continuation, and no
-Operation screen ships to a real user before it does.
+**The Known gap recorded here is closed.** A terminal Operation screen was a dead end: it
+reported that the Operation had finished and offered no way forward, and the destination
+was not that screen's to invent. It now links back to `applications/:applicationId`, the
+screen that owns the projection, and that screen states what follows from
+`recommended_action` and `available_actions`. No `operation_type` to route map was
+introduced, so A.1 still holds.
 
 Running the Playwright suite on a fresh checkout needs its browser binary first:
 `npx playwright install chromium`.
@@ -621,13 +685,69 @@ is green — not that this change did anything.
 The one supporting edit outside the new files is `TextInput`/`TextArea` moving to
 `ComponentProps`, and the axe scan moving from `shell.spec.ts` to its own screen spec.
 
-The next slice is the explicit `ניתוח המשרה` action and its Operation Progress, which is
-also the surface that owns the application projection. It is what closes both open
-continuations: the terminal Operation dead end named above, and the
-`applications/:applicationId` placeholder this slice routes an opened duplicate to. That
-second one is also what closes the first Stage C bullet, which stays open until opening an
-existing duplicate actually opens it. Do not implement Dashboard navigation or tracking
+The Analyze slice that followed built the destination this slice was missing, which is
+what closed the first Stage C bullet. Do not implement Dashboard navigation or tracking
 endpoints.
+
+## Stage C bullet 2 — gate closed 2026-08-24
+
+The change is **Class B**: `ApplicationStateResponse.preparation_state` and
+`working_draft_state` changed from `str` to the `PreparationState` and `WorkingDraftState`
+enums, and `openapi/openapi.json` and `openapi/types.ts` were regenerated. The gate is
+therefore Class A plus golden hashes, the architecture test, and one offline CLI run.
+
+User-run evidence supplied on 2026-08-24 covers every automated command. The first pasted
+pytest invocation accidentally passed the shell-comment token `#` as a path and therefore
+collected no tests; it is an invalid invocation, not product evidence. The two corrected
+commands below passed. The agent then ran the fresh offline CLI sequence itself against an
+isolated disposable Workspace with `OPENAI_API_KEY` removed. The complete Class B gate is
+closed.
+
+| Command | Proves | Observed |
+| --- | --- | --- |
+| `cd frontend && npm run typecheck` | the enum unions reach the label maps and every `Record` over them is exhaustive | **passed** |
+| `cd frontend && npm run test` | the new screen, the landmark derivation, and the analyze call | **55 passed, 6 files** |
+| `cd frontend && npm run build` | production build plus the derived design-token guard | **passed**; guard reported **16 color, 2 radius, 1 shadow** |
+| `cd frontend && npm run e2e` | the RTL shell, the landmark, route focus, and the New Application screen with axe | **5 passed** |
+| `pytest -m "not browser"` | the whole non-browser suite, including the OpenAPI drift test against the regenerated contract | **451 passed, 4 deselected** in 78.11s |
+| `pytest tests/test_golden.py tests/test_architecture.py` | golden hashes did not move and `api -> application` layering still holds | **13 passed, 1 browser-marked deselected** in 2.80s |
+| offline `ingest → analyze → draft → validate → approve → render → ready → reconcile` with `OPENAI_API_KEY` unset | the deterministic path still reaches Ready, which the analyze request depends on by omitting `provider`/`model` | **passed** against fresh `/tmp/cv-m4-class-b.6ZU7eZ` |
+
+Predicted deltas from the Stage C bullet 1 baseline of **38 Vitest tests in 4 files**:
+
+- `applications.test.ts` 7 → **12**: two `startAnalysis` cases (the explicit snapshot ID
+  with its idempotency key, and the refusal of a `202` that does not name its Operation)
+  and three projection-poll cases;
+- `OperationPage.test.tsx` 9 → **10**: the finished Operation's way back, plus an added
+  absence assertion inside the existing "does not invent an action" case;
+- `ApplicationPage.test.tsx` **+7**, a new file;
+- `WorkflowLandmark.test.ts` **+4**, a new file;
+- `operations.test.ts` and `NewApplicationPage.test.tsx` keep **10** and **12**. The two
+  `NewApplicationPage` navigation assertions were repointed from the deleted analysis
+  route to the context screen rather than added to.
+
+Playwright stayed at **5**: the application context screen needs a real projection, so it
+belongs to the central E2E the F gate owns, not to the backend-free specs.
+
+The non-browser prediction of **450** was wrong by one, and the difference is explained.
+No Python item changed in this slice and the enum wire values did not move, but the baseline
+used for the prediction was the user-run Stage C bullet 1 tree at `1e47e5e`. Commit
+`6a60b07`, added afterward, split the mixed golden test into a non-browser content/hash test
+and a browser render-validation test. Its declared collection delta is exactly **+1** in the
+default suite, so **451 passed, 4 deselected** is the reconciled expected count for this
+tree. The focused result also has the corresponding shape: two golden items plus eleven
+architecture items pass, while the one browser golden item is deselected.
+
+The offline run used `purpose=development`, `data_class=copy`, schema `0001`, and the
+deterministic provider default. It created Application
+`a4a10bcf-ceb5-4f0c-87cd-283c74ac14ea`, analyzed explicit JobSnapshot
+`c16ab71a-aa67-46a0-90a2-a9469a8849e1`, and returned both JobAnalysis
+`e0d5ace6-6492-454b-ac2b-959c052a8783` and initial SelectionPlan
+`7720fa16-933b-4733-8616-90f336704c58`. Draft and exact validation passed with 29 claims
+and 28 selected facts; approval created revision
+`ec44db3f-4f66-49e3-943e-7cb86c39ff3f`. The real Chromium render passed all eight render
+groups in one page with ATS claim coverage 1.0. Ready passed all six integrity groups, and
+reconcile passed with exactly five artifact versions, 87 canonical facts, and no problems.
 
 One A.4 surface is deliberately not a primitive: the sandboxed preview frame. Its direction
 isolation and refresh behavior depend on the render contract, so it is built in Stage D with

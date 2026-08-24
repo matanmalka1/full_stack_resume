@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { ApiProblem, apiRequest } from "./client";
+import { ApiProblem, type ApiResponse, apiRequest } from "./client";
 import type { Operation } from "./contracts";
 
 /* Which statuses end an Operation is a lifecycle rule the backend owns and now reports,
@@ -57,23 +57,21 @@ export const cancelOperation = async (operationId: string): Promise<Operation> =
   return response.data;
 };
 
-export interface RetryOperationResult {
+export interface QueuedOperation {
   operation: Operation;
   operationPath: string;
 }
 
-export const retryOperation = async (
-  operationId: string,
-  idempotencyKey: string,
-): Promise<RetryOperationResult> => {
-  const response = await apiRequest<Operation>(
-    `/api/v1/operations/${operationId}/retry`,
-    { method: "POST", idempotencyKey },
-  );
+/* Every command that queues durable work answers `202` and a `Location` naming the
+   Operation it queued (§13). A response without that pair is not a queued Operation this
+   client may follow, so it is refused here rather than navigated to. One copy of the
+   check: every caller carries the same obligation, and a second copy is the one that
+   goes stale. */
+export const queuedOperation = (response: ApiResponse<Operation>): QueuedOperation => {
   const expectedLocation = `/api/v1/operations/${response.data.id}`;
 
   if (response.status !== 202 || response.location !== expectedLocation) {
-    throw new Error("Retry response did not identify its queued Operation");
+    throw new Error("Accepted response did not identify its queued Operation");
   }
 
   return {
@@ -81,3 +79,14 @@ export const retryOperation = async (
     operationPath: `/operations/${encodeURIComponent(response.data.id)}`,
   };
 };
+
+export const retryOperation = async (
+  operationId: string,
+  idempotencyKey: string,
+): Promise<QueuedOperation> =>
+  queuedOperation(
+    await apiRequest<Operation>(`/api/v1/operations/${operationId}/retry`, {
+      method: "POST",
+      idempotencyKey,
+    }),
+  );

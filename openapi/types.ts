@@ -695,8 +695,7 @@ export interface components {
             latest_snapshot: components["schemas"]["JobSnapshotResponse"];
             /** Newer Draft In Progress */
             newer_draft_in_progress: boolean;
-            /** Preparation State */
-            preparation_state: string;
+            preparation_state: components["schemas"]["PreparationState"];
             /** Primary Stale Reason */
             primary_stale_reason?: string | null;
             /** Recommended Action */
@@ -711,8 +710,7 @@ export interface components {
             terminal_outcome?: string | null;
             /** Warnings */
             warnings: components["schemas"]["WarningResponse"][];
-            /** Working Draft State */
-            working_draft_state: string;
+            working_draft_state: components["schemas"]["WorkingDraftState"];
         };
         /** ApplicationListItemResponse */
         ApplicationListItemResponse: {
@@ -761,8 +759,7 @@ export interface components {
             normalized_role?: string | null;
             /** Notes */
             notes: string;
-            /** Preparation State */
-            preparation_state: string;
+            preparation_state: components["schemas"]["PreparationState"];
             /** Primary Stale Reason */
             primary_stale_reason?: string | null;
             /** Profile */
@@ -789,8 +786,7 @@ export interface components {
             updated_at: string;
             /** Warnings */
             warnings: components["schemas"]["WarningResponse"][];
-            /** Working Draft State */
-            working_draft_state: string;
+            working_draft_state: components["schemas"]["WorkingDraftState"];
         };
         /** ApplicationListResponse */
         ApplicationListResponse: {
@@ -1507,6 +1503,11 @@ export interface components {
          * @enum {string}
          */
         OperationType: "analyze_job" | "propose_selection_plan" | "create_draft" | "regenerate_section" | "regenerate_claim" | "render_revision";
+        /**
+         * PreparationState
+         * @enum {string}
+         */
+        PreparationState: "needs_analysis" | "needs_review" | "ready_to_draft" | "draft_in_progress" | "ready_for_approval" | "approved" | "ready";
         /** ReasonResponse */
         ReasonResponse: {
             /** Allowed Resolution Actions */
@@ -1752,6 +1753,11 @@ export interface components {
             /** Updated At */
             updated_at: string;
         };
+        /**
+         * WorkingDraftState
+         * @enum {string}
+         */
+        WorkingDraftState: "none" | "editing" | "validation_failed" | "validated" | "stale";
         /**
          * WorkingDraftUpdateResponse
          * @description The new token, and which claims were saved as pending.

@@ -148,8 +148,7 @@
             "type": "boolean"
           },
           "preparation_state": {
-            "title": "Preparation State",
-            "type": "string"
+            "$ref": "#/components/schemas/PreparationState"
           },
           "primary_stale_reason": {
             "anyOf": [
@@ -210,8 +209,7 @@
             "type": "array"
           },
           "working_draft_state": {
-            "title": "Working Draft State",
-            "type": "string"
+            "$ref": "#/components/schemas/WorkingDraftState"
           }
         },
         "required": [
@@ -430,8 +428,7 @@
             "type": "string"
           },
           "preparation_state": {
-            "title": "Preparation State",
-            "type": "string"
+            "$ref": "#/components/schemas/PreparationState"
           },
           "primary_stale_reason": {
             "anyOf": [
@@ -537,8 +534,7 @@
             "type": "array"
           },
           "working_draft_state": {
-            "title": "Working Draft State",
-            "type": "string"
+            "$ref": "#/components/schemas/WorkingDraftState"
           }
         },
         "required": [
@@ -2468,6 +2464,19 @@
         "title": "OperationType",
         "type": "string"
       },
+      "PreparationState": {
+        "enum": [
+          "needs_analysis",
+          "needs_review",
+          "ready_to_draft",
+          "draft_in_progress",
+          "ready_for_approval",
+          "approved",
+          "ready"
+        ],
+        "title": "PreparationState",
+        "type": "string"
+      },
       "ReasonResponse": {
         "additionalProperties": false,
         "properties": {
@@ -2988,6 +2997,17 @@
         ],
         "title": "WorkingDraftResponse",
         "type": "object"
+      },
+      "WorkingDraftState": {
+        "enum": [
+          "none",
+          "editing",
+          "validation_failed",
+          "validated",
+          "stale"
+        ],
+        "title": "WorkingDraftState",
+        "type": "string"
       },
       "WorkingDraftUpdateResponse": {
         "additionalProperties": false,
