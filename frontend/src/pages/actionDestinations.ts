@@ -10,6 +10,12 @@
 const destinations: Record<string, (applicationId: string) => string> = {
   apply_analysis_decisions: (applicationId) =>
     `/applications/${encodeURIComponent(applicationId)}/review`,
+  /* The Draft Editor is where the patch is issued, so the three commands it carries all
+     lead to it. `apply_selection_change` and the removal path are controls on that
+     screen rather than screens of their own: they act on the claim the user is looking
+     at, and a separate destination would ask them to find it twice. */
+  update_working_draft: (applicationId) =>
+    `/applications/${encodeURIComponent(applicationId)}/draft`,
 };
 
 export const actionDestination = (action: string, applicationId: string): string | null =>

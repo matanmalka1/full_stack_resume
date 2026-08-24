@@ -88,6 +88,14 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
     : null;
   const reviewRecommended = recommended === "apply_analysis_decisions";
 
+  /* The same, for the draft the user is holding. The editor is the screen for every
+     command addressed at an existing draft, so availability of the autosave patch is what
+     says there is something there to edit. */
+  const editHref = detail.available_actions.includes("update_working_draft")
+    ? actionDestination("update_working_draft", detail.application.id)
+    : null;
+  const editRecommended = recommended === "update_working_draft";
+
   const handledHere = new Set<string>();
   if (canAnalyze) {
     handledHere.add("analyze");
@@ -97,6 +105,9 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
   }
   if (reviewHref !== null) {
     handledHere.add("apply_analysis_decisions");
+  }
+  if (editHref !== null) {
+    handledHere.add("update_working_draft");
   }
 
   /* "Its screen is not built" is a claim about existence, not about availability, so it
@@ -129,6 +140,13 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
     reviewHref === null ? null : (
       <Link className={buttonClasses(reviewRecommended ? "primary" : "secondary")} to={reviewHref}>
         החלטות הסקירה
+      </Link>
+    );
+
+  const editButton =
+    editHref === null ? null : (
+      <Link className={buttonClasses(editRecommended ? "primary" : "secondary")} to={editHref}>
+        עריכת הטיוטה
       </Link>
     );
 
@@ -183,9 +201,10 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
       ) : null}
 
       {(() => {
-        /* One emphasized primary (A.1). Review outranks drafting while a decision is
-           still owed, and analyze stays the fallback when nothing else is offered. */
-        const ordered = [reviewButton, draftButton, analyzeButton].filter(
+        /* One emphasized primary (A.1). Review outranks the draft while a decision is
+           still owed, editing an existing draft outranks building another one, and
+           analyze stays the fallback when nothing else is offered. */
+        const ordered = [reviewButton, editButton, draftButton, analyzeButton].filter(
           (button) => button !== null,
         );
         return ordered.length === 0 ? null : (

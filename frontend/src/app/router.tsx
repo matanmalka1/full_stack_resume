@@ -2,6 +2,7 @@ import { createBrowserRouter } from "react-router-dom";
 
 import { App } from "../App";
 import { ApplicationPage } from "../pages/ApplicationPage";
+import { DraftEditorPage } from "../pages/DraftEditorPage";
 import { NewApplicationPage } from "../pages/NewApplicationPage";
 import { OperationPage } from "../pages/OperationPage";
 import { ReviewPage } from "../pages/ReviewPage";
@@ -35,7 +36,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "applications/:applicationId/draft",
-        element: <RoutePlaceholder title="עריכת הטיוטה" />,
+        element: <DraftEditorPage />,
       },
       {
         path: "applications/:applicationId/validation",

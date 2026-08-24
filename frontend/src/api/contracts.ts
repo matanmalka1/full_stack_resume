@@ -40,3 +40,22 @@ export type Track = ApiSchemas["Track"];
 export type ProfileName = ApiSchemas["ProfileName"];
 export type Emphasis = ApiSchemas["Emphasis"];
 export type Language = NonNullable<ApplyAnalysisDecisionsRequest["language_override"]>;
+
+/* §14/§20 the WorkingDraft the editor holds. `outline` is the editable structure derived
+   from `source` on each read; `source` stays the opaque versioned document, on the same
+   reasoning `JobAnalysisResponse.analysis` does. `ClaimType` and `ClaimStyle` are real
+   unions, so the Hebrew status labels keyed by them stay exhaustive. */
+export type DraftOutline = ApiSchemas["DraftOutlineResponse"];
+export type DraftSection = ApiSchemas["DraftSectionResponse"];
+export type DraftClaim = ApiSchemas["DraftClaimResponse"];
+export type ClaimType = DraftClaim["claim_type"];
+export type ClaimStyle = DraftClaim["style"];
+
+export type WorkingDraftFacts = ApiSchemas["WorkingDraftFactsResponse"];
+export type DraftFact = ApiSchemas["DraftFactResponse"];
+export type SelectionOutcome = NonNullable<DraftFact["outcome"]>;
+export type OmissionReason = NonNullable<DraftFact["reason"]>;
+
+export type UpdateWorkingDraftRequest = ApiSchemas["UpdateWorkingDraftRequest"];
+export type ClaimPatch = ApiSchemas["ClaimPatchRequest"];
+export type WorkingDraftUpdate = ApiSchemas["WorkingDraftUpdateResponse"];
