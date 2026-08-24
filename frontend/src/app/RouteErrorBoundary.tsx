@@ -1,7 +1,9 @@
-import { useEffect, useRef } from "react";
 import { isRouteErrorResponse, useRouteError } from "react-router-dom";
 
 import { ApiProblem } from "../api/client";
+import { Card } from "../ui/Card";
+import { LtrText } from "../ui/LtrText";
+import { PageHeading } from "../ui/PageHeading";
 
 interface SafeRouteError {
   title: string;
@@ -34,36 +36,24 @@ const toSafeRouteError = (error: unknown): SafeRouteError => {
 
 export const RouteErrorBoundary = () => {
   const error = toSafeRouteError(useRouteError());
-  const headingRef = useRef<HTMLHeadingElement>(null);
-
-  useEffect(() => {
-    headingRef.current?.focus();
-  }, []);
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-12" dir="rtl">
-      <section
-        aria-labelledby="route-error-heading"
-        className="rounded-xl border border-cv-border bg-cv-surface p-8"
-        role="alert"
-      >
-        <p className="mb-2 text-sm font-semibold text-cv-blocker">הבקשה נכשלה</p>
-        <h1
-          className="text-3xl font-semibold tracking-tight outline-none"
-          data-route-heading
+      <Card aria-labelledby="route-error-heading" role="alert">
+        <PageHeading
+          description={error.detail}
+          eyebrow="הבקשה נכשלה"
+          eyebrowTone="blocker"
           id="route-error-heading"
-          ref={headingRef}
-          tabIndex={-1}
         >
           {error.title}
-        </h1>
-        <p className="mt-4 max-w-2xl leading-7 text-cv-text-muted">{error.detail}</p>
+        </PageHeading>
         {error.status === undefined ? null : (
-          <p className="mt-4 text-sm text-cv-text-muted" dir="ltr">
-            HTTP {error.status}
+          <p className="mt-4 text-support text-cv-text-muted">
+            <LtrText>HTTP {error.status}</LtrText>
           </p>
         )}
-      </section>
+      </Card>
     </main>
   );
 };

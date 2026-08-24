@@ -92,9 +92,20 @@ approval confirmation, autosave conflict resolution, and destructive-to-working-
 | Status | Text label + icon + position in the workflow landmark. Technical codes may appear only in expandable details when useful. |
 | Motion | Minimal progress indication; honor reduced-motion preferences and never depend on animation to communicate completion. |
 
-The implementation will express these as semantic tokens rather than scattering literal
-colors and spacing values through components. Exact color values are selected and contrast-
-checked when the Tailwind theme and first components are implemented.
+The implementation expresses these as semantic tokens rather than scattering literal colors
+and spacing values through components.
+
+**Contrast is checked and closed.** Every token pair the components actually produce was
+measured against WCAG 2.1 (4.5:1 for text, 3:1 for the focus ring and for a control edge
+that is the only boundary of the control). Nineteen pairs were measured; the lowest passing
+text pair is `cv-success` on `cv-surface` at 5.87:1, and the tinted `tone/10` and `tone/5`
+callout and badge surfaces keep their own text at 5.10:1 or better.
+
+One pair failed: `cv-border` on `cv-surface` at **1.38:1**. The token was not weakened for
+decoration it serves correctly. Instead `--color-cv-border-strong` (`#818b9a`) was added for
+control edges — 3.45:1 on `cv-surface`, 3.22:1 on `cv-canvas`, 3.04:1 on `cv-surface-muted` —
+and text inputs, textareas, selects, and checkboxes use it. `cv-border` remains the card and
+separator line, where no 1.4.11 obligation applies.
 
 ### A.3 Direction rules
 
@@ -328,9 +339,21 @@ production-build evidence accepted on 2026-08-24.
       implementation in `api/frontend.py`. The local predicate was removed in favor of
       Starlette `StaticFiles`; the guard was not weakened and the focused rerun passed
       **35 tests**. User-run `npm run typecheck` and `npm run build` also passed.
-- [ ] Add shared Operation polling without WebSocket or SSE.
-- [ ] Add Vitest, React Testing Library, Playwright Web E2E, and axe foundations without
-      blanket DOM snapshots.
+- [x] Add the shared UI primitives that express the A.2 visual foundation as components.
+      Taken before Operation polling so Stage C screens are not built on ad-hoc classes.
+      The theme gained a semantic type scale, an explicit 4px spacing base, control and
+      surface radii, an overlay shadow, `cv-border-strong`, `cv-blocker-hover`, and
+      `cv-on-accent`. `frontend/src/ui/` holds the primitives derived from the A.4 frames:
+      `Button`, `Card`, `PageHeading`, `StatusBadge`, `Callout`, `Field`, `TextInput`/
+      `TextArea`, `Select`, `Checkbox`, `LtrText`, `Dialog`, `LiveRegion`, `ActionBar`,
+      `SummaryList`, `TechnicalDetails`, `ViewSwitch`, and `WorkflowSteps`. Components read
+      tokens only, and none writes its own focus ring: the global `:focus-visible` rule owns
+      focus and the guard below refuses `outline-none`. `StatusBadge` and `Callout` make the
+      icon and the Hebrew `אזהרה`/`חסימה` label part of the type, so color is never the only
+      status signal. `Dialog` is the native `<dialog>` element, which supplies the A.5 focus
+      trap, inert background, and focus restoration without a dialog dependency; Escape is
+      refused when `dismissible` is false. User-run `npm run typecheck` and `npm run build`
+      both passed on the first set of primitives.
 
 ## C — Intake, analysis, and review
 
@@ -375,6 +398,11 @@ production-build evidence accepted on 2026-08-24.
 
 ## Current next action
 
-Add shared Operation polling through TanStack Query without WebSocket, SSE, synthetic
-percentages, or automatic mutation retries. Do not change the visual design, or implement
-Dashboard navigation, tracking endpoints, or the Stage C intake flow yet.
+The design system is closed. Add shared Operation polling through TanStack Query without
+WebSocket, SSE, synthetic percentages, or automatic mutation retries, rendering it with the
+existing primitives. Do not implement Dashboard navigation, tracking endpoints, or the
+Stage C intake flow yet.
+
+One A.4 surface is deliberately not a primitive: the sandboxed preview frame. Its direction
+isolation and refresh behavior depend on the render contract, so it is built in Stage D with
+the screen that owns it rather than guessed at now.
