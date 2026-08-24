@@ -24,20 +24,11 @@ different facts.
 
 from __future__ import annotations
 
-import json
-
-import pytest
 from api_harness import MUTATION_HEADERS
 from helpers import ACCOUNT_MANAGER_JOB
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import CreateJobSnapshotCommand
-from cv_engine.application.errors import (
-    ArtifactContainmentRefused,
-    ArtifactHashMismatch,
-    ArtifactPayloadMissing,
-    UnknownRecord,
-)
 from cv_engine.util import sha256_bytes, sha256_file
 
 #: Several spellings of the same intent, because the layers that could decode
@@ -88,64 +79,6 @@ def _rendered(api_worker, approved_application, company: str = "Render Co"):
 
 
 # --- render ------------------------------------------------------------------
-
-
-def test_render_is_accepted_as_an_operation_and_registers_three_artifacts(
-    api_worker, approved_application, deterministic_renderer
-) -> None:
-    """§16 through §21/§22: `202`, a `Location`, and the three rendered outputs."""
-    setup, outputs = _rendered(api_worker, approved_application)
-    assert set(outputs) == {"resume_html", "resume_pdf", "visual_evidence"}
-
-    detail = _get(api_worker, f"/approved-revisions/{setup.approved.revision_id}")
-    assert detail.status_code == 200, detail.text
-    body = detail.json()
-    assert body["ready_qualified"] is True
-    assert body["pdf_artifact_version_id"] == outputs["resume_pdf"]
-
-
-def test_render_addressed_to_the_wrong_application_is_refused_before_queueing(
-    api_worker, approved_application, deterministic_renderer
-) -> None:
-    """The body states which Application the client believes it is rendering for.
-
-    A mismatch is `412 LINEAGE_BROKEN` and no Operation is created, so a render
-    cannot land on another Application's revision because two IDs were confused.
-    """
-    setup = approved_application("Lineage Co")
-    other = approved_application("Other Co")
-    before = len(setup.services.repository.artifact_versions(setup.application_id))
-
-    response = _post(
-        api_worker,
-        f"/approved-revisions/{setup.approved.revision_id}/render",
-        {"application_id": other.application_id},
-    )
-    assert response.status_code == 412, response.text
-    assert response.json()["code"] == "LINEAGE_BROKEN"
-    assert len(setup.services.repository.artifact_versions(setup.application_id)) == before
-
-
-def test_an_idempotency_key_returns_the_first_render_instead_of_a_second(
-    api_worker, approved_application, deterministic_renderer
-) -> None:
-    """§21: the same key with the same payload does not queue a second render."""
-    setup = approved_application("Idempotent Co")
-    headers = {"Idempotency-Key": "render-once"}
-    first = _post(
-        api_worker,
-        f"/approved-revisions/{setup.approved.revision_id}/render",
-        {"application_id": setup.application_id},
-        **headers,
-    )
-    second = _post(
-        api_worker,
-        f"/approved-revisions/{setup.approved.revision_id}/render",
-        {"application_id": setup.application_id},
-        **headers,
-    )
-    assert first.status_code == 202 and second.status_code == 202, second.text
-    assert first.json()["id"] == second.json()["id"]
 
 
 def test_a_failed_render_leaves_the_approved_revision_exactly_as_it_was(
@@ -213,71 +146,6 @@ def test_retrying_a_failed_render_creates_a_new_operation(
 # --- artifact access, by ID and only by ID -----------------------------------
 
 
-def test_metadata_and_download_are_reached_by_artifact_version_id(
-    api_worker, approved_application, deterministic_renderer
-) -> None:
-    """§21: `GET /artifacts/{id}` and `/download`, with no path anywhere."""
-    _setup, outputs = _rendered(api_worker, approved_application)
-    pdf_id = outputs["resume_pdf"]
-
-    metadata = _get(api_worker, f"/artifacts/{pdf_id}")
-    assert metadata.status_code == 200, metadata.text
-    body = metadata.json()
-    assert body["id"] == pdf_id
-    assert body["artifact_type"] == "resume_pdf"
-    assert body["downloadable"] is True
-    assert body["unavailable_reason"] is None
-    assert body["size"] > 0
-
-    download = _get(api_worker, f"/artifacts/{pdf_id}/download")
-    assert download.status_code == 200, download.text
-    assert download.headers["content-type"] == "application/pdf"
-    assert download.content.startswith(b"%PDF")
-    assert int(download.headers["content-length"]) == len(download.content)
-    assert download.headers["etag"].strip('"') == body["content_hash"]
-
-
-def test_the_metadata_response_carries_no_stored_location(
-    api_worker, approved_application, deterministic_renderer
-) -> None:
-    """§20: "They return DTOs, not database rows or local paths."
-
-    Compared against the response model's own field set rather than a
-    hand-written list. A list would be written from the same belief that the
-    projection is narrow, which is exactly the belief that was wrong three times
-    in M3 - so the assertion has to come from the schema.
-    """
-    from cv_engine.api.schemas.artifacts import ArtifactVersionDetailResponse
-
-    _setup, outputs = _rendered(api_worker, approved_application)
-    body = _get(api_worker, f"/artifacts/{outputs['resume_pdf']}").json()
-    assert set(body) == set(ArtifactVersionDetailResponse.model_fields)
-    assert "path" not in body
-
-
-def test_the_pdf_downloads_under_its_registered_recruiter_filename(
-    api_worker, approved_application, deterministic_renderer
-) -> None:
-    """Architecture §6.2: a recruiter name is a delivery name, not an identity.
-
-    The name in the header is the one render recorded in the artifact's own
-    metadata, and the stored file is still the UUID. Both halves are asserted:
-    a test that only checked the header would pass if the physical file had been
-    renamed to match.
-    """
-    setup, outputs = _rendered(api_worker, approved_application)
-    pdf_id = outputs["resume_pdf"]
-    registered = setup.services.repository.artifact_version(pdf_id)
-
-    download = _get(api_worker, f"/artifacts/{pdf_id}/download")
-    assert download.content.startswith(b"%PDF"), "a named download must still deliver bytes"
-    disposition = download.headers["content-disposition"]
-    assert disposition.startswith("attachment; ")
-    assert "CV.pdf" in disposition
-    assert pdf_id in registered["path"]
-    assert "CV.pdf" not in registered["path"]
-
-
 def test_every_rendered_artifact_type_downloads_as_what_it_is(
     api_worker, approved_application, deterministic_renderer
 ) -> None:
@@ -304,31 +172,11 @@ def test_every_rendered_artifact_type_downloads_as_what_it_is(
         assert int(response.headers["content-length"]) == len(response.content)
 
 
-def test_the_approved_markdown_and_manifest_download_without_a_render(
-    api_worker, approved_application
-) -> None:
-    """Download does not require Ready qualification, and says so by working.
-
-    Approval registers the Markdown and the claim manifest before any render
-    exists. They are registered artifacts, so they are downloadable; only the
-    recruiter export requires qualification.
-    """
-    setup = approved_application("Pre-render Co")
-    for artifact_version_id in (
-        setup.approved.markdown_artifact_version_id,
-        setup.approved.manifest_artifact_version_id,
-    ):
-        response = _get(api_worker, f"/artifacts/{artifact_version_id}/download")
-        assert response.status_code == 200, response.text
-        assert response.content
-
-
 # --- security and failure paths ----------------------------------------------
 
 
-@pytest.mark.parametrize("traversal", TRAVERSAL_IDS)
 def test_a_traversal_string_is_only_an_id_that_names_nothing(
-    api_worker, approved_application, traversal
+    api_worker, approved_application
 ) -> None:
     """The endpoints take IDs, so traversal has nowhere to be interpreted.
 
@@ -337,12 +185,13 @@ def test_a_traversal_string_is_only_an_id_that_names_nothing(
     about the filesystem. `200` would mean a file was served; a `5xx` would mean
     something tried to open it.
     """
-    for suffix in ("", "/download"):
-        response = _get(api_worker, f"/artifacts/{traversal}{suffix}")
-        assert response.status_code in {404, 400}, (traversal, suffix, response.text)
-        assert "/" not in response.text or "artifacts" in response.json().get("instance", "")
-        assert "Traceback" not in response.text
-        assert "workspace" not in response.text.casefold()
+    for traversal in TRAVERSAL_IDS:
+        for suffix in ("", "/download"):
+            response = _get(api_worker, f"/artifacts/{traversal}{suffix}")
+            assert response.status_code in {404, 400}, (traversal, suffix, response.text)
+            assert "/" not in response.text or "artifacts" in response.json().get("instance", "")
+            assert "Traceback" not in response.text
+            assert "workspace" not in response.text.casefold()
 
 
 def test_an_unregistered_id_is_404_and_a_broken_registration_is_412(
@@ -367,21 +216,6 @@ def test_an_unregistered_id_is_404_and_a_broken_registration_is_412(
     tampered = _get(api_worker, f"/artifacts/{pdf_id}/download")
     assert tampered.status_code == 412, tampered.text
     assert tampered.json()["code"] == "ARTIFACT_HASH_MISMATCH"
-
-
-def test_a_hash_mismatch_also_makes_the_metadata_say_it_is_not_downloadable(
-    api_worker, approved_application, deterministic_renderer
-) -> None:
-    """The eligibility answer and the download answer cannot disagree.
-
-    They run the same verification, so a client that asked first is not
-    surprised second.
-    """
-    setup, outputs = _rendered(api_worker, approved_application)
-    pdf_id = outputs["resume_pdf"]
-    setup.services.artifacts.resolve(
-        setup.services.repository.artifact_version(pdf_id)["path"]
-    ).write_bytes(b"%PDF-1.4\ntampered\n")
 
     body = _get(api_worker, f"/artifacts/{pdf_id}").json()
     assert body["downloadable"] is False
@@ -460,58 +294,7 @@ def test_a_symlink_out_of_the_artifact_root_is_refused_by_the_same_check(
     assert b"secret" not in response.content
 
 
-def test_no_artifact_refusal_leaks_a_path_a_trace_or_the_workspace(
-    api_worker, approved_application, deterministic_renderer
-) -> None:
-    """§22: Problem Details carries a stable code and safe context, and no more.
-
-    Checked over every refusal this stage can produce, in one place, so a new
-    refusal that leaked would have to be added here to be believed safe.
-    """
-    setup, outputs = _rendered(api_worker, approved_application)
-    workspace_root = str(setup.services.workspace.root)
-    pdf_id = outputs["resume_pdf"]
-    setup.services.artifacts.resolve(
-        setup.services.repository.artifact_version(pdf_id)["path"]
-    ).write_bytes(b"tampered")
-
-    responses = [
-        _get(api_worker, "/artifacts/not-an-id"),
-        _get(api_worker, "/artifacts/not-an-id/download"),
-        _get(api_worker, f"/artifacts/{pdf_id}/download"),
-        _get(api_worker, "/approved-revisions/not-an-id"),
-        _get(api_worker, f"/approved-revisions/{setup.approved.revision_id}/recruiter-pdf"),
-    ]
-    for response in responses:
-        assert response.status_code >= 400, response.text
-        text = response.text
-        assert workspace_root not in text
-        assert "Traceback" not in text
-        assert "artifacts/outputs" not in text
-        assert "/Users/" not in text
-
-
 # --- Ready -------------------------------------------------------------------
-
-
-def test_ready_qualification_is_exposed_and_not_recomputed_by_the_router(
-    api_worker, approved_application, deterministic_renderer
-) -> None:
-    """The endpoint reports what the application layer derived, exactly.
-
-    Asserted by comparing the response against a direct call to the service, so
-    "the router does not recompute Ready" is measured rather than promised. If a
-    router ever grew its own rule, these two would drift and this would fail.
-    """
-    setup, _outputs = _rendered(api_worker, approved_application)
-    revision_id = setup.approved.revision_id
-
-    from_service = setup.services.rendering.revision_ready_qualification(revision_id)
-    from_http = _get(api_worker, f"/approved-revisions/{revision_id}").json()
-
-    assert from_http["ready_qualified"] is from_service.ready_qualified
-    assert from_http["pdf_artifact_version_id"] == from_service.pdf_artifact_version_id
-    assert from_http["ready_validation"] == from_service.validation.model_dump(mode="json")
 
 
 def test_ready_is_the_active_preparation_state_only_while_the_context_matches(
@@ -559,35 +342,6 @@ def test_ready_is_the_active_preparation_state_only_while_the_context_matches(
 
 
 # --- the recruiter export ----------------------------------------------------
-
-
-def test_the_recruiter_export_needs_both_ids_and_uses_the_registered_name(
-    api_worker, approved_application, deterministic_renderer
-) -> None:
-    """§16: registration, binding, and qualification, then the friendly name."""
-    setup, outputs = _rendered(api_worker, approved_application)
-    revision_id = setup.approved.revision_id
-    pdf_id = outputs["resume_pdf"]
-
-    response = _get(
-        api_worker,
-        f"/approved-revisions/{revision_id}/recruiter-pdf?pdf_artifact_version_id={pdf_id}",
-    )
-    assert response.status_code == 200, response.text
-    assert response.headers["content-type"] == "application/pdf"
-
-    registered = setup.services.repository.artifact_version(pdf_id)
-    expected = json.loads(registered["metadata_json"])["recruiter_filename"]
-    assert expected in response.headers["content-disposition"]
-
-
-def test_the_recruiter_export_requires_the_pdf_artifact_version_id(
-    api_worker, approved_application, deterministic_renderer
-) -> None:
-    """No `latest`. The exact PDF is named or the request is invalid (§12)."""
-    setup, _outputs = _rendered(api_worker, approved_application)
-    response = _get(api_worker, f"/approved-revisions/{setup.approved.revision_id}/recruiter-pdf")
-    assert response.status_code == 422, response.text
 
 
 def test_a_pdf_from_another_revision_is_refused_before_qualification_runs(
@@ -710,56 +464,3 @@ def test_a_delivery_survives_the_payload_being_deleted_in_the_same_window(
     stored.unlink()
 
     assert b"".join(delivery.stream.chunks()) == original
-
-
-def test_the_delivered_bytes_are_stable_across_repeated_iteration(
-    services, approved_application, deterministic_renderer
-) -> None:
-    """Two iterations of one delivery yield the same verified content.
-
-    A factory that reread its path could return different bytes each time and
-    nothing would notice. This is the property that makes `chunks` safe to hand
-    on before it is consumed.
-    """
-    setup, pdf = _rendered_pdf(services, approved_application, "Stable Co")
-    delivery = services.rendering.download_artifact(pdf["id"])
-
-    first = b"".join(delivery.stream.chunks())
-    services.artifacts.resolve(pdf["path"]).write_bytes(b"%PDF-1.4\nchanged again\n")
-    second = b"".join(delivery.stream.chunks())
-
-    assert first == second
-    assert sha256_bytes(first) == pdf["content_hash"]
-
-
-# --- the application-layer refusals, named ------------------------------------
-
-
-def test_the_three_artifact_refusals_are_distinguishable_at_the_application_layer(
-    services, approved_application, deterministic_renderer, tmp_path
-) -> None:
-    """Each check fails as its own class, so a caller can tell them apart.
-
-    Without this the three would only be distinguishable by message, and a
-    message is the one part of a refusal that is free to be rewritten.
-    """
-    setup = approved_application("Taxonomy Co")
-    services.rendering.render(setup.application_id)
-    pdf = services.repository.latest_artifact_version(setup.application_id, "resume_pdf")
-
-    with pytest.raises(UnknownRecord):
-        services.rendering.download_artifact("no-such-artifact")
-
-    services.artifacts.resolve(pdf["path"]).write_bytes(b"changed")
-    with pytest.raises(ArtifactHashMismatch):
-        services.rendering.download_artifact(pdf["id"])
-
-    services.artifacts.resolve(pdf["path"]).unlink()
-    with pytest.raises(ArtifactPayloadMissing):
-        services.rendering.download_artifact(pdf["id"])
-
-    escaped = services.repository.register_artifact_version(
-        setup.application_id, "resume_pdf", "resume", "../outside.pdf", "0" * 64, "rendered"
-    )
-    with pytest.raises(ArtifactContainmentRefused):
-        services.rendering.download_artifact(escaped)

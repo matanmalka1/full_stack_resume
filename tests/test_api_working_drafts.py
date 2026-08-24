@@ -20,13 +20,11 @@ from __future__ import annotations
 
 import json
 
-import pytest
 from api_harness import MUTATION_HEADERS
 from helpers import ACCOUNT_MANAGER_JOB, run_cli, working_claim
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import IngestCommand
-from cv_engine.application.errors import WorkflowError
 
 UNSUPPORTED_WORDING = "Delivered 30% improvement in direct SaaS Sales."
 
@@ -126,99 +124,7 @@ def _unsupported_edit(harness, application_id: str) -> dict:
 # --- E1: generation ----------------------------------------------------------
 
 
-def test_generation_is_an_accepted_operation_naming_both_of_its_sources(api_worker) -> None:
-    """`202` plus `Location`, and the draft the Operation actually committed (§14)."""
-    application_id, working_draft_id, sources = _drafted(api_worker, "Draft Generation Co")
-
-    # Generation records its own passing ValidationRun against the exact draft it
-    # committed, so §5's `validated` holds the moment the Operation succeeds.
-    # That is what lets the no-review path approve without a separate validate,
-    # and it is why `cv fast` can name a real run rather than making one.
-    state = _state(api_worker, application_id)
-    assert state["active_working_draft_id"] == working_draft_id
-    assert state["working_draft_state"] == "validated"
-    assert state["preparation_state"] == "ready_for_approval"
-
-    body = _read(api_worker, working_draft_id).json()
-    assert body["job_analysis_id"] == sources["job_analysis"]
-    assert body["selection_plan_id"] == sources["selection_plan"]
-    assert body["edit_version"] == 1
-    assert body["active"] is True
-
-
-def test_generation_reuses_one_operation_for_one_idempotency_key(api_worker) -> None:
-    application_id = _application(api_worker.services, "Idempotent Generation Co")
-    sources = _analyze(api_worker, application_id)
-    path = f"/applications/{application_id}/working-draft/generate"
-    body = {
-        "job_analysis_id": sources["job_analysis"],
-        "selection_plan_id": sources["selection_plan"],
-    }
-    headers = {"Idempotency-Key": "generate-once"}
-
-    first = _post(api_worker, path, body, **headers)
-    second = _post(api_worker, path, body, **headers)
-
-    assert first.status_code == second.status_code == 202
-    assert first.json()["id"] == second.json()["id"]
-    finished = api_worker.wait_for_operation(first.json()["id"])
-    working_ids = [
-        output["output_id"]
-        for output in finished["outputs"]
-        if output["output_type"] == "working_draft"
-    ]
-    assert len(working_ids) == 1
-    assert _state(api_worker, application_id)["active_working_draft_id"] == working_ids[0]
-
-
-def test_generation_refuses_a_plan_belonging_to_another_application(api_worker) -> None:
-    """Explicit source IDs are checked, not trusted (§5.4 item 5)."""
-    application_id, _draft_id, _sources = _drafted(api_worker, "Source Owner Co")
-    other_id = _application(api_worker.services, "Source Intruder Co")
-    other_sources = _analyze(api_worker, other_id)
-
-    response = _post(
-        api_worker,
-        f"/applications/{application_id}/working-draft/generate",
-        {
-            "job_analysis_id": other_sources["job_analysis"],
-            "selection_plan_id": other_sources["selection_plan"],
-        },
-    )
-
-    assert response.status_code == 412, response.text
-    assert response.json()["code"] == "LINEAGE_BROKEN"
-
-
 # --- E2: read, ETag, and optimistic update -----------------------------------
-
-
-def test_a_read_carries_an_etag_built_from_the_version_and_the_content_hash(api_worker) -> None:
-    _application_id, working_draft_id, _sources = _drafted(api_worker, "Etag Read Co")
-
-    response = _read(api_worker, working_draft_id)
-    body = response.json()
-
-    assert response.headers["ETag"] == f'"{body["edit_version"]}-{body["content_hash"]}"'
-
-
-def test_a_patch_with_the_current_etag_saves_and_returns_the_next_one(api_worker) -> None:
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Autosave Co")
-    read = _read(api_worker, working_draft_id)
-    claim = working_claim(api_worker.services, application_id, "sales.metric.performance")
-
-    response = _patch(
-        api_worker,
-        working_draft_id,
-        read.headers["ETag"],
-        [{"claim_id": claim.claim_id, "fact_ids": claim.fact_ids, "text": claim.text}],
-    )
-
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["edit_version"] == read.json()["edit_version"] + 1
-    assert response.headers["ETag"] == f'"{body["edit_version"]}-{body["content_hash"]}"'
-    assert response.headers["ETag"] != read.headers["ETag"]
 
 
 def test_a_second_save_with_the_same_etag_is_a_conflict_that_changes_nothing(api_worker) -> None:
@@ -301,20 +207,6 @@ def test_free_text_no_fact_authorizes_is_kept_as_a_pending_claim(api_worker) -> 
     assert saved["claim_type"] == "pending"
     assert saved["text"] == UNSUPPORTED_WORDING
     assert saved["pending_reason"]
-
-
-def test_a_patch_without_if_match_is_refused_as_an_invalid_request(api_worker) -> None:
-    """`If-Match` is required, so its absence is a schema failure (§22, `422`)."""
-    application_id, working_draft_id, _sources = _drafted(api_worker, "No Etag Co")
-    claim = working_claim(api_worker.services, application_id, "sales.metric.performance")
-
-    response = api_worker.client.patch(
-        f"{API_PREFIX}/working-drafts/{working_draft_id}",
-        json={"claim_edits": [{"claim_id": claim.claim_id, "fact_ids": claim.fact_ids}]},
-        headers=MUTATION_HEADERS,
-    )
-
-    assert response.status_code == 422, response.text
 
 
 # --- E3: selection change, archive, replace ----------------------------------
@@ -459,68 +351,7 @@ def test_a_refused_replacement_leaves_the_existing_draft_exactly_as_it_was(api_w
     assert _state(api_worker, application_id)["active_working_draft_id"] == working_draft_id
 
 
-def test_replacement_refuses_a_draft_belonging_to_another_application(api_worker) -> None:
-    """The path names the Application and the body names the draft; both are checked.
-
-    Neither is inferred from the other, so this pairing has to be refused
-    explicitly - otherwise a replacement addressed to one Application would
-    quietly rebuild another Application's draft.
-    """
-    owner_id, owner_draft_id, _owner_sources = _drafted(api_worker, "Replace Owner Co")
-    intruder_id, _intruder_draft, intruder_sources = _drafted(api_worker, "Replace Intruder Co")
-    before = _read(api_worker, owner_draft_id).json()
-
-    response = _post(
-        api_worker,
-        f"/applications/{intruder_id}/working-draft/replace",
-        {
-            "working_draft_id": owner_draft_id,
-            "expected_edit_version": before["edit_version"],
-            "job_analysis_id": intruder_sources["job_analysis"],
-            "selection_plan_id": intruder_sources["selection_plan"],
-            "keep_previous": True,
-        },
-    )
-
-    assert response.status_code == 412, response.text
-    assert response.json()["code"] == "LINEAGE_BROKEN"
-    assert _read(api_worker, owner_draft_id).json() == before
-    artifacts = api_worker.client.get(f"{API_PREFIX}/applications/{owner_id}/artifacts")
-    assert not [
-        item
-        for item in artifacts.json()["items"]
-        if item["artifact_type"] == "working_draft_snapshot"
-    ]
-
-
 # --- E4: validation ----------------------------------------------------------
-
-
-def test_validation_returns_the_run_id_the_client_will_need_to_approve(api_worker) -> None:
-    _application_id, working_draft_id, _sources = _drafted(api_worker, "Validate Co")
-    read = _read(api_worker, working_draft_id).json()
-
-    response = _post(
-        api_worker,
-        f"/working-drafts/{working_draft_id}/validate",
-        {"expected_edit_version": read["edit_version"]},
-    )
-
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["passed"] is True
-    assert body["edit_version"] == read["edit_version"]
-    assert body["content_hash"] == read["content_hash"]
-    assert (
-        api_worker.services.repository.validation_lineage(
-            body["validation_run_id"]
-        ).working_draft_id
-        == working_draft_id
-    )
-    assert (
-        _read(api_worker, working_draft_id).json()["latest_validation_run_id"]
-        == (body["validation_run_id"])
-    )
 
 
 def test_a_failed_validation_is_a_successful_outcome_with_its_run_recorded(api_worker) -> None:
@@ -548,20 +379,13 @@ def test_a_failed_validation_is_a_successful_outcome_with_its_run_recorded(api_w
         False
     )
     assert _state(api_worker, application_id)["working_draft_state"] == "validation_failed"
-
-
-def test_validation_refuses_a_version_the_client_no_longer_holds(api_worker) -> None:
-    _application_id, working_draft_id, _sources = _drafted(api_worker, "Stale Validate Co")
-    read = _read(api_worker, working_draft_id).json()
-
-    response = _post(
+    stale = _post(
         api_worker,
         f"/working-drafts/{working_draft_id}/validate",
-        {"expected_edit_version": read["edit_version"] + 1},
+        {"expected_edit_version": body["edit_version"] + 1},
     )
-
-    assert response.status_code == 409, response.text
-    assert response.json()["code"] == "STATE_CONFLICT"
+    assert stale.status_code == 409, stale.text
+    assert stale.json()["code"] == "STATE_CONFLICT"
 
 
 # --- E5: approval ------------------------------------------------------------
@@ -576,56 +400,6 @@ def _validated(harness, working_draft_id: str) -> dict:
     )
     assert response.status_code == 200, response.text
     return response.json()
-
-
-def test_approval_freezes_exactly_the_content_the_named_run_passed(api_worker) -> None:
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Approval Co")
-    validated = _validated(api_worker, working_draft_id)
-
-    response = _post(
-        api_worker,
-        f"/working-drafts/{working_draft_id}/approve",
-        {
-            "expected_edit_version": validated["edit_version"],
-            "validation_run_id": validated["validation_run_id"],
-        },
-    )
-
-    assert response.status_code == 201, response.text
-    revision = api_worker.services.repository.approved_revision(response.json()["revision_id"])
-    assert revision.working_draft_id == working_draft_id
-    assert revision.draft_edit_version == validated["edit_version"]
-    assert revision.draft_content_hash == validated["content_hash"]
-    assert revision.validation_run_id == validated["validation_run_id"]
-    assert _state(api_worker, application_id)["active_working_draft_id"] is None
-
-
-def test_a_web_approval_is_recorded_as_web_in_its_immutable_provenance(api_worker) -> None:
-    """The application layer defaults to `cli`, so the router has to say otherwise.
-
-    `decision_provenance` lives on the ApprovedRevision, which is immutable. A
-    browser's approval recorded as a person at a terminal is not a mislabelled
-    log line that a later write can correct - it is permanent, and it is exactly
-    the kind of value §13 forbids inventing.
-    """
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Web Provenance Co")
-    validated = _validated(api_worker, working_draft_id)
-
-    response = _post(
-        api_worker,
-        f"/working-drafts/{working_draft_id}/approve",
-        {
-            "expected_edit_version": validated["edit_version"],
-            "validation_run_id": validated["validation_run_id"],
-        },
-    )
-
-    assert response.status_code == 201, response.text
-    revision = api_worker.services.repository.approved_revision(response.json()["revision_id"])
-    assert revision.decision_provenance["client"] == "web"
-    assert revision.decision_provenance["actor_type"] == "user"
-    assert revision.decision_provenance["command"] == "approve_draft"
-    assert _audit(api_worker, application_id, "approve_draft")["client"] == "web"
 
 
 def test_an_edit_after_validation_makes_that_run_unusable_for_approval(api_worker) -> None:
@@ -659,25 +433,6 @@ def test_an_edit_after_validation_makes_that_run_unusable_for_approval(api_worke
     assert response.status_code == 412, response.text
     assert response.json()["code"] == "VALIDATION_STALE"
     assert api_worker.services.repository.approved_revisions(application_id) == []
-
-
-def test_a_run_from_another_draft_cannot_authorize_this_one(api_worker) -> None:
-    _application_id, working_draft_id, _sources = _drafted(api_worker, "Foreign Run Co")
-    _other_app, other_draft_id, _other_sources = _drafted(api_worker, "Foreign Run Other Co")
-    foreign = _validated(api_worker, other_draft_id)
-    read = _read(api_worker, working_draft_id).json()
-
-    response = _post(
-        api_worker,
-        f"/working-drafts/{working_draft_id}/approve",
-        {
-            "expected_edit_version": read["edit_version"],
-            "validation_run_id": foreign["validation_run_id"],
-        },
-    )
-
-    assert response.status_code == 412, response.text
-    assert response.json()["code"] == "VALIDATION_STALE"
 
 
 def test_a_failing_run_blocks_approval_and_says_which_groups_failed(api_worker) -> None:
@@ -806,73 +561,3 @@ def test_cv_approve_refuses_when_no_run_describes_the_current_draft(
     assert approved.returncode == 2
     assert "cv validate" in approved.stderr
     assert services.repository.approved_revisions(application_id) == []
-
-
-def test_cv_fast_names_the_validation_run_the_draft_operation_recorded() -> None:
-    """`cv fast` chains the real run ID, so it passes the same binding check.
-
-    Driven through fakes rather than the full flow because the full flow ends in
-    a browser render: what has to be proved here is which arguments approval
-    receives, and that is entirely upstream of the renderer.
-    """
-    from types import SimpleNamespace
-
-    from cv_engine.cli.fast import _fast
-    from cv_engine.domain.models import ValidationReport
-
-    approvals: list[object] = []
-    passing = ValidationReport(passed=True, groups={"draft": True}, issues=[])
-    operations = {
-        "analysis-operation": SimpleNamespace(
-            status=SimpleNamespace(value="succeeded"),
-            outputs=[
-                SimpleNamespace(output_type="job_analysis", output_id="analysis-1"),
-                SimpleNamespace(output_type="selection_plan", output_id="plan-1"),
-            ],
-        ),
-        "draft-operation": SimpleNamespace(
-            status=SimpleNamespace(value="succeeded"),
-            outputs=[SimpleNamespace(output_type="working_draft", output_id="draft-1")],
-        ),
-        "render-operation": SimpleNamespace(
-            status=SimpleNamespace(value="failed"),
-            safe_failure_detail="render stopped here on purpose",
-            failure_code=SimpleNamespace(value="RENDER_FAILED"),
-            outputs=[],
-        ),
-    }
-    services = SimpleNamespace(
-        applications=SimpleNamespace(
-            ingest=lambda _command: SimpleNamespace(
-                application_id="application-1", job_snapshot_id="snapshot-1"
-            )
-        ),
-        analysis=SimpleNamespace(),
-        drafts=SimpleNamespace(),
-        rendering=SimpleNamespace(),
-        operations=SimpleNamespace(
-            submit_analysis=lambda _command, **_kwargs: SimpleNamespace(id="analysis-operation"),
-            submit_draft=lambda _command, **_kwargs: SimpleNamespace(id="draft-operation"),
-            approve_idempotent=lambda command, **_kwargs: (
-                approvals.append(command)
-                or SimpleNamespace(version=1, revision_id="revision-1", decision_record_id="d-1")
-            ),
-            submit_render=lambda _command, **_kwargs: SimpleNamespace(id="render-operation"),
-        ),
-        foreground_operations=SimpleNamespace(execute=lambda name: operations[name]),
-        repository=SimpleNamespace(
-            latest_validation_for_working_draft=lambda _draft_id: {
-                "id": "validation-7",
-                "report": passing,
-            },
-            working_draft=lambda draft_id: SimpleNamespace(id=draft_id, edit_version=3),
-        ),
-    )
-
-    with pytest.raises(WorkflowError, match="render stopped here on purpose"):
-        _fast(services, "Fast Co", "Account Manager", ACCOUNT_MANAGER_JOB)
-
-    assert [
-        (command.working_draft_id, command.expected_edit_version, command.validation_run_id)
-        for command in approvals
-    ] == [("draft-1", 3, "validation-7")]

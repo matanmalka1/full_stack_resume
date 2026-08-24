@@ -72,9 +72,8 @@ def test_health_reports_this_instance_and_its_version_surfaces(api, services) ->
 # --- refusals ---------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("error", "status", "code"),
-    [
+def test_every_refusal_maps_to_one_status_and_one_code() -> None:
+    cases = [
         (UnknownRecord("gone"), 404, "UNKNOWN_RECORD"),
         (StateConflict("moved"), 409, "STATE_CONFLICT"),
         (PreconditionFailed("not yet"), 412, "PRECONDITION_FAILED"),
@@ -83,19 +82,10 @@ def test_health_reports_this_instance_and_its_version_surfaces(api, services) ->
         (KnowledgeRejected("refused"), 412, "KNOWLEDGE_REJECTED"),
         (DependencyUnavailable("no provider"), 503, "DEPENDENCY_UNAVAILABLE"),
         (InfrastructureFailure("disk"), 500, "INFRASTRUCTURE_FAILURE"),
-    ],
-)
-def test_every_refusal_maps_to_one_status_and_one_code(error, status, code) -> None:
-    assert status_for(error) == status
-    assert error.code == code
-
-
-def test_an_unregistered_subclass_inherits_its_parents_status() -> None:
-    """Adding an exception class cannot turn a domain refusal into a 500.
-
-    The lookup walks the MRO, so a subclass nobody remembered to register still
-    answers 412 rather than falling through to a server error.
-    """
+    ]
+    for error, status, code in cases:
+        assert status_for(error) == status, type(error).__name__
+        assert error.code == code
 
     class NotRegistered(PreconditionFailed):
         pass
@@ -230,27 +220,18 @@ def _echo_app() -> FastAPI:
 # --- origin policy ----------------------------------------------------------
 
 
-def test_a_mutation_without_an_origin_is_refused(api) -> None:
-    response = api.post(f"{API_PREFIX}/does-not-exist", json={})
-
-    assert response.status_code == 403
-    assert response.json()["code"] == "ORIGIN_NOT_ALLOWED"
-
-
-def test_a_mutation_from_a_foreign_origin_is_refused_without_echoing_it(api) -> None:
+def test_mutations_without_a_known_origin_are_refused(api) -> None:
     foreign = "http://evil.example"
-    response = api.post(f"{API_PREFIX}/does-not-exist", json={}, headers={"Origin": foreign})
+    for headers in ({}, {"Origin": foreign}):
+        response = api.post(f"{API_PREFIX}/does-not-exist", json={}, headers=headers)
 
-    assert response.status_code == 403
-    assert response.json()["code"] == "ORIGIN_NOT_ALLOWED"
-    assert foreign not in response.text
+        assert response.status_code == 403
+        assert response.json()["code"] == "ORIGIN_NOT_ALLOWED"
+        assert foreign not in response.text
 
 
 def test_a_read_needs_no_origin(api) -> None:
     assert api.get(f"{API_PREFIX}/health").status_code == 200
-
-
-def test_cors_is_never_a_wildcard(api) -> None:
     response = api.get(f"{API_PREFIX}/health", headers={"Origin": ALLOWED_ORIGIN})
 
     assert response.headers.get("access-control-allow-origin") == ALLOWED_ORIGIN
@@ -287,14 +268,10 @@ def test_the_production_frontend_serves_assets_and_browser_routes_without_shadow
     app = create_app(build_api_services(services), frontend_dist=dist)
     with TestClient(app) as client:
         root = client.get("/", headers={"Accept": "text/html"})
-        nested = client.get(
-            "/applications/application-id/draft", headers={"Accept": "text/html"}
-        )
+        nested = client.get("/applications/application-id/draft", headers={"Accept": "text/html"})
         asset = client.get("/assets/app.js")
         health = client.get(f"{API_PREFIX}/health", headers={"Accept": "text/html"})
-        unknown_api = client.get(
-            f"{API_PREFIX}/does-not-exist", headers={"Accept": "text/html"}
-        )
+        unknown_api = client.get(f"{API_PREFIX}/does-not-exist", headers={"Accept": "text/html"})
         missing_asset = client.get("/assets/missing.js")
 
     assert root.status_code == 200

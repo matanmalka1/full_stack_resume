@@ -315,56 +315,58 @@ def test_marker_is_validated_before_workspace_config_is_read(tmp_path: Path) -> 
     assert "unreadable Workspace config" not in result.stderr
 
 
-@pytest.mark.parametrize("child", ["data", "artifacts", "tmp", "logs"])
-def test_symlinked_default_child_roots_are_refused(tmp_path: Path, child: str) -> None:
-    workspace = create_workspace(tmp_path / f"workspace-{child}")
-    child_path = workspace.root / child
-    child_path.rmdir()
-    outside = tmp_path / f"outside-{child}"
-    outside.mkdir()
-    child_path.symlink_to(outside, target_is_directory=True)
+def test_symlinked_default_child_roots_are_refused(tmp_path: Path) -> None:
+    for child in ("data", "artifacts", "tmp", "logs"):
+        workspace = create_workspace(tmp_path / f"workspace-{child}")
+        child_path = workspace.root / child
+        child_path.rmdir()
+        outside = tmp_path / f"outside-{child}"
+        outside.mkdir()
+        child_path.symlink_to(outside, target_is_directory=True)
 
-    with pytest.raises(WorkspaceError, match="Workspace root .* may not be a symlink"):
-        load_workspace(workspace.root)
+        with pytest.raises(WorkspaceError, match="Workspace root .* may not be a symlink"):
+            load_workspace(workspace.root)
 
 
-@pytest.mark.parametrize("source", ["flag", "environment"])
-def test_database_override_is_contained_inside_state_root(tmp_path: Path, source: str) -> None:
-    workspace = create_workspace(tmp_path / f"database-{source}", purpose="test", data_class="test")
-
-    def run(value: Path | str) -> CliRun:
-        if source == "flag":
-            return _cv("--workspace", str(workspace.root), "--db", str(value), "init")
-        return _cv(
-            "--workspace",
-            str(workspace.root),
-            "init",
-            env={"CV_DATABASE": str(value)},
+def test_database_override_is_contained_inside_state_root(tmp_path: Path) -> None:
+    for source in ("flag", "environment"):
+        workspace = create_workspace(
+            tmp_path / f"database-{source}", purpose="test", data_class="test"
         )
 
-    relative = run("relative.sqlite3")
-    assert relative.returncode == 0, relative.stderr
-    assert (workspace.state_root / "relative.sqlite3").is_file()
+        def run(value: Path | str, *, source: str = source, workspace=workspace) -> CliRun:
+            if source == "flag":
+                return _cv("--workspace", str(workspace.root), "--db", str(value), "init")
+            return _cv(
+                "--workspace",
+                str(workspace.root),
+                "init",
+                env={"CV_DATABASE": str(value)},
+            )
 
-    absolute_path = workspace.state_root / "absolute.sqlite3"
-    absolute = run(absolute_path)
-    assert absolute.returncode == 0, absolute.stderr
-    assert absolute_path.is_file()
+        relative = run("relative.sqlite3")
+        assert relative.returncode == 0, relative.stderr
+        assert (workspace.state_root / "relative.sqlite3").is_file()
 
-    outside_path = tmp_path / f"outside-{source}.sqlite3"
-    outside = run(outside_path)
-    assert outside.returncode == 2
-    assert "escapes configured root" in outside.stderr
-    assert not outside_path.exists()
+        absolute_path = workspace.state_root / "absolute.sqlite3"
+        absolute = run(absolute_path)
+        assert absolute.returncode == 0, absolute.stderr
+        assert absolute_path.is_file()
 
-    outside_directory = tmp_path / f"symlink-outside-{source}"
-    outside_directory.mkdir()
-    link = workspace.state_root / "escape"
-    link.symlink_to(outside_directory, target_is_directory=True)
-    escaped = run("escape/escaped.sqlite3")
-    assert escaped.returncode == 2
-    assert "escapes configured root" in escaped.stderr
-    assert not (outside_directory / "escaped.sqlite3").exists()
+        outside_path = tmp_path / f"outside-{source}.sqlite3"
+        outside = run(outside_path)
+        assert outside.returncode == 2
+        assert "escapes configured root" in outside.stderr
+        assert not outside_path.exists()
+
+        outside_directory = tmp_path / f"symlink-outside-{source}"
+        outside_directory.mkdir()
+        link = workspace.state_root / "escape"
+        link.symlink_to(outside_directory, target_is_directory=True)
+        escaped = run("escape/escaped.sqlite3")
+        assert escaped.returncode == 2
+        assert "escapes configured root" in escaped.stderr
+        assert not (outside_directory / "escaped.sqlite3").exists()
 
 
 # --- backup and restore -----------------------------------------------------

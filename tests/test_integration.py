@@ -1,98 +1,21 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
-from helpers import ACCOUNT_MANAGER_JOB, approve_active_draft, validate_active_draft
+from helpers import ACCOUNT_MANAGER_JOB, validate_active_draft
 from helpers import working_claim as _working_claim
 
 import cv_engine.application.services.drafts.generation as draft_generation_module
 from cv_engine.application.commands import (
-    AnalyzeCommand,
-    DraftCommand,
     IngestCommand,
-    SubmissionCommand,
 )
 from cv_engine.application.errors import WorkflowError
 from cv_engine.domain.draft_markdown import parse_draft, serialize_markdown
 from cv_engine.domain.models import ValidationIssue, ValidationReport
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
-from cv_engine.infrastructure.persistence import connect
 from cv_engine.runtime.workspace import Workspace
-
-
-@pytest.mark.browser
-def test_default_flow_stops_for_review_then_reaches_ready(services) -> None:
-    ingested = services.applications.ingest(
-        IngestCommand(
-            company="Acme",
-            target_role="Account Manager",
-            job_text=ACCOUNT_MANAGER_JOB,
-        )
-    )
-    analysed = services.analysis.analyze(
-        AnalyzeCommand(
-            application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
-        )
-    )
-    drafted = services.drafts.draft(
-        DraftCommand(
-            application_id=ingested.application_id,
-            job_analysis_id=analysed.analysis_id,
-            selection_plan_id=analysed.selection_plan_id,
-        )
-    )
-    app_id = ingested.application_id
-    paths = services.artifacts.working_paths(app_id)
-    assert drafted.validation.passed
-    markdown, manifest = paths.markdown, paths.manifest
-    assert markdown.is_file() and manifest.is_file()
-    assert services.repository.get_application(app_id)["current_status"] == "saved"
-    assert services.repository.artifact_versions(app_id) == []
-    approved = approve_active_draft(services, app_id)
-    assert approved.version == 1
-    rendered = services.rendering.render(app_id)
-    pdf_record = services.repository.latest_artifact_version(app_id, "resume_pdf")
-    pdf = services.artifacts.resolve(pdf_record["path"])
-    assert rendered.validation.passed, rendered.validation.model_dump()
-    assert pdf.parts[-4:-1] == ("outputs", app_id, approved.revision_id)
-    assert pdf.name == f"{pdf_record['id']}.pdf"
-    assert json.loads(pdf_record["metadata_json"])["recruiter_filename"] == (
-        "Matan Malka - Account Manager - CV.pdf"
-    )
-    assert rendered.validation.groups["filename"] is True
-    assert services.repository.get_application(app_id)["current_status"] == "saved"
-    assert services.rendering.ready_qualification(app_id).ready_qualified
-    with connect(services.repository.path) as connection:
-        statuses = connection.execute(
-            "SELECT to_status FROM recruitment_events WHERE application_id=? ORDER BY rowid",
-            (app_id,),
-        ).fetchall()
-    assert "ready" not in {row["to_status"] for row in statuses}
-    decision = services.repository.latest_decision(app_id)
-    assert decision["job_snapshot_id"] == ingested.job_snapshot_id
-    submission_result = services.tracking.submit_application(
-        SubmissionCommand(
-            application_id=app_id,
-            approved_revision_id=approved.revision_id,
-            pdf_artifact_version_id=pdf_record["id"],
-            submitted_at="2026-08-19T10:00:00+00:00",
-            metadata={"reason": "submitted to employer"},
-        )
-    )
-    assert submission_result.current_status == "applied"
-    with connect(services.repository.path) as connection:
-        submission = connection.execute(
-            "SELECT approved_revision_id, artifact_version_id FROM submissions WHERE application_id=?",
-            (app_id,),
-        ).fetchone()
-    assert submission is not None
-    assert submission["approved_revision_id"] == approved.revision_id
-    assert submission["artifact_version_id"] == submission_result.pdf_artifact_version_id
 
 
 def test_csv_export_declares_its_schema_version(services, tmp_path: Path) -> None:
@@ -229,109 +152,6 @@ def test_render_revalidates_approved_markdown_before_browser(approved_applicatio
         assert "approved Markdown" in str(exc)
     else:
         raise AssertionError("modified approved source reached rendering")
-
-
-@pytest.mark.parametrize(
-    "failed_phase, expected_calls, message",
-    [
-        (
-            "pre-render",
-            ["ingest", "analyze", "draft"],
-            "fast mode blocked by pre-render validation",
-        ),
-        (
-            "post-render",
-            ["ingest", "analyze", "draft", "approve", "render"],
-            "fast mode blocked by post-render validation",
-        ),
-    ],
-)
-def test_fast_orchestration_preserves_call_order_and_gate_messages(
-    failed_phase: str, expected_calls: list[str], message: str
-) -> None:
-    from cv_engine.cli import _fast
-
-    calls: list[str] = []
-
-    def report(phase: str) -> ValidationReport:
-        passed = failed_phase != phase
-        issues = (
-            []
-            if passed
-            else [ValidationIssue(group="content", code=f"injected-{phase}-failure", message="x")]
-        )
-        return ValidationReport.from_findings(groups={"content": passed}, issues=issues)
-
-    operation_results = {
-        "analysis-operation": SimpleNamespace(
-            status=SimpleNamespace(value="succeeded"),
-            safe_failure_detail=None,
-            failure_code=None,
-            outputs=[
-                SimpleNamespace(output_type="job_analysis", output_id="analysis-1"),
-                SimpleNamespace(output_type="selection_plan", output_id="selection-plan-1"),
-            ],
-        ),
-        "draft-operation": SimpleNamespace(
-            status=SimpleNamespace(value="succeeded"),
-            safe_failure_detail=None,
-            failure_code=None,
-            outputs=[SimpleNamespace(output_type="working_draft", output_id="draft-1")],
-        ),
-        "render-operation": SimpleNamespace(
-            status=SimpleNamespace(value="succeeded"),
-            safe_failure_detail=None,
-            failure_code=None,
-            outputs=[SimpleNamespace(output_type="resume_pdf", output_id="pdf-1")],
-        ),
-    }
-    fake_services = SimpleNamespace(
-        applications=SimpleNamespace(
-            ingest=lambda _command: (
-                calls.append("ingest")
-                or SimpleNamespace(application_id="application-1", job_snapshot_id="snapshot-1")
-            )
-        ),
-        analysis=SimpleNamespace(),
-        drafts=SimpleNamespace(),
-        rendering=SimpleNamespace(),
-        operations=SimpleNamespace(
-            submit_analysis=lambda _command, **_kwargs: (
-                calls.append("analyze") or SimpleNamespace(id="analysis-operation")
-            ),
-            submit_draft=lambda _command, **_kwargs: (
-                calls.append("draft") or SimpleNamespace(id="draft-operation")
-            ),
-            approve_idempotent=lambda _command, **_kwargs: (
-                calls.append("approve")
-                or SimpleNamespace(
-                    version=1,
-                    revision_id="revision-1",
-                    decision_record_id="decision-1",
-                )
-            ),
-            submit_render=lambda _command, **_kwargs: (
-                calls.append("render") or SimpleNamespace(id="render-operation")
-            ),
-        ),
-        foreground_operations=SimpleNamespace(
-            execute=lambda operation_id: operation_results[operation_id]
-        ),
-        repository=SimpleNamespace(
-            latest_validation_for_working_draft=lambda _draft_id: {
-                "id": "validation-1",
-                "report": report("pre-render"),
-            },
-            working_draft=lambda draft_id: SimpleNamespace(id=draft_id, edit_version=1),
-            artifact_version=lambda _artifact_id: {"metadata_json": "{}"},
-            validation_for_artifact=lambda *_args: report("post-render"),
-        ),
-    )
-
-    with pytest.raises(WorkflowError, match=re.escape(message)):
-        _fast(fake_services, "Co", "Role", ACCOUNT_MANAGER_JOB)
-
-    assert calls == expected_calls
 
 
 def test_cli_fast_mode_refuses_pre_render_validation_failure(

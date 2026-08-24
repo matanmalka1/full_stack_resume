@@ -9,9 +9,7 @@ from fastapi.testclient import TestClient
 
 from cv_engine.api.app import API_PREFIX, DEFAULT_PORT, create_app
 from cv_engine.application.commands import (
-    CloseApplicationCommand,
     CreateJobSnapshotCommand,
-    DuplicateCheckCommand,
     IngestCommand,
 )
 from cv_engine.application.errors import (
@@ -24,49 +22,6 @@ from cv_engine.runtime.composition import build_api_services
 
 ALLOWED_ORIGIN = f"http://127.0.0.1:{DEFAULT_PORT}"
 MUTATION_HEADERS = {"Origin": ALLOWED_ORIGIN}
-
-
-def test_duplicate_check_reports_each_matching_contract(services) -> None:
-    url_match = services.applications.ingest(
-        IngestCommand(
-            company="URL Co",
-            target_role="URL Role",
-            job_text="Unique URL source text",
-            source_url="https://jobs.example/url-role",
-        )
-    )
-    text_match = services.applications.ingest(
-        IngestCommand(
-            company="Text Co",
-            target_role="Text Role",
-            job_text="Second unique job text",
-            source_url="https://jobs.example/text-role",
-        )
-    )
-    heuristic_match = services.applications.ingest(
-        IngestCommand(
-            company="Heuristic Co",
-            target_role="Platform Engineer",
-            job_text="Third unique job text",
-            source_url="https://jobs.example/heuristic-role",
-        )
-    )
-
-    result = services.applications.duplicate_check(
-        DuplicateCheckCommand(
-            company="  HEURISTIC   co ",
-            target_role="platform engineer",
-            job_text="SECOND  unique\njob text",
-            source_url="https://jobs.example/url-role",
-        )
-    )
-
-    matches = {match.application_id: match.matched_on for match in result.matches}
-    assert matches == {
-        url_match.application_id: ["source_url"],
-        text_match.application_id: ["normalized_text"],
-        heuristic_match.application_id: ["company_title"],
-    }
 
 
 def test_duplicate_acknowledgement_precedes_every_write_and_retry_keeps_warnings(
@@ -216,28 +171,6 @@ def test_repeating_exact_snapshot_content_is_refused_before_a_payload_write(serv
     assert services.repository.latest_snapshot(created.application_id)["version_number"] == 1
 
 
-def test_close_application_appends_policy_and_audit_records_without_touching_snapshot(
-    services,
-) -> None:
-    created = services.applications.ingest(
-        IngestCommand(company="Close Co", target_role="Developer", job_text="Closing role")
-    )
-    snapshot_before = services.repository.get_snapshot(created.job_snapshot_id)
-
-    result = services.tracking.close_application(
-        CloseApplicationCommand(application_id=created.application_id, client="web")
-    )
-
-    assert result.current_status == "closed"
-    assert result.event_id is not None
-    assert services.repository.get_snapshot(created.job_snapshot_id) == snapshot_before
-    events = services.repository.recruitment_events(created.application_id)
-    assert [event["to_status"] for event in events] == ["saved", "closed"]
-    assert events[-1]["client"] == "web"
-    audit = services.repository.audit_records(created.application_id)
-    assert audit[-1]["action"] == "transition_recruitment_status"
-
-
 def test_application_http_create_read_snapshot_and_close_sequence(services) -> None:
     with TestClient(create_app(build_api_services(services))) as api:
         created = api.post(
@@ -292,29 +225,6 @@ def test_application_http_create_read_snapshot_and_close_sequence(services) -> N
         assert final.json()["recruitment_status"] == "closed"
 
 
-def test_application_http_reads_artifact_metadata_and_latest_decision(
-    approved_application,
-) -> None:
-    setup = approved_application("HTTP Read Surfaces Co")
-    with TestClient(create_app(build_api_services(setup.services))) as api:
-        artifacts = api.get(f"{API_PREFIX}/applications/{setup.application_id}/artifacts")
-        decision = api.get(f"{API_PREFIX}/applications/{setup.application_id}/decision")
-        unknown_artifacts = api.get(f"{API_PREFIX}/applications/missing/artifacts")
-        unknown_decision = api.get(f"{API_PREFIX}/applications/missing/decision")
-
-    assert artifacts.status_code == 200
-    assert artifacts.json()["items"]
-    assert all(
-        "path" not in item and "metadata_json" not in item for item in artifacts.json()["items"]
-    )
-    assert decision.status_code == 200
-    assert decision.json()["id"] == setup.approved.decision_record_id
-    assert decision.json()["application_id"] == setup.application_id
-    assert "structured_json" not in decision.json()
-    assert unknown_artifacts.status_code == 404
-    assert unknown_decision.status_code == 404
-
-
 def test_application_http_duplicate_precheck_and_acknowledgement_contract(services) -> None:
     payload = {
         "company": "HTTP Duplicate Co",
@@ -364,15 +274,11 @@ def test_application_http_duplicate_precheck_and_acknowledgement_contract(servic
             "DUPLICATE_COMPANY_TITLE",
         ]
         assert len(api.get(f"{API_PREFIX}/applications").json()["items"]) == 2
-
-
-def test_application_http_enforces_url_length_and_control_character_limits(services) -> None:
-    base = {
-        "company": "URL Safety Co",
-        "target_role": "Developer",
-        "job_text": "A safe posting",
-    }
-    with TestClient(create_app(build_api_services(services))) as api:
+        base = {
+            "company": "URL Safety Co",
+            "target_role": "Developer",
+            "job_text": "A safe posting",
+        }
         controlled = api.post(
             f"{API_PREFIX}/applications/duplicate-check",
             headers=MUTATION_HEADERS,
@@ -384,9 +290,9 @@ def test_application_http_enforces_url_length_and_control_character_limits(servi
             json={**base, "source_url": "https://jobs.example/" + "x" * 2048},
         )
 
-    assert controlled.status_code == 412
-    assert controlled.json()["code"] == "PRECONDITION_FAILED"
-    assert too_long.status_code == 422
+        assert controlled.status_code == 412
+        assert controlled.json()["code"] == "PRECONDITION_FAILED"
+        assert too_long.status_code == 422
 
 
 def test_cli_ingest_requires_and_records_explicit_duplicate_acknowledgement(

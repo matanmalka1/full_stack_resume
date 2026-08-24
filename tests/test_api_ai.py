@@ -14,12 +14,12 @@ which is what makes a `202` mean anything.
 from __future__ import annotations
 
 from api_harness import MUTATION_HEADERS
-from fake_provider import FakeOpenAI, HTTPStatus
+from fake_provider import FakeOpenAI
 from helpers import ACCOUNT_MANAGER_JOB
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import IngestCommand
-from cv_engine.domain.models import ClaimProposal, SectionProposal, SelectionProposal
+from cv_engine.domain.models import ClaimProposal, SelectionProposal
 
 
 def _post(harness, path: str, body: dict, **headers):
@@ -141,44 +141,6 @@ def test_ai_selection_plan_mode_refuses_a_user_overlay_in_the_same_request(
     assert response.status_code == 412, response.text
 
 
-def test_regenerate_section_is_accepted_at_the_specified_path(
-    ai_api_worker, fake_openai: FakeOpenAI
-) -> None:
-    application_id, sources, working = _drafted(ai_api_worker, "Section Route Co")
-    section, claim = _canonical_claim(working)
-    fake_openai.script(
-        "regenerate_section",
-        SectionProposal(
-            section=section.name,
-            claims=[
-                {
-                    "section": section.name,
-                    "claim_id": claim.claim_id,
-                    "text": claim.text,
-                    "fact_ids": list(claim.fact_ids),
-                }
-            ],
-            rationale="r",
-        ),
-    )
-    response = _post(
-        ai_api_worker,
-        f"/working-drafts/{working.id}/regenerate-section",
-        {
-            "application_id": application_id,
-            "expected_edit_version": working.edit_version,
-            "expected_content_hash": working.content_hash,
-            "job_analysis_id": sources["job_analysis"],
-            "selection_plan_id": sources["selection_plan"],
-            "section": section.name,
-        },
-    )
-    assert response.status_code == 202, response.text
-    assert response.headers["Location"].endswith(response.json()["id"])
-    finished = ai_api_worker.wait_for_operation(response.json()["id"])
-    assert finished["status"] == "succeeded", finished
-
-
 def test_regenerate_claim_is_accepted_at_the_specified_path(
     ai_api_worker, fake_openai: FakeOpenAI
 ) -> None:
@@ -230,23 +192,3 @@ def test_a_stale_etag_on_regeneration_is_a_conflict_and_calls_no_provider(
     )
     assert response.status_code == 409, response.text
     assert fake_openai.calls_for("regenerate_claim") == []
-
-
-def test_a_failed_ai_operation_is_a_successful_poll_reporting_the_failure(
-    ai_api_worker, fake_openai: FakeOpenAI
-) -> None:
-    """A provider failure is data on the Operation, not a 5xx on the route."""
-    application_id = _application(ai_api_worker.services, "Failed Plan Co")
-    sources = _analyze(ai_api_worker, application_id)
-    fake_openai.script("propose_selection_plan", HTTPStatus(400))
-
-    response = _post(
-        ai_api_worker,
-        f"/analyses/{sources['job_analysis']}/selection-plans",
-        {"application_id": application_id, "mode": "ai"},
-    )
-    assert response.status_code == 202, response.text
-    finished = ai_api_worker.wait_for_operation(response.json()["id"])
-    assert finished["status"] == "failed"
-    assert finished["failure_code"] == "PROVIDER_REFUSED"
-    assert "sk-" not in finished["safe_failure_detail"]

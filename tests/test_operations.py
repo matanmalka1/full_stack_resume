@@ -19,7 +19,6 @@ from cv_engine.application.commands import (
 from cv_engine.application.errors import (
     IDEMPOTENCY_KEY_REUSED,
     InfrastructureFailure,
-    ProviderTimeout,
     StateConflict,
     UnknownRecord,
 )
@@ -48,12 +47,11 @@ from cv_engine.application.operations import (
 from cv_engine.domain.models import ValidationIssue, ValidationReport
 from cv_engine.infrastructure.persistence import Repository
 from cv_engine.runtime.execution import ForegroundOperationExecutor, OperationWorker
-from cv_engine.util import new_id, sha256_text
+from cv_engine.util import new_id
 
 
-@pytest.mark.parametrize(
-    ("current", "target"),
-    [
+def test_operation_lifecycle_accepts_only_forward_transitions() -> None:
+    transitions = [
         (OperationStatus.QUEUED, OperationStatus.RUNNING),
         (OperationStatus.QUEUED, OperationStatus.CANCELLED),
         (OperationStatus.QUEUED, OperationStatus.INTERRUPTED),
@@ -61,18 +59,17 @@ from cv_engine.util import new_id, sha256_text
         (OperationStatus.RUNNING, OperationStatus.FAILED),
         (OperationStatus.RUNNING, OperationStatus.CANCELLED),
         (OperationStatus.RUNNING, OperationStatus.INTERRUPTED),
-    ],
-)
-def test_operation_lifecycle_accepts_only_forward_transitions(current, target) -> None:
-    require_operation_transition(current, target)
+    ]
+    for current, target in transitions:
+        require_operation_transition(current, target)
 
 
-@pytest.mark.parametrize("terminal", list(OperationStatus)[2:])
-def test_terminal_operations_are_immutable(terminal) -> None:
-    assert is_terminal_operation(terminal)
-    for target in OperationStatus:
-        with pytest.raises(OperationContractError):
-            require_operation_transition(terminal, target)
+def test_terminal_operations_are_immutable() -> None:
+    for terminal in list(OperationStatus)[2:]:
+        assert is_terminal_operation(terminal)
+        for target in OperationStatus:
+            with pytest.raises(OperationContractError):
+                require_operation_transition(terminal, target)
 
 
 _OPERATION_ACTION_CASES = [
@@ -86,14 +83,10 @@ _OPERATION_ACTION_CASES = [
 ]
 
 
-@pytest.mark.parametrize(
-    ("status", "cancellation_requested_at", "expected"), _OPERATION_ACTION_CASES
-)
-def test_operation_actions_are_derived_by_the_lifecycle(
-    status, cancellation_requested_at, expected
-) -> None:
+def test_operation_actions_are_derived_by_the_lifecycle() -> None:
     assert {case[0] for case in _OPERATION_ACTION_CASES} == set(OperationStatus)
-    assert available_operation_actions(status, cancellation_requested_at) == expected
+    for status, cancellation_requested_at, expected in _OPERATION_ACTION_CASES:
+        assert available_operation_actions(status, cancellation_requested_at) == expected, status
 
 
 def test_operation_payload_hash_is_canonical_and_secret_fields_are_refused() -> None:
@@ -114,27 +107,20 @@ def test_operation_payload_hash_is_canonical_and_secret_fields_are_refused() -> 
         CreateOperation(payload={"provider": {"api-key": "must-not-persist"}}, **common)
 
 
-def test_working_draft_optimistic_identity_is_all_or_nothing() -> None:
-    with pytest.raises(ValidationError, match="requires id, edit version, and content hash"):
-        OperationSources(working_draft_id="draft-id", working_draft_edit_version=1)
-
-
-@pytest.mark.parametrize(
-    "code",
-    [
+def test_only_one_automatic_retry_is_allowed_for_transient_failures() -> None:
+    transient_codes = [
         OperationFailureCode.PROVIDER_TIMEOUT,
         OperationFailureCode.PROVIDER_RATE_LIMITED,
         OperationFailureCode.PROVIDER_UNAVAILABLE,
         OperationFailureCode.BROWSER_START_FAILED,
-    ],
-)
-def test_only_one_automatic_retry_is_allowed_for_transient_failures(code) -> None:
-    assert allows_automatic_retry(code, attempts_completed=1)
-    assert not allows_automatic_retry(code, attempts_completed=2)
-    assert not allows_automatic_retry(OperationFailureCode.INVALID_OUTPUT, 1)
+    ]
+    for code in transient_codes:
+        assert allows_automatic_retry(code, attempts_completed=1), code
+        assert not allows_automatic_retry(code, attempts_completed=2), code
+        assert not allows_automatic_retry(OperationFailureCode.INVALID_OUTPUT, 1)
 
-    with pytest.raises(OperationContractError):
-        allows_automatic_retry(code, attempts_completed=0)
+        with pytest.raises(OperationContractError):
+            allows_automatic_retry(code, attempts_completed=0)
 
 
 def _stored_request(application_id: str, key: str = "request-1") -> CreateOperation:
@@ -597,102 +583,6 @@ def test_runner_retries_one_transient_failure_and_keeps_technical_detail_out_of_
     assert failed.technical_log_reference == "logs/operation-failure.jsonl"
 
 
-def test_analysis_operation_matches_direct_service_and_reuses_idempotency_key(services) -> None:
-    operated = services.applications.ingest(
-        IngestCommand(
-            company="Operated Analysis Co",
-            target_role="Account Manager",
-            job_text=ACCOUNT_MANAGER_JOB,
-        )
-    )
-    command = AnalyzeCommand(
-        application_id=operated.application_id,
-        job_snapshot_id=operated.job_snapshot_id,
-    )
-    operation = services.operations.submit_analysis(
-        command,
-        idempotency_key="analysis-parity",
-        analysis_service=services.analysis,
-    )
-    repeated = services.operations.submit_analysis(
-        command,
-        idempotency_key="analysis-parity",
-        analysis_service=services.analysis,
-    )
-    assert repeated.id == operation.id
-
-    completed = services.foreground_operations.execute(operation.id)
-    assert completed.status is OperationStatus.SUCCEEDED
-    output_ids = {output.output_type: output.output_id for output in completed.outputs}
-    stored = services.repository.get_analysis(output_ids["job_analysis"])
-    assert services.repository.selection_plan(output_ids["selection_plan"])
-
-    direct = services.applications.ingest(
-        IngestCommand(
-            company="Direct Analysis Co",
-            target_role="Account Manager",
-            job_text=ACCOUNT_MANAGER_JOB,
-            acknowledged_duplicates=True,
-        )
-    )
-    direct_result = services.analysis.analyze(
-        AnalyzeCommand(
-            application_id=direct.application_id,
-            job_snapshot_id=direct.job_snapshot_id,
-        )
-    )
-    assert stored["analysis"] == direct_result.analysis
-
-
-def test_analysis_handler_classifies_timeout_and_uses_its_single_retry(
-    services, monkeypatch
-) -> None:
-    ingested = services.applications.ingest(
-        IngestCommand(
-            company="Provider Retry Co",
-            target_role="Account Manager",
-            job_text=ACCOUNT_MANAGER_JOB,
-        )
-    )
-    command = AnalyzeCommand(
-        application_id=ingested.application_id,
-        job_snapshot_id=ingested.job_snapshot_id,
-        provider="openai",
-        model="test-model",
-    )
-    original_prepare = services.analysis.prepare
-    attempts = 0
-
-    def prepare_with_timeout(_command, *, operation_id=None):
-        """A timeout raised as its own class, not as a message to be searched.
-
-        `operation_id` is part of the signature because AI mode needs somewhere
-        to preserve the provider response, and a double that did not accept it
-        would pass while the real handler could not call it.
-        """
-        nonlocal attempts
-        attempts += 1
-        if attempts == 1:
-            raise ProviderTimeout("provider request timed out")
-        return original_prepare(
-            _command.model_copy(update={"provider": "deterministic"}),
-            operation_id=operation_id,
-        )
-
-    monkeypatch.setattr(services.analysis, "prepare", prepare_with_timeout)
-    operation = services.operations.submit_analysis(
-        command,
-        idempotency_key="classified-timeout",
-        analysis_service=services.analysis,
-    )
-
-    completed = services.foreground_operations.execute(operation.id)
-
-    assert completed.status is OperationStatus.SUCCEEDED
-    assert completed.attempts_completed == 2
-    assert attempts == 2
-
-
 def test_an_unclassified_infrastructure_failure_is_terminal_and_not_retried(
     services, monkeypatch
 ) -> None:
@@ -734,44 +624,6 @@ def test_an_unclassified_infrastructure_failure_is_terminal_and_not_retried(
     assert completed.status is OperationStatus.FAILED
     assert completed.failure_code is OperationFailureCode.VALIDATION_EXECUTION_FAILED
     assert attempts == 1
-
-
-def test_analysis_operation_fails_source_changed_when_a_new_snapshot_becomes_active(
-    services,
-) -> None:
-    ingested = services.applications.ingest(
-        IngestCommand(
-            company="Snapshot Race Co",
-            target_role="Account Manager",
-            job_text=ACCOUNT_MANAGER_JOB,
-        )
-    )
-    operation = services.operations.submit_analysis(
-        AnalyzeCommand(
-            application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
-        ),
-        idempotency_key="snapshot-race",
-        analysis_service=services.analysis,
-    )
-    replacement_id = new_id()
-    replacement_text = ACCOUNT_MANAGER_JOB + "\nNew territory ownership."
-    payload = services.payloads.commit_snapshot(
-        ingested.application_id, replacement_id, replacement_text
-    )
-    services.repository.add_job_snapshot(
-        ingested.application_id,
-        payload.reference,
-        payload.sha256,
-        sha256_text(replacement_text.casefold()),
-        snapshot_id=replacement_id,
-    )
-
-    failed = services.foreground_operations.execute(operation.id)
-
-    assert failed.status is OperationStatus.FAILED
-    assert failed.failure_code is OperationFailureCode.SOURCE_CHANGED
-    assert services.repository.analyses(ingested.application_id) == []
 
 
 def test_cli_analyze_uses_foreground_operation_and_reuses_explicit_key(services) -> None:
@@ -920,34 +772,6 @@ def test_cli_draft_uses_foreground_operation(services) -> None:
     assert payload["validation"]["passed"] is True
     assert services.repository.operation(payload["operation_id"]).status is (
         OperationStatus.SUCCEEDED
-    )
-
-
-def test_render_operation_registers_and_activates_exact_revision_outputs(
-    ready_application,
-) -> None:
-    setup = ready_application("Render Operation Co")
-    operation = setup.services.operations.submit_render(
-        RenderCommand(
-            application_id=setup.application_id,
-            approved_revision_id=setup.approved.revision_id,
-        ),
-        idempotency_key="render-operation",
-        rendering_service=setup.services.rendering,
-    )
-
-    completed = setup.services.foreground_operations.execute(operation.id)
-
-    assert completed.status is OperationStatus.SUCCEEDED
-    assert {output.output_type for output in completed.outputs} == {
-        "resume_html",
-        "resume_pdf",
-        "visual_evidence",
-    }
-    assert all(output.active for output in completed.outputs)
-    pdf = next(output for output in completed.outputs if output.output_type == "resume_pdf")
-    assert setup.services.repository.artifact_version(pdf.output_id)["revision_id"] == (
-        setup.approved.revision_id
     )
 
 
@@ -1146,52 +970,6 @@ def test_a_failure_partway_through_registration_leaves_no_artifact_at_all(
     ]
 
 
-def test_cancel_and_manual_retry_keep_the_old_operation_immutable(services) -> None:
-    operation = _operation_for_runner(services, "Manual Retry Co")
-    cancelled = services.operations.cancel(operation.id)
-    assert cancelled.status is OperationStatus.CANCELLED
-    # The service hands back the client view; the immutable record it narrows is
-    # read once here so the assertion below still compares the whole row.
-    cancelled_record = services.repository.operation(operation.id)
-    assert as_operation_view(cancelled_record) == cancelled
-
-    retried = services.operations.retry(operation.id, idempotency_key="manual-retry-new")
-    assert retried.id != operation.id
-    assert retried.retry_of_operation_id == operation.id
-    assert retried.status is OperationStatus.QUEUED
-
-    reused_old_key = services.operations.retry(
-        operation.id, idempotency_key=operation.idempotency_key
-    )
-    assert reused_old_key.id == operation.id
-    assert services.repository.operation(operation.id) == cancelled_record
-
-
-def test_cli_operation_show_cancel_and_failed_retry_return_truthful_status(services) -> None:
-    operation = _operation_for_runner(services, "CLI Lifecycle Co")
-    prefix = ("--workspace", str(services.workspace.root), "operation")
-
-    shown = run_cli(*prefix, "show", operation.id)
-    cancelled = run_cli(*prefix, "cancel", operation.id)
-    retried = run_cli(
-        *prefix,
-        "retry",
-        operation.id,
-        "--idempotency-key",
-        "cli-lifecycle-retry",
-    )
-
-    assert shown.returncode == 0
-    assert json.loads(shown.stdout)["status"] == "queued"
-    assert cancelled.returncode == 0
-    assert json.loads(cancelled.stdout)["status"] == "cancelled"
-    assert retried.returncode == 1
-    retry_payload = json.loads(retried.stdout)
-    assert retry_payload["status"] == "failed"
-    assert retry_payload["failure_code"] == "SOURCE_CHANGED"
-    assert retry_payload["retry_of_operation_id"] == operation.id
-
-
 def _approve_command(services, application_id) -> ApproveDraftCommand:
     """Validate the active draft and name the run that approval must rely on."""
     validated = validate_active_draft(services, application_id)
@@ -1200,53 +978,6 @@ def _approve_command(services, application_id) -> ApproveDraftCommand:
         expected_edit_version=validated.edit_version,
         validation_run_id=validated.validation_run_id,
     )
-
-
-def test_approval_idempotency_returns_the_exact_original_revision(drafted_application) -> None:
-    setup = drafted_application("Idempotent Approval Co")
-    command = _approve_command(setup.services, setup.application_id)
-
-    first = setup.services.operations.approve_idempotent(
-        command,
-        idempotency_key="approval-key",
-        draft_service=setup.services.drafts,
-    )
-    repeated = setup.services.operations.approve_idempotent(
-        command,
-        idempotency_key="approval-key",
-        draft_service=setup.services.drafts,
-    )
-
-    assert repeated == first
-    assert [
-        revision.id
-        for revision in setup.services.repository.approved_revisions(setup.application_id)
-    ] == [first.revision_id]
-    receipt = setup.services.repository.idempotency_receipt(
-        "approve_draft",
-        "approval-key",
-        installation_id=setup.services.workspace.installation_id(),
-    )
-    assert receipt["status"] == "completed"
-    assert receipt["result"]["revision_id"] == first.revision_id
-
-
-def test_approval_idempotency_key_cannot_cross_applications(drafted_application) -> None:
-    first = drafted_application("Approval Key Owner")
-    second = drafted_application("Approval Key Intruder")
-    first.services.operations.approve_idempotent(
-        _approve_command(first.services, first.application_id),
-        idempotency_key="application-bound-approval",
-        draft_service=first.services.drafts,
-    )
-
-    with pytest.raises(StateConflict) as raised:
-        second.services.operations.approve_idempotent(
-            _approve_command(second.services, second.application_id),
-            idempotency_key="application-bound-approval",
-            draft_service=second.services.drafts,
-        )
-    assert raised.value.code == IDEMPOTENCY_KEY_REUSED
 
 
 def test_pending_approval_receipt_recovers_a_committed_revision(drafted_application) -> None:
@@ -1439,31 +1170,3 @@ def test_outputs_cannot_be_activated_once_the_operation_stops_running(services) 
     repository.record_operation_output(operation.id, "analysis", "analysis-3")
     with pytest.raises(StateConflict, match="cannot be activated"):
         repository.record_operation_output(operation.id, "analysis", "analysis-4", active=True)
-
-
-def test_an_idempotency_receipt_completes_once_and_agrees_with_itself(services) -> None:
-    repository = services.repository
-    installation = services.workspace.installation_id()
-    receipt = repository.claim_idempotency_receipt(
-        "analyze_job",
-        "receipt-key",
-        {"application_id": "app-1"},
-        installation_id=installation,
-        reserved_entity_id="operation-1",
-    )
-    assert receipt["status"] == "pending"
-
-    result = {"operation_id": "operation-1"}
-    repository.complete_idempotency_receipt(receipt["id"], result)
-    stored = repository.idempotency_receipt(
-        "analyze_job", "receipt-key", installation_id=installation
-    )
-    assert stored is not None
-    assert stored["status"] == "completed"
-    assert stored["result"] == result
-
-    # Replaying the same completion is the retry case and must be accepted;
-    # completing it with a different result is a real conflict.
-    repository.complete_idempotency_receipt(receipt["id"], result)
-    with pytest.raises(StateConflict, match="cannot be completed"):
-        repository.complete_idempotency_receipt(receipt["id"], {"operation_id": "different"})

@@ -450,22 +450,18 @@ def test_a_fact_named_on_both_sides_of_the_overlay_is_refused(
         )
 
 
-@pytest.mark.parametrize(
-    "fact_id",
-    ["sales.role.leader.title", "sales.role.leader.dates"],
-    ids=["role-title", "role-dates"],
-)
 def test_structure_cannot_be_excluded_as_if_it_were_evidence(
-    profile_store: ProfileStore, policy_store, fact_store, fact_id: str
+    profile_store: ProfileStore, policy_store, fact_store
 ) -> None:
     """Removing a heading does not shorten a CV; it orphans what is under it."""
-    with pytest.raises(SelectionError, match="structure, not evidence"):
-        _account_manager_selection(
-            profile_store,
-            policy_store,
-            fact_store,
-            excluded_fact_ids=frozenset({fact_id}),
-        )
+    for fact_id in ("sales.role.leader.title", "sales.role.leader.dates"):
+        with pytest.raises(SelectionError, match="structure, not evidence"):
+            _account_manager_selection(
+                profile_store,
+                policy_store,
+                fact_store,
+                excluded_fact_ids=frozenset({fact_id}),
+            )
 
 
 def test_an_exclusion_that_costs_a_role_block_its_quantitative_floor_is_refused(

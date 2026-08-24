@@ -823,3 +823,34 @@ Playwright stayed at **5** and the token counts did not move: no screen was adde
 theme was not touched. The Python **451** was predicted to be unchanged from the bullet 2
 run, because nothing this slice touched is observable from Python, and it was.
 
+## Current backend-test baseline — 2026-08-24
+
+A Class A, test-only consolidation removed repeated evidence without changing production
+code, schemas, artifact paths, public contracts, golden fixtures, or product behavior. The
+historical **451 passed, 4 deselected** results above remain the evidence for the trees on
+which they ran; the expected baseline for work after this consolidation is now **300 passed,
+3 deselected**.
+
+User-run evidence after the consolidation and the repair of two test-fixture queue leaks:
+
+| Command | Proves | Observed |
+| --- | --- | --- |
+| the two repaired AI/provider tests | independent matrix cases do not inherit the fake provider's repeat-last response | **2 passed** |
+| the 17-file focused backend selection | the consolidated AI/provider, API, domain, Operation, persistence, selection, integration, and Workspace tests remain green together | **187 passed, 1 deselected** |
+| `pytest -q -m "not browser"` | the complete default backend gate on the consolidated suite | **300 passed, 3 deselected** |
+
+The collection delta is fully reconciled: **455 → 303**, or **-152** items. Of these,
+**151** were non-browser items. The remaining **-1** was the browser-marked default-flow
+test in `test_integration.py`; it repeated the same lifecycle already exercised through
+the API/CLI journeys and the dedicated rendering, Ready-integrity, chain-integrity, and
+submission tests. The surviving three browser items are the golden render-validation test,
+the Ready-integrity browser case, and the integration rendering case.
+
+The main cuts were duplicated happy paths across layers, repeated validation/status
+mapping, private-helper and trivial wiring assertions, equivalent CRUD cases, and
+permutation-heavy provider/Operation tests that now run as matrices inside one item.
+Integrity, immutability, crash recovery, golden output, and rendering failure evidence was
+kept. The original goal was approximately half of the 451-test non-browser baseline; this
+boundary reaches 300, so roughly **75** further removals would still be needed to reach
+about 225. That requires a separate audit rather than unreviewed deletion from the safety
+suites.

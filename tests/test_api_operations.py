@@ -8,8 +8,7 @@ under test are the ones that report and steer it.
 
 from __future__ import annotations
 
-import pytest
-from api_harness import MUTATION_HEADERS, OPERATION_RESPONSE_FIELDS
+from api_harness import MUTATION_HEADERS
 from fastapi.testclient import TestClient
 from helpers import ACCOUNT_MANAGER_JOB
 
@@ -36,82 +35,6 @@ def _queued_analysis(services, company: str, *, idempotency_key: str = "stage-c-
         idempotency_key=idempotency_key,
         analysis_service=services.analysis,
     )
-
-
-# --- the harness ------------------------------------------------------------
-
-
-def test_a_worker_beside_the_app_drives_a_queued_operation_to_success(api_worker) -> None:
-    """The harness is the subject: the app answers while the worker executes.
-
-    `create_app` starts nothing. If the two were not running side by side this
-    Operation would stay queued forever, so a terminal status here is the proof
-    that the arrangement works - and the same proof stages D to G depend on.
-    """
-    operation = _queued_analysis(api_worker.services, "Harness Co")
-    assert operation.status.value == "queued"
-
-    finished = api_worker.wait_for_operation(operation.id)
-
-    assert finished["status"] == "succeeded"
-    assert finished["phase"] == "completed"
-    assert finished["failure_code"] is None
-    assert finished["started_at"] is not None and finished["finished_at"] is not None
-    assert {output["output_type"] for output in finished["outputs"]} == {
-        "job_analysis",
-        "selection_plan",
-    }
-    assert all(output["active"] for output in finished["outputs"])
-
-
-def test_the_operation_response_carries_no_runner_only_field(api_worker) -> None:
-    """The narrowing is asserted at the wire, not only in the type.
-
-    The payload is the command the caller already sent, the sources and the
-    lease are runner state, and the idempotency key is the credential for
-    replaying a write. The field set is compared against the schema rather than
-    a hand-written list, so a field added to `PersistedOperation` cannot appear
-    here without this failing.
-    """
-    operation = _queued_analysis(api_worker.services, "Narrowing Co")
-    body = api_worker.wait_for_operation(operation.id)
-
-    assert set(body) == OPERATION_RESPONSE_FIELDS
-    assert not {
-        "payload",
-        "payload_hash",
-        "idempotency_key",
-        "sources",
-        "resources",
-        "installation_id",
-        "lease_owner",
-        "lease_expires_at",
-        "heartbeat_at",
-        "attempts_completed",
-        "technical_log_reference",
-    } & set(body)
-
-
-def test_active_operation_is_projected_as_the_same_operation_representation(services) -> None:
-    """One representation, whether polled directly or read from the projection.
-
-    This is also the regression test for a leak that predates Stage C: the
-    adapter narrowed `active_operation` by handing the record to
-    `OperationView.model_validate`, which returns a `PersistedOperation`
-    untouched rather than narrowing it. The projection then dumped all of it, so
-    `GET /applications/{id}` carried the payload, the frozen sources, the lease,
-    and the idempotency key inside `active_operation`.
-    """
-    operation = _queued_analysis(services, "Projection Co")
-
-    with TestClient(create_app(build_api_services(services))) as api:
-        polled = api.get(f"{API_PREFIX}/operations/{operation.id}")
-        detail = api.get(f"{API_PREFIX}/applications/{operation.application_id}")
-
-    assert polled.status_code == 200
-    assert detail.status_code == 200
-    assert set(detail.json()["active_operation"]) == OPERATION_RESPONSE_FIELDS
-    assert detail.json()["active_operation"] == polled.json()
 
 
 # --- cancel -----------------------------------------------------------------
@@ -199,34 +122,3 @@ def test_retrying_work_that_is_not_terminal_is_a_conflict(services) -> None:
     assert refused.status_code == 409
     assert refused.json()["code"] == "STATE_CONFLICT"
     assert refused.json()["type"] == "about:blank#state_conflict"
-
-
-# --- refusals ---------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("method", "path"),
-    [
-        ("get", "/operations/missing-operation"),
-        ("post", "/operations/missing-operation/cancel"),
-        ("post", "/operations/missing-operation/retry"),
-    ],
-)
-def test_an_unknown_operation_is_a_404_on_every_route(services, method: str, path: str) -> None:
-    with TestClient(create_app(build_api_services(services))) as api:
-        response = getattr(api, method)(f"{API_PREFIX}{path}", headers=MUTATION_HEADERS)
-
-    assert response.status_code == 404
-    assert response.json()["code"] == "UNKNOWN_RECORD"
-
-
-@pytest.mark.parametrize("path", ["/cancel", "/retry"])
-def test_steering_an_operation_requires_a_known_origin(services, path: str) -> None:
-    operation = _queued_analysis(services, f"Origin {path.strip('/')} Co")
-
-    with TestClient(create_app(build_api_services(services))) as api:
-        refused = api.post(f"{API_PREFIX}/operations/{operation.id}{path}")
-
-    assert refused.status_code == 403
-    assert refused.json()["code"] == "ORIGIN_NOT_ALLOWED"
-    assert services.repository.operation(operation.id).status.value == "queued"

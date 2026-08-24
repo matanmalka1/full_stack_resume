@@ -12,7 +12,7 @@ change that splits the two writes fails instead of being argued about.
 from __future__ import annotations
 
 import pytest
-from api_harness import MUTATION_HEADERS, OPERATION_RESPONSE_FIELDS
+from api_harness import MUTATION_HEADERS
 from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB
 
 from cv_engine.api.app import API_PREFIX
@@ -126,74 +126,6 @@ def test_an_analysis_whose_plan_cannot_be_written_leaves_no_analysis_behind(
 # --- POST /applications/{id}/analyses ----------------------------------------
 
 
-def test_analyze_is_accepted_as_an_operation_the_client_polls(api_worker) -> None:
-    application_id = _application(api_worker.services, "Accepted Analysis Co")
-    snapshot_id = _state(api_worker, application_id)["active_job_snapshot_id"]
-
-    response = api_worker.client.post(
-        f"{API_PREFIX}/applications/{application_id}/analyses",
-        json={"job_snapshot_id": snapshot_id},
-        headers=MUTATION_HEADERS,
-    )
-
-    assert response.status_code == 202
-    body = response.json()
-    assert response.headers["Location"] == f"{API_PREFIX}/operations/{body['id']}"
-    assert body["operation_type"] == "analyze_job"
-    assert body["status"] == "queued"
-    # Compared against the response model rather than a hand-written list: a
-    # list would be written from the same belief that the narrowing works, which
-    # is what let the runner record reach a client before Stage C.
-    assert set(body) == OPERATION_RESPONSE_FIELDS
-
-    assert api_worker.wait_for_operation(body["id"])["status"] == "succeeded"
-
-
-def test_reusing_an_idempotency_key_returns_the_one_operation_it_created(api_worker) -> None:
-    application_id = _application(api_worker.services, "Idempotent Analysis Co")
-    snapshot_id = _state(api_worker, application_id)["active_job_snapshot_id"]
-    request = {
-        "json": {"job_snapshot_id": snapshot_id},
-        "headers": {**MUTATION_HEADERS, "Idempotency-Key": "stage-d-analysis"},
-    }
-
-    first = api_worker.client.post(
-        f"{API_PREFIX}/applications/{application_id}/analyses", **request
-    )
-    second = api_worker.client.post(
-        f"{API_PREFIX}/applications/{application_id}/analyses", **request
-    )
-
-    assert first.status_code == second.status_code == 202
-    assert first.json()["id"] == second.json()["id"]
-    assert api_worker.wait_for_operation(first.json()["id"])["status"] == "succeeded"
-
-
-def test_needs_review_is_a_successful_outcome_carrying_both_records(api_worker) -> None:
-    """NeedsReview is data, not a failure (§20, M3 acceptance item 3).
-
-    The Operation succeeds, both immutable records exist, and what needs
-    deciding is reported by the Application's review reasons - which name the
-    command that resolves them.
-    """
-    application_id = _application(
-        api_worker.services, "Needs Review Co", job_text=AMBIGUOUS_HEBREW_JOB
-    )
-
-    finished = _analyze(api_worker, application_id)
-
-    assert finished["status"] == "succeeded"
-    assert finished["failure_code"] is None
-    outputs = _outputs(finished)
-    assert set(outputs) == {"job_analysis", "selection_plan"}
-
-    state = _state(api_worker, application_id)
-    assert state["preparation_state"] == "needs_review"
-    assert state["recommended_action"] == "apply_analysis_decisions"
-    assert "apply_analysis_decisions" in state["available_actions"]
-    assert {reason["code"] for reason in state["review_reasons"]}
-
-
 # --- POST /analyses/{id}/apply-decisions -------------------------------------------
 
 
@@ -298,61 +230,16 @@ def test_a_submission_carrying_both_kinds_of_decision_is_refused(api_worker) -> 
     assert response.status_code == 412, response.text
     assert response.json()["code"] == "PRECONDITION_FAILED"
 
+    empty_application_id = _application(api_worker.services, "Empty Decision Co")
+    empty_outputs = _outputs(_analyze(api_worker, empty_application_id))
 
-def test_a_submission_that_changes_nothing_is_refused(api_worker) -> None:
-    """An empty form would otherwise create a second identical plan, putting a
-    decision in the history that nobody made."""
-    application_id = _application(api_worker.services, "Empty Decision Co")
-    outputs = _outputs(_analyze(api_worker, application_id))
-
-    response = api_worker.client.post(
-        f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
-        json={"application_id": application_id},
+    empty = api_worker.client.post(
+        f"{API_PREFIX}/analyses/{empty_outputs['job_analysis']}/apply-decisions",
+        json={"application_id": empty_application_id},
         headers=MUTATION_HEADERS,
     )
 
-    assert response.status_code == 412, response.text
-
-
-@pytest.mark.parametrize(
-    ("route", "payload_key"),
-    [
-        ("apply-decisions", "profile_override"),
-        ("selection-plans", "expected_profile_version"),
-    ],
-    ids=["apply-decisions", "selection-plans"],
-)
-def test_an_analysis_belonging_to_another_application_is_refused(
-    api_worker, route: str, payload_key: str
-) -> None:
-    """Both IDs are explicit, so a mismatch is a named refusal rather than a
-    decision landing on someone else's analysis."""
-    owner = _application(api_worker.services, "Lineage Owner Co")
-    other = _application(api_worker.services, "Lineage Other Co")
-    analysis_id = _outputs(_analyze(api_worker, owner))["job_analysis"]
-
-    response = api_worker.client.post(
-        f"{API_PREFIX}/analyses/{analysis_id}/{route}",
-        json={"application_id": other, payload_key: "account-manager"},
-        headers=MUTATION_HEADERS,
-    )
-
-    assert response.status_code == 412, response.text
-    assert response.json()["code"] == "LINEAGE_BROKEN"
-
-
-@pytest.mark.parametrize("route", ["apply-decisions", "selection-plans"])
-def test_an_unknown_analysis_is_a_not_found(api_worker, route: str) -> None:
-    application_id = _application(api_worker.services, f"Unknown Analysis {route} Co")
-
-    response = api_worker.client.post(
-        f"{API_PREFIX}/analyses/does-not-exist/{route}",
-        json={"application_id": application_id},
-        headers=MUTATION_HEADERS,
-    )
-
-    assert response.status_code == 404, response.text
-    assert response.json()["code"] == "UNKNOWN_RECORD"
+    assert empty.status_code == 412, empty.text
 
 
 # --- POST /analyses/{id}/selection-plans -------------------------------------

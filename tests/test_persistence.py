@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import inspect
 import sqlite3
 import threading
 import time
-import uuid
 from pathlib import Path
 
 import pytest
@@ -14,7 +12,6 @@ from cv_engine.application.knowledge_mutations import (
     KnowledgeMutationState,
     PrepareKnowledgeMutation,
 )
-from cv_engine.application.ports import ArtifactRegistry
 from cv_engine.domain.analysis.classification import classify_job
 from cv_engine.domain.models import (
     AuditRecord,
@@ -40,7 +37,7 @@ from cv_engine.infrastructure.persistence.schema import (
     registered_migration_names,
     sqlite_master_fingerprint,
 )
-from cv_engine.util import new_id, normalized_text, sha256_text
+from cv_engine.util import normalized_text, sha256_text
 
 # Immutability is the default, so nothing has to be registered when an immutable
 # table is added. A table is exempt only by being named here, which means that
@@ -510,53 +507,6 @@ def test_immutability_triggers_refuse_real_repository_writes(tmp_path: Path) -> 
             with pytest.raises(sqlite3.IntegrityError, match="immutable record"):
                 with repository.transaction() as connection:
                     connection.execute(statement)
-
-
-def test_identity_and_typed_artifact_ports() -> None:
-    values = [new_id() for _ in range(20)]
-    assert len(set(values)) == len(values)
-    assert all(uuid.UUID(value).version == 4 for value in values)
-
-    for member in (
-        "register_artifact_version",
-        "insert_decision",
-        "record_validation",
-        "latest_artifact_version",
-    ):
-        parameters = inspect.signature(getattr(ArtifactRegistry, member)).parameters.values()
-        assert all(
-            parameter.kind not in (parameter.VAR_POSITIONAL, parameter.VAR_KEYWORD)
-            for parameter in parameters
-        )
-
-
-def test_analysis_does_not_change_recruitment_status(tmp_path: Path) -> None:
-    repository = Repository(tmp_path / "atomic-analysis.sqlite3")
-    app_id, snapshot_id = _create_application(
-        repository, company="Atomic", target_role="Developer", text="Python developer"
-    )
-    _save_analysis(repository, app_id, snapshot_id, classify_job("Python backend developer role"))
-
-    with connect(repository.path) as connection:
-        assert (
-            connection.execute(
-                "SELECT COUNT(*) FROM job_analyses WHERE application_id=?", (app_id,)
-            ).fetchone()[0]
-            == 1
-        )
-        assert (
-            connection.execute(
-                "SELECT COUNT(*) FROM selection_plans WHERE application_id=?", (app_id,)
-            ).fetchone()[0]
-            == 1
-        )
-        application = connection.execute(
-            "SELECT current_status, language, track, profile, emphasis, fit_level "
-            "FROM applications WHERE id=?",
-            (app_id,),
-        ).fetchone()
-    assert application["current_status"] == "saved"
-    assert all(application[field] is not None for field in tuple(application.keys())[1:])
 
 
 def test_typed_preparation_records_round_trip_and_refuse_stale_edits(

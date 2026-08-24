@@ -247,3 +247,12 @@ or weaken an existing acceptance gate.
       one test, the browser suite still collects one from this file.
       `test_persisted_plan_reproduces_the_computed_selection` was already in the default
       suite and is untouched.
+- [ ] **TODO 24 — backend-suite reduction, first boundary complete.** Consolidated
+      duplicated backend evidence across 17 test files without changing production code.
+      The user-run non-browser gate moved from **451 passed, 4 deselected** to **300 passed,
+      3 deselected**; the complete **-152 collected-item** delta and the retained safety
+      boundaries are reconciled in `docs/v2/m4-remaining.md` under “Current backend-test
+      baseline”. The initial reduction is **151 non-browser tests (33.5%)**. Approximately
+      75 further removals remain before the original half-size target is met; continue only
+      through a fresh redundancy audit, with integrity, immutability, recovery, golden, and
+      rendering failures cut last.

@@ -5,26 +5,6 @@ from cv_engine.domain.analysis.gaps import derive_gaps
 from cv_engine.domain.models import Track
 
 
-def test_development_classification() -> None:
-    result = classify_job(
-        "Backend software developer building Python APIs with React and PostgreSQL"
-    )
-    assert result.track.value == "development"
-    assert result.profile.value == "development"
-    assert result.fit.value == "high"
-
-
-def test_sales_profile_and_salesforce_warning() -> None:
-    result = classify_job(
-        "Account Manager responsible for customer relationships, retention, portfolio growth, and Salesforce"
-    )
-    assert result.track.value == "sales"
-    assert result.profile.value == "account-manager"
-    assert result.fit.value == "medium"
-    assert result.gaps[0].requirement == "Salesforce"
-    assert "sales.tool.priority" in result.gaps[0].substitute_fact_ids
-
-
 def test_direct_saas_requirement_is_hard_gap() -> None:
     result = classify_job(
         "Account Executive. Must have proven direct SaaS Sales experience and closing quota."

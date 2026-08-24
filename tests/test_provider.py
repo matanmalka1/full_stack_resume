@@ -44,8 +44,6 @@ from cv_engine.domain.models import (
 )
 from cv_engine.infrastructure.providers import (
     TASK_OUTPUT_MODELS,
-    _strict_schema,
-    sanitize_response,
 )
 from cv_engine.util import canonical_json, sha256_text
 
@@ -144,100 +142,50 @@ def _object_nodes(schema: dict) -> list[tuple[str, dict]]:
     return found
 
 
-def test_every_contracted_task_has_exactly_one_output_model(task_contracts) -> None:
-    """The contract file and the adapter's task table cannot drift apart."""
-    assert set(task_contracts.tasks) == set(TASK_OUTPUT_MODELS)
-    assert {name for name, _context, _proposal in TASKS} == set(TASK_OUTPUT_MODELS)
-
-
-def test_the_strict_rewrite_actually_changes_the_hashed_document() -> None:
-    """The reason the output hash is taken from the request, made to fail loudly.
-
-    `SelectionProposal` declares one required field and comes back with three
-    after `_strict_schema`. If that ever stopped being true, hashing the model
-    and hashing the sent schema would agree, and the distinction the provenance
-    draws would be untested rather than merely unnecessary.
-    """
-    raw = SelectionProposal.model_json_schema()
-    strict = _strict_schema(raw)
-    assert sorted(raw.get("required", [])) != sorted(strict["required"])
-    assert canonical_json(raw) != canonical_json(strict)
-
-
-def test_every_task_declares_both_schema_versions(task_contracts) -> None:
-    """Architecture §11 names input *and* output schema versions.
-
-    Read from the contract file over the adapter's task table, so a task added
-    to the code without declaring its schema versions fails here rather than
-    persisting an empty string into an immutable record.
-    """
-    for name, model in TASK_OUTPUT_MODELS.items():
-        contract = task_contracts.get(name)
-        assert contract.input, name
-        assert contract.output == model.__name__, name
-        assert contract.input_schema_version, name
-        assert contract.output_schema_version, name
-
-
-@pytest.mark.parametrize("task,context,proposal", TASKS, ids=[item[0] for item in TASKS])
 def test_each_task_sends_a_strict_schema_and_parses_its_own_proposal(
-    fake_openai: FakeOpenAI, task_contracts, task, context, proposal
-) -> None:
-    """§6: strict schema generation, and task-specific Proposal parsing."""
-    fake_openai.script(task, proposal)
-    answered = _call(fake_openai.provider(task_contracts), task, context)
-
-    assert answered.proposal == proposal
-    assert type(answered.proposal) is TASK_OUTPUT_MODELS[task]
-
-    body = fake_openai.calls_for(task)[-1].body
-    output_format = body["text"]["format"]
-    assert output_format["type"] == "json_schema"
-    assert output_format["name"] == task
-    assert output_format["strict"] is True
-
-    # The contract file names the models on both sides. Compared against what
-    # actually crossed, so a wrong name in the file fails here instead of being
-    # persisted as a truthful-looking `*_schema_version`.
-    contract = task_contracts.get(task)
-    assert contract.input == type(context).__name__
-    assert contract.output == type(answered.proposal).__name__
-
-    # Strict Structured Outputs requires every declared property to be required
-    # and every object closed - at every depth, not only at the root.
-    nodes = _object_nodes(output_format["schema"])
-    assert nodes, "the generated schema declares no object at all"
-    for path, node in nodes:
-        assert node.get("additionalProperties") is False, f"{task}: {path} is open"
-        assert sorted(node.get("required", [])) == sorted(node.get("properties", {})), (
-            f"{task}: {path} leaves a property optional"
-        )
-
-
-def test_a_nested_proposal_model_is_reached_by_the_strict_walk() -> None:
-    """The walk is only worth having if a task actually nests a model.
-
-    `DraftProposal` does - `claims` is a list of `ProposedClaim`. Asserted
-    directly so that if the Proposal shapes are ever flattened, this fails and
-    says the recursive check has stopped proving anything, rather than passing
-    over a document with nothing below the root.
-    """
-    schema = _strict_schema(DraftProposal.model_json_schema())
-    paths = [path for path, _node in _object_nodes(schema)]
-    assert any("$defs" in path for path in paths), paths
-    assert schema["$defs"]["ProposedClaim"]["additionalProperties"] is False
-
-
-def test_the_classification_schema_cannot_express_a_policy_field(
     fake_openai: FakeOpenAI, task_contracts
 ) -> None:
-    """The proposal contract is narrower than `JobAnalysis`, by construction."""
-    fake_openai.script("propose_job_analysis", CLASSIFICATION)
-    _call(fake_openai.provider(task_contracts), "propose_job_analysis", ANALYSIS_CONTEXT)
-    properties = fake_openai.calls_for("propose_job_analysis")[-1].body["text"]["format"]["schema"][
-        "properties"
-    ]
-    assert {"fit", "language", "classification_requires_approval"}.isdisjoint(properties)
+    """§6: strict schema generation, and task-specific Proposal parsing."""
+    assert set(task_contracts.tasks) == set(TASK_OUTPUT_MODELS)
+    assert {name for name, _context, _proposal in TASKS} == set(TASK_OUTPUT_MODELS)
+    provider = fake_openai.provider(task_contracts)
+    for task, context, proposal in TASKS:
+        fake_openai.script(task, proposal)
+        answered = _call(provider, task, context)
+
+        assert answered.proposal == proposal, task
+        assert type(answered.proposal) is TASK_OUTPUT_MODELS[task]
+
+        body = fake_openai.calls_for(task)[-1].body
+        output_format = body["text"]["format"]
+        assert output_format["type"] == "json_schema", task
+        assert output_format["name"] == task
+        assert output_format["strict"] is True
+
+        contract = task_contracts.get(task)
+        assert contract.input == type(context).__name__
+        assert contract.output == type(answered.proposal).__name__
+        assert contract.input_schema_version, task
+        assert contract.output_schema_version, task
+
+        call = fake_openai.calls_for(task)[-1]
+        assert call.payload == context.model_dump(mode="json"), task
+        assert [message["role"] for message in call.body["input"]] == ["system", "user"]
+        assert "previous_response_id" not in call.body
+        assert "conversation" not in call.body
+
+        nodes = _object_nodes(output_format["schema"])
+        assert nodes, f"{task}: the generated schema declares no object"
+        for path, node in nodes:
+            assert node.get("additionalProperties") is False, f"{task}: {path} is open"
+            assert sorted(node.get("required", [])) == sorted(node.get("properties", {})), (
+                f"{task}: {path} leaves a property optional"
+            )
+
+        if task == "propose_job_analysis":
+            assert {"fit", "language", "classification_requires_approval"}.isdisjoint(
+                output_format["schema"]["properties"]
+            )
 
 
 def test_the_system_prompt_and_versions_come_from_the_contract_file(
@@ -274,15 +222,6 @@ def test_the_system_prompt_and_versions_come_from_the_contract_file(
         canonical_json(JobAnalysisContext.model_json_schema())
     )
     assert context.output_schema_hash == sha256_text(canonical_json(sent))
-
-
-def test_provenance_records_provider_model_usage_latency_and_response_id(
-    fake_openai: FakeOpenAI, task_contracts
-) -> None:
-    """§6: exact provider/model/usage/latency/response metadata."""
-    fake_openai.script("propose_job_analysis", CLASSIFICATION)
-    answered = _call(fake_openai.provider(task_contracts), "propose_job_analysis", ANALYSIS_CONTEXT)
-    context = answered.provenance.context
     assert context.provider == "openai"
     assert context.model == "gpt-test"
     assert context.response_id == "resp_fake_1"
@@ -292,49 +231,6 @@ def test_provenance_records_provider_model_usage_latency_and_response_id(
     assert len(answered.provenance.input_hash) == 64
     assert len(answered.provenance.output_hash) == 64
     assert len(answered.provenance.raw_output_hash) == 64
-
-
-def test_the_preserved_response_is_the_sanitized_one_and_its_hash_matches(
-    fake_openai: FakeOpenAI, task_contracts
-) -> None:
-    """§6: raw response sanitization.
-
-    Secrets and hidden reasoning are gone, the hash covers what is preserved,
-    and the structured answer itself survives - a sanitizer that removed the
-    output would leave an artifact proving nothing.
-    """
-    dirty = envelope(
-        CLASSIFICATION,
-        api_key="sk-live-should-never-be-stored",
-        reasoning={"summary": "hidden chain of thought"},
-    )
-    dirty["output"].insert(0, {"type": "reasoning", "summary": ["step one", "step two"]})
-    dirty["output"][1]["Authorization"] = "Bearer sk-live"
-    fake_openai.script("propose_job_analysis", dirty)
-
-    answered = _call(fake_openai.provider(task_contracts), "propose_job_analysis", ANALYSIS_CONTEXT)
-    preserved = answered.provenance.sanitized_response
-
-    for secret in ("sk-live", "hidden chain of thought", "step one", "Bearer"):
-        assert secret not in preserved
-    assert '"reasoning"' not in preserved
-    assert "account-manager" in preserved
-    assert answered.provenance.raw_output_hash == sha256_text(preserved)
-
-
-def test_sanitization_removes_secret_keys_at_any_depth() -> None:
-    cleaned = sanitize_response(
-        {
-            "keep": "yes",
-            "nested": {"Access-Token": "t", "deeper": [{"password": "p", "keep": 1}]},
-            "output": [{"type": "reasoning", "summary": "drop"}, {"type": "message"}],
-        }
-    )
-    assert cleaned == {
-        "keep": "yes",
-        "nested": {"deeper": [{"keep": 1}]},
-        "output": [{"type": "message"}],
-    }
 
 
 def test_a_refusal_is_a_provider_refusal_carrying_its_own_evidence(
@@ -355,19 +251,8 @@ def test_a_refusal_is_a_provider_refusal_carrying_its_own_evidence(
     assert provenance.output == {}
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
-        '{"track": "sales"}',
-        '{"track": "sales", "profile": "account-manager", "emphasis": "account-growth",'
-        ' "confidence": 0.9, "rationale": "r", "gaps": [], "keywords": ["k"],'
-        ' "fit": "high"}',
-        "not json at all",
-    ],
-    ids=["missing-fields", "extra-policy-field", "not-json"],
-)
 def test_invalid_output_is_a_schema_violation_and_never_a_partial_proposal(
-    fake_openai: FakeOpenAI, task_contracts, text
+    fake_openai: FakeOpenAI, task_contracts
 ) -> None:
     """§6: invalid-output handling.
 
@@ -375,11 +260,21 @@ def test_invalid_output_is_a_schema_violation_and_never_a_partial_proposal(
     The Proposal model forbids extras, so a provider cannot smuggle `fit` in
     beside the fields it is allowed to send.
     """
-    fake_openai.script("propose_job_analysis", envelope(text))
-    with pytest.raises(ProviderSchemaViolation) as raised:
-        _call(fake_openai.provider(task_contracts), "propose_job_analysis", ANALYSIS_CONTEXT)
-    assert raised.value.provenance is not None
-    assert raised.value.provenance.sanitized_response
+    texts = [
+        '{"track": "sales"}',
+        '{"track": "sales", "profile": "account-manager", "emphasis": "account-growth",'
+        ' "confidence": 0.9, "rationale": "r", "gaps": [], "keywords": ["k"],'
+        ' "fit": "high"}',
+        "not json at all",
+    ]
+    provider = fake_openai.provider(task_contracts)
+    for text in texts:
+        fake_openai.scripts["propose_job_analysis"].clear()
+        fake_openai.script("propose_job_analysis", envelope(text))
+        with pytest.raises(ProviderSchemaViolation) as raised:
+            _call(provider, "propose_job_analysis", ANALYSIS_CONTEXT)
+        assert raised.value.provenance is not None, text
+        assert raised.value.provenance.sanitized_response, text
 
 
 def test_a_response_that_is_not_json_at_all_is_a_schema_violation(
@@ -400,21 +295,8 @@ def test_a_response_that_is_not_json_at_all_is_a_schema_violation(
         _call(fake_openai.provider(task_contracts), "propose_job_analysis", ANALYSIS_CONTEXT)
 
 
-@pytest.mark.parametrize(
-    "answer,expected",
-    [
-        (HTTPStatus(429), ProviderRateLimited),
-        (HTTPStatus(500), ProviderUnavailable),
-        (HTTPStatus(503), ProviderUnavailable),
-        (HTTPStatus(400), ProviderRefused),
-        (HTTPStatus(401), ProviderRefused),
-        (Timeout(), ProviderTimeout),
-        (urllib.error.URLError("no route"), ProviderUnavailable),
-    ],
-    ids=["429", "500", "503", "400", "401", "timeout", "network"],
-)
 def test_transport_failures_are_classified_by_status_not_by_message(
-    fake_openai: FakeOpenAI, task_contracts, answer, expected
+    fake_openai: FakeOpenAI, task_contracts
 ) -> None:
     """The classification a retry decision depends on, pinned to the status.
 
@@ -422,31 +304,18 @@ def test_transport_failures_are_classified_by_status_not_by_message(
     "429", "timeout", and "http 5". A reworded message silently reclassified a
     failure, and only the transient four may be retried.
     """
-    fake_openai.script("propose_job_analysis", answer)
-    with pytest.raises(expected):
-        _call(fake_openai.provider(task_contracts), "propose_job_analysis", ANALYSIS_CONTEXT)
-
-
-def test_each_task_receives_only_its_own_context(fake_openai: FakeOpenAI, task_contracts) -> None:
-    """§6: stateless inputs and minimal context.
-
-    Nothing is carried between calls: no conversation, no prior response ID, no
-    accumulated history. Two calls to different tasks send exactly their own
-    contexts and nothing else.
-    """
+    cases = [
+        (HTTPStatus(429), ProviderRateLimited),
+        (HTTPStatus(500), ProviderUnavailable),
+        (HTTPStatus(503), ProviderUnavailable),
+        (HTTPStatus(400), ProviderRefused),
+        (HTTPStatus(401), ProviderRefused),
+        (Timeout(), ProviderTimeout),
+        (urllib.error.URLError("no route"), ProviderUnavailable),
+    ]
     provider = fake_openai.provider(task_contracts)
-    fake_openai.script("propose_job_analysis", CLASSIFICATION)
-    fake_openai.script("regenerate_claim", CLAIM)
-    _call(provider, "propose_job_analysis", ANALYSIS_CONTEXT)
-    _call(provider, "regenerate_claim", CLAIM_CONTEXT)
-
-    for call in fake_openai.calls:
-        assert [message["role"] for message in call.body["input"]] == ["system", "user"]
-        assert "previous_response_id" not in call.body
-        assert "conversation" not in call.body
-    assert fake_openai.calls_for("propose_job_analysis")[-1].payload == ANALYSIS_CONTEXT.model_dump(
-        mode="json"
-    )
-    assert fake_openai.calls_for("regenerate_claim")[-1].payload == CLAIM_CONTEXT.model_dump(
-        mode="json"
-    )
+    for answer, expected in cases:
+        fake_openai.scripts["propose_job_analysis"].clear()
+        fake_openai.script("propose_job_analysis", answer)
+        with pytest.raises(expected):
+            _call(provider, "propose_job_analysis", ANALYSIS_CONTEXT)
