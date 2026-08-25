@@ -9,7 +9,7 @@ Three decisions are recorded here because each is a contract rather than an
 implementation detail:
 
 1. **The media type comes from the registered `artifact_type`, never from the
-   filename.** The type is a value this system wrote into SQLite when it
+   filename.** The type is a value this system wrote into the database when it
    produced the payload; the extension is part of a stored string. Serving a
    PDF as HTML because a row's path ended in `.html` is exactly the confusion
    that a registry exists to prevent.

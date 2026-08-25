@@ -246,11 +246,20 @@ def _direct_validation_report_calls(path: Path) -> list[int]:
 
 
 def _sql_string_lines(path: Path) -> list[int]:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    docstrings = {
+        id(node.value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Expr)
+        and isinstance(node.value, ast.Constant)
+        and isinstance(node.value.value, str)
+    }
     return [
         node.lineno
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        for node in ast.walk(tree)
         if isinstance(node, ast.Constant)
         and isinstance(node.value, str)
+        and id(node) not in docstrings
         and SQL_STATEMENT.search(node.value)
     ]
 
