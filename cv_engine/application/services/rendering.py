@@ -12,7 +12,7 @@ from ...domain.models import (
     ValidationReport,
 )
 from ...domain.validation import validate_draft
-from ...util import new_id, sha256_file
+from ...util import new_id
 from ..artifacts import ArtifactDelivery, deliver_artifact
 from ..commands import (
     RenderCommand,
@@ -227,12 +227,17 @@ class RenderingService(ServiceBase[ReadinessRepository]):
                 metadata: dict[str, Any] = {"validation_passed": report.passed}
                 if artifact_type == "resume_pdf":
                     metadata["recruiter_filename"] = targets.recruiter_pdf_filename
+                # The rendered file enters storage here, and the row records
+                # what storage returned. Deriving the reference from the path
+                # and hashing the file separately described two different
+                # reads of the same location; one ingest describes one.
+                stored = self.revision_payloads.ingest_render_output(path)
                 registered_id = repository.register_artifact_version(
                     command.application_id,
                     artifact_type,
                     "resume",
-                    self.artifacts.relative(path),
-                    sha256_file(path),
+                    stored.reference,
+                    stored.sha256,
                     lifecycle,
                     revision_id=command.approved_revision_id,
                     job_snapshot_id=draft.job_snapshot_id,

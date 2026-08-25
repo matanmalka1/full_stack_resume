@@ -121,6 +121,24 @@ class RevisionPayloadStore(SnapshotPayloadStore, Protocol):
         recruiter_pdf_filename: str,
     ) -> RenderTargets: ...
 
+    def ingest_render_output(self, path: Path) -> SnapshotPayload:
+        """Take one rendered output into storage and describe what was stored.
+
+        Rendered HTML, PDF and screenshots are immutable payloads like any
+        other, but they cannot be handed over as bytes: Chromium writes real
+        files to the real paths `render_targets` hands it, so they arrive as a
+        location rather than a value. This is the one place a `Path` travels
+        *inward* to the store, and nothing comes back out - the returned
+        reference is a storage-neutral string, exactly as `commit_snapshot`
+        returns one.
+
+        The hash describes the bytes that were stored, captured in the same
+        read that stored them. A caller must register this `sha256` rather than
+        re-hashing the file, or it records a digest for something other than
+        what storage holds.
+        """
+        ...
+
 
 class KnowledgeStore(Protocol):
     """Where canonical knowledge comes from, without saying it is files.

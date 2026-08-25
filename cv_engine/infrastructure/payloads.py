@@ -232,6 +232,43 @@ class PayloadStore:
             recruiter_pdf_filename=recruiter_pdf_filename,
         )
 
+    def ingest_render_output(self, path: Path) -> SnapshotPayload:
+        """Take one rendered output into storage, keyed by where it belongs.
+
+        The three rendered outputs are the one payload family that cannot go
+        through `commit`: Chromium writes them itself, to the paths
+        `render_targets` hands it, so they exist as files before the store ever
+        sees them. Everything else about them is the same - they are immutable,
+        they are registered in `artifact_versions`, and they are served back
+        through `open_artifact` - so they belong under the same keys, with the
+        same containment rules and the same reference format.
+
+        The key is derived from the path through `_approved_destination`, which
+        is what refuses a rendered output that landed somewhere the layout does
+        not approve. The bytes are read once and that read is what is stored and
+        what is hashed; the caller registers this digest rather than re-hashing
+        the file, so the recorded hash describes what storage holds rather than
+        what the filesystem held a moment later.
+
+        A `Path` travels inward here and nothing carrying one travels back:
+        the return value is the same storage-neutral `SnapshotPayload` that
+        every other commit produces.
+        """
+        key = self._key(path)
+        try:
+            stored = self._objects.ingest(key, Path(path))
+        except ObjectNotFound as exc:
+            raise ArtifactPayloadMissing(
+                "the rendered output was not written to its render target"
+            ) from exc
+        except ObjectAlreadyExists as exc:
+            raise FileExistsError(f"immutable payload already exists: {key}") from exc
+        return SnapshotPayload(
+            reference=self._reference_for_key(key),
+            sha256=stored.sha256,
+            size=stored.size,
+        )
+
     def provider_path(self, application_id: str, operation_id: str, artifact_id: str) -> Path:
         return self._target(
             "provider",

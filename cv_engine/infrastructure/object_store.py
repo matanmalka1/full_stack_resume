@@ -96,6 +96,22 @@ class ObjectStore(Protocol):
         """
         ...
 
+    def ingest(self, key: str, source: Path) -> StoredObject:
+        """Store the contents of a local file under `key`.
+
+        The one method that admits a `Path`, and it admits one inward only.
+        Chromium writes rendered HTML, PDFs and screenshots to real paths
+        because it cannot write to an object store, so those payloads reach
+        storage as a location rather than as bytes. Nothing carrying a `Path`
+        comes back.
+
+        The hash describes the bytes that were stored, read once. Raises
+        `ObjectNotFound` when `source` does not exist, and `ObjectAlreadyExists`
+        when the key is already occupied - a rendered output must not silently
+        replace a registered one.
+        """
+        ...
+
 
 def validate_key(key: str) -> str:
     """Refuse any key that could become a traversal, then return it unchanged.
@@ -215,13 +231,15 @@ class LocalObjectStore:
     def ingest(self, key: str, source: Path) -> StoredObject:
         """Take a file the renderer wrote and store it under `key`.
 
-        This exists for exactly one caller shape: Chromium writes real files to
-        real paths (`RenderTargets`), so those three payloads cannot be handed
-        to `put` as bytes the way every other payload can. On this store the
-        source path is already the destination path, which is why the method is
-        not on the `ObjectStore` protocol yet - see the S1 report. It is
-        implemented here so the local store can answer the question, and so the
-        S3 store's version has something to be identical to.
+        On this store the renderer already wrote to the destination path, so
+        the file is where it belongs and ingesting it is a read: the bytes are
+        read once, and that read is what the hash describes. Copying it onto
+        itself would be a no-op with a truncation window in the middle.
+
+        When the source is somewhere else - which is what a remote store always
+        sees, and what this store sees if the renderer is ever pointed at a
+        scratch directory - the bytes are put under the key normally, so the
+        overwrite refusal still applies.
         """
         path = self._path(key)
         resolved_source = Path(source).resolve()

@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from cv_engine.application.errors import ArtifactPayloadMissing
 from cv_engine.infrastructure.payloads import PayloadStore
 
 
@@ -221,3 +222,50 @@ def test_failed_validation_never_claims_the_destination_key(
     )
     assert destination.read_bytes() == b"valid"
     assert stored.workspace_relative == "artifacts/snapshots/app/snapshot.txt"
+
+
+def test_ingest_render_output_matches_the_reference_the_registry_records(
+    payload_store: PayloadStore,
+) -> None:
+    """Rendered outputs are the one family that arrives as a file, not bytes.
+
+    Chromium writes them to the paths `render_targets` hands it, so they enter
+    storage by location. What must not move is the stored reference: an
+    `artifact_versions` row records this string, and it has to be exactly what
+    the previous `ArtifactStore.relative(path)` produced.
+    """
+    targets = payload_store.render_targets(
+        "app", "revision", "html-id", "pdf-id", "screenshot-id", "Recruiter CV.pdf"
+    )
+    content = b"<html>rendered</html>"
+    targets.html.parent.mkdir(parents=True, exist_ok=True)
+    targets.html.write_bytes(content)
+
+    stored = payload_store.ingest_render_output(targets.html)
+
+    assert stored.reference == "artifacts/outputs/app/revision/html-id.html"
+    assert stored.sha256 == hashlib.sha256(content).hexdigest()
+    assert stored.size == len(content)
+    # Served back through the same path a download takes.
+    stream = payload_store.open_artifact(stored.reference, stored.sha256)
+    assert b"".join(stream.chunks()) == content
+
+
+def test_ingest_render_output_refuses_a_file_outside_the_approved_layout(
+    payload_store: PayloadStore, tmp_path: Path
+) -> None:
+    stray = tmp_path / "workspace" / "artifacts" / "working" / "app" / "resume.html"
+    stray.parent.mkdir(parents=True, exist_ok=True)
+    stray.write_bytes(b"not a rendered output")
+
+    with pytest.raises(ValueError, match="not an approved layout"):
+        payload_store.ingest_render_output(stray)
+
+
+def test_ingest_render_output_reports_a_render_target_that_was_never_written(
+    payload_store: PayloadStore,
+) -> None:
+    missing = payload_store.output_path("app", "revision", "ghost", suffix="pdf")
+
+    with pytest.raises(ArtifactPayloadMissing):
+        payload_store.ingest_render_output(missing)
