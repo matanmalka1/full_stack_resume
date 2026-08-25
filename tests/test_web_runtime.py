@@ -90,9 +90,7 @@ def test_select_web_endpoint_avoids_a_foreign_process(services, monkeypatch) -> 
     assert endpoint == WebEndpoint("127.0.0.1", 49152)
 
 
-def test_web_runtime_serves_real_http_and_stops_its_worker(
-    services, tmp_path: Path
-) -> None:
+def test_web_runtime_serves_real_http_and_stops_its_worker(services, tmp_path: Path) -> None:
     from cv_engine.runtime.web import _free_loopback_port
 
     endpoint = WebEndpoint("127.0.0.1", _free_loopback_port("127.0.0.1"))

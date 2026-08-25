@@ -7,7 +7,6 @@ from typing import Literal, Protocol
 from .commands import BoundaryDTO
 from .errors import PreconditionFailed
 
-
 ExecutionMode = Literal["deterministic", "ai"]
 UiDensity = Literal["comfortable", "compact"]
 UiTextSize = Literal["normal", "large"]
@@ -72,9 +71,7 @@ class SettingsService:
 
     def update(self, expected_edit_version: int, command: UpdateSettings) -> SettingsView:
         enabled = self.provider_configured and command.ai_enabled_override is not False
-        if command.default_execution_mode == "ai" and not (
-            self.provider_configured and enabled
-        ):
+        if command.default_execution_mode == "ai" and not (self.provider_configured and enabled):
             raise PreconditionFailed(
                 "AI cannot be the default execution mode until it is enabled and configured"
             )

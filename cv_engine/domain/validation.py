@@ -417,8 +417,7 @@ def _historical_titles_are_headings(context: _ValidationContext) -> None:
         context.add_issue(
             "structure",
             "historical-title-placement",
-            "Historical titles must remain exact headings: "
-            + ", ".join(sorted(demoted)),
+            "Historical titles must remain exact headings: " + ", ".join(sorted(demoted)),
         )
 
 

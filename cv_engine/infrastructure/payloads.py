@@ -77,6 +77,7 @@ class _PayloadRoots:
     artifacts_root: Path
     temp_root: Path
 
+
 class PayloadStore:
     """Immutable v2 payload storage, independent of database registration."""
 

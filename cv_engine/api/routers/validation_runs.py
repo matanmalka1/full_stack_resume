@@ -13,8 +13,6 @@ router = APIRouter(prefix="/validation-runs", tags=["validation-runs"])
     response_model=ValidationRunDetailResponse,
     summary="Read one immutable ValidationRun, including stale historical evidence",
 )
-def validation_run(
-    validation_run_id: str, services: Services
-) -> ValidationRunDetailResponse:
+def validation_run(validation_run_id: str, services: Services) -> ValidationRunDetailResponse:
     result = services.queries.validation_run(validation_run_id)
     return ValidationRunDetailResponse.model_validate(result.model_dump(mode="json"))

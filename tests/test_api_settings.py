@@ -4,7 +4,6 @@ from api_harness import MUTATION_HEADERS
 
 from cv_engine.api.app import API_PREFIX
 
-
 SETTINGS_FIELDS = {
     "edit_version",
     "auto_generate_when_review_not_required",
@@ -147,6 +146,7 @@ def test_ai_default_mode_requires_effective_ai_to_remain_enabled(ai_api_worker) 
     )
     assert refused_disabled.status_code == 412, refused_disabled.text
     assert refused_disabled.json()["code"] == "PRECONDITION_FAILED"
-    assert ai_api_worker.client.get(f"{API_PREFIX}/settings").headers["ETag"] == configured.headers[
-        "ETag"
-    ]
+    assert (
+        ai_api_worker.client.get(f"{API_PREFIX}/settings").headers["ETag"]
+        == configured.headers["ETag"]
+    )

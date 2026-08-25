@@ -182,7 +182,9 @@ class WebRuntime:
             if self._worker_thread.is_alive():
                 raise WebRuntimeError("Operation worker did not stop within 15 seconds")
             if self._worker_failure is not None:
-                raise WebRuntimeError("Operation worker stopped unexpectedly") from self._worker_failure
+                raise WebRuntimeError(
+                    "Operation worker stopped unexpectedly"
+                ) from self._worker_failure
             if opener is not None:
                 opener.join(timeout=0.1)
 

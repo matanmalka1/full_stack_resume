@@ -106,9 +106,7 @@ def build_object_store(workspace: Workspace, config: RuntimeConfig) -> ObjectSto
     if backend == "local":
         return LocalObjectStore(workspace.artifacts_root)
     if backend != "s3":
-        raise WorkspaceError(
-            f"unknown object store backend: {backend} (expected 'local' or 's3')"
-        )
+        raise WorkspaceError(f"unknown object store backend: {backend} (expected 'local' or 's3')")
     bucket = config.get("s3_bucket")
     if not bucket:
         raise WorkspaceError("object store 's3' requires a bucket; set CV_S3_BUCKET")

@@ -376,9 +376,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown approved revision: {approved_revision_id}") from exc
         if record["artifact_type"] != "resume_html" or record["lifecycle_status"] != "rendered":
-            raise LineageBroken(
-                f"artifact {html_artifact_version_id} is not rendered resume HTML"
-            )
+            raise LineageBroken(f"artifact {html_artifact_version_id} is not rendered resume HTML")
         if record["revision_id"] != revision.id:
             raise LineageBroken("the named HTML does not belong to the named approved revision")
         if record["application_id"] != revision.application_id:

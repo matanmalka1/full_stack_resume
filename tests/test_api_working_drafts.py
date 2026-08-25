@@ -163,9 +163,9 @@ def test_generation_records_the_explicit_parent_approved_revision(api_worker) ->
         for output in finished["outputs"]
         if output["output_type"] == "working_draft"
     )
-    assert _read(api_worker, draft_id).json()["parent_revision_id"] == approved.json()[
-        "revision_id"
-    ]
+    assert (
+        _read(api_worker, draft_id).json()["parent_revision_id"] == approved.json()["revision_id"]
+    )
 
 
 def test_generation_refuses_a_parent_revision_owned_by_another_application(
@@ -197,9 +197,12 @@ def test_generation_refuses_a_parent_revision_owned_by_another_application(
 
     assert queued.status_code == 412, queued.text
     assert queued.json()["code"] == "LINEAGE_BROKEN"
-    assert api_worker.services.repository.approved_revision(
-        approved.json()["revision_id"]
-    ).application_id == first_id
+    assert (
+        api_worker.services.repository.approved_revision(
+            approved.json()["revision_id"]
+        ).application_id
+        == first_id
+    )
     assert _state(api_worker, second_id)["active_working_draft_id"] is None
 
 
@@ -697,9 +700,7 @@ def test_validation_run_http_projection_preserves_unknown_groups_and_issue_codes
         api_worker, "Forward Compatible Report Co"
     )
     ordinary = _validated(api_worker, working_draft_id)
-    lineage = api_worker.services.repository.validation_lineage(
-        ordinary["validation_run_id"]
-    )
+    lineage = api_worker.services.repository.validation_lineage(ordinary["validation_run_id"])
     report = ValidationReport(
         passed=False,
         groups={"content": True, "future-validator-group": False},
@@ -735,9 +736,7 @@ def test_validation_run_http_projection_preserves_unknown_groups_and_issue_codes
             "hard": False,
         }
     ]
-    assert response.json()["report"]["evidence"]["future-evidence"] == {
-        "kept": [1, "two", False]
-    }
+    assert response.json()["report"]["evidence"]["future-evidence"] == {"kept": [1, "two", False]}
 
 
 # --- E5: approval ------------------------------------------------------------
