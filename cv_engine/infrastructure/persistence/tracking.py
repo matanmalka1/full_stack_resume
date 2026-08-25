@@ -2,16 +2,30 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import insert, select, update
+
 from ...application.errors import (
     LineageBroken,
     StateConflict,
     UnknownRecord,
 )
 from ...util import canonical_json, new_id
-from .base import SqliteRepositoryBase
+from .base import SqlAlchemyRepositoryBase
+from .tables import applications, recruitment_events, submissions
+
+_RECRUITMENT_EVENT_COLUMNS = tuple(
+    column for column in recruitment_events.c if column.name != "seq"
+)
+_SUBMISSION_COLUMNS = tuple(column for column in submissions.c if column.name != "seq")
 
 
-class SqliteTrackingRepository(SqliteRepositoryBase):
+def _json_text_record(row: Any, field: str) -> dict[str, Any]:
+    record = dict(row)
+    record[field] = canonical_json(record[field])
+    return record
+
+
+class SqlAlchemyTrackingRepository(SqlAlchemyRepositoryBase):
     def insert_submission(
         self,
         submission_id: str,
@@ -24,18 +38,15 @@ class SqliteTrackingRepository(SqliteRepositoryBase):
     ) -> None:
         with self.transaction() as connection:
             connection.execute(
-                "INSERT INTO submissions(id, application_id, submission_type, "
-                "approved_revision_id, artifact_version_id, submitted_at, metadata_json) "
-                "VALUES(?, ?, ?, ?, ?, ?, ?)",
-                (
-                    submission_id,
-                    application_id,
-                    submission_type,
-                    approved_revision_id,
-                    artifact_version_id,
-                    submitted_at,
-                    canonical_json(metadata),
-                ),
+                insert(submissions).values(
+                    id=submission_id,
+                    application_id=application_id,
+                    submission_type=submission_type,
+                    approved_revision_id=approved_revision_id,
+                    artifact_version_id=artifact_version_id,
+                    submitted_at=submitted_at,
+                    metadata_json=metadata,
+                )
             )
 
     def insert_recruitment_event(
@@ -57,10 +68,15 @@ class SqliteTrackingRepository(SqliteRepositoryBase):
     ) -> str:
         identity = event_id or new_id()
         with self.transaction() as connection:
-            row = connection.execute(
-                "SELECT current_status, terminal_outcome FROM applications WHERE id=?",
-                (application_id,),
-            ).fetchone()
+            row = (
+                connection.execute(
+                    select(applications.c.current_status, applications.c.terminal_outcome).where(
+                        applications.c.id == application_id
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
             if row is None:
                 raise UnknownRecord(application_id)
             if row["current_status"] != expected_current_status:
@@ -69,39 +85,44 @@ class SqliteTrackingRepository(SqliteRepositoryBase):
                     f"expected {expected_current_status}, found {row['current_status']}"
                 )
             if corrects_event_id is not None:
-                corrected = connection.execute(
-                    "SELECT application_id FROM recruitment_events WHERE id=?",
-                    (corrects_event_id,),
-                ).fetchone()
+                corrected = (
+                    connection.execute(
+                        select(recruitment_events.c.application_id).where(
+                            recruitment_events.c.id == corrects_event_id
+                        )
+                    )
+                    .mappings()
+                    .one_or_none()
+                )
                 if corrected is None:
                     raise UnknownRecord(corrects_event_id)
                 if corrected["application_id"] != application_id:
                     raise LineageBroken("a correction cannot reference another application's event")
             connection.execute(
-                "UPDATE applications SET current_status=?, terminal_outcome=?, updated_at=? "
-                "WHERE id=?",
-                (target_status, terminal_outcome, occurred_at, application_id),
+                update(applications)
+                .where(applications.c.id == application_id)
+                .values(
+                    current_status=target_status,
+                    terminal_outcome=terminal_outcome,
+                    updated_at=occurred_at,
+                )
             )
             connection.execute(
-                "INSERT INTO recruitment_events(id, application_id, event_type, from_status, "
-                "to_status, corrects_event_id, reason, actor_type, client, installation_id, "
-                "occurred_at, payload_json, created_at) "
-                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    identity,
-                    application_id,
-                    event_type,
-                    expected_current_status,
-                    target_status,
-                    corrects_event_id,
-                    reason,
-                    actor_type,
-                    client,
-                    installation_id,
-                    occurred_at,
-                    canonical_json(payload or {}),
-                    occurred_at,
-                ),
+                insert(recruitment_events).values(
+                    id=identity,
+                    application_id=application_id,
+                    event_type=event_type,
+                    from_status=expected_current_status,
+                    to_status=target_status,
+                    corrects_event_id=corrects_event_id,
+                    reason=reason,
+                    actor_type=actor_type,
+                    client=client,
+                    installation_id=installation_id,
+                    occurred_at=occurred_at,
+                    payload_json=payload or {},
+                    created_at=occurred_at,
+                )
             )
         return identity
 
@@ -118,58 +139,80 @@ class SqliteTrackingRepository(SqliteRepositoryBase):
     ) -> str:
         event_id = new_id()
         with self.transaction() as connection:
-            row = connection.execute(
-                "SELECT current_status FROM applications WHERE id=?", (application_id,)
-            ).fetchone()
+            row = (
+                connection.execute(
+                    select(applications.c.current_status).where(applications.c.id == application_id)
+                )
+                .mappings()
+                .one_or_none()
+            )
             if row is None:
                 raise UnknownRecord(application_id)
             connection.execute(
-                "UPDATE applications SET next_action=?, next_action_date=?, updated_at=? WHERE id=?",
-                (next_action, next_action_date, occurred_at, application_id),
+                update(applications)
+                .where(applications.c.id == application_id)
+                .values(
+                    next_action=next_action,
+                    next_action_date=next_action_date,
+                    updated_at=occurred_at,
+                )
             )
             connection.execute(
-                "INSERT INTO recruitment_events(id, application_id, event_type, from_status, "
-                "to_status, reason, actor_type, client, installation_id, occurred_at, "
-                "payload_json, created_at) VALUES(?, ?, 'next_action', ?, ?, '', ?, ?, ?, ?, ?, ?)",
-                (
-                    event_id,
-                    application_id,
-                    row["current_status"],
-                    row["current_status"],
-                    actor_type,
-                    client,
-                    installation_id,
-                    occurred_at,
-                    canonical_json(
-                        {"next_action": next_action, "next_action_date": next_action_date}
-                    ),
-                    occurred_at,
-                ),
+                insert(recruitment_events).values(
+                    id=event_id,
+                    application_id=application_id,
+                    event_type="next_action",
+                    from_status=row["current_status"],
+                    to_status=row["current_status"],
+                    reason="",
+                    actor_type=actor_type,
+                    client=client,
+                    installation_id=installation_id,
+                    occurred_at=occurred_at,
+                    payload_json={
+                        "next_action": next_action,
+                        "next_action_date": next_action_date,
+                    },
+                    created_at=occurred_at,
+                )
             )
         return event_id
 
     def recruitment_event(self, event_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
-            row = connection.execute(
-                "SELECT * FROM recruitment_events WHERE id=?", (event_id,)
-            ).fetchone()
+            row = (
+                connection.execute(
+                    select(*_RECRUITMENT_EVENT_COLUMNS).where(recruitment_events.c.id == event_id)
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             raise UnknownRecord(event_id)
-        return dict(row)
+        return _json_text_record(row, "payload_json")
 
     def recruitment_events(self, application_id: str) -> list[dict[str, Any]]:
         with self.read_connection() as connection:
-            rows = connection.execute(
-                "SELECT * FROM recruitment_events WHERE application_id=? "
-                "ORDER BY occurred_at, rowid",
-                (application_id,),
-            ).fetchall()
-        return [dict(row) for row in rows]
+            rows = (
+                connection.execute(
+                    select(*_RECRUITMENT_EVENT_COLUMNS)
+                    .where(recruitment_events.c.application_id == application_id)
+                    .order_by(recruitment_events.c.occurred_at, recruitment_events.c.seq)
+                )
+                .mappings()
+                .all()
+            )
+        return [_json_text_record(row, "payload_json") for row in rows]
 
     def submissions(self, application_id: str) -> list[dict[str, Any]]:
         with self.read_connection() as connection:
-            rows = connection.execute(
-                "SELECT * FROM submissions WHERE application_id=? ORDER BY submitted_at, rowid",
-                (application_id,),
-            ).fetchall()
-        return [dict(row) for row in rows]
+            rows = (
+                connection.execute(
+                    select(*_SUBMISSION_COLUMNS)
+                    .where(submissions.c.application_id == application_id)
+                    .order_by(submissions.c.submitted_at, submissions.c.seq)
+                )
+                .mappings()
+                .all()
+            )
+        return [_json_text_record(row, "metadata_json") for row in rows]

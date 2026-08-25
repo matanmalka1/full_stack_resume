@@ -2,7 +2,7 @@
 
 `domain <- application <- infrastructure / cli / runtime`: dependencies point
 inward. These tests are the M1 acceptance criterion that domain and application
-code carries no FastAPI, SQLite, filesystem-layout, browser, or provider HTTP
+code carries no FastAPI, persistence-library, filesystem-layout, browser, or provider HTTP
 dependency, expressed so it keeps holding as later milestones add code.
 """
 
@@ -15,12 +15,30 @@ from pathlib import Path
 ENGINE = Path(__file__).resolve().parent.parent / "cv_engine"
 
 FORBIDDEN_EXTERNAL = {
-    "domain": {"sqlite3", "fastapi", "playwright", "urllib", "uvicorn", "httpx", "requests"},
-    "application": {"sqlite3", "fastapi", "playwright", "urllib", "uvicorn", "httpx", "requests"},
+    "domain": {
+        "sqlalchemy",
+        "psycopg",
+        "fastapi",
+        "playwright",
+        "urllib",
+        "uvicorn",
+        "httpx",
+        "requests",
+    },
+    "application": {
+        "sqlalchemy",
+        "psycopg",
+        "fastapi",
+        "playwright",
+        "urllib",
+        "uvicorn",
+        "httpx",
+        "requests",
+    },
     # The API is the one layer that may hold FastAPI. It may not hold storage,
     # a browser, or provider HTTP: reaching any of those from a router is how
     # business logic arrives there.
-    "api": {"sqlite3", "playwright", "urllib", "requests"},
+    "api": {"sqlalchemy", "psycopg", "playwright", "urllib", "requests"},
 }
 ALLOWED_INTERNAL = {
     "domain": {"domain", "util"},
@@ -47,8 +65,8 @@ ALLOWED_INTERNAL = {
 # new allowlist.
 ARCHITECTURE_DEBT_ALLOWLIST: set[str] = set()
 
-# Every non-persistence module that may still touch SQLite. Deleting the v1 migration
-# adapters emptied it, so any new SQLite access outside persistence now fails.
+# Every non-persistence module allowed to touch the database libraries. The set
+# stays empty so a new adapter leak fails instead of creating a fresh exception.
 PERSISTENCE_KNOWN_OFFENDERS: set[str] = set()
 SQL_STATEMENT = re.compile(
     r"\b(?:SELECT\b[\s\S]*\bFROM|INSERT\s+INTO|UPDATE\b[\s\S]*\bSET|DELETE\s+FROM|CREATE\s+(?:TABLE|INDEX|TRIGGER)|"
@@ -228,11 +246,20 @@ def _direct_validation_report_calls(path: Path) -> list[int]:
 
 
 def _sql_string_lines(path: Path) -> list[int]:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    docstrings = {
+        id(node.value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Expr)
+        and isinstance(node.value, ast.Constant)
+        and isinstance(node.value.value, str)
+    }
     return [
         node.lineno
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        for node in ast.walk(tree)
         if isinstance(node, ast.Constant)
         and isinstance(node.value, str)
+        and id(node) not in docstrings
         and SQL_STATEMENT.search(node.value)
     ]
 
@@ -350,8 +377,8 @@ def test_known_outer_layer_policy_debt_does_not_grow() -> None:
     assert not unexpected, sorted(unexpected)
 
 
-def test_sqlite_and_sql_are_owned_by_persistence() -> None:
-    """All SQLite access lands in persistence; there are no remaining exceptions."""
+def test_database_libraries_and_sql_are_owned_by_persistence() -> None:
+    """Database access lands in persistence; there are no remaining exceptions."""
     offenders: list[str] = []
     for path in sorted(ENGINE.rglob("*.py")):
         relative = path.relative_to(ENGINE).as_posix()
@@ -359,14 +386,10 @@ def test_sqlite_and_sql_are_owned_by_persistence() -> None:
             continue
         if relative.removeprefix("infrastructure/") in PERSISTENCE_KNOWN_OFFENDERS:
             continue
-        if any(name == "sqlite3" for name, _line in _imports(path)):
-            offenders.append(f"{relative}: imports sqlite3")
+        for name, line in _imports(path):
+            if name in {"sqlalchemy", "psycopg"}:
+                offenders.append(f"{relative}:{line} imports {name}")
         offenders.extend(f"{relative}:{line} contains SQL" for line in _sql_string_lines(path))
-        offenders.extend(
-            f"{relative}:{line} issues PRAGMA"
-            for line, source in _code_lines(path)
-            if "PRAGMA" in source
-        )
     assert not offenders, offenders
 
 
@@ -385,12 +408,8 @@ def test_path_containment_has_one_implementation() -> None:
     # artifact delivery, not a second verifier in the router or service. Keep
     # these two delegation edges explicit: Stage B previously regressed when an
     # API helper reimplemented storage checks beside the application service.
-    approved_router = (ENGINE / "api/routers/approved_revisions.py").read_text(
-        encoding="utf-8"
-    )
-    rendering_service = (ENGINE / "application/services/rendering.py").read_text(
-        encoding="utf-8"
-    )
+    approved_router = (ENGINE / "api/routers/approved_revisions.py").read_text(encoding="utf-8")
+    rendering_service = (ENGINE / "application/services/rendering.py").read_text(encoding="utf-8")
     assert "services.rendering.preview_approved_html(" in approved_router
     assert "return self.download_artifact(html_artifact_version_id)" in rendering_service
     assert not any(
@@ -400,27 +419,20 @@ def test_path_containment_has_one_implementation() -> None:
 
 
 def test_numbered_migrations_are_registered_once() -> None:
-    migration_dir = ENGINE / "infrastructure/persistence/migrations"
-    assert migration_dir.is_dir(), "the registered migration directory must exist"
-    files = sorted(migration_dir.glob("*.sql"))
-    assert files
-    numbered: dict[str, str] = {}
-    for path in files:
-        match = re.fullmatch(r"(\d{4})_[a-z0-9_]+\.sql", path.name)
-        assert match, f"unnumbered migration: {path.name}"
-        assert match.group(1) not in numbered, (
-            f"duplicate migration number {match.group(1)}: "
-            f"{numbered.get(match.group(1))}, {path.name}"
-        )
-        numbered[match.group(1)] = path.name
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
 
-    from cv_engine.infrastructure.persistence.schema import registered_migration_names
+    config = Config(str(ENGINE.parent / "alembic.ini"))
+    scripts = ScriptDirectory.from_config(config)
+    revisions = list(scripts.walk_revisions())
+    identifiers = [revision.revision for revision in revisions]
+    files = set((ENGINE.parent / "alembic/versions").glob("[0-9][0-9][0-9][0-9]_*.py"))
 
-    registered = registered_migration_names()
-    assert len(registered) == len(set(registered)), "migration runner registers a file twice"
-    assert registered == [path.name for path in files], (
-        f"migration files and runner registry differ: files={[p.name for p in files]} "
-        f"registered={registered}"
+    assert len(scripts.get_heads()) == 1, "Alembic must have exactly one head"
+    assert len(identifiers) == len(set(identifiers)), "Alembic registers a revision twice"
+    assert {Path(revision.path) for revision in revisions} == files
+    assert all(
+        Path(revision.path).name.startswith(f"{revision.revision}_") for revision in revisions
     )
 
 

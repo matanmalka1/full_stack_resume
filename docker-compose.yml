@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ${CV_POSTGRES_DB:-cv}
+      POSTGRES_USER: ${CV_POSTGRES_USER:-cv}
+      POSTGRES_PASSWORD: ${CV_POSTGRES_PASSWORD:-cv}
+    ports:
+      - "${CV_POSTGRES_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

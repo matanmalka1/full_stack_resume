@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from helpers import ACCOUNT_MANAGER_JOB, approve_active_draft, artifact_version_and_path
+from sqlalchemy import func, select
 
 import cv_engine.infrastructure.rendering as rendering_module
 from cv_engine.application.commands import (
@@ -16,6 +17,7 @@ from cv_engine.application.commands import (
     SubmissionCommand,
 )
 from cv_engine.application.errors import WorkflowError
+from cv_engine.infrastructure.persistence.tables import submissions
 from cv_engine.infrastructure.rendering import validate_rendered as real_validate_rendered
 from cv_engine.util import normalized_text, sha256_file, sha256_text, verify_payload
 
@@ -239,8 +241,6 @@ def test_ready_qualification_is_independent_of_active_context(ready_application)
 def test_submission_binds_current_pdf_and_remains_immutable_after_later_versions(
     ready_application,
 ) -> None:
-    from cv_engine.infrastructure.persistence import connect
-
     services, app_id = ready_application("Two Cycles")
     first_pdf = services.repository.latest_artifact_version(app_id, "resume_pdf", "rendered")
     _start_new_draft(services, app_id)
@@ -260,41 +260,54 @@ def test_submission_binds_current_pdf_and_remains_immutable_after_later_versions
     )
     assert result.pdf_artifact_version_id == second_pdf["id"]
     submitted_pdf_id = result.pdf_artifact_version_id
-    with connect(services.repository.path) as connection:
-        before = connection.execute(
-            "SELECT artifact_version_id FROM submissions WHERE application_id=?", (app_id,)
-        ).fetchall()
-    assert [row["artifact_version_id"] for row in before] == [submitted_pdf_id]
+    with services.repository.read_connection() as connection:
+        before = (
+            connection.execute(
+                select(submissions.c.artifact_version_id).where(
+                    submissions.c.application_id == app_id
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert before == [submitted_pdf_id]
 
     # A later approved version must not rewrite or relink the existing submission.
     _start_new_draft(services, app_id)
     approve_active_draft(services, app_id)
-    with connect(services.repository.path) as connection:
-        after = connection.execute(
-            "SELECT artifact_version_id FROM submissions WHERE application_id=?", (app_id,)
-        ).fetchall()
-    assert [row["artifact_version_id"] for row in after] == [submitted_pdf_id]
+    with services.repository.read_connection() as connection:
+        after = (
+            connection.execute(
+                select(submissions.c.artifact_version_id).where(
+                    submissions.c.application_id == app_id
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert after == [submitted_pdf_id]
 
 
 def test_submission_and_applied_transition_roll_back_together(
     ready_application, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from cv_engine.infrastructure.persistence import connect
-    from cv_engine.infrastructure.persistence.tracking import SqliteTrackingRepository
+    from cv_engine.infrastructure.persistence.tracking import SqlAlchemyTrackingRepository
 
     services, app_id = ready_application("Atomic Submission")
 
     def fail_status_write(*_args, **_kwargs) -> None:
         raise RuntimeError("injected status failure")
 
-    monkeypatch.setattr(SqliteTrackingRepository, "insert_recruitment_event", fail_status_write)
+    monkeypatch.setattr(SqlAlchemyTrackingRepository, "insert_recruitment_event", fail_status_write)
     with pytest.raises(RuntimeError, match="injected status failure"):
         services.tracking.submit_application(_submission_command(services, app_id))
 
-    with connect(services.repository.path) as connection:
+    with services.repository.read_connection() as connection:
         count = connection.execute(
-            "SELECT COUNT(*) FROM submissions WHERE application_id=?", (app_id,)
-        ).fetchone()[0]
+            select(func.count())
+            .select_from(submissions)
+            .where(submissions.c.application_id == app_id)
+        ).scalar_one()
     assert count == 0
     assert services.repository.get_application(app_id)["current_status"] == "saved"
 

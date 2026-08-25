@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-import json
 from typing import Any
+
+from sqlalchemy import Boolean, Column, Integer, MetaData, String, Table, func, insert, select
+from sqlalchemy.engine import Connection
 
 from ...application.errors import (
     VALIDATION_STALE,
@@ -11,17 +13,58 @@ from ...application.errors import (
 )
 from ...domain.models import DecisionRecord, ValidationReport, ValidationRunLineage
 from ...util import canonical_json, new_id, utc_now
-from .base import SqliteRepositoryBase
-from .connection import integrity_results
-from .preparation import _require_owned_snapshot
+from .base import SqlAlchemyRepositoryBase
+from .tables import (
+    approved_revisions,
+    artifact_versions,
+    artifacts,
+    decision_records,
+    generation_runs,
+    job_analyses,
+    job_snapshots,
+    validation_runs,
+    working_drafts,
+)
 
 
-class SqliteArtifactRepository(SqliteRepositoryBase):
+def _json_text_record(row: Any, *fields: str) -> dict[str, Any]:
+    record = dict(row)
+    for field in fields:
+        value = record[field]
+        record[field] = None if value is None else canonical_json(value)
+    return record
+
+
+def _require_owned_snapshot(
+    connection: Connection,
+    application_id: str | None,
+    snapshot_id: str,
+    subject: str,
+) -> None:
+    """Refuse to link a record to a job snapshot another application owns."""
+    row = (
+        connection.execute(
+            select(job_snapshots.c.application_id).where(job_snapshots.c.id == snapshot_id)
+        )
+        .mappings()
+        .one_or_none()
+    )
+    if row is None:
+        raise LineageBroken(f"a {subject} cannot reference an unknown job snapshot: {snapshot_id}")
+    if row["application_id"] != application_id:
+        raise LineageBroken(
+            f"a {subject} cannot reference a job snapshot belonging to another application"
+        )
+
+
+class SqlAlchemyArtifactRepository(SqlAlchemyRepositoryBase):
     def artifact_inventory(self) -> list[dict[str, Any]]:
         """Every recorded artifact version's path and hash, for reconciliation."""
         with self.read_connection() as connection:
-            rows = connection.execute("SELECT path, content_hash FROM artifact_versions").fetchall()
-        return [dict(row) for row in rows]
+            rows = connection.execute(
+                select(artifact_versions.c.path, artifact_versions.c.content_hash)
+            ).mappings()
+            return [dict(row) for row in rows]
 
     def register_artifact_version(
         self,
@@ -51,10 +94,16 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
                     connection, application_id, job_snapshot_id, "artifact version"
                 )
             if revision_id is not None:
-                revision = connection.execute(
-                    "SELECT application_id, job_snapshot_id FROM approved_revisions WHERE id=?",
-                    (revision_id,),
-                ).fetchone()
+                revision = (
+                    connection.execute(
+                        select(
+                            approved_revisions.c.application_id,
+                            approved_revisions.c.job_snapshot_id,
+                        ).where(approved_revisions.c.id == revision_id)
+                    )
+                    .mappings()
+                    .one_or_none()
+                )
                 if revision is None or revision["application_id"] != application_id:
                     raise LineageBroken(
                         "an artifact version cannot reference an approved revision "
@@ -64,46 +113,59 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
                     raise LineageBroken(
                         "an artifact version's revision and job snapshot must match"
                     )
-            artifact = connection.execute(
-                "SELECT id FROM artifacts WHERE application_id IS ? "
-                "AND artifact_type=? AND logical_name=?",
-                (application_id, artifact_type, logical_name),
-            ).fetchone()
+            application_clause = (
+                artifacts.c.application_id.is_(None)
+                if application_id is None
+                else artifacts.c.application_id == application_id
+            )
+            artifact = (
+                connection.execute(
+                    select(artifacts.c.id).where(
+                        application_clause,
+                        artifacts.c.artifact_type == artifact_type,
+                        artifacts.c.logical_name == logical_name,
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
             if artifact is None:
                 artifact_id = new_id()
                 connection.execute(
-                    "INSERT INTO artifacts(id, application_id, artifact_type, logical_name, created_at) "
-                    "VALUES(?, ?, ?, ?, ?)",
-                    (artifact_id, application_id, artifact_type, logical_name, now),
+                    insert(artifacts).values(
+                        id=artifact_id,
+                        application_id=application_id,
+                        artifact_type=artifact_type,
+                        logical_name=logical_name,
+                        created_at=now,
+                    )
                 )
             else:
                 artifact_id = artifact["id"]
             version = connection.execute(
-                "SELECT COALESCE(MAX(version_number), 0) + 1 AS version "
-                "FROM artifact_versions WHERE artifact_id=?",
-                (artifact_id,),
-            ).fetchone()["version"]
+                select(func.coalesce(func.max(artifact_versions.c.version_number), 0) + 1).where(
+                    artifact_versions.c.artifact_id == artifact_id
+                )
+            ).scalar_one()
             connection.execute(
-                "INSERT INTO artifact_versions(id, artifact_id, version_number, lifecycle_status, path, content_hash, created_at, approved_at, submitted_at, track, profile, emphasis, facts_version, job_snapshot_id, metadata_json, revision_id) "
-                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    version_id,
-                    artifact_id,
-                    version,
-                    lifecycle_status,
-                    path,
-                    content_hash,
-                    now,
-                    approved_at,
-                    submitted_at,
-                    track,
-                    profile,
-                    emphasis,
-                    facts_version,
-                    job_snapshot_id,
-                    canonical_json(metadata or {}),
-                    revision_id,
-                ),
+                insert(artifact_versions).values(
+                    id=version_id,
+                    artifact_id=artifact_id,
+                    version_number=version,
+                    lifecycle_status=lifecycle_status,
+                    path=path,
+                    content_hash=content_hash,
+                    created_at=now,
+                    approved_at=approved_at,
+                    submitted_at=submitted_at,
+                    track=track,
+                    profile=profile,
+                    emphasis=emphasis,
+                    facts_version=facts_version,
+                    job_snapshot_id=job_snapshot_id,
+                    metadata_json=metadata or {},
+                    revision_id=revision_id,
+                )
             )
         return version_id
 
@@ -113,43 +175,60 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
         artifact_type: str,
         lifecycle_status: str | None = None,
     ) -> dict[str, Any]:
-        query = (
-            "SELECT av.*, a.artifact_type, a.logical_name FROM artifact_versions av "
-            "JOIN artifacts a ON a.id=av.artifact_id "
-            "WHERE a.application_id=? AND a.artifact_type=?"
+        statement = (
+            select(*artifact_versions.c, artifacts.c.artifact_type, artifacts.c.logical_name)
+            .select_from(artifact_versions.join(artifacts))
+            .where(
+                artifacts.c.application_id == application_id,
+                artifacts.c.artifact_type == artifact_type,
+            )
         )
-        params: list[Any] = [application_id, artifact_type]
         if lifecycle_status:
-            query += " AND av.lifecycle_status=?"
-            params.append(lifecycle_status)
-        query += " ORDER BY av.created_at DESC, av.version_number DESC LIMIT 1"
+            statement = statement.where(artifact_versions.c.lifecycle_status == lifecycle_status)
+        statement = statement.order_by(
+            artifact_versions.c.created_at.desc(), artifact_versions.c.version_number.desc()
+        ).limit(1)
         with self.read_connection() as connection:
-            row = connection.execute(query, params).fetchone()
+            row = connection.execute(statement).mappings().one_or_none()
         if row is None:
             raise UnknownRecord(f"no {artifact_type} artifact for application {application_id}")
-        return dict(row)
+        return _json_text_record(row, "metadata_json")
 
     def artifact_versions(self, application_id: str) -> list[dict[str, Any]]:
         with self.read_connection() as connection:
-            rows = connection.execute(
-                "SELECT av.*, a.artifact_type, a.logical_name FROM artifact_versions av "
-                "JOIN artifacts a ON a.id=av.artifact_id WHERE a.application_id=? "
-                "ORDER BY av.created_at, av.version_number",
-                (application_id,),
-            ).fetchall()
-        return [dict(row) for row in rows]
+            rows = (
+                connection.execute(
+                    select(
+                        *artifact_versions.c, artifacts.c.artifact_type, artifacts.c.logical_name
+                    )
+                    .select_from(artifact_versions.join(artifacts))
+                    .where(artifacts.c.application_id == application_id)
+                    .order_by(artifact_versions.c.created_at, artifact_versions.c.version_number)
+                )
+                .mappings()
+                .all()
+            )
+        return [_json_text_record(row, "metadata_json") for row in rows]
 
     def artifact_version(self, artifact_version_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
-            row = connection.execute(
-                "SELECT av.*, a.application_id, a.artifact_type, a.logical_name "
-                "FROM artifact_versions av JOIN artifacts a ON a.id=av.artifact_id "
-                "WHERE av.id=?",
-                (artifact_version_id,),
-            ).fetchone()
+            row = (
+                connection.execute(
+                    select(
+                        *artifact_versions.c,
+                        artifacts.c.application_id,
+                        artifacts.c.artifact_type,
+                        artifacts.c.logical_name,
+                    )
+                    .select_from(artifact_versions.join(artifacts))
+                    .where(artifact_versions.c.id == artifact_version_id)
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             raise UnknownRecord(f"no artifact version {artifact_version_id}")
-        return dict(row)
+        return _json_text_record(row, "metadata_json")
 
     def artifact_version_for_revision(
         self,
@@ -157,100 +236,129 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
         artifact_type: str,
         lifecycle_status: str | None = None,
     ) -> dict[str, Any]:
-        query = (
-            "SELECT av.*, a.application_id, a.artifact_type, a.logical_name "
-            "FROM artifact_versions av JOIN artifacts a ON a.id=av.artifact_id "
-            "WHERE av.revision_id=? AND a.artifact_type=?"
+        statement = (
+            select(
+                *artifact_versions.c,
+                artifacts.c.application_id,
+                artifacts.c.artifact_type,
+                artifacts.c.logical_name,
+            )
+            .select_from(artifact_versions.join(artifacts))
+            .where(
+                artifact_versions.c.revision_id == revision_id,
+                artifacts.c.artifact_type == artifact_type,
+            )
         )
-        params: list[Any] = [revision_id, artifact_type]
         if lifecycle_status is not None:
-            query += " AND av.lifecycle_status=?"
-            params.append(lifecycle_status)
-        query += " ORDER BY av.created_at DESC, av.version_number DESC LIMIT 1"
+            statement = statement.where(artifact_versions.c.lifecycle_status == lifecycle_status)
+        statement = statement.order_by(
+            artifact_versions.c.created_at.desc(), artifact_versions.c.version_number.desc()
+        ).limit(1)
         with self.read_connection() as connection:
-            row = connection.execute(query, params).fetchone()
+            row = connection.execute(statement).mappings().one_or_none()
         if row is None:
             raise UnknownRecord(f"no {artifact_type} artifact for approved revision {revision_id}")
-        return dict(row)
+        return _json_text_record(row, "metadata_json")
 
     def insert_decision(self, record: DecisionRecord) -> None:
         with self.transaction() as connection:
             connection.execute(
-                "INSERT INTO decision_records(id, application_id, artifact_version_id, job_snapshot_id, job_analysis_id, structured_json, summary, created_at) "
-                "VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    record.id,
-                    record.application_id,
-                    record.artifact_version_id,
-                    record.job_snapshot_id,
-                    record.job_analysis_id,
-                    canonical_json(record.structured),
-                    record.summary,
-                    record.created_at,
-                ),
+                insert(decision_records).values(
+                    id=record.id,
+                    application_id=record.application_id,
+                    artifact_version_id=record.artifact_version_id,
+                    job_snapshot_id=record.job_snapshot_id,
+                    job_analysis_id=record.job_analysis_id,
+                    structured_json=record.structured,
+                    summary=record.summary,
+                    created_at=record.created_at,
+                )
             )
 
     def latest_decision(self, application_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
-            row = connection.execute(
-                "SELECT decisions.* FROM decision_records AS decisions "
-                "JOIN artifact_versions AS versions "
-                "ON versions.id=decisions.artifact_version_id "
-                "WHERE decisions.application_id=? "
-                "ORDER BY versions.version_number DESC, "
-                "decisions.created_at DESC, decisions.id ASC LIMIT 1",
-                (application_id,),
-            ).fetchone()
+            row = (
+                connection.execute(
+                    select(decision_records)
+                    .select_from(
+                        decision_records.join(
+                            artifact_versions,
+                            artifact_versions.c.id == decision_records.c.artifact_version_id,
+                        )
+                    )
+                    .where(decision_records.c.application_id == application_id)
+                    .order_by(
+                        artifact_versions.c.version_number.desc(),
+                        decision_records.c.created_at.desc(),
+                        decision_records.c.id,
+                    )
+                    .limit(1)
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             raise UnknownRecord(f"no decision record for application {application_id}")
-        return dict(row)
+        return _json_text_record(row, "structured_json")
 
     def decision_for_artifact_version(self, artifact_version_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
-            row = connection.execute(
-                "SELECT * FROM decision_records WHERE artifact_version_id=? "
-                "ORDER BY created_at DESC LIMIT 1",
-                (artifact_version_id,),
-            ).fetchone()
+            row = (
+                connection.execute(
+                    select(decision_records)
+                    .where(decision_records.c.artifact_version_id == artifact_version_id)
+                    .order_by(decision_records.c.created_at.desc())
+                    .limit(1)
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             raise UnknownRecord(f"no decision record for artifact version {artifact_version_id}")
-        return dict(row)
+        return _json_text_record(row, "structured_json")
 
     def decision_for_revision(self, revision_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
-            row = connection.execute(
-                "SELECT decisions.* FROM decision_records AS decisions "
-                "JOIN artifact_versions AS versions "
-                "ON versions.id=decisions.artifact_version_id "
-                "WHERE versions.revision_id=? ORDER BY decisions.created_at DESC LIMIT 1",
-                (revision_id,),
-            ).fetchone()
+            row = (
+                connection.execute(
+                    select(decision_records)
+                    .select_from(
+                        decision_records.join(
+                            artifact_versions,
+                            artifact_versions.c.id == decision_records.c.artifact_version_id,
+                        )
+                    )
+                    .where(artifact_versions.c.revision_id == revision_id)
+                    .order_by(decision_records.c.created_at.desc())
+                    .limit(1)
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             raise UnknownRecord(f"no decision record for approved revision {revision_id}")
-        return dict(row)
+        return _json_text_record(row, "structured_json")
 
     def record_generation_run(self, values: dict[str, Any]) -> str:
         run_id = values.get("id") or new_id()
         with self.transaction() as connection:
             connection.execute(
-                "INSERT INTO generation_runs(id, application_id, created_at, engine_version, profile_version, rendering_rules_version, facts_version, ai_provider, ai_model, task_contract_version, prompt_version, job_analysis_version, instruction_overrides_json, status) "
-                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    run_id,
-                    values["application_id"],
-                    values.get("created_at", utc_now()),
-                    values["engine_version"],
-                    values["profile_version"],
-                    values["rendering_rules_version"],
-                    values["facts_version"],
-                    values["ai_provider"],
-                    values["ai_model"],
-                    values["task_contract_version"],
-                    values["prompt_version"],
-                    values["job_analysis_version"],
-                    canonical_json(values.get("instruction_overrides", {})),
-                    values.get("status", "completed"),
-                ),
+                insert(generation_runs).values(
+                    id=run_id,
+                    application_id=values["application_id"],
+                    created_at=values.get("created_at", utc_now()),
+                    engine_version=values["engine_version"],
+                    profile_version=values["profile_version"],
+                    rendering_rules_version=values["rendering_rules_version"],
+                    facts_version=values["facts_version"],
+                    ai_provider=values["ai_provider"],
+                    ai_model=values["ai_model"],
+                    task_contract_version=values["task_contract_version"],
+                    prompt_version=values["prompt_version"],
+                    job_analysis_version=values["job_analysis_version"],
+                    instruction_overrides_json=values.get("instruction_overrides", {}),
+                    status=values.get("status", "completed"),
+                )
             )
         return run_id
 
@@ -266,14 +374,22 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
         validation_id = new_id()
         with self.transaction() as connection:
             if lineage is not None:
-                draft = connection.execute(
-                    "SELECT wd.application_id, wd.job_analysis_id, "
-                    "wd.selection_plan_id, wd.edit_version, wd.content_hash, "
-                    "ja.job_snapshot_id FROM working_drafts wd "
-                    "JOIN job_analyses ja ON ja.id=wd.job_analysis_id "
-                    "WHERE wd.id=?",
-                    (lineage.working_draft_id,),
-                ).fetchone()
+                draft = (
+                    connection.execute(
+                        select(
+                            working_drafts.c.application_id,
+                            working_drafts.c.job_analysis_id,
+                            working_drafts.c.selection_plan_id,
+                            working_drafts.c.edit_version,
+                            working_drafts.c.content_hash,
+                            job_analyses.c.job_snapshot_id,
+                        )
+                        .select_from(working_drafts.join(job_analyses))
+                        .where(working_drafts.c.id == lineage.working_draft_id)
+                    )
+                    .mappings()
+                    .one_or_none()
+                )
                 if (
                     draft is None
                     or draft["application_id"] != application_id
@@ -288,38 +404,43 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
                         code=VALIDATION_STALE,
                     )
             connection.execute(
-                "INSERT INTO validation_runs(id, application_id, artifact_version_id, "
-                "phase, report_json, created_at, working_draft_id, edit_version, "
-                "content_hash, job_snapshot_id, job_analysis_id, selection_plan_id, "
-                "knowledge_context_hash, validator_versions_json) "
-                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    validation_id,
-                    application_id,
-                    artifact_version_id,
-                    phase,
-                    report.model_dump_json(),
-                    utc_now(),
-                    lineage.working_draft_id if lineage else None,
-                    lineage.edit_version if lineage else None,
-                    lineage.content_hash if lineage else None,
-                    lineage.job_snapshot_id if lineage else None,
-                    lineage.job_analysis_id if lineage else None,
-                    lineage.selection_plan_id if lineage else None,
-                    lineage.knowledge_context_hash if lineage else None,
-                    canonical_json(lineage.validator_versions) if lineage else None,
-                ),
+                insert(validation_runs).values(
+                    id=validation_id,
+                    application_id=application_id,
+                    artifact_version_id=artifact_version_id,
+                    phase=phase,
+                    report_json=report.model_dump(mode="json"),
+                    created_at=utc_now(),
+                    working_draft_id=lineage.working_draft_id if lineage else None,
+                    edit_version=lineage.edit_version if lineage else None,
+                    content_hash=lineage.content_hash if lineage else None,
+                    job_snapshot_id=lineage.job_snapshot_id if lineage else None,
+                    job_analysis_id=lineage.job_analysis_id if lineage else None,
+                    selection_plan_id=lineage.selection_plan_id if lineage else None,
+                    knowledge_context_hash=lineage.knowledge_context_hash if lineage else None,
+                    validator_versions_json=lineage.validator_versions if lineage else None,
+                )
             )
         return validation_id
 
     def validation_lineage(self, validation_id: str) -> ValidationRunLineage:
         with self.read_connection() as connection:
-            row = connection.execute(
-                "SELECT working_draft_id, edit_version, content_hash, job_snapshot_id, "
-                "job_analysis_id, selection_plan_id, knowledge_context_hash, "
-                "validator_versions_json FROM validation_runs WHERE id=?",
-                (validation_id,),
-            ).fetchone()
+            row = (
+                connection.execute(
+                    select(
+                        validation_runs.c.working_draft_id,
+                        validation_runs.c.edit_version,
+                        validation_runs.c.content_hash,
+                        validation_runs.c.job_snapshot_id,
+                        validation_runs.c.job_analysis_id,
+                        validation_runs.c.selection_plan_id,
+                        validation_runs.c.knowledge_context_hash,
+                        validation_runs.c.validator_versions_json,
+                    ).where(validation_runs.c.id == validation_id)
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None or row["working_draft_id"] is None:
             raise UnknownRecord(f"no validation lineage {validation_id}")
         return ValidationRunLineage(
@@ -330,21 +451,34 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
             job_analysis_id=row["job_analysis_id"],
             selection_plan_id=row["selection_plan_id"],
             knowledge_context_hash=row["knowledge_context_hash"],
-            validator_versions=json.loads(row["validator_versions_json"]),
+            validator_versions=row["validator_versions_json"],
         )
 
     def latest_validation_for_working_draft(self, working_draft_id: str) -> dict[str, Any] | None:
         with self.read_connection() as connection:
-            row = connection.execute(
-                "SELECT id, edit_version, content_hash, job_snapshot_id, job_analysis_id, "
-                "selection_plan_id, report_json, created_at FROM validation_runs "
-                "WHERE working_draft_id=? ORDER BY created_at DESC, rowid DESC LIMIT 1",
-                (working_draft_id,),
-            ).fetchone()
+            row = (
+                connection.execute(
+                    select(
+                        validation_runs.c.id,
+                        validation_runs.c.edit_version,
+                        validation_runs.c.content_hash,
+                        validation_runs.c.job_snapshot_id,
+                        validation_runs.c.job_analysis_id,
+                        validation_runs.c.selection_plan_id,
+                        validation_runs.c.report_json,
+                        validation_runs.c.created_at,
+                    )
+                    .where(validation_runs.c.working_draft_id == working_draft_id)
+                    .order_by(validation_runs.c.created_at.desc(), validation_runs.c.seq.desc())
+                    .limit(1)
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             return None
         record = dict(row)
-        record["report"] = ValidationReport.model_validate_json(record.pop("report_json"))
+        record["report"] = ValidationReport.model_validate(record.pop("report_json"))
         return record
 
     def validation_for_artifact(
@@ -354,46 +488,100 @@ class SqliteArtifactRepository(SqliteRepositoryBase):
         artifact_version_id: str,
     ) -> ValidationReport:
         with self.read_connection() as connection:
-            row = connection.execute(
-                "SELECT report_json FROM validation_runs WHERE application_id=? "
-                "AND phase=? AND artifact_version_id=? "
-                "ORDER BY created_at DESC LIMIT 1",
-                (application_id, phase, artifact_version_id),
-            ).fetchone()
+            row = (
+                connection.execute(
+                    select(validation_runs.c.report_json)
+                    .where(
+                        validation_runs.c.application_id == application_id,
+                        validation_runs.c.phase == phase,
+                        validation_runs.c.artifact_version_id == artifact_version_id,
+                    )
+                    .order_by(validation_runs.c.created_at.desc())
+                    .limit(1)
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             raise UnknownRecord(
                 f"no {phase} validation references artifact version {artifact_version_id}"
             )
-        return ValidationReport.model_validate_json(row["report_json"])
+        return ValidationReport.model_validate(row["report_json"])
 
     def validation_report(self, validation_id: str) -> ValidationReport:
         with self.read_connection() as connection:
-            row = connection.execute(
-                "SELECT report_json FROM validation_runs WHERE id=?", (validation_id,)
-            ).fetchone()
+            row = (
+                connection.execute(
+                    select(validation_runs.c.report_json).where(
+                        validation_runs.c.id == validation_id
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             raise UnknownRecord(f"no validation report {validation_id}")
-        return ValidationReport.model_validate_json(row["report_json"])
+        return ValidationReport.model_validate(row["report_json"])
 
     def validation_run(self, validation_id: str) -> dict[str, Any]:
         """Read immutable validation evidence by ID, irrespective of current draft state."""
         with self.read_connection() as connection:
-            row = connection.execute(
-                "SELECT id, application_id, working_draft_id, edit_version, content_hash, "
-                "report_json, created_at FROM validation_runs WHERE id=? AND phase='pre-render'",
-                (validation_id,),
-            ).fetchone()
+            row = (
+                connection.execute(
+                    select(
+                        validation_runs.c.id,
+                        validation_runs.c.application_id,
+                        validation_runs.c.working_draft_id,
+                        validation_runs.c.edit_version,
+                        validation_runs.c.content_hash,
+                        validation_runs.c.report_json,
+                        validation_runs.c.created_at,
+                    ).where(
+                        validation_runs.c.id == validation_id,
+                        validation_runs.c.phase == "pre-render",
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             raise UnknownRecord(f"no validation run {validation_id}")
         record = dict(row)
-        record["report"] = ValidationReport.model_validate_json(record.pop("report_json"))
+        record["report"] = ValidationReport.model_validate(record.pop("report_json"))
         return record
 
     def integrity_check(self) -> list[str]:
-        problems: list[str] = []
+        catalog = MetaData()
+        pg_constraint = Table(
+            "pg_constraint",
+            catalog,
+            Column("conname", String),
+            Column("connamespace", Integer),
+            Column("contype", String),
+            Column("convalidated", Boolean),
+            schema="pg_catalog",
+        )
+        pg_namespace = Table(
+            "pg_namespace",
+            catalog,
+            Column("oid", Integer),
+            Column("nspname", String),
+            schema="pg_catalog",
+        )
         with self.read_connection() as connection:
-            result, fk_rows = integrity_results(connection)
-            if result != "ok":
-                problems.append(f"SQLite integrity_check: {result}")
-            problems.extend(f"foreign key violation: {tuple(row)}" for row in fk_rows)
-        return problems
+            names = connection.execute(
+                select(pg_constraint.c.conname)
+                .select_from(
+                    pg_constraint.join(
+                        pg_namespace,
+                        pg_namespace.c.oid == pg_constraint.c.connamespace,
+                    )
+                )
+                .where(
+                    pg_constraint.c.contype == "f",
+                    pg_constraint.c.convalidated.is_(False),
+                    pg_namespace.c.nspname == func.current_schema(),
+                )
+                .order_by(pg_constraint.c.conname)
+            ).scalars()
+            return [f"foreign key constraint not validated: {name}" for name in names]

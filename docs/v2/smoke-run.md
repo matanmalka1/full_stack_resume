@@ -1,32 +1,50 @@
-# Offline end-to-end smoke run
+# Deterministic end-to-end smoke run
 
 Proves the deterministic pipeline reaches `ready` on a fresh, isolated Workspace with
-no AI key and no money spent. Run before any Postgres / auth / storage work, so that
-later failures have a known-good baseline to be compared against.
+no AI key and no money spent. The workflow makes no provider or Internet call, but it
+does require the local PostgreSQL service: database access is no longer embedded in the
+Workspace.
 
 Everything below runs as **one user, one terminal**, and touches nothing that already
-exists: the Workspace lives in `/tmp`, and the existing `data/` is never opened.
+exists: both the Workspace and database have unique smoke-run names, and the existing
+Workspace/database are never opened.
 
-## 0. Guard rails
+## 0. PostgreSQL prerequisite and guard rails
 
 ```bash
-cd /Users/matanmalka/Projects/resume_python
+cd "$(git rev-parse --show-toplevel)"
 unset OPENAI_API_KEY
 export CV_PROVIDER=deterministic
-export WS=/tmp/cv-smoke-$(date +%Y%m%d-%H%M%S)
-echo "$WS"
+export CV_SOURCE_ROOT=$(pwd)
+export CV_SMOKE_ID=$(date +%Y%m%d%H%M%S)
+export CV_SMOKE_WS=/tmp/cv-smoke-$CV_SMOKE_ID
+export CV_SMOKE_DB=cv_smoke_$CV_SMOKE_ID
+cv_cli() {
+  ./.venv/bin/python -m cv_engine.cli "$@"
+}
+
+docker compose up -d postgres
+docker compose exec -T postgres pg_isready -U cv -d cv
+docker compose exec -T postgres createdb -U cv "$CV_SMOKE_DB"
+export CV_DATABASE_URL="postgresql+psycopg://cv:cv@127.0.0.1:5433/$CV_SMOKE_DB"
+
+echo "$CV_SMOKE_WS"
+echo "$CV_SMOKE_DB"
 ```
 
-`unset` is the point of the exercise: if any step reaches for a key, it must fail
-loudly rather than quietly spend.
+`OPENAI_API_KEY` being unset is the point of the exercise: if any step reaches for a key,
+it must fail loudly rather than quietly spend. `pg_isready` must report that the local
+Compose service accepts connections before continuing. The commands assume the documented
+Compose defaults; when those defaults are overridden, set `CV_DATABASE_URL` to the matching
+fresh database instead.
 
 ## 1. Create an isolated Workspace
 
 ```bash
-cv --workspace "$WS" workspace init \
+cv_cli --workspace "$CV_SMOKE_WS" workspace init \
   --purpose test \
   --data-class test \
-  --knowledge-from /Users/matanmalka/Projects/resume_python
+  --knowledge-from "$CV_SOURCE_ROOT"
 ```
 
 `--knowledge-from` copies `base/ profiles/ rendering/ config/ ai/` in. Without it the
@@ -36,17 +54,18 @@ Workspace has no canonical facts and drafting has nothing to draw on.
 a real Workspace.
 
 ```bash
-cv --workspace "$WS" workspace status
-cv --workspace "$WS" init
+cv_cli --workspace "$CV_SMOKE_WS" workspace upgrade
+cv_cli --workspace "$CV_SMOKE_WS" workspace status
 ```
 
-`workspace status` should report the five roots under `$WS`. `init` creates the SQLite
-schema.
+`workspace upgrade` applies Alembic to the fresh PostgreSQL database. `workspace status`
+should then report the five roots under `$CV_SMOKE_WS`, the configured database URL, and
+schema revision `0002`.
 
 ## 2. Ingest a posting
 
 ```bash
-cv --workspace "$WS" ingest \
+cv_cli --workspace "$CV_SMOKE_WS" ingest \
   --company "Smoke Test Ltd" \
   --role "Backend Engineer" \
   --job-text "Backend engineer. Python, FastAPI, PostgreSQL. Build and operate HTTP services."
@@ -55,23 +74,23 @@ cv --workspace "$WS" ingest \
 Prints JSON with `application_id` and `job_snapshot_id`. Capture it:
 
 ```bash
-export APP=$(cv --workspace "$WS" ingest \
+export CV_SMOKE_APP=$(cv_cli --workspace "$CV_SMOKE_WS" ingest \
   --company "Smoke Test Ltd 2" \
   --role "Backend Engineer" \
   --job-text "Backend engineer. Python, FastAPI, PostgreSQL." \
   | jq -r .application_id)
-echo "$APP"
+echo "$CV_SMOKE_APP"
 ```
 
 ## 3. The chain
 
 ```bash
-cv --workspace "$WS" analyze  "$APP" --provider deterministic
-cv --workspace "$WS" draft    "$APP"
-cv --workspace "$WS" validate "$APP"
-cv --workspace "$WS" approve  "$APP"
-cv --workspace "$WS" render   "$APP"
-cv --workspace "$WS" ready    "$APP"
+cv_cli --workspace "$CV_SMOKE_WS" analyze  "$CV_SMOKE_APP" --provider deterministic
+cv_cli --workspace "$CV_SMOKE_WS" draft    "$CV_SMOKE_APP"
+cv_cli --workspace "$CV_SMOKE_WS" validate "$CV_SMOKE_APP"
+cv_cli --workspace "$CV_SMOKE_WS" approve  "$CV_SMOKE_APP"
+cv_cli --workspace "$CV_SMOKE_WS" render   "$CV_SMOKE_APP"
+cv_cli --workspace "$CV_SMOKE_WS" ready    "$CV_SMOKE_APP"
 ```
 
 Run them **one at a time** and read each JSON before the next. The first non-zero exit
@@ -81,14 +100,14 @@ is the finding — do not push past it.
 installed:
 
 ```bash
-python -m playwright install chromium
+./.venv/bin/python -m playwright install chromium
 ```
 
 ## 4. What a pass looks like
 
 ```bash
-cv --workspace "$WS" show "$APP"
-ls -R "$WS/artifacts"
+cv_cli --workspace "$CV_SMOKE_WS" show "$CV_SMOKE_APP"
+ls -R "$CV_SMOKE_WS/artifacts"
 ```
 
 - `show` reports `preparation_state: ready`
@@ -99,10 +118,15 @@ ls -R "$WS/artifacts"
 ## 5. Cleanup
 
 ```bash
-rm -rf "$WS"
+rm -rf "$CV_SMOKE_WS"
+docker compose exec -T postgres dropdb -U cv "$CV_SMOKE_DB"
+unset CV_DATABASE_URL CV_SMOKE_APP CV_SMOKE_DB CV_SMOKE_WS CV_SMOKE_ID CV_SOURCE_ROOT
+unset -f cv_cli
 ```
 
-Safe: it is a `/tmp` Workspace marked `test`, and nothing else points into it.
+Safe: the Workspace is the unique `/tmp` path printed in section 0 and is marked `test`;
+the database is the unique name created in the same section. Neither cleanup target is a
+pre-existing development resource.
 
 ## Notes
 

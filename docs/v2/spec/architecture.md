@@ -29,7 +29,10 @@ Backend/runtime:
   and HTTP schemas
 - FastAPI for the local HTTP API and production static-asset serving
 - Uvicorn as the supervised loopback ASGI server
-- standard-library `sqlite3`
+- PostgreSQL 17 for structured state and relationships
+- SQLAlchemy 2.0 Core for database access; no ORM Session or mapped entities
+- psycopg 3 as the PostgreSQL driver
+- Alembic for explicit numbered schema revisions
 - Jinja2 for resume HTML
 - Playwright-managed Chromium for rendering and render validation
 - `pypdf` for PDF extraction and ATS checks
@@ -57,8 +60,8 @@ Testing additions:
 - Playwright Web E2E
 - axe checks on the central screens, through `@axe-core/playwright`
 
-SQLAlchemy, Alembic, Redux, a full component framework, Celery, Redis, WebSockets, SSE,
-and a DI framework are not part of v2.0.
+Redux, a full component framework, Celery, Redis, WebSockets, SSE, and a DI framework are
+not part of v2.0.
 
 ## 3. Source organization
 
@@ -82,8 +85,8 @@ There is no one-file-per-interface rule and no micro-packaging objective.
 
 The domain owns entities, value objects, lifecycle rules, validation semantics,
 transition rules, knowledge/fact safety, Ready qualification, and invariant checks. It
-does not import FastAPI, SQLite, Workspace paths, Playwright, React concepts, provider
-HTTP code, or runtime configuration.
+does not import FastAPI, SQLAlchemy, psycopg, Workspace paths, Playwright, React concepts,
+provider HTTP code, or runtime configuration.
 
 Pydantic remains appropriate for DraftDocument and other serialized domain documents.
 Small internal value objects may be dataclasses when serialization is not a boundary.
@@ -108,9 +111,9 @@ A small façade may compose them for convenience but contains no business logic.
 
 ### 3.3 Infrastructure
 
-Infrastructure implements SQLite repositories, UnitOfWork, filesystem payload stores,
-KnowledgeRepository, OpenAI provider, rendering, operation claiming/execution, logging,
-and backup.
+Infrastructure implements SQLAlchemy Core repositories, PostgreSQL UnitOfWork, filesystem
+payload stores, KnowledgeRepository, OpenAI provider, rendering, operation
+claiming/execution, logging, and Alembic integration.
 
 Repository boundaries follow transactional ownership and use-cases rather than tables:
 
@@ -216,9 +219,9 @@ and CLI edits remain valid inputs; a changed context produces `knowledge_changed
 
 ## 6. Persistence boundary
 
-### 6.1 SQLite
+### 6.1 PostgreSQL
 
-SQLite stores structured state and relationships:
+PostgreSQL stores structured state and relationships:
 
 - Applications and current recruitment projections
 - immutable status and audit history
@@ -234,12 +237,20 @@ SQLite stores structured state and relationships:
 - Knowledge audit and cross-store mutation journal
 - schema, installation, and Workspace metadata
 
-SQLite configuration includes foreign keys, WAL, a busy timeout, short transactions,
-CHECK/UNIQUE constraints, and only the narrow triggers needed to prevent otherwise easy
-immutability bypasses. Business workflows remain in domain/application code.
+The database is addressed by the resolved `database_url` setting (`CV_DATABASE_URL` at
+the environment layer), not by a path inside the Workspace. One process-wide SQLAlchemy
+`Engine` per URL owns pooling and connection health. UnitOfWork and multi-query projection
+reads use explicit transactions; stable projections use `REPEATABLE READ`.
 
-The database uses explicit numbered SQL migrations and schema version metadata. It does
-not depend on application startup side effects to perform an unguarded migration.
+Foreign keys and CHECK/UNIQUE constraints enforce relational invariants. The 36 row
+triggers comprise 28 UPDATE/DELETE guards over 14 immutable tables, four DELETE-only
+guards over deliberately mutable tables, and four exact transition guards. Application
+`current_status` validity is one CHECK constraint, which covers both INSERT and UPDATE.
+Business workflows remain in domain/application code.
+
+Alembic owns explicit numbered revisions and schema version metadata. The revision graph
+has one head, `workspace upgrade` applies it explicitly, and normal runtime composition
+does not perform hidden migrations as a startup side effect.
 
 ### 6.2 Object storage
 
@@ -265,7 +276,7 @@ The key layout is the same either way:
 **References are storage-neutral and their format is frozen.** `artifact_versions`
 stores a Workspace-relative string (`artifacts/snapshots/{app}/{id}.txt`); an object key
 is the same string without the `artifacts/` prefix. A row is identical under either
-backend, so a Workspace can change storage without rewriting SQLite.
+backend, so a Workspace can change storage without rewriting database rows.
 
 Key validation is shared by both implementations rather than delegated to each. A
 crafted key - traversal, absolute, empty segment, backslash, drive prefix - is refused
@@ -285,10 +296,10 @@ location is correct in the second case and would destroy the payload in the firs
 which is why the store answers the question rather than the caller.
 
 Additional manifests use immutable UUID-based names. Every payload has SHA-256 metadata
-in SQLite. Recruiter-friendly names are Content-Disposition/export names, never the
+in PostgreSQL. Recruiter-friendly names are Content-Disposition/export names, never the
 physical identity of an artifact. There is no `latest.pdf` artifact.
 
-JobSnapshot source is the exact text accepted by the backend. SQLite keeps path, source
+JobSnapshot source is the exact text accepted by the backend. PostgreSQL keeps path, source
 hash, normalized dedupe hash, URL/provenance, timestamp, and prior-snapshot reference.
 
 ApprovedRevision content includes immutable structured JSON and Markdown projection.
@@ -298,13 +309,13 @@ provider response are separate registered artifacts where applicable.
 ### 6.3 Knowledge files
 
 Facts, CandidateContext, Profiles, selection/emphasis policy, prompts, task contracts,
-rendering rules, and templates remain file-backed and version-controlled. SQLite audit
+rendering rules, and templates remain file-backed and version-controlled. Database audit
 does not become an alternative Knowledge source of truth. The product never runs Git
 commit automatically.
 
 ## 7. UnitOfWork and consistency
 
-Commands that mutate several SQLite tables execute through a UnitOfWork:
+Commands that mutate several PostgreSQL tables execute through a UnitOfWork:
 
 ```python
 with uow:
@@ -312,10 +323,9 @@ with uow:
     uow.commit()
 ```
 
-Services do not own global connections or call SQLite transaction primitives directly.
-Each worker/request obtains an appropriate connection/UnitOfWork. Queries use
-purpose-built projections and may use efficient joins without hydrating complete
-aggregates.
+Services do not own global connections or call driver transaction primitives directly.
+Each worker/request obtains an appropriate SQLAlchemy Connection/UnitOfWork. Queries use
+purpose-built projections and explicit joins without hydrating ORM entities.
 
 State tables are authoritative current projections. Append-only events provide audit
 and provenance; the system is not event-sourced.
@@ -324,7 +334,7 @@ and provenance; the system is not event-sourced.
 
 The normal artifact protocol is:
 
-`validate bytes -> conditional store under key -> register in SQLite`
+`validate bytes -> conditional store under key -> register in PostgreSQL`
 
 There is no temp-then-rename staging. Validation runs on the bytes before the key is
 claimed, so a payload that fails it never occupies its destination - which is what temp
@@ -343,7 +353,7 @@ payload.
 
 ### 7.2 Knowledge mutation journal
 
-Knowledge changes cross a file source of truth and SQLite audit/relationships, so they
+Knowledge changes cross a file source of truth and PostgreSQL audit/relationships, so they
 use a narrow durable journal:
 
 1. Validate the complete command and proposed Knowledge file.
@@ -351,7 +361,7 @@ use a narrow durable journal:
 3. Persist a `PREPARED` journal entry with old/new hashes and paths, staged path, DB
    mutation identity, and recovery strategy.
 4. Atomically replace the Knowledge file.
-5. Commit audit, attachment, SelectionPlan, and related SQLite state.
+5. Commit audit, attachment, SelectionPlan, and related PostgreSQL state.
 6. Mark the journal entry `COMMITTED`.
 
 Startup recovery must decide from durable hashes and identities whether to finish or
@@ -413,7 +423,7 @@ API and CLI consume this policy. React does not duplicate it.
 Operation is an application/infrastructure concern, not the central domain aggregate.
 The Operation runner has two hosts but one execution contract. Under `cv web`,
 lightweight worker loops run inside the supervised local backend process, poll/claim
-SQLite rows atomically, and execute jobs outside requests. A standalone CLI command
+PostgreSQL rows atomically, and execute jobs outside requests. A standalone CLI command
 that creates an Operation attempts to claim that row and runs it in the foreground in
 the CLI process with the same leases, heartbeat, resource locks, cancellation,
 idempotency, and optimistic activation checks. If another eligible runner claims the
@@ -555,27 +565,15 @@ Structured rotating logs under `logs_root` include timestamp, level, Operation I
 Application ID, phase, error code, and log reference. v2.0 offers an Open Logs Folder
 action rather than a logs screen.
 
-## 16. Backup and upgrade
+## 16. Database lifecycle and upgrade
 
-`cv workspace backup` captures SQLite, Knowledge, immutable snapshots/revisions/
-artifacts, Workspace marker/config needed to restore, and a manifest with hashes.
-`cv workspace verify-backup` verifies the archive. Acceptance additionally restores to
-a temporary directory, opens the restored Workspace, and reconciles it.
+v2.0 has no built-in Workspace backup or restore command. PostgreSQL lifecycle and any
+environment-level backup policy remain outside the application; this development-only
+replacement starts from an empty database and does not migrate historical data.
 
-**Open gap, `CV_OBJECT_STORE=s3` only.** Backup copies `artifacts_root` from the
-filesystem, so with payloads in a bucket it captures the Workspace's SQLite rows and
-Knowledge but none of the immutable payloads those rows point at. Restoring such an
-archive yields a Workspace whose records name payloads it does not contain. The local
-default is unaffected and backup remains complete there. Do not rely on
-`cv workspace backup` as the only copy of a bucket-backed Workspace until backup reads
-through `ObjectStore`.
-
-Upgrade is explicit:
-
-`backup -> verify -> compatibility check -> migration -> integrity check -> launch`
-
-There is no auto-update. A new binary/runtime never performs a hidden live data
-migration.
+Schema upgrade is explicit through `cv workspace upgrade`, backed by Alembic. Runtime
+surfaces report the current schema revision and database integrity result; a new
+binary/runtime never performs a hidden live data migration.
 
 ## 17. Version surfaces
 

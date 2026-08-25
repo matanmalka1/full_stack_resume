@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-import json
-import sqlite3
 from datetime import datetime, timedelta
 from typing import Any
+
+from sqlalchemy import case, delete, insert, select, update
+from sqlalchemy.engine import Connection
+from sqlalchemy.exc import IntegrityError
 
 from ...application.errors import IDEMPOTENCY_KEY_REUSED, StateConflict, UnknownRecord
 from ...application.operations import (
@@ -19,10 +21,16 @@ from ...application.operations import (
     required_operation_resources,
 )
 from ...util import canonical_json, new_id, sha256_text, utc_now
-from .base import SqliteRepositoryBase
+from .base import SqlAlchemyRepositoryBase
+from .tables import (
+    idempotency_receipts,
+    operation_outputs,
+    operation_resource_leases,
+    operations,
+)
 
 
-class SqliteOperationRepository(SqliteRepositoryBase):
+class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
     _RESOURCE_CAPACITY = {
         "application_mutation": 1,
         "render_browser": 1,
@@ -45,11 +53,11 @@ class SqliteOperationRepository(SqliteRepositoryBase):
             application_id=record["application_id"],
             installation_id=record["installation_id"],
             operation_type=record["operation_type"],
-            payload=json.loads(record["payload_json"]),
+            payload=record["payload_json"],
             payload_hash=record["payload_hash"],
             idempotency_key=record["idempotency_key"],
-            sources=OperationSources.model_validate_json(record["sources_json"]),
-            resources=tuple(json.loads(record["resources_json"])),
+            sources=OperationSources.model_validate(record["sources_json"]),
+            resources=tuple(record["resources_json"]),
             provider=record["provider"],
             model=record["model"],
             status=record["status"],
@@ -79,12 +87,17 @@ class SqliteOperationRepository(SqliteRepositoryBase):
         )
 
     @staticmethod
-    def _outputs(connection: Any, operation_id: str) -> list[Any]:
-        return connection.execute(
-            "SELECT output_type, output_id, active FROM operation_outputs "
-            "WHERE operation_id=? ORDER BY created_at, id",
-            (operation_id,),
-        ).fetchall()
+    def _outputs(connection: Connection, operation_id: str) -> list[Any]:
+        statement = (
+            select(
+                operation_outputs.c.output_type,
+                operation_outputs.c.output_id,
+                operation_outputs.c.active,
+            )
+            .where(operation_outputs.c.operation_id == operation_id)
+            .order_by(operation_outputs.c.created_at, operation_outputs.c.id)
+        )
+        return list(connection.execute(statement).mappings())
 
     def create_operation(
         self,
@@ -98,11 +111,17 @@ class SqliteOperationRepository(SqliteRepositoryBase):
         timestamp = created_at or utc_now()
         resources = required_operation_resources(request)
         with self.transaction() as connection:
-            existing = connection.execute(
-                "SELECT * FROM operations WHERE installation_id=? AND operation_type=? "
-                "AND idempotency_key=?",
-                (installation_id, request.operation_type.value, request.idempotency_key),
-            ).fetchone()
+            existing = (
+                connection.execute(
+                    select(operations).where(
+                        operations.c.installation_id == installation_id,
+                        operations.c.operation_type == request.operation_type.value,
+                        operations.c.idempotency_key == request.idempotency_key,
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
             if existing is not None:
                 if existing["payload_hash"] != request.payload_hash:
                     raise StateConflict(
@@ -112,55 +131,64 @@ class SqliteOperationRepository(SqliteRepositoryBase):
                 return self._operation_record(existing, self._outputs(connection, existing["id"]))
             try:
                 connection.execute(
-                    "INSERT INTO operations("
-                    "id, application_id, installation_id, operation_type, payload_json, "
-                    "payload_hash, idempotency_key, sources_json, resources_json, provider, "
-                    "model, status, phase, message, created_at, retry_of_operation_id"
-                    ") VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)",
-                    (
-                        identifier,
-                        request.application_id,
-                        installation_id,
-                        request.operation_type.value,
-                        canonical_json(request.payload),
-                        request.payload_hash,
-                        request.idempotency_key,
-                        request.sources.model_dump_json(),
-                        canonical_json(
-                            [resource.model_dump(mode="json") for resource in resources]
-                        ),
-                        request.provider,
-                        request.model,
-                        OperationStatus.QUEUED.value,
-                        OperationPhase.QUEUED.value,
-                        timestamp,
-                        request.retry_of_operation_id,
-                    ),
+                    insert(operations).values(
+                        id=identifier,
+                        application_id=request.application_id,
+                        installation_id=installation_id,
+                        operation_type=request.operation_type.value,
+                        payload_json=request.payload,
+                        payload_hash=request.payload_hash,
+                        idempotency_key=request.idempotency_key,
+                        sources_json=request.sources.model_dump(mode="json"),
+                        resources_json=[resource.model_dump(mode="json") for resource in resources],
+                        provider=request.provider,
+                        model=request.model,
+                        status=OperationStatus.QUEUED.value,
+                        phase=OperationPhase.QUEUED.value,
+                        message="",
+                        created_at=timestamp,
+                        retry_of_operation_id=request.retry_of_operation_id,
+                    )
                 )
-            except sqlite3.IntegrityError:
+            except IntegrityError:
                 # Do not translate ownership, retry-reference, or schema violations
                 # into an idempotency conflict.
                 raise
-            row = connection.execute(
-                "SELECT * FROM operations WHERE id=?", (identifier,)
-            ).fetchone()
+            row = (
+                connection.execute(select(operations).where(operations.c.id == identifier))
+                .mappings()
+                .one_or_none()
+            )
             return self._operation_record(row, [])
 
     def operation(self, operation_id: str) -> PersistedOperation:
         with self.read_connection() as connection:
-            row = connection.execute(
-                "SELECT * FROM operations WHERE id=?", (operation_id,)
-            ).fetchone()
+            row = (
+                connection.execute(select(operations).where(operations.c.id == operation_id))
+                .mappings()
+                .one_or_none()
+            )
             return self._operation_record(row, self._outputs(connection, operation_id))
 
     def active_operation(self, application_id: str) -> OperationView | None:
         with self.read_connection() as connection:
-            row = connection.execute(
-                "SELECT * FROM operations WHERE application_id=? "
-                "AND status IN ('queued', 'running') "
-                "ORDER BY CASE status WHEN 'running' THEN 0 ELSE 1 END, created_at, id LIMIT 1",
-                (application_id,),
-            ).fetchone()
+            row = (
+                connection.execute(
+                    select(operations)
+                    .where(
+                        operations.c.application_id == application_id,
+                        operations.c.status.in_(("queued", "running")),
+                    )
+                    .order_by(
+                        case((operations.c.status == "running", 0), else_=1),
+                        operations.c.created_at,
+                        operations.c.id,
+                    )
+                    .limit(1)
+                )
+                .mappings()
+                .one_or_none()
+            )
             if row is None:
                 return None
             return as_operation_view(
@@ -186,9 +214,11 @@ class SqliteOperationRepository(SqliteRepositoryBase):
         timestamp = now or utc_now()
         expires_at = self._expiry(timestamp, lease_seconds)
         with self.transaction() as connection:
-            row = connection.execute(
-                "SELECT * FROM operations WHERE id=?", (operation_id,)
-            ).fetchone()
+            row = (
+                connection.execute(select(operations).where(operations.c.id == operation_id))
+                .mappings()
+                .one_or_none()
+            )
             if row is None:
                 raise UnknownRecord("operation does not exist")
             if row["status"] != OperationStatus.QUEUED.value:
@@ -196,23 +226,27 @@ class SqliteOperationRepository(SqliteRepositoryBase):
             if row["next_attempt_at"] is not None and row["next_attempt_at"] > timestamp:
                 return None
 
-            resources = json.loads(row["resources_json"])
-            acquired: list[tuple[str, str, int]] = []
+            resources = row["resources_json"]
             blocked_kind: str | None = None
             for resource in resources:
                 kind = resource["kind"]
                 key = resource["key"]
                 for slot in range(self._RESOURCE_CAPACITY[kind]):
                     try:
-                        connection.execute(
-                            "INSERT INTO operation_resource_leases("
-                            "resource_kind, resource_key, slot, operation_id, lease_owner, "
-                            "lease_expires_at, heartbeat_at) VALUES(?, ?, ?, ?, ?, ?, ?)",
-                            (kind, key, slot, operation_id, runner_id, expires_at, timestamp),
-                        )
-                    except sqlite3.IntegrityError:
+                        with connection.begin_nested():
+                            connection.execute(
+                                insert(operation_resource_leases).values(
+                                    resource_kind=kind,
+                                    resource_key=key,
+                                    slot=slot,
+                                    operation_id=operation_id,
+                                    lease_owner=runner_id,
+                                    lease_expires_at=expires_at,
+                                    heartbeat_at=timestamp,
+                                )
+                            )
+                    except IntegrityError:
                         continue
-                    acquired.append((kind, key, slot))
                     break
                 else:
                     blocked_kind = kind
@@ -220,38 +254,46 @@ class SqliteOperationRepository(SqliteRepositoryBase):
 
             if blocked_kind is not None:
                 connection.execute(
-                    "DELETE FROM operation_resource_leases WHERE operation_id=?",
-                    (operation_id,),
+                    delete(operation_resource_leases).where(
+                        operation_resource_leases.c.operation_id == operation_id
+                    )
                 )
                 phase, message = self._waiting_phase(blocked_kind)
                 connection.execute(
-                    "UPDATE operations SET phase=?, message=? WHERE id=? AND status='queued'",
-                    (phase, message, operation_id),
+                    update(operations)
+                    .where(
+                        operations.c.id == operation_id,
+                        operations.c.status == "queued",
+                    )
+                    .values(phase=phase, message=message)
                 )
                 return None
 
             changed = connection.execute(
-                "UPDATE operations SET status='running', phase=?, message='', started_at=?, "
-                "lease_owner=?, lease_expires_at=?, heartbeat_at=? "
-                "WHERE id=? AND status='queued'",
-                (
-                    OperationPhase.PRE_EXECUTION_CHECK.value,
-                    timestamp,
-                    runner_id,
-                    expires_at,
-                    timestamp,
-                    operation_id,
-                ),
+                update(operations)
+                .where(operations.c.id == operation_id, operations.c.status == "queued")
+                .values(
+                    status="running",
+                    phase=OperationPhase.PRE_EXECUTION_CHECK.value,
+                    message="",
+                    started_at=timestamp,
+                    lease_owner=runner_id,
+                    lease_expires_at=expires_at,
+                    heartbeat_at=timestamp,
+                )
             ).rowcount
             if changed != 1:
                 connection.execute(
-                    "DELETE FROM operation_resource_leases WHERE operation_id=?",
-                    (operation_id,),
+                    delete(operation_resource_leases).where(
+                        operation_resource_leases.c.operation_id == operation_id
+                    )
                 )
                 return None
-            current = connection.execute(
-                "SELECT * FROM operations WHERE id=?", (operation_id,)
-            ).fetchone()
+            current = (
+                connection.execute(select(operations).where(operations.c.id == operation_id))
+                .mappings()
+                .one_or_none()
+            )
             return self._operation_record(current, self._outputs(connection, operation_id))
 
     def claim_next_operation(
@@ -263,12 +305,19 @@ class SqliteOperationRepository(SqliteRepositoryBase):
     ) -> PersistedOperation | None:
         timestamp = now or utc_now()
         with self.read_connection() as connection:
-            candidates = connection.execute(
-                "SELECT id FROM operations WHERE status='queued' "
-                "AND (next_attempt_at IS NULL OR next_attempt_at<=?) "
-                "ORDER BY created_at, id",
-                (timestamp,),
-            ).fetchall()
+            candidates = (
+                connection.execute(
+                    select(operations.c.id)
+                    .where(
+                        operations.c.status == "queued",
+                        (operations.c.next_attempt_at.is_(None))
+                        | (operations.c.next_attempt_at <= timestamp),
+                    )
+                    .order_by(operations.c.created_at, operations.c.id)
+                )
+                .mappings()
+                .all()
+            )
         for candidate in candidates:
             claimed = self.claim_operation(
                 candidate["id"],
@@ -292,16 +341,23 @@ class SqliteOperationRepository(SqliteRepositoryBase):
         expires_at = self._expiry(timestamp, lease_seconds)
         with self.transaction() as connection:
             changed = connection.execute(
-                "UPDATE operations SET heartbeat_at=?, lease_expires_at=? "
-                "WHERE id=? AND status='running' AND lease_owner=?",
-                (timestamp, expires_at, operation_id, runner_id),
+                update(operations)
+                .where(
+                    operations.c.id == operation_id,
+                    operations.c.status == "running",
+                    operations.c.lease_owner == runner_id,
+                )
+                .values(heartbeat_at=timestamp, lease_expires_at=expires_at)
             ).rowcount
             if changed != 1:
                 raise StateConflict("operation lease is not owned by this runner")
             leases = connection.execute(
-                "UPDATE operation_resource_leases SET heartbeat_at=?, lease_expires_at=? "
-                "WHERE operation_id=? AND lease_owner=?",
-                (timestamp, expires_at, operation_id, runner_id),
+                update(operation_resource_leases)
+                .where(
+                    operation_resource_leases.c.operation_id == operation_id,
+                    operation_resource_leases.c.lease_owner == runner_id,
+                )
+                .values(heartbeat_at=timestamp, lease_expires_at=expires_at)
             ).rowcount
             if leases < 1:
                 raise StateConflict("operation resource leases are missing")
@@ -309,22 +365,41 @@ class SqliteOperationRepository(SqliteRepositoryBase):
     def interrupt_expired_operations(self, *, now: str | None = None) -> list[str]:
         timestamp = now or utc_now()
         with self.transaction() as connection:
-            rows = connection.execute(
-                "SELECT id FROM operations WHERE status IN ('queued', 'running') "
-                "AND lease_expires_at IS NOT NULL AND lease_expires_at<=? ORDER BY created_at, id",
-                (timestamp,),
-            ).fetchall()
+            rows = (
+                connection.execute(
+                    select(operations.c.id)
+                    .where(
+                        operations.c.status.in_(("queued", "running")),
+                        operations.c.lease_expires_at.is_not(None),
+                        operations.c.lease_expires_at <= timestamp,
+                    )
+                    .order_by(operations.c.created_at, operations.c.id)
+                )
+                .mappings()
+                .all()
+            )
             identifiers = [row["id"] for row in rows]
             for identifier in identifiers:
                 connection.execute(
-                    "DELETE FROM operation_resource_leases WHERE operation_id=?", (identifier,)
+                    delete(operation_resource_leases).where(
+                        operation_resource_leases.c.operation_id == identifier
+                    )
                 )
                 connection.execute(
-                    "UPDATE operations SET status='interrupted', phase='completed', "
-                    "message='Interrupted after runner lease expired.', finished_at=?, "
-                    "lease_owner=NULL, lease_expires_at=NULL, heartbeat_at=NULL "
-                    "WHERE id=? AND status IN ('queued', 'running')",
-                    (timestamp, identifier),
+                    update(operations)
+                    .where(
+                        operations.c.id == identifier,
+                        operations.c.status.in_(("queued", "running")),
+                    )
+                    .values(
+                        status="interrupted",
+                        phase="completed",
+                        message="Interrupted after runner lease expired.",
+                        finished_at=timestamp,
+                        lease_owner=None,
+                        lease_expires_at=None,
+                        heartbeat_at=None,
+                    )
                 )
             return identifiers
 
@@ -338,18 +413,28 @@ class SqliteOperationRepository(SqliteRepositoryBase):
     ) -> None:
         with self.transaction() as connection:
             changed = connection.execute(
-                "UPDATE operations SET phase=?, message=? "
-                "WHERE id=? AND status='running' AND lease_owner=?",
-                (phase.value, message, operation_id, runner_id),
+                update(operations)
+                .where(
+                    operations.c.id == operation_id,
+                    operations.c.status == "running",
+                    operations.c.lease_owner == runner_id,
+                )
+                .values(phase=phase.value, message=message)
             ).rowcount
             if changed != 1:
                 raise StateConflict("operation lease is not owned by this runner")
 
     def cancellation_requested(self, operation_id: str) -> bool:
         with self.read_connection() as connection:
-            row = connection.execute(
-                "SELECT cancellation_requested_at FROM operations WHERE id=?", (operation_id,)
-            ).fetchone()
+            row = (
+                connection.execute(
+                    select(operations.c.cancellation_requested_at).where(
+                        operations.c.id == operation_id
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             raise UnknownRecord("operation does not exist")
         return row["cancellation_requested_at"] is not None
@@ -359,32 +444,48 @@ class SqliteOperationRepository(SqliteRepositoryBase):
     ) -> PersistedOperation:
         timestamp = now or utc_now()
         with self.transaction() as connection:
-            row = connection.execute(
-                "SELECT * FROM operations WHERE id=?", (operation_id,)
-            ).fetchone()
+            row = (
+                connection.execute(select(operations).where(operations.c.id == operation_id))
+                .mappings()
+                .one_or_none()
+            )
             if row is None:
                 raise UnknownRecord("operation does not exist")
             if row["status"] == OperationStatus.QUEUED.value:
                 connection.execute(
-                    "DELETE FROM operation_resource_leases WHERE operation_id=?", (operation_id,)
+                    delete(operation_resource_leases).where(
+                        operation_resource_leases.c.operation_id == operation_id
+                    )
                 )
                 connection.execute(
-                    "UPDATE operations SET status='cancelled', phase='completed', "
-                    "message='Cancelled before execution.', finished_at=?, "
-                    "cancellation_requested_at=?, lease_owner=NULL, lease_expires_at=NULL, "
-                    "heartbeat_at=NULL WHERE id=? AND status='queued'",
-                    (timestamp, timestamp, operation_id),
+                    update(operations)
+                    .where(operations.c.id == operation_id, operations.c.status == "queued")
+                    .values(
+                        status="cancelled",
+                        phase="completed",
+                        message="Cancelled before execution.",
+                        finished_at=timestamp,
+                        cancellation_requested_at=timestamp,
+                        lease_owner=None,
+                        lease_expires_at=None,
+                        heartbeat_at=None,
+                    )
                 )
             elif row["status"] == OperationStatus.RUNNING.value:
                 connection.execute(
-                    "UPDATE operations SET cancellation_requested_at=?, "
-                    "message='Cancellation requested.' WHERE id=? AND status='running' "
-                    "AND cancellation_requested_at IS NULL",
-                    (timestamp, operation_id),
+                    update(operations)
+                    .where(
+                        operations.c.id == operation_id,
+                        operations.c.status == "running",
+                        operations.c.cancellation_requested_at.is_(None),
+                    )
+                    .values(cancellation_requested_at=timestamp, message="Cancellation requested.")
                 )
-            current = connection.execute(
-                "SELECT * FROM operations WHERE id=?", (operation_id,)
-            ).fetchone()
+            current = (
+                connection.execute(select(operations).where(operations.c.id == operation_id))
+                .mappings()
+                .one_or_none()
+            )
             return self._operation_record(current, self._outputs(connection, operation_id))
 
     def record_operation_output(
@@ -399,10 +500,15 @@ class SqliteOperationRepository(SqliteRepositoryBase):
         timestamp = created_at or utc_now()
         identifier = new_id()
         with self.transaction() as connection:
-            operation = connection.execute(
-                "SELECT status, cancellation_requested_at FROM operations WHERE id=?",
-                (operation_id,),
-            ).fetchone()
+            operation = (
+                connection.execute(
+                    select(operations.c.status, operations.c.cancellation_requested_at).where(
+                        operations.c.id == operation_id
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
             if operation is None:
                 raise UnknownRecord("operation does not exist")
             if active and (
@@ -411,17 +517,15 @@ class SqliteOperationRepository(SqliteRepositoryBase):
             ):
                 raise StateConflict("operation output cannot be activated")
             connection.execute(
-                "INSERT INTO operation_outputs(id, operation_id, output_type, output_id, "
-                "active, created_at, activated_at) VALUES(?, ?, ?, ?, ?, ?, ?)",
-                (
-                    identifier,
-                    operation_id,
-                    output_type,
-                    output_id,
-                    int(active),
-                    timestamp,
-                    timestamp if active else None,
-                ),
+                insert(operation_outputs).values(
+                    id=identifier,
+                    operation_id=operation_id,
+                    output_type=output_type,
+                    output_id=output_id,
+                    active=active,
+                    created_at=timestamp,
+                    activated_at=timestamp if active else None,
+                )
             )
         return identifier
 
@@ -431,9 +535,14 @@ class SqliteOperationRepository(SqliteRepositoryBase):
         timestamp = now or utc_now()
         with self.transaction() as connection:
             changed = connection.execute(
-                "UPDATE operation_outputs SET active=1, activated_at=? "
-                "WHERE operation_id=? AND output_type=? AND output_id=? AND active=0",
-                (timestamp, operation_id, output_type, output_id),
+                update(operation_outputs)
+                .where(
+                    operation_outputs.c.operation_id == operation_id,
+                    operation_outputs.c.output_type == output_type,
+                    operation_outputs.c.output_id == output_id,
+                    operation_outputs.c.active.is_(False),
+                )
+                .values(active=True, activated_at=timestamp)
             ).rowcount
             if changed != 1:
                 raise StateConflict("operation output cannot be activated")
@@ -447,21 +556,30 @@ class SqliteOperationRepository(SqliteRepositoryBase):
     ) -> int:
         with self.transaction() as connection:
             changed = connection.execute(
-                "UPDATE operations SET attempts_completed=attempts_completed+1, "
-                "phase=?, next_attempt_at=? "
-                "WHERE id=? AND status='running' AND lease_owner=?",
-                (OperationPhase.RETRY_WAIT.value, retry_at, operation_id, runner_id),
+                update(operations)
+                .where(
+                    operations.c.id == operation_id,
+                    operations.c.status == "running",
+                    operations.c.lease_owner == runner_id,
+                )
+                .values(
+                    attempts_completed=operations.c.attempts_completed + 1,
+                    phase=OperationPhase.RETRY_WAIT.value,
+                    next_attempt_at=retry_at,
+                )
             ).rowcount
             if changed != 1:
                 raise StateConflict("operation lease is not owned by this runner")
             return connection.execute(
-                "SELECT attempts_completed FROM operations WHERE id=?", (operation_id,)
-            ).fetchone()[0]
+                select(operations.c.attempts_completed).where(operations.c.id == operation_id)
+            ).scalar_one()
 
     @staticmethod
-    def _release(connection: Any, operation_id: str) -> None:
+    def _release(connection: Connection, operation_id: str) -> None:
         connection.execute(
-            "DELETE FROM operation_resource_leases WHERE operation_id=?", (operation_id,)
+            delete(operation_resource_leases).where(
+                operation_resource_leases.c.operation_id == operation_id
+            )
         )
 
     def complete_operation(
@@ -473,10 +591,17 @@ class SqliteOperationRepository(SqliteRepositoryBase):
     ) -> PersistedOperation:
         timestamp = now or utc_now()
         with self.transaction() as connection:
-            row = connection.execute(
-                "SELECT * FROM operations WHERE id=? AND status='running' AND lease_owner=?",
-                (operation_id, runner_id),
-            ).fetchone()
+            row = (
+                connection.execute(
+                    select(operations).where(
+                        operations.c.id == operation_id,
+                        operations.c.status == "running",
+                        operations.c.lease_owner == runner_id,
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
             if row is None:
                 raise StateConflict("operation lease is not owned by this runner")
             self._release(connection, operation_id)
@@ -489,24 +614,31 @@ class SqliteOperationRepository(SqliteRepositoryBase):
                 failure_code = None
                 message = ""
             connection.execute(
-                "UPDATE operations SET status=?, phase='completed', message=?, finished_at=?, "
-                "failure_code=?, safe_failure_detail=?, lease_owner=NULL, "
-                "lease_expires_at=NULL, heartbeat_at=NULL, next_attempt_at=NULL, "
-                "attempts_completed=attempts_completed+1 "
-                "WHERE id=? AND status='running' AND lease_owner=?",
-                (
-                    status,
-                    message,
-                    timestamp,
-                    failure_code,
-                    message or None,
-                    operation_id,
-                    runner_id,
-                ),
+                update(operations)
+                .where(
+                    operations.c.id == operation_id,
+                    operations.c.status == "running",
+                    operations.c.lease_owner == runner_id,
+                )
+                .values(
+                    status=status,
+                    phase="completed",
+                    message=message,
+                    finished_at=timestamp,
+                    failure_code=failure_code,
+                    safe_failure_detail=message or None,
+                    lease_owner=None,
+                    lease_expires_at=None,
+                    heartbeat_at=None,
+                    next_attempt_at=None,
+                    attempts_completed=operations.c.attempts_completed + 1,
+                )
             )
-            current = connection.execute(
-                "SELECT * FROM operations WHERE id=?", (operation_id,)
-            ).fetchone()
+            current = (
+                connection.execute(select(operations).where(operations.c.id == operation_id))
+                .mappings()
+                .one_or_none()
+            )
             return self._operation_record(current, self._outputs(connection, operation_id))
 
     def fail_operation(
@@ -523,25 +655,34 @@ class SqliteOperationRepository(SqliteRepositoryBase):
         with self.transaction() as connection:
             self._release(connection, operation_id)
             changed = connection.execute(
-                "UPDATE operations SET status='failed', phase='completed', message='', "
-                "finished_at=?, failure_code=?, safe_failure_detail=?, "
-                "technical_log_reference=?, attempts_completed=attempts_completed+1, "
-                "lease_owner=NULL, lease_expires_at=NULL, heartbeat_at=NULL, next_attempt_at=NULL "
-                "WHERE id=? AND status='running' AND lease_owner=?",
-                (
-                    timestamp,
-                    code.value,
-                    safe_detail,
-                    technical_log_reference,
-                    operation_id,
-                    runner_id,
-                ),
+                update(operations)
+                .where(
+                    operations.c.id == operation_id,
+                    operations.c.status == "running",
+                    operations.c.lease_owner == runner_id,
+                )
+                .values(
+                    status="failed",
+                    phase="completed",
+                    message="",
+                    finished_at=timestamp,
+                    failure_code=code.value,
+                    safe_failure_detail=safe_detail,
+                    technical_log_reference=technical_log_reference,
+                    attempts_completed=operations.c.attempts_completed + 1,
+                    lease_owner=None,
+                    lease_expires_at=None,
+                    heartbeat_at=None,
+                    next_attempt_at=None,
+                )
             ).rowcount
             if changed != 1:
                 raise StateConflict("operation lease is not owned by this runner")
-            current = connection.execute(
-                "SELECT * FROM operations WHERE id=?", (operation_id,)
-            ).fetchone()
+            current = (
+                connection.execute(select(operations).where(operations.c.id == operation_id))
+                .mappings()
+                .one_or_none()
+            )
             return self._operation_record(current, self._outputs(connection, operation_id))
 
     def claim_idempotency_receipt(
@@ -558,11 +699,17 @@ class SqliteOperationRepository(SqliteRepositoryBase):
         payload_hash = sha256_text(payload_json)
         timestamp = created_at or utc_now()
         with self.transaction() as connection:
-            existing = connection.execute(
-                "SELECT * FROM idempotency_receipts WHERE installation_id=? "
-                "AND command_type=? AND idempotency_key=?",
-                (installation_id, command_type, idempotency_key),
-            ).fetchone()
+            existing = (
+                connection.execute(
+                    select(idempotency_receipts).where(
+                        idempotency_receipts.c.installation_id == installation_id,
+                        idempotency_receipts.c.command_type == command_type,
+                        idempotency_receipts.c.idempotency_key == idempotency_key,
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
             if existing is not None:
                 if existing["payload_hash"] != payload_hash:
                     raise StateConflict(
@@ -570,26 +717,22 @@ class SqliteOperationRepository(SqliteRepositoryBase):
                         code=IDEMPOTENCY_KEY_REUSED,
                     )
                 record = dict(existing)
-                record["payload"] = json.loads(record.pop("payload_json"))
-                result_json = record.pop("result_json")
-                record["result"] = json.loads(result_json) if result_json is not None else None
+                record["payload"] = record.pop("payload_json")
+                record["result"] = record.pop("result_json")
                 return record
             identifier = new_id()
             connection.execute(
-                "INSERT INTO idempotency_receipts("
-                "id, installation_id, command_type, idempotency_key, payload_json, "
-                "payload_hash, reserved_entity_id, status, created_at"
-                ") VALUES(?, ?, ?, ?, ?, ?, ?, 'pending', ?)",
-                (
-                    identifier,
-                    installation_id,
-                    command_type,
-                    idempotency_key,
-                    payload_json,
-                    payload_hash,
-                    reserved_entity_id,
-                    timestamp,
-                ),
+                insert(idempotency_receipts).values(
+                    id=identifier,
+                    installation_id=installation_id,
+                    command_type=command_type,
+                    idempotency_key=idempotency_key,
+                    payload_json=payload,
+                    payload_hash=payload_hash,
+                    reserved_entity_id=reserved_entity_id,
+                    status="pending",
+                    created_at=timestamp,
+                )
             )
             return {
                 "id": identifier,
@@ -609,17 +752,22 @@ class SqliteOperationRepository(SqliteRepositoryBase):
         self, command_type: str, idempotency_key: str, *, installation_id: str
     ) -> dict[str, Any] | None:
         with self.read_connection() as connection:
-            row = connection.execute(
-                "SELECT * FROM idempotency_receipts WHERE installation_id=? "
-                "AND command_type=? AND idempotency_key=?",
-                (installation_id, command_type, idempotency_key),
-            ).fetchone()
+            row = (
+                connection.execute(
+                    select(idempotency_receipts).where(
+                        idempotency_receipts.c.installation_id == installation_id,
+                        idempotency_receipts.c.command_type == command_type,
+                        idempotency_receipts.c.idempotency_key == idempotency_key,
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             return None
         record = dict(row)
-        record["payload"] = json.loads(record.pop("payload_json"))
-        result_json = record.pop("result_json")
-        record["result"] = json.loads(result_json) if result_json is not None else None
+        record["payload"] = record.pop("payload_json")
+        record["result"] = record.pop("result_json")
         return record
 
     def complete_idempotency_receipt(
@@ -628,14 +776,23 @@ class SqliteOperationRepository(SqliteRepositoryBase):
         timestamp = completed_at or utc_now()
         with self.transaction() as connection:
             changed = connection.execute(
-                "UPDATE idempotency_receipts SET status='completed', result_json=?, "
-                "completed_at=? WHERE id=? AND status='pending'",
-                (canonical_json(result), timestamp, receipt_id),
+                update(idempotency_receipts)
+                .where(
+                    idempotency_receipts.c.id == receipt_id,
+                    idempotency_receipts.c.status == "pending",
+                )
+                .values(status="completed", result_json=result, completed_at=timestamp)
             ).rowcount
             if changed != 1:
-                row = connection.execute(
-                    "SELECT result_json FROM idempotency_receipts WHERE id=? AND status='completed'",
-                    (receipt_id,),
-                ).fetchone()
-                if row is None or json.loads(row["result_json"]) != result:
+                row = (
+                    connection.execute(
+                        select(idempotency_receipts.c.result_json).where(
+                            idempotency_receipts.c.id == receipt_id,
+                            idempotency_receipts.c.status == "completed",
+                        )
+                    )
+                    .mappings()
+                    .one_or_none()
+                )
+                if row is None or row["result_json"] != result:
                     raise StateConflict("idempotency receipt cannot be completed")

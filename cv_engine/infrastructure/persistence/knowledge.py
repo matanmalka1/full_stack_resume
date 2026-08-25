@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import json
 from typing import Any
+
+from sqlalchemy import insert, select, update
 
 from ...application.errors import (
     PreconditionFailed,
@@ -12,12 +13,13 @@ from ...application.knowledge_mutations import (
     KnowledgeMutationState,
     PrepareKnowledgeMutation,
 )
-from ...util import canonical_json, utc_now
-from .base import SqliteRepositoryBase
+from ...util import utc_now
+from .base import SqlAlchemyRepositoryBase
+from .tables import knowledge_mutation_journal
 
 
-class SqliteKnowledgeMutationRepository(SqliteRepositoryBase):
-    """SQLite ownership for the narrow file/DB Knowledge mutation journal."""
+class SqlAlchemyKnowledgeMutationRepository(SqlAlchemyRepositoryBase):
+    """Persistence ownership for the narrow file/DB Knowledge mutation journal."""
 
     @staticmethod
     def _knowledge_mutation_record(row: Any) -> KnowledgeMutation:
@@ -33,7 +35,7 @@ class SqliteKnowledgeMutationRepository(SqliteRepositoryBase):
             new_sha256=row["new_sha256"],
             db_mutation_type=row["db_mutation_type"],
             db_mutation_id=row["db_mutation_id"],
-            db_mutation=json.loads(row["db_mutation_json"]),
+            db_mutation=row["db_mutation_json"],
             recovery_strategy=row["recovery_strategy"],
             prepared_at=row["prepared_at"],
             committed_at=row["committed_at"],
@@ -46,51 +48,75 @@ class SqliteKnowledgeMutationRepository(SqliteRepositoryBase):
     ) -> KnowledgeMutation:
         with self.transaction() as connection:
             connection.execute(
-                "INSERT INTO knowledge_mutation_journal("
-                "id, mutation_type, state, source_reference, staged_reference, old_sha256, "
-                "new_sha256, db_mutation_type, db_mutation_id, db_mutation_json, "
-                "recovery_strategy, prepared_at) VALUES(?, ?, 'PREPARED', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    request.mutation_id,
-                    request.mutation_type,
-                    request.source_reference,
-                    request.staged_reference,
-                    request.old_sha256,
-                    request.new_sha256,
-                    request.db_mutation_type,
-                    request.db_mutation_id,
-                    canonical_json(request.db_mutation),
-                    request.recovery_strategy,
-                    prepared_at or utc_now(),
-                ),
+                insert(knowledge_mutation_journal).values(
+                    id=request.mutation_id,
+                    mutation_type=request.mutation_type,
+                    state="PREPARED",
+                    source_reference=request.source_reference,
+                    staged_reference=request.staged_reference,
+                    old_sha256=request.old_sha256,
+                    new_sha256=request.new_sha256,
+                    db_mutation_type=request.db_mutation_type,
+                    db_mutation_id=request.db_mutation_id,
+                    db_mutation_json=request.db_mutation,
+                    recovery_strategy=request.recovery_strategy,
+                    prepared_at=prepared_at or utc_now(),
+                )
             )
-            row = connection.execute(
-                "SELECT * FROM knowledge_mutation_journal WHERE id=?",
-                (request.mutation_id,),
-            ).fetchone()
+            row = (
+                connection.execute(
+                    select(knowledge_mutation_journal).where(
+                        knowledge_mutation_journal.c.id == request.mutation_id
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
         return self._knowledge_mutation_record(row)
 
     def knowledge_mutation(self, mutation_id: str) -> KnowledgeMutation:
         with self.read_connection() as connection:
-            row = connection.execute(
-                "SELECT * FROM knowledge_mutation_journal WHERE id=?", (mutation_id,)
-            ).fetchone()
+            row = (
+                connection.execute(
+                    select(knowledge_mutation_journal).where(
+                        knowledge_mutation_journal.c.id == mutation_id
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
         return self._knowledge_mutation_record(row)
 
     def prepared_knowledge_mutations(self) -> list[KnowledgeMutation]:
         with self.read_connection() as connection:
-            rows = connection.execute(
-                "SELECT * FROM knowledge_mutation_journal WHERE state='PREPARED' "
-                "ORDER BY prepared_at, id"
-            ).fetchall()
+            rows = (
+                connection.execute(
+                    select(knowledge_mutation_journal)
+                    .where(knowledge_mutation_journal.c.state == "PREPARED")
+                    .order_by(
+                        knowledge_mutation_journal.c.prepared_at,
+                        knowledge_mutation_journal.c.id,
+                    )
+                )
+                .mappings()
+                .all()
+            )
         return [self._knowledge_mutation_record(row) for row in rows]
 
     def quarantined_knowledge_mutations(self) -> list[KnowledgeMutation]:
         with self.read_connection() as connection:
-            rows = connection.execute(
-                "SELECT * FROM knowledge_mutation_journal WHERE state='QUARANTINED' "
-                "ORDER BY quarantined_at, id"
-            ).fetchall()
+            rows = (
+                connection.execute(
+                    select(knowledge_mutation_journal)
+                    .where(knowledge_mutation_journal.c.state == "QUARANTINED")
+                    .order_by(
+                        knowledge_mutation_journal.c.quarantined_at,
+                        knowledge_mutation_journal.c.id,
+                    )
+                )
+                .mappings()
+                .all()
+            )
         return [self._knowledge_mutation_record(row) for row in rows]
 
     def commit_knowledge_mutation(
@@ -98,15 +124,24 @@ class SqliteKnowledgeMutationRepository(SqliteRepositoryBase):
     ) -> KnowledgeMutation:
         with self.transaction() as connection:
             cursor = connection.execute(
-                "UPDATE knowledge_mutation_journal SET state='COMMITTED', committed_at=? "
-                "WHERE id=? AND state='PREPARED'",
-                (committed_at or utc_now(), mutation_id),
+                update(knowledge_mutation_journal)
+                .where(
+                    knowledge_mutation_journal.c.id == mutation_id,
+                    knowledge_mutation_journal.c.state == "PREPARED",
+                )
+                .values(state="COMMITTED", committed_at=committed_at or utc_now())
             )
             if cursor.rowcount != 1:
                 raise PreconditionFailed("knowledge mutation is not prepared")
-            row = connection.execute(
-                "SELECT * FROM knowledge_mutation_journal WHERE id=?", (mutation_id,)
-            ).fetchone()
+            row = (
+                connection.execute(
+                    select(knowledge_mutation_journal).where(
+                        knowledge_mutation_journal.c.id == mutation_id
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
         return self._knowledge_mutation_record(row)
 
     def quarantine_knowledge_mutation(
@@ -120,13 +155,26 @@ class SqliteKnowledgeMutationRepository(SqliteRepositoryBase):
             raise PreconditionFailed("knowledge mutation quarantine requires a reason")
         with self.transaction() as connection:
             cursor = connection.execute(
-                "UPDATE knowledge_mutation_journal SET state='QUARANTINED', "
-                "quarantined_at=?, quarantine_reason=? WHERE id=? AND state='PREPARED'",
-                (quarantined_at or utc_now(), reason, mutation_id),
+                update(knowledge_mutation_journal)
+                .where(
+                    knowledge_mutation_journal.c.id == mutation_id,
+                    knowledge_mutation_journal.c.state == "PREPARED",
+                )
+                .values(
+                    state="QUARANTINED",
+                    quarantined_at=quarantined_at or utc_now(),
+                    quarantine_reason=reason,
+                )
             )
             if cursor.rowcount != 1:
                 raise PreconditionFailed("knowledge mutation is not prepared")
-            row = connection.execute(
-                "SELECT * FROM knowledge_mutation_journal WHERE id=?", (mutation_id,)
-            ).fetchone()
+            row = (
+                connection.execute(
+                    select(knowledge_mutation_journal).where(
+                        knowledge_mutation_journal.c.id == mutation_id
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
         return self._knowledge_mutation_record(row)

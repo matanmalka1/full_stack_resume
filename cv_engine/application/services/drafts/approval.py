@@ -26,9 +26,9 @@ class DraftApproval(DraftServiceBase):
     """The trust boundary: immutable payloads, then the records that name them."""
 
     def _require_synced_projection(self, application_id: str, draft: DraftDocument) -> None:
-        """Refuse to approve while the projection holds edits SQLite has not imported.
+        """Refuse to approve while the projection holds edits storage has not imported.
 
-        SQLite is authoritative from boundary 2a, and approval rebuilds the
+        The database is authoritative from boundary 2a, and approval rebuilds the
         projection from it, so an unimported file edit would be destroyed without
         a word. `validate` deliberately reports on the stored draft instead of
         refusing, because that report is true; approval is the trust boundary and
@@ -103,7 +103,7 @@ class DraftApproval(DraftServiceBase):
         validation_id = command.validation_run_id
         facts, profiles = knowledge.facts, knowledge.profiles
         draft = working.source
-        # SQLite is authoritative. Seal the exact stored document and commit its
+        # The database is authoritative. Seal the exact stored document and commit its
         # immutable payloads before any revision row can become visible.
         sealed, markdown, structured_json = seal_draft(draft)
         if sealed.content_hash != working.content_hash:

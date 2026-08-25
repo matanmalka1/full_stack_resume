@@ -1,17 +1,24 @@
 from __future__ import annotations
 
+from sqlalchemy import insert, select, update
+
 from ...application.errors import StateConflict
 from ...application.settings import StoredSettings, UpdateSettings
 from ...util import utc_now
-from .base import SqliteRepositoryBase
+from .base import SqlAlchemyRepositoryBase
+from .tables import workspace_settings
 
 
-class SqliteSettingsRepository(SqliteRepositoryBase):
+class SqlAlchemySettingsRepository(SqlAlchemyRepositoryBase):
     def workspace_settings(self) -> StoredSettings:
         with self.read_connection() as connection:
-            row = connection.execute(
-                "SELECT * FROM workspace_settings WHERE singleton_id=1"
-            ).fetchone()
+            row = (
+                connection.execute(
+                    select(workspace_settings).where(workspace_settings.c.singleton_id == 1)
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             return StoredSettings()
         return StoredSettings(
@@ -20,9 +27,7 @@ class SqliteSettingsRepository(SqliteRepositoryBase):
                 row["auto_generate_when_review_not_required"]
             ),
             ai_enabled_override=(
-                None
-                if row["ai_enabled_override"] is None
-                else bool(row["ai_enabled_override"])
+                None if row["ai_enabled_override"] is None else bool(row["ai_enabled_override"])
             ),
             default_execution_mode=row["default_execution_mode"],
             open_browser_on_launch=bool(row["open_browser_on_launch"]),
@@ -36,9 +41,15 @@ class SqliteSettingsRepository(SqliteRepositoryBase):
     ) -> StoredSettings:
         now = utc_now()
         with self.transaction() as connection:
-            current = connection.execute(
-                "SELECT edit_version FROM workspace_settings WHERE singleton_id=1"
-            ).fetchone()
+            current = (
+                connection.execute(
+                    select(workspace_settings.c.edit_version).where(
+                        workspace_settings.c.singleton_id == 1
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
             observed = 0 if current is None else current["edit_version"]
             if observed != expected_edit_version:
                 raise StateConflict(
@@ -46,35 +57,25 @@ class SqliteSettingsRepository(SqliteRepositoryBase):
                     f"to {observed}; reload them before saving"
                 )
             next_version = observed + 1
-            values = (
-                next_version,
-                int(settings.auto_generate_when_review_not_required),
-                (
-                    None
-                    if settings.ai_enabled_override is None
-                    else int(settings.ai_enabled_override)
+            values = {
+                "edit_version": next_version,
+                "auto_generate_when_review_not_required": (
+                    settings.auto_generate_when_review_not_required
                 ),
-                settings.default_execution_mode,
-                int(settings.open_browser_on_launch),
-                settings.ui_density,
-                settings.ui_text_size,
-                now,
-            )
+                "ai_enabled_override": settings.ai_enabled_override,
+                "default_execution_mode": settings.default_execution_mode,
+                "open_browser_on_launch": settings.open_browser_on_launch,
+                "ui_density": settings.ui_density,
+                "ui_text_size": settings.ui_text_size,
+                "updated_at": now,
+            }
             if current is None:
-                connection.execute(
-                    "INSERT INTO workspace_settings("
-                    "singleton_id, edit_version, auto_generate_when_review_not_required, "
-                    "ai_enabled_override, default_execution_mode, open_browser_on_launch, "
-                    "ui_density, ui_text_size, updated_at) VALUES(1, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    values,
-                )
+                connection.execute(insert(workspace_settings).values(singleton_id=1, **values))
             else:
                 connection.execute(
-                    "UPDATE workspace_settings SET edit_version=?, "
-                    "auto_generate_when_review_not_required=?, ai_enabled_override=?, "
-                    "default_execution_mode=?, open_browser_on_launch=?, ui_density=?, "
-                    "ui_text_size=?, updated_at=? WHERE singleton_id=1",
-                    values,
+                    update(workspace_settings)
+                    .where(workspace_settings.c.singleton_id == 1)
+                    .values(**values)
                 )
         return StoredSettings(
             edit_version=next_version,

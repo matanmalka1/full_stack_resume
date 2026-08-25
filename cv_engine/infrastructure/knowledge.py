@@ -174,7 +174,7 @@ def seed_fact_before_workspace(
 
     Normal commands must use ``KnowledgeService``. This helper exists only for
     constructing the isolated test Knowledge fixture before its Workspace marker
-    and SQLite database are created.
+    and database are created.
     """
     store = load_fact_store(base_dir)
     record = build_new_fact(store, source_name, payload, canonical=canonical)

@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
 
 from .. import __version__
 from ..api import ApiLimits, ApiServices, InstanceIdentity
@@ -40,7 +39,11 @@ from ..infrastructure.knowledge import FileKnowledge
 from ..infrastructure.object_store import LocalObjectStore, ObjectStore, S3ObjectStore
 from ..infrastructure.operation_logging import OperationFailureLogger
 from ..infrastructure.payloads import PayloadStore
-from ..infrastructure.persistence import Repository, current_schema_version
+from ..infrastructure.persistence import (
+    Repository,
+    create_database_engine,
+    current_database_revision,
+)
 from ..infrastructure.providers import OpenAIProvider
 from ..infrastructure.rendering import PlaywrightRenderer
 from ..util import new_id
@@ -59,7 +62,8 @@ class Services:
     """Everything a client needs, already wired to one Workspace."""
 
     workspace: Workspace
-    database_path: Path
+    database_url: str
+    schema_version: str
     repository: ApplicationRepository
     knowledge: KnowledgeStore
     artifacts: ArtifactStore
@@ -113,7 +117,7 @@ def build_object_store(workspace: Workspace, config: RuntimeConfig) -> ObjectSto
 def build_services(
     workspace: Workspace,
     *,
-    database_path: Path | None = None,
+    database_url: str | None = None,
     repository: ApplicationRepository | None = None,
     knowledge: KnowledgeStore | None = None,
     artifacts: ArtifactStore | None = None,
@@ -128,8 +132,18 @@ def build_services(
     Callers may substitute any of them — that is how tests replace the browser
     and the AI provider without the application layer knowing either exists.
     """
-    resolved_database_path = Path(database_path or workspace.database_path).resolve()
-    resolved_repository = repository or Repository(resolved_database_path)
+    resolved_config = config or _default_config()
+    resolved_database_url = database_url or str(resolved_config.get("database_url"))
+    if repository is None:
+        engine = create_database_engine(resolved_database_url)
+        resolved_repository = Repository(engine)
+        schema_version = current_database_revision(engine) or ""
+    else:
+        resolved_repository = repository
+        repository_engine = getattr(repository, "engine", None)
+        schema_version = (
+            current_database_revision(repository_engine) if repository_engine is not None else None
+        ) or ""
     resolved_knowledge = knowledge or FileKnowledge(
         workspace.knowledge_root,
         workspace_root=workspace.root,
@@ -150,7 +164,7 @@ def build_services(
     if resolved_provider is None and os.environ.get("OPENAI_API_KEY"):
         resolved_provider = OpenAIProvider(
             resolved_knowledge.task_contracts(),
-            default_model=str((config or _default_config()).get("model")),
+            default_model=str(resolved_config.get("model")),
         )
     shared = {
         "repository": resolved_repository,
@@ -192,7 +206,8 @@ def build_services(
     )
     return Services(
         workspace=workspace,
-        database_path=resolved_database_path,
+        database_url=resolved_database_url,
+        schema_version=schema_version,
         repository=resolved_repository,
         knowledge=resolved_knowledge,
         artifacts=resolved_artifacts,
@@ -248,10 +263,7 @@ def build_api_services(
             workspace_id=services.workspace.workspace_id,
             product_version=__version__,
             api_version=API_VERSION,
-            # None before `cv init` has run. Reported as-is rather than
-            # invented: a health probe that claims a schema version for a
-            # database that has none is worse than one that says so.
-            schema_version=current_schema_version(services.database_path) or "",
+            schema_version=services.schema_version,
         ),
         limits=ApiLimits(max_body_bytes=max_body_bytes, dev_origin=dev_origin),
     )

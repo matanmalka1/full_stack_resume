@@ -2,7 +2,7 @@
 
 Create -> Analyze -> Draft -> Edit -> Validate -> Approve -> Render -> Ready,
 driven entirely over HTTP against a real FastAPI app, a real `OperationWorker`,
-real SQLite, and a real filesystem. This is the acceptance test the milestone
+real PostgreSQL, and a real filesystem. This is the acceptance test the milestone
 names, so it is deliberately one long test rather than several short ones: what
 is being proved is that the steps compose, and a suite that proved each step
 separately would not have proved that.

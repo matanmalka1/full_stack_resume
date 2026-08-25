@@ -323,7 +323,7 @@ def test_the_production_frontend_never_serves_a_symlink_outside_its_build_root(
 
 
 def test_the_committed_openapi_schema_matches_the_application() -> None:
-    """The same shape as the frozen SQLite fingerprint.
+    """The same shape as the frozen schema record.
 
     A committed contract that silently disagrees with the code is worse than no
     committed contract: the TypeScript types are generated from this file, so a

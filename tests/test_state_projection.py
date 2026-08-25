@@ -4,12 +4,13 @@ from dataclasses import replace
 
 import pytest
 from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB, approve_active_draft
+from sqlalchemy import update
 
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
 from cv_engine.application.queries import PreparationState, WorkingDraftState
 from cv_engine.domain.facts import FactStore
 from cv_engine.domain.models import ValidationIssue, ValidationReport, ValidationRunLineage
-from cv_engine.infrastructure.persistence import connect
+from cv_engine.infrastructure.persistence.tables import applications
 from cv_engine.util import canonical_json, new_id, sha256_text
 
 
@@ -287,19 +288,19 @@ def test_pending_claim_recommends_its_resolution_action(drafted_application) -> 
     assert "confirm_and_use_fact" in detail.available_actions
 
 
-def test_projection_queries_share_one_sqlite_snapshot(services) -> None:
+def test_projection_queries_share_one_database_snapshot(services) -> None:
     ingested = services.applications.ingest(
         IngestCommand(company="Snapshot Co", target_role="Developer", job_text="Python role")
     )
     repository = services.repository
     with repository.read_transaction() as reader:
         before = reader.get_application(ingested.application_id)
-        with connect(repository.path) as writer:
+        with repository.engine.begin() as writer:
             writer.execute(
-                "UPDATE applications SET next_action='Call recruiter' WHERE id=?",
-                (ingested.application_id,),
+                update(applications)
+                .where(applications.c.id == ingested.application_id)
+                .values(next_action="Call recruiter")
             )
-            writer.commit()
         during = reader.get_application(ingested.application_id)
 
     after = repository.get_application(ingested.application_id)

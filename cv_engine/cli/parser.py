@@ -69,7 +69,6 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="deprecated alias for --workspace",
     )
-    parser.add_argument("--db", type=Path)
     sub = parser.add_subparsers(dest="command", required=True)
 
     web = sub.add_parser("web", help="start the local Web UI, API, and Operation worker")
@@ -93,20 +92,7 @@ def build_parser() -> argparse.ArgumentParser:
     workspace_sub.add_parser(
         "status", help="show Workspace identity, roots, and resolved configuration"
     )
-    workspace_sub.add_parser(
-        "upgrade", help="explicitly apply pending registered SQLite migrations"
-    )
-    workspace_backup = workspace_sub.add_parser(
-        "backup", help="copy this Workspace's durable state into a new directory"
-    )
-    workspace_backup.add_argument("--into", type=Path, required=True)
-    workspace_restore = workspace_sub.add_parser(
-        "restore", help="restore a backup into a new directory and open it"
-    )
-    workspace_restore.add_argument("--from", dest="backup_from", type=Path, required=True)
-    workspace_restore.add_argument("--into", type=Path, required=True)
-
-    sub.add_parser("init", help="initialize the SQLite schema")
+    workspace_sub.add_parser("upgrade", help="apply pending Alembic migrations")
     ingest = sub.add_parser("ingest", help="create an application and immutable job snapshot")
     _add_job_input(ingest)
 
@@ -219,7 +205,7 @@ def build_parser() -> argparse.ArgumentParser:
     export = sub.add_parser("export", help="export application data to CSV")
     export.add_argument("output", type=Path)
     sub.add_parser(
-        "reconcile", help="reconcile SQLite references, artifact hashes, and the fact lifecycle"
+        "reconcile", help="reconcile database references, artifact hashes, and the fact lifecycle"
     )
 
     fact = sub.add_parser(

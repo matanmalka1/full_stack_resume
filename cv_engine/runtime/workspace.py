@@ -114,16 +114,11 @@ class Workspace:
     def data_class(self) -> str:
         return self.marker.data_class
 
-    @property
-    def database_path(self) -> Path:
-        return self.state_root / "applications.sqlite3"
-
     def relative(self, path: Path) -> str:
         """A Workspace-relative POSIX path, or a refusal.
 
-        Artifact rows store Workspace-relative paths so a Workspace can be
-        backed up, restored, or copied to another directory without rewriting
-        SQLite, and so no absolute local path becomes part of the record.
+        Artifact rows store Workspace-relative paths so relocating a Workspace
+        does not rewrite stored records or persist absolute local paths.
         """
         if not Path(path).is_absolute():
             raise WorkspaceError(f"path is outside the Workspace: {path}")

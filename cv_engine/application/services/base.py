@@ -254,7 +254,7 @@ class ServiceBase(Generic[RepoT]):
     ) -> tuple[str, SnapshotPayload]:
         """Write one sanitized provider response, before anything is registered.
 
-        Filesystem first, SQLite second - the order every immutable payload in
+        Filesystem first, database second - the order every immutable payload in
         this system uses. A registration that fails afterwards leaves a
         reconcilable orphan; a row written first would name content that does
         not exist.
@@ -339,7 +339,7 @@ def bound_analysis(
 
     Called before any write on every path that consumes a draft, so a draft
     whose chain no longer holds is rejected while the working area, the
-    artifact directory, and SQLite are all still untouched.
+    artifact directory, and database are all still untouched.
     """
     chain = check_draft_chain(
         repo,

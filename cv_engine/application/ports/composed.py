@@ -125,7 +125,7 @@ class DraftRepository(ApplicationStore, JobStore, ArtifactRegistry, WorkingDraft
 class KnowledgeAuditRepository(
     FactAudit, WorkingDraftReader, KnowledgeMutationRepository, Protocol
 ):
-    """The SQLite audit side of the file-backed Knowledge lifecycle.
+    """The database audit side of the file-backed Knowledge lifecycle.
 
     Promoting a manual claim reads the working draft the claim was edited in,
     so the port says so instead of relying on the adapter carrying more than

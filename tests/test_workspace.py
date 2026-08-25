@@ -16,8 +16,6 @@ from pathlib import Path
 import pytest
 from helpers import CliRun, run_cli
 
-from cv_engine.infrastructure.persistence import connect, current_schema_version, initialize
-from cv_engine.runtime.backup import BackupError, backup_workspace, restore_workspace
 from cv_engine.runtime.composition import build_services
 from cv_engine.runtime.config import CONFIG_NAME, resolve_config
 from cv_engine.runtime.workspace import (
@@ -57,7 +55,6 @@ def test_created_workspace_round_trips_with_identity_and_roots(tmp_path: Path) -
     )
     assert workspace.artifacts_root == workspace.root / "payloads"
     assert workspace.state_root == workspace.root / "state"
-    assert workspace.database_path == workspace.root / "state" / "applications.sqlite3"
 
     with pytest.raises(WorkspaceError, match="escapes the Workspace"):
         create_workspace(tmp_path / "escaped", roots={"artifacts_root": "../outside"})
@@ -247,7 +244,12 @@ def test_cli_workspace_surface_guards_normal_and_unmarked_roots(
     reported = json.loads(status.stdout)
     assert reported["workspace_id"] == identity["workspace_id"]
     assert reported["installation_id"] == identity["installation_id"]
+    assert reported["schema_version"] == "0002"
+    assert reported["database_url"] == reported["configuration"]["database_url"]["value"]
     assert reported["configuration"]["provider"]["source"] == "default"
+    upgraded = _cv("--workspace", str(root), "workspace", "upgrade")
+    assert upgraded.returncode == 0, upgraded.stderr
+    assert json.loads(upgraded.stdout)["upgraded"] is False
     plain = tmp_path / "plain"
     plain.mkdir()
     result = _cv("--workspace", str(plain), "list")
@@ -291,14 +293,18 @@ def test_cli_commands_fail_closed_without_writes(tmp_path: Path, legacy_root: Pa
             assert _tree(root) == before
 
 
-def test_cli_exposes_no_migration_command(workspace_root: Path) -> None:
+def test_cli_exposes_no_retired_storage_commands(workspace_root: Path) -> None:
     """v1 is an archive, so the engine offers no way to migrate it in.
 
     Asserted at the CLI surface rather than by absence of a module, so a
     future re-added migration path has to be a deliberate decision.
     """
-    for command in ("migrate", "inventory-legacy"):
+    for command in ("migrate", "inventory-legacy", "init"):
         result = _cv("--workspace", str(workspace_root), command)
+        assert result.returncode == 2
+        assert "invalid choice" in result.stderr
+    for command in ("backup", "restore"):
+        result = _cv("--workspace", str(workspace_root), "workspace", command)
         assert result.returncode == 2
         assert "invalid choice" in result.stderr
 
@@ -326,208 +332,6 @@ def test_symlinked_default_child_roots_are_refused(tmp_path: Path) -> None:
 
         with pytest.raises(WorkspaceError, match="Workspace root .* may not be a symlink"):
             load_workspace(workspace.root)
-
-
-def test_database_override_is_contained_inside_state_root(tmp_path: Path) -> None:
-    for source in ("flag", "environment"):
-        workspace = create_workspace(
-            tmp_path / f"database-{source}", purpose="test", data_class="test"
-        )
-
-        def run(value: Path | str, *, source: str = source, workspace=workspace) -> CliRun:
-            if source == "flag":
-                return _cv("--workspace", str(workspace.root), "--db", str(value), "init")
-            return _cv(
-                "--workspace",
-                str(workspace.root),
-                "init",
-                env={"CV_DATABASE": str(value)},
-            )
-
-        relative = run("relative.sqlite3")
-        assert relative.returncode == 0, relative.stderr
-        assert (workspace.state_root / "relative.sqlite3").is_file()
-
-        absolute_path = workspace.state_root / "absolute.sqlite3"
-        absolute = run(absolute_path)
-        assert absolute.returncode == 0, absolute.stderr
-        assert absolute_path.is_file()
-
-        outside_path = tmp_path / f"outside-{source}.sqlite3"
-        outside = run(outside_path)
-        assert outside.returncode == 2
-        assert "escapes configured root" in outside.stderr
-        assert not outside_path.exists()
-
-        outside_directory = tmp_path / f"symlink-outside-{source}"
-        outside_directory.mkdir()
-        link = workspace.state_root / "escape"
-        link.symlink_to(outside_directory, target_is_directory=True)
-        escaped = run("escape/escaped.sqlite3")
-        assert escaped.returncode == 2
-        assert "escapes configured root" in escaped.stderr
-        assert not (outside_directory / "escaped.sqlite3").exists()
-
-
-# --- backup and restore -----------------------------------------------------
-
-
-def _seeded_workspace(root: Path):
-    """A Workspace with something in every root a backup is supposed to carry."""
-    workspace = create_workspace(root, purpose="test", data_class="test")
-    initialize(workspace.database_path)
-    for name in ("base", "profiles", "rendering", "config", "ai"):
-        directory = workspace.knowledge_root / name
-        directory.mkdir(parents=True, exist_ok=True)
-        (directory / f"{name}.md").write_text(f"# {name}\n", encoding="utf-8")
-    (workspace.artifacts_root / "app-1").mkdir(parents=True, exist_ok=True)
-    (workspace.artifacts_root / "app-1/resume.md").write_text("# resume\n", encoding="utf-8")
-    (workspace.temp_root / "scratch.txt").write_text("discard me\n", encoding="utf-8")
-    (workspace.logs_root / "run.log").write_text("discard me\n", encoding="utf-8")
-    return workspace
-
-
-def test_backup_restores_into_a_new_workspace_that_opens(tmp_path: Path) -> None:
-    workspace = _seeded_workspace(tmp_path / "ws")
-    report = backup_workspace(workspace, tmp_path / "backup")
-
-    assert report.database.is_file()
-    assert "artifacts" in report.directories
-    assert "base" in report.directories
-    # Scratch and diagnostics are not state; carrying them would make every
-    # backup bigger and none of them more restorable.
-    assert not (report.root / "tmp").exists()
-    assert not (report.root / "logs").exists()
-
-    restored = restore_workspace(report.root, tmp_path / "restored")
-    assert restored.workspace_id == workspace.workspace_id
-    assert current_schema_version(restored.database_path) == current_schema_version(
-        workspace.database_path
-    )
-    assert (restored.artifacts_root / "app-1/resume.md").read_text(encoding="utf-8") == "# resume\n"
-
-
-def test_backup_and_restore_include_workspace_settings(tmp_path: Path) -> None:
-    from cv_engine.application.settings import UpdateSettings
-    from cv_engine.infrastructure.persistence import Repository
-
-    workspace = _seeded_workspace(tmp_path / "ws")
-    configured_database = workspace.state_root / "configured.sqlite3"
-    Repository(configured_database).update_workspace_settings(
-        0,
-        UpdateSettings(
-            auto_generate_when_review_not_required=True,
-            ai_enabled_override=False,
-            default_execution_mode="deterministic",
-            open_browser_on_launch=False,
-            ui_density="compact",
-            ui_text_size="large",
-        ),
-    )
-
-    status = run_cli(
-        "--workspace",
-        str(workspace.root),
-        "workspace",
-        "status",
-        env={"CV_DATABASE": configured_database.name},
-    )
-    assert status.returncode == 0, status.stderr
-    assert json.loads(status.stdout)["database"] == str(configured_database)
-
-    upgraded = run_cli(
-        "--workspace",
-        str(workspace.root),
-        "workspace",
-        "upgrade",
-        env={"CV_DATABASE": configured_database.name},
-    )
-    assert upgraded.returncode == 0, upgraded.stderr
-    assert json.loads(upgraded.stdout) == {
-        **workspace.describe(),
-        "database": str(configured_database),
-        "schema_version_before": "0002",
-        "schema_version": "0002",
-        "upgraded": False,
-    }
-
-    backup_root = tmp_path / "backup"
-    backed_up = run_cli(
-        "--workspace",
-        str(workspace.root),
-        "workspace",
-        "backup",
-        "--into",
-        str(backup_root),
-        env={"CV_DATABASE": configured_database.name},
-    )
-    assert backed_up.returncode == 0, backed_up.stderr
-    report = json.loads(backed_up.stdout)
-    restored = restore_workspace(backup_root, tmp_path / "restored")
-    restored_database = restored.database_path
-    assert report["database"] == str(
-        backup_root / workspace.database_path.relative_to(workspace.root)
-    )
-    assert restored_database.is_file()
-    assert not (restored.state_root / configured_database.name).exists()
-    settings = Repository(restored_database).workspace_settings()
-
-    assert settings.edit_version == 1
-    assert settings.auto_generate_when_review_not_required is True
-    assert settings.ai_enabled_override is False
-    assert settings.open_browser_on_launch is False
-    assert (settings.ui_density, settings.ui_text_size) == ("compact", "large")
-
-
-def test_backup_and_restore_refuse_to_overlay_existing_directories(tmp_path: Path) -> None:
-    workspace = _seeded_workspace(tmp_path / "ws")
-
-    occupied = tmp_path / "occupied"
-    occupied.mkdir()
-    (occupied / "keep.txt").write_text("keep\n", encoding="utf-8")
-    with pytest.raises(BackupError, match="non-empty directory"):
-        backup_workspace(workspace, occupied)
-    assert (occupied / "keep.txt").exists()
-
-    # A backup inside its own Workspace would be captured by the next backup and
-    # would grow without bound.
-    with pytest.raises(BackupError, match="inside its own Workspace"):
-        backup_workspace(workspace, workspace.root / "self-backup")
-
-    report = backup_workspace(workspace, tmp_path / "backup")
-    with pytest.raises(BackupError, match="non-empty directory"):
-        restore_workspace(report.root, occupied)
-    assert (occupied / "keep.txt").exists()
-
-    with pytest.raises(BackupError, match="no .cv-workspace.json"):
-        restore_workspace(tmp_path / "not-a-backup", tmp_path / "elsewhere")
-
-
-def test_backup_captures_committed_writes_still_in_the_write_ahead_log(tmp_path: Path) -> None:
-    """The reason the backup goes through SQLite rather than copying the file."""
-    workspace = _seeded_workspace(tmp_path / "ws")
-    connection = connect(workspace.database_path)
-    connection.execute(
-        "INSERT INTO applications(id, company, target_role, current_status, notes, "
-        "source, created_at, updated_at) VALUES(?, ?, ?, ?, '', 'manual', ?, ?)",
-        (
-            "app-wal",
-            "alpha",
-            "dev",
-            "saved",
-            "2026-01-01T00:00:00+00:00",
-            "2026-01-01T00:00:00+00:00",
-        ),
-    )
-    connection.commit()
-
-    report = backup_workspace(workspace, tmp_path / "backup")
-    connection.close()
-
-    restored = restore_workspace(report.root, tmp_path / "restored")
-    with connect(restored.database_path) as check:
-        rows = check.execute("SELECT id FROM applications").fetchall()
-    assert [row["id"] for row in rows] == ["app-wal"]
 
 
 def test_knowledge_source_provenance_is_recorded_and_incomplete_sources_are_refused(

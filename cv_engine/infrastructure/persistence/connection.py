@@ -1,101 +1,50 @@
 from __future__ import annotations
 
-import sqlite3
-from collections.abc import Iterator
-from contextlib import contextmanager
-from pathlib import Path
+from functools import cache
 from typing import Any
 
-BUSY_TIMEOUT_MS = 5000
+from sqlalchemy import Engine, create_engine
+from sqlalchemy.engine import Connection
 
 
-def connect(path: Path) -> sqlite3.Connection:
-    """Open one configured SQLite connection.
+@cache
+def create_database_engine(database_url: str) -> Engine:
+    """Build the application's configured database engine.
 
-    This is the single connection-policy authority: every caller receives
-    foreign-key enforcement, WAL mode, the same busy timeout, and Row results.
+    This remains the single connection-policy authority: repositories and
+    units of work for one URL share the same pool and connection health policy.
+    An Engine is process-wide infrastructure, not per-service state; caching it
+    also prevents repeated CLI/service composition from accumulating idle
+    PostgreSQL pools.
     """
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(path, timeout=BUSY_TIMEOUT_MS / 1000)
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON")
-    connection.execute("PRAGMA journal_mode = WAL")
-    connection.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
-    return connection
+    return create_engine(database_url, pool_pre_ping=True)
 
 
-def memory_connection() -> sqlite3.Connection:
-    """Open a configured in-memory connection for schema fingerprinting."""
-    connection = sqlite3.connect(":memory:")
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON")
-    connection.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
-    return connection
+def _engine_for(repository_or_engine: Any) -> Engine:
+    engine = getattr(repository_or_engine, "engine", repository_or_engine)
+    if not isinstance(engine, Engine):
+        raise TypeError("UnitOfWork requires a SQLAlchemy Engine or repository")
+    return engine
 
 
-def backup_database(source: Path, target: Path) -> None:
-    """Copy a database through SQLite's own backup API.
-
-    Not `shutil.copy`: the database runs in WAL mode, so a file copy can catch
-    a committed transaction that still lives in the write-ahead log and produce
-    an archive that opens but is missing its most recent writes. The backup API
-    reads a consistent snapshot and folds the WAL in, which is the whole reason
-    a restored copy can be trusted.
-    """
-    source = Path(source)
-    if not source.is_file():
-        raise FileNotFoundError(f"no database to back up at {source}")
-    target = Path(target)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    origin = connect(source)
-    try:
-        destination = sqlite3.connect(target)
-        try:
-            origin.backup(destination)
-        finally:
-            destination.close()
-    finally:
-        origin.close()
-
-
-def integrity_results(connection: sqlite3.Connection) -> tuple[str, list[sqlite3.Row]]:
-    """Run SQLite's own integrity and foreign-key diagnostics."""
-    integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
-    foreign_keys = connection.execute("PRAGMA foreign_key_check").fetchall()
-    return integrity, foreign_keys
-
-
-@contextmanager
-def transaction(path: Path) -> Iterator[sqlite3.Connection]:
-    connection = connect(path)
-    try:
-        connection.execute("BEGIN IMMEDIATE")
-        yield connection
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
-
-
-class SqliteUnitOfWork:
-    """One explicit-commit SQLite transaction.
+class SqlAlchemyUnitOfWork:
+    """One explicit-commit SQLAlchemy transaction.
 
     Exiting without ``commit()`` rolls back even when no exception was raised.
+    REPEATABLE READ also gives a bound multi-query projection one stable
+    snapshot for the lifetime of the unit of work.
     """
 
-    def __init__(self, repository_or_path: Any):
-        self.path = Path(getattr(repository_or_path, "path", repository_or_path))
-        self.connection: sqlite3.Connection | None = None
+    def __init__(self, repository_or_engine: Any):
+        self.engine = _engine_for(repository_or_engine)
+        self.connection: Connection | None = None
         self._commit_requested = False
 
-    def __enter__(self) -> SqliteUnitOfWork:
+    def __enter__(self) -> SqlAlchemyUnitOfWork:
         if self.connection is not None:
             raise RuntimeError("UnitOfWork is already active")
-        self.connection = connect(self.path)
-        self.connection.execute("BEGIN IMMEDIATE")
+        self.connection = self.engine.connect().execution_options(isolation_level="REPEATABLE READ")
+        self.connection.begin()
         self._commit_requested = False
         return self
 

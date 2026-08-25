@@ -3,7 +3,7 @@
 Stage D began with a verification rather than a mechanism. §13 requires every
 successful analyze activation to commit an immutable JobAnalysis *and* its
 initial deterministic SelectionPlan atomically, and the engine already did:
-`save_analysis` writes both inside one SQLite transaction, and under an
+`save_analysis` writes both inside one database transaction, and under an
 Operation that transaction is the runner's own UnitOfWork. The first two tests
 here are that evidence, held as a test rather than as a paragraph, so a later
 change that splits the two writes fails instead of being argued about.

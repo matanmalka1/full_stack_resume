@@ -78,7 +78,7 @@ class _PayloadRoots:
     temp_root: Path
 
 class PayloadStore:
-    """Immutable v2 payload storage, independent of SQLite registration."""
+    """Immutable v2 payload storage, independent of database registration."""
 
     _OUTPUT_SUFFIXES = {".html", ".pdf", ".png"}
     #: Read size for streaming a payload outward. Bounded so a download
@@ -384,7 +384,8 @@ class PayloadStore:
         """Validate, hash, and store one immutable payload under its key.
 
         The returned metadata is the registration boundary. The caller registers
-        it in SQLite; a failure there deliberately leaves a safe stored orphan.
+        it in the database; a failure there deliberately leaves a safe stored
+        orphan.
 
         There is no temp staging any more, and the ordering that staging used to
         provide is preserved rather than dropped. Validation runs on the bytes
@@ -394,7 +395,7 @@ class PayloadStore:
         digest describes what was stored rather than a file re-read afterwards.
 
         The overwrite refusal moved into the write itself. `LocalObjectStore`
-        uses `O_EXCL` and the S3 store will use a conditional PUT, so the key is
+        uses `O_EXCL` and the S3 store uses a conditional PUT, so the key is
         claimed atomically instead of being checked and then written - closing
         the window between the old `exists()` check and the `os.rename` that
         followed it.
@@ -440,7 +441,7 @@ class PayloadStore:
     ) -> SnapshotPayload:
         """Materialize one archived WorkingDraft version as an immutable payload.
 
-        SQLite registration stays with the caller, exactly as it does for
+        Database registration stays with the caller, exactly as it does for
         revisions: a failure there leaves a safe filesystem orphan rather than
         an archived pointer with nothing behind it.
         """
@@ -471,7 +472,7 @@ class PayloadStore:
         disagree with the adapter that applied it; it validates that they parse
         as JSON, which is what the approved layout promises about the file.
 
-        Registration in SQLite stays with the caller, exactly as it does for
+        Database registration stays with the caller, exactly as it does for
         revisions and archived drafts: a failure there leaves a reconcilable
         filesystem orphan rather than a pointer to nothing.
         """
@@ -631,7 +632,7 @@ class PayloadStore:
     ) -> RevisionPayloads:
         """Commit and re-hash both immutable ApprovedRevision payloads.
 
-        SQLite registration is deliberately left to the caller. If either
+        Database registration is deliberately left to the caller. If either
         registration later fails, these files are safe reconciliation orphans.
         """
 
