@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Column,
@@ -12,6 +13,7 @@ from sqlalchemy import (
     Integer,
     MetaData,
     PrimaryKeyConstraint,
+    Sequence,
     String,
     Table,
     Text,
@@ -79,6 +81,17 @@ OPERATION_FAILURE_CODES = (
 
 def _sql_values(values: tuple[str, ...]) -> str:
     return ", ".join(f"'{value}'" for value in values)
+
+
+def _sequence_column(table_name: str) -> Column[int]:
+    sequence = Sequence(f"{table_name}_seq_seq")
+    return Column(
+        "seq",
+        BigInteger,
+        sequence,
+        server_default=sequence.next_value(),
+        nullable=False,
+    )
 
 
 applications = Table(
@@ -206,6 +219,7 @@ recruitment_events = Table(
     "recruitment_events",
     metadata,
     Column("id", String, primary_key=True),
+    _sequence_column("recruitment_events"),
     Column("application_id", String, ForeignKey("applications.id"), nullable=False),
     Column("event_type", Text, nullable=False),
     Column("from_status", Text),
@@ -246,7 +260,7 @@ Index(
     "idx_recruitment_events_application",
     recruitment_events.c.application_id,
     recruitment_events.c.occurred_at,
-    recruitment_events.c.id,
+    recruitment_events.c.seq,
 )
 
 artifacts = Table(
@@ -364,6 +378,7 @@ validation_runs = Table(
     "validation_runs",
     metadata,
     Column("id", String, primary_key=True),
+    _sequence_column("validation_runs"),
     Column("application_id", String, ForeignKey("applications.id"), nullable=False),
     Column("artifact_version_id", String, ForeignKey("artifact_versions.id")),
     Column("phase", Text, nullable=False),
@@ -383,6 +398,7 @@ submissions = Table(
     "submissions",
     metadata,
     Column("id", String, primary_key=True),
+    _sequence_column("submissions"),
     Column("application_id", String, ForeignKey("applications.id"), nullable=False),
     Column("submission_type", Text, nullable=False),
     Column("approved_revision_id", String, ForeignKey("approved_revisions.id")),
@@ -401,13 +417,14 @@ Index(
     "idx_submissions_application",
     submissions.c.application_id,
     submissions.c.submitted_at,
-    submissions.c.id,
+    submissions.c.seq,
 )
 
 audit_records = Table(
     "audit_records",
     metadata,
     Column("id", String, primary_key=True),
+    _sequence_column("audit_records"),
     Column("application_id", String, ForeignKey("applications.id"), nullable=False),
     Column("action", Text, nullable=False),
     Column("entity_type", Text, nullable=False),
@@ -424,13 +441,14 @@ Index(
     "idx_audit_records_application",
     audit_records.c.application_id,
     audit_records.c.occurred_at,
-    audit_records.c.id,
+    audit_records.c.seq,
 )
 
 fact_events = Table(
     "fact_events",
     metadata,
     Column("id", String, primary_key=True),
+    _sequence_column("fact_events"),
     Column("fact_id", String, nullable=False),
     Column("source_file", Text, nullable=False),
     Column("event_type", Text, nullable=False),
