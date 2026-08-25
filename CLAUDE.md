@@ -209,7 +209,17 @@ submission data was 22 unsent `draft` rows — no submission, no evidence — an
 deleted. `jobs/status.csv` was the guard's only signature, so it could no longer fire on
 any real directory, and its two tests passed only because they wrote that file
 themselves. There is no archive left to isolate. The marker guard still refuses an
-unmarked directory and an unsafe purpose/data-class pair. Do not re-add it.
+unmarked directory and an unknown marker version. Do not re-add it.
+
+Retired 2026-08-25: **the `purpose`/`data_class` live-data guard.** It refused a
+`development` or `test` runtime opening `data_class=live`. No Workspace was ever marked
+`live`: v2 starts from an empty database, every Workspace is a copy of regenerable
+Knowledge, and the only `live` marker in the repository was the one its own test wrote
+before asserting the refusal — the same shape as `looks_legacy`. `installation_id` and
+`state_root` went with it, unused once the guard did. What still fails closed is the
+marker itself: no marker, or a version this runtime does not open. Retired marker keys
+are dropped on read so an existing Workspace does not need a re-init; do not reuse those
+names.
 
 M3 close 2026-08-23: **no control was retirable.** Every remaining control still guards
 an active failure mode, and M3 exercised several of them: fresh count reconciliation

@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import shutil
 from pathlib import Path
-from typing import Literal
 
 from ..domain.models import StrictModel
 from ..infrastructure.paths import relative_within, resolve_within
@@ -13,14 +12,6 @@ MARKER_NAME = ".cv-workspace.json"
 WORKSPACE_VERSION = 2
 KNOWLEDGE_DIRS = ("base", "profiles", "rendering", "config", "ai")
 
-Purpose = Literal["development", "test", "live"]
-DataClass = Literal["copy", "test", "live"]
-
-# Live data is only ever opened by a runtime that declares itself live. This is
-# the guard that stops a development or test process from touching the real
-# Workspace, and it is expressed in marker metadata rather than path naming.
-UNSAFE_COMBINATIONS = {("development", "live"), ("test", "live")}
-
 ROOT_NAMES = ("knowledge_root", "artifacts_root", "temp_root", "logs_root")
 
 
@@ -28,11 +19,16 @@ class WorkspaceError(RuntimeError):
     """The selected directory is not a Workspace this process may open."""
 
 
+#: Marker keys this runtime no longer stores. Dropped on read rather than
+#: refused: a Workspace written before they were retired is still a valid
+#: version-2 Workspace, and `StrictModel` would otherwise turn an obsolete key
+#: into an unreadable marker. Never reuse one of these names for new meaning.
+RETIRED_MARKER_KEYS = ("purpose", "data_class")
+
+
 class WorkspaceMarker(StrictModel):
     workspace_id: str
     workspace_version: int
-    purpose: Purpose
-    data_class: DataClass
     created_at: str
     roots: dict[str, str] = {}
     # Where `--knowledge-from` copied the seed knowledge, and what it hashed to
@@ -95,14 +91,6 @@ class Workspace:
     def workspace_id(self) -> str:
         return self.marker.workspace_id
 
-    @property
-    def purpose(self) -> str:
-        return self.marker.purpose
-
-    @property
-    def data_class(self) -> str:
-        return self.marker.data_class
-
     def relative(self, path: Path) -> str:
         """A Workspace-relative POSIX path, or a refusal.
 
@@ -120,8 +108,6 @@ class Workspace:
         return {
             "workspace_id": self.workspace_id,
             "workspace_version": self.marker.workspace_version,
-            "purpose": self.purpose,
-            "data_class": self.data_class,
             "created_at": self.marker.created_at,
             "root": str(self.root),
             "roots": {name: str(getattr(self, name)) for name in ROOT_NAMES},
@@ -134,19 +120,9 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
     temporary.replace(path)
 
 
-def _check_combination(purpose: str, data_class: str) -> None:
-    if (purpose, data_class) in UNSAFE_COMBINATIONS:
-        raise WorkspaceError(
-            f"a {purpose} process may not open {data_class} data; "
-            "run live data only from a Workspace marked purpose=live"
-        )
-
-
 def create_workspace(
     root: Path,
     *,
-    purpose: Purpose = "development",
-    data_class: DataClass = "copy",
     roots: dict[str, str] | None = None,
     knowledge_source: Path | None = None,
 ) -> Workspace:
@@ -156,7 +132,6 @@ def create_workspace(
     Workspace never rewrites an existing one. There is no override.
     """
     root = Path(root).resolve()
-    _check_combination(purpose, data_class)
     if (root / MARKER_NAME).exists():
         raise WorkspaceError(f"a Workspace marker already exists at {root}")
     root.mkdir(parents=True, exist_ok=True)
@@ -169,8 +144,6 @@ def create_workspace(
     marker = WorkspaceMarker(
         workspace_id=new_id(),
         workspace_version=WORKSPACE_VERSION,
-        purpose=purpose,
-        data_class=data_class,
         created_at=utc_now(),
         roots=roots or {},
         knowledge_source=str(source) if source else None,
@@ -237,7 +210,10 @@ def load_workspace(root: Path) -> Workspace:
             f"no v2 Workspace marker at {root}. Create one with 'cv workspace init'."
         )
     try:
-        marker = WorkspaceMarker.model_validate(json.loads(path.read_text(encoding="utf-8")))
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(payload, dict):
+            payload = {key: value for key, value in payload.items() if key not in RETIRED_MARKER_KEYS}
+        marker = WorkspaceMarker.model_validate(payload)
     except (json.JSONDecodeError, ValueError) as exc:
         raise WorkspaceError(f"unreadable Workspace marker {path}: {exc}") from exc
     if marker.workspace_version != WORKSPACE_VERSION:
@@ -245,5 +221,4 @@ def load_workspace(root: Path) -> Workspace:
             f"unsupported Workspace version {marker.workspace_version} at {root}; "
             f"this runtime opens version {WORKSPACE_VERSION}"
         )
-    _check_combination(marker.purpose, marker.data_class)
     return Workspace(root, marker)

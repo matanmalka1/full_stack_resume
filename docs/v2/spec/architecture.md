@@ -171,18 +171,18 @@ The Workspace marker includes at least:
 {
   "workspace_id": "uuid",
   "workspace_version": 2,
-  "purpose": "development",
-  "data_class": "copy",
   "created_at": "UTC timestamp"
 }
 ```
 
-`purpose` and `data_class` distinguish development/test/live and copy/test/live data.
 Normal v2 runtime commands fail closed unless the selected root contains a valid v2
-marker whose purpose/data class is allowed for that command. An unmarked directory,
-legacy v1 root, unknown marker version, or unsafe development/live combination is never
-opened as a normal v2 Workspace. Guards use metadata rather than folder-name
-heuristics.
+marker. An unmarked directory or an unknown marker version is never opened as a normal
+v2 Workspace. Guards use metadata rather than folder-name heuristics.
+
+The `purpose`/`data_class` pair was retired on 2026-08-25. It guarded a `live` data
+class that nothing ever created: v2 starts from an empty database, every Workspace is a
+copy, and the only marker carrying `live` was the one its own test wrote. A marker
+written before the retirement still opens; the retired keys are dropped on read.
 
 There is no exception. The read-only v1 source adapter that once held one was deleted
 on 2026-08-19 with the migration it served, so a v1 root is refused outright rather than

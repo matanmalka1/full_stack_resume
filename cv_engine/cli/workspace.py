@@ -1,4 +1,4 @@
-"""Workspace lifecycle commands: init, status, and database upgrade."""
+"""Workspace lifecycle commands: init and status."""
 
 from __future__ import annotations
 
@@ -35,13 +35,9 @@ def workspace_command(
     if args.workspace_command == "init":
         created = create_workspace(
             root,
-            purpose=args.purpose,
-            data_class=args.data_class,
             knowledge_source=args.knowledge_from.resolve() if args.knowledge_from else None,
         )
-        _print(
-            {**created.describe(), "created": True}
-        )
+        _print({**created.describe(), "created": True})
         return 0
     if args.workspace_command == "status":
         opened = opened or load_workspace(root)

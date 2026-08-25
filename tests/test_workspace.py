@@ -1,7 +1,7 @@
 """Workspace identity, fail-closed guards, and config precedence.
 
 These are the M1 foundations every later v2 command depends on: if a directory
-can be opened without a marker, or an unsafe marker can be opened as live data,
+can be opened without a marker, or an unknown marker version can be opened,
 no later safety property means anything.
 """
 
@@ -34,12 +34,10 @@ SOURCE_ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_created_workspace_round_trips_with_identity_and_roots(tmp_path: Path) -> None:
-    created = create_workspace(tmp_path / "ws", purpose="development", data_class="copy")
+    created = create_workspace(tmp_path / "ws")
     opened = load_workspace(tmp_path / "ws")
 
     assert opened.workspace_id == created.workspace_id
-    assert opened.purpose == "development"
-    assert opened.data_class == "copy"
     assert opened.knowledge_root == opened.root
     assert opened.artifacts_root == opened.root / "artifacts"
     assert opened.temp_root == opened.root / "tmp"
@@ -98,17 +96,21 @@ def test_workspace_markers_fail_closed_for_plain_legacy_invalid_and_reused_roots
         build_services(load_workspace(plain))
 
 
-def test_live_data_is_refused_outside_a_live_runtime(tmp_path: Path) -> None:
-    for purpose in ("development", "test"):
-        with pytest.raises(WorkspaceError, match="may not open live data"):
-            create_workspace(tmp_path / purpose, purpose=purpose, data_class="live")
-        live = create_workspace(tmp_path / f"{purpose}-live", purpose="live", data_class="live")
-        marker = live.root / MARKER_NAME
-        payload = json.loads(marker.read_text(encoding="utf-8"))
-        payload["purpose"] = purpose
-        marker.write_text(json.dumps(payload), encoding="utf-8")
-        with pytest.raises(WorkspaceError, match="may not open live data"):
-            load_workspace(live.root)
+def test_a_marker_carrying_retired_keys_still_opens(tmp_path: Path) -> None:
+    """A Workspace written before `purpose`/`data_class` were retired still opens.
+
+    `WorkspaceMarker` forbids extra keys, so dropping a field from the model
+    turns every existing marker into an unreadable one. The version did not
+    change, so the Workspace is still valid and must not need a re-init.
+    """
+    workspace = create_workspace(tmp_path / "ws")
+    marker = workspace.root / MARKER_NAME
+    payload = json.loads(marker.read_text(encoding="utf-8"))
+    payload["purpose"] = "development"
+    payload["data_class"] = "copy"
+    marker.write_text(json.dumps(payload), encoding="utf-8")
+
+    assert load_workspace(workspace.root).workspace_id == workspace.workspace_id
 
 
 # --- configuration precedence ----------------------------------------------
@@ -260,13 +262,10 @@ def test_cli_workspace_surface_guards_normal_and_unmarked_roots(
     tmp_path: Path, workspace_root: Path
 ) -> None:
     root = tmp_path / "cli-ws"
-    created = _cv(
-        "--workspace", str(root), "workspace", "init", "--purpose", "test", "--data-class", "test"
-    )
+    created = _cv("--workspace", str(root), "workspace", "init")
     assert created.returncode == 0, created.stderr
     identity = json.loads(created.stdout)
-    assert identity["purpose"] == "test"
-    assert identity["data_class"] == "test"
+    assert identity["created"] is True
 
     status = _cv("--workspace", str(root), "workspace", "status")
     assert status.returncode == 0, status.stderr
@@ -296,16 +295,9 @@ def test_cli_commands_fail_closed_without_writes(tmp_path: Path) -> None:
     unknown_payload["workspace_version"] = 999
     unknown_marker.write_text(json.dumps(unknown_payload), encoding="utf-8")
 
-    unsafe = create_workspace(tmp_path / "unsafe-live", purpose="live", data_class="live")
-    unsafe_marker = unsafe.root / MARKER_NAME
-    unsafe_payload = json.loads(unsafe_marker.read_text(encoding="utf-8"))
-    unsafe_payload["purpose"] = "development"
-    unsafe_marker.write_text(json.dumps(unsafe_payload), encoding="utf-8")
-
     roots = [
         (plain, "no v2 Workspace marker"),
         (unknown.root, "unsupported Workspace version 999"),
-        (unsafe.root, "may not open live data"),
     ]
     commands = [("list",)]
     for root, expected_error in roots:

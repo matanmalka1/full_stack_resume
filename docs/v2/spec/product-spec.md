@@ -238,9 +238,8 @@ including for Hebrew CVs:
 CandidateContext may explicitly override the filename name. Renderers and filename
 normalizers receive CandidateContext and must not contain a candidate literal.
 
-The Workspace has explicit roots for knowledge, state, artifacts, temporary files, and
-logs. It has a durable Workspace ID and marker. Development, copy, test, and live data classes are explicit metadata, not inferred
-from directory names.
+The Workspace has explicit roots for knowledge, artifacts, temporary files, and logs. It
+has a durable Workspace ID and marker.
 
 ## 8. Job intake and snapshots
 

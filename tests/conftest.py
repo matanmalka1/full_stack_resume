@@ -205,7 +205,7 @@ def workspace_root(tmp_path: Path) -> Path:
     shutil.copy2(SOURCE_ROOT / "base/candidate.json", root / "base/candidate.json")
     for name in ("profiles", "rendering", "ai", "config"):
         shutil.copytree(SOURCE_ROOT / name, root / name)
-    create_workspace(root, purpose="test", data_class="test")
+    create_workspace(root)
     return root
 
 

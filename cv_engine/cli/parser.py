@@ -81,10 +81,6 @@ def build_parser() -> argparse.ArgumentParser:
         "init", help="create an isolated Workspace and its marker"
     )
     workspace_init.add_argument(
-        "--purpose", choices=["development", "test", "live"], default="development"
-    )
-    workspace_init.add_argument("--data-class", choices=["copy", "test", "live"], default="copy")
-    workspace_init.add_argument(
         "--knowledge-from",
         type=Path,
         help="copy base/profiles/rendering/config/ai from this directory into the new Workspace",
