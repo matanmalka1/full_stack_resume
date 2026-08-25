@@ -16,6 +16,7 @@ import { Button } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { Card } from "../ui/Card";
 import { Field } from "../ui/Field";
+import { FormSection } from "../ui/FormSection";
 import { LtrText } from "../ui/LtrText";
 import { PageHeading } from "../ui/PageHeading";
 import { TechnicalDetails } from "../ui/TechnicalDetails";
@@ -128,6 +129,11 @@ export const NewApplicationPage = () => {
     return () => subscription.unsubscribe();
   }, [watch]);
 
+  /* The snapshot is written exactly as entered, so its size is worth showing while it is
+     still editable. Subscribing to this one field keeps the counter live without making
+     the whole form controlled. */
+  const jobTextLength = watch("job_text").length;
+
   const runSubmit = (acknowledgedIntake: ApplicationIntake | undefined) =>
     handleSubmit((fields) => {
       const intake = intakeFrom(fields);
@@ -165,70 +171,89 @@ export const NewApplicationPage = () => {
         משרה חדשה
       </PageHeading>
 
-      <form className="mt-8 flex flex-col gap-6" noValidate onSubmit={runSubmit(undefined)}>
-        <div className="grid gap-6 md:grid-cols-2">
-          <Field error={errors.company?.message} label="שם החברה">
-            {(control) => (
-              <TextInput
-                {...control}
-                {...register("company", {
-                  validate: (value) => value.trim() !== "" || "יש להזין את שם החברה.",
-                })}
-                autoComplete="organization"
-                dir="auto"
-                maxLength={LABEL_MAX_CHARACTERS}
-              />
-            )}
-          </Field>
-
-          <Field error={errors.target_role?.message} label="תפקיד היעד">
-            {(control) => (
-              <TextInput
-                {...control}
-                {...register("target_role", {
-                  validate: (value) => value.trim() !== "" || "יש להזין את תפקיד היעד.",
-                })}
-                dir="auto"
-                maxLength={LABEL_MAX_CHARACTERS}
-              />
-            )}
-          </Field>
-        </div>
-
-        <Field
-          hint="הכתובת נשמרת כתיעוד מקור בלבד. המערכת אינה פותחת אותה ואינה מייבאת ממנה טקסט."
-          label="כתובת המשרה (לא חובה)"
+      <form className="mt-8 flex flex-col gap-8" noValidate onSubmit={runSubmit(undefined)}>
+        <FormSection
+          description="שלושת אלה מזהים את המועמדות ברשימות ובכל מסכי ההמשך."
+          title="פרטי המשרה"
         >
-          {(control) => (
-            /* A.3: a URL is an LTR island even inside the RTL shell. */
-            <TextInput
-              {...control}
-              {...register("source_url")}
-              className="ltr-island"
-              dir="ltr"
-              inputMode="url"
-              maxLength={SOURCE_URL_MAX_CHARACTERS}
-            />
-          )}
-        </Field>
+          <div className="grid gap-5 md:grid-cols-2">
+            <Field error={errors.company?.message} label="שם החברה">
+              {(control) => (
+                <TextInput
+                  {...control}
+                  {...register("company", {
+                    validate: (value) => value.trim() !== "" || "יש להזין את שם החברה.",
+                  })}
+                  autoComplete="organization"
+                  dir="auto"
+                  maxLength={LABEL_MAX_CHARACTERS}
+                />
+              )}
+            </Field>
 
-        <JobTextFileField
-          onText={(text) => setValue("job_text", text, { shouldDirty: true, shouldValidate: true })}
-        />
+            <Field error={errors.target_role?.message} label="תפקיד היעד">
+              {(control) => (
+                <TextInput
+                  {...control}
+                  {...register("target_role", {
+                    validate: (value) => value.trim() !== "" || "יש להזין את תפקיד היעד.",
+                  })}
+                  dir="auto"
+                  maxLength={LABEL_MAX_CHARACTERS}
+                />
+              )}
+            </Field>
+          </div>
 
-        <Field error={errors.job_text?.message} label="טקסט המשרה">
-          {(control) => (
-            /* Mixed Hebrew/English job text picks its own direction (A.3). */
-            <TextArea
-              {...control}
-              {...register("job_text", {
-                validate: (value) => value.trim() !== "" || "יש להזין את טקסט המשרה.",
-              })}
-              className="min-h-64"
-              dir="auto"
-            />
-          )}
-        </Field>
+          <Field
+            hint="הכתובת נשמרת כתיעוד מקור בלבד. המערכת אינה פותחת אותה ואינה מייבאת ממנה טקסט."
+            label="כתובת המשרה (לא חובה)"
+          >
+            {(control) => (
+              /* A.3: a URL is an LTR island even inside the RTL shell. */
+              <TextInput
+                {...control}
+                {...register("source_url")}
+                className="ltr-island"
+                dir="ltr"
+                inputMode="url"
+                maxLength={SOURCE_URL_MAX_CHARACTERS}
+              />
+            )}
+          </Field>
+        </FormSection>
+
+        <FormSection
+          aside={
+            jobTextLength === 0 ? null : (
+              <span>
+                <LtrText>{jobTextLength.toLocaleString("en-US")}</LtrText> תווים
+              </span>
+            )
+          }
+          description="הטקסט נשמר כתצלום משרה קבוע ואינו משתנה אחרי היצירה. הוא נשמר בדיוק כפי שהוזן."
+          title="תצלום המשרה"
+        >
+          <JobTextFileField
+            onText={(text) =>
+              setValue("job_text", text, { shouldDirty: true, shouldValidate: true })
+            }
+          />
+
+          <Field error={errors.job_text?.message} label="טקסט המשרה">
+            {(control) => (
+              /* Mixed Hebrew/English job text picks its own direction (A.3). */
+              <TextArea
+                {...control}
+                {...register("job_text", {
+                  validate: (value) => value.trim() !== "" || "יש להזין את טקסט המשרה.",
+                })}
+                className="min-h-64"
+                dir="auto"
+              />
+            )}
+          </Field>
+        </FormSection>
 
         {duplicates === null ? null : (
           <DuplicateChoices

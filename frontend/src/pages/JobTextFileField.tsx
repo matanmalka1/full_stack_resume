@@ -1,9 +1,11 @@
-import { type ChangeEvent, useState } from "react";
+import { type ChangeEvent, useId, useState } from "react";
+import { Upload } from "lucide-react";
 
 import { JOB_TEXT_MAX_BYTES } from "../api/applications";
-import { Field } from "../ui/Field";
 import { LiveRegion } from "../ui/LiveRegion";
 import { LtrText } from "../ui/LtrText";
+import { buttonClasses } from "../ui/Button";
+import { cx } from "../ui/cx";
 
 interface JobTextFileFieldProps {
   onText: (text: string) => void;
@@ -14,8 +16,13 @@ const isLocalTextFile = (file: File): boolean =>
 
 /* A.4 frame 1: choosing a `.txt` file reads it locally into the text area. Nothing is
    uploaded, and the component owns the whole local-read outcome - the refusals, the
-   announcement, and the file name - so the form only ever receives text. */
+   announcement, and the file name - so the form only ever receives text.
+
+   It is an optional convenience for filling the job text, so it is presented as one
+   compact control beside that field rather than as a form field of its own competing
+   with the text it fills. */
 export const JobTextFileField = ({ onText }: JobTextFileFieldProps) => {
+  const inputId = useId();
   const [loadedFileName, setLoadedFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | undefined>(undefined);
 
@@ -50,30 +57,40 @@ export const JobTextFileField = ({ onText }: JobTextFileFieldProps) => {
   };
 
   return (
-    <>
-      <Field
-        error={error}
-        hint="הקובץ נקרא בדפדפן וממלא את שדה טקסט המשרה. שום קובץ אינו נשלח לשרת."
-        label="קריאת קובץ טקסט מהמחשב (לא חובה)"
+    <div className="flex flex-col items-start gap-2">
+      {/* The visible control is the label, so the native file input can stay off screen
+          without losing its accessible name or keyboard reachability. */}
+      <label
+        className={cx(buttonClasses("secondary"), "cursor-pointer font-medium")}
+        htmlFor={inputId}
       >
-        {(control) => (
-          <input
-            {...control}
-            accept=".txt,text/plain"
-            className="block w-full text-support text-cv-text file:me-3 file:min-h-11 file:rounded-control file:border file:border-cv-border-strong file:bg-cv-surface-muted file:px-4 file:text-support file:font-medium file:text-cv-text"
-            onChange={(event) => {
-              void readLocalFile(event);
-            }}
-            type="file"
-          />
-        )}
-      </Field>
+        <Upload aria-hidden="true" className="size-4" />
+        קריאת קובץ טקסט מהמחשב (לא חובה)
+      </label>
+      <input
+        accept=".txt,text/plain"
+        aria-describedby={`${inputId}-hint`}
+        aria-invalid={error === undefined ? undefined : true}
+        className="sr-only"
+        id={inputId}
+        onChange={(event) => {
+          void readLocalFile(event);
+        }}
+        type="file"
+      />
+      <p className="text-support text-cv-text-muted" id={`${inputId}-hint`}>
+        הקובץ נקרא בדפדפן וממלא את שדה טקסט המשרה. שום קובץ אינו נשלח לשרת.
+      </p>
+
+      {error === undefined ? null : (
+        <p className="text-support font-medium text-cv-blocker">{error}</p>
+      )}
 
       {loadedFileName === null ? null : (
         <LiveRegion className="text-support text-cv-text-muted" visuallyHidden={false}>
           הטקסט מהקובץ <LtrText>{loadedFileName}</LtrText> נטען לשדה טקסט המשרה.
         </LiveRegion>
       )}
-    </>
+    </div>
   );
 };
