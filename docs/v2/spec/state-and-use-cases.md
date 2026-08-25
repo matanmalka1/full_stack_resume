@@ -619,7 +619,7 @@ Initial query contracts include:
 - contextual fact detail/history
 - submissions and recruitment history
 - next-action/overdue projection
-- Workspace/runtime/provider configuration status without secrets
+- runtime/provider configuration status without secrets
 
 Queries may use direct efficient joins and read models. They return DTOs, not database
 rows or local paths.
@@ -700,7 +700,7 @@ Create
 -> Ready
 ```
 
-Auto-generation is enabled by default when review is not required and the Workspace
+Auto-generation is enabled by default when review is not required and the application
 setting allows it. Successful Analyze already returns the explicit initial
 SelectionPlan ID used by Draft. The UI may chain commands, but each remains an
 independent application use-case.

@@ -108,7 +108,7 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
   const approvalHref = detail.available_actions.includes("approve")
     ? actionDestination("approve", detail.application.id)
     : null;
-  /* Rendering happens in the draft workspace, on the revision the approval there
+  /* Rendering happens in the draft editor, on the revision the approval there
      produced. There is no render screen to link to, so the projection's `render` is
      reported by name below rather than given a destination this table does not have. */
   const readyHref = detail.latest_ready_revision_id == null

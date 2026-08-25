@@ -95,14 +95,14 @@ export const DraftEditorPage = () => {
      being unmounted: switching views must not discard text the user has typed, and an
      unmounted editor would take its visible text with it. */
   const [view, setView] = useState<"editor" | "preview">("editor");
-  /* The three screens that used to follow the editor are states of this one workspace.
+  /* The three screens that used to follow the editor are states of this one editor.
      None of them changes what is sent: the validation panel runs the same command, the
      dialog is A.4 frame 5's own approval dialog, and the render panel keeps rendering an
      explicit action on the exact revision the approval returned. */
   const [approvalOpen, setApprovalOpen] = useState(false);
   const [validationStale, setValidationStale] = useState(false);
   const [exactPassingRunId, setExactPassingRunId] = useState<string | null>(null);
-  /* The revision this workspace just approved. Held here rather than read from the
+  /* The revision this editor just approved. Held here rather than read from the
      projection so the render step names the exact revision the approval returned. */
   const [approvedRevisionId, setApprovedRevisionId] = useState<string | null>(null);
 

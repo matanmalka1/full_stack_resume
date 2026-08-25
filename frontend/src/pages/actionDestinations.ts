@@ -16,7 +16,7 @@ const destinations: Record<string, (applicationId: string) => string> = {
      at, and a separate destination would ask them to find it twice. */
   update_working_draft: (applicationId) =>
     `/applications/${encodeURIComponent(applicationId)}/draft`,
-  /* Validation and approval are states of the draft workspace, not screens beside it.
+  /* Validation and approval are states of the draft editor, not screens beside it.
      Both act on the exact draft the editor is holding, so they resolve to that one
      destination: the panel that reports the result and the dialog that approves it are
      already there when the user arrives. */

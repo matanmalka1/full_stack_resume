@@ -13,7 +13,7 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 @router.get(
     "",
     response_model=SettingsResponse,
-    summary="Read safe Workspace settings",
+    summary="Read safe application settings",
     responses={
         200: {
             "headers": {
@@ -34,7 +34,7 @@ def read_settings(services: Services, response: Response) -> SettingsResponse:
 @router.patch(
     "",
     response_model=SettingsResponse,
-    summary="Update safe Workspace settings",
+    summary="Update safe application settings",
     responses={
         200: {
             "headers": {

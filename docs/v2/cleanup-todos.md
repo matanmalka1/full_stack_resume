@@ -40,15 +40,15 @@ or weaken an existing acceptance gate.
       specification-compliant reduced port surface.
 - [x] **TODO 13:** measured 178/201 MB dedicated virtualenvs and one shared 554 MB
       Playwright browser cache; with a warm `uv` cache, a 173 MB logical environment added
-      about 2 MB physically while keeping independent editable environments and Workspace state.
+      about 2 MB physically while keeping independent editable environments and project state.
 - [x] **TODO 14 — completed (`8429aa5`).** Every rule in `tests/test_architecture.py` was
       classified by what it actually proves. Two were hand-maintained and are now derived;
       the rest already read their answer out of the code and were left alone. Nothing was
       removed: no rule turned out to guard something that had gone away.
 
       The one that mattered was latent. The rule forbidding `domain`/`application` from
-      naming a Workspace root checked `artifacts_root`, `knowledge_root`, and `base_dir` —
-      while `runtime/workspace.py` defines five roots. `state_root`, `temp_root`, and
+      naming a project root checked `artifacts_root`, `knowledge_root`, and `base_dir` —
+      while the former path model defined five roots. `state_root`, `temp_root`, and
       `logs_root` were never covered. It now reads `ROOT_NAMES` from the module that owns
       them. Nothing violated the gap, which is exactly why nobody found it: a hand-kept
       list fails only when someone happens to trip the part that was written down.
@@ -83,7 +83,7 @@ or weaken an existing acceptance gate.
       | `application/operations.py` | the DTO family — `commands`, `queries`, `knowledge_mutations` | correct; it is the Operation contract |
       | `application/services/operations.py` | subject area — `analysis`, `drafts`, `rendering`, `tracking` | correct |
       | `infrastructure/persistence/operations.py` | the table it owns — `applications`, `artifacts`, `audit`, `tracking` | correct |
-      | `runtime/operations.py` | role — `backup`, `composition`, `config`, `workspace` | **wrong**; renamed to `execution.py` |
+      | `runtime/operations.py` | role — `backup`, `composition`, `config`, `project` | **wrong**; renamed to `execution.py` |
 
       Renaming all four would have broken four internal conventions to fix one
       cross-package collision that no importer or traceback is actually ambiguous

@@ -4,7 +4,7 @@ The runner itself is `application/operation_runner.py`. This is the two hosts
 it can run inside — the foreground one the CLI drives, and the supervised pool
 `cv web` owns — which is why the module is named for the role rather than for
 Operations. Its siblings here are named the same way: composition,
-config, workspace.
+config, application paths.
 """
 
 from __future__ import annotations

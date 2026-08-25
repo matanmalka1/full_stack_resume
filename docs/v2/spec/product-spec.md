@@ -1,8 +1,8 @@
-# Local-First CV Workspace v2.0 Product Specification
+# Local-First CV Application v2.0 Product Specification
 
 Status: **Approved for v2.0 implementation (2026-08-17)**
 
-Persistence, object-storage, and secret-configuration amendments: **2026-08-25**
+Persistence, object-storage, secret-configuration, and fixed-root amendments: **2026-08-25**
 
 Product version: **2.0**
 
@@ -16,7 +16,7 @@ Official target platform: macOS
 
 ## תקציר מנהלים
 
-v2.0 הופך את מנוע ה-CLI המאומת של v1 ל-Workspace מקומי מלא למועמד יחיד.
+v2.0 הופך את מנוע ה-CLI המאומת של v1 לאפליקציה מקומית מלאה למועמד יחיד.
 המערכת כוללת FastAPI מקומי, ממשק React בעברית, PostgreSQL ל-state מובנה
 ו-object-storage abstraction ל-snapshots ולתוצרים immutable. ברירת המחדל היא
 אחסון מקומי, וניתן לבחור bucket תואם S3 בלי לשנות references במסד.
@@ -36,8 +36,8 @@ AI מסווג ומציע ניסוח תחת חוזים מובנים. הוא אי�
 ישירות. עובדות canonical, policy דטרמיניסטי ו-validation נשארים סמכותיים. מסלול
 דטרמיניסטי מלא עד Ready PDF ממשיך לעבוד ללא API key.
 
-הפיתוח מתבצע ב-branch/worktree הפעיל של v2 וב-Workspace מבודד ומסומן במפורש.
-הפיתוח משתמש בעותקים בלבד. אין dual-write. v1 הוא ארכיון קפוא ב-Git ואינו נפתח,
+הפיתוח מתבצע ב-branch/worktree הפעיל של v2 מול מסד PostgreSQL מבודד.
+אין dual-write. v1 הוא ארכיון קפוא ב-Git ואינו נפתח,
 נקרא או נכתב על ידי v2 — אין מיגרציה ואין cutover.
 
 ## 1. Authority and interpretation
@@ -81,7 +81,7 @@ views and diagnostic interfaces.
 ## 3. Product boundaries
 
 - v2.0 is local-first and single-user.
-- One Workspace represents one candidate and one canonical knowledge source.
+- The application represents one candidate and one canonical knowledge source.
 - The domain must not hardcode `Matan`, a particular filename, or another candidate
   identity. A single `CandidateContext` supplies the candidate-specific policy.
 - There is no candidate selector, candidate CRUD, or multi-candidate UI.
@@ -105,7 +105,7 @@ views and diagnostic interfaces.
 
 v2.0 includes:
 
-- An isolated, validated local Workspace and `cv web` runtime supervisor.
+- A local application rooted in the project and a `cv web` runtime supervisor.
 - A Hebrew, desktop-first Web UI with basic responsive behavior.
 - FastAPI `/api/v1` endpoints backed by explicit application use-cases.
 - Job creation from required pasted text, an optional provenance URL, and a browser-read
@@ -135,7 +135,7 @@ v2.0 includes:
   first vertical slice is complete.
 - Recruiter-facing PDF download and human-readable provenance/decision Markdown export.
 - Explicit schema upgrade and reconciliation commands. PostgreSQL and remote-bucket
-  backup/restore remain environment responsibilities rather than Workspace commands.
+  backup/restore remain environment responsibilities rather than application commands.
 
 ## 5. Explicit non-goals
 
@@ -168,7 +168,7 @@ decision.
 ## 6. Core invariants
 
 1. `Application` is the container for one target job and its history.
-2. The Workspace represents one candidate. Candidate identity is not a dimension on
+2. The application represents one candidate. Candidate identity is not a dimension on
    every Application row.
 3. `WorkingDraft` is the only mutable resume document and there is at most one active
    WorkingDraft per Application.
@@ -224,7 +224,7 @@ decision.
 23. v2 starts with an empty database. It is proven by running its own workflow, not by
     being pointed at existing data to see what happens.
 
-## 7. Candidate and Workspace behavior
+## 7. Candidate and application behavior
 
 One CandidateContext is loaded from Knowledge. It points to canonical identity and
 contact fact IDs and supplies display/filename policy, locale, and timezone. Candidate
@@ -238,8 +238,8 @@ including for Hebrew CVs:
 CandidateContext may explicitly override the filename name. Renderers and filename
 normalizers receive CandidateContext and must not contain a candidate literal.
 
-The Workspace has explicit roots for knowledge, artifacts, temporary files, and logs. It
-has a durable Workspace ID and marker.
+Knowledge, artifacts, temporary files, and logs use fixed directories below the project
+root. There is no selectable root, marker, or runtime identity file.
 
 ## 8. Job intake and snapshots
 
@@ -381,7 +381,7 @@ historical artifacts by default. The UI explains that job descriptions and relev
 profile facts may be sent when AI is enabled; no per-call consent dialog is required.
 
 An OpenAI key is backend/environment configuration only. It is resolved through the
-runtime configuration contract but is environment-only: `.env` and Workspace config
+runtime configuration contract but is environment-only: `.env` and project config
 cannot enable it. It is never stored in PostgreSQL, sent to React, or written to logs.
 Settings expose only whether it is configured.
 
@@ -494,12 +494,12 @@ belongs to provenance rather than the normal timeline label.
 ## 15. Runtime and local security
 
 `cv web` is a runtime supervisor, not a shell alias for Uvicorn. It validates the
-Workspace and schema, detects the process/port state, builds the composition root,
+the schema, detects the process/port state, builds the composition root,
 starts FastAPI and the Operation worker, opens the default browser unless `--no-open`
 is supplied, and performs graceful shutdown.
 
 The default endpoint is `127.0.0.1:8765`. If that endpoint belongs to the same
-Workspace, the existing instance is opened. If another process owns it,
+compatible CV application, the existing instance is opened. If another process owns it,
 the supervisor chooses a free port and reports/opens it.
 
 Production serves the built React application from FastAPI under the same origin. The
@@ -513,8 +513,8 @@ fallback only and is never selected silently.
 
 Safe UI settings in v2.0 are limited to automatic generation when review is not
 required, `ai_enabled`, default execution mode (`ai` or `deterministic`), basic UI
-preferences, and `open_browser_on_launch`. Model/task overrides, Workspace roots,
-timezone, and secrets remain backend/Workspace configuration.
+preferences, and `open_browser_on_launch`. Model/task overrides, timezone, and secrets
+remain backend/project configuration.
 
 ## 16. Storage, provenance, and retention
 
@@ -534,7 +534,7 @@ outputs/{application_id}/{revision_id}/{artifact_id}.pdf
 Screenshots, manifests, sanitized provider responses, and other immutable payloads use
 the same ID-based policy. `LocalObjectStore` maps keys below `artifacts_root`;
 `S3ObjectStore` maps the same keys below the configured bucket/prefix. Database rows keep
-the same Workspace-relative references under either backend. Friendly filenames exist
+the same project-relative references under either backend. Friendly filenames exist
 only at export/download. Storage keys and local paths are never API inputs and are
 validated before access.
 
@@ -668,8 +668,8 @@ synchronization, and no cutover event.
 
 Rollout stages are:
 
-1. Alpha on a test Workspace.
-2. Beta on a Workspace seeded from the candidate's own Knowledge, used for real work.
+1. Alpha against an isolated test database and project copy.
+2. Beta against the candidate's project Knowledge, used for real work.
 3. Release Ready after full engineering, environment-level data-protection verification,
    and acceptance evidence.
 
@@ -684,7 +684,7 @@ worktree of the frozen commit. There is no v2 database downgrade.
 
 v2.0 is Release Ready only when all of the following are demonstrably true:
 
-- [ ] `cv web` starts an isolated validated Workspace without manual Python/Node steps.
+- [ ] `cv web` starts the local application without manual Python/Node steps.
 - [ ] Web and CLI use the same application layer and permission policy.
 - [ ] One Application completes the full Web vertical slice through Ready PDF.
 - [ ] The central failure paths are exercised through the same slice.
@@ -734,6 +734,7 @@ candidates, not commitments.
 
 ## 24. Decision log
 
-This section remains empty at initial approval. Later entries record only approved
-changes to this specification, with date, rationale, affected contracts, migration
-impact, and acceptance changes. It is not a transcript of planning discussions.
+2026-08-25: Removed the selectable, marked root model. The application now runs from
+the project root; marker files, root-selection flags/environment variables, lifecycle
+commands, runtime root identity, and root-scoped terminology are removed. Safe settings
+now use `app_settings`; migration `0004` performs the schema rename.

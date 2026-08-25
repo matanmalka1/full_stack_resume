@@ -100,7 +100,7 @@ def test_failed_post_render_validation_does_not_set_ready(
 
 
 def test_no_repository_primitive_can_assert_ready_for_unlinked_pdf(
-    workspace_root: Path, approved_application
+    project_root: Path, approved_application
 ) -> None:
     """Ready has no write primitive and exact stored proof is always re-derived."""
     services, app_id = approved_application("Set Ready Bypass")
@@ -114,7 +114,7 @@ def test_no_repository_primitive_can_assert_ready_for_unlinked_pdf(
         app_id,
         "resume_pdf",
         "resume",
-        fake_pdf.relative_to(workspace_root).as_posix(),
+        fake_pdf.relative_to(project_root).as_posix(),
         sha256_file(fake_pdf),
         "rendered",
         revision_id=services.repository.latest_approved_revision(app_id).id,
@@ -133,7 +133,7 @@ def test_no_repository_primitive_can_assert_ready_for_unlinked_pdf(
 
 
 def test_public_workflow_cannot_restore_ready_after_tamper_without_fresh_render(
-    workspace_root: Path, ready_application
+    project_root: Path, ready_application
 ) -> None:
     """Stored validation alone cannot qualify a tampered immutable artifact."""
     services, app_id = ready_application("No Stale Restore")
@@ -165,7 +165,7 @@ def test_untouched_ready_application_passes(ready_application) -> None:
 
 
 def test_ready_integrity_rejects_missing_or_tampered_registered_artifacts(
-    workspace_root: Path, ready_application
+    project_root: Path, ready_application
 ) -> None:
     cases = [
         ("resume_pdf", "rendered", "tamper", "pdf-tampered", "rendered_artifacts"),

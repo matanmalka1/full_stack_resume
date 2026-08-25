@@ -72,7 +72,7 @@ contract coverage. Cover:
 - immutable row protections
 - status/audit projection consistency
 - artifact identity/hash/path registration
-- Workspace markers and guards
+- fixed project-path containment
 - transaction isolation, row locking, and claiming behavior relevant to CLI/Web concurrency
 - query projections and one-snapshot consistency
 
@@ -113,7 +113,7 @@ Avoid blanket DOM snapshots.
 ### 2.6 Full Web E2E
 
 Playwright E2E runs a built React application, real FastAPI, real worker, real PostgreSQL,
-the configured object store, and real renderer against a temporary Workspace and isolated
+the configured object store, and real renderer against a temporary project copy and isolated
 database. Only the external AI provider is stubbed in automated CI.
 
 The central E2E must not mock application services or state projections.
@@ -136,7 +136,7 @@ Use focused visual screenshots where useful, not broad pixel-perfect PDF compari
 
 ### 2.8 Database lifecycle and object-store tests
 
-The application has no built-in Workspace backup/restore command. Test Alembic's
+The application has no built-in backup/restore command. Test Alembic's
 single-head topology, revision registration, and upgrade of an empty PostgreSQL database.
 Exercise immutable create-if-absent semantics, hash verification, key validation, and
 storage-neutral references against both object-store adapters. Environment-level backup
@@ -362,9 +362,7 @@ variants, and redaction fields should normally be grouped:
 - Operation payload and log sanitization
 - sanitized raw provider artifact
 - prompt-injection fixtures
-- Workspace marker/live-data guard
-- every normal v2 command rejects an unmarked v1 root, and `workspace init` refuses to
-  mark one, so nothing can open or write into the archive
+- no runtime root selector or v1 data reader
 - foreign process on default port
 - same-instance health/identity detection
 
@@ -422,8 +420,8 @@ Application-owned acceptance must prove:
 
 PostgreSQL and bucket backup/restore are environment-level responsibilities. When a
 deployment policy is introduced, its restore drill belongs in deployment evidence and
-must cover both stores consistently; the application does not claim that a Workspace
-archive is a complete backup.
+must cover both stores consistently; the application does not claim that a project copy
+is a complete backup.
 
 ## 14. Migration acceptance — withdrawn
 

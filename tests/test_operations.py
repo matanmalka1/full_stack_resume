@@ -309,12 +309,8 @@ def test_application_and_global_render_leases_queue_contending_work(services) ->
             acknowledged_duplicates=True,
         )
     )
-    app_one = services.repository.create_operation(
-        _stored_request(first.application_id, "app-1")
-    )
-    same_app = services.repository.create_operation(
-        _stored_request(first.application_id, "app-2")
-    )
+    app_one = services.repository.create_operation(_stored_request(first.application_id, "app-1"))
+    same_app = services.repository.create_operation(_stored_request(first.application_id, "app-2"))
     render_request = CreateOperation(
         application_id=second.application_id,
         operation_type=OperationType.RENDER_REVISION,
@@ -362,11 +358,7 @@ def test_ai_resource_allows_two_operations_and_queues_the_third(services) -> Non
         request = _stored_request(ingested.application_id, f"ai-{number}").model_copy(
             update={"provider": "openai", "model": "test-model"}
         )
-        operations.append(
-            services.repository.create_operation(
-                request
-            )
-        )
+        operations.append(services.repository.create_operation(request))
 
     assert services.repository.claim_operation(operations[0].id, runner_id="ai-a")
     assert services.repository.claim_operation(operations[1].id, runner_id="ai-b")
@@ -443,7 +435,7 @@ def _ingest_for_operation(services, company: str):
 
     Acknowledged, because every caller ingests the same job text under a
     different company and Stage B made an unacknowledged duplicate a refusal. A
-    test that builds two Operations in one Workspace is exercising the runner,
+    test that builds two Operations in one project is exercising the runner,
     not duplicate detection.
     """
     return services.applications.ingest(
@@ -633,8 +625,6 @@ def test_cli_analyze_uses_foreground_operation_and_reuses_explicit_key(services)
         )
     )
     arguments = (
-        "--workspace",
-        str(services.workspace.root),
         "analyze",
         ingested.application_id,
         "--job-snapshot",
@@ -741,8 +731,6 @@ def test_cli_draft_uses_foreground_operation(services) -> None:
         )
     )
     analysis_run = run_cli(
-        "--workspace",
-        str(services.workspace.root),
         "analyze",
         ingested.application_id,
         "--job-snapshot",
@@ -753,8 +741,6 @@ def test_cli_draft_uses_foreground_operation(services) -> None:
     analysis_payload = json.loads(analysis_run.stdout)
 
     drafted = run_cli(
-        "--workspace",
-        str(services.workspace.root),
         "draft",
         ingested.application_id,
         "--job-analysis",
@@ -807,7 +793,7 @@ def test_failed_render_operation_preserves_registered_outputs_as_inactive(
     assert failed.status is OperationStatus.FAILED
     assert failed.failure_code is OperationFailureCode.RENDER_FAILED
     assert failed.technical_log_reference == "logs/operations.jsonl"
-    assert (setup.services.workspace.root / failed.technical_log_reference).is_file()
+    assert (setup.services.paths.root / failed.technical_log_reference).is_file()
     assert len(failed.outputs) == 3
     assert all(not output.active for output in failed.outputs)
     for output in failed.outputs:

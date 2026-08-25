@@ -30,7 +30,7 @@ from .object_store import (
 from .paths import relative_within, resolve_within
 
 
-class PayloadWorkspace(Protocol):
+class PayloadPaths(Protocol):
     @property
     def root(self) -> Path: ...
 
@@ -47,7 +47,7 @@ class PayloadWorkspace(Protocol):
 #: whole bytes and writing them in one call.
 PayloadValidator = Callable[[bytes], bool | None]
 
-#: Immutable payload references are Workspace-relative POSIX strings
+#: Immutable payload references are project-relative POSIX strings
 #: (`artifacts/snapshots/app/id.txt`), and object keys are relative to the
 #: artifact root (`snapshots/app/id.txt`). The two differ by exactly this
 #: prefix. The reference format is frozen - `artifact_versions` rows carry it
@@ -66,7 +66,7 @@ class StoredPayload:
     """
 
     path: Path
-    workspace_relative: str
+    project_relative: str
     sha256: str
     size: int
 
@@ -86,22 +86,22 @@ class PayloadStore:
     #: never holds a whole artifact in memory the way a `read_bytes` would.
     _STREAM_CHUNK_BYTES = 64 * 1024
 
-    def __init__(self, workspace: PayloadWorkspace, object_store: ObjectStore | None = None):
-        """Storage is injected; the Workspace still supplies the layout.
+    def __init__(self, paths: PayloadPaths, object_store: ObjectStore | None = None):
+        """Storage is injected; application paths supply the local layout.
 
-        `object_store` defaults to a `LocalObjectStore` over the Workspace's
+        `object_store` defaults to a `LocalObjectStore` over the application's
         artifact root, so a caller that configures nothing keeps exactly the
-        behaviour it had. The Workspace roots stay because references are
-        Workspace-relative and because `render_targets` must still hand
+        behaviour it had. The roots stay because references are project-relative
+        and because `render_targets` must still hand
         Chromium a real path.
         """
-        self._workspace_root = Path(workspace.root).resolve()
-        self._artifacts_root = resolve_within(self._workspace_root, workspace.artifacts_root)
-        self._temp_root = resolve_within(self._workspace_root, workspace.temp_root)
+        self._project_root = Path(paths.root).resolve()
+        self._artifacts_root = resolve_within(self._project_root, paths.artifacts_root)
+        self._temp_root = resolve_within(self._project_root, paths.temp_root)
         self._objects = object_store or LocalObjectStore(self._artifacts_root)
 
     @classmethod
-    def for_workspace_root(cls, root: Path) -> PayloadStore:
+    def for_project_root(cls, root: Path) -> PayloadStore:
         resolved = Path(root).resolve()
         return cls(
             _PayloadRoots(
@@ -140,8 +140,8 @@ class PayloadStore:
     def _reference_for_key(self, key: str) -> str:
         """The stored reference for one object key.
 
-        `artifact_versions` rows carry Workspace-relative strings and
-        `ArtifactStore.resolve` joins them onto the Workspace root. That format
+        `artifact_versions` rows carry project-relative strings and
+        `ArtifactStore.resolve` joins them onto the project root. That format
         is frozen, so the prefix is added here rather than the rows changing.
         """
         return f"{_REFERENCE_PREFIX}/{key}"
@@ -150,10 +150,10 @@ class PayloadStore:
         """The object key for one stored reference, refusing anything else.
 
         A reference that does not sit under the artifact root is refused rather
-        than coerced: a row pointing at a Workspace file that is not an artifact
+        than coerced: a row pointing at a project file that is not an artifact
         payload must not become an addressable key.
         """
-        candidate = resolve_within(self._workspace_root, reference)
+        candidate = resolve_within(self._project_root, reference)
         approved = self._approved_destination(candidate)
         return relative_within(self._artifacts_root, approved).as_posix()
 
@@ -244,7 +244,7 @@ class PayloadStore:
 
         The store decides. On the local store this is the artifact path itself,
         so the render target *is* the stored object and nothing is written
-        twice. On a remote store it is scratch under the Workspace temp root,
+        twice. On a remote store it is scratch under the application temp root,
         which `ingest_render_output` uploads and then removes.
         """
         return self._objects.render_location(self._key(destination), self._temp_root)
@@ -411,7 +411,7 @@ class PayloadStore:
 
         return StoredPayload(
             path=self._path_for_key(key),
-            workspace_relative=self._reference_for_key(key),
+            project_relative=self._reference_for_key(key),
             sha256=stored.sha256,
             size=stored.size,
         )
@@ -428,7 +428,7 @@ class PayloadStore:
             validate=lambda _payload: True,
         )
         return SnapshotPayload(
-            reference=stored.workspace_relative,
+            reference=stored.project_relative,
             sha256=stored.sha256,
             size=stored.size,
         )
@@ -491,7 +491,7 @@ class PayloadStore:
         which resolves symlinks before it compares - so a link inside the
         artifact root pointing anywhere else is refused by the same check that
         refuses `..`, rather than by a second rule that could disagree with it.
-        Then the approved-layout check, so a row pointing at a Workspace file
+        Then the approved-layout check, so a row pointing at a project file
         that is not an artifact payload cannot be served. Then the payload is
         read once, and the hash is computed over the bytes that were read.
 
@@ -614,7 +614,7 @@ class PayloadStore:
     @staticmethod
     def _reference(stored: StoredPayload) -> SnapshotPayload:
         return SnapshotPayload(
-            reference=stored.workspace_relative,
+            reference=stored.project_relative,
             sha256=stored.sha256,
             size=stored.size,
         )
@@ -651,7 +651,7 @@ class PayloadStore:
                     raise ValueError(f"existing immutable payload failed validation: {destination}")
                 return StoredPayload(
                     path=self._path_for_key(key),
-                    workspace_relative=self._reference_for_key(key),
+                    project_relative=self._reference_for_key(key),
                     sha256=sha256_bytes(existing),
                     size=len(existing),
                 )
@@ -668,7 +668,7 @@ class PayloadStore:
             lambda _payload: True,
         )
         for stored in (structured, rendered):
-            actual = self._objects.stat(self._key_for_reference(stored.workspace_relative)).sha256
+            actual = self._objects.stat(self._key_for_reference(stored.project_relative)).sha256
             if actual != stored.sha256:
                 raise ValueError(
                     "committed revision payload hash mismatch: "

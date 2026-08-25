@@ -378,7 +378,7 @@ def test_a_symlink_out_of_the_artifact_root_is_refused_by_the_same_check(
     outside.write_bytes(b"%PDF-1.4\nsecret\n")
 
     link_relative = f"artifacts/outputs/{setup.application_id}/linked/{'a' * 32}.pdf"
-    link = setup.services.workspace.root / link_relative
+    link = setup.services.paths.root / link_relative
     link.parent.mkdir(parents=True, exist_ok=True)
     link.symlink_to(outside)
 
@@ -474,7 +474,7 @@ def test_an_unqualified_revision_refuses_its_export(api_worker, approved_applica
     """
     setup = approved_application("Unrendered Co")
     payload = (
-        setup.services.workspace.artifacts_root
+        setup.services.paths.artifacts_root
         / "outputs"
         / setup.application_id
         / setup.approved.revision_id

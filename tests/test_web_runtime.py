@@ -43,13 +43,11 @@ def _post_json(url: str, body: dict, *, origin: str) -> tuple[int, dict, str | N
         return response.status, json.loads(response.read()), response.headers.get("Location")
 
 
-def test_select_web_endpoint_reuses_the_same_workspace(services, monkeypatch) -> None:
+def test_select_web_endpoint_reuses_the_same_application(services, monkeypatch) -> None:
     monkeypatch.setattr("cv_engine.runtime.web._port_is_open", lambda _host, _port: True)
     monkeypatch.setattr(
         "cv_engine.runtime.web._health_identity",
-        lambda _endpoint: {
-            "workspace_id": services.workspace.workspace_id,
-        },
+        lambda _endpoint: {"product_version": "2.0.0"},
     )
 
     endpoint = select_web_endpoint(services)
@@ -80,7 +78,7 @@ def test_select_web_endpoint_avoids_a_foreign_process(services, monkeypatch) -> 
     monkeypatch.setattr("cv_engine.runtime.web._port_is_open", lambda _host, _port: True)
     monkeypatch.setattr(
         "cv_engine.runtime.web._health_identity",
-        lambda _endpoint: {"workspace_id": "foreign"},
+        lambda _endpoint: {"product_version": "foreign"},
     )
     monkeypatch.setattr("cv_engine.runtime.web._free_loopback_port", lambda _host: 49152)
 
@@ -116,7 +114,7 @@ def test_web_runtime_serves_real_http_and_stops_its_worker(services, tmp_path: P
                 sleep(0.02)
         assert status == 200
         health = json.loads(body)
-        assert health["workspace_id"] == services.workspace.workspace_id
+        assert "workspace_id" not in health
         index_status, index = _read(endpoint.url, accept="text/html")
         assert index_status == 200
         assert b"CV Web Runtime" in index

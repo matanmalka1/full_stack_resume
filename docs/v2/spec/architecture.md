@@ -2,7 +2,7 @@
 
 Status: **Approved for v2.0 implementation (2026-08-17)**
 
-PostgreSQL/object-storage baseline and secret-configuration amendment: **2026-08-25**
+PostgreSQL/object-storage, secret-configuration, and fixed-root amendment: **2026-08-25**
 
 Product authority: `docs/v2/spec/product-spec.md`
 
@@ -87,7 +87,7 @@ There is no one-file-per-interface rule and no micro-packaging objective.
 
 The domain owns entities, value objects, lifecycle rules, validation semantics,
 transition rules, knowledge/fact safety, Ready qualification, and invariant checks. It
-does not import FastAPI, SQLAlchemy, psycopg, Workspace paths, Playwright, React concepts,
+does not import FastAPI, SQLAlchemy, psycopg, filesystem paths, Playwright, React concepts,
 provider HTTP code, or runtime configuration.
 
 Pydantic remains appropriate for DraftDocument and other serialized domain documents.
@@ -146,17 +146,18 @@ services directly. It was never a v2 architectural boundary, and no code refers 
 
 ### 3.5 Runtime and composition
 
-`runtime/composition.py` is the manual composition root. It builds Workspace paths,
+`runtime/composition.py` is the manual composition root. It builds fixed application paths,
 configuration, repositories, UnitOfWork factory, services, provider, renderer,
 operation worker, and API dependencies. No DI framework is used.
 
-`cv web` is a supervisor responsible for Workspace validation, schema gates,
+`cv web` is a supervisor responsible for schema gates,
 process/port detection, worker lifecycle, browser launch, and graceful shutdown.
 FastAPI remains a Web server and does not become the installation/process manager.
 
-## 4. Workspace model
+## 4. Application paths
 
-No service constructs paths from a repository root. A Workspace/config layer supplies:
+The runtime uses the repository root as the single application root. There is no root
+selector, marker, initialization command, or per-root identity. `AppPaths` supplies:
 
 ```text
 knowledge_root
@@ -165,42 +166,10 @@ temp_root
 logs_root
 ```
 
-The Workspace marker includes at least:
-
-```json
-{
-  "workspace_id": "uuid",
-  "workspace_version": 2,
-  "created_at": "UTC timestamp"
-}
-```
-
-Normal v2 runtime commands fail closed unless the selected root contains a valid v2
-marker. An unmarked directory or an unknown marker version is never opened as a normal
-v2 Workspace. Guards use metadata rather than folder-name heuristics.
-
-The `purpose`/`data_class` pair was retired on 2026-08-25. It guarded a `live` data
-class that nothing ever created: v2 starts from an empty database, every Workspace is a
-copy, and the only marker carrying `live` was the one its own test wrote. A marker
-written before the retirement still opens; the retired keys are dropped on read.
-
-There is no exception. The read-only v1 source adapter that once held one was deleted
-on 2026-08-19 with the migration it served, so a v1 root is refused outright rather than
-read under conditions.
-
-`installation_id` was retired on 2026-08-25. v2.0 is one user on one machine, so it was
-a constant repeated on every row of four tables and distinguished nothing; `workspace_id`
-carries the identity that is actually used.
-
-During development:
-
-```text
-v1 worktree -> v1 Workspace
-v2 worktree -> isolated v2 Workspace
-```
-
-Nothing points v2 at v1. The archive is read by a person with a text editor or
-`git worktree add`, never by this engine.
+All mutable and immutable local paths remain contained below that root. Tests inject a
+temporary root directly into composition; production CLI commands do not expose that
+injection surface. Nothing points v2 at v1. The archive is read by a person with a text
+editor or `git worktree add`, never by this engine.
 
 ## 5. CandidateContext
 
@@ -237,10 +206,10 @@ PostgreSQL stores structured state and relationships:
 - Operation, lease, idempotency, failure, retry, and output metadata
 - safe settings
 - Knowledge audit and cross-store mutation journal
-- schema and Workspace metadata
+- schema metadata
 
 The database is addressed by the resolved `database_url` setting (`CV_DATABASE_URL` in
-environment and `.env` surfaces), not by a path inside the Workspace. One process-wide SQLAlchemy
+environment and `.env` surfaces), not by a local database path. One process-wide SQLAlchemy
 `Engine` per URL owns pooling and connection health. UnitOfWork and multi-query projection
 reads use explicit transactions; stable projections use `REPEATABLE READ`.
 
@@ -276,9 +245,9 @@ The key layout is the same either way:
 ```
 
 **References are storage-neutral and their format is frozen.** `artifact_versions`
-stores a Workspace-relative string (`artifacts/snapshots/{app}/{id}.txt`); an object key
+stores a project-relative string (`artifacts/snapshots/{app}/{id}.txt`); an object key
 is the same string without the `artifacts/` prefix. A row is identical under either
-backend, so a Workspace can change storage without rewriting database rows.
+backend, so storage can change without rewriting database rows.
 
 Key validation is shared by both implementations rather than delegated to each. A
 crafted key - traversal, absolute, empty segment, backslash, drive prefix - is refused
@@ -556,7 +525,7 @@ arbitrary file uploads.
 
 `cv web` defaults to `127.0.0.1:8765`, opens the default browser, and supports
 `--no-open`. It probes a health/identity endpoint to determine whether the existing port
-belongs to the same Workspace. If so it opens that instance; if a
+is a compatible CV application. If so it opens that instance; if a
 foreign process owns the port it selects and reports another free port.
 
 Production supports current Chrome/Chromium and Safari. Full E2E uses Chromium;
@@ -571,14 +540,13 @@ action rather than a logs screen.
 
 `runtime/config.py` is the single resolution contract. Precedence is:
 
-`CLI > process environment > one .env file > Workspace config > default`
+`CLI > process environment > project .env file > project config > default`
 
-When a Workspace is open, only `{workspace_root}/.env` is considered; otherwise the
-repository-root `.env` is considered. The two files are never merged. Real environment
-variables therefore override stale developer files. The supported `.env` syntax is the
+Only the repository-root `.env` is considered. Real environment variables override
+stale developer files. The supported `.env` syntax is the
 small documented `KEY=value` subset, implemented without an additional dependency.
 
-Each setting declares whether it is Workspace-scoped, secret, or environment-only.
+Each setting declares whether it is secret or environment-only.
 `database_url` is secret. `OPENAI_API_KEY` is both secret and environment-only, so an
 `unset OPENAI_API_KEY` reliably disables the OpenAI adapter even when a `.env` exists.
 AWS credentials remain ambient boto3 configuration rather than values copied through
@@ -586,14 +554,14 @@ the application contract.
 
 Masking occurs only at display/reporting boundaries. Any CLI/API/log/error surface that
 reports a configuration value must show `***` for a configured secret while preserving
-the non-secret source label; `cv workspace status` follows this rule, and unset secrets
+the non-secret source label, and unset secrets
 remain visibly unset. Connectors always receive the original value, never the masked
 representation. `.env` and `.env.*` are ignored by Git, while `.env.example` is the
 committed safe inventory of supported variables.
 
 ## 16. Database lifecycle and upgrade
 
-v2.0 has no built-in Workspace backup or restore command. PostgreSQL lifecycle and any
+v2.0 has no built-in backup or restore command. PostgreSQL lifecycle and any
 environment-level backup policy remain outside the application; this development-only
 replacement starts from an empty database and does not migrate historical data.
 

@@ -159,7 +159,7 @@ def load_presentations(knowledge_root: Path, facts: FactStore) -> PresentationSt
 def load_candidate_context(knowledge_root: Path, facts: FactStore) -> CandidateContext:
     path = knowledge_root / "base" / CANDIDATE_FILE
     if not path.is_file():
-        raise CandidateContextError(f"no candidate context in this Workspace: {path}")
+        raise CandidateContextError(f"no candidate context in this project: {path}")
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
@@ -167,13 +167,13 @@ def load_candidate_context(knowledge_root: Path, facts: FactStore) -> CandidateC
     return build_candidate_context(payload, facts, origin=str(path))
 
 
-def seed_fact_before_workspace(
+def seed_fact_before_project(
     base_dir: Path, source_name: str, payload: dict, *, canonical: bool = False
 ) -> Fact:
-    """Seed bootstrap Knowledge before a Workspace and its journal exist.
+    """Seed bootstrap Knowledge before its journal exists.
 
     Normal commands must use ``KnowledgeService``. This helper exists only for
-    constructing the isolated test Knowledge fixture before its Workspace marker
+    constructing an isolated test Knowledge fixture before services
     and database are created.
     """
     store = load_fact_store(base_dir)
@@ -187,7 +187,7 @@ def seed_fact_before_workspace(
 class FileKnowledge:
     """Knowledge as it is actually stored: version-controlled files.
 
-    This is the only place that knows the knowledge layout inside a Workspace.
+    This is the only place that knows the knowledge layout inside the project.
     Every command re-reads through it rather than holding a long-lived cache,
     so a manual or CLI edit between commands is seen rather than assumed away.
     """
@@ -196,16 +196,16 @@ class FileKnowledge:
         self,
         knowledge_root: Path,
         *,
-        workspace_root: Path | None = None,
+        project_root: Path | None = None,
         temp_root: Path | None = None,
         has_prepared_mutation: Callable[[], bool] | None = None,
     ):
         self.knowledge_root = Path(knowledge_root).resolve()
-        self.workspace_root = Path(workspace_root or knowledge_root).resolve()
-        self.temp_root = Path(temp_root or (self.workspace_root / "tmp")).resolve()
+        self.project_root = Path(project_root or knowledge_root).resolve()
+        self.temp_root = Path(temp_root or (self.project_root / "tmp")).resolve()
         self._has_prepared_mutation = has_prepared_mutation
-        resolve_within(self.workspace_root, self.knowledge_root)
-        resolve_within(self.workspace_root, self.temp_root)
+        resolve_within(self.project_root, self.knowledge_root)
+        resolve_within(self.project_root, self.temp_root)
 
     @property
     def base_dir(self) -> Path:
@@ -289,8 +289,8 @@ class FileKnowledge:
             raise
         return StagedKnowledgeFile(
             mutation_id=mutation_id,
-            source_reference=relative_within(self.workspace_root, source).as_posix(),
-            staged_reference=relative_within(self.workspace_root, new_path).as_posix(),
+            source_reference=relative_within(self.project_root, source).as_posix(),
+            staged_reference=relative_within(self.project_root, new_path).as_posix(),
             old_sha256=sha256_file(old_path),
             new_sha256=sha256_file(new_path),
             proposed_versions=proposed_versions,
@@ -336,9 +336,9 @@ class FileKnowledge:
             os.close(descriptor)
 
     def _paths(self, staged: StagedKnowledgeFile) -> tuple[Path, Path, Path]:
-        source = resolve_within(self.workspace_root, staged.source_reference)
+        source = resolve_within(self.project_root, staged.source_reference)
         source = resolve_within(self.knowledge_root, source)
-        new_path = resolve_within(self.workspace_root, staged.staged_reference)
+        new_path = resolve_within(self.project_root, staged.staged_reference)
         new_path = resolve_within(self.temp_root, new_path)
         old_path = resolve_within(self.temp_root, new_path.with_name("old"))
         if new_path.parent.name != staged.mutation_id or new_path.name != "new":
@@ -401,7 +401,7 @@ class FileKnowledge:
         )
         proposed = json.dumps(document, ensure_ascii=False, indent=2) + "\n"
         staged = self._stage(mutation_id, path, proposed)
-        return staged, updated, relative_within(self.workspace_root, path).as_posix()
+        return staged, updated, relative_within(self.project_root, path).as_posix()
 
     def stage_confirm_and_use_fact(
         self,
@@ -452,7 +452,7 @@ class FileKnowledge:
             confirmed,
             canonical,
             updated,
-            relative_within(self.workspace_root, profile_path).as_posix(),
+            relative_within(self.project_root, profile_path).as_posix(),
             proposed,
         )
 

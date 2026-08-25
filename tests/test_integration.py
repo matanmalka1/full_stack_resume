@@ -15,7 +15,7 @@ from cv_engine.application.errors import WorkflowError
 from cv_engine.domain.draft_markdown import parse_draft, serialize_markdown
 from cv_engine.domain.models import ValidationIssue, ValidationReport
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
-from cv_engine.runtime.workspace import Workspace
+from cv_engine.runtime.paths import AppPaths
 
 
 def test_csv_export_declares_its_schema_version(services, tmp_path: Path) -> None:
@@ -42,7 +42,7 @@ def test_csv_export_declares_its_schema_version(services, tmp_path: Path) -> Non
 
 
 def test_filesystem_working_draft_unconditionally_overwrites_the_projection(
-    workspace: Workspace,
+    app_paths: AppPaths,
     draft_factory,
 ) -> None:
     application_id = "overwrite-projection"
@@ -54,7 +54,7 @@ def test_filesystem_working_draft_unconditionally_overwrites_the_projection(
         "Python backend developer API React",
         application_id=application_id,
     ).draft
-    store = FilesystemArtifactStore(workspace)
+    store = FilesystemArtifactStore(app_paths)
 
     first_stored = store.write_working_draft(first)
     first_markdown = first_stored.paths.markdown.read_text(encoding="utf-8")
@@ -155,7 +155,7 @@ def test_render_revalidates_approved_markdown_before_browser(approved_applicatio
 
 
 def test_cli_fast_mode_refuses_pre_render_validation_failure(
-    workspace_root: Path,
+    project_root: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -188,8 +188,6 @@ def test_cli_fast_mode_refuses_pre_render_validation_failure(
 
     result = main(
         [
-            "--workspace",
-            str(workspace_root),
             "fast",
             "--company",
             "CLI Refusal",
@@ -207,7 +205,7 @@ def test_cli_fast_mode_refuses_pre_render_validation_failure(
 
 
 @pytest.mark.browser
-def test_cli_fast_mode_completes_definition_of_done(cli_runner, workspace_root: Path) -> None:
+def test_cli_fast_mode_completes_definition_of_done(cli_runner, project_root: Path) -> None:
     result = cli_runner(
         "fast",
         "--company",
@@ -222,6 +220,6 @@ def test_cli_fast_mode_completes_definition_of_done(cli_runner, workspace_root: 
     assert payload["ready"] is True
     # The CLI reports the stored reference, which is what artifact_versions
     # carries and what resolves under either storage backend. On the local
-    # store it is Workspace-relative, so the payload is still checkable here.
+    # store it is project-relative, so the payload is still checkable here.
     assert payload["pdf"].startswith("artifacts/outputs/")
-    assert (workspace_root / payload["pdf"]).is_file()
+    assert (project_root / payload["pdf"]).is_file()

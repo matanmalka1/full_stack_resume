@@ -281,11 +281,11 @@ def _containment_test_lines(path: Path) -> list[int]:
 
 def test_domain_and_application_dependencies_point_inward() -> None:
     """Report every dependency and storage-boundary violation in one contract."""
-    from cv_engine.runtime.workspace import ROOT_NAMES
+    from cv_engine.runtime.paths import ROOT_NAMES
 
-    # The Workspace's own root names, read from their one definition, plus the
+    # The application's root names, read from their one definition, plus the
     # one storage-layout parameter name (`base_dir`, in infrastructure/knowledge.py)
-    # that predates the Workspace roots and is not one of them. A hand-picked
+    # that predates these roots and is not one of them. A hand-picked
     # subset of ROOT_NAMES would silently stop covering a root nobody remembered
     # to add to this list; reading the tuple itself cannot fall out of date.
     storage_layout_names = set(ROOT_NAMES) | {"base_dir"}
@@ -332,7 +332,7 @@ def test_infrastructure_does_not_import_its_composition_root() -> None:
     its other half asserts storage purity and `infrastructure` is the layer
     that legitimately owns storage. That left infrastructure's own outbound
     edges unchecked, which is how `FilesystemArtifactStore` came to import
-    `runtime.workspace`. This check is the import half alone, derived from the
+    `runtime.paths`. This check is the import half alone, derived from the
     package tree rather than a file list, and it carries no exception set: a
     new outward edge fails here rather than arriving with an allowlist.
     """

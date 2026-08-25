@@ -1,4 +1,4 @@
-"""Safe, mutable Workspace settings exposed to the local Web client."""
+"""Safe, mutable application settings exposed to the local Web client."""
 
 from __future__ import annotations
 
@@ -46,9 +46,9 @@ class UpdateSettings(BoundaryDTO):
 
 
 class SettingsRepository(Protocol):
-    def workspace_settings(self) -> StoredSettings: ...
+    def app_settings(self) -> StoredSettings: ...
 
-    def update_workspace_settings(
+    def update_app_settings(
         self, expected_edit_version: int, settings: UpdateSettings
     ) -> StoredSettings: ...
 
@@ -67,7 +67,7 @@ class SettingsService:
         )
 
     def read(self) -> SettingsView:
-        return self._view(self.repo.workspace_settings())
+        return self._view(self.repo.app_settings())
 
     def update(self, expected_edit_version: int, command: UpdateSettings) -> SettingsView:
         enabled = self.provider_configured and command.ai_enabled_override is not False
@@ -75,5 +75,5 @@ class SettingsService:
             raise PreconditionFailed(
                 "AI cannot be the default execution mode until it is enabled and configured"
             )
-        stored = self.repo.update_workspace_settings(expected_edit_version, command)
+        stored = self.repo.update_app_settings(expected_edit_version, command)
         return self._view(stored)

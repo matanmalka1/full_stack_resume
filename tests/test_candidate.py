@@ -67,23 +67,23 @@ def test_context_resolves_identity_filename_and_track_contact_policy(candidate_c
 
 
 def test_filename_override_and_dependency_hash_follow_canonical_context(
-    workspace_root: Path, fact_store: FactStore
+    project_root: Path, fact_store: FactStore
 ) -> None:
-    payload = _payload(workspace_root)
+    payload = _payload(project_root)
     payload["filename_name"] = "M. Malka"
-    _write(workspace_root, payload)
-    context = load_candidate_context(workspace_root, fact_store)
+    _write(project_root, payload)
+    context = load_candidate_context(project_root, fact_store)
     assert context.resolved_filename_name == "M. Malka"
     assert context.display_name("en") == "Matan Malka"
 
     before = context.version_hash
-    common = workspace_root / "base/common.md"
+    common = project_root / "base/common.md"
     text = common.read_text(encoding="utf-8")
     common.write_text(
         text.replace("linkedin.com/in/matanmalka1", "linkedin.com/in/other"), encoding="utf-8"
     )
     after = load_candidate_context(
-        workspace_root, load_fact_store(workspace_root / "base")
+        project_root, load_fact_store(project_root / "base")
     ).version_hash
     assert after != before
 
@@ -105,17 +105,17 @@ def test_a_drafted_document_takes_its_identity_from_the_context(drafted_applicat
 
 
 def test_candidate_context_rejects_missing_or_unusable_identity(
-    workspace_root: Path, fact_store: FactStore
+    project_root: Path, fact_store: FactStore
 ) -> None:
-    original = _payload(workspace_root)
-    _candidate_file(workspace_root).unlink()
+    original = _payload(project_root)
+    _candidate_file(project_root).unlink()
     with pytest.raises(CandidateContextError, match="no candidate context"):
-        load_candidate_context(workspace_root, fact_store)
+        load_candidate_context(project_root, fact_store)
     payload = dict(original)
     payload["name_fact_id"] = "00000000-0000-4000-8000-000000000000"
-    _write(workspace_root, payload)
+    _write(project_root, payload)
     with pytest.raises(CandidateContextError, match="unusable fact"):
-        load_candidate_context(workspace_root, fact_store)
+        load_candidate_context(project_root, fact_store)
 
 
 # --- no candidate literals in policy code -----------------------------------

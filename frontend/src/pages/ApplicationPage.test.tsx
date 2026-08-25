@@ -245,12 +245,12 @@ describe("ApplicationPage", () => {
 
     renderPage();
 
-    /* Both resolve to the workspace holding the draft they act on. */
+    /* Both resolve to the editor holding the draft they act on. */
     expect(await screen.findByRole("link", { name: "אישור הגרסה" })).toHaveAttribute("href", "/applications/app-1/draft");
     expect(screen.getByRole("link", { name: "אימות הטיוטה" })).toHaveAttribute("href", "/applications/app-1/draft");
   });
 
-  /* Rendering happens in the draft workspace, on the revision the approval there
+  /* Rendering happens in the draft editor, on the revision the approval there
      returned, so this screen has no destination for it. It names the recommended action
      rather than inventing a link - the same honest default it applies to any action whose
      screen it does not own. */

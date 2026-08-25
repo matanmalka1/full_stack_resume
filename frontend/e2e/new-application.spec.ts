@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 
 /* The New Application screen is the one M4 screen that renders fully without a backend:
    the form, the local `.txt` read, and its accessibility are all client-side. Duplicate
-   choices and creation need real FastAPI and a real Workspace, so they belong to the
+   choices and creation need real FastAPI and a real DraftFlow, so they belong to the
    central E2E that the F gate owns, not here. */
 test.describe("the New Application screen", () => {
   test("is the Hebrew intake form and never presents the URL as an import", async ({ page }) => {

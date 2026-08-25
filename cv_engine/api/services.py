@@ -27,14 +27,8 @@ from ..application.settings import SettingsService
 
 @dataclass(frozen=True)
 class InstanceIdentity:
-    """Which Workspace this process is serving.
+    """Version identity exposed by the local process."""
 
-    `cv web` probes a running instance to decide whether the port belongs to the
-    same Workspace or to a foreign process (M6 §8.1). That decision is part of
-    the API's own contract rather than something a router digs out of a service.
-    """
-
-    workspace_id: str
     product_version: str
     api_version: str
     schema_version: str

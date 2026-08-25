@@ -443,7 +443,7 @@ def test_ai_mode_with_no_provider_configured_is_an_explicit_refusal(services, mo
 
 
 def test_a_successful_run_registers_the_sanitized_response_with_full_provenance(
-    ai_services, fake_openai: FakeOpenAI, workspace
+    ai_services, fake_openai: FakeOpenAI, app_paths
 ) -> None:
     """§6: raw sanitization, artifact registration, and exact metadata."""
     dirty = envelope(
@@ -467,7 +467,7 @@ def test_a_successful_run_registers_the_sanitized_response_with_full_provenance(
     assert row["path"].startswith("artifacts/provider/")
     assert row["path"].endswith(".json")
 
-    stored = (workspace.root / row["path"]).read_text(encoding="utf-8")
+    stored = (app_paths.root / row["path"]).read_text(encoding="utf-8")
     for secret in ("sk-live", "hidden thinking", "hidden chain of thought", "Bearer"):
         assert secret not in stored
     assert '"reasoning"' not in stored

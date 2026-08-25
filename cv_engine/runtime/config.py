@@ -6,18 +6,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .workspace import WorkspaceError
+CONFIG_NAME = "cv.config.json"
 
-CONFIG_NAME = "cv-workspace.config.json"
+
+class ConfigError(RuntimeError):
+    """Runtime configuration could not be read safely."""
 
 
 @dataclass(frozen=True)
 class Setting:
     """One configurable value and where it may come from.
-
-    `workspace_scoped` is false only for settings that select the Workspace
-    itself: a value stored inside a Workspace cannot decide which Workspace to
-    open without arguing with itself.
 
     `secret` marks a value that carries a credential. It changes nothing about
     how the value is read or used - only how it is displayed. Masking happens
@@ -25,7 +23,7 @@ class Setting:
     masked URL that reached `create_engine` would be a connection string
     pointing at a host called `***`.
 
-    `environment_only` refuses the `.env` layer for one setting, so it can be
+    `environment_only` refuses file-backed layers for one setting, so it can be
     supplied by a real environment variable and nothing else. It exists for
     `OPENAI_API_KEY`. Everything in this repository - `CLAUDE.md`,
     `docs/v2/smoke-run.md`, and every test that asserts the offline path -
@@ -40,21 +38,19 @@ class Setting:
     name: str
     env: str
     default: Any = None
-    workspace_scoped: bool = True
     secret: bool = False
     environment_only: bool = False
 
 
 # The HTTP body limit lives here rather than in the API package because the
 # test plan (§10) requires the chosen value to be recorded in the config
-# contract, and because `cv workspace status` is then able to report it.
+# contract and can be reported by diagnostics.
 # 2 MiB sits inside the approved 1-2 MB order of magnitude.
 API_MAX_BODY_BYTES_DEFAULT = 2 * 1024 * 1024
 
 SETTINGS: dict[str, Setting] = {
     setting.name: setting
     for setting in (
-        Setting("workspace", "CV_WORKSPACE", workspace_scoped=False),
         Setting(
             "database_url",
             "CV_DATABASE_URL",
@@ -82,7 +78,7 @@ SETTINGS: dict[str, Setting] = {
         # and nothing else — never a wildcard, never a list.
         Setting("api_dev_origin", "CV_API_DEV_ORIGIN", default=None),
         # Immutable payload storage. "local" is the default and keeps every
-        # payload on the Workspace filesystem; "s3" stores them in a bucket,
+        # payload below the application root; "s3" stores them in a bucket,
         # which is what a deployed installation uses. Nothing else about the
         # workflow changes - the reference strings recorded in
         # `artifact_versions` are identical either way.
@@ -142,18 +138,9 @@ def load_env_file(path: Path) -> dict[str, str]:
     return parse_env_file(text)
 
 
-def env_file_path(workspace_root: Path | None, repo_root: Path | None = None) -> Path | None:
-    """Where the `.env` for this run lives.
-
-    The Workspace root when one is open, the repository root otherwise. Only
-    one file is read: merging two would make "which file set this" a question
-    with no answer visible in `cv workspace status`.
-    """
-    if workspace_root is not None:
-        return Path(workspace_root) / ENV_FILE_NAME
-    if repo_root is not None:
-        return Path(repo_root) / ENV_FILE_NAME
-    return None
+def env_file_path(project_root: Path | None) -> Path | None:
+    """Return the single project-root `.env` considered for this run."""
+    return None if project_root is None else Path(project_root) / ENV_FILE_NAME
 
 
 def mask_value(name: str, value: Any) -> Any:
@@ -169,7 +156,7 @@ def mask_value(name: str, value: Any) -> Any:
     return MASK
 
 
-SOURCES = ("cli", "environment", "env-file", "workspace-config", "default")
+SOURCES = ("cli", "environment", "env-file", "project-config", "default")
 
 
 @dataclass(frozen=True)
@@ -181,8 +168,8 @@ class Resolved:
 class RuntimeConfig:
     """Resolved settings plus the layer each one came from.
 
-    The source is kept because `cv workspace status` has to be able to answer
-    "why is this value in effect", and because a setting silently arriving from
+    The source is kept so diagnostics can answer "why is this value in effect",
+    and because a setting silently arriving from
     an unexpected layer is the kind of thing that only shows up as a wrong
     artifact much later.
     """
@@ -209,21 +196,20 @@ class RuntimeConfig:
         }
 
 
-def load_workspace_config(root: Path) -> dict[str, Any]:
+def load_project_config(root: Path) -> dict[str, Any]:
     path = Path(root) / CONFIG_NAME
     if not path.is_file():
         return {}
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        raise WorkspaceError(f"unreadable Workspace config {path}: {exc}") from exc
+        raise ConfigError(f"unreadable project config {path}: {exc}") from exc
     if not isinstance(payload, dict):
-        raise WorkspaceError(f"Workspace config must be an object: {path}")
-    unknown = sorted(
-        set(payload) - {name for name, setting in SETTINGS.items() if setting.workspace_scoped}
-    )
+        raise ConfigError(f"project config must be an object: {path}")
+    allowed = {name for name, setting in SETTINGS.items() if not setting.environment_only}
+    unknown = sorted(set(payload) - allowed)
     if unknown:
-        raise WorkspaceError(f"unknown Workspace config settings in {path}: {', '.join(unknown)}")
+        raise ConfigError(f"unknown project config settings in {path}: {', '.join(unknown)}")
     return payload
 
 
@@ -231,11 +217,10 @@ def resolve_config(
     *,
     cli: Mapping[str, Any] | None = None,
     env: Mapping[str, str] | None = None,
-    workspace_root: Path | None = None,
-    repo_root: Path | None = None,
+    project_root: Path | None = None,
     env_file: Mapping[str, str] | None = None,
 ) -> RuntimeConfig:
-    """Apply CLI > environment > `.env` file > Workspace config > default.
+    """Apply CLI > environment > project `.env` > project config > default.
 
     The `.env` layer sits below the real environment on purpose: a value a
     developer exported deliberately in this shell must not be silently
@@ -251,9 +236,9 @@ def resolve_config(
     cli = cli or {}
     env = env if env is not None else {}
     if env_file is None:
-        path = env_file_path(workspace_root, repo_root)
+        path = env_file_path(project_root)
         env_file = load_env_file(path) if path is not None else {}
-    stored = load_workspace_config(workspace_root) if workspace_root is not None else {}
+    stored = load_project_config(project_root) if project_root is not None else {}
     values: dict[str, Resolved] = {}
     for name, setting in SETTINGS.items():
         if cli.get(name) is not None:
@@ -262,8 +247,8 @@ def resolve_config(
             values[name] = Resolved(env[setting.env], "environment")
         elif not setting.environment_only and env_file.get(setting.env):
             values[name] = Resolved(env_file[setting.env], "env-file")
-        elif setting.workspace_scoped and stored.get(name) is not None:
-            values[name] = Resolved(stored[name], "workspace-config")
+        elif not setting.environment_only and stored.get(name) is not None:
+            values[name] = Resolved(stored[name], "project-config")
         else:
             values[name] = Resolved(setting.default, "default")
     return RuntimeConfig(values)

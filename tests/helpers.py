@@ -12,16 +12,16 @@ from cv_engine.cli import main as cli_main
 from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.runtime.composition import Services
-from cv_engine.runtime.workspace import load_workspace
+from cv_engine.runtime.paths import AppPaths
 
 
 def artifact_store(root: Path) -> FilesystemArtifactStore:
-    """The real artifact adapter for a test Workspace.
+    """The real artifact adapter for a test project.
 
     Tests that need a draft on disk go through the same adapter the product
     uses, so no test carries its own copy of the storage layout.
     """
-    return FilesystemArtifactStore(load_workspace(root))
+    return FilesystemArtifactStore(AppPaths.from_root(root))
 
 
 def store_draft(root: Path, draft):

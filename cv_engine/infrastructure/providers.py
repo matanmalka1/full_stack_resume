@@ -12,7 +12,7 @@ describing an HTTP call.
 `OpenAIProvider` is the *contract*. It implements `application.ports.AIProvider`,
 one method per task, and it holds the only mapping from a task name to its
 output model. It cannot save state: it has no repository, no payload store, and
-no Workspace, so what it returns stays a Proposal until the application commits
+no local path context, so what it returns stays a Proposal until the application commits
 it.
 
 Nothing here reads a task-contract version or a prompt version. Both arrive as

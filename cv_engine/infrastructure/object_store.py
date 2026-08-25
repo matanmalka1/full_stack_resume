@@ -440,7 +440,7 @@ class S3ObjectStore:
         """Scratch space. The bucket cannot be a render target.
 
         Keyed by the object key so two concurrent renders cannot collide on one
-        scratch file, and rooted in the Workspace temp directory so nothing
+        scratch file, and rooted in the application temp directory so nothing
         Chromium writes lands in the artifact tree - a stray file there would
         look like an artifact to anything walking it.
 

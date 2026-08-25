@@ -661,8 +661,8 @@ Index(
     knowledge_mutation_journal.c.id,
 )
 
-workspace_settings = Table(
-    "workspace_settings",
+app_settings = Table(
+    "app_settings",
     metadata,
     Column("singleton_id", Integer, primary_key=True, autoincrement=False),
     Column("edit_version", Integer, nullable=False),

@@ -13,13 +13,13 @@ from cv_engine.infrastructure.payloads import PayloadStore
 
 @pytest.fixture
 def payload_store(tmp_path: Path) -> PayloadStore:
-    root = tmp_path / "workspace"
-    workspace = SimpleNamespace(
+    root = tmp_path / "project"
+    paths = SimpleNamespace(
         root=root,
         artifacts_root=root / "artifacts",
         temp_root=root / "tmp",
     )
-    return PayloadStore(workspace)
+    return PayloadStore(paths)
 
 
 def test_approved_payload_layouts(payload_store: PayloadStore) -> None:
@@ -84,7 +84,7 @@ def test_commit_validates_before_storing_and_returns_registration_metadata(
 
     assert observed == [content]
     assert stored.path == destination
-    assert stored.workspace_relative == "artifacts/snapshots/app/snapshot.txt"
+    assert stored.project_relative == "artifacts/snapshots/app/snapshot.txt"
     assert stored.sha256 == hashlib.sha256(content).hexdigest()
     assert stored.size == len(content)
     assert destination.read_bytes() == content
@@ -153,7 +153,7 @@ def test_traversal_and_unapproved_destinations_are_refused(
     with pytest.raises(ValueError, match="contains traversal"):
         payload_store.commit(
             tmp_path
-            / "workspace"
+            / "project"
             / "artifacts"
             / "snapshots"
             / "app"
@@ -180,7 +180,7 @@ def test_traversal_and_unapproved_destinations_are_refused(
 def test_symlink_escapes_are_refused_before_a_write(
     payload_store: PayloadStore, tmp_path: Path
 ) -> None:
-    artifacts = tmp_path / "workspace" / "artifacts"
+    artifacts = tmp_path / "project" / "artifacts"
     outside = tmp_path / "outside"
     outside.mkdir()
     artifacts.mkdir(parents=True)
@@ -221,7 +221,7 @@ def test_failed_validation_never_claims_the_destination_key(
         validate=lambda _payload: True,
     )
     assert destination.read_bytes() == b"valid"
-    assert stored.workspace_relative == "artifacts/snapshots/app/snapshot.txt"
+    assert stored.project_relative == "artifacts/snapshots/app/snapshot.txt"
 
 
 def test_ingest_render_output_matches_the_reference_the_registry_records(
@@ -254,7 +254,7 @@ def test_ingest_render_output_matches_the_reference_the_registry_records(
 def test_ingest_render_output_refuses_a_file_outside_the_approved_layout(
     payload_store: PayloadStore, tmp_path: Path
 ) -> None:
-    stray = tmp_path / "workspace" / "artifacts" / "working" / "app" / "resume.html"
+    stray = tmp_path / "project" / "artifacts" / "working" / "app" / "resume.html"
     stray.parent.mkdir(parents=True, exist_ok=True)
     stray.write_bytes(b"not a rendered output")
 

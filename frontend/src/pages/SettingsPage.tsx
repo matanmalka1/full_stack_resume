@@ -45,7 +45,7 @@ export const SettingsPage = () => {
 
   return (
     <Card aria-labelledby="route-heading">
-      <PageHeading id="route-heading" description="השינויים נשמרים ב־Workspace ומשפיעים מיד על מסכי ה־Web.">הגדרות</PageHeading>
+      <PageHeading id="route-heading" description="השינויים נשמרים באפליקציה ומשפיעים מיד על מסכי ה־Web.">הגדרות</PageHeading>
       <div className="mt-6 flex flex-col gap-6">
         {form === null ? <p className="text-body text-cv-text-muted">טוען הגדרות…</p> : (
           <form className="flex flex-col gap-6" onSubmit={(event) => { event.preventDefault(); save.mutate(); }}>

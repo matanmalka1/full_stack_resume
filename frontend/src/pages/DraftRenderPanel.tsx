@@ -12,7 +12,7 @@ interface DraftRenderPanelProps {
   approvedRevisionId: string;
 }
 
-/* A.4 frame 6's render step, inline in the workspace that produced the revision.
+/* A.4 frame 6's render step, inline in the editor that produced the revision.
    Rendering stays an explicit action with its own retry: it queues a durable Operation
    and it can fail on its own, and a render that fired itself on approval would queue
    work the user never asked for and leave a failure with nothing that asked for it.

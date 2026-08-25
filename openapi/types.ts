@@ -506,14 +506,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Read safe Workspace settings */
+        /** Read safe application settings */
         get: operations["read_settings_api_v1_settings_get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** Update safe Workspace settings */
+        /** Update safe application settings */
         patch: operations["update_settings_api_v1_settings_patch"];
         trace?: never;
     };
@@ -1526,11 +1526,7 @@ export interface components {
         };
         /**
          * HealthResponse
-         * @description What `cv web` probes to tell its own instance from a foreign process.
-         *
-         *     `workspace_id` answers "is the process on this port serving the Workspace I
-         *     am about to open". The version surfaces are the §17 provenance set, reported
-         *     so a client can refuse to talk to an instance it does not understand.
+         * @description Health and version surfaces for the local process.
          */
         HealthResponse: {
             /** Api Version */
@@ -1542,8 +1538,6 @@ export interface components {
             schema_version: string;
             /** Status */
             status: string;
-            /** Workspace Id */
-            workspace_id: string;
         };
         /** JobAnalysisResponse */
         JobAnalysisResponse: {

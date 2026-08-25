@@ -342,7 +342,7 @@ class AIProvider(Protocol):
 
     Every method takes one explicit, minimal context and returns a Proposal
     with its provenance. Nothing here can save state: an implementation is
-    handed no repository, no payload store, and no Workspace, so activation
+    handed no repository, no payload store, and no filesystem paths, so activation
     stays a decision the application commits (invariant 13).
 
     Calls are stateless. No method takes a conversation, a prior response ID,

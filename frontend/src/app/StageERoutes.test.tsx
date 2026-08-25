@@ -13,7 +13,7 @@ const stageEElementType = (path: string) => {
 };
 
 describe("Stage E routes", () => {
-  /* Validation, approval, and render are states of the draft workspace, so the route
+  /* Validation, approval, and render are states of the draft editor, so the route
      table must not carry a screen for any of them. Keeping the assertion as "no route"
      rather than deleting it means a re-added interstitial fails here. */
   it("keeps validation, approval, and render off the route table", () => {
@@ -22,7 +22,7 @@ describe("Stage E routes", () => {
     expect(stageERoute("approved-revisions/:approvedRevisionId/render")).toBeUndefined();
   });
 
-  it("mounts the draft workspace, which owns validation and approval", () => {
+  it("mounts the draft editor, which owns validation and approval", () => {
     expect(stageEElementType("applications/:applicationId/draft")).toBe(DraftEditorPage);
   });
 

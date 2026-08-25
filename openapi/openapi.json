@@ -2270,7 +2270,7 @@
       },
       "HealthResponse": {
         "additionalProperties": false,
-        "description": "What `cv web` probes to tell its own instance from a foreign process.\n\n`workspace_id` answers \"is the process on this port serving the Workspace I\nam about to open\". The version surfaces are the §17 provenance set, reported\nso a client can refuse to talk to an instance it does not understand.",
+        "description": "Health and version surfaces for the local process.",
         "properties": {
           "api_version": {
             "title": "Api Version",
@@ -2290,15 +2290,10 @@
           "status": {
             "title": "Status",
             "type": "string"
-          },
-          "workspace_id": {
-            "title": "Workspace Id",
-            "type": "string"
           }
         },
         "required": [
           "status",
-          "workspace_id",
           "product_version",
           "api_version",
           "schema_version",
@@ -4794,7 +4789,7 @@
             }
           }
         },
-        "summary": "Read safe Workspace settings",
+        "summary": "Read safe application settings",
         "tags": [
           "settings"
         ]
@@ -4854,7 +4849,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Update safe Workspace settings",
+        "summary": "Update safe application settings",
         "tags": [
           "settings"
         ]

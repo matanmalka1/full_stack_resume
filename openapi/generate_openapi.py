@@ -8,10 +8,9 @@ The committed file is the contract the TypeScript types are generated from and
 the drift test compares against. Regenerating it is deliberate: the diff is
 stated in the commit message, the same way the frozen schema fingerprint is.
 
-Only the route table is read, so no Workspace, database, or provider is needed.
+Only the route table is read, so no database or provider is needed.
 The container is filled with placeholders for exactly that reason - a schema
-dump that required a live Workspace would make the contract depend on whichever
-Workspace happened to be open.
+dump that required live application state would make the contract environment-dependent.
 """
 
 from __future__ import annotations
@@ -44,7 +43,6 @@ def schema_only_services() -> ApiServices:
         operations=placeholder,
         settings=placeholder,
         identity=InstanceIdentity(
-            workspace_id="schema-only",
             product_version="schema-only",
             api_version=API_VERSION,
             schema_version="schema-only",

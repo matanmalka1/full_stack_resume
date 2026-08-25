@@ -2,7 +2,7 @@
 
 The ASGI app remains a transport object and never starts background work. This
 supervisor owns both processes over one composition root, which keeps browser
-commands and worker activation on the same Workspace and database.
+commands and worker activation on the same database.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from urllib.request import Request, urlopen
 
 import uvicorn
 
+from .. import __version__
 from ..api.app import API_PREFIX, DEFAULT_HOST, DEFAULT_PORT, create_app
 from ..api.frontend import FrontendBuildError, validate_frontend_build
 from .composition import Services, build_api_services
@@ -87,7 +88,7 @@ def select_web_endpoint(
     if not _port_is_open(preferred.host, preferred.port):
         return preferred
     identity = _health_identity(preferred)
-    if identity is not None and identity.get("workspace_id") == services.workspace.workspace_id:
+    if identity is not None and identity.get("product_version") == __version__:
         return WebEndpoint(preferred.host, preferred.port, reuse_existing=True)
     return WebEndpoint(DEFAULT_HOST, _free_loopback_port(DEFAULT_HOST))
 

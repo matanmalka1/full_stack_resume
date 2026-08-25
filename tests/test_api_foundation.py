@@ -42,7 +42,7 @@ from generate_openapi import OUTPUT, build_schema, render  # noqa: E402
 
 @pytest.fixture
 def api(services):
-    """The real app over the isolated test Workspace.
+    """The real app over the isolated test project.
 
     The Operation worker is deliberately absent: `create_app` builds a server,
     and the worker is hosted by the supervisor. Stages that need one start it
@@ -63,7 +63,7 @@ def test_health_reports_this_instance_and_its_version_surfaces(api, services) ->
     assert body["status"] == "ok"
     # The value `cv web` probes to tell its own instance from a foreign process
     # on the same port.
-    assert body["workspace_id"] == services.workspace.workspace_id
+    assert "workspace_id" not in body
     assert body["api_version"] == "1"
     assert body["knowledge"] == services.knowledge_lifecycle.knowledge_versions().model_dump()
 

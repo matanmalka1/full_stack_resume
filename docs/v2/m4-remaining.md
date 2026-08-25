@@ -43,7 +43,7 @@ adds the production build/static-serving integration required by §6.2.
 The PostgreSQL persistence line and object-storage line merged into `main` at `db1629e`;
 local object storage remains the zero-configuration default and S3-compatible storage is
 optional. Configuration/secrets hygiene then closed in `1061c66` and `b24dd5f`: one
-Workspace-or-repository `.env` sits below the real environment, configured secrets are
+project-or-repository `.env` sits below the real environment, configured secrets are
 masked only at display boundaries, and `OPENAI_API_KEY` is environment-only so `unset`
 still proves the deterministic path is disarmed. `2bfae11` is formatting/readability only
 and changes no product contract.
@@ -97,7 +97,7 @@ approval confirmation, autosave conflict resolution, and destructive-to-working-
 | Typography | Tuned native macOS-first sans-serif stack with explicit Hebrew fallbacks; 16px body, 14px supporting text, 20/24/32px headings; document preview keeps its server-rendered typography. |
 | Spacing | 4px base; common gaps 8/12/16/24/32px; content width capped for reading while the editor may use the full desktop width. |
 | Surfaces | Cool Slate canvas, white primary and raised surfaces, subtle borders, and restrained surface/floating/overlay elevation. Shadows clarify hierarchy and never carry state by themselves. |
-| Accent | Indigo identifies primary actions, the current step, links, and focus support; Slate structures the workspace and Emerald marks successful states. Color is never the only status signal. |
+| Accent | Indigo identifies primary actions, the current step, links, and focus support; Slate structures the project and Emerald marks successful states. Color is never the only status signal. |
 | Success | Green plus icon/text for completed validation and Ready. |
 | Warning | Amber plus a visible `אזהרה` label; warnings never look like blockers and never silently disable approval. |
 | Blocker | Red plus a visible `חסימה` label, plain-language reason, and the allowed resolution action when one exists. |
@@ -303,7 +303,7 @@ Numbers identify regions; exact Hebrew labels and behavior follow each frame.
 Settings is a focused dialog or narrow page containing only auto-generation when review is
 not required, AI enabled, default execution mode (`ai` or `deterministic`), provider-configured
 status without secrets, open-browser preference, and basic UI preferences. It contains no
-model picker, provider picker, Workspace paths, secrets, Profile editor, or Knowledge manager.
+model picker, provider picker, project paths, secrets, Profile editor, or Knowledge manager.
 
 ### A.5 Keyboard, announcements, and failure presentation
 
@@ -426,7 +426,7 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
       typechecks them.
 
       Two things are deliberately not here. The specification's central E2E runs against
-      real FastAPI, a real worker, and a real Workspace; the shell is the only screen that
+      real FastAPI, a real worker, and a real project; the shell is the only screen that
       exists without a backend, so that suite arrives with the Stage C screens that drive
       it. And the axe coverage the specification lists by screen - New Application,
       Analysis Review, Draft Editor, Validation, Ready - is added per screen, not stubbed
@@ -605,7 +605,7 @@ model picker, provider picker, Workspace paths, secrets, Profile editor, or Know
       "not built yet" sentence, and the existing draft is left exactly as it is.
 
       There is still no automatic chaining. Auto-generation when review is not required is a
-      Workspace setting that belongs to Settings (Stage E), so the continuation stays an
+      project setting that belongs to Settings (Stage E), so the continuation stays an
       explicit action; nothing on this screen runs itself.
 - [x] Review-reason form and one Apply Decisions commit. **Closed on the complete Class B
       gate.**
@@ -727,7 +727,7 @@ agent.**
 | 5 | `pytest -m "not browser"` | the whole non-browser suite, including the OpenAPI drift test against the regenerated contract | **305 passed, 3 deselected** |
 | 6 | `pytest tests/test_golden.py tests/test_architecture.py` | the `compose_html` split moved no rendered output, and `api -> application` layering still holds with the new `domain` import in `api/schemas/` | passes |
 | 7 | `pytest -m browser` | the rendering path still renders after the split | **3 passed** |
-| 8 | offline `ingest → analyze → draft → validate → approve → render → ready → reconcile`, `OPENAI_API_KEY` unset, fresh Workspace | the deterministic path still reaches Ready after the patch-schema and renderer changes | passes |
+| 8 | offline `ingest → analyze → draft → validate → approve → render → ready → reconcile`, `OPENAI_API_KEY` unset, fresh project | the deterministic path still reaches Ready after the patch-schema and renderer changes | passes |
 
 Predicted deltas, and where each comes from:
 
@@ -781,9 +781,9 @@ prediction; there is no unexplained delta.
 | `pytest -m "not browser"` | **305 passed, 3 deselected** in 62.71s | user |
 | `pytest tests/test_golden.py tests/test_architecture.py` | **13 passed, 1 deselected** in 4.45s | user |
 | `pytest -m browser` | **3 passed, 305 deselected** in 16.73s | user |
-| offline `ingest → analyze → draft → validate → approve → render → ready → reconcile` | **passed** with `OPENAI_API_KEY` unset against a fresh disposable Workspace | executing agent; transcript supplied by user |
+| offline `ingest → analyze → draft → validate → approve → render → ready → reconcile` | **passed** with `OPENAI_API_KEY` unset against a fresh disposable project | executing agent; transcript supplied by user |
 
-The offline run used Workspace
+The offline run used project
 `/private/tmp/claude-501/-Users-matanmalka-Projects-resume-python-v2/adc007bf-d604-4c99-9dff-00f23ff4b5bb/scratchpad/cv-staged-f0VSk4`,
 initialized with `purpose=development` and `data_class=copy`. It created Application
 `91fb3916-1a49-4c78-94b2-b9ec542732b4` and ApprovedRevision
@@ -832,7 +832,7 @@ Focused evidence on 2026-08-24, run by the implementing agent against the workin
 
 The reusable local Web host was pulled forward from M6 at the user's direction so this gate
 can exercise the deployed shape rather than a Vite-only surrogate. `cv web` now supervises
-FastAPI and the Operation worker over one validated Workspace, serves the production React
+FastAPI and the Operation worker over one validated project, serves the production React
 build same-origin on loopback, reuses a matching existing instance, avoids a foreign process
 with a free port, honors `--no-open`, and shuts both hosts down together. M6 still owns bundled
 package data, Open Logs Folder, and release hardening; none of those is claimed here.
@@ -844,7 +844,7 @@ Focused runtime evidence on 2026-08-24:
 | `pytest tests/test_api_foundation.py tests/test_web_runtime.py tests/test_architecture.py` | **32 passed** — 15 API foundation, 6 runtime, and 11 architecture | real loopback HTTP, production frontend delivery, a queued Analyze completed by the supervised worker, matching-instance reuse, foreign-port fallback, missing-build refusal, clean Ctrl+C shutdown, static/API routing, and preserved layer/containment guards |
 | targeted Ruff and Pyright over the changed runtime/CLI/port files | **passed; 0 type errors** | the new host satisfies formatting, import, and repository port contracts |
 | `python -m pip check` | **passed** | the added Uvicorn runtime dependency is consistent with the environment |
-| manual `cv web --no-open --port 18765` against a fresh test Workspace | **passed** | health reported schema `0002`, FastAPI served the built React root, and Ctrl+C stopped Uvicorn and the worker without a traceback |
+| manual `cv web --no-open --port 18765` against a fresh test project | **passed** | health reported schema `0002`, FastAPI served the built React root, and Ctrl+C stopped Uvicorn and the worker without a traceback |
 
 - [ ] A real built-Web E2E completes Create through Ready against FastAPI, worker,
       PostgreSQL, the configured object store, and renderer without mocking application
@@ -957,7 +957,7 @@ User-run evidence supplied on 2026-08-24 covers every automated command. The fir
 pytest invocation accidentally passed the shell-comment token `#` as a path and therefore
 collected no tests; it is an invalid invocation, not product evidence. The two corrected
 commands below passed. The agent then ran the fresh offline CLI sequence itself against an
-isolated disposable Workspace with `OPENAI_API_KEY` removed. The complete Class B gate is
+isolated disposable project with `OPENAI_API_KEY` removed. The complete Class B gate is
 closed.
 
 | Command | Proves | Observed |
@@ -1058,7 +1058,7 @@ User-run evidence after the consolidation and the repair of two test-fixture que
 | Command | Proves | Observed |
 | --- | --- | --- |
 | the two repaired AI/provider tests | independent matrix cases do not inherit the fake provider's repeat-last response | **2 passed** |
-| the 17-file focused backend selection | the consolidated AI/provider, API, domain, Operation, persistence, selection, integration, and Workspace tests remain green together | **187 passed, 1 deselected** |
+| the 17-file focused backend selection | the consolidated AI/provider, API, domain, Operation, persistence, selection, integration, and project tests remain green together | **187 passed, 1 deselected** |
 | `pytest -q -m "not browser"` | the complete default backend gate on the consolidated suite | **300 passed, 3 deselected** |
 
 The collection delta is fully reconciled: **455 → 303**, or **-152** items. Of these,

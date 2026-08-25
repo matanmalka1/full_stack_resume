@@ -10,13 +10,13 @@ from ..domain.drafts import seal_draft
 from ..domain.models import DraftDocument
 
 
-class ArtifactWorkspace(Protocol):
-    """The three Workspace members this store actually uses.
+class ArtifactPaths(Protocol):
+    """The application paths this store uses.
 
-    Declared here, as `PayloadStore` declares `PayloadWorkspace`, so an adapter
+    Declared here, as `PayloadStore` declares `PayloadPaths`, so an adapter
     does not import the composition layer that builds it. `relative` stays on
     the protocol rather than being replaced by a direct `relative_within` call:
-    it carries the "must be absolute" check and the `WorkspaceError` that
+    it carries the "must be absolute" containment check that
     artifact rows depend on, and `relative_within` alone would raise
     `ValueError`.
     """
@@ -31,7 +31,7 @@ class ArtifactWorkspace(Protocol):
 
 
 class FilesystemArtifactStore:
-    """The Workspace's artifact layout, in one place.
+    """The application's artifact layout, in one place.
 
     This compatibility adapter owns mutable working-draft paths and reads
     registered immutable payloads. New snapshot, revision, and rendered-output
@@ -41,9 +41,9 @@ class FilesystemArtifactStore:
     MARKDOWN = "resume.md"
     MANIFEST = "resume.claims.json"
 
-    def __init__(self, workspace: ArtifactWorkspace):
-        self._workspace = workspace
-        self._root = workspace.artifacts_root
+    def __init__(self, paths: ArtifactPaths):
+        self._paths = paths
+        self._root = paths.artifacts_root
 
     def _pair(self, directory: Path) -> DraftPaths:
         return DraftPaths(directory / self.MARKDOWN, directory / self.MANIFEST)
@@ -104,7 +104,7 @@ class FilesystemArtifactStore:
         return published
 
     def resolve(self, stored_path: str) -> Path:
-        return self._workspace.root / stored_path
+        return self._paths.root / stored_path
 
     def relative(self, path: Path) -> str:
-        return self._workspace.relative(path)
+        return self._paths.relative(path)

@@ -3,7 +3,7 @@
 /* Hebrew-first typography. Heebo is a true Hebrew family with matching Latin
    glyphs, so a mixed line does not switch face mid-sentence; index.html loads it.
    The fallbacks below are real Hebrew faces rather than a generic sans, so an
-   offline Workspace still renders Hebrew in a face designed for it. */
+   offline DraftFlow still renders Hebrew in a face designed for it. */
 
 @theme {
   /* Warm archival ink. The canvas is a toned paper, the surfaces sit above it in

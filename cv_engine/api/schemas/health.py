@@ -19,15 +19,9 @@ class KnowledgeVersions(HttpSchema):
 
 
 class HealthResponse(HttpSchema):
-    """What `cv web` probes to tell its own instance from a foreign process.
-
-    `workspace_id` answers "is the process on this port serving the Workspace I
-    am about to open". The version surfaces are the §17 provenance set, reported
-    so a client can refuse to talk to an instance it does not understand.
-    """
+    """Health and version surfaces for the local process."""
 
     status: str
-    workspace_id: str
     product_version: str
     api_version: str
     schema_version: str

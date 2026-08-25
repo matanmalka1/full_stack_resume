@@ -16,14 +16,14 @@ The implementation sequence is:
 
 `Review -> Architecture -> Plan -> Implement -> Test -> Verify`
 
-Work occurs on the active v2 branch/worktree against an explicitly marked, isolated
-Workspace and dedicated PostgreSQL database. A single developer working sequentially
+Work occurs on the active v2 branch/worktree against a dedicated PostgreSQL database.
+A single developer working sequentially
 uses small milestone commits rather than additional feature branches. Parallel lanes
 follow `docs/v2/process/execution-protocol.md` and isolate files, database, object-store
 namespace, temp output, and ports.
 
-No v2 process opens the v1 Workspace, in development or otherwise. All development,
-Alpha, and Beta use explicit test/copy Workspace markers.
+No v2 process opens v1 data, in development or otherwise. Development and Alpha use
+isolated project copies and databases.
 
 Repository authority has already handed off to v2. `AGENTS.md` and the approved v2
 specifications govern current work; the v1 documents remain frozen evidence.
@@ -49,24 +49,17 @@ Completed M0 gates:
 - [x] Six v2 planning documents approved on 2026-08-17 after blocker review.
 - [x] Repository authority/agent instructions updated for v2.
 
-The v2 development Workspace marker/config and isolated data copy are the first M1
-Workspace tasks below. Creating them through the implemented guard/config contracts,
-rather than as unvalidated manual files, is part of proving M1. M1 is authorized to
-start; no v2 command may point to live v1 paths while those tasks are implemented.
+M1 is authorized to start; no v2 command may point to live v1 paths.
 
 ## 3. M1 — Application foundation
 
 Objective: prove that v1 behavior can run through clean application boundaries before
 introducing HTTP or React.
 
-### 3.1 Workspace and configuration
+### 3.1 Application paths and configuration
 
-- Add explicit Workspace path/config models and marker validation.
-- Add a Workspace ID.
-- Implement config precedence: CLI > environment > Workspace config > defaults.
-- Add fail-closed marker policy for all normal v2 commands. The read-only v1
-  migration-source adapter this once required was deleted on 2026-08-19 with the
-  migration; a v1 root is now simply refused, which is stricter.
+- Add explicit fixed application path/config models.
+- Implement config precedence: CLI > environment > project `.env` > project config > defaults.
 - Add CandidateContext loader referencing canonical identity/contact facts.
 - Remove candidate literals from filename and rendering policy.
 - Add version/hash surfaces for CandidateContext and Knowledge dependencies.
@@ -106,11 +99,7 @@ source-ID resolvers.
 - [x] Selected facts, claims, validation outcomes, Ready eligibility, and decision
       behavior retain semantic parity with v1.
 - [x] Candidate name is not hardcoded in core or renderer policy.
-- [x] Normal v2 commands reject every missing, legacy, unknown, or unsafe marker; only
-      the dedicated migration adapter can inventory an explicit v1 source read-only.
-      That adapter was deleted on 2026-08-19 when v1 became an archive. The rejection
-      half of this criterion still holds and is still tested; nothing can read v1 now,
-      which is stricter than what was accepted here.
+- [x] Normal v2 commands use only the fixed project root; no root selector or v1 reader exists.
 - [x] All applicable v1 safety invariants remain covered and the consolidated suite
       passes; retaining every legacy test item is not required.
 
@@ -179,7 +168,7 @@ them inside endpoints later.
 ### 4.6 Database lifecycle and storage portability
 
 Superseded on 2026-08-25 with the PostgreSQL/object-storage baseline. The built-in
-Workspace backup/restore command was retired: PostgreSQL and bucket lifecycle belong to
+The built-in backup/restore command was retired: PostgreSQL and bucket lifecycle belong to
 the configured environment, while this development baseline always starts from an empty
 database.
 
@@ -357,7 +346,7 @@ data as a test environment.
 ### 8.1 Runtime supervisor
 
 - Implement `cv web` and `--no-open`.
-- Validate Workspace, schema, compatibility, and marker guards.
+- Validate schema and compatibility.
 - Implement default port 8765, same-instance health/identity detection, and controlled
   fallback port.
 - Start composition, FastAPI, worker, and default browser.

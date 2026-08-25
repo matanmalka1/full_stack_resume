@@ -20,7 +20,7 @@ interface DraftApprovalDialogProps {
   draft: WorkingDraft | undefined;
   onApproved: (revisionId: string) => void;
   onClose: () => void;
-  /* Refused as stale: the workspace shows the reason on its validation panel rather
+  /* Refused as stale: the editor shows the reason on its validation panel rather
      than sending the user to a screen for it. */
   onStale: () => void;
   open: boolean;
@@ -30,7 +30,7 @@ interface DraftApprovalDialogProps {
 }
 
 /* A.4 frame 5's approval dialog. It was already specified as a dialog rather than a
-   screen; this is that dialog, opened from the workspace holding the draft it approves.
+   screen; this is that dialog, opened from the editor holding the draft it approves.
    The command, the idempotency key, and the `VALIDATION_STALE` path are unchanged. */
 export const DraftApprovalDialog = ({
   applicationId,

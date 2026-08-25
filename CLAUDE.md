@@ -8,7 +8,7 @@ working rule set. Reading them is the reading requirement.
 A single-candidate CV tailoring tool. One user, no auth. v2 starts with an empty
 database. v2 has replaced v1: the v1 submission data was unsent drafts carrying no
 evidence and was removed on 2026-08-25, recoverable from Git history. `base/` and
-`profiles/` are not archive — a new Workspace copies them in as live source facts.
+`profiles/` are the live source facts in this project.
 
 **Changed 2026-08-25: "local only, not deployed, no cloud" is no longer true of
 storage.** Immutable payloads sit behind an object-storage abstraction and can live in
@@ -92,8 +92,8 @@ These are cheap and have each caught a real bug in this repository. Prefer them 
 process:
 
 - **Run the deterministic CLI end to end** — `ingest → analyze → draft → validate → approve
-  → render → ready → reconcile`, with `OPENAI_API_KEY` unset, against a fresh Workspace
-  and a running configured PostgreSQL database.
+  → render → ready → reconcile`, with `OPENAI_API_KEY` unset and a fresh configured
+  PostgreSQL database.
   This is what found approval silently destroying unimported manual edits.
 - **Golden hashes** — they must not move unless output was meant to change.
 - **Immutability triggers** on records that must never be rewritten.
@@ -156,8 +156,8 @@ what remains. A hard failure is never relabelled as a warning.
   and product semantics stay the same.
 - Do not silently change workflow, validation behavior, fact semantics, application
   statuses, or artifact lifecycle.
-- Preserve unrelated user changes in a dirty worktree. One agent at a time per worktree
-  and isolated Workspace: concurrent edits race the test runner and make every
+- Preserve unrelated user changes in a dirty worktree. One agent at a time per worktree:
+  concurrent edits race the test runner and make every
   measurement meaningless. Parallel agents are permitted only under
   `docs/v2/process/execution-protocol.md`, with separate git worktrees, disjoint file
   ownership, and isolated runtime and test resources.
@@ -192,7 +192,7 @@ Retired 2026-08-19: the **Migration safety** section and the v1 arm of Class C. 
 those rules ever fired — they guarded a migration that was then not performed. Do not
 re-add them; see `docs/v2/m2-remaining.md`.
 
-PostgreSQL replacement 2026-08-25: retired the built-in Workspace backup/restore control
+PostgreSQL replacement 2026-08-25: retired the built-in backup/restore control
 and the frozen file-database schema-fingerprint control. This task starts every development
 database empty; Alembic's single-head/revision registration guard and explicit foreign-key
 integrity check now own schema safety.
@@ -201,18 +201,7 @@ Retired 2026-08-25: **`looks_legacy` and the archive-isolation control.** The v1
 submission data was 22 unsent `draft` rows — no submission, no evidence — and was
 deleted. `jobs/status.csv` was the guard's only signature, so it could no longer fire on
 any real directory, and its two tests passed only because they wrote that file
-themselves. There is no archive left to isolate. The marker guard still refuses an
-unmarked directory and an unknown marker version. Do not re-add it.
-
-Retired 2026-08-25: **the `purpose`/`data_class` live-data guard.** It refused a
-`development` or `test` runtime opening `data_class=live`. No Workspace was ever marked
-`live`: v2 starts from an empty database, every Workspace is a copy of regenerable
-Knowledge, and the only `live` marker in the repository was the one its own test wrote
-before asserting the refusal — the same shape as `looks_legacy`. `installation_id` and
-`state_root` went with it, unused once the guard did. What still fails closed is the
-marker itself: no marker, or a version this runtime does not open. Retired marker keys
-are dropped on read so an existing Workspace does not need a re-init; do not reuse those
-names.
+themselves. There is no archive left to isolate. Do not re-add it.
 
 M3 close 2026-08-23: **no control was retirable.** Every remaining control still guards
 an active failure mode, and M3 exercised several of them: fresh count reconciliation

@@ -63,31 +63,12 @@ def _add_fact_content(parser: argparse.ArgumentParser, *, from_claim: bool = Fal
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="cv", description="Multi-track fact-safe CV engine")
-    parser.add_argument("--workspace", type=Path, help="Workspace root; must carry a v2 marker")
-    parser.add_argument(
-        "--repo",
-        type=Path,
-        help="deprecated alias for --workspace",
-    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     web = sub.add_parser("web", help="start the local Web UI, API, and Operation worker")
     web.add_argument("--no-open", action="store_true", help="do not open the default browser")
     web.add_argument("--port", type=int, help="preferred loopback port; defaults to 8765")
 
-    workspace = sub.add_parser("workspace", help="create and inspect the local Workspace")
-    workspace_sub = workspace.add_subparsers(dest="workspace_command", required=True)
-    workspace_init = workspace_sub.add_parser(
-        "init", help="create an isolated Workspace and its marker"
-    )
-    workspace_init.add_argument(
-        "--knowledge-from",
-        type=Path,
-        help="copy base/profiles/rendering/config/ai from this directory into the new Workspace",
-    )
-    workspace_sub.add_parser(
-        "status", help="show Workspace identity, roots, and resolved configuration"
-    )
     ingest = sub.add_parser("ingest", help="create an application and immutable job snapshot")
     _add_job_input(ingest)
 
@@ -97,8 +78,8 @@ def build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--provider", choices=["deterministic", "openai"], default="deterministic")
     analyze.add_argument("--model", default="gpt-5.6")
     analyze.add_argument("--idempotency-key")
-    # v2 commands take an explicit source ID. The legacy signature omits it,
-    # so the CLI-boundary resolver fills it in when the flag is absent.
+    # Use-cases take an explicit source ID. This flag is optional, so the
+    # CLI-boundary resolver fills it in when the flag is absent.
     analyze.add_argument("--job-snapshot", dest="job_snapshot", default=None)
 
     draft = sub.add_parser("draft", help="create or update the active working draft")

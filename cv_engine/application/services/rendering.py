@@ -20,7 +20,7 @@ from ..commands import (
     RenderResult,
 )
 from ..errors import (
-    # Re-exported: the v1 CLI and test suite catch WorkflowError from here, and
+    # Re-exported: the CLI and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     ApplicationError,
     InfrastructureFailure,
@@ -114,7 +114,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         # The claim manifest and the approved Markdown beside it are registered
         # immutable payloads, so they are read through the store rather than
         # resolved to a local path. Resolving them worked only while storage
-        # happened to be the same disk the Workspace sits on.
+        # happened to be the same disk the application sits on.
         manifest_reference = manifest_record["path"]
         draft = self._registered_draft(manifest_reference)
         profile = profiles.get(draft.profile)

@@ -1,1 +1,1 @@
-"""Runtime concerns: Workspace identity, guards, and configuration resolution."""
+"""Runtime concerns: fixed paths, composition, and configuration resolution."""

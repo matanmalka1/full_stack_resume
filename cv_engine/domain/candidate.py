@@ -20,7 +20,7 @@ def build_candidate_context(
 ) -> CandidateContext:
     """Bind an already-read candidate context to canonical facts.
 
-    Every referenced fact must exist and be canonical, so a Workspace whose
+    Every referenced fact must exist and be canonical, so a project whose
     identity or contact facts were removed, renamed, or left pending fails here
     rather than rendering a CV with a missing name or a dead link.
     """

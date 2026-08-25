@@ -13,7 +13,7 @@ class KnowledgeMutationState(StrEnum):
 
 @dataclass(frozen=True)
 class StagedKnowledgeFile:
-    """Opaque Workspace references and hashes for one validated file replacement."""
+    """Opaque project references and hashes for one validated file replacement."""
 
     mutation_id: str
     source_reference: str

@@ -1,4 +1,4 @@
-"""Resolving the selected Workspace root and building the stage a command needs.
+"""Resolving the fixed application root and building command services.
 
 `CommandContext` carries what one command was given, opened as far as that
 command needs; the `_command` registry binds a command name to its handler
@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,28 +17,21 @@ from typing import Any
 from ..application.ports import ApplicationRepository
 from ..runtime.composition import Services, build_services
 from ..runtime.config import resolve_config
-from ..runtime.workspace import Workspace, load_workspace
+from ..runtime.paths import AppPaths
 
 
 def _repo_root() -> Path:
     # cli.py used to sit directly in cv_engine/, so two .parent calls reached
     # the repo root. This module sits one level deeper, in cv_engine/cli/, so
     # it needs a third .parent to land on the same directory as before.
-    return Path(__file__).resolve().parent.parent.parent
+    test_root = os.environ.get("CV_TEST_PROJECT_ROOT")
+    return Path(test_root).resolve() if test_root else Path(__file__).resolve().parent.parent.parent
 
 
 def _resolve_root(args: argparse.Namespace) -> tuple[Path, Any]:
-    """The selected root plus the resolved configuration behind it.
-
-    `--repo` stays accepted because v1 scripts pass it, but it is an alias with
-    a warning rather than a second concept: one Workspace selection, resolved
-    through CLI > environment > Workspace config > default.
-    """
-    if args.repo is not None:
-        print("WARNING: --repo is deprecated; use --workspace", file=sys.stderr)
-    selected = args.workspace or args.repo
-    config = resolve_config(cli={"workspace": selected}, env=os.environ, repo_root=_repo_root())
-    root = Path(config.get("workspace") or _repo_root()).resolve()
+    """Return the repository root and its configuration."""
+    root = _repo_root().resolve()
+    config = resolve_config(env=os.environ, project_root=root)
     return root, config
 
 
@@ -47,21 +39,19 @@ def _resolve_root(args: argparse.Namespace) -> tuple[Path, Any]:
 class CommandContext:
     """What one command was given, opened as far as that command needs.
 
-    A command's stage is what it may touch: `workspace init` runs before a
-    Workspace exists, and every normal command gets built services. Building
-    only up to the stage keeps each command's fail-closed order explicit.
+    Every command uses the same fixed root and composition.
     """
 
     args: argparse.Namespace
     root: Path
     config: Any
-    workspace: Workspace | None = None
+    paths: AppPaths | None = None
     services: Services | None = None
 
     @property
-    def opened_workspace(self) -> Workspace:
-        assert self.workspace is not None
-        return self.workspace
+    def opened_paths(self) -> AppPaths:
+        assert self.paths is not None
+        return self.paths
 
     @property
     def built_services(self) -> Services:
@@ -89,22 +79,8 @@ def _command(name: str, *, needs: str = "services") -> Callable[[Handler], Handl
     return register
 
 
-def _workspace_config(args: argparse.Namespace, workspace: Workspace) -> Any:
-    return resolve_config(
-        cli={"workspace": args.workspace or args.repo},
-        env=os.environ,
-        workspace_root=workspace.root,
-        repo_root=_repo_root(),
-    )
-
-
 def _build_context(args: argparse.Namespace, root: Path, config: Any, needs: str) -> CommandContext:
     context = CommandContext(args=args, root=root, config=config)
-    if needs == "root":
-        return context
-    # Every remaining command is a normal v2 command, so it opens the
-    # Workspace fail-closed before it touches state.
-    context.workspace = load_workspace(root)
-    context.config = _workspace_config(args, context.workspace)
-    context.services = build_services(context.workspace, config=context.config)
+    context.paths = AppPaths.from_root(root)
+    context.services = build_services(context.paths, config=context.config)
     return context

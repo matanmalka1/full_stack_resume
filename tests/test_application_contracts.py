@@ -18,7 +18,7 @@ def test_ingest_commits_exact_snapshot_payload_before_registration(
     original_create = services.repository.create_application
 
     def assert_payload_exists_first(**values):
-        payload = services.workspace.root / values["payload_path"]
+        payload = services.paths.root / values["payload_path"]
         assert payload.read_bytes() == received.encode("utf-8")
         assert sha256_text(received) == values["source_hash"]
         return original_create(**values)
@@ -32,9 +32,7 @@ def test_ingest_commits_exact_snapshot_payload_before_registration(
         )
     )
     snapshot = services.repository.get_snapshot(ingested.job_snapshot_id)
-    assert (
-        sha256_file(services.workspace.root / snapshot["payload_path"]) == snapshot["source_hash"]
-    )
+    assert sha256_file(services.paths.root / snapshot["payload_path"]) == snapshot["source_hash"]
 
 
 def test_commands_require_sources_owned_by_the_named_application(services) -> None:

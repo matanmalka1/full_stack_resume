@@ -44,7 +44,7 @@ from cv_engine.infrastructure.persistence.tables import (
     metadata,
 )
 from cv_engine.runtime.composition import Services, build_api_services
-from cv_engine.runtime.workspace import Workspace
+from cv_engine.runtime.paths import AppPaths
 from cv_engine.util import normalized_text, sha256_file, sha256_text
 
 
@@ -100,7 +100,7 @@ def _draft(services: Services, application_id: str, analysis_id: str):
 
 
 def test_moved_snapshot_or_moved_knowledge_requires_a_new_analysis_before_drafting(
-    workspace_root: Path, analyzed_application
+    project_root: Path, analyzed_application
 ) -> None:
     services, app_id = analyzed_application("Snapshot Race")
     stale_analysis_id, _ = services.repository.latest_analysis(app_id)
@@ -119,7 +119,7 @@ def test_moved_snapshot_or_moved_knowledge_requires_a_new_analysis_before_drafti
     with pytest.raises(WorkflowError, match="snapshot"):
         _draft(services, app_id, stale_analysis_id)
 
-    assert not (workspace_root / "artifacts/working" / app_id).exists()
+    assert not (project_root / "artifacts/working" / app_id).exists()
     assert _persisted(services) == before
 
     # Analyzing the new snapshot unblocks drafting, and the draft binds both ends
@@ -147,7 +147,7 @@ def test_moved_snapshot_or_moved_knowledge_requires_a_new_analysis_before_drafti
     # Editing a policy without touching its declared label is exactly the change
     # the column exists to detect: the plan's section assignment was decided
     # under weights that no longer hold, so drafting from it refuses.
-    policy_file = workspace_root / "config" / "emphasis.json"
+    policy_file = project_root / "config" / "emphasis.json"
     original_policy = policy_file.read_text(encoding="utf-8")
     policy = json.loads(original_policy)
     policy["emphases"]["development-balanced"]["tag_weights"]["testing"] += 1
@@ -171,7 +171,7 @@ def test_moved_snapshot_or_moved_knowledge_requires_a_new_analysis_before_drafti
 
 
 def test_newer_material_analysis_invalidates_the_working_draft(
-    workspace_root: Path, drafted_application
+    project_root: Path, drafted_application
 ) -> None:
     setup = drafted_application("Emphasis Drift")
     services, app_id = setup.services, setup.application_id
@@ -184,7 +184,7 @@ def test_newer_material_analysis_invalidates_the_working_draft(
     with pytest.raises(WorkflowError, match="analysis"):
         approve_active_draft(services, app_id)
 
-    assert not (workspace_root / "artifacts" / app_id).exists()
+    assert not (project_root / "artifacts" / app_id).exists()
     assert _persisted(services) == before
 
     # Re-drafting under the newer analysis is the way forward, and the decision
@@ -198,7 +198,7 @@ def test_newer_material_analysis_invalidates_the_working_draft(
 
 
 def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registration(
-    drafted_application, monkeypatch: pytest.MonkeyPatch, workspace_root: Path
+    drafted_application, monkeypatch: pytest.MonkeyPatch, project_root: Path
 ) -> None:
     """A re-run that changes nothing material leaves the draft valid -- and the
     approval still records the analysis the draft was actually built from."""
@@ -228,7 +228,7 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
 
     def require_payloads_first(repository, *args, **kwargs):
         for reference, expected_hash in ((args[4], args[5]), (args[6], args[7])):
-            path = workspace_root / reference
+            path = project_root / reference
             assert path.is_file()
             assert sha256_file(path) == expected_hash
         observed["payloads_precede_row"] = True
@@ -272,13 +272,13 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
     assert revision.resume_markdown_reference == (
         f"artifacts/revisions/{app_id}/{revision.id}/resume.md"
     )
-    assert sha256_file(workspace_root / revision.resume_json_reference) == revision.resume_json_hash
+    assert sha256_file(project_root / revision.resume_json_reference) == revision.resume_json_hash
     assert (
-        sha256_file(workspace_root / revision.resume_markdown_reference)
+        sha256_file(project_root / revision.resume_markdown_reference)
         == revision.resume_markdown_hash
     )
     assert (
-        parse_draft((workspace_root / revision.resume_json_reference).read_text(encoding="utf-8"))
+        parse_draft((project_root / revision.resume_json_reference).read_text(encoding="utf-8"))
         == working.source
     )
 
@@ -381,12 +381,12 @@ def test_latest_decision_uses_revision_order_when_approvals_share_a_timestamp(
 
 
 def test_foreign_working_projection_cannot_replace_the_database_source(
-    workspace_root: Path, drafted_application
+    project_root: Path, drafted_application
 ) -> None:
     target = drafted_application("Target Co")
     other = drafted_application("Other Co", role="Key Account Manager")
     services = target.services
-    working = workspace_root / "artifacts/working"
+    working = project_root / "artifacts/working"
     for name in ("resume.md", "resume.claims.json"):
         shutil.copy2(working / other.application_id / name, working / target.application_id / name)
     # Validation is its own command now, and it legitimately records a run: it
@@ -506,11 +506,11 @@ def test_invalid_classifications_are_rejected_before_any_persistence(services: S
 
 
 def test_projection_manifest_changes_do_not_mutate_the_working_draft_record(
-    workspace_root: Path, drafted_application
+    project_root: Path, drafted_application
 ) -> None:
     setup = drafted_application("Tampered Chain")
     services, app_id = setup.services, setup.application_id
-    manifest = workspace_root / "artifacts/working" / app_id / "resume.claims.json"
+    manifest = project_root / "artifacts/working" / app_id / "resume.claims.json"
     original = manifest.read_text(encoding="utf-8")
     authoritative = services.repository.active_working_draft(app_id)
     cases = [
@@ -525,7 +525,7 @@ def test_projection_manifest_changes_do_not_mutate_the_working_draft_record(
         payload[field] = value
         manifest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         assert validate_active_draft(services, app_id).passed
-        assert not (workspace_root / "artifacts" / app_id).exists()
+        assert not (project_root / "artifacts" / app_id).exists()
         assert services.repository.active_working_draft(app_id) == authoritative
     manifest.write_text(original, encoding="utf-8")
 
@@ -534,7 +534,7 @@ def test_projection_manifest_changes_do_not_mutate_the_working_draft_record(
 
 
 def test_ready_qualification_is_not_invalidated_by_material_reanalysis(
-    workspace: Workspace, ready_application
+    app_paths: AppPaths, ready_application
 ) -> None:
     services, app_id = ready_application("Chain Recheck")
     revision_id = services.repository.latest_approved_revision(app_id).id
@@ -549,7 +549,7 @@ def test_ready_qualification_is_not_invalidated_by_material_reanalysis(
 
 
 def test_ready_integrity_holds_through_an_immaterial_reanalysis(
-    workspace: Workspace, ready_application
+    app_paths: AppPaths, ready_application
 ) -> None:
     """A re-run that changes nothing material is not a reason to fail integrity."""
     services, app_id = ready_application("Immaterial Rerun")

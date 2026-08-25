@@ -35,7 +35,7 @@ def test_duplicate_acknowledgement_precedes_every_write_and_retry_keeps_warnings
             source_url="https://jobs.example/duplicate",
         )
     )
-    snapshots = services.workspace.artifacts_root / "snapshots"
+    snapshots = services.paths.artifacts_root / "snapshots"
     files_before = sorted(snapshots.rglob("*.txt"))
     applications_before = services.repository.list_applications()
     command = IngestCommand(
@@ -128,7 +128,7 @@ def test_job_snapshot_metadata_rolls_back_when_its_audit_insert_fails(
     created = services.applications.ingest(
         IngestCommand(company="Audit Rollback Co", target_role="Developer", job_text="Initial")
     )
-    snapshots = services.workspace.artifacts_root / "snapshots" / created.application_id
+    snapshots = services.paths.artifacts_root / "snapshots" / created.application_id
     files_before = sorted(snapshots.iterdir())
 
     def refuse_audit(_repository, _record) -> None:
@@ -152,7 +152,7 @@ def test_repeating_exact_snapshot_content_is_refused_before_a_payload_write(serv
     created = services.applications.ingest(
         IngestCommand(company="Repeat Co", target_role="Developer", job_text="Exact text")
     )
-    snapshots = services.workspace.artifacts_root / "snapshots" / created.application_id
+    snapshots = services.paths.artifacts_root / "snapshots" / created.application_id
     files_before = sorted(snapshots.iterdir())
 
     try:

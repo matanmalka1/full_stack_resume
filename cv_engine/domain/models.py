@@ -245,7 +245,7 @@ ContactScheme = Literal["text", "mailto", "tel", "https"]
 
 
 class CandidateContext(StrictModel):
-    """Who this Workspace is about, expressed as references rather than literals.
+    """Who this application is about, expressed as references rather than literals.
 
     The candidate's name and contacts stay canonical facts with one location.
     This context only says which fact plays which role, how a contact becomes a
@@ -531,7 +531,7 @@ class WorkingDraft(StrictModel):
 class ApprovedRevision(StrictModel):
     """One immutable approved resume and its complete frozen lineage.
 
-    Payload references are opaque Workspace-relative identities. The domain
+    Payload references are opaque project-relative identities. The domain
     record neither composes nor opens them; infrastructure owns that policy.
     """
 

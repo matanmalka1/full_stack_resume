@@ -46,8 +46,8 @@ each worktree. To install the browser again without replacing the environment:
   SQLAlchemy Core and numbered Alembic revisions.
 - `artifacts/working/` contains replaceable working drafts; approved/rendered versions
   are immutable version directories under `artifacts/<application-id>/`.
-- `base/` and `profiles/` hold the canonical source facts; a new Workspace copies them
-  in, so they are live input rather than archive.
+- `base/` and `profiles/` hold the canonical source facts used directly by the
+  application, so they are live input rather than archive.
 
 ## Default workflow
 

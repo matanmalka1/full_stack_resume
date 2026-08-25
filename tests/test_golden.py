@@ -43,7 +43,7 @@ def _build_case(draft_factory, case: dict):
 
 
 def test_representative_profiles_match_their_golden_ready_outputs(
-    workspace_root: Path,
+    project_root: Path,
     tmp_path: Path,
     draft_factory,
 ) -> None:
@@ -76,7 +76,7 @@ def test_representative_profiles_match_their_golden_ready_outputs(
 
         target = tmp_path / fixture.stem
         target.mkdir()
-        html = render_html(draft, workspace_root, target / "resume.html", candidate)
+        html = render_html(draft, project_root, target / "resume.html", candidate)
         html_text = html.read_text(encoding="utf-8")
         front_matter, markdown_body = _front_matter_and_body(markdown)
         assert f'fact_store_version: "{facts.version}"' in front_matter
@@ -98,7 +98,7 @@ def test_representative_profiles_match_their_golden_ready_outputs(
 
 
 def test_golden_outputs_pass_render_validation(
-    workspace_root: Path,
+    project_root: Path,
     tmp_path: Path,
     draft_factory,
     render_validator,
@@ -115,7 +115,7 @@ def test_golden_outputs_pass_render_validation(
 
         target = tmp_path / fixture.stem
         target.mkdir()
-        html = render_html(draft, workspace_root, target / "resume.html", candidate)
+        html = render_html(draft, project_root, target / "resume.html", candidate)
         assert sha256_text(html.read_text(encoding="utf-8")) == case["snapshot"]["html_sha256"], (
             fixture.stem
         )
@@ -128,7 +128,7 @@ def test_golden_outputs_pass_render_validation(
 
 
 def test_persisted_plan_reproduces_the_computed_selection(
-    workspace_root: Path,
+    project_root: Path,
     draft_factory,
     fact_store,
     profile_store,
@@ -164,7 +164,7 @@ def test_persisted_plan_reproduces_the_computed_selection(
             facts=fact_store,
             policies=policy_store,
             candidate=candidate_context,
-            presentations=load_presentations(workspace_root, fact_store),
+            presentations=load_presentations(project_root, fact_store),
             selection=computed.draft.selection,
         )
         if serialize_markdown(computed.draft) != serialize_markdown(rebuilt):

@@ -97,14 +97,14 @@ beforeEach(() => {
 
 afterEach(() => { vi.unstubAllGlobals(); sessionStorage.clear(); });
 
-/* Validation, approval, and render are panels of the draft workspace rather than screens
+/* Validation, approval, and render are panels of the draft editor rather than screens
    of their own. The behavior each one owns is unchanged, so these exercise the components
    at the same boundaries the screens were held to: the exact payload sent, the exact run
    approval is offered for, and the two refusal paths. */
 
-/* A harness standing in for the workspace: it holds the draft, the exact passing run the
+/* A harness standing in for the editor: it holds the draft, the exact passing run the
    panel reports, and the dialog, exactly as DraftEditorPage does. */
-const Workspace = () => {
+const DraftFlow = () => {
   const [runId, setRunId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [stale, setStale] = useState(false);
@@ -149,7 +149,7 @@ describe("DraftValidationPanel", () => {
       { group: "unknown_group", code: "UNKNOWN_SOFT", hard: false, message: "Soft issue" },
     ] } });
     vi.stubGlobal("fetch", vi.fn((input: string | URL | Request) => Promise.resolve(json(String(input).includes("validation-runs") ? run : String(input).includes("working-drafts") ? draft() : detail({ working_draft_state: "validation_failed" })))));
-    renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <Workspace />);
+    renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftFlow />);
     expect(await screen.findByText("Hard issue")).toBeInTheDocument();
     expect(screen.getByText("Soft issue")).toBeInTheDocument();
     expect(screen.getByText(/UNKNOWN_HARD/)).toBeInTheDocument();
@@ -163,7 +163,7 @@ describe("DraftValidationPanel", () => {
       return Promise.resolve(json(url.includes("working-drafts") ? draft({ latest_validation_run_id: null }) : detail({ working_draft_state: "editing" })));
     });
     vi.stubGlobal("fetch", fetchMock);
-    renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <Workspace />);
+    renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftFlow />);
     const validate = await screen.findByRole("button", { name: "אימות הטיוטה" });
     await waitFor(() => expect(validate).toBeEnabled());
     /* Approval is closed until a passing run for this exact version exists. */
@@ -184,7 +184,7 @@ describe("DraftApprovalDialog", () => {
       return Promise.resolve(json(url.includes("validation-runs") ? warned : url.includes("working-drafts") ? draft() : detail()));
     });
     vi.stubGlobal("fetch", fetchMock);
-    renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <Workspace />);
+    renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftFlow />);
     const openApproval = await screen.findByRole("button", { name: "פתיחת אישור" });
     await waitFor(() => expect(openApproval).toBeEnabled());
     fireEvent.click(openApproval);
@@ -199,7 +199,7 @@ describe("DraftApprovalDialog", () => {
     const approve = await screen.findByRole("button", { name: "אישור הגרסה" });
     expect(approve).toBeDisabled();
     fireEvent.click(screen.getByRole("checkbox")); fireEvent.click(approve);
-    /* Approval succeeded, so the workspace moves to its render step in place. */
+    /* Approval succeeded, so the editor moves to its render step in place. */
     expect(await screen.findByRole("heading", { name: "הגרסה אושרה" })).toBeInTheDocument();
     const request = fetchMock.mock.calls.find((call) => call[1]?.method === "POST");
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({ expected_edit_version: 4, validation_run_id: "run-1" });
@@ -209,7 +209,7 @@ describe("DraftApprovalDialog", () => {
     vi.stubGlobal("fetch", vi.fn((input: string | URL | Request, init?: RequestInit) => init?.method === "POST"
       ? Promise.resolve(json({ type: "about:blank", title: "Conflict", status: 409, code: "STATE_CONFLICT", detail: "approval changed" }, 409))
       : Promise.resolve(json(String(input).includes("validation-runs") ? validation() : String(input).includes("working-drafts") ? draft() : detail()))));
-    renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <Workspace />);
+    renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftFlow />);
     const openApproval = await screen.findByRole("button", { name: "פתיחת אישור" });
     await waitFor(() => expect(openApproval).toBeEnabled());
     fireEvent.click(openApproval);
@@ -224,7 +224,7 @@ describe("DraftApprovalDialog", () => {
       ? Promise.resolve(json({ type: "about:blank", title: "Stale", status: 412, code: "VALIDATION_STALE", detail: "stale" }, 412))
       : Promise.resolve(json(String(input).includes("validation-runs") ? validation() : String(input).includes("working-drafts") ? draft() : detail())));
     vi.stubGlobal("fetch", fetchMock);
-    renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <Workspace />);
+    renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftFlow />);
     const openApproval = await screen.findByRole("button", { name: "פתיחת אישור" });
     await waitFor(() => expect(openApproval).toBeEnabled());
     fireEvent.click(openApproval);

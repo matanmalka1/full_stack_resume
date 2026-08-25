@@ -51,7 +51,7 @@ OPERATION_TIMEOUT_SECONDS = 20.0
 
 @dataclass(frozen=True)
 class ApiHarness:
-    """One HTTP client and the Workspace services the worker shares with it."""
+    """One HTTP client and the application services the worker shares with it."""
 
     client: TestClient
     services: Services

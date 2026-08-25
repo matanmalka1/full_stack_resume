@@ -50,24 +50,24 @@ from ..infrastructure.rendering import PlaywrightRenderer
 from ..util import new_id
 from .config import API_MAX_BODY_BYTES_DEFAULT, RuntimeConfig, resolve_config
 from .execution import ForegroundOperationExecutor, OperationWorker
-from .workspace import Workspace, WorkspaceError
+from .paths import AppPaths, PathConfigurationError
 
 
 def _repo_root() -> Path:
-    """The repository root, where a `.env` lives when no Workspace is open."""
+    """The fixed application root."""
     return Path(__file__).resolve().parent.parent.parent
 
 
 def _default_config() -> RuntimeConfig:
     """The settings a caller that passed none is implicitly asking for."""
-    return resolve_config(env=os.environ, repo_root=_repo_root())
+    return resolve_config(env=os.environ, project_root=_repo_root())
 
 
 @dataclass(frozen=True)
 class Services:
-    """Everything a client needs, already wired to one Workspace."""
+    """Everything a client needs, wired to one fixed application root."""
 
-    workspace: Workspace
+    paths: AppPaths
     database_url: str
     schema_version: str
     repository: ApplicationRepository
@@ -89,7 +89,7 @@ class Services:
     settings: SettingsService
 
 
-def build_object_store(workspace: Workspace, config: RuntimeConfig) -> ObjectStore:
+def build_object_store(paths: AppPaths, config: RuntimeConfig) -> ObjectStore:
     """Choose the immutable payload backend named by configuration.
 
     Local is the default and stays the default: a caller that configures
@@ -104,12 +104,14 @@ def build_object_store(workspace: Workspace, config: RuntimeConfig) -> ObjectSto
     """
     backend = str(config.get("object_store") or "local").strip().lower()
     if backend == "local":
-        return LocalObjectStore(workspace.artifacts_root)
+        return LocalObjectStore(paths.artifacts_root)
     if backend != "s3":
-        raise WorkspaceError(f"unknown object store backend: {backend} (expected 'local' or 's3')")
+        raise PathConfigurationError(
+            f"unknown object store backend: {backend} (expected 'local' or 's3')"
+        )
     bucket = config.get("s3_bucket")
     if not bucket:
-        raise WorkspaceError("object store 's3' requires a bucket; set CV_S3_BUCKET")
+        raise PathConfigurationError("object store 's3' requires a bucket; set CV_S3_BUCKET")
     return S3ObjectStore(
         str(bucket),
         prefix=str(config.get("s3_prefix") or ""),
@@ -119,7 +121,7 @@ def build_object_store(workspace: Workspace, config: RuntimeConfig) -> ObjectSto
 
 
 def build_services(
-    workspace: Workspace,
+    paths: AppPaths,
     *,
     database_url: str | None = None,
     repository: ApplicationRepository | None = None,
@@ -149,16 +151,14 @@ def build_services(
             current_database_revision(repository_engine) if repository_engine is not None else None
         ) or ""
     resolved_knowledge = knowledge or FileKnowledge(
-        workspace.knowledge_root,
-        workspace_root=workspace.root,
-        temp_root=workspace.temp_root,
+        paths.knowledge_root,
+        project_root=paths.root,
+        temp_root=paths.temp_root,
         has_prepared_mutation=lambda: bool(resolved_repository.prepared_knowledge_mutations()),
     )
-    resolved_artifacts = artifacts or FilesystemArtifactStore(workspace)
-    resolved_payloads = payloads or PayloadStore(
-        workspace, build_object_store(workspace, resolved_config)
-    )
-    resolved_renderer = renderer or PlaywrightRenderer(workspace.knowledge_root)
+    resolved_artifacts = artifacts or FilesystemArtifactStore(paths)
+    resolved_payloads = payloads or PayloadStore(paths, build_object_store(paths, resolved_config))
+    resolved_renderer = renderer or PlaywrightRenderer(paths.knowledge_root)
     # Built only when a key is configured. The deterministic workflow must
     # reach Ready with `OPENAI_API_KEY` unset, so constructing an adapter that
     # refuses at import time would break the offline path for every command,
@@ -184,7 +184,7 @@ def build_services(
     operation_service = OperationService(**shared)
     draft_service = DraftService(**shared)
     rendering_service = RenderingService(**shared)
-    failure_logger = OperationFailureLogger(workspace.root, workspace.logs_root)
+    failure_logger = OperationFailureLogger(paths.root, paths.logs_root)
     runner = OperationRunner(
         resolved_repository,
         {
@@ -210,7 +210,7 @@ def build_services(
         resolved_repository, provider_configured=resolved_provider is not None
     )
     return Services(
-        workspace=workspace,
+        paths=paths,
         database_url=resolved_database_url,
         schema_version=schema_version,
         repository=resolved_repository,
@@ -264,7 +264,6 @@ def build_api_services(
         operations=services.operations,
         settings=services.settings,
         identity=InstanceIdentity(
-            workspace_id=services.workspace.workspace_id,
             product_version=__version__,
             api_version=API_VERSION,
             schema_version=services.schema_version,

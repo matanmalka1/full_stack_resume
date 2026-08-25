@@ -1,4 +1,4 @@
-"""The canonical knowledge a test Workspace starts from.
+"""The canonical knowledge a test project starts from.
 
 This was `cv_engine/infrastructure/canonical_data.py`: 831 lines, of which about
 770 were the candidate's facts written out as Python literals. Nothing in the

@@ -13,7 +13,7 @@ import { ValidationReportView } from "./ValidationReportView";
 interface DraftValidationPanelProps {
   applicationId: string;
   draft: WorkingDraft | undefined;
-  /* Approval is the workspace's own dialog, so the panel reports the exact passing run
+  /* Approval is the editor's own dialog, so the panel reports the exact passing run
      upward rather than linking to a screen for it. */
   onExactPassingRun: (runId: string | null) => void;
   /* Set when an approval was refused as stale: the panel says so instead of the user
@@ -21,7 +21,7 @@ interface DraftValidationPanelProps {
   stale: boolean;
 }
 
-/* A.4 frame 5, as a panel of the workspace rather than a screen of its own. The draft it
+/* A.4 frame 5, as a panel of the editor rather than a screen of its own. The draft it
    validates is the one in the editor beside it, so making the user leave the editor to
    read the result - and come back to fix it - was the trip this removes. Every command,
    key, and stale path is the one the standalone screen used. */

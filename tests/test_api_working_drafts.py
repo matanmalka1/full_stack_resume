@@ -240,8 +240,6 @@ def test_cli_edit_wins_before_a_web_autosave_with_the_stale_etag(api_worker) -> 
     before = read.json()
 
     edited = run_cli(
-        "--workspace",
-        str(api_worker.services.workspace.root),
         "edit-claim",
         application_id,
         claim.claim_id,

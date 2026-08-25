@@ -52,7 +52,7 @@ from cv_engine.infrastructure.knowledge import (
     load_fact_store,
     load_presentations,
     load_profile_store,
-    seed_fact_before_workspace,
+    seed_fact_before_project,
 )
 from cv_engine.infrastructure.persistence import (
     Repository,
@@ -63,7 +63,7 @@ from cv_engine.infrastructure.persistence.tables import metadata
 from cv_engine.infrastructure.rendering import render_pdf, validate_rendered
 from cv_engine.runtime.composition import Services, build_services
 from cv_engine.runtime.config import resolve_config
-from cv_engine.runtime.workspace import Workspace, create_workspace, load_workspace
+from cv_engine.runtime.paths import AppPaths
 from cv_engine.util import new_id
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
@@ -188,30 +188,25 @@ class ProposalSetup:
 
 
 @pytest.fixture
-def workspace_root(tmp_path: Path) -> Path:
-    """A marked, isolated test Workspace holding a full knowledge copy.
-
-    The marker is part of the fixture because every normal command now opens
-    its Workspace fail-closed; an unmarked directory is a guard test, not a
-    starting point.
-    """
+def project_root(tmp_path: Path) -> Path:
+    """An isolated application root holding a full knowledge copy."""
     root = tmp_path / "repo"
     root.mkdir()
     write_canonical_sources(root / "base")
     # The identity fact and candidate context are added the way the product
     # adds them, rather than baked into the seed sources, so the fixture
     # exercises the real lifecycle instead of a shortcut around it.
-    seed_fact_before_workspace(root / "base", "common.md", dict(V2_IDENTITY_FACT), canonical=True)
+    seed_fact_before_project(root / "base", "common.md", dict(V2_IDENTITY_FACT), canonical=True)
     shutil.copy2(SOURCE_ROOT / "base/candidate.json", root / "base/candidate.json")
     for name in ("profiles", "rendering", "ai", "config"):
         shutil.copytree(SOURCE_ROOT / name, root / name)
-    create_workspace(root)
     return root
 
 
 @pytest.fixture
-def workspace(workspace_root: Path) -> Workspace:
-    return load_workspace(workspace_root)
+def app_paths(project_root: Path, monkeypatch: pytest.MonkeyPatch) -> AppPaths:
+    monkeypatch.setenv("CV_TEST_PROJECT_ROOT", str(project_root))
+    return AppPaths.from_root(project_root)
 
 
 @pytest.fixture(scope="session")
@@ -262,39 +257,39 @@ def isolated_database(database_engine: Engine, monkeypatch: pytest.MonkeyPatch) 
 
 
 @pytest.fixture
-def fact_store(workspace_root: Path) -> FactStore:
-    return load_fact_store(workspace_root / "base")
+def fact_store(project_root: Path) -> FactStore:
+    return load_fact_store(project_root / "base")
 
 
 @pytest.fixture
-def profile_store(workspace_root: Path, fact_store: FactStore) -> ProfileStore:
-    return load_profile_store(workspace_root, fact_store)
+def profile_store(project_root: Path, fact_store: FactStore) -> ProfileStore:
+    return load_profile_store(project_root, fact_store)
 
 
 @pytest.fixture
-def policy_store(workspace_root: Path) -> EmphasisPolicyStore:
-    return load_emphasis_policies(workspace_root)
+def policy_store(project_root: Path) -> EmphasisPolicyStore:
+    return load_emphasis_policies(project_root)
 
 
 @pytest.fixture
-def presentation_store(workspace_root: Path, fact_store: FactStore):
-    return load_presentations(workspace_root, fact_store)
+def presentation_store(project_root: Path, fact_store: FactStore):
+    return load_presentations(project_root, fact_store)
 
 
 @pytest.fixture
-def candidate_context(workspace_root: Path, fact_store: FactStore):
-    return load_candidate_context(workspace_root, fact_store)
+def candidate_context(project_root: Path, fact_store: FactStore):
+    return load_candidate_context(project_root, fact_store)
 
 
 @pytest.fixture
-def services(workspace: Workspace) -> Services:
-    return build_services(workspace)
+def services(app_paths: AppPaths) -> Services:
+    return build_services(app_paths)
 
 
 @pytest.fixture
-def task_contracts(workspace: Workspace):
+def task_contracts(app_paths: AppPaths):
     """The declared AI contracts, read the way every command reads them."""
-    return FileKnowledge(workspace.knowledge_root, workspace_root=workspace.root).task_contracts()
+    return FileKnowledge(app_paths.knowledge_root, project_root=app_paths.root).task_contracts()
 
 
 @pytest.fixture
@@ -304,7 +299,7 @@ def fake_openai(monkeypatch) -> FakeOpenAI:
 
 
 @pytest.fixture
-def ai_services(workspace: Workspace, fake_openai: FakeOpenAI, task_contracts) -> Services:
+def ai_services(app_paths: AppPaths, fake_openai: FakeOpenAI, task_contracts) -> Services:
     """Services whose AI provider is the real adapter over the fake transport.
 
     `OPENAI_API_KEY` stays unset. The key is handed to the adapter directly, so
@@ -312,7 +307,7 @@ def ai_services(workspace: Workspace, fake_openai: FakeOpenAI, task_contracts) -
     than reaching the network, and the offline guarantee is not weakened by the
     fixture that exercises AI.
     """
-    return build_services(workspace, provider=fake_openai.provider(task_contracts))
+    return build_services(app_paths, provider=fake_openai.provider(task_contracts))
 
 
 @pytest.fixture
@@ -321,25 +316,29 @@ def application_repo(database_engine: Engine) -> Repository:
 
 
 @pytest.fixture
-def cli_runner(workspace_root: Path):
-    """The CLI against the test Workspace, run in this process."""
+def cli_runner(project_root: Path, monkeypatch: pytest.MonkeyPatch):
+    """The CLI against the isolated test project, run in this process."""
+
+    monkeypatch.setenv("CV_TEST_PROJECT_ROOT", str(project_root))
 
     def run(*args: str) -> CliRun:
-        return run_cli("--workspace", str(workspace_root), *args)
+        return run_cli(*args)
 
     return run
 
 
 @pytest.fixture
-def cli_subprocess(workspace_root: Path):
+def cli_subprocess(project_root: Path):
     """The CLI as a real process, for tests whose subject is that boundary."""
 
     def run(*args: str) -> subprocess.CompletedProcess[str]:
+        env = {**os.environ, "CV_TEST_PROJECT_ROOT": str(project_root)}
         return subprocess.run(
-            [sys.executable, "-m", "cv_engine.cli", "--workspace", str(workspace_root), *args],
+            [sys.executable, "-m", "cv_engine.cli", *args],
             text=True,
             capture_output=True,
             check=False,
+            env=env,
         )
 
     return run
@@ -534,7 +533,7 @@ def ready_application(approved_application, deterministic_renderer):
 
 @pytest.fixture
 def draft_factory(
-    workspace_root: Path,
+    project_root: Path,
     fact_store: FactStore,
     profile_store: ProfileStore,
     policy_store: EmphasisPolicyStore,
@@ -560,9 +559,9 @@ def draft_factory(
             facts=fact_store,
             policies=policy_store,
             candidate=candidate_context,
-            presentations=load_presentations(workspace_root, fact_store),
+            presentations=load_presentations(project_root, fact_store),
         )
-        store = FilesystemArtifactStore(load_workspace(workspace_root))
+        store = FilesystemArtifactStore(AppPaths.from_root(project_root))
         markdown = store.write_working_draft(draft).paths.markdown if write else None
         return DraftSetup(fact_store, profile, analysis, draft, markdown, candidate_context)
 
@@ -669,7 +668,7 @@ def render_validator():
 
 @pytest.fixture
 def api_worker(services: Services):
-    """The API and an Operation worker running together over one Workspace."""
+    """The API and an Operation worker running together over one project."""
     with api_with_worker(services) as harness:
         yield harness
 

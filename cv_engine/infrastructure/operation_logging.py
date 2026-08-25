@@ -12,8 +12,8 @@ from .paths import relative_within
 class OperationFailureLogger:
     """Structured rotating technical log kept outside safe Operation responses."""
 
-    def __init__(self, workspace_root: Path, logs_root: Path):
-        self.workspace_root = Path(workspace_root).resolve()
+    def __init__(self, project_root: Path, logs_root: Path):
+        self.project_root = Path(project_root).resolve()
         self.path = Path(logs_root).resolve() / "operations.jsonl"
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = Lock()
@@ -43,4 +43,4 @@ class OperationFailureLogger:
             self._logger.error(canonical_json(entry))
             for handler in self._logger.handlers:
                 handler.flush()
-        return relative_within(self.workspace_root, self.path).as_posix()
+        return relative_within(self.project_root, self.path).as_posix()

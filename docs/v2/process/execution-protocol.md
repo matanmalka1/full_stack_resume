@@ -78,8 +78,8 @@ same PostgreSQL database/schema, object-store namespace, or rendered output race
 runner, and the numbers
 they report become meaningless without either lane failing. So a lane also gets its own:
 
-- Workspace root and its marker, a dedicated PostgreSQL database, and a dedicated
-  local payload tree or S3-compatible bucket prefix;
+- a separate git worktree, a dedicated PostgreSQL database, and a dedicated local
+  payload tree or S3-compatible bucket prefix;
 - temp roots and test output directories;
 - any bound port, when a lane runs the API or a browser.
 
@@ -107,7 +107,7 @@ which strategy it uses so integration does not assume a shim exists.
 ## 5. Git protocol
 
 `AGENTS.md`'s rules on small scoped commits, destructive operations, and isolated
-Workspaces apply unchanged to every lane. What multi-agent work adds:
+runtime resources apply unchanged to every lane. What multi-agent work adds:
 
 - One git worktree per lane, all based on the same commit. No executor commits to the
   long-lived branch.

@@ -33,7 +33,7 @@ NEW_FACT = {
 
 def _reload(services: Services) -> FactStore:
     """Read the fact store back from disk, as a later process would."""
-    return load_fact_store(services.workspace.knowledge_root / "base")
+    return load_fact_store(services.paths.knowledge_root / "base")
 
 
 def test_new_fact_is_persisted_as_pending_and_cannot_reach_a_cv(services: Services) -> None:
@@ -81,7 +81,7 @@ def test_create_fact_from_claim_preserves_exact_claim_text(drafted_application) 
 def test_knowledge_file_mutation_is_validated_staged_activated_and_restored(
     services: Services,
 ) -> None:
-    source = services.workspace.knowledge_root / "base" / "situational_skills.md"
+    source = services.paths.knowledge_root / "base" / "situational_skills.md"
     before = source.read_bytes()
 
     staged, fact = services.knowledge.stage_create_fact(
@@ -99,13 +99,13 @@ def test_knowledge_file_mutation_is_validated_staged_activated_and_restored(
     services.knowledge.restore_staged(staged)
     assert source.read_bytes() == before
     services.knowledge.discard_staged(staged)
-    assert not (services.workspace.temp_root / "knowledge" / "staged-create").exists()
+    assert not (services.paths.temp_root / "knowledge" / "staged-create").exists()
 
 
 def test_knowledge_file_activation_refuses_source_or_staged_hash_changes(
     services: Services,
 ) -> None:
-    source = services.workspace.knowledge_root / "base" / "situational_skills.md"
+    source = services.paths.knowledge_root / "base" / "situational_skills.md"
     staged, _fact = services.knowledge.stage_create_fact(
         "source-change",
         "situational_skills.md",
@@ -132,8 +132,8 @@ def test_prepared_knowledge_mutation_recovers_or_quarantines_from_hashes(
     with pytest.raises(RuntimeError, match="simulated crash"):
         services.knowledge_lifecycle.add_fact("situational_skills.md", dict(NEW_FACT))
     mutation = services.repository.prepared_knowledge_mutations()[0]
-    source = services.workspace.root / mutation.source_reference
-    staged = services.workspace.root / mutation.staged_reference
+    source = services.paths.root / mutation.source_reference
+    staged = services.paths.root / mutation.staged_reference
     backup = staged.with_name("old")
     if window == "staged-missing":
         staged.unlink()
@@ -144,7 +144,7 @@ def test_prepared_knowledge_mutation_recovers_or_quarantines_from_hashes(
     else:
         backup.unlink()
 
-    recovered = build_services(services.workspace)
+    recovered = build_services(services.paths)
     assert recovered.repository.prepared_knowledge_mutations() == []
     quarantined = recovered.repository.quarantined_knowledge_mutations()
     assert [item.id for item in quarantined] == [mutation.id]
@@ -171,7 +171,7 @@ def test_startup_finishes_crashes_before_and_after_file_activation(
     assert services.knowledge_lifecycle.fact_history().events == []
 
     monkeypatch.setattr(services.knowledge_lifecycle, "_complete_prepared", original_complete)
-    recovered = build_services(services.workspace)
+    recovered = build_services(services.paths)
     assert recovered.repository.knowledge_mutation(mutation.id).state.value == "COMMITTED"
     assert _reload(recovered).get("situational.postgres").status is FactStatus.PENDING
     assert len(recovered.knowledge_lifecycle.fact_history("situational.postgres").events) == 1
@@ -186,7 +186,7 @@ def test_startup_finishes_crashes_before_and_after_file_activation(
     monkeypatch.setattr(recovered.knowledge_lifecycle, "_complete_prepared", interrupt_after)
     with pytest.raises(RuntimeError, match="after replace"):
         recovered.knowledge_lifecycle.add_fact("situational_skills.md", second_payload)
-    recovered_again = build_services(services.workspace)
+    recovered_again = build_services(services.paths)
     assert _reload(recovered_again).get("situational.postgres.second").status is FactStatus.PENDING
     assert len(recovered_again.knowledge_lifecycle.fact_history().events) == 2
 
@@ -210,7 +210,7 @@ def test_startup_marks_committed_db_mutation_without_duplicate_event(
     assert len(services.repository.fact_events("situational.postgres")) == 1
     assert len(services.repository.prepared_knowledge_mutations()) == 1
 
-    recovered = build_services(services.workspace)
+    recovered = build_services(services.paths)
     assert recovered.repository.prepared_knowledge_mutations() == []
     assert len(recovered.repository.fact_events("situational.postgres")) == 1
 
@@ -218,7 +218,7 @@ def test_startup_marks_committed_db_mutation_without_duplicate_event(
 def test_audit_failure_restores_source_and_quarantines(
     services: Services, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    source = services.workspace.knowledge_root / "base" / "situational_skills.md"
+    source = services.paths.knowledge_root / "base" / "situational_skills.md"
     before = source.read_bytes()
 
     def refuse_event(self, **_values):
@@ -311,10 +311,8 @@ def test_selection_plan_failure_restores_both_knowledge_files_and_quarantines(
         },
         application_id=application_id,
     )
-    fact_source = services.workspace.knowledge_root / "base" / "sales.md"
-    profile_source = (
-        services.workspace.knowledge_root / "profiles" / "sales" / "account-manager.yaml"
-    )
+    fact_source = services.paths.knowledge_root / "base" / "sales.md"
+    profile_source = services.paths.knowledge_root / "profiles" / "sales" / "account-manager.yaml"
     before_fact = fact_source.read_bytes()
     before_profile = profile_source.read_bytes()
 
@@ -341,7 +339,7 @@ def test_selection_plan_failure_restores_both_knowledge_files_and_quarantines(
         "situational_skills.md",
         dict(NEW_FACT),
     )
-    staged_path = services.workspace.root / staged.staged_reference
+    staged_path = services.paths.root / staged.staged_reference
     staged_path.write_text("tampered", encoding="utf-8")
     with pytest.raises(ValueError, match="staged Knowledge file hash mismatch"):
         services.knowledge.activate_staged(staged)
@@ -391,7 +389,7 @@ def test_promotion_requires_explicit_confirmation_and_a_legal_transition(
 
 
 def test_lifecycle_survives_process_boundaries_through_the_cli(
-    cli_subprocess, workspace_root: Path
+    cli_subprocess, project_root: Path
 ) -> None:
     added = cli_subprocess(
         "fact",
@@ -428,7 +426,7 @@ def test_lifecycle_survives_process_boundaries_through_the_cli(
     ids = [fact["fact_id"] for fact in json.loads(listed.stdout)]
     assert "situational.postgres" in ids
     assert (
-        load_fact_store(workspace_root / "base").get("situational.postgres").status
+        load_fact_store(project_root / "base").get("situational.postgres").status
         is FactStatus.CANONICAL
     )
 

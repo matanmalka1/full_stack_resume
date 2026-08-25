@@ -24,13 +24,13 @@ from cv_engine.domain.models import (
 )
 from cv_engine.infrastructure.persistence import Repository
 from cv_engine.infrastructure.persistence.tables import (
+    app_settings,
     applications,
     job_snapshots,
     knowledge_mutation_journal,
     metadata,
     selection_plans,
     working_drafts,
-    workspace_settings,
 )
 from cv_engine.util import normalized_text, sha256_text
 
@@ -48,7 +48,7 @@ MUTABLE_TABLES = frozenset(
         "operation_outputs",  # permits exactly one inactive-to-active transition
         "idempotency_receipts",  # permits exactly one pending-to-completed transition
         "knowledge_mutation_journal",  # permits one prepared-to-terminal transition
-        "workspace_settings",  # safe mutable Web preferences, guarded by edit_version
+        "app_settings",  # safe mutable Web preferences, guarded by edit_version
     }
 )
 DELETE_ONLY_TABLES = frozenset(
@@ -93,7 +93,7 @@ def _save_analysis(repository, application_id: str, snapshot_id: str, analysis):
     )
 
 
-def test_workspace_settings_schema_rejects_non_singleton_and_invalid_values(
+def test_app_settings_schema_rejects_non_singleton_and_invalid_values(
     application_repo,
 ) -> None:
     valid = {
@@ -117,11 +117,11 @@ def test_workspace_settings_schema_rejects_non_singleton_and_invalid_values(
     for values in invalid_values:
         with pytest.raises(IntegrityError):
             with application_repo.transaction() as connection:
-                connection.execute(insert(workspace_settings).values(**values))
+                connection.execute(insert(app_settings).values(**values))
 
 
-def test_workspace_settings_default_read_is_pure(application_repo) -> None:
-    assert application_repo.workspace_settings().model_dump(mode="python") == {
+def test_app_settings_default_read_is_pure(application_repo) -> None:
+    assert application_repo.app_settings().model_dump(mode="python") == {
         "edit_version": 0,
         "auto_generate_when_review_not_required": False,
         "ai_enabled_override": None,
@@ -132,16 +132,11 @@ def test_workspace_settings_default_read_is_pure(application_repo) -> None:
         "updated_at": None,
     }
     with application_repo.read_connection() as connection:
-        assert (
-            connection.execute(select(func.count()).select_from(workspace_settings)).scalar_one()
-            == 0
-        )
+        assert connection.execute(select(func.count()).select_from(app_settings)).scalar_one() == 0
 
 
-def test_workspace_settings_updates_are_optimistic_and_atomic(
-    application_repo, monkeypatch
-) -> None:
-    first = application_repo.update_workspace_settings(
+def test_app_settings_updates_are_optimistic_and_atomic(application_repo, monkeypatch) -> None:
+    first = application_repo.update_app_settings(
         0,
         UpdateSettings(
             auto_generate_when_review_not_required=True,
@@ -156,7 +151,7 @@ def test_workspace_settings_updates_are_optimistic_and_atomic(
     assert first.ui_density == "compact"
 
     with pytest.raises(StateConflict, match="changed from version 0 to 1"):
-        application_repo.update_workspace_settings(
+        application_repo.update_app_settings(
             0,
             UpdateSettings(
                 auto_generate_when_review_not_required=False,
@@ -167,13 +162,13 @@ def test_workspace_settings_updates_are_optimistic_and_atomic(
                 ui_text_size="normal",
             ),
         )
-    assert application_repo.workspace_settings() == first
+    assert application_repo.app_settings() == first
 
     def refuse_post_commit_reread() -> None:
         raise AssertionError("an update response must describe its own committed write")
 
-    monkeypatch.setattr(application_repo, "workspace_settings", refuse_post_commit_reread)
-    second = application_repo.update_workspace_settings(
+    monkeypatch.setattr(application_repo, "app_settings", refuse_post_commit_reread)
+    second = application_repo.update_app_settings(
         1,
         UpdateSettings(
             auto_generate_when_review_not_required=False,
@@ -185,7 +180,7 @@ def test_workspace_settings_updates_are_optimistic_and_atomic(
         ),
     )
     assert second.edit_version == 2
-    assert Repository(application_repo.engine).workspace_settings() == second
+    assert Repository(application_repo.engine).app_settings() == second
 
 
 def test_connection_policy_unit_of_work_bind_and_foreign_keys(application_repo) -> None:
