@@ -86,11 +86,12 @@ class RenderingService(ServiceBase[ReadinessRepository]):
             ) from exc
         if revision.application_id != command.application_id:
             raise LineageBroken("approved revision does not belong to the named Application")
-        try:
-            manifest_path = self.artifacts.resolve(manifest_record["path"])
-        except (OSError, ValueError) as exc:
-            raise InfrastructureFailure(f"could not resolve approved revision: {exc}") from exc
-        draft = self.stored_draft(manifest_path)
+        # The claim manifest and the approved Markdown beside it are registered
+        # immutable payloads, so they are read through the store rather than
+        # resolved to a local path. Resolving them worked only while storage
+        # happened to be the same disk the Workspace sits on.
+        manifest_reference = manifest_record["path"]
+        draft = self.registered_draft(manifest_reference)
         profile = profiles.get(draft.profile)
         _, analysis = bound_analysis(
             self.repo,
@@ -104,7 +105,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         )
         source_report = validate_draft(
             draft,
-            self.artifact_text(self.artifacts.paths_beside(manifest_path).markdown),
+            self.registered_text(self.markdown_reference_beside(manifest_reference)),
             facts,
             profile,
             analysis,

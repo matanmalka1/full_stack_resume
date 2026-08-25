@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from ....util import canonical_json, sha256_file, sha256_text
+from ....util import canonical_json, sha256_text
 from ...commands import (
     AnalyzeCommand,
     DraftCommand,
@@ -436,7 +436,6 @@ class RenderOperationHandler:
             snapshot = readiness.get_snapshot(revision.job_snapshot_id)
             analysis = readiness.get_analysis(revision.job_analysis_id)
             plan = readiness.selection_plan(revision.selection_plan_id)
-            manifest_path = self.service.artifacts.resolve(manifest["path"])
         except (UnknownRecord, OSError, ValueError) as exc:
             raise SourceChanged("An approved render source is missing or unreadable.") from exc
         dependencies = sources.dependency_hashes
@@ -446,7 +445,14 @@ class RenderOperationHandler:
             or snapshot["source_hash"] != sources.job_snapshot_hash
             or analysis["application_id"] != operation.application_id
             or plan.application_id != operation.application_id
-            or sha256_file(manifest_path) != manifest["content_hash"]
+            # The manifest is a registered immutable payload: verifying it
+            # through the store checks the bytes storage holds, where hashing a
+            # resolved local path checked the filesystem no matter where the
+            # payload actually lives.
+            or self.service.snapshot_payloads.verify_payload(
+                manifest["path"], manifest["content_hash"]
+            )
+            != "ok"
             or manifest["content_hash"] != dependencies.get("claim_manifest")
         ):
             raise SourceChanged("Approved render inputs changed before activation.")
