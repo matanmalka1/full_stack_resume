@@ -2,40 +2,52 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import insert, select
+
 from ...application.errors import StateConflict
 from ...domain.models import AuditRecord
 from ...util import canonical_json, new_id, sha256_text, utc_now
-from .base import SqliteRepositoryBase
+from .base import SqlAlchemyRepositoryBase
+from .tables import audit_records, fact_events
 
 
-class SqliteAuditRepository(SqliteRepositoryBase):
+def _json_text_record(row: Any, field: str) -> dict[str, Any]:
+    record = dict(row)
+    record[field] = canonical_json(record[field])
+    return record
+
+
+class SqlAlchemyAuditRepository(SqlAlchemyRepositoryBase):
     def insert_audit(self, record: AuditRecord) -> None:
         with self.transaction() as connection:
             connection.execute(
-                "INSERT INTO audit_records(id, application_id, action, entity_type, entity_id, "
-                "actor_type, client, installation_id, occurred_at, details_json) "
-                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    record.id,
-                    record.application_id,
-                    record.action,
-                    record.entity_type,
-                    record.entity_id,
-                    record.actor_type,
-                    record.client,
-                    record.installation_id,
-                    record.occurred_at,
-                    canonical_json(record.details),
-                ),
+                insert(audit_records).values(
+                    id=record.id,
+                    application_id=record.application_id,
+                    action=record.action,
+                    entity_type=record.entity_type,
+                    entity_id=record.entity_id,
+                    actor_type=record.actor_type,
+                    client=record.client,
+                    installation_id=record.installation_id,
+                    occurred_at=record.occurred_at,
+                    details_json=record.details,
+                )
             )
 
     def audit_records(self, application_id: str) -> list[dict[str, Any]]:
         with self.read_connection() as connection:
-            rows = connection.execute(
-                "SELECT * FROM audit_records WHERE application_id=? ORDER BY occurred_at, rowid",
-                (application_id,),
-            ).fetchall()
-        return [dict(row) for row in rows]
+            visible_columns = [column for column in audit_records.c if column.name != "seq"]
+            rows = (
+                connection.execute(
+                    select(*visible_columns)
+                    .where(audit_records.c.application_id == application_id)
+                    .order_by(audit_records.c.occurred_at, audit_records.c.seq)
+                )
+                .mappings()
+                .all()
+            )
+        return [_json_text_record(row, "details_json") for row in rows]
 
     def record_fact_event(
         self,
@@ -66,64 +78,57 @@ class SqliteAuditRepository(SqliteRepositoryBase):
             "application_id": application_id,
             "claim_id": claim_id,
             "reason": reason,
-            "fact_json": payload,
+            "fact_json": fact,
             "fact_hash": sha256_text(payload),
             "facts_version": facts_version,
             "lifecycle_version": lifecycle_version,
             "created_at": created_at or utc_now(),
         }
         with self.transaction() as connection:
-            existing = connection.execute(
-                "SELECT * FROM fact_events WHERE id=?", (event_id,)
-            ).fetchone()
+            visible_columns = [column for column in fact_events.c if column.name != "seq"]
+            existing = (
+                connection.execute(select(*visible_columns).where(fact_events.c.id == event_id))
+                .mappings()
+                .one_or_none()
+            )
             if existing is not None:
                 if dict(existing) != values:
                     raise StateConflict("fact event identity already has different content")
                 return event_id
-            connection.execute(
-                "INSERT INTO fact_events(id, fact_id, source_file, event_type, from_status, "
-                "to_status, application_id, claim_id, reason, fact_json, fact_hash, "
-                "facts_version, lifecycle_version, created_at) "
-                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    values["id"],
-                    values["fact_id"],
-                    values["source_file"],
-                    values["event_type"],
-                    values["from_status"],
-                    values["to_status"],
-                    values["application_id"],
-                    values["claim_id"],
-                    values["reason"],
-                    values["fact_json"],
-                    values["fact_hash"],
-                    values["facts_version"],
-                    values["lifecycle_version"],
-                    values["created_at"],
-                ),
-            )
+            connection.execute(insert(fact_events).values(**values))
         return event_id
 
     def fact_event(self, event_id: str) -> dict[str, Any] | None:
         with self.read_connection() as connection:
-            row = connection.execute("SELECT * FROM fact_events WHERE id=?", (event_id,)).fetchone()
-        return None if row is None else dict(row)
+            visible_columns = [column for column in fact_events.c if column.name != "seq"]
+            row = (
+                connection.execute(select(*visible_columns).where(fact_events.c.id == event_id))
+                .mappings()
+                .one_or_none()
+            )
+        return None if row is None else _json_text_record(row, "fact_json")
 
     def fact_events(self, fact_id: str | None = None) -> list[dict[str, Any]]:
-        query = "SELECT * FROM fact_events"
-        parameters: tuple[Any, ...] = ()
+        visible_columns = [column for column in fact_events.c if column.name != "seq"]
+        statement = select(*visible_columns)
         if fact_id is not None:
-            query += " WHERE fact_id=?"
-            parameters = (fact_id,)
-        query += " ORDER BY created_at, rowid"
+            statement = statement.where(fact_events.c.fact_id == fact_id)
+        statement = statement.order_by(fact_events.c.created_at, fact_events.c.seq)
         with self.read_connection() as connection:
-            return [dict(row) for row in connection.execute(query, parameters).fetchall()]
+            return [
+                _json_text_record(row, "fact_json")
+                for row in connection.execute(statement).mappings()
+            ]
 
     def latest_fact_statuses(self) -> dict[str, str]:
         with self.read_connection() as connection:
-            rows = connection.execute(
-                "SELECT fact_id, to_status FROM fact_events "
-                "WHERE event_type IN ('fact_created', 'fact_promoted') "
-                "ORDER BY created_at, rowid"
-            ).fetchall()
+            rows = (
+                connection.execute(
+                    select(fact_events.c.fact_id, fact_events.c.to_status)
+                    .where(fact_events.c.event_type.in_(("fact_created", "fact_promoted")))
+                    .order_by(fact_events.c.created_at, fact_events.c.seq)
+                )
+                .mappings()
+                .all()
+            )
         return {row["fact_id"]: row["to_status"] for row in rows}

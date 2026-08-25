@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import insert, select, update
+
 from ...application.errors import UnknownRecord
 from ...domain.models import ApplicationStatus
-from ...util import canonical_json, new_id, utc_now
-from .base import SqliteRepositoryBase
+from ...util import new_id, utc_now
+from .base import SqlAlchemyRepositoryBase
+from .tables import application_events, applications, recruitment_events
 
 
-class SqliteApplicationRepository(SqliteRepositoryBase):
+class SqlAlchemyApplicationRepository(SqlAlchemyRepositoryBase):
     def _insert_application(
         self,
         *,
@@ -25,67 +28,73 @@ class SqliteApplicationRepository(SqliteRepositoryBase):
     ) -> None:
         with self.transaction() as connection:
             connection.execute(
-                "INSERT INTO applications(id, company, target_role, source_url, current_status, notes, source, created_at, updated_at) "
-                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    application_id,
-                    company.strip(),
-                    target_role.strip(),
-                    source_url,
-                    ApplicationStatus.SAVED.value,
-                    notes,
-                    source,
-                    created_at,
-                    created_at,
-                ),
+                insert(applications).values(
+                    id=application_id,
+                    company=company.strip(),
+                    target_role=target_role.strip(),
+                    source_url=source_url,
+                    current_status=ApplicationStatus.SAVED.value,
+                    notes=notes,
+                    source=source,
+                    created_at=created_at,
+                    updated_at=created_at,
+                )
             )
             connection.execute(
-                "INSERT INTO recruitment_events(id, application_id, event_type, from_status, "
-                "to_status, reason, actor_type, client, installation_id, occurred_at, "
-                "payload_json, created_at) VALUES(?, ?, 'status_transition', NULL, 'saved', "
-                "'application created', ?, ?, ?, ?, '{}', ?)",
-                (
-                    new_id(),
-                    application_id,
-                    actor_type,
-                    client,
-                    installation_id,
-                    created_at,
-                    created_at,
-                ),
+                insert(recruitment_events).values(
+                    id=new_id(),
+                    application_id=application_id,
+                    event_type="status_transition",
+                    from_status=None,
+                    to_status="saved",
+                    reason="application created",
+                    actor_type=actor_type,
+                    client=client,
+                    installation_id=installation_id,
+                    occurred_at=created_at,
+                    payload_json={},
+                    created_at=created_at,
+                )
             )
 
     def get_application(self, application_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
-            row = connection.execute(
-                "SELECT * FROM applications WHERE id=?", (application_id,)
-            ).fetchone()
+            row = (
+                connection.execute(select(applications).where(applications.c.id == application_id))
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             raise UnknownRecord(application_id)
         return dict(row)
 
     def list_applications(self) -> list[dict[str, Any]]:
         with self.read_connection() as connection:
-            return [
-                dict(row)
-                for row in connection.execute("SELECT * FROM applications ORDER BY created_at, id")
-            ]
+            rows = connection.execute(
+                select(applications).order_by(applications.c.created_at, applications.c.id)
+            ).mappings()
+            return [dict(row) for row in rows]
 
     def record_event(self, application_id: str, event_type: str, payload: dict[str, Any]) -> str:
         event_id = new_id()
         with self.transaction() as connection:
             connection.execute(
-                "INSERT INTO application_events(id, application_id, event_type, payload_json, created_at) "
-                "VALUES(?, ?, ?, ?, ?)",
-                (event_id, application_id, event_type, canonical_json(payload), utc_now()),
+                insert(application_events).values(
+                    id=event_id,
+                    application_id=application_id,
+                    event_type=event_type,
+                    payload_json=payload,
+                    created_at=utc_now(),
+                )
             )
         return event_id
 
     def set_normalized_role(self, application_id: str, normalized_role: str) -> None:
         with self.transaction() as connection:
             result = connection.execute(
-                "UPDATE applications SET normalized_role=?, updated_at=? WHERE id=?",
-                (normalized_role, utc_now(), application_id),
+                update(applications)
+                .where(applications.c.id == application_id)
+                .values(normalized_role=normalized_role, updated_at=utc_now())
             )
             if result.rowcount != 1:
                 raise UnknownRecord(application_id)
