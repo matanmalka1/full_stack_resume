@@ -10,8 +10,8 @@
     "emphasis": "account-growth"
   },
   "snapshot": {
-    "markdown_body_sha256": "68b7ca496be6ec7ffdeebe81ed022906e9f51bfbc0c13dfaf973f17f6dcc5143",
-    "html_sha256": "04684fbf6efdcaf3e95a82457d4f3060a7af55f5188bc1a8f006971dba670481",
+    "markdown_body_sha256": "25e2adb77c491784b7aa04dd6eb488fbd1515372d3d1dce8c6afe50e5c3330e5",
+    "html_sha256": "a583470288fbcdf8c785b9c2544d98929514d3ac69eac4a164e24de50bbecafd",
     "selected_fact_ids": [
       "common.contact.email",
       "common.contact.linkedin",

@@ -207,3 +207,55 @@ def test_headline_claim_type_outside_the_headline_is_blocked(
     assert not report.passed
     assert any(issue.code == "misplaced-headline-claim" for issue in report.issues)
     assert any(issue.code == "unlinked-claim" for issue in report.issues)
+
+
+def test_a_demoted_historical_title_is_blocked(draft_factory) -> None:
+    """A job title that stops being a heading loses the prominence it is read by.
+
+    This is the direction `historical-title-placement` exists to catch, and it
+    had no test: the rule only ever failed incidentally, through a fixture.
+    """
+    facts, profile, analysis, draft, markdown = draft_factory(
+        "Sales Manager team leader coaching forecast", write=True
+    )
+    demoted = None
+    for section in draft.sections:
+        for index, claim in enumerate(section.claims):
+            if claim.style == "heading" and any(
+                "historical-title" in facts.get(fact_id).tags for fact_id in claim.fact_ids
+            ):
+                demoted = claim.fact_ids[0]
+                section.claims[index] = claim.model_copy(update={"style": "bullet"})
+                break
+        if demoted:
+            break
+    assert demoted is not None, "fixture carries no historical title to demote"
+
+    report = validate_draft(draft, markdown.read_text(encoding="utf-8"), facts, profile, analysis)
+    assert not report.passed
+    issue = next(i for i in report.issues if i.code == "historical-title-placement")
+    assert demoted in issue.message
+
+
+def test_a_project_heading_is_not_mistaken_for_a_demoted_job_title(draft_factory) -> None:
+    """A heading that was never a job title must not trip the rule.
+
+    The Projects section renders project names as headings. They carry no
+    `historical-title` tag on purpose - a project is not employment - so an
+    equality check would have forced them out of the document.
+    """
+    facts, profile, analysis, draft, markdown = draft_factory(
+        "Python backend developer API React", write=True
+    )
+    headings = [
+        fact_id
+        for section in draft.sections
+        for claim in section.claims
+        if claim.style == "heading"
+        for fact_id in claim.fact_ids
+    ]
+    untagged = [f for f in headings if "historical-title" not in facts.get(f).tags]
+    assert untagged, "fixture carries no non-title heading to protect"
+
+    report = validate_draft(draft, markdown.read_text(encoding="utf-8"), facts, profile, analysis)
+    assert not any(i.code == "historical-title-placement" for i in report.issues)

@@ -3,10 +3,27 @@
   "track": "sales",
   "default_pages": 1,
   "maximum_pages": 2,
-  "required_concepts": ["Professional Summary", "Work Experience", "Core Skills"],
-  "conditional_sections": ["Leadership", "Tools", "Technology Background", "Selected Achievements", "Education", "Languages"],
-  "contact_links": ["email", "linkedin"],
-  "directions": ["ltr", "rtl"],
+  "required_concepts": [
+    "Professional Summary",
+    "Work Experience",
+    "Core Skills"
+  ],
+  "conditional_sections": [
+    "Leadership",
+    "Tools",
+    "Technology Background",
+    "Selected Achievements",
+    "Education",
+    "Languages"
+  ],
+  "contact_links": [
+    "email",
+    "linkedin"
+  ],
+  "directions": [
+    "ltr",
+    "rtl"
+  ],
   "keyword_emphasis": {
     "terms": [
       "30% improvement",
@@ -29,18 +46,31 @@
       "Excel"
     ],
     "sections": [
+      "Commercial Experience",
+      "Core Skills",
       "Professional Summary",
+      "Sales & Technical Skills",
       "Sales Experience",
+      "Selected Achievements",
       "Technology Background",
       "Technology Experience",
-      "Business & Technology Tools",
-      "Sales & Technical Skills",
-      "תקציר מקצועי",
+      "Tools",
+      "Work Experience",
+      "הישגים נבחרים",
+      "כישורי מכירות וטכנולוגיה",
+      "כלים",
+      "מיומנויות ליבה",
       "ניסיון במכירות",
       "ניסיון טכנולוגי",
-      "כישורי מכירות וטכנולוגיה"
+      "ניסיון מסחרי",
+      "ניסיון מקצועי",
+      "תקציר מקצועי"
     ],
-    "styles": ["paragraph", "bullet", "item"],
+    "styles": [
+      "paragraph",
+      "bullet",
+      "item"
+    ],
     "max_groups_per_line": 2
   }
 }

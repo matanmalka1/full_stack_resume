@@ -403,11 +403,22 @@ def _historical_titles_are_headings(context: _ValidationContext) -> None:
         if claim.style == "heading"
         for fact_id in claim.fact_ids
     }
-    if historical_title_ids != heading_ids:
+    # Containment, not equality. The rule exists so a historical job title can
+    # never be demoted out of a heading, where it would lose the prominence a
+    # recruiter reads it by. It was written as equality because at the time the
+    # only headings in any track were job titles. A Projects section broke that
+    # assumption: a project title is a heading and is deliberately not tagged
+    # `historical-title`, because it is not a role the candidate held. Equality
+    # would force the choice between mislabelling a project as employment and
+    # dropping it from the document - so it checks the direction that protects
+    # the fact, and stays silent on headings that were never job titles.
+    demoted = historical_title_ids - heading_ids
+    if demoted:
         context.add_issue(
             "structure",
             "historical-title-placement",
-            "Historical titles must remain exact headings.",
+            "Historical titles must remain exact headings: "
+            + ", ".join(sorted(demoted)),
         )
 
 

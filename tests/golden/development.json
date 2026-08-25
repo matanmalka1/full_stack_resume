@@ -5,8 +5,8 @@
   "emphasis": "development-backend",
   "language": "en",
   "snapshot": {
-    "markdown_body_sha256": "2cd07ea5847c1061f3139880768893746b6377243964731c67fcb1addba03dc6",
-    "html_sha256": "c3078d8aed49709ea7b31985812eb88ab1ed376e5ef6381fbe56ab2e8581604d",
+    "markdown_body_sha256": "f0a979ef7be584a525ac1715bce37f048579b6f9cb5dda8ba052591b700dbce3",
+    "html_sha256": "020759a48e770bdabc557711b53e1de8f49c997aebe7c2068eff1eb12a14ac88",
     "selected_fact_ids": [
       "common.contact.email",
       "common.contact.github",
@@ -25,10 +25,16 @@
       "development.phdigital.fullstack",
       "development.phdigital.integrations",
       "development.phdigital.role",
+      "development.project.mm_backend_core",
+      "development.project.mm_backend_core.links",
+      "development.project.mm_backend_core.title",
+      "development.skills.ai",
       "development.skills.backend",
       "development.skills.databases",
       "development.skills.devops",
-      "development.summary",
+      "development.summary.backend",
+      "development.summary.delivery",
+      "development.summary.frontend",
       "sales.metric.performance",
       "sales.metric.team_size",
       "sales.role.leader.dates",
@@ -37,6 +43,7 @@
     "sections": [
       "Professional Summary",
       "Work Experience",
+      "Projects",
       "Education",
       "Core Skills",
       "Languages"
