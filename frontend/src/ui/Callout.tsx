@@ -4,10 +4,10 @@ import { type ClassValue, cx } from "./cx";
 import { type StatusTone, statusPresentation } from "./status";
 
 const toneClasses: Record<StatusTone, string> = {
-  success: "border-cv-success/30 bg-cv-success/5",
-  warning: "border-cv-warning/30 bg-cv-warning/5",
-  blocker: "border-cv-blocker/30 bg-cv-blocker/5",
-  progress: "border-cv-accent/30 bg-cv-accent-soft",
+  success: "border-cv-success/25 bg-cv-success-soft",
+  warning: "border-cv-warning/25 bg-cv-warning-soft",
+  blocker: "border-cv-blocker/25 bg-cv-blocker-soft",
+  progress: "border-cv-accent/25 bg-cv-accent-soft",
   neutral: "border-cv-border bg-cv-surface-muted",
 };
 
@@ -36,11 +36,13 @@ export const Callout = ({ action, children, className, role, title, tone }: Call
 
   return (
     <div
-      className={cx("rounded-surface border p-4", toneClasses[tone], className)}
+      className={cx("rounded-surface border p-4 shadow-surface", toneClasses[tone], className)}
       role={role}
     >
       <div className="flex gap-3">
-        <Icon aria-hidden="true" className={cx("mt-0.5 size-5 shrink-0", toneIconClasses[tone])} />
+        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-pill bg-cv-surface shadow-surface">
+          <Icon aria-hidden="true" className={cx("size-4", toneIconClasses[tone])} />
+        </span>
         <div className="min-w-0 flex-1">
           <p className="text-support leading-6">
             <span className={cx("font-semibold", toneIconClasses[tone])}>{label}</span>{" "}

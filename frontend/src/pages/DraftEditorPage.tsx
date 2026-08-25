@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowRight, RefreshCw } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
@@ -216,6 +217,7 @@ export const DraftEditorPage = () => {
             ? "טוען את מצב המועמדות…"
             : `תפקיד היעד: ${detail.application.target_role}`
         }
+        eyebrow="סביבת עריכה"
         id="route-heading"
       >
         עריכת הטיוטה
@@ -244,7 +246,7 @@ export const DraftEditorPage = () => {
         ) : null}
 
         {detail === undefined ? null : (
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-cv-border bg-cv-surface-muted px-4 py-3 shadow-inner">
             <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
               {workingDraftStateLabels[detail.working_draft_state]}
             </StatusBadge>
@@ -294,16 +296,16 @@ export const DraftEditorPage = () => {
               />
             </div>
 
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8 xl:gap-10">
               <div
                 className={cx(
-                  "flex flex-col gap-6 lg:flex-1 lg:basis-3/5",
+                  "flex min-w-0 flex-col gap-6 lg:flex-1 lg:basis-7/12",
                   view === "editor" ? undefined : "hidden lg:flex",
                 )}
               >
                 <section aria-labelledby="draft-structure-heading" className="flex flex-col gap-4">
                   <h2
-                    className="text-heading-sm font-semibold text-cv-text"
+                    className="text-heading-sm font-bold text-cv-text"
                     id="draft-structure-heading"
                   >
                     מבנה המסמך
@@ -336,9 +338,12 @@ export const DraftEditorPage = () => {
                   </ul>
 
                   {draft.outline.sections.map((section) => (
-                    <div className="flex flex-col gap-3" key={section.name}>
+                    <div
+                      className="flex flex-col gap-3 border-t border-cv-border pt-6"
+                      key={section.name}
+                    >
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <h3 className="text-body font-semibold text-cv-text" dir="auto">
+                        <h3 className="text-heading-sm font-bold text-cv-text" dir="auto">
                           {section.name}
                         </h3>
                         <Button
@@ -346,6 +351,7 @@ export const DraftEditorPage = () => {
                           onClick={() => regeneration.mutate({ section: section.name })}
                           variant="secondary"
                         >
+                          <RefreshCw aria-hidden="true" className="size-4" />
                           יצירה מחדש של הפרק
                         </Button>
                       </div>
@@ -424,6 +430,7 @@ export const DraftEditorPage = () => {
 
                 <div>
                   <Link className={buttonClasses("secondary")} to={applicationHref}>
+                    <ArrowRight aria-hidden="true" className="size-4" />
                     חזרה למועמדות
                   </Link>
                 </div>
@@ -431,7 +438,7 @@ export const DraftEditorPage = () => {
 
               <div
                 className={cx(
-                  "lg:flex-1 lg:basis-2/5",
+                  "min-w-0 lg:sticky lg:top-24 lg:flex-1 lg:basis-5/12",
                   view === "preview" ? undefined : "hidden lg:block",
                 )}
               >

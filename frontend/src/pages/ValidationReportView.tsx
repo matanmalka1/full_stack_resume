@@ -1,3 +1,5 @@
+import { CircleCheck, ShieldAlert, TriangleAlert } from "lucide-react";
+
 import type { ValidationReport } from "../api/contracts";
 import { Callout } from "../ui/Callout";
 import { LtrText } from "../ui/LtrText";
@@ -17,9 +19,27 @@ const blockerResolution = (code: string): string => {
 export const ValidationReportView = ({ report }: { report: ValidationReport }) => {
   const hard = report.issues.filter((issue) => issue.hard);
   const warnings = report.issues.filter((issue) => !issue.hard);
+  const passedGroups = Object.values(report.groups).filter(Boolean).length;
 
   return (
     <div className="flex flex-col gap-4">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-surface border border-cv-success/25 bg-cv-success-soft p-4 shadow-surface">
+          <CircleCheck aria-hidden="true" className="size-5 text-cv-success" />
+          <p className="mt-3 text-heading-md font-bold text-cv-text">{passedGroups}</p>
+          <p className="text-support font-medium text-cv-success">קבוצות שעברו</p>
+        </div>
+        <div className="rounded-surface border border-cv-blocker/25 bg-cv-blocker-soft p-4 shadow-surface">
+          <ShieldAlert aria-hidden="true" className="size-5 text-cv-blocker" />
+          <p className="mt-3 text-heading-md font-bold text-cv-text">{hard.length}</p>
+          <p className="text-support font-medium text-cv-blocker">חסימות</p>
+        </div>
+        <div className="rounded-surface border border-cv-warning/25 bg-cv-warning-soft p-4 shadow-surface">
+          <TriangleAlert aria-hidden="true" className="size-5 text-cv-warning" />
+          <p className="mt-3 text-heading-md font-bold text-cv-text">{warnings.length}</p>
+          <p className="text-support font-medium text-cv-warning">אזהרות</p>
+        </div>
+      </div>
       {hard.map((issue, index) => (
         <Callout key={`${issue.code}-${index}`} title="חסימת אימות" tone="blocker">
           <p dir="auto">{issue.message}</p>

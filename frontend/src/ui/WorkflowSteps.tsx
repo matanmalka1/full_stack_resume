@@ -1,4 +1,4 @@
-import { CircleCheck } from "lucide-react";
+import { Check } from "lucide-react";
 
 import { cx } from "./cx";
 
@@ -11,8 +11,14 @@ export interface WorkflowStep {
 
 const stateClasses: Record<WorkflowStepState, string> = {
   complete: "text-cv-success",
-  current: "rounded-control bg-cv-accent-soft font-semibold text-cv-accent",
+  current: "font-semibold text-cv-accent",
   upcoming: "text-cv-text-muted",
+};
+
+const nodeClasses: Record<WorkflowStepState, string> = {
+  complete: "border-cv-success bg-cv-success text-cv-on-accent",
+  current: "border-cv-accent bg-cv-accent text-cv-on-accent ring-4 ring-cv-accent-soft",
+  upcoming: "border-cv-border-strong bg-cv-surface text-cv-text-muted",
 };
 
 interface WorkflowStepsProps {
@@ -24,21 +30,42 @@ interface WorkflowStepsProps {
    navigable, so the steps are text, never links. */
 export const WorkflowSteps = ({ label, steps }: WorkflowStepsProps) => {
   return (
-    <nav aria-label={label} className="border-b border-cv-border bg-cv-surface">
-      <ol className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-6 py-3 text-support">
-        {steps.map((step) => (
+    <nav
+      aria-label={label}
+      className="overflow-x-auto border-b border-cv-border bg-cv-surface/80"
+    >
+      <ol className="mx-auto flex min-w-[42rem] max-w-5xl px-6 py-4 text-support">
+        {steps.map((step, index) => (
           <li
             aria-current={step.state === "current" ? "step" : undefined}
             className={cx(
-              "flex shrink-0 items-center gap-2 px-3 py-2",
+              "relative flex flex-1 flex-col items-center gap-2 px-2 text-center",
               stateClasses[step.state],
             )}
             key={step.label}
           >
-            {step.state === "complete" ? (
-              <CircleCheck aria-hidden="true" className="size-4 shrink-0" />
-            ) : null}
-            {step.label}
+            {index === steps.length - 1 ? null : (
+              <span
+                aria-hidden="true"
+                className={cx(
+                  "absolute top-[1.125rem] start-[calc(50%+1.25rem)] h-0.5 w-[calc(100%-2.5rem)]",
+                  step.state === "complete" ? "bg-cv-success" : "bg-cv-border",
+                )}
+              />
+            )}
+            <span
+              className={cx(
+                "relative z-10 flex size-9 items-center justify-center rounded-pill border text-support font-bold shadow-surface transition-transform duration-200",
+                nodeClasses[step.state],
+              )}
+            >
+              {step.state === "complete" ? (
+                <Check aria-hidden="true" className="size-4" strokeWidth={3} />
+              ) : (
+                <span aria-hidden="true">{index + 1}</span>
+              )}
+            </span>
+            <span>{step.label}</span>
           </li>
         ))}
       </ol>

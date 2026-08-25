@@ -1,3 +1,5 @@
+import { Database, Plus } from "lucide-react";
+
 import type { DraftFact, WorkingDraftFacts } from "../api/contracts";
 import { Button } from "../ui/Button";
 import { omissionReasonLabels, selectionOutcomeLabels } from "./draftLabels";
@@ -18,16 +20,44 @@ export const DraftFactPanel = ({ busy, facts, onInclude }: DraftFactPanelProps) 
   const omitted = (facts?.facts ?? []).filter(
     (fact) => fact.outcome === "omitted" && fact.linked_claim_ids.length === 0,
   );
+  const included = (facts?.facts ?? []).filter(
+    (fact) =>
+      fact.outcome !== null && fact.outcome !== undefined && fact.outcome !== "omitted",
+  );
 
   if (facts === undefined) {
     return <p className="text-support leading-6 text-cv-text-muted">טוען את חשבונאות העובדות…</p>;
   }
 
   return (
-    <section aria-labelledby="draft-facts-heading" className="flex flex-col gap-3">
-      <h2 className="text-heading-sm font-semibold text-cv-text" id="draft-facts-heading">
-        עובדות שלא נכללו
-      </h2>
+    <section
+      aria-labelledby="draft-facts-heading"
+      className="flex flex-col gap-4 rounded-surface border border-cv-border bg-cv-surface-muted p-4 shadow-inner sm:p-5"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2
+            className="flex items-center gap-2 text-heading-sm font-bold text-cv-text"
+            id="draft-facts-heading"
+          >
+            <span className="flex size-9 items-center justify-center rounded-control bg-cv-accent-soft text-cv-accent">
+              <Database aria-hidden="true" className="size-4" />
+            </span>
+            ביסוס עובדתי
+          </h2>
+          <p className="mt-2 text-support leading-6 text-cv-text-muted">
+            תמונת מצב של העובדות שתוכנית הבחירה שקלה עבור הטיוטה הזו.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <span className="rounded-pill border border-cv-success/25 bg-cv-success-soft px-3 py-1 text-support font-semibold text-cv-success">
+            {included.length} נכללו
+          </span>
+          <span className="rounded-pill border border-cv-border bg-cv-surface px-3 py-1 text-support font-semibold text-cv-text-muted">
+            {omitted.length} הושמטו
+          </span>
+        </div>
+      </div>
 
       {omitted.length === 0 ? (
         <p className="text-support leading-6 text-cv-text-muted">
@@ -38,10 +68,10 @@ export const DraftFactPanel = ({ busy, facts, onInclude }: DraftFactPanelProps) 
           <p className="text-support leading-6 text-cv-text-muted">
             הכללה של עובדה קובעת אותה במפורש ובונה את הטיוטה מחדש. שאר ההחלטות שכבר נקבעו נשמרות.
           </p>
-          <ul className="flex flex-col gap-3">
+          <ul className="grid gap-3 xl:grid-cols-2">
             {omitted.map((fact) => (
               <li
-                className="flex flex-wrap items-start justify-between gap-3 rounded-surface border border-cv-border bg-cv-surface p-4"
+                className="flex flex-col justify-between gap-4 rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface transition-[border-color,box-shadow] duration-200 hover:border-cv-accent/30 hover:shadow-floating"
                 key={fact.fact_id}
               >
                 <div className="max-w-prose">
@@ -59,10 +89,12 @@ export const DraftFactPanel = ({ busy, facts, onInclude }: DraftFactPanelProps) 
                   </p>
                 </div>
                 <Button
+                  className="self-start"
                   disabled={busy || fact.text === null}
                   onClick={() => onInclude(fact)}
                   variant="secondary"
                 >
+                  <Plus aria-hidden="true" className="size-4" />
                   הכללת העובדה
                 </Button>
               </li>

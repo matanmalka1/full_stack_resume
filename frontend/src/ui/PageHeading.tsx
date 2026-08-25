@@ -36,7 +36,7 @@ export const PageHeading = ({
   return (
     <>
       {eyebrow === undefined ? null : (
-        <p className={cx("mb-2 text-support font-semibold", eyebrowClasses[eyebrowTone])}>
+        <p className={cx("mb-2 text-support font-bold tracking-wide", eyebrowClasses[eyebrowTone])}>
           {eyebrow}
         </p>
       )}
@@ -44,7 +44,7 @@ export const PageHeading = ({
           passes a backend title and detail through here, so each picks its own
           direction rather than inheriting the RTL shell. */}
       <h1
-        className="text-heading-lg font-semibold tracking-tight"
+        className="text-heading-lg font-bold tracking-tight text-cv-text"
         data-route-heading
         dir="auto"
         id={id}
@@ -54,7 +54,7 @@ export const PageHeading = ({
         {children}
       </h1>
       {description === undefined ? null : (
-        <p className="mt-4 max-w-2xl text-body text-cv-text-muted" dir="auto">
+        <p className="mt-3 max-w-2xl text-body leading-7 text-cv-text-muted" dir="auto">
           {description}
         </p>
       )}

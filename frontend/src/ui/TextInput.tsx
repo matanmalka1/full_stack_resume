@@ -5,7 +5,7 @@ import { cx } from "./cx";
 /* ComponentProps rather than the attribute types alone: these carry `ref`, which is
    how React Hook Form binds an uncontrolled field to the primitive. */
 export const controlClasses =
-  "block w-full rounded-control border border-cv-border-strong bg-cv-surface px-3 py-2 text-body text-cv-text placeholder:text-cv-text-muted disabled:bg-cv-surface-muted aria-invalid:border-cv-blocker";
+  "block w-full rounded-control border border-cv-border-strong bg-cv-surface px-3.5 py-2.5 text-body text-cv-text shadow-inner transition-[border-color,box-shadow,background-color] duration-200 placeholder:text-cv-text-muted hover:border-cv-text-muted focus:border-cv-accent focus:ring-4 focus:ring-cv-accent-soft disabled:bg-cv-surface-muted aria-invalid:border-cv-blocker aria-invalid:ring-cv-blocker-soft";
 
 export const TextInput = ({
   className,

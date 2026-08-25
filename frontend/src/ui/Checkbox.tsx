@@ -11,7 +11,12 @@ interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "typ
    rather than an optional prop. */
 export const Checkbox = ({ children, className, hint, ...rest }: CheckboxProps) => {
   return (
-    <label className={cx("flex min-h-11 items-start gap-3 py-2 text-body", className)}>
+    <label
+      className={cx(
+        "flex min-h-11 items-start gap-3 rounded-control border border-transparent px-3 py-2.5 text-body transition-colors hover:border-cv-border hover:bg-cv-surface-muted",
+        className,
+      )}
+    >
       <input
         className="mt-1 size-5 shrink-0 rounded-control border-cv-border-strong accent-cv-accent"
         type="checkbox"

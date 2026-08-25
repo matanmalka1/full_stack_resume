@@ -13,11 +13,14 @@ export const ActionBar = ({ className, primary, secondary }: ActionBarProps) => 
   return (
     <div
       className={cx(
-        "mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-cv-border pt-6",
+        "mt-8 flex flex-wrap items-center gap-3 rounded-surface border border-cv-border bg-cv-surface-muted p-4 shadow-inner",
+        /* With no secondary actions the bar has one side, so the primary takes the end
+           rather than being pushed there by an empty container. */
+        secondary === undefined ? "justify-end" : "justify-between",
         className,
       )}
     >
-      <div className="flex flex-wrap gap-3">{secondary}</div>
+      {secondary === undefined ? null : <div className="flex flex-wrap gap-3">{secondary}</div>}
       <div className="flex flex-wrap gap-3">{primary}</div>
     </div>
   );

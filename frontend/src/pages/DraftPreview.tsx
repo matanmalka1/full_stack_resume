@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { FileText, RefreshCw } from "lucide-react";
 
 import type { WorkingDraft } from "../api/contracts";
 import { draftPreviewSrc } from "../api/drafts";
@@ -27,16 +28,25 @@ export const DraftPreview = ({ draft }: { draft: WorkingDraft }) => {
   }, [draft.edit_version]);
 
   return (
-    <section aria-labelledby="draft-preview-heading" className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-heading-sm font-semibold text-cv-text" id="draft-preview-heading">
-          תצוגה מקדימה
-        </h2>
+    <section aria-labelledby="draft-preview-heading" className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2
+            className="flex items-center gap-2 text-heading-sm font-bold text-cv-text"
+            id="draft-preview-heading"
+          >
+            <span className="flex size-9 items-center justify-center rounded-control bg-cv-accent-soft text-cv-accent">
+              <FileText aria-hidden="true" className="size-4" />
+            </span>
+            תצוגה מקדימה
+          </h2>
+          <span className="mt-2 flex items-center gap-2 text-support text-cv-text-muted">
+            {loading ? <RefreshCw aria-hidden="true" className="size-3.5 animate-spin" /> : null}
+            {loading ? "מרענן את התצוגה…" : "מעודכן לגרסה השמורה"}
+          </span>
+          <LiveRegion>{loading ? null : "התצוגה המקדימה עודכנה"}</LiveRegion>
+        </div>
         <StatusBadge tone="neutral">טיוטה</StatusBadge>
-        <span className="text-support text-cv-text-muted">
-          {loading ? "מרענן את התצוגה…" : "מעודכן לגרסה השמורה"}
-        </span>
-        <LiveRegion>{loading ? null : "התצוגה המקדימה עודכנה"}</LiveRegion>
       </div>
 
       <p className="text-support leading-6 text-cv-text-muted">
@@ -44,14 +54,16 @@ export const DraftPreview = ({ draft }: { draft: WorkingDraft }) => {
         מתעדכנת אחרי כל שמירה ואינה מייצרת PDF.
       </p>
 
-      <iframe
-        className="h-[70vh] w-full rounded-surface border border-cv-border bg-cv-surface"
-        key={draft.edit_version}
-        onLoad={() => setLoading(false)}
-        sandbox=""
-        src={draftPreviewSrc(draft.id, draft.edit_version)}
-        title="תצוגה מקדימה של הטיוטה"
-      />
+      <div className="rounded-surface border border-cv-border bg-cv-canvas-strong p-3 shadow-inner sm:p-5">
+        <iframe
+          className="h-[72vh] w-full rounded-control border border-cv-border bg-cv-surface shadow-floating"
+          key={draft.edit_version}
+          onLoad={() => setLoading(false)}
+          sandbox=""
+          src={draftPreviewSrc(draft.id, draft.edit_version)}
+          title="תצוגה מקדימה של הטיוטה"
+        />
+      </div>
     </section>
   );
 };

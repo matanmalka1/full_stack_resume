@@ -50,7 +50,7 @@ the frontend does not exist.
 - [x] **A2 — one workflow shell.** Use a shallow shell with the current Application context,
       a progress landmark, one primary content region, and local actions. Do not introduce
       Dashboard navigation or expose technical IDs in the normal flow.
-- [x] **A3 — visual foundation.** Define typography, spacing, restrained color, focus,
+- [x] **A3 — visual foundation.** Define typography, spacing, purposeful color, focus,
       warning/blocker, and status hierarchy below.
 - [x] **A4 — direction and responsive behavior.** Define an RTL application shell, explicit
       LTR islands, the desktop editor/preview split, and a single-column fallback below.
@@ -81,31 +81,26 @@ approval confirmation, autosave conflict resolution, and destructive-to-working-
 
 | Concern | Decision |
 | --- | --- |
-| Typography | Native system sans-serif stack; 16px body, 14px supporting text, 20/24/32px headings; document preview keeps its server-rendered typography. |
+| Typography | Tuned native macOS-first sans-serif stack with explicit Hebrew fallbacks; 16px body, 14px supporting text, 20/24/32px headings; document preview keeps its server-rendered typography. |
 | Spacing | 4px base; common gaps 8/12/16/24/32px; content width capped for reading while the editor may use the full desktop width. |
-| Surfaces | Neutral canvas, white primary surface, one subtle border level; shadow only for a dialog/popover. |
-| Accent | One restrained blue for the primary action, current step, links, and focus support; color is never the only status signal. |
+| Surfaces | Cool Slate canvas, white primary and raised surfaces, subtle borders, and restrained surface/floating/overlay elevation. Shadows clarify hierarchy and never carry state by themselves. |
+| Accent | Indigo identifies primary actions, the current step, links, and focus support; Slate structures the workspace and Emerald marks successful states. Color is never the only status signal. |
 | Success | Green plus icon/text for completed validation and Ready. |
 | Warning | Amber plus a visible `אזהרה` label; warnings never look like blockers and never silently disable approval. |
 | Blocker | Red plus a visible `חסימה` label, plain-language reason, and the allowed resolution action when one exists. |
 | Focus | A 2px high-contrast focus ring with 2px offset on every interactive element; focus is moved to the page heading after route changes and to the dialog heading when a dialog opens. |
 | Status | Text label + icon + position in the workflow landmark. Technical codes may appear only in expandable details when useful. |
-| Motion | Minimal progress indication; honor reduced-motion preferences and never depend on animation to communicate completion. |
+| Motion | Short hover, save, and progress transitions; honor reduced-motion preferences and never depend on animation to communicate completion. |
 
 The implementation expresses these as semantic tokens rather than scattering literal colors
 and spacing values through components.
 
-**Contrast is checked and closed.** Every token pair the components actually produce was
-measured against WCAG 2.1 (4.5:1 for text, 3:1 for the focus ring and for a control edge
-that is the only boundary of the control). Nineteen pairs were measured; the lowest passing
-text pair is `cv-success` on `cv-surface` at 5.87:1, and the tinted `tone/10` and `tone/5`
-callout and badge surfaces keep their own text at 5.10:1 or better.
-
-One pair failed: `cv-border` on `cv-surface` at **1.38:1**. The token was not weakened for
-decoration it serves correctly. Instead `--color-cv-border-strong` (`#818b9a`) was added for
-control edges — 3.45:1 on `cv-surface`, 3.22:1 on `cv-canvas`, 3.04:1 on `cv-surface-muted` —
-and text inputs, textareas, selects, and checkboxes use it. `cv-border` remains the card and
-separator line, where no 1.4.11 obligation applies.
+**Contrast must be re-verified for the 2026-08-25 visual refresh before this boundary
+closes.** The refresh preserves the established high-contrast focus treatment, uses the
+strong border token for control edges, and keeps icon/text labels alongside every semantic
+color. The earlier nineteen-pair measurements and 16-color token counts below remain
+historical evidence for the superseded restrained-color baseline; they are not evidence for
+the refreshed palette.
 
 ### A.3 Direction rules
 

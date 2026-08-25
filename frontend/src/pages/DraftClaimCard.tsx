@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Database, RefreshCw, Trash2 } from "lucide-react";
 
 import type { DraftClaim, DraftFact, WorkingDraft, WorkingDraftFacts } from "../api/contracts";
 import { Button } from "../ui/Button";
@@ -24,7 +25,8 @@ interface DraftClaimCardProps {
 }
 
 const factRow = (fact: DraftFact) => (
-  <li className="text-support leading-6 text-cv-text-muted" key={fact.fact_id}>
+  <li className="flex gap-2 text-support leading-6 text-cv-text-muted" key={fact.fact_id}>
+    <span aria-hidden="true" className="mt-2 size-1.5 shrink-0 rounded-pill bg-cv-success" />
     <span dir="auto">{fact.text ?? "לא ניתן לקרוא את העובדה הזו מהידע."}</span>
   </li>
 );
@@ -54,17 +56,19 @@ export const DraftClaimCard = ({
   }, [claim.text]);
 
   return (
-    <li className="rounded-surface border border-cv-border bg-cv-surface p-4">
+    <li className="group rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-cv-accent/30 hover:shadow-floating sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <StatusBadge tone={claimTypeTones[claim.claim_type]}>
           {claimTypeLabels[claim.claim_type]}
         </StatusBadge>
         <div className="flex flex-wrap gap-2">
           <Button disabled={unsaved} onClick={() => onRegenerate(claim)} variant="secondary">
+            <RefreshCw aria-hidden="true" className="size-4" />
             יצירה מחדש של השורה
           </Button>
           {removal.route === "none" ? null : (
             <Button onClick={() => onRemove(claim)} variant="secondary">
+              <Trash2 aria-hidden="true" className="size-4" />
               הסרת השורה
             </Button>
           )}
@@ -75,7 +79,7 @@ export const DraftClaimCard = ({
         {(control) => (
           <TextArea
             {...control}
-            className="min-h-20"
+            className="min-h-24 resize-y bg-cv-surface-raised"
             dir="auto"
             onBlur={onBlur}
             onChange={(event) => {
@@ -98,9 +102,12 @@ export const DraftClaimCard = ({
       ) : null}
 
       {linked.length === 0 ? null : (
-        <div className="mt-3">
-          <p className="text-support font-medium text-cv-text">העובדות שמאחורי השורה</p>
-          <ul className="mt-1 flex list-disc flex-col gap-1 ps-5">{linked.map(factRow)}</ul>
+        <div className="mt-4 rounded-control border border-cv-success/20 bg-cv-success-soft p-3">
+          <p className="flex items-center gap-2 text-support font-semibold text-cv-success">
+            <Database aria-hidden="true" className="size-4" />
+            העובדות שמאחורי השורה
+          </p>
+          <ul className="mt-2 flex flex-col gap-1.5">{linked.map(factRow)}</ul>
         </div>
       )}
 

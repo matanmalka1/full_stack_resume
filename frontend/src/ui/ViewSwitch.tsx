@@ -24,16 +24,16 @@ export const ViewSwitch = <TValue extends string>({
   return (
     <div
       aria-label={label}
-      className="inline-flex gap-1 rounded-control border border-cv-border bg-cv-surface p-1"
+      className="inline-flex gap-1 rounded-surface border border-cv-border bg-cv-surface-muted p-1 shadow-inner"
       role="group"
     >
       {options.map((option) => (
         <button
           aria-pressed={option.value === value}
           className={cx(
-            "min-h-11 rounded-control px-4 text-support font-medium transition-colors",
+            "min-h-11 rounded-control px-4 text-support font-semibold transition-all duration-200",
             option.value === value
-              ? "bg-cv-accent-soft text-cv-accent"
+              ? "bg-cv-surface text-cv-accent shadow-surface"
               : "text-cv-text-muted hover:bg-cv-surface-muted",
           )}
           key={option.value}

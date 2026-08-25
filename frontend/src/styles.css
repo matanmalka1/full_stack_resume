@@ -1,25 +1,32 @@
 @import "tailwindcss";
 
 @theme {
-  --color-cv-canvas: #f6f7f9;
+  --color-cv-canvas: #f5f7fb;
+  --color-cv-canvas-strong: #e9eef7;
   --color-cv-surface: #ffffff;
-  --color-cv-surface-muted: #eef1f5;
-  --color-cv-border: #d7dce3;
-  /* Control edges need 3:1 against every surface (WCAG 1.4.11); the decorative
-     border above is 1.38:1 and stays for card and separator lines only. */
-  --color-cv-border-strong: #818b9a;
+  --color-cv-surface-muted: #f1f5f9;
+  --color-cv-surface-raised: #ffffff;
+  --color-cv-border: #dbe3ee;
+  /* Control edges use the strong token; the lighter border stays decorative and is
+     reserved for cards and separators rather than being a control's only boundary. */
+  --color-cv-border-strong: #64748b;
   --color-cv-text: #172033;
-  --color-cv-text-muted: #566174;
-  --color-cv-accent: #1d4ed8;
-  --color-cv-accent-hover: #1e40af;
-  --color-cv-accent-soft: #e8efff;
-  --color-cv-success: #157347;
-  --color-cv-warning: #8a4b08;
+  --color-cv-text-muted: #526077;
+  --color-cv-accent: #4f46e5;
+  --color-cv-accent-hover: #4338ca;
+  --color-cv-accent-soft: #eef2ff;
+  --color-cv-brand-deep: #312e81;
+  --color-cv-success: #047857;
+  --color-cv-success-soft: #ecfdf5;
+  --color-cv-warning: #92400e;
+  --color-cv-warning-soft: #fffbeb;
   --color-cv-blocker: #b42318;
   --color-cv-blocker-hover: #912018;
-  --color-cv-focus: #2563eb;
+  --color-cv-blocker-soft: #fff1f2;
+  --color-cv-focus: #4f46e5;
   --color-cv-on-accent: #ffffff;
-  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --font-sans: "SF Pro Text", "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "Arial Hebrew", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
   /* A.2 typography scale: 16px body, 14px supporting text, 20/24/32px headings. */
@@ -37,10 +44,13 @@
   /* A.2 spacing: 4px base, so the 8/12/16/24/32px gaps are 2/3/4/6/8. */
   --spacing: 0.25rem;
 
-  /* A.2 surfaces: one control radius, one surface radius, shadow only for overlays. */
-  --radius-control: 0.375rem;
-  --radius-surface: 0.75rem;
-  --shadow-overlay: 0 16px 40px -12px rgb(23 32 51 / 0.28);
+  /* A.2 surfaces: harmonious radii and three restrained elevation levels. */
+  --radius-control: 0.625rem;
+  --radius-surface: 1rem;
+  --radius-pill: 9999px;
+  --shadow-surface: 0 1px 2px rgb(15 23 42 / 0.04), 0 10px 30px -22px rgb(49 46 129 / 0.24);
+  --shadow-floating: 0 18px 48px -24px rgb(30 41 59 / 0.28);
+  --shadow-overlay: 0 24px 64px -20px rgb(23 32 51 / 0.34);
 }
 :root {
   color: var(--color-cv-text);
@@ -48,6 +58,7 @@
   font-family: var(--font-sans);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  font-feature-settings: "kern" 1, "liga" 1;
 }
 
 html {
@@ -58,6 +69,15 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
+  background: var(--color-cv-canvas);
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
 }
 
 [data-text-size="large"] {

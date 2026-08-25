@@ -23,7 +23,7 @@ export const StatusBadge = ({ children, className, tone }: StatusBadgeProps) => 
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-2 rounded-control border px-3 py-1 text-support font-medium",
+        "inline-flex items-center gap-2 rounded-pill border px-3 py-1 text-support font-semibold",
         toneClasses[tone],
         className,
       )}
