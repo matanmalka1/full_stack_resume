@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 
 import { applicationDetailQueryOptions } from "../api/applications";
 import { ApiProblem } from "../api/client";
-import type { ApplicationDetail, Reason } from "../api/contracts";
+import type { ApplicationDetail, BlockedAction, Reason } from "../api/contracts";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
@@ -19,6 +19,7 @@ import {
   actionLabel,
   blockedReasonLabel,
   preparationStateLabels,
+  preparationStateNextStep,
   preparationStateTones,
   workingDraftStateLabels,
   workingDraftStateTones,
@@ -46,6 +47,32 @@ const identifiers = (detail: ApplicationDetail): SummaryItem[] => {
 
   return items;
 };
+
+/* A blocked action is worth reporting only when its blocker is not already the plain
+   reading of the stage the screen is showing.
+
+   Every action downstream of where the workflow has got to is blocked, by definition, and
+   listing all of them restated the landmark once per row: fourteen sentences of "there is
+   no active draft" on a screen whose own badge says there is no active draft. What is
+   worth a row is the blocker that does not follow from the stage - a draft that exists
+   but failed validation, an approval waiting on a validation run - because that one names
+   something the user has to act on rather than something they have simply not reached.
+
+   The codes are the projection's, so an unrecognised one is kept rather than filtered:
+   silence about a blocker nobody anticipated is the failure this list exists to avoid. */
+const IMPLIED_BY_STAGE = new Set([
+  "NO_REVIEW_DECISION_REQUIRED",
+  "ANALYSIS_OR_SELECTION_PLAN_REQUIRED",
+  "WORKING_DRAFT_REQUIRED",
+  "VALIDATED_DRAFT_REQUIRED",
+  "APPROVED_REVISION_REQUIRED",
+  "ACTION_NOT_AVAILABLE",
+]);
+
+const noteworthyBlockedActions = (detail: ApplicationDetail): BlockedAction[] =>
+  detail.blocked_actions.filter((blocked) =>
+    blocked.reasons.some((reason) => !IMPLIED_BY_STAGE.has(reason)),
+  );
 
 /* Review reasons and stale reasons carry the same shape, and both frame a backend
    sentence rather than replacing it: the message is the server's plain-language
@@ -110,6 +137,7 @@ export const ApplicationPage = () => {
 
   const query = useQuery(applicationDetailQueryOptions(applicationId));
   const detail = query.data;
+  const noteworthy = detail === undefined ? [] : noteworthyBlockedActions(detail);
   /* The landmark follows the projection, and says nothing at all until it arrives. */
   useWorkflowStage(detail === undefined ? "unknown" : detail.preparation_state);
 
@@ -220,18 +248,26 @@ export const ApplicationPage = () => {
             </Callout>
           ) : null}
 
+          {/* What the workflow is waiting on, in front of the control rather than behind a
+              disclosure. Without it the card body was a single button in an empty box,
+              and the only text explaining it was fourteen collapsed rows of blockers. */}
+          <p className="text-body leading-7 text-cv-text-muted" dir="auto">
+            {preparationStateNextStep[detail.preparation_state]}
+          </p>
+
           <ApplicationActions detail={detail} />
 
-          {/* One collapsed block, not three. Blocked actions and the identifier table are
-              both answers to "why" and "which record" - useful when something looks wrong,
-              and noise in front of the action the screen is actually offering. */}
+          {/* Only the blockers that are not already implied by the stage. Listing every
+              later action of the workflow as "unavailable" said nothing the landmark and
+              the offered action did not already say, and it buried the identifiers - the
+              one thing in here that is genuinely technical - under fourteen rows of it. */}
           <TechnicalDetails>
             <div className="flex flex-col gap-4">
-              {detail.blocked_actions.length === 0 ? null : (
+              {noteworthy.length === 0 ? null : (
                 <div>
                   <p className="mb-2 font-semibold text-cv-text">פעולות שאינן זמינות כעת</p>
                   <SummaryList
-                    items={detail.blocked_actions.map((blocked) => ({
+                    items={noteworthy.map((blocked) => ({
                       term: actionLabel(blocked.action),
                       value: blocked.reasons.map(blockedReasonLabel).join(" "),
                     }))}

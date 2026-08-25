@@ -25,6 +25,29 @@ export const preparationStateTones: Record<PreparationState, StatusTone> = {
   ready: "success",
 };
 
+/* What the stage means for the reader, in one sentence, keyed by the same generated
+   union as the labels above.
+
+   This is the sentence the screen used to make them open a disclosure and read fourteen
+   rows of blocked actions to infer. It says what the workflow is waiting on and what
+   comes after it - not what is unavailable, which is the whole rest of the workflow and
+   says nothing. It decides nothing (A.1): the offered controls stay the projection's. */
+export const preparationStateNextStep: Record<PreparationState, string> = {
+  needs_analysis:
+    "ניתוח המשרה קורא את תצלום המשרה ומסיק מה נדרש בה. אחריו ייפתחו בחירת העובדות ויצירת הטיוטה.",
+  needs_review:
+    "הניתוח מוכן והוא ממתין להחלטה שלך. אחרי החלטות הסקירה אפשר יהיה ליצור טיוטה.",
+  ready_to_draft:
+    "הניתוח ותוכנית הבחירה מוכנים. יצירת הטיוטה מרכיבה מהם קורות חיים לעריכה.",
+  draft_in_progress:
+    "יש טיוטה פעילה לעבוד עליה. כשהיא מוכנה, אימות בודק אותה מול העובדות הקנוניות.",
+  ready_for_approval:
+    "הטיוטה עברה אימות. אישור הגרסה יוצר רשומה קבועה שאינה משתנה עוד.",
+  approved:
+    "הגרסה אושרה ונשמרה כפי שהיא. נותר ליצור ממנה את קובץ קורות החיים.",
+  ready: "קורות החיים מוכנים. אפשר לצפות בגרסה המוכנה ולהגיש אותה.",
+};
+
 export const workingDraftStateLabels: Record<WorkingDraftState, string> = {
   none: "אין טיוטה פעילה",
   editing: "טיוטה בעריכה",

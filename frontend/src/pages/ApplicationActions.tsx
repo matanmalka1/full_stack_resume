@@ -279,6 +279,10 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
 
         return (
           <ActionBar
+            /* The bar's own top margin assumes it closes a page. Here it is one item in a
+               gap-spaced column that now opens with the next-step sentence, so the gap is
+               the spacing and the margin would double it. */
+            className="mt-0"
             primary={emphasized}
             secondary={rest.length === 0 ? undefined : rest}
           />
