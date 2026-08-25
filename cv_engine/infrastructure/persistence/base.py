@@ -2,67 +2,65 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from pathlib import Path
-from typing import Any, Self
+from typing import Self
+
+from sqlalchemy.engine import Connection, Engine
 
 from ...application.ports import UnitOfWork
-from .connection import SqliteUnitOfWork, connect, transaction
+from .connection import SqlAlchemyUnitOfWork
 
 
-def sqlite_unit_of_work(uow: UnitOfWork) -> SqliteUnitOfWork:
-    """The UnitOfWork a SQLite repository can bind to.
+def sqlalchemy_unit_of_work(uow: UnitOfWork) -> SqlAlchemyUnitOfWork:
+    """Return the concrete UnitOfWork a SQLAlchemy repository can bind to.
 
     The port promises only commit/rollback, so a repository that needs the open
     connection behind it has to say so. Refusing here names the mismatch
     instead of failing later on a missing attribute.
     """
-    if not isinstance(uow, SqliteUnitOfWork):
-        raise TypeError("a SQLite repository binds only a SQLite UnitOfWork")
+    if not isinstance(uow, SqlAlchemyUnitOfWork):
+        raise TypeError("a SQLAlchemy repository binds only a SQLAlchemy UnitOfWork")
     return uow
 
 
-class SqliteRepositoryBase:
-    def __init__(self, path: Path, connection: Any | None = None):
-        self.path = Path(path)
+class SqlAlchemyRepositoryBase:
+    def __init__(self, engine: Engine, connection: Connection | None = None):
+        self.engine = engine
         self._bound_connection = connection
 
     def bind(self, uow: UnitOfWork) -> Self:
-        sqlite_uow = sqlite_unit_of_work(uow)
-        if sqlite_uow.connection is None:
+        sqlalchemy_uow = sqlalchemy_unit_of_work(uow)
+        if sqlalchemy_uow.connection is None:
             raise RuntimeError("UnitOfWork is not active")
-        if sqlite_uow.path.resolve() != self.path.resolve():
+        if sqlalchemy_uow.engine is not self.engine:
             raise ValueError("UnitOfWork belongs to another database")
-        return type(self)(self.path, sqlite_uow.connection)
+        return type(self)(self.engine, sqlalchemy_uow.connection)
 
     @contextmanager
-    def transaction(self) -> Iterator[Any]:
+    def transaction(self) -> Iterator[Connection]:
         if self._bound_connection is not None:
             yield self._bound_connection
             return
-        with transaction(self.path) as connection:
+        with self.engine.begin() as connection:
             yield connection
 
     @contextmanager
-    def read_connection(self) -> Iterator[Any]:
+    def read_connection(self) -> Iterator[Connection]:
         if self._bound_connection is not None:
             yield self._bound_connection
             return
-        connection = connect(self.path)
-        try:
+        with self.engine.connect() as connection:
             yield connection
-        finally:
-            connection.close()
 
     @contextmanager
     def read_transaction(self) -> Iterator[Self]:
-        """Bind every query in one projection to the same SQLite snapshot."""
+        """Bind every query in one projection to one consistent snapshot."""
         if self._bound_connection is not None:
             yield self
             return
-        connection = connect(self.path)
+        connection = self.engine.connect().execution_options(isolation_level="REPEATABLE READ")
+        transaction = connection.begin()
         try:
-            connection.execute("BEGIN")
-            yield type(self)(self.path, connection)
+            yield type(self)(self.engine, connection)
         finally:
-            connection.rollback()
+            transaction.rollback()
             connection.close()
