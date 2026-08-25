@@ -4,7 +4,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
 
 ```json
 {
-  "source_version": "1.0.0",
+  "source_version": "1.0.4",
   "facts": [
     {
       "fact_id": "situational.testing",
@@ -220,6 +220,86 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "status": "canonical",
       "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
+      "effective_dates": null,
+      "replaces": null,
+      "source_file": "",
+      "resume_style": "bullet",
+      "link_target": null
+    },
+    {
+      "fact_id": "situational.agentic_multi_agent",
+      "meaning": "Designed and ran a multi-agent development protocol in a personal project: lead agent sequencing, parallel executor lanes with exclusive file ownership, staged waves, and one git worktree per lane; a seven-stage refactor ran across three lanes without cross-lane conflict.",
+      "renderings": {
+        "en": "Designed and ran a multi-agent development workflow: a lead agent sequencing the work, parallel executor lanes with exclusive file ownership, staged waves, and a separate git worktree per lane; a seven-stage refactor ran across three lanes without a cross-lane conflict."
+      },
+      "tags": [
+        "development",
+        "situational",
+        "ai-assisted"
+      ],
+      "status": "canonical",
+      "provenance": "Verified in the repository 2026-08-19: docs/v2/process/execution-protocol.md defines roles, waves, exclusive file ownership and per-lane worktree isolation; docs/v2/records/architecture-audit.md section 4 records the staged plan; git worktree list shows main and v2-main. Candidate wording proposed from that evidence; not user-authored.",
+      "confirmed_at": "2026-08-19",
+      "effective_dates": null,
+      "replaces": null,
+      "source_file": "",
+      "resume_style": "bullet",
+      "link_target": null
+    },
+    {
+      "fact_id": "situational.agent_skills",
+      "meaning": "Authored a custom Claude Code skill invoked as a slash command, with an explicit tool allowlist, an argument contract, and per-skill model selection.",
+      "renderings": {
+        "en": "Authors custom Claude Code skills invoked as slash commands, with explicit tool allowlists, argument contracts, and per-skill model selection."
+      },
+      "tags": [
+        "development",
+        "situational",
+        "ai-assisted"
+      ],
+      "status": "canonical",
+      "provenance": "Verified 2026-08-19: ~/.claude/skills/review-frontend/SKILL.md declares name, description, argument-hint, allowed-tools (including MCP tools) and model. One skill observed; plural wording needs user confirmation.",
+      "confirmed_at": "2026-08-19",
+      "effective_dates": null,
+      "replaces": null,
+      "source_file": "",
+      "resume_style": "bullet",
+      "link_target": null
+    },
+    {
+      "fact_id": "situational.mcp_usage",
+      "meaning": "Configures and uses MCP servers as part of an agentic development setup.",
+      "renderings": {
+        "en": "Configures and uses MCP servers as part of an agentic development setup, wiring external tools into the coding agent."
+      },
+      "tags": [
+        "development",
+        "situational",
+        "ai-assisted"
+      ],
+      "status": "canonical",
+      "provenance": "Verified 2026-08-19: ~/.claude/mcp.json configures two stdio MCP servers (render, stitch). Configuration and use only; no evidence of authoring an MCP server.",
+      "confirmed_at": "2026-08-19",
+      "effective_dates": null,
+      "replaces": null,
+      "source_file": "",
+      "resume_style": "bullet",
+      "link_target": null
+    },
+    {
+      "fact_id": "situational.agent_instructions",
+      "meaning": "Maintains repository-level agent instruction files defining authority order, scope limits and stop conditions so coding agents work from one binding specification.",
+      "renderings": {
+        "en": "Maintains repository-level agent instructions that define an explicit authority order, scope limits, and stop conditions, so coding agents work from one binding specification instead of ad-hoc prompts."
+      },
+      "tags": [
+        "development",
+        "situational",
+        "ai-assisted"
+      ],
+      "status": "canonical",
+      "provenance": "Verified 2026-08-19: CLAUDE.md (AGENTS.md symlink) in resume_python defines authority order, scope discipline, fact/AI boundaries and stop conditions; .codex/rules/pytest.rules constrains a second agent tool.",
+      "confirmed_at": "2026-08-19",
       "effective_dates": null,
       "replaces": null,
       "source_file": "",

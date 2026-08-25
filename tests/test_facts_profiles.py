@@ -8,10 +8,11 @@ from seed import V2_IDENTITY_FACT, facts_in, source_texts
 
 def test_canonical_fact_store_has_unique_stable_ids(fact_store) -> None:
     facts = fact_store
-    # 92 migrated v1 facts plus the v2 candidate identity fact. The count rose
-    # from 87 when the v1 content branch merged in: three development summary
-    # restatements and three mm-backend-core project facts.
-    assert len(facts.facts) == 93
+    # 96 migrated v1 facts plus the v2 candidate identity fact. 87 -> 93 when the
+    # v1 content branch merged in (three development summary restatements, three
+    # mm-backend-core facts); 93 -> 97 with the four AI-assisted engineering
+    # facts carried over from the v1 worktree.
+    assert len(facts.facts) == 97
     # Migrated facts keep their v1 semantic IDs; a fact created for v2 takes
     # UUIDv4 technical identity.
     uuid.UUID(V2_IDENTITY_FACT["fact_id"])

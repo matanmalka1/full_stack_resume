@@ -5,8 +5,8 @@
   "emphasis": "development-backend",
   "language": "en",
   "snapshot": {
-    "markdown_body_sha256": "f0a979ef7be584a525ac1715bce37f048579b6f9cb5dda8ba052591b700dbce3",
-    "html_sha256": "020759a48e770bdabc557711b53e1de8f49c997aebe7c2068eff1eb12a14ac88",
+    "markdown_body_sha256": "e7a262ea35859d0925b346064c7daccbd0b0b99fad07722edcee072a39185dc9",
+    "html_sha256": "a18bab905bc2d87d581370db1351a815eab29c4b60c37a0567b85f23d866cd8e",
     "selected_fact_ids": [
       "common.contact.email",
       "common.contact.github",
@@ -18,7 +18,6 @@
       "common.language.english",
       "common.language.french",
       "common.language.hebrew",
-      "development.phdigital.agile",
       "development.phdigital.cicd",
       "development.phdigital.crm",
       "development.phdigital.dates",
@@ -32,16 +31,20 @@
       "development.skills.backend",
       "development.skills.databases",
       "development.skills.devops",
+      "development.skills.frontend",
       "development.summary.backend",
       "development.summary.delivery",
       "development.summary.frontend",
       "sales.metric.performance",
       "sales.metric.team_size",
       "sales.role.leader.dates",
-      "sales.role.leader.title"
+      "sales.role.leader.title",
+      "situational.agent_skills",
+      "situational.agentic_multi_agent"
     ],
     "sections": [
       "Professional Summary",
+      "AI-Assisted Engineering",
       "Work Experience",
       "Projects",
       "Education",
