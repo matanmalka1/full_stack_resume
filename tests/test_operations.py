@@ -8,7 +8,7 @@ import pytest
 from helpers import ACCOUNT_MANAGER_JOB, run_cli, validate_active_draft
 from pydantic import ValidationError
 from sqlalchemy import delete, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import ProgrammingError
 
 from cv_engine.application.commands import (
     AnalyzeCommand,
@@ -208,12 +208,12 @@ def test_terminal_operation_rows_cannot_be_rewritten_or_deleted(services) -> Non
             )
         )
 
-    with pytest.raises(IntegrityError, match="immutable terminal operation"):
+    with pytest.raises(ProgrammingError, match="immutable terminal operation"):
         with services.repository.transaction() as connection:
             connection.execute(
                 update(operations).where(operations.c.id == created.id).values(message="rewritten")
             )
-    with pytest.raises(IntegrityError, match="immutable record"):
+    with pytest.raises(ProgrammingError, match="immutable record"):
         with services.repository.transaction() as connection:
             connection.execute(delete(operations).where(operations.c.id == created.id))
 

@@ -25,7 +25,8 @@ def upgrade_database(database_url: str) -> tuple[str | None, str | None]:
     finally:
         engine.dispose()
 
-    config = Config(str(Path(__file__).resolve().parents[3] / "alembic.ini"))
+    project_root = Path(__file__).resolve().parent.parent.parent.parent
+    config = Config(str(project_root / "alembic.ini"))
     config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
     command.upgrade(config, "head")
 

@@ -305,7 +305,7 @@ def cli_runner(workspace_root: Path):
     """The CLI against the test Workspace, run in this process."""
 
     def run(*args: str) -> CliRun:
-        return run_cli("--repo", str(workspace_root), *args)
+        return run_cli("--workspace", str(workspace_root), *args)
 
     return run
 
@@ -316,7 +316,7 @@ def cli_subprocess(workspace_root: Path):
 
     def run(*args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [sys.executable, "-m", "cv_engine.cli", "--repo", str(workspace_root), *args],
+            [sys.executable, "-m", "cv_engine.cli", "--workspace", str(workspace_root), *args],
             text=True,
             capture_output=True,
             check=False,

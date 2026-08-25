@@ -17,7 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 from helpers import ACCOUNT_MANAGER_JOB, approve_active_draft, validate_active_draft
 from sqlalchemy import delete, func, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import ProgrammingError
 
 from cv_engine.api.app import API_PREFIX, create_app
 from cv_engine.application.commands import (
@@ -307,7 +307,7 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
         .values(draft_content_hash=approved_revisions.c.draft_content_hash),
         delete(approved_revisions).where(approved_revisions.c.id == revision.id),
     ):
-        with pytest.raises(IntegrityError, match="immutable record"):
+        with pytest.raises(ProgrammingError, match="immutable record"):
             with services.repository.transaction() as connection:
                 connection.execute(statement)
 

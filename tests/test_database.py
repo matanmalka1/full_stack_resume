@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 from sqlalchemy import select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, ProgrammingError
 
 from cv_engine.application.commands import IngestCommand, NextActionCommand
 from cv_engine.domain.models import ApplicationStatus
@@ -66,7 +66,7 @@ def test_immutable_job_snapshot_trigger(application_repo) -> None:
     _, snapshot_id = _create(
         repo, company="Acme", target_role="Developer", text="Original exact text"
     )
-    with pytest.raises(IntegrityError, match="immutable record"):
+    with pytest.raises(ProgrammingError, match="immutable record"):
         with repo.transaction() as connection:
             connection.execute(
                 update(job_snapshots)

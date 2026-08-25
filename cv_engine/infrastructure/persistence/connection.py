@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+from functools import cache
 from typing import Any
 
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.engine import Connection
 
 
+@cache
 def create_database_engine(database_url: str) -> Engine:
     """Build the application's configured database engine.
 
     This remains the single connection-policy authority: repositories and
-    units of work share the same pool and connection health policy.
+    units of work for one URL share the same pool and connection health policy.
+    An Engine is process-wide infrastructure, not per-service state; caching it
+    also prevents repeated CLI/service composition from accumulating idle
+    PostgreSQL pools.
     """
     return create_engine(database_url, pool_pre_ping=True)
 

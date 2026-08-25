@@ -9,7 +9,7 @@ import pytest
 from helpers import approve_active_draft
 from helpers import working_claim as _working_claim
 from sqlalchemy import delete, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import ProgrammingError
 
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand
 from cv_engine.application.errors import KnowledgeRejected, PreconditionFailed
@@ -455,10 +455,10 @@ def test_lifecycle_events_are_immutable(services: Services) -> None:
     services.knowledge_lifecycle.add_fact("situational_skills.md", dict(NEW_FACT))
     repository = cast(Repository, services.repository)
 
-    with pytest.raises(IntegrityError, match="immutable record"):
+    with pytest.raises(ProgrammingError, match="immutable record"):
         with repository.transaction() as connection:
             connection.execute(update(fact_events).values(to_status="canonical"))
-    with pytest.raises(IntegrityError, match="immutable record"):
+    with pytest.raises(ProgrammingError, match="immutable record"):
         with repository.transaction() as connection:
             connection.execute(delete(fact_events))
 

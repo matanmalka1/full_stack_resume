@@ -5,7 +5,7 @@ import time
 
 import pytest
 from sqlalchemy import delete, func, insert, inspect, select, text, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, ProgrammingError
 
 from cv_engine.application.errors import PreconditionFailed, StateConflict, UnknownRecord
 from cv_engine.application.knowledge_mutations import (
@@ -303,14 +303,14 @@ def test_knowledge_mutation_journal_has_one_guarded_terminal_transition(
     assert repository.prepared_knowledge_mutations() == []
     with pytest.raises(PreconditionFailed, match="not prepared"):
         repository.commit_knowledge_mutation(prepared.id)
-    with pytest.raises(IntegrityError, match="invalid knowledge mutation transition"):
+    with pytest.raises(ProgrammingError, match="invalid knowledge mutation transition"):
         with repository.transaction() as connection:
             connection.execute(
                 update(knowledge_mutation_journal)
                 .where(knowledge_mutation_journal.c.id == prepared.id)
                 .values(mutation_type="attach_fact")
             )
-    with pytest.raises(IntegrityError, match="immutable record"):
+    with pytest.raises(ProgrammingError, match="immutable record"):
         with repository.transaction() as connection:
             connection.execute(
                 delete(knowledge_mutation_journal).where(
@@ -399,26 +399,30 @@ def test_every_product_table_is_immutable_unless_explicitly_exempt(application_r
     assert tables - MUTABLE_TABLES
 
 
-def test_every_immutable_table_guard_calls_the_shared_reject_function(application_repo) -> None:
-    """Derive guard coverage from the live catalog, including future tables."""
+def test_every_immutable_table_guard_calls_its_shared_reject_function(application_repo) -> None:
+    """Derive both guard groups from the live catalog, including future tables."""
     with application_repo.read_connection() as connection:
         guarded = {
-            (table, trigger_name)
-            for table, trigger_name in connection.execute(
+            (table, trigger_name, function_name)
+            for table, trigger_name, function_name in connection.execute(
                 text(
-                    "SELECT c.relname, t.tgname FROM pg_trigger t "
+                    "SELECT c.relname, t.tgname, p.proname FROM pg_trigger t "
                     "JOIN pg_class c ON c.oid = t.tgrelid "
                     "JOIN pg_proc p ON p.oid = t.tgfoid "
                     "WHERE NOT t.tgisinternal AND t.tgenabled = 'O' "
-                    "AND p.proname = 'cv_reject_immutable_change'"
+                    "AND p.proname IN "
+                    "('cv_reject_immutable_change', 'cv_reject_protected_delete')"
                 )
             )
         }
     expected = {
-        (table, f"no_{verb}_{table}")
+        (table, f"no_{verb}_{table}", "cv_reject_immutable_change")
         for table in set(metadata.tables) - MUTABLE_TABLES
         for verb in ("update", "delete")
-    } | {(table, f"prevent_delete_{table}") for table in DELETE_ONLY_TABLES}
+    } | {
+        (table, f"prevent_delete_{table}", "cv_reject_protected_delete")
+        for table in DELETE_ONLY_TABLES
+    }
     assert guarded == expected
 
 
@@ -465,7 +469,7 @@ def test_immutability_triggers_refuse_real_repository_writes(application_repo) -
     for table_name in ("job_snapshots", "recruitment_events", "submissions", "audit_records"):
         table = metadata.tables[table_name]
         for statement in (update(table).values(id=table.c.id), delete(table)):
-            with pytest.raises(IntegrityError, match="immutable record"):
+            with pytest.raises(ProgrammingError, match="immutable record"):
                 with repository.transaction() as connection:
                     connection.execute(statement)
 
@@ -597,14 +601,14 @@ def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
     )
     repository.create_working_draft(app_id, analysis_id, plan.id, document)
 
-    with pytest.raises(IntegrityError, match="immutable record"):
+    with pytest.raises(ProgrammingError, match="immutable record"):
         with repository.transaction() as connection:
             connection.execute(
                 update(selection_plans)
                 .where(selection_plans.c.id == plan.id)
                 .values(plan_json=selection_plans.c.plan_json)
             )
-    with pytest.raises(IntegrityError, match="immutable record"):
+    with pytest.raises(ProgrammingError, match="immutable record"):
         with repository.transaction() as connection:
             connection.execute(delete(selection_plans).where(selection_plans.c.id == plan.id))
     with pytest.raises(IntegrityError, match="one_active_working_draft_per_application"):
