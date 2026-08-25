@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
-import time
 import uuid
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -21,7 +19,13 @@ from ..application.ports import (
     RevisionPayloads,
     SnapshotPayload,
 )
-from ..util import new_id, sha256_bytes, sha256_file
+from ..util import sha256_bytes
+from .object_store import (
+    LocalObjectStore,
+    ObjectAlreadyExists,
+    ObjectNotFound,
+    ObjectStore,
+)
 from .paths import relative_within, resolve_within
 
 
@@ -36,23 +40,33 @@ class PayloadWorkspace(Protocol):
     def temp_root(self) -> Path: ...
 
 
-PayloadWriter = Callable[[Path], object]
-PayloadValidator = Callable[[Path], bool | None]
+#: A payload writer is handed the bytes it must produce rather than a path to
+#: write them to. The filesystem signature `Callable[[Path], object]` could not
+#: survive a store that has no paths, and every caller was already producing
+#: whole bytes and writing them in one call.
+PayloadValidator = Callable[[bytes], bool | None]
+
+#: Immutable payload references are Workspace-relative POSIX strings
+#: (`artifacts/snapshots/app/id.txt`), and object keys are relative to the
+#: artifact root (`snapshots/app/id.txt`). The two differ by exactly this
+#: prefix. The reference format is frozen - `artifact_versions` rows carry it
+#: and `ArtifactStore.resolve` reads it - so the conversion happens here rather
+#: than the stored string changing to match the key.
+_REFERENCE_PREFIX = "artifacts"
 
 
 @dataclass(frozen=True, slots=True)
 class StoredPayload:
+    """One committed immutable payload, as the registration boundary sees it.
+
+    `path` stays a `Path` because `commit_revision` and the render targets are
+    expressed in paths and because nothing outside this module reads it. It is
+    derived from the key, never the other way round.
+    """
+
     path: Path
     workspace_relative: str
     sha256: str
-    size: int
-
-
-@dataclass(frozen=True, slots=True)
-class TempOrphan:
-    path: Path
-    workspace_relative: str
-    age_seconds: float
     size: int
 
 
@@ -62,20 +76,26 @@ class _PayloadRoots:
     artifacts_root: Path
     temp_root: Path
 
-
 class PayloadStore:
     """Immutable v2 payload storage, independent of SQLite registration."""
 
     _OUTPUT_SUFFIXES = {".html", ".pdf", ".png"}
-    _TEMP_DIRECTORY = "payloads"
     #: Read size for streaming a payload outward. Bounded so a download
     #: never holds a whole artifact in memory the way a `read_bytes` would.
     _STREAM_CHUNK_BYTES = 64 * 1024
 
-    def __init__(self, workspace: PayloadWorkspace):
+    def __init__(self, workspace: PayloadWorkspace, object_store: ObjectStore | None = None):
+        """Storage is injected; the Workspace still supplies the layout.
+
+        `object_store` defaults to a `LocalObjectStore` over the Workspace's
+        artifact root, so a caller that configures nothing keeps exactly the
+        behaviour it had. The Workspace roots stay because references are
+        Workspace-relative and because `render_targets` must still hand
+        Chromium a real path.
+        """
         self._workspace_root = Path(workspace.root).resolve()
         self._artifacts_root = resolve_within(self._workspace_root, workspace.artifacts_root)
-        self._temp_root = resolve_within(self._workspace_root, workspace.temp_root)
+        self._objects = object_store or LocalObjectStore(self._artifacts_root)
 
     @classmethod
     def for_workspace_root(cls, root: Path) -> PayloadStore:
@@ -103,6 +123,39 @@ class PayloadStore:
 
     def _target(self, *parts: str) -> Path:
         return resolve_within(self._artifacts_root, Path(*parts))
+
+    def _key(self, destination: Path | str) -> str:
+        """The object key for one approved destination.
+
+        Goes through `_approved_destination` first, so the layout rules that
+        guarded the filesystem still decide what is addressable. A key is only
+        ever derived from a destination that already passed them.
+        """
+        approved = self._approved_destination(destination)
+        return relative_within(self._artifacts_root, approved).as_posix()
+
+    def _reference_for_key(self, key: str) -> str:
+        """The stored reference for one object key.
+
+        `artifact_versions` rows carry Workspace-relative strings and
+        `ArtifactStore.resolve` joins them onto the Workspace root. That format
+        is frozen, so the prefix is added here rather than the rows changing.
+        """
+        return f"{_REFERENCE_PREFIX}/{key}"
+
+    def _key_for_reference(self, reference: str) -> str:
+        """The object key for one stored reference, refusing anything else.
+
+        A reference that does not sit under the artifact root is refused rather
+        than coerced: a row pointing at a Workspace file that is not an artifact
+        payload must not become an addressable key.
+        """
+        candidate = resolve_within(self._workspace_root, reference)
+        approved = self._approved_destination(candidate)
+        return relative_within(self._artifacts_root, approved).as_posix()
+
+    def _path_for_key(self, key: str) -> Path:
+        return resolve_within(self._artifacts_root, key)
 
     def snapshot_path(self, application_id: str, snapshot_id: str) -> Path:
         return self._target(
@@ -242,44 +295,40 @@ class PayloadStore:
         self,
         destination: Path | str,
         *,
-        write: PayloadWriter,
+        payload: bytes,
         validate: PayloadValidator,
     ) -> StoredPayload:
-        """Stage, validate, hash, and atomically publish one immutable payload.
+        """Validate, hash, and store one immutable payload under its key.
 
-        The returned metadata is the registration boundary. The caller registers it
-        in SQLite; a failure there deliberately leaves a safe filesystem orphan.
+        The returned metadata is the registration boundary. The caller registers
+        it in SQLite; a failure there deliberately leaves a safe stored orphan.
+
+        There is no temp staging any more, and the ordering that staging used to
+        provide is preserved rather than dropped. Validation runs on the bytes
+        *before* anything is stored, so a payload that fails validation never
+        occupies its key - which is what the old temp file bought, without the
+        temp file. The bytes are hashed by the store as it writes them, so the
+        digest describes what was stored rather than a file re-read afterwards.
+
+        The overwrite refusal moved into the write itself. `LocalObjectStore`
+        uses `O_EXCL` and the S3 store will use a conditional PUT, so the key is
+        claimed atomically instead of being checked and then written - closing
+        the window between the old `exists()` check and the `os.rename` that
+        followed it.
         """
-        target = self._approved_destination(destination)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target = resolve_within(self._artifacts_root, target)
-        if target.exists() or target.is_symlink():
-            raise FileExistsError(f"immutable payload already exists: {target}")
-
-        temp_directory = resolve_within(self._temp_root, self._TEMP_DIRECTORY)
-        temp_directory.mkdir(parents=True, exist_ok=True)
-        temporary = resolve_within(self._temp_root, temp_directory / f"{new_id()}.tmp")
-
-        write(temporary)
-        resolved_temporary = resolve_within(self._temp_root, temporary)
-        if temporary.is_symlink() or not resolved_temporary.is_file():
-            raise ValueError(f"payload writer did not create a regular temp file: {temporary}")
-        if validate(resolved_temporary) is False:
-            raise ValueError(f"payload validation failed: {temporary}")
-
-        digest = sha256_file(resolved_temporary)
-        size = resolved_temporary.stat().st_size
-
-        target = resolve_within(self._artifacts_root, target)
-        if target.exists() or target.is_symlink():
-            raise FileExistsError(f"immutable payload already exists: {target}")
-        os.rename(resolved_temporary, target)
+        key = self._key(destination)
+        if validate(payload) is False:
+            raise ValueError(f"payload validation failed: {destination}")
+        try:
+            stored = self._objects.put(key, payload)
+        except ObjectAlreadyExists as exc:
+            raise FileExistsError(f"immutable payload already exists: {key}") from exc
 
         return StoredPayload(
-            path=target,
-            workspace_relative=relative_within(self._workspace_root, target).as_posix(),
-            sha256=digest,
-            size=size,
+            path=self._path_for_key(key),
+            workspace_relative=self._reference_for_key(key),
+            sha256=stored.sha256,
+            size=stored.size,
         )
 
     def commit_snapshot(
@@ -290,8 +339,8 @@ class PayloadStore:
     ) -> SnapshotPayload:
         stored = self.commit(
             self.snapshot_path(application_id, snapshot_id),
-            write=lambda path: path.write_bytes(text.encode("utf-8")),
-            validate=lambda path: path.is_file(),
+            payload=text.encode("utf-8"),
+            validate=lambda _payload: True,
         )
         return SnapshotPayload(
             reference=stored.workspace_relative,
@@ -314,7 +363,7 @@ class PayloadStore:
         """
         stored = self.commit(
             self.draft_snapshot_path(application_id, working_draft_id, edit_version),
-            write=lambda path: path.write_bytes(structured_json.encode("utf-8")),
+            payload=structured_json.encode("utf-8"),
             validate=self._valid_json,
         )
         return self._reference(stored)
@@ -345,7 +394,7 @@ class PayloadStore:
         """
         stored = self.commit(
             self.provider_path(application_id, operation_id, artifact_id),
-            write=lambda path: path.write_bytes(sanitized_json.encode("utf-8")),
+            payload=sanitized_json.encode("utf-8"),
             validate=self._valid_json,
         )
         return self._reference(stored)
@@ -386,18 +435,18 @@ class PayloadStore:
         No `Path` leaves this method.
         """
         try:
-            approved = self._approved_destination(resolve_within(self._workspace_root, reference))
+            key = self._key_for_reference(reference)
         except ValueError as exc:
             raise ArtifactContainmentRefused(
                 "the registered artifact path does not resolve to a contained "
                 "payload inside the artifact root"
             ) from exc
-        if not approved.is_file():
-            raise ArtifactPayloadMissing("the registered artifact payload is not stored")
         try:
-            payload = approved.read_bytes()
-        except FileNotFoundError as exc:
+            payload = self._objects.get(key)
+        except ObjectNotFound as exc:
             raise ArtifactPayloadMissing("the registered artifact payload is not stored") from exc
+        except InfrastructureFailure:
+            raise
         except OSError as exc:
             raise InfrastructureFailure(
                 "the registered artifact payload could not be read"
@@ -415,19 +464,19 @@ class PayloadStore:
         return ArtifactStream(size=len(payload), chunks=chunks)
 
     def read_snapshot(self, reference: str, expected_hash: str) -> str:
-        candidate = resolve_within(self._workspace_root, reference)
-        approved = self._approved_destination(candidate)
-        relative = relative_within(self._artifacts_root, approved)
-        if len(relative.parts) != 3 or relative.parts[0] != "snapshots":
+        key = self._key_for_reference(reference)
+        if len(key.split("/")) != 3 or not key.startswith("snapshots/"):
             raise ValueError(f"payload is not a JobSnapshot: {reference}")
-        if not approved.is_file():
-            raise FileNotFoundError(f"snapshot payload does not exist: {reference}")
-        actual_hash = sha256_file(approved)
+        try:
+            payload = self._objects.get(key)
+        except ObjectNotFound as exc:
+            raise FileNotFoundError(f"snapshot payload does not exist: {reference}") from exc
+        actual_hash = sha256_bytes(payload)
         if actual_hash != expected_hash:
             raise ValueError(
                 f"snapshot payload hash mismatch: expected {expected_hash}, got {actual_hash}"
             )
-        return approved.read_bytes().decode("utf-8")
+        return payload.decode("utf-8")
 
     @staticmethod
     def _reference(stored: StoredPayload) -> SnapshotPayload:
@@ -438,8 +487,8 @@ class PayloadStore:
         )
 
     @staticmethod
-    def _valid_json(path: Path) -> bool:
-        json.loads(path.read_text(encoding="utf-8"))
+    def _valid_json(payload: bytes) -> bool:
+        json.loads(payload.decode("utf-8"))
         return True
 
     def commit_revision(
@@ -458,26 +507,22 @@ class PayloadStore:
         def commit_or_reuse(
             destination: Path, content: bytes, validator: PayloadValidator
         ) -> StoredPayload:
-            if destination.exists():
-                if not destination.is_file() or destination.read_bytes() != content:
+            key = self._key(destination)
+            if self._objects.exists(key):
+                existing = self._objects.get(key)
+                if existing != content:
                     raise FileExistsError(
                         f"immutable payload already exists with different content: {destination}"
                     )
-                if validator(destination) is False:
+                if validator(existing) is False:
                     raise ValueError(f"existing immutable payload failed validation: {destination}")
                 return StoredPayload(
-                    path=destination,
-                    workspace_relative=relative_within(
-                        self._workspace_root, destination
-                    ).as_posix(),
-                    sha256=sha256_file(destination),
-                    size=destination.stat().st_size,
+                    path=self._path_for_key(key),
+                    workspace_relative=self._reference_for_key(key),
+                    sha256=sha256_bytes(existing),
+                    size=len(existing),
                 )
-            return self.commit(
-                destination,
-                write=lambda path: path.write_bytes(content),
-                validate=validator,
-            )
+            return self.commit(destination, payload=content, validate=validator)
 
         structured = commit_or_reuse(
             self.revision_path(application_id, revision_id, format="json"),
@@ -487,10 +532,10 @@ class PayloadStore:
         rendered = commit_or_reuse(
             self.revision_path(application_id, revision_id, format="md"),
             markdown.encode("utf-8"),
-            lambda path: path.is_file(),
+            lambda _payload: True,
         )
         for stored in (structured, rendered):
-            actual = sha256_file(stored.path)
+            actual = self._objects.stat(self._key_for_reference(stored.workspace_relative)).sha256
             if actual != stored.sha256:
                 raise ValueError(
                     "committed revision payload hash mismatch: "
@@ -500,26 +545,3 @@ class PayloadStore:
             structured=self._reference(structured),
             markdown=self._reference(rendered),
         )
-
-    def temp_orphans(self, *, now: float | None = None) -> list[TempOrphan]:
-        """Report store-owned temp files for reconciliation without deleting them."""
-        observed_at = time.time() if now is None else now
-        temp_directory = resolve_within(self._temp_root, self._TEMP_DIRECTORY)
-        if not temp_directory.exists():
-            return []
-
-        orphans: list[TempOrphan] = []
-        for candidate in sorted(temp_directory.iterdir()):
-            path = resolve_within(self._temp_root, candidate)
-            if candidate.is_symlink() or not path.is_file():
-                continue
-            stat = path.stat()
-            orphans.append(
-                TempOrphan(
-                    path=path,
-                    workspace_relative=relative_within(self._workspace_root, path).as_posix(),
-                    age_seconds=max(0.0, observed_at - stat.st_mtime),
-                    size=stat.st_size,
-                )
-            )
-        return orphans
