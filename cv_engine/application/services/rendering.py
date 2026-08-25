@@ -273,7 +273,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         repo.record_validation(command.application_id, "post-render", report, artifact_ids[1])
         if report.passed:
             qualification = qualify_ready_revision(
-                self.artifacts,
+                self.revision_payloads,
                 repo,
                 command.application_id,
                 command.approved_revision_id,
@@ -342,7 +342,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         if record["revision_id"] != revision.id:
             raise LineageBroken("the named PDF does not belong to the named approved revision")
         qualification = qualify_ready_revision(
-            self.artifacts,
+            self.revision_payloads,
             self.repo,
             revision.application_id,
             revision.id,
@@ -402,7 +402,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown approved revision: {approved_revision_id}") from exc
         return qualify_ready_revision(
-            self.artifacts, self.repo, revision.application_id, revision.id
+            self.revision_payloads, self.repo, revision.application_id, revision.id
         )
 
     def ready_qualification(
@@ -414,7 +414,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         try:
             self.repo.get_application(application_id)
             return qualify_ready_revision(
-                self.artifacts,
+                self.revision_payloads,
                 self.repo,
                 application_id,
                 approved_revision_id,

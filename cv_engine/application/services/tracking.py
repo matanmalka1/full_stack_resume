@@ -225,7 +225,7 @@ class TrackingService(ServiceBase[TrackingRepository]):
         if revision.application_id != command.application_id:
             raise StateConflict("approved revision belongs to another application")
         qualification = qualify_ready_revision(
-            self.artifacts,
+            self.revision_payloads,
             self.repo,
             command.application_id,
             command.approved_revision_id,

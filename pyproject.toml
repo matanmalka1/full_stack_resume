@@ -17,6 +17,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Object storage for immutable payloads. Optional because the local store is
+# the default and the deterministic workflow must reach Ready with nothing
+# configured - a required cloud SDK would make the offline path depend on it.
+s3 = [
+  "boto3>=1.35,<2",
+]
 test = [
   # Starlette's TestClient is the only reason an HTTP client is here at all; no
   # ASGI server ships in M3, since `uvicorn` and `cv web` are M6 scope.
@@ -68,6 +74,10 @@ select = ["E4", "E7", "E9", "F", "I", "B", "UP", "ARG"]
 # adopted: its 200+ findings are unannotated locals, not contract drift.
 include = ["cv_engine"]
 typeCheckingMode = "basic"
+# boto3 ships in the optional "s3" extra and is imported inside a function so
+# the local path never needs it. Without the extra installed the import is
+# genuinely unresolvable, and that is the intended state, not a finding.
+reportMissingImports = "warning"
 pythonVersion = "3.11"
 venvPath = "."
 venv = ".venv"

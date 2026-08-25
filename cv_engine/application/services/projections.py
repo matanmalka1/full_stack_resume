@@ -23,9 +23,9 @@ from ..queries import (
     ArtifactVersionsView,
     DecisionRecordView,
     DraftPreviewView,
+    ValidationRunView,
     WorkingDraftFactsView,
     WorkingDraftView,
-    ValidationRunView,
     analysis_view,
     application_list_item_view,
     application_view,
@@ -85,7 +85,7 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
             revision.id
             for revision in revisions
             if qualify_ready_revision(
-                self.artifacts,
+                self.snapshot_payloads,
                 transaction,
                 application_id,
                 approved_revision_id=revision.id,
@@ -212,7 +212,7 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
         # which extends `ReadinessRepository`. Widening `QueryRepository`
         # instead would give every read projection write access to drafts.
         qualification = qualify_ready_revision(
-            self.artifacts,
+            self.snapshot_payloads,
             cast(ReadinessRepository, self.repo),
             revision.application_id,
             revision.id,

@@ -262,3 +262,138 @@ class LocalObjectStore:
         for path in sorted(base.rglob("*")):
             if path.is_file() and not path.is_symlink():
                 yield path.relative_to(self._root).as_posix()
+
+
+class S3ObjectStore:
+    """`ObjectStore` over an S3-compatible bucket. R2 via `endpoint_url`.
+
+    boto3 is imported inside `__init__` rather than at module scope, because
+    the local path must keep working with no cloud SDK installed - the
+    deterministic workflow has to reach Ready with nothing configured, and a
+    module-level import would make that depend on an optional dependency.
+
+    Every botocore exception is translated. One escaping raw would reach the
+    application layer as something it has no case for, and architecture §14's
+    error taxonomy would then depend on which backend is configured.
+    """
+
+    def __init__(
+        self,
+        bucket: str,
+        *,
+        prefix: str = "",
+        endpoint_url: str | None = None,
+        region_name: str | None = None,
+        client: object | None = None,
+    ):
+        self._bucket = bucket
+        self._prefix = prefix.strip("/")
+        if client is not None:
+            self._client = client
+            return
+        try:
+            import boto3
+        except ImportError as exc:  # pragma: no cover - depends on the install extra
+            raise InfrastructureFailure(
+                "object storage is configured for S3 but boto3 is not installed; "
+                "install the 's3' extra"
+            ) from exc
+        self._client = boto3.client(
+            "s3",
+            endpoint_url=endpoint_url,
+            region_name=region_name,
+        )
+
+    def _object_key(self, key: str) -> str:
+        """The bucket key for one store key.
+
+        The prefix is applied after validation, never before: validating the
+        joined string would let a crafted key be judged against a different
+        subject than the one that gets stored.
+        """
+        validated = validate_key(key)
+        return f"{self._prefix}/{validated}" if self._prefix else validated
+
+    def _client_error(self, exc: Exception) -> str:
+        code = getattr(exc, "response", {}).get("Error", {}).get("Code", "")
+        return str(code)
+
+    def put(self, key: str, payload: bytes) -> StoredObject:
+        """Conditional PUT. No temp key, no copy.
+
+        `IfNoneMatch: "*"` makes the overwrite refusal the server's decision
+        rather than a read-then-write this client could lose a race on. S3 and
+        R2 both support it, and a precondition failure maps onto the same
+        `ObjectAlreadyExists` the local store raises.
+
+        There is no temp-then-copy staging: a PutObject is atomic at the object
+        level and S3 has provided strong read-after-write consistency since
+        December 2020, so the partial-write window that staging existed to
+        close does not exist here. CopyObject is not atomic anyway.
+        """
+        object_key = self._object_key(key)
+        try:
+            self._client.put_object(  # type: ignore[attr-defined]
+                Bucket=self._bucket,
+                Key=object_key,
+                Body=payload,
+                IfNoneMatch="*",
+            )
+        except Exception as exc:
+            code = self._client_error(exc)
+            if code in {"PreconditionFailed", "ConditionalRequestConflict", "412"}:
+                raise ObjectAlreadyExists(f"immutable payload already exists: {key}") from exc
+            raise InfrastructureFailure(f"object could not be written: {key}") from exc
+        return StoredObject(key=key, sha256=sha256_bytes(payload), size=len(payload))
+
+    def get(self, key: str) -> bytes:
+        object_key = self._object_key(key)
+        try:
+            response = self._client.get_object(  # type: ignore[attr-defined]
+                Bucket=self._bucket, Key=object_key
+            )
+            return response["Body"].read()
+        except Exception as exc:
+            if self._client_error(exc) in {"NoSuchKey", "404", "NoSuchBucket"}:
+                raise ObjectNotFound(f"no object is stored under {key}") from exc
+            raise InfrastructureFailure(f"object could not be read: {key}") from exc
+
+    def exists(self, key: str) -> bool:
+        try:
+            object_key = self._object_key(key)
+        except ObjectKeyRefused:
+            return False
+        try:
+            self._client.head_object(Bucket=self._bucket, Key=object_key)  # type: ignore[attr-defined]
+        except Exception as exc:
+            if self._client_error(exc) in {"NoSuchKey", "404", "NotFound"}:
+                return False
+            raise InfrastructureFailure(f"object could not be read: {key}") from exc
+        return True
+
+    def stat(self, key: str) -> StoredObject:
+        """Metadata without transferring the payload - except for the hash.
+
+        The bytes are fetched because the hash must describe what is stored.
+        S3's `ETag` is not a content hash for a multipart upload and is not
+        SHA-256 in any case, so trusting it would record a digest that is not
+        the one every other read path checks.
+        """
+        payload = self.get(key)
+        return StoredObject(key=key, sha256=sha256_bytes(payload), size=len(payload))
+
+    def ingest(self, key: str, source: Path) -> StoredObject:
+        """Upload a renderer-written file, read once.
+
+        Unlike the local store there is no in-place case: the file Chromium
+        wrote is never already the stored object, so this always uploads. The
+        read that produces the bytes is the read the hash describes.
+        """
+        resolved = Path(source)
+        try:
+            payload = resolved.read_bytes()
+        except FileNotFoundError as exc:
+            raise ObjectNotFound(f"no file to ingest at {source}") from exc
+        except OSError as exc:
+            raise InfrastructureFailure(f"object could not be read: {source}") from exc
+        return self.put(key, payload)

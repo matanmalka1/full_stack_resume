@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..domain.draft_markdown import parse_draft
 from ..domain.models import ReadyQualification, ValidationIssue, ValidationReport
-from ..util import verify_payload
 from .errors import UnknownRecord
-from .ports import ArtifactStore, ReadinessRepository
+from .ports import ReadinessRepository, SnapshotPayloadStore
 
 
 def qualify_ready_revision(
-    artifacts: ArtifactStore,
+    payloads: SnapshotPayloadStore,
     repo: ReadinessRepository,
     application_id: str,
     approved_revision_id: str | None = None,
@@ -95,10 +95,13 @@ def qualify_ready_revision(
                 f"{label}-revision-mismatch",
                 f"the approved {label} row does not match the approved revision payload",
             )
-        try:
-            verification = verify_payload(artifacts.resolve(version["path"]), expected_hash)
-        except (OSError, ValueError) as exc:
-            fail("approved_source", f"approved-{label}-unresolvable", str(exc))
+        verification = payloads.verify_payload(version["path"], expected_hash)
+        if verification == "unresolvable":
+            fail(
+                "approved_source",
+                f"approved-{label}-unresolvable",
+                version["path"],
+            )
             continue
         if verification != "ok":
             fail(
@@ -110,7 +113,7 @@ def qualify_ready_revision(
     draft = None
     if manifest_version is not None and groups["approved_source"]:
         try:
-            draft = artifacts.load_draft(artifacts.resolve(manifest_version["path"]))
+            draft = parse_draft(payloads.read_payload_text(manifest_version["path"]))
         except Exception as exc:  # noqa: BLE001 - unreadable immutable input blocks Ready
             fail("approved_source", "manifest-unreadable", str(exc))
 
@@ -274,12 +277,9 @@ def qualify_ready_revision(
             )
 
     for version, label in rendered_versions:
-        try:
-            verification = verify_payload(
-                artifacts.resolve(version["path"]), version["content_hash"]
-            )
-        except (OSError, ValueError) as exc:
-            fail("rendered_artifacts", f"{label}-unresolvable", str(exc))
+        verification = payloads.verify_payload(version["path"], version["content_hash"])
+        if verification == "unresolvable":
+            fail("rendered_artifacts", f"{label}-unresolvable", version["path"])
             continue
         if verification != "ok":
             fail("rendered_artifacts", f"{label}-{verification}", version["path"])

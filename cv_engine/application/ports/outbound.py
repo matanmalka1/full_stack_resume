@@ -83,6 +83,27 @@ class SnapshotPayloadStore(Protocol):
 
     def read_snapshot(self, reference: str, expected_hash: str) -> str: ...
 
+    def read_payload_text(self, reference: str) -> str:
+        """Return one registered immutable payload as text.
+
+        For a caller that has already verified the payload's hash and needs its
+        content - Ready qualification re-deriving draft bindings from a claim
+        manifest. `read_snapshot` refuses anything that is not a JobSnapshot,
+        and `open_artifact` is the outward-facing download path.
+        """
+        ...
+
+    def verify_payload(self, reference: str, expected_hash: str) -> str:
+        """Classify one registered payload without transferring it outward.
+
+        Returns `ok`, `missing`, `tampered`, or `unresolvable`. Ready
+        qualification uses this to re-derive itself from stored evidence:
+        resolving a reference to a local path and hashing the file verified the
+        filesystem rather than the configured store, and reported everything
+        missing once storage moved off local disk.
+        """
+        ...
+
     def open_artifact(self, reference: str, expected_hash: str) -> ArtifactStream: ...
 
 

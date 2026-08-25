@@ -531,12 +531,12 @@ def test_ready_qualification_is_not_invalidated_by_material_reanalysis(
 ) -> None:
     services, app_id = ready_application("Chain Recheck")
     revision_id = services.repository.latest_approved_revision(app_id).id
-    assert qualify_ready_revision(services.artifacts, services.repository, app_id).ready_qualified
+    assert qualify_ready_revision(services.payloads, services.repository, app_id).ready_qualified
 
     _analyze(services, app_id, emphasis="balanced-sales")
 
     qualification = qualify_ready_revision(
-        services.artifacts, services.repository, app_id, revision_id
+        services.payloads, services.repository, app_id, revision_id
     )
     assert qualification.ready_qualified, qualification.validation.model_dump()
 
@@ -547,7 +547,7 @@ def test_ready_integrity_holds_through_an_immaterial_reanalysis(
     """A re-run that changes nothing material is not a reason to fail integrity."""
     services, app_id = ready_application("Immaterial Rerun")
     _analyze(services, app_id)
-    qualification = qualify_ready_revision(services.artifacts, services.repository, app_id)
+    qualification = qualify_ready_revision(services.payloads, services.repository, app_id)
     assert qualification.ready_qualified, qualification.validation.model_dump()
     revision_id = services.repository.latest_approved_revision(app_id).id
     assert {

@@ -37,6 +37,7 @@ from ..application.services.tracking import TrackingService
 from ..application.settings import SettingsService
 from ..infrastructure.artifacts import FilesystemArtifactStore
 from ..infrastructure.knowledge import FileKnowledge
+from ..infrastructure.object_store import LocalObjectStore, ObjectStore, S3ObjectStore
 from ..infrastructure.operation_logging import OperationFailureLogger
 from ..infrastructure.payloads import PayloadStore
 from ..infrastructure.persistence import Repository, current_schema_version
@@ -45,7 +46,7 @@ from ..infrastructure.rendering import PlaywrightRenderer
 from ..util import new_id
 from .config import API_MAX_BODY_BYTES_DEFAULT, RuntimeConfig, resolve_config
 from .execution import ForegroundOperationExecutor, OperationWorker
-from .workspace import Workspace
+from .workspace import Workspace, WorkspaceError
 
 
 def _default_config() -> RuntimeConfig:
@@ -78,6 +79,37 @@ class Services:
     settings: SettingsService
 
 
+def build_object_store(workspace: Workspace, config: RuntimeConfig) -> ObjectStore:
+    """Select the immutable payload backend from configuration.
+
+    Local is the default and stays the default: a caller that configures
+    nothing gets exactly the filesystem behaviour it had, which is what keeps
+    the deterministic offline workflow working with no cloud SDK installed.
+
+    The choice is made here, in the composition root, rather than inside
+    `PayloadStore`. A store that branched on a backend name internally would
+    put the polymorphism in the wrong place - the two implementations already
+    differ behind one protocol, and nothing above this line should be able to
+    tell which one it got.
+    """
+    backend = str(config.get("object_store") or "local").strip().lower()
+    if backend == "local":
+        return LocalObjectStore(workspace.artifacts_root)
+    if backend != "s3":
+        raise WorkspaceError(
+            f"unknown object store backend: {backend} (expected 'local' or 's3')"
+        )
+    bucket = config.get("s3_bucket")
+    if not bucket:
+        raise WorkspaceError("object store 's3' requires a bucket; set CV_S3_BUCKET")
+    return S3ObjectStore(
+        str(bucket),
+        prefix=str(config.get("s3_prefix") or ""),
+        endpoint_url=config.get("s3_endpoint_url") or None,
+        region_name=config.get("s3_region") or None,
+    )
+
+
 def build_services(
     workspace: Workspace,
     *,
@@ -105,7 +137,9 @@ def build_services(
         has_prepared_mutation=lambda: bool(resolved_repository.prepared_knowledge_mutations()),
     )
     resolved_artifacts = artifacts or FilesystemArtifactStore(workspace)
-    resolved_payloads = payloads or PayloadStore(workspace)
+    resolved_payloads = payloads or PayloadStore(
+        workspace, build_object_store(workspace, config or _default_config())
+    )
     resolved_renderer = renderer or PlaywrightRenderer(workspace.knowledge_root)
     # Built only when a key is configured. The deterministic workflow must
     # reach Ready with `OPENAI_API_KEY` unset, so constructing an adapter that

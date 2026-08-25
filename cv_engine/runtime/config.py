@@ -44,6 +44,18 @@ SETTINGS: dict[str, Setting] = {
         # second origin to allow. A value here is the one development Vite origin
         # and nothing else — never a wildcard, never a list.
         Setting("api_dev_origin", "CV_API_DEV_ORIGIN", default=None),
+        # Immutable payload storage. "local" is the default and keeps every
+        # payload on the Workspace filesystem; "s3" stores them in a bucket,
+        # which is what a deployed installation uses. Nothing else about the
+        # workflow changes - the reference strings recorded in
+        # `artifact_versions` are identical either way.
+        Setting("object_store", "CV_OBJECT_STORE", default="local"),
+        Setting("s3_bucket", "CV_S3_BUCKET", default=None),
+        Setting("s3_prefix", "CV_S3_PREFIX", default=None),
+        # Set for R2 or MinIO; unset for AWS S3, where boto3 derives the
+        # endpoint from the region.
+        Setting("s3_endpoint_url", "CV_S3_ENDPOINT_URL", default=None),
+        Setting("s3_region", "CV_S3_REGION", default=None),
     )
 }
 

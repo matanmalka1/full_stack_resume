@@ -500,6 +500,54 @@ class PayloadStore:
 
         return ArtifactStream(size=len(payload), chunks=chunks)
 
+    def read_payload_text(self, reference: str) -> str:
+        """Return one registered immutable payload as text.
+
+        `read_snapshot` is deliberately JobSnapshot-only - it refuses anything
+        that is not a snapshot layout - and `open_artifact` is the verified
+        outward-facing download path. Ready qualification needs neither: it
+        reads a registered claim manifest it has already verified by hash a few
+        lines earlier, to re-derive the draft bindings from it. Reading it back
+        off the local filesystem was the last thing in that function still
+        bypassing the store.
+
+        No hash argument, because the caller has already checked it and a
+        second check here would be a different read from the one it verified.
+        """
+        key = self._key_for_reference(reference)
+        try:
+            return self._objects.get(key).decode("utf-8")
+        except ObjectNotFound as exc:
+            raise ArtifactPayloadMissing("the registered artifact payload is not stored") from exc
+
+    def verify_payload(self, reference: str, expected_hash: str) -> str:
+        """Classify one registered payload as ok, missing, tampered, or unresolvable.
+
+        Ready qualification re-derives itself from stored evidence, and it used
+        to do that by resolving the reference to a filesystem path and hashing
+        the file. That is a fourth read path into immutable payloads, alongside
+        `open_artifact`, `read_snapshot` and `commit`, and it is the only one
+        that never went through the store - so it verified the local disk no
+        matter what storage was configured, and would have reported every
+        payload missing once storage moved off it.
+
+        The classification is returned rather than raised because Ready
+        qualification records each failure as an issue and continues, so it can
+        report every unmet condition at once instead of the first one. A
+        reference that does not resolve to an approved payload is
+        `unresolvable`, which keeps a malformed row distinguishable from a
+        payload that is genuinely absent.
+        """
+        try:
+            key = self._key_for_reference(reference)
+        except ValueError:
+            return "unresolvable"
+        try:
+            payload = self._objects.get(key)
+        except ObjectNotFound:
+            return "missing"
+        return "ok" if sha256_bytes(payload) == expected_hash else "tampered"
+
     def read_snapshot(self, reference: str, expected_hash: str) -> str:
         key = self._key_for_reference(reference)
         if len(key.split("/")) != 3 or not key.startswith("snapshots/"):
