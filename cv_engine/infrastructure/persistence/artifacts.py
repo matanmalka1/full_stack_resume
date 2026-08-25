@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy import Boolean, Column, Integer, MetaData, String, Table, func, insert, select
+from sqlalchemy.engine import Connection
 
 from ...application.errors import (
     VALIDATION_STALE,
@@ -13,7 +14,6 @@ from ...application.errors import (
 from ...domain.models import DecisionRecord, ValidationReport, ValidationRunLineage
 from ...util import canonical_json, new_id, utc_now
 from .base import SqlAlchemyRepositoryBase
-from .preparation import _require_owned_snapshot
 from .tables import (
     approved_revisions,
     artifact_versions,
@@ -21,6 +21,7 @@ from .tables import (
     decision_records,
     generation_runs,
     job_analyses,
+    job_snapshots,
     validation_runs,
     working_drafts,
 )
@@ -32,6 +33,28 @@ def _json_text_record(row: Any, *fields: str) -> dict[str, Any]:
         value = record[field]
         record[field] = None if value is None else canonical_json(value)
     return record
+
+
+def _require_owned_snapshot(
+    connection: Connection,
+    application_id: str | None,
+    snapshot_id: str,
+    subject: str,
+) -> None:
+    """Refuse to link a record to a job snapshot another application owns."""
+    row = (
+        connection.execute(
+            select(job_snapshots.c.application_id).where(job_snapshots.c.id == snapshot_id)
+        )
+        .mappings()
+        .one_or_none()
+    )
+    if row is None:
+        raise LineageBroken(f"a {subject} cannot reference an unknown job snapshot: {snapshot_id}")
+    if row["application_id"] != application_id:
+        raise LineageBroken(
+            f"a {subject} cannot reference a job snapshot belonging to another application"
+        )
 
 
 class SqlAlchemyArtifactRepository(SqlAlchemyRepositoryBase):

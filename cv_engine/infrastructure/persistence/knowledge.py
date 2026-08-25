@@ -63,44 +63,60 @@ class SqlAlchemyKnowledgeMutationRepository(SqlAlchemyRepositoryBase):
                     prepared_at=prepared_at or utc_now(),
                 )
             )
-            row = connection.execute(
-                select(knowledge_mutation_journal).where(
-                    knowledge_mutation_journal.c.id == request.mutation_id
+            row = (
+                connection.execute(
+                    select(knowledge_mutation_journal).where(
+                        knowledge_mutation_journal.c.id == request.mutation_id
+                    )
                 )
-            ).mappings().one_or_none()
+                .mappings()
+                .one_or_none()
+            )
         return self._knowledge_mutation_record(row)
 
     def knowledge_mutation(self, mutation_id: str) -> KnowledgeMutation:
         with self.read_connection() as connection:
-            row = connection.execute(
-                select(knowledge_mutation_journal).where(
-                    knowledge_mutation_journal.c.id == mutation_id
+            row = (
+                connection.execute(
+                    select(knowledge_mutation_journal).where(
+                        knowledge_mutation_journal.c.id == mutation_id
+                    )
                 )
-            ).mappings().one_or_none()
+                .mappings()
+                .one_or_none()
+            )
         return self._knowledge_mutation_record(row)
 
     def prepared_knowledge_mutations(self) -> list[KnowledgeMutation]:
         with self.read_connection() as connection:
-            rows = connection.execute(
-                select(knowledge_mutation_journal)
-                .where(knowledge_mutation_journal.c.state == "PREPARED")
-                .order_by(
-                    knowledge_mutation_journal.c.prepared_at,
-                    knowledge_mutation_journal.c.id,
+            rows = (
+                connection.execute(
+                    select(knowledge_mutation_journal)
+                    .where(knowledge_mutation_journal.c.state == "PREPARED")
+                    .order_by(
+                        knowledge_mutation_journal.c.prepared_at,
+                        knowledge_mutation_journal.c.id,
+                    )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
         return [self._knowledge_mutation_record(row) for row in rows]
 
     def quarantined_knowledge_mutations(self) -> list[KnowledgeMutation]:
         with self.read_connection() as connection:
-            rows = connection.execute(
-                select(knowledge_mutation_journal)
-                .where(knowledge_mutation_journal.c.state == "QUARANTINED")
-                .order_by(
-                    knowledge_mutation_journal.c.quarantined_at,
-                    knowledge_mutation_journal.c.id,
+            rows = (
+                connection.execute(
+                    select(knowledge_mutation_journal)
+                    .where(knowledge_mutation_journal.c.state == "QUARANTINED")
+                    .order_by(
+                        knowledge_mutation_journal.c.quarantined_at,
+                        knowledge_mutation_journal.c.id,
+                    )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
         return [self._knowledge_mutation_record(row) for row in rows]
 
     def commit_knowledge_mutation(
@@ -117,11 +133,15 @@ class SqlAlchemyKnowledgeMutationRepository(SqlAlchemyRepositoryBase):
             )
             if cursor.rowcount != 1:
                 raise PreconditionFailed("knowledge mutation is not prepared")
-            row = connection.execute(
-                select(knowledge_mutation_journal).where(
-                    knowledge_mutation_journal.c.id == mutation_id
+            row = (
+                connection.execute(
+                    select(knowledge_mutation_journal).where(
+                        knowledge_mutation_journal.c.id == mutation_id
+                    )
                 )
-            ).mappings().one_or_none()
+                .mappings()
+                .one_or_none()
+            )
         return self._knowledge_mutation_record(row)
 
     def quarantine_knowledge_mutation(
@@ -148,9 +168,13 @@ class SqlAlchemyKnowledgeMutationRepository(SqlAlchemyRepositoryBase):
             )
             if cursor.rowcount != 1:
                 raise PreconditionFailed("knowledge mutation is not prepared")
-            row = connection.execute(
-                select(knowledge_mutation_journal).where(
-                    knowledge_mutation_journal.c.id == mutation_id
+            row = (
+                connection.execute(
+                    select(knowledge_mutation_journal).where(
+                        knowledge_mutation_journal.c.id == mutation_id
+                    )
                 )
-            ).mappings().one_or_none()
+                .mappings()
+                .one_or_none()
+            )
         return self._knowledge_mutation_record(row)

@@ -1,33 +1,31 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
+from sqlalchemy.engine import Connection, Engine
 
-from .applications import SqliteApplicationRepository
-from .artifacts import SqliteArtifactRepository
-from .audit import SqliteAuditRepository
-from .connection import SqliteUnitOfWork
-from .drafts import SqliteDraftRepository
-from .knowledge import SqliteKnowledgeMutationRepository
-from .operations import SqliteOperationRepository
-from .preparation import SqlitePreparationRepository
-from .schema import ensure_current_schema
-from .settings import SqliteSettingsRepository
-from .tracking import SqliteTrackingRepository
+from .applications import SqlAlchemyApplicationRepository
+from .artifacts import SqlAlchemyArtifactRepository
+from .audit import SqlAlchemyAuditRepository
+from .connection import SqlAlchemyUnitOfWork
+from .drafts import SqlAlchemyDraftRepository
+from .knowledge import SqlAlchemyKnowledgeMutationRepository
+from .operations import SqlAlchemyOperationRepository
+from .preparation import SqlAlchemyPreparationRepository
+from .settings import SqlAlchemySettingsRepository
+from .tracking import SqlAlchemyTrackingRepository
 
 
 class Repository(
-    SqlitePreparationRepository,
-    SqliteApplicationRepository,
-    SqliteArtifactRepository,
-    SqliteDraftRepository,
-    SqliteTrackingRepository,
-    SqliteAuditRepository,
-    SqliteOperationRepository,
-    SqliteKnowledgeMutationRepository,
-    SqliteSettingsRepository,
+    SqlAlchemyPreparationRepository,
+    SqlAlchemyApplicationRepository,
+    SqlAlchemyArtifactRepository,
+    SqlAlchemyDraftRepository,
+    SqlAlchemyTrackingRepository,
+    SqlAlchemyAuditRepository,
+    SqlAlchemyOperationRepository,
+    SqlAlchemyKnowledgeMutationRepository,
+    SqlAlchemySettingsRepository,
 ):
-    """The SQLite adapter, composed from the five ownership repositories.
+    """The SQLAlchemy adapter, composed from the ownership repositories.
 
     Each repository keeps its own tables and its own SQL; this class only
     states which of them make up the composition root's view of storage. The
@@ -37,13 +35,11 @@ class Repository(
 
     def __init__(
         self,
-        path: Path,
-        connection: Any | None = None,
-        applications: SqliteApplicationRepository | None = None,
+        engine: Engine,
+        connection: Connection | None = None,
+        applications: SqlAlchemyApplicationRepository | None = None,
     ):
-        if connection is None:
-            ensure_current_schema(Path(path))
-        super().__init__(path, connection, applications)
+        super().__init__(engine, connection, applications)
 
-    def unit_of_work(self) -> SqliteUnitOfWork:
-        return SqliteUnitOfWork(self.path)
+    def unit_of_work(self) -> SqlAlchemyUnitOfWork:
+        return SqlAlchemyUnitOfWork(self.engine)

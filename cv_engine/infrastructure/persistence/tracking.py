@@ -9,7 +9,7 @@ from ...application.errors import (
     StateConflict,
     UnknownRecord,
 )
-from ...util import new_id
+from ...util import canonical_json, new_id
 from .base import SqlAlchemyRepositoryBase
 from .tables import applications, recruitment_events, submissions
 
@@ -17,6 +17,12 @@ _RECRUITMENT_EVENT_COLUMNS = tuple(
     column for column in recruitment_events.c if column.name != "seq"
 )
 _SUBMISSION_COLUMNS = tuple(column for column in submissions.c if column.name != "seq")
+
+
+def _json_text_record(row: Any, field: str) -> dict[str, Any]:
+    record = dict(row)
+    record[field] = canonical_json(record[field])
+    return record
 
 
 class SqlAlchemyTrackingRepository(SqlAlchemyRepositoryBase):
@@ -62,11 +68,15 @@ class SqlAlchemyTrackingRepository(SqlAlchemyRepositoryBase):
     ) -> str:
         identity = event_id or new_id()
         with self.transaction() as connection:
-            row = connection.execute(
-                select(applications.c.current_status, applications.c.terminal_outcome).where(
-                    applications.c.id == application_id
+            row = (
+                connection.execute(
+                    select(applications.c.current_status, applications.c.terminal_outcome).where(
+                        applications.c.id == application_id
+                    )
                 )
-            ).mappings().one_or_none()
+                .mappings()
+                .one_or_none()
+            )
             if row is None:
                 raise UnknownRecord(application_id)
             if row["current_status"] != expected_current_status:
@@ -75,11 +85,15 @@ class SqlAlchemyTrackingRepository(SqlAlchemyRepositoryBase):
                     f"expected {expected_current_status}, found {row['current_status']}"
                 )
             if corrects_event_id is not None:
-                corrected = connection.execute(
-                    select(recruitment_events.c.application_id).where(
-                        recruitment_events.c.id == corrects_event_id
+                corrected = (
+                    connection.execute(
+                        select(recruitment_events.c.application_id).where(
+                            recruitment_events.c.id == corrects_event_id
+                        )
                     )
-                ).mappings().one_or_none()
+                    .mappings()
+                    .one_or_none()
+                )
                 if corrected is None:
                     raise UnknownRecord(corrects_event_id)
                 if corrected["application_id"] != application_id:
@@ -125,9 +139,13 @@ class SqlAlchemyTrackingRepository(SqlAlchemyRepositoryBase):
     ) -> str:
         event_id = new_id()
         with self.transaction() as connection:
-            row = connection.execute(
-                select(applications.c.current_status).where(applications.c.id == application_id)
-            ).mappings().one_or_none()
+            row = (
+                connection.execute(
+                    select(applications.c.current_status).where(applications.c.id == application_id)
+                )
+                .mappings()
+                .one_or_none()
+            )
             if row is None:
                 raise UnknownRecord(application_id)
             connection.execute(
@@ -162,27 +180,39 @@ class SqlAlchemyTrackingRepository(SqlAlchemyRepositoryBase):
 
     def recruitment_event(self, event_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
-            row = connection.execute(
-                select(*_RECRUITMENT_EVENT_COLUMNS).where(recruitment_events.c.id == event_id)
-            ).mappings().one_or_none()
+            row = (
+                connection.execute(
+                    select(*_RECRUITMENT_EVENT_COLUMNS).where(recruitment_events.c.id == event_id)
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             raise UnknownRecord(event_id)
-        return dict(row)
+        return _json_text_record(row, "payload_json")
 
     def recruitment_events(self, application_id: str) -> list[dict[str, Any]]:
         with self.read_connection() as connection:
-            rows = connection.execute(
-                select(*_RECRUITMENT_EVENT_COLUMNS)
-                .where(recruitment_events.c.application_id == application_id)
-                .order_by(recruitment_events.c.occurred_at, recruitment_events.c.seq)
-            ).mappings().all()
-        return [dict(row) for row in rows]
+            rows = (
+                connection.execute(
+                    select(*_RECRUITMENT_EVENT_COLUMNS)
+                    .where(recruitment_events.c.application_id == application_id)
+                    .order_by(recruitment_events.c.occurred_at, recruitment_events.c.seq)
+                )
+                .mappings()
+                .all()
+            )
+        return [_json_text_record(row, "payload_json") for row in rows]
 
     def submissions(self, application_id: str) -> list[dict[str, Any]]:
         with self.read_connection() as connection:
-            rows = connection.execute(
-                select(*_SUBMISSION_COLUMNS)
-                .where(submissions.c.application_id == application_id)
-                .order_by(submissions.c.submitted_at, submissions.c.seq)
-            ).mappings().all()
-        return [dict(row) for row in rows]
+            rows = (
+                connection.execute(
+                    select(*_SUBMISSION_COLUMNS)
+                    .where(submissions.c.application_id == application_id)
+                    .order_by(submissions.c.submitted_at, submissions.c.seq)
+                )
+                .mappings()
+                .all()
+            )
+        return [_json_text_record(row, "metadata_json") for row in rows]

@@ -12,9 +12,13 @@ from .tables import workspace_settings
 class SqlAlchemySettingsRepository(SqlAlchemyRepositoryBase):
     def workspace_settings(self) -> StoredSettings:
         with self.read_connection() as connection:
-            row = connection.execute(
-                select(workspace_settings).where(workspace_settings.c.singleton_id == 1)
-            ).mappings().one_or_none()
+            row = (
+                connection.execute(
+                    select(workspace_settings).where(workspace_settings.c.singleton_id == 1)
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             return StoredSettings()
         return StoredSettings(
@@ -23,9 +27,7 @@ class SqlAlchemySettingsRepository(SqlAlchemyRepositoryBase):
                 row["auto_generate_when_review_not_required"]
             ),
             ai_enabled_override=(
-                None
-                if row["ai_enabled_override"] is None
-                else bool(row["ai_enabled_override"])
+                None if row["ai_enabled_override"] is None else bool(row["ai_enabled_override"])
             ),
             default_execution_mode=row["default_execution_mode"],
             open_browser_on_launch=bool(row["open_browser_on_launch"]),
@@ -39,11 +41,15 @@ class SqlAlchemySettingsRepository(SqlAlchemyRepositoryBase):
     ) -> StoredSettings:
         now = utc_now()
         with self.transaction() as connection:
-            current = connection.execute(
-                select(workspace_settings.c.edit_version).where(
-                    workspace_settings.c.singleton_id == 1
+            current = (
+                connection.execute(
+                    select(workspace_settings.c.edit_version).where(
+                        workspace_settings.c.singleton_id == 1
+                    )
                 )
-            ).mappings().one_or_none()
+                .mappings()
+                .one_or_none()
+            )
             observed = 0 if current is None else current["edit_version"]
             if observed != expected_edit_version:
                 raise StateConflict(

@@ -17,11 +17,17 @@ from ...domain.models import (
     SelectionManifest,
     SelectionPlan,
 )
-from ...util import new_id, utc_now
+from ...util import canonical_json, new_id, utc_now
 from .applications import SqlAlchemyApplicationRepository
 from .base import SqlAlchemyRepositoryBase, sqlalchemy_unit_of_work
 from .connection import SqlAlchemyUnitOfWork
 from .tables import applications, job_analyses, job_snapshots, selection_plans
+
+
+def _snapshot_record(row: Any) -> dict[str, Any]:
+    record = dict(row)
+    record["source_metadata_json"] = canonical_json(record["source_metadata_json"])
+    return record
 
 
 class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
@@ -173,12 +179,16 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         captured_at: str | None = None,
     ) -> str:
         with self.transaction() as connection:
-            prior = connection.execute(
-                select(job_snapshots.c.id, job_snapshots.c.version_number)
-                .where(job_snapshots.c.application_id == application_id)
-                .order_by(job_snapshots.c.version_number.desc())
-                .limit(1)
-            ).mappings().one_or_none()
+            prior = (
+                connection.execute(
+                    select(job_snapshots.c.id, job_snapshots.c.version_number)
+                    .where(job_snapshots.c.application_id == application_id)
+                    .order_by(job_snapshots.c.version_number.desc())
+                    .limit(1)
+                )
+                .mappings()
+                .one_or_none()
+            )
             if prior is None:
                 raise UnknownRecord(application_id)
             resolved_snapshot_id = snapshot_id or new_id()
@@ -207,60 +217,74 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         use-case, not to database collation rules.
         """
         with self.read_connection() as connection:
-            rows = connection.execute(
-                select(
-                    applications.c.id.label("application_id"),
-                    applications.c.company,
-                    applications.c.target_role,
-                    job_snapshots.c.source_url,
-                    job_snapshots.c.normalized_hash,
-                )
-                .select_from(
-                    applications.join(
-                        job_snapshots,
-                        job_snapshots.c.application_id == applications.c.id,
+            rows = (
+                connection.execute(
+                    select(
+                        applications.c.id.label("application_id"),
+                        applications.c.company,
+                        applications.c.target_role,
+                        job_snapshots.c.source_url,
+                        job_snapshots.c.normalized_hash,
+                    )
+                    .select_from(
+                        applications.join(
+                            job_snapshots,
+                            job_snapshots.c.application_id == applications.c.id,
+                        )
+                    )
+                    .order_by(
+                        applications.c.created_at,
+                        applications.c.id,
+                        job_snapshots.c.version_number,
                     )
                 )
-                .order_by(
-                    applications.c.created_at,
-                    applications.c.id,
-                    job_snapshots.c.version_number,
-                )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
         return [dict(row) for row in rows]
 
     def snapshot_for_content_hash(
         self, application_id: str, content_hash: str
     ) -> dict[str, Any] | None:
         with self.read_connection() as connection:
-            row = connection.execute(
-                select(job_snapshots).where(
-                    job_snapshots.c.application_id == application_id,
-                    job_snapshots.c.content_hash == content_hash,
+            row = (
+                connection.execute(
+                    select(job_snapshots).where(
+                        job_snapshots.c.application_id == application_id,
+                        job_snapshots.c.content_hash == content_hash,
+                    )
                 )
-            ).mappings().one_or_none()
-        return dict(row) if row is not None else None
+                .mappings()
+                .one_or_none()
+            )
+        return _snapshot_record(row) if row is not None else None
 
     def latest_snapshot(self, application_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
-            row = connection.execute(
-                select(job_snapshots)
-                .where(job_snapshots.c.application_id == application_id)
-                .order_by(job_snapshots.c.version_number.desc())
-                .limit(1)
-            ).mappings().one_or_none()
+            row = (
+                connection.execute(
+                    select(job_snapshots)
+                    .where(job_snapshots.c.application_id == application_id)
+                    .order_by(job_snapshots.c.version_number.desc())
+                    .limit(1)
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             raise UnknownRecord(f"no snapshot for application {application_id}")
-        return dict(row)
+        return _snapshot_record(row)
 
     def get_snapshot(self, snapshot_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
-            row = connection.execute(
-                select(job_snapshots).where(job_snapshots.c.id == snapshot_id)
-            ).mappings().one_or_none()
+            row = (
+                connection.execute(select(job_snapshots).where(job_snapshots.c.id == snapshot_id))
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             raise UnknownRecord(f"no job snapshot {snapshot_id}")
-        return dict(row)
+        return _snapshot_record(row)
 
     def save_analysis(
         self,
@@ -283,9 +307,7 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         with self.transaction() as connection:
             version = connection.execute(
                 select(
-                    (func.coalesce(func.max(job_analyses.c.version_number), 0) + 1).label(
-                        "version"
-                    )
+                    (func.coalesce(func.max(job_analyses.c.version_number), 0) + 1).label("version")
                 ).where(job_analyses.c.application_id == application_id)
             ).scalar_one()
             connection.execute(
@@ -326,9 +348,13 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                     updated_at=now,
                 )
             )
-            plan_row = connection.execute(
-                select(selection_plans).where(selection_plans.c.id == selection_plan_id)
-            ).mappings().one_or_none()
+            plan_row = (
+                connection.execute(
+                    select(selection_plans).where(selection_plans.c.id == selection_plan_id)
+                )
+                .mappings()
+                .one_or_none()
+            )
         return analysis_id, self._selection_plan_record(plan_row)
 
     def create_selection_plan(
@@ -348,9 +374,13 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         selection_plan_id = plan_id or new_id()
         now = created_at or utc_now()
         with self.transaction() as connection:
-            existing = connection.execute(
-                select(selection_plans).where(selection_plans.c.id == selection_plan_id)
-            ).mappings().one_or_none()
+            existing = (
+                connection.execute(
+                    select(selection_plans).where(selection_plans.c.id == selection_plan_id)
+                )
+                .mappings()
+                .one_or_none()
+            )
             if existing is not None:
                 stored = self._selection_plan_record(existing)
                 expected = {
@@ -381,9 +411,13 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                 track_emphasis_dependencies,
                 now,
             )
-            row = connection.execute(
-                select(selection_plans).where(selection_plans.c.id == selection_plan_id)
-            ).mappings().one_or_none()
+            row = (
+                connection.execute(
+                    select(selection_plans).where(selection_plans.c.id == selection_plan_id)
+                )
+                .mappings()
+                .one_or_none()
+            )
         return self._selection_plan_record(row)
 
     @staticmethod
@@ -400,18 +434,20 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         track_emphasis_dependencies: dict[str, str],
         created_at: str,
     ) -> None:
-        analysis = connection.execute(
-            select(job_analyses.c.application_id).where(job_analyses.c.id == job_analysis_id)
-        ).mappings().one_or_none()
+        analysis = (
+            connection.execute(
+                select(job_analyses.c.application_id).where(job_analyses.c.id == job_analysis_id)
+            )
+            .mappings()
+            .one_or_none()
+        )
         if analysis is None or analysis["application_id"] != application_id:
             raise LineageBroken(
                 "a selection plan cannot reference a job analysis belonging to another application"
             )
         version = connection.execute(
             select(
-                (func.coalesce(func.max(selection_plans.c.version_number), 0) + 1).label(
-                    "version"
-                )
+                (func.coalesce(func.max(selection_plans.c.version_number), 0) + 1).label("version")
             ).where(selection_plans.c.application_id == application_id)
         ).scalar_one()
         connection.execute(
@@ -451,21 +487,29 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
 
     def selection_plan(self, selection_plan_id: str) -> SelectionPlan:
         with self.read_connection() as connection:
-            row = connection.execute(
-                select(selection_plans).where(selection_plans.c.id == selection_plan_id)
-            ).mappings().one_or_none()
+            row = (
+                connection.execute(
+                    select(selection_plans).where(selection_plans.c.id == selection_plan_id)
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             raise UnknownRecord(f"no selection plan {selection_plan_id}")
         return self._selection_plan_record(row)
 
     def latest_selection_plan(self, application_id: str) -> SelectionPlan:
         with self.read_connection() as connection:
-            row = connection.execute(
-                select(selection_plans)
-                .where(selection_plans.c.application_id == application_id)
-                .order_by(selection_plans.c.version_number.desc())
-                .limit(1)
-            ).mappings().one_or_none()
+            row = (
+                connection.execute(
+                    select(selection_plans)
+                    .where(selection_plans.c.application_id == application_id)
+                    .order_by(selection_plans.c.version_number.desc())
+                    .limit(1)
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             raise UnknownRecord(f"no selection plan for application {application_id}")
         return self._selection_plan_record(row)
@@ -478,30 +522,40 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
 
     def get_analysis(self, analysis_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
-            row = connection.execute(
-                select(job_analyses).where(job_analyses.c.id == analysis_id)
-            ).mappings().one_or_none()
+            row = (
+                connection.execute(select(job_analyses).where(job_analyses.c.id == analysis_id))
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             raise UnknownRecord(f"no job analysis {analysis_id}")
         return self._analysis_record(row)
 
     def analyses(self, application_id: str) -> list[dict[str, Any]]:
         with self.read_connection() as connection:
-            rows = connection.execute(
-                select(job_analyses)
-                .where(job_analyses.c.application_id == application_id)
-                .order_by(job_analyses.c.version_number)
-            ).mappings().all()
+            rows = (
+                connection.execute(
+                    select(job_analyses)
+                    .where(job_analyses.c.application_id == application_id)
+                    .order_by(job_analyses.c.version_number)
+                )
+                .mappings()
+                .all()
+            )
         return [self._analysis_record(row) for row in rows]
 
     def latest_analysis(self, application_id: str) -> tuple[str, JobAnalysis]:
         with self.read_connection() as connection:
-            row = connection.execute(
-                select(job_analyses.c.id, job_analyses.c.structured_json)
-                .where(job_analyses.c.application_id == application_id)
-                .order_by(job_analyses.c.version_number.desc())
-                .limit(1)
-            ).mappings().one_or_none()
+            row = (
+                connection.execute(
+                    select(job_analyses.c.id, job_analyses.c.structured_json)
+                    .where(job_analyses.c.application_id == application_id)
+                    .order_by(job_analyses.c.version_number.desc())
+                    .limit(1)
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             raise UnknownRecord(f"no analysis for application {application_id}")
         return row["id"], JobAnalysis.model_validate(row["structured_json"])

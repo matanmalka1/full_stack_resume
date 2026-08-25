@@ -86,12 +86,16 @@ class SqlAlchemyDraftRepository(SqlAlchemyRepositoryBase):
         selection_plan_id: str,
         source: DraftDocument,
     ) -> None:
-        plan = connection.execute(
-            select(
-                selection_plans.c.application_id,
-                selection_plans.c.job_analysis_id,
-            ).where(selection_plans.c.id == selection_plan_id)
-        ).mappings().one_or_none()
+        plan = (
+            connection.execute(
+                select(
+                    selection_plans.c.application_id,
+                    selection_plans.c.job_analysis_id,
+                ).where(selection_plans.c.id == selection_plan_id)
+            )
+            .mappings()
+            .one_or_none()
+        )
         if (
             plan is None
             or plan["application_id"] != application_id
@@ -142,9 +146,11 @@ class SqlAlchemyDraftRepository(SqlAlchemyRepositoryBase):
                     updated_at=now,
                 )
             )
-            row = connection.execute(
-                select(working_drafts).where(working_drafts.c.id == draft_id)
-            ).mappings().one_or_none()
+            row = (
+                connection.execute(select(working_drafts).where(working_drafts.c.id == draft_id))
+                .mappings()
+                .one_or_none()
+            )
         return self._record(row)
 
     def replace_active_working_draft(
@@ -167,12 +173,16 @@ class SqlAlchemyDraftRepository(SqlAlchemyRepositoryBase):
                 selection_plan_id,
                 source,
             )
-            current = connection.execute(
-                select(working_drafts).where(
-                    working_drafts.c.application_id == application_id,
-                    working_drafts.c.active.is_(True),
+            current = (
+                connection.execute(
+                    select(working_drafts).where(
+                        working_drafts.c.application_id == application_id,
+                        working_drafts.c.active.is_(True),
+                    )
                 )
-            ).mappings().one_or_none()
+                .mappings()
+                .one_or_none()
+            )
             if current is None:
                 draft_id = new_id()
                 connection.execute(
@@ -208,28 +218,38 @@ class SqlAlchemyDraftRepository(SqlAlchemyRepositoryBase):
                         updated_at=now,
                     )
                 )
-            row = connection.execute(
-                select(working_drafts).where(working_drafts.c.id == draft_id)
-            ).mappings().one_or_none()
+            row = (
+                connection.execute(select(working_drafts).where(working_drafts.c.id == draft_id))
+                .mappings()
+                .one_or_none()
+            )
         return self._record(row)
 
     def working_draft(self, working_draft_id: str) -> WorkingDraft:
         with self.read_connection() as connection:
-            row = connection.execute(
-                select(working_drafts).where(working_drafts.c.id == working_draft_id)
-            ).mappings().one_or_none()
+            row = (
+                connection.execute(
+                    select(working_drafts).where(working_drafts.c.id == working_draft_id)
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             raise UnknownRecord(f"no working draft {working_draft_id}")
         return self._record(row)
 
     def active_working_draft(self, application_id: str) -> WorkingDraft:
         with self.read_connection() as connection:
-            row = connection.execute(
-                select(working_drafts).where(
-                    working_drafts.c.application_id == application_id,
-                    working_drafts.c.active.is_(True),
+            row = (
+                connection.execute(
+                    select(working_drafts).where(
+                        working_drafts.c.application_id == application_id,
+                        working_drafts.c.active.is_(True),
+                    )
                 )
-            ).mappings().one_or_none()
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             raise UnknownRecord(f"no active working draft for application {application_id}")
         return self._record(row)
@@ -253,9 +273,13 @@ class SqlAlchemyDraftRepository(SqlAlchemyRepositoryBase):
         """
         now = updated_at or utc_now()
         with self.transaction() as connection:
-            current = connection.execute(
-                select(working_drafts).where(working_drafts.c.id == working_draft_id)
-            ).mappings().one_or_none()
+            current = (
+                connection.execute(
+                    select(working_drafts).where(working_drafts.c.id == working_draft_id)
+                )
+                .mappings()
+                .one_or_none()
+            )
             if current is None:
                 raise UnknownRecord(f"no working draft {working_draft_id}")
             plan_id = selection_plan_id or current["selection_plan_id"]
@@ -283,9 +307,13 @@ class SqlAlchemyDraftRepository(SqlAlchemyRepositoryBase):
             )
             if changed.rowcount != 1:
                 raise StateConflict("working draft edit version mismatch")
-            row = connection.execute(
-                select(working_drafts).where(working_drafts.c.id == working_draft_id)
-            ).mappings().one_or_none()
+            row = (
+                connection.execute(
+                    select(working_drafts).where(working_drafts.c.id == working_draft_id)
+                )
+                .mappings()
+                .one_or_none()
+            )
         return self._record(row)
 
     def deactivate_working_draft(
@@ -305,9 +333,13 @@ class SqlAlchemyDraftRepository(SqlAlchemyRepositoryBase):
         """
         now = updated_at or utc_now()
         with self.transaction() as connection:
-            current = connection.execute(
-                select(working_drafts).where(working_drafts.c.id == working_draft_id)
-            ).mappings().one_or_none()
+            current = (
+                connection.execute(
+                    select(working_drafts).where(working_drafts.c.id == working_draft_id)
+                )
+                .mappings()
+                .one_or_none()
+            )
             if current is None:
                 raise UnknownRecord(f"no working draft {working_draft_id}")
             changed = connection.execute(
@@ -321,9 +353,13 @@ class SqlAlchemyDraftRepository(SqlAlchemyRepositoryBase):
             )
             if changed.rowcount != 1:
                 raise StateConflict("working draft edit version mismatch")
-            row = connection.execute(
-                select(working_drafts).where(working_drafts.c.id == working_draft_id)
-            ).mappings().one_or_none()
+            row = (
+                connection.execute(
+                    select(working_drafts).where(working_drafts.c.id == working_draft_id)
+                )
+                .mappings()
+                .one_or_none()
+            )
         return self._record(row)
 
     def create_approved_revision(
@@ -342,41 +378,45 @@ class SqlAlchemyDraftRepository(SqlAlchemyRepositoryBase):
     ) -> ApprovedRevision:
         """Freeze one exact WorkingDraft using its recorded plan and validation."""
         with self.transaction() as connection:
-            row = connection.execute(
-                select(
-                    *working_drafts.c,
-                    job_analyses.c.job_snapshot_id.label("frozen_job_snapshot_id"),
-                    selection_plans.c.application_id.label("plan_application_id"),
-                    selection_plans.c.job_analysis_id.label("plan_job_analysis_id"),
-                    selection_plans.c.candidate_context_version,
-                    selection_plans.c.candidate_context_hash,
-                    selection_plans.c.profile_version,
-                    selection_plans.c.selection_policy_version,
-                    selection_plans.c.track_emphasis_dependencies_json,
-                    validation_runs.c.application_id.label("validation_application_id"),
-                    validation_runs.c.working_draft_id.label("validation_working_draft_id"),
-                    validation_runs.c.edit_version.label("validation_edit_version"),
-                    validation_runs.c.content_hash.label("validation_content_hash"),
-                    validation_runs.c.job_snapshot_id.label("validation_job_snapshot_id"),
-                    validation_runs.c.job_analysis_id.label("validation_job_analysis_id"),
-                    validation_runs.c.selection_plan_id.label("validation_selection_plan_id"),
-                    validation_runs.c.knowledge_context_hash,
-                    validation_runs.c.validator_versions_json,
-                    validation_runs.c.report_json,
-                )
-                .select_from(
-                    working_drafts.join(
-                        job_analyses,
-                        job_analyses.c.id == working_drafts.c.job_analysis_id,
+            row = (
+                connection.execute(
+                    select(
+                        *working_drafts.c,
+                        job_analyses.c.job_snapshot_id.label("frozen_job_snapshot_id"),
+                        selection_plans.c.application_id.label("plan_application_id"),
+                        selection_plans.c.job_analysis_id.label("plan_job_analysis_id"),
+                        selection_plans.c.candidate_context_version,
+                        selection_plans.c.candidate_context_hash,
+                        selection_plans.c.profile_version,
+                        selection_plans.c.selection_policy_version,
+                        selection_plans.c.track_emphasis_dependencies_json,
+                        validation_runs.c.application_id.label("validation_application_id"),
+                        validation_runs.c.working_draft_id.label("validation_working_draft_id"),
+                        validation_runs.c.edit_version.label("validation_edit_version"),
+                        validation_runs.c.content_hash.label("validation_content_hash"),
+                        validation_runs.c.job_snapshot_id.label("validation_job_snapshot_id"),
+                        validation_runs.c.job_analysis_id.label("validation_job_analysis_id"),
+                        validation_runs.c.selection_plan_id.label("validation_selection_plan_id"),
+                        validation_runs.c.knowledge_context_hash,
+                        validation_runs.c.validator_versions_json,
+                        validation_runs.c.report_json,
                     )
-                    .join(
-                        selection_plans,
-                        selection_plans.c.id == working_drafts.c.selection_plan_id,
+                    .select_from(
+                        working_drafts.join(
+                            job_analyses,
+                            job_analyses.c.id == working_drafts.c.job_analysis_id,
+                        )
+                        .join(
+                            selection_plans,
+                            selection_plans.c.id == working_drafts.c.selection_plan_id,
+                        )
+                        .join(validation_runs, validation_runs.c.id == validation_run_id)
                     )
-                    .join(validation_runs, validation_runs.c.id == validation_run_id)
+                    .where(working_drafts.c.id == working_draft_id)
                 )
-                .where(working_drafts.c.id == working_draft_id)
-            ).mappings().one_or_none()
+                .mappings()
+                .one_or_none()
+            )
             if row is None:
                 raise PreconditionFailed(
                     "approval requires an existing working draft and validation"
@@ -434,9 +474,7 @@ class SqlAlchemyDraftRepository(SqlAlchemyRepositoryBase):
                     knowledge_context_hash=row["knowledge_context_hash"],
                     profile_version=row["profile_version"],
                     selection_policy_version=row["selection_policy_version"],
-                    track_emphasis_dependencies_json=row[
-                        "track_emphasis_dependencies_json"
-                    ],
+                    track_emphasis_dependencies_json=row["track_emphasis_dependencies_json"],
                     validation_run_id=validation_run_id,
                     validator_versions_json=row["validator_versions_json"],
                     decision_provenance_json=decision_provenance,
@@ -453,37 +491,53 @@ class SqlAlchemyDraftRepository(SqlAlchemyRepositoryBase):
             )
             if changed.rowcount != 1:
                 raise StateConflict("working draft changed before approval committed")
-            revision = connection.execute(
-                select(approved_revisions).where(approved_revisions.c.id == revision_id)
-            ).mappings().one_or_none()
+            revision = (
+                connection.execute(
+                    select(approved_revisions).where(approved_revisions.c.id == revision_id)
+                )
+                .mappings()
+                .one_or_none()
+            )
         return self._revision_record(revision)
 
     def approved_revision(self, revision_id: str) -> ApprovedRevision:
         with self.read_connection() as connection:
-            row = connection.execute(
-                select(approved_revisions).where(approved_revisions.c.id == revision_id)
-            ).mappings().one_or_none()
+            row = (
+                connection.execute(
+                    select(approved_revisions).where(approved_revisions.c.id == revision_id)
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             raise UnknownRecord(f"no approved revision {revision_id}")
         return self._revision_record(row)
 
     def latest_approved_revision(self, application_id: str) -> ApprovedRevision:
         with self.read_connection() as connection:
-            row = connection.execute(
-                select(approved_revisions)
-                .where(approved_revisions.c.application_id == application_id)
-                .order_by(approved_revisions.c.version_number.desc())
-                .limit(1)
-            ).mappings().one_or_none()
+            row = (
+                connection.execute(
+                    select(approved_revisions)
+                    .where(approved_revisions.c.application_id == application_id)
+                    .order_by(approved_revisions.c.version_number.desc())
+                    .limit(1)
+                )
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             raise UnknownRecord(f"no approved revision for application {application_id}")
         return self._revision_record(row)
 
     def approved_revisions(self, application_id: str) -> list[ApprovedRevision]:
         with self.read_connection() as connection:
-            rows = connection.execute(
-                select(approved_revisions)
-                .where(approved_revisions.c.application_id == application_id)
-                .order_by(approved_revisions.c.version_number)
-            ).mappings().all()
+            rows = (
+                connection.execute(
+                    select(approved_revisions)
+                    .where(approved_revisions.c.application_id == application_id)
+                    .order_by(approved_revisions.c.version_number)
+                )
+                .mappings()
+                .all()
+            )
         return [self._revision_record(row) for row in rows]
