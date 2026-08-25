@@ -283,8 +283,8 @@ terminal outcome are updated transactionally while the original event remains.
 `closed` is archival. The last accepted/rejected/withdrawn outcome remains in
 `terminal_outcome` and history.
 
-Audit actors use `actor_type=user|system`, `client=web|cli|worker`, and the
-installation ID. There is no authenticated username in v2.0; the UI may label the local
+Audit actors use `actor_type=user|system` and `client=web|cli|worker`. There is no
+authenticated username in v2.0; the UI may label the local
 user as `You`.
 
 Preparation commands never alter RecruitmentStatus. Drafting after `applied` leaves the

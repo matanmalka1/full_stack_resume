@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from conftest import alembic_head
 from helpers import CliRun, run_cli
 
 from cv_engine.runtime.composition import build_services
@@ -22,6 +23,7 @@ from cv_engine.runtime.workspace import (
     MARKER_NAME,
     WorkspaceError,
     create_workspace,
+    default_roots,
     load_workspace,
 )
 
@@ -39,22 +41,17 @@ def test_created_workspace_round_trips_with_identity_and_roots(tmp_path: Path) -
     assert opened.purpose == "development"
     assert opened.data_class == "copy"
     assert opened.knowledge_root == opened.root
-    assert opened.state_root == opened.root / "data"
     assert opened.artifacts_root == opened.root / "artifacts"
     assert opened.temp_root == opened.root / "tmp"
     assert opened.logs_root == opened.root / "logs"
-    for root in (opened.state_root, opened.artifacts_root, opened.temp_root, opened.logs_root):
+    for root in (opened.artifacts_root, opened.temp_root, opened.logs_root):
         assert root.is_dir()
-    first = opened.installation_id()
-    assert first == load_workspace(opened.root).installation_id()
-    assert first != opened.workspace_id
 
     workspace = create_workspace(
         tmp_path / "custom",
-        roots={"artifacts_root": "payloads", "state_root": "state"},
+        roots={"artifacts_root": "payloads"},
     )
     assert workspace.artifacts_root == workspace.root / "payloads"
-    assert workspace.state_root == workspace.root / "state"
 
     with pytest.raises(WorkspaceError, match="escapes the Workspace"):
         create_workspace(tmp_path / "escaped", roots={"artifacts_root": "../outside"})
@@ -275,13 +272,9 @@ def test_cli_workspace_surface_guards_normal_and_unmarked_roots(
     assert status.returncode == 0, status.stderr
     reported = json.loads(status.stdout)
     assert reported["workspace_id"] == identity["workspace_id"]
-    assert reported["installation_id"] == identity["installation_id"]
-    assert reported["schema_version"] == "0002"
+    assert reported["schema_version"] == alembic_head()
     assert reported["database_url"] == reported["configuration"]["database_url"]["value"]
     assert reported["configuration"]["provider"]["source"] == "default"
-    upgraded = _cv("--workspace", str(root), "workspace", "upgrade")
-    assert upgraded.returncode == 0, upgraded.stderr
-    assert json.loads(upgraded.stdout)["upgraded"] is False
     plain = tmp_path / "plain"
     plain.mkdir()
     result = _cv("--workspace", str(plain), "list")
@@ -353,7 +346,12 @@ def test_marker_is_validated_before_workspace_config_is_read(tmp_path: Path) -> 
 
 
 def test_symlinked_default_child_roots_are_refused(tmp_path: Path) -> None:
-    for child in ("data", "artifacts", "tmp", "logs"):
+    # Derived from `default_roots` rather than listed here: a hand-kept list
+    # silently stops covering a root that is added, and stops resolving one
+    # that is removed.
+    probe = default_roots(tmp_path / "probe")
+    children = sorted(path.name for name, path in probe.items() if name != "knowledge_root")
+    for child in children:
         workspace = create_workspace(tmp_path / f"workspace-{child}")
         child_path = workspace.root / child
         child_path.rmdir()

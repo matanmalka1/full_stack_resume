@@ -44,7 +44,6 @@ def schema_only_services() -> ApiServices:
         operations=placeholder,
         settings=placeholder,
         identity=InstanceIdentity(
-            installation_id="schema-only",
             workspace_id="schema-only",
             product_version="schema-only",
             api_version=API_VERSION,

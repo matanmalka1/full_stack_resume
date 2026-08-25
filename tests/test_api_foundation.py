@@ -61,9 +61,8 @@ def test_health_reports_this_instance_and_its_version_surfaces(api, services) ->
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    # The two values `cv web` probes to tell its own instance from a foreign
-    # process on the same port.
-    assert body["installation_id"] == services.workspace.installation_id()
+    # The value `cv web` probes to tell its own instance from a foreign process
+    # on the same port.
     assert body["workspace_id"] == services.workspace.workspace_id
     assert body["api_version"] == "1"
     assert body["knowledge"] == services.knowledge_lifecycle.knowledge_versions().model_dump()

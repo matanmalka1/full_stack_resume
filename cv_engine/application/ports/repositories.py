@@ -66,7 +66,6 @@ class ApplicationStore(Protocol):
         snapshot_id: str | None = None,
         actor_type: str = ...,
         client: str = ...,
-        installation_id: str = ...,
     ) -> tuple[str, str]: ...
 
     def get_application(self, application_id: str) -> dict[str, Any]: ...
@@ -287,7 +286,6 @@ class OperationRepository(Protocol):
         self,
         request: CreateOperation,
         *,
-        installation_id: str,
         operation_id: str | None = None,
         created_at: str | None = None,
     ) -> PersistedOperation: ...
@@ -391,13 +389,12 @@ class OperationRepository(Protocol):
         idempotency_key: str,
         payload: dict[str, Any],
         *,
-        installation_id: str,
         reserved_entity_id: str,
         created_at: str | None = None,
     ) -> dict[str, Any]: ...
 
     def idempotency_receipt(
-        self, command_type: str, idempotency_key: str, *, installation_id: str
+        self, command_type: str, idempotency_key: str
     ) -> dict[str, Any] | None: ...
 
     def complete_idempotency_receipt(

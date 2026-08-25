@@ -230,7 +230,6 @@ class OperationView(OperationModel):
 class PersistedOperation(OperationView):
     """Runner-facing record; query clients receive the narrower OperationView."""
 
-    installation_id: str
     payload: dict[str, Any]
     payload_hash: str
     idempotency_key: str

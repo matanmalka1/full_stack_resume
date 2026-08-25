@@ -91,7 +91,7 @@ class OperationService(ServiceBase[OperationRepository]):
             model=command.model,
         )
         return as_operation_view(
-            self.repo.create_operation(request, installation_id=self.installation_id)
+            self.repo.create_operation(request)
         )
 
     def submit_draft(
@@ -152,7 +152,7 @@ class OperationService(ServiceBase[OperationRepository]):
             model="rules-v1" if command.provider == "deterministic" else None,
         )
         return as_operation_view(
-            self.repo.create_operation(request, installation_id=self.installation_id)
+            self.repo.create_operation(request)
         )
 
     def submit_selection_plan_proposal(
@@ -193,7 +193,7 @@ class OperationService(ServiceBase[OperationRepository]):
             model=command.model,
         )
         return as_operation_view(
-            self.repo.create_operation(request, installation_id=self.installation_id)
+            self.repo.create_operation(request)
         )
 
     def submit_regeneration(
@@ -263,7 +263,7 @@ class OperationService(ServiceBase[OperationRepository]):
             model=None,
         )
         return as_operation_view(
-            self.repo.create_operation(request, installation_id=self.installation_id)
+            self.repo.create_operation(request)
         )
 
     def submit_replacement_draft(
@@ -340,7 +340,7 @@ class OperationService(ServiceBase[OperationRepository]):
             model="playwright",
         )
         return as_operation_view(
-            self.repo.create_operation(request, installation_id=self.installation_id)
+            self.repo.create_operation(request)
         )
 
     def cancel(self, operation_id: str) -> OperationView:
@@ -405,7 +405,6 @@ class OperationService(ServiceBase[OperationRepository]):
         existing = self.repo.idempotency_receipt(
             command_type,
             idempotency_key,
-            installation_id=self.installation_id,
         )
         if existing is not None:
             if existing["payload"].get("working_draft_id") != command.working_draft_id:
@@ -431,7 +430,6 @@ class OperationService(ServiceBase[OperationRepository]):
                 command_type,
                 idempotency_key,
                 self._approval_payload(command),
-                installation_id=self.installation_id,
                 reserved_entity_id=new_id(),
             )
         try:
@@ -467,7 +465,7 @@ class OperationService(ServiceBase[OperationRepository]):
             retry_of_operation_id=original.id,
         )
         return as_operation_view(
-            self.repo.create_operation(request, installation_id=self.installation_id)
+            self.repo.create_operation(request)
         )
 
     def get(self, operation_id: str) -> OperationView:

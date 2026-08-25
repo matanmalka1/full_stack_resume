@@ -148,13 +148,11 @@ def test_operation_creation_is_idempotent_and_projects_active_work(services) -> 
 
     created = services.repository.create_operation(
         request,
-        installation_id=services.workspace.installation_id(),
         operation_id="operation-id",
         created_at="2026-08-19T08:00:00+00:00",
     )
     repeated = services.repository.create_operation(
         request,
-        installation_id=services.workspace.installation_id(),
         operation_id="ignored-id",
     )
 
@@ -175,7 +173,6 @@ def test_operation_rejects_idempotency_key_with_another_payload(services) -> Non
     request = _stored_request(ingested.application_id)
     services.repository.create_operation(
         request,
-        installation_id=services.workspace.installation_id(),
     )
     conflicting = request.model_copy(update={"payload": {"mode": "ai"}})
 
@@ -184,7 +181,6 @@ def test_operation_rejects_idempotency_key_with_another_payload(services) -> Non
     with pytest.raises(StateConflict) as raised:
         services.repository.create_operation(
             conflicting,
-            installation_id=services.workspace.installation_id(),
         )
     assert raised.value.code == IDEMPOTENCY_KEY_REUSED
 
@@ -195,7 +191,6 @@ def test_terminal_operation_rows_cannot_be_rewritten_or_deleted(services) -> Non
     )
     created = services.repository.create_operation(
         _stored_request(ingested.application_id),
-        installation_id=services.workspace.installation_id(),
     )
     with services.repository.transaction() as connection:
         connection.execute(
@@ -224,7 +219,6 @@ def test_two_runners_racing_one_operation_produce_one_claim(services) -> None:
     )
     created = services.repository.create_operation(
         _stored_request(ingested.application_id),
-        installation_id=services.workspace.installation_id(),
     )
     barrier = Barrier(2)
 
@@ -315,12 +309,11 @@ def test_application_and_global_render_leases_queue_contending_work(services) ->
             acknowledged_duplicates=True,
         )
     )
-    installation = services.workspace.installation_id()
     app_one = services.repository.create_operation(
-        _stored_request(first.application_id, "app-1"), installation_id=installation
+        _stored_request(first.application_id, "app-1")
     )
     same_app = services.repository.create_operation(
-        _stored_request(first.application_id, "app-2"), installation_id=installation
+        _stored_request(first.application_id, "app-2")
     )
     render_request = CreateOperation(
         application_id=second.application_id,
@@ -329,7 +322,7 @@ def test_application_and_global_render_leases_queue_contending_work(services) ->
         idempotency_key="render-1",
         sources=OperationSources(approved_revision_id="revision-1"),
     )
-    render_one = services.repository.create_operation(render_request, installation_id=installation)
+    render_one = services.repository.create_operation(render_request)
     third = services.applications.ingest(
         IngestCommand(
             company="Lease C",
@@ -345,7 +338,6 @@ def test_application_and_global_render_leases_queue_contending_work(services) ->
                 "idempotency_key": "render-2",
             }
         ),
-        installation_id=installation,
     )
 
     assert services.repository.claim_operation(app_one.id, runner_id="runner-a") is not None
@@ -372,7 +364,7 @@ def test_ai_resource_allows_two_operations_and_queues_the_third(services) -> Non
         )
         operations.append(
             services.repository.create_operation(
-                request, installation_id=services.workspace.installation_id()
+                request
             )
         )
 
@@ -388,7 +380,6 @@ def test_heartbeat_prevents_interruption_until_extended_lease_expires(services) 
     )
     created = services.repository.create_operation(
         _stored_request(ingested.application_id),
-        installation_id=services.workspace.installation_id(),
     )
     claimed = services.repository.claim_operation(
         created.id,
@@ -469,7 +460,6 @@ def _operation_for_runner(services, company: str = "Runner Co"):
     ingested = _ingest_for_operation(services, company)
     operation = services.repository.create_operation(
         _stored_request(ingested.application_id, company.casefold().replace(" ", "-")),
-        installation_id=services.workspace.installation_id(),
     )
     return operation
 
@@ -1002,7 +992,6 @@ def test_pending_approval_receipt_recovers_a_committed_revision(drafted_applicat
             "validation_run_id": command.validation_run_id,
             "content_hash": working.content_hash,
         },
-        installation_id=setup.services.workspace.installation_id(),
         reserved_entity_id=reserved_revision,
     )
     committed = setup.services.drafts.approve_draft(command, revision_id=reserved_revision)
@@ -1018,7 +1007,6 @@ def test_pending_approval_receipt_recovers_a_committed_revision(drafted_applicat
     completed = setup.services.repository.idempotency_receipt(
         "approve_draft",
         "approval-recovery",
-        installation_id=setup.services.workspace.installation_id(),
     )
     assert completed["status"] == "completed"
 
@@ -1067,7 +1055,6 @@ def _queued(services, company: str, key: str = "request-1", created_at: str | No
     ingested = _ingest_for_operation(services, company)
     return services.repository.create_operation(
         _stored_request(ingested.application_id, key=key),
-        installation_id=services.workspace.installation_id(),
         created_at=created_at,
     )
 

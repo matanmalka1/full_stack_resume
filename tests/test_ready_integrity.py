@@ -418,4 +418,3 @@ def test_approval_audit_and_decision_markdown_are_exact(approved_application) ->
     audits = setup.services.repository.audit_records(setup.application_id)
     approval = next(row for row in audits if row["action"] == "approve_draft")
     assert approval["entity_id"] == revision_id
-    assert approval["installation_id"] == setup.services.workspace.installation_id()

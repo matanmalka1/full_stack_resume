@@ -51,7 +51,6 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
         return PersistedOperation(
             id=record["id"],
             application_id=record["application_id"],
-            installation_id=record["installation_id"],
             operation_type=record["operation_type"],
             payload=record["payload_json"],
             payload_hash=record["payload_hash"],
@@ -103,7 +102,6 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
         self,
         request: CreateOperation,
         *,
-        installation_id: str,
         operation_id: str | None = None,
         created_at: str | None = None,
     ) -> PersistedOperation:
@@ -114,7 +112,6 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
             existing = (
                 connection.execute(
                     select(operations).where(
-                        operations.c.installation_id == installation_id,
                         operations.c.operation_type == request.operation_type.value,
                         operations.c.idempotency_key == request.idempotency_key,
                     )
@@ -134,7 +131,6 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
                     insert(operations).values(
                         id=identifier,
                         application_id=request.application_id,
-                        installation_id=installation_id,
                         operation_type=request.operation_type.value,
                         payload_json=request.payload,
                         payload_hash=request.payload_hash,
@@ -691,7 +687,6 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
         idempotency_key: str,
         payload: dict[str, Any],
         *,
-        installation_id: str,
         reserved_entity_id: str,
         created_at: str | None = None,
     ) -> dict[str, Any]:
@@ -702,7 +697,6 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
             existing = (
                 connection.execute(
                     select(idempotency_receipts).where(
-                        idempotency_receipts.c.installation_id == installation_id,
                         idempotency_receipts.c.command_type == command_type,
                         idempotency_receipts.c.idempotency_key == idempotency_key,
                     )
@@ -724,7 +718,6 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
             connection.execute(
                 insert(idempotency_receipts).values(
                     id=identifier,
-                    installation_id=installation_id,
                     command_type=command_type,
                     idempotency_key=idempotency_key,
                     payload_json=payload,
@@ -736,7 +729,6 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
             )
             return {
                 "id": identifier,
-                "installation_id": installation_id,
                 "command_type": command_type,
                 "idempotency_key": idempotency_key,
                 "payload": payload,
@@ -749,13 +741,12 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
             }
 
     def idempotency_receipt(
-        self, command_type: str, idempotency_key: str, *, installation_id: str
+        self, command_type: str, idempotency_key: str
     ) -> dict[str, Any] | None:
         with self.read_connection() as connection:
             row = (
                 connection.execute(
                     select(idempotency_receipts).where(
-                        idempotency_receipts.c.installation_id == installation_id,
                         idempotency_receipts.c.command_type == command_type,
                         idempotency_receipts.c.idempotency_key == idempotency_key,
                     )

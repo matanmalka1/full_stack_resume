@@ -461,7 +461,6 @@ def test_immutability_triggers_refuse_real_repository_writes(application_repo) -
             entity_id="external-submission",
             actor_type="user",
             client="cli",
-            installation_id="test-installation",
             occurred_at="2026-08-19T10:00:00+00:00",
         )
     )

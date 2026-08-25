@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from conftest import alembic_head
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError, ProgrammingError
 
@@ -84,7 +85,6 @@ def test_next_action_is_not_a_status(application_repo) -> None:
         next_action_date="2026-08-20",
         actor_type="user",
         client="cli",
-        installation_id="test-installation",
         occurred_at="2026-08-19T10:00:00+00:00",
     )
     row = repo.get_application(app_id)
@@ -94,7 +94,7 @@ def test_next_action_is_not_a_status(application_repo) -> None:
 
 
 def test_database_is_at_registered_head_schema(application_repo) -> None:
-    assert current_database_revision(application_repo.engine) == "0002"
+    assert current_database_revision(application_repo.engine) == alembic_head()
 
 
 def test_ready_is_not_persisted_and_submission_storage_commits_atomically(
@@ -139,7 +139,6 @@ def test_ready_is_not_persisted_and_submission_storage_commits_atomically(
             reason="submitted",
             actor_type="user",
             client="cli",
-            installation_id="test-installation",
             occurred_at="2026-08-18T10:00:00+00:00",
             terminal_outcome=None,
         )

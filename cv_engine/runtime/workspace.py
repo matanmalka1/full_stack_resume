@@ -21,7 +21,7 @@ DataClass = Literal["copy", "test", "live"]
 # Workspace, and it is expressed in marker metadata rather than path naming.
 UNSAFE_COMBINATIONS = {("development", "live"), ("test", "live")}
 
-ROOT_NAMES = ("knowledge_root", "state_root", "artifacts_root", "temp_root", "logs_root")
+ROOT_NAMES = ("knowledge_root", "artifacts_root", "temp_root", "logs_root")
 
 
 class WorkspaceError(RuntimeError):
@@ -47,7 +47,6 @@ class WorkspaceMarker(StrictModel):
 def default_roots(root: Path) -> dict[str, Path]:
     return {
         "knowledge_root": root,
-        "state_root": root / "data",
         "artifacts_root": root / "artifacts",
         "temp_root": root / "tmp",
         "logs_root": root / "logs",
@@ -55,7 +54,7 @@ def default_roots(root: Path) -> dict[str, Path]:
 
 
 class Workspace:
-    """One candidate Workspace: its identity, its guards, and its five roots.
+    """One candidate Workspace: its identity, its guards, and its four roots.
 
     Nothing else in the engine builds a path from a repository root. Services
     receive a Workspace, so relocating state or artifacts is a marker change
@@ -88,7 +87,6 @@ class Workspace:
                 ) from exc
             resolved[name] = candidate
         self.knowledge_root = resolved["knowledge_root"]
-        self.state_root = resolved["state_root"]
         self.artifacts_root = resolved["artifacts_root"]
         self.temp_root = resolved["temp_root"]
         self.logs_root = resolved["logs_root"]
@@ -117,25 +115,6 @@ class Workspace:
             return relative_within(self.root, path).as_posix()
         except ValueError as exc:
             raise WorkspaceError(f"path is outside the Workspace: {path}") from exc
-
-    def installation_id(self) -> str:
-        """Durable identity of this installation, distinct from the Workspace.
-
-        Idempotency keys and audit records are scoped by installation, so the
-        value must survive restarts and must not change when the same
-        installation opens a different Workspace.
-        """
-        path = self.state_root / "installation.json"
-        if path.is_file():
-            try:
-                payload = json.loads(path.read_text(encoding="utf-8"))
-                return str(payload["installation_id"])
-            except (json.JSONDecodeError, KeyError) as exc:
-                raise WorkspaceError(f"installation record is unreadable: {path}") from exc
-        path.parent.mkdir(parents=True, exist_ok=True)
-        value = new_id()
-        _write_json(path, {"installation_id": value, "created_at": utc_now()})
-        return value
 
     def describe(self) -> dict[str, object]:
         return {
@@ -202,7 +181,6 @@ def create_workspace(
         _copy_knowledge(source, workspace.knowledge_root)
     for directory in (
         workspace.knowledge_root,
-        workspace.state_root,
         workspace.artifacts_root,
         workspace.temp_root,
         workspace.logs_root,

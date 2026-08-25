@@ -228,7 +228,6 @@ recruitment_events = Table(
     Column("reason", Text, nullable=False, server_default=text("''")),
     Column("actor_type", Text, nullable=False),
     Column("client", Text, nullable=False),
-    Column("installation_id", Text, nullable=False),
     Column("occurred_at", Text, nullable=False),
     Column("payload_json", JSONB, nullable=False, server_default=text("'{}'::jsonb")),
     Column("created_at", Text, nullable=False),
@@ -431,7 +430,6 @@ audit_records = Table(
     Column("entity_id", String, nullable=False),
     Column("actor_type", Text, nullable=False),
     Column("client", Text, nullable=False),
-    Column("installation_id", Text, nullable=False),
     Column("occurred_at", Text, nullable=False),
     Column("details_json", JSONB, nullable=False, server_default=text("'{}'::jsonb")),
     CheckConstraint("actor_type IN ('user', 'system')", name="actor_type"),
@@ -470,7 +468,6 @@ operations = Table(
     metadata,
     Column("id", String, primary_key=True),
     Column("application_id", String, ForeignKey("applications.id"), nullable=False),
-    Column("installation_id", Text, nullable=False),
     Column("operation_type", Text, nullable=False),
     Column("payload_json", JSONB, nullable=False),
     Column("payload_hash", Text, nullable=False),
@@ -535,7 +532,7 @@ operations = Table(
         "safe_failure_detail IS NULL OR status IN ('failed', 'cancelled')",
         name="failure_detail_status",
     ),
-    UniqueConstraint("installation_id", "operation_type", "idempotency_key"),
+    UniqueConstraint("operation_type", "idempotency_key"),
 )
 Index(
     "idx_operations_application_status",
@@ -599,7 +596,6 @@ idempotency_receipts = Table(
     "idempotency_receipts",
     metadata,
     Column("id", String, primary_key=True),
-    Column("installation_id", Text, nullable=False),
     Column("command_type", Text, nullable=False),
     Column("idempotency_key", Text, nullable=False),
     Column("payload_json", JSONB, nullable=False),
@@ -614,7 +610,7 @@ idempotency_receipts = Table(
     CheckConstraint("status IN ('pending', 'completed')", name="status"),
     CheckConstraint("(status = 'completed') = (result_json IS NOT NULL)", name="result"),
     CheckConstraint("(status = 'completed') = (completed_at IS NOT NULL)", name="completed_at"),
-    UniqueConstraint("installation_id", "command_type", "idempotency_key"),
+    UniqueConstraint("command_type", "idempotency_key"),
 )
 
 knowledge_mutation_journal = Table(

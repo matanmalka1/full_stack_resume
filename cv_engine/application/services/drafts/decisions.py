@@ -96,7 +96,7 @@ class DecisionExport(DraftServiceBase):
                 "",
             ]
         )
-        for key in ("actor_type", "client", "installation_id", "command"):
+        for key in ("actor_type", "client", "command"):
             lines.append(f"- {key}: {revision.decision_provenance.get(key, '')}")
         content = "\n".join(lines) + "\n"
         return DecisionMarkdownExport(

@@ -179,7 +179,6 @@ def build_services(
         "renderer": resolved_renderer,
         "provider": resolved_provider,
         "snapshots": resolved_payloads,
-        "installation_id": workspace.installation_id(),
     }
     analysis_service = AnalysisService(**shared)
     operation_service = OperationService(**shared)
@@ -265,7 +264,6 @@ def build_api_services(
         operations=services.operations,
         settings=services.settings,
         identity=InstanceIdentity(
-            installation_id=services.workspace.installation_id(),
             workspace_id=services.workspace.workspace_id,
             product_version=__version__,
             api_version=API_VERSION,

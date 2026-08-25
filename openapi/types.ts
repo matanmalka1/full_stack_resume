@@ -1528,16 +1528,13 @@ export interface components {
          * HealthResponse
          * @description What `cv web` probes to tell its own instance from a foreign process.
          *
-         *     `installation_id` and `workspace_id` together answer "is the process on this
-         *     port mine, and is it serving the Workspace I am about to open". The version
-         *     surfaces are the §17 provenance set, reported so a client can refuse to talk
-         *     to an instance it does not understand.
+         *     `workspace_id` answers "is the process on this port serving the Workspace I
+         *     am about to open". The version surfaces are the §17 provenance set, reported
+         *     so a client can refuse to talk to an instance it does not understand.
          */
         HealthResponse: {
             /** Api Version */
             api_version: string;
-            /** Installation Id */
-            installation_id: string;
             knowledge: components["schemas"]["KnowledgeVersions"];
             /** Product Version */
             product_version: string;

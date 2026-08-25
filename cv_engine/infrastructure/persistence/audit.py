@@ -29,7 +29,6 @@ class SqlAlchemyAuditRepository(SqlAlchemyRepositoryBase):
                     entity_id=record.entity_id,
                     actor_type=record.actor_type,
                     client=record.client,
-                    installation_id=record.installation_id,
                     occurred_at=record.occurred_at,
                     details_json=record.details,
                 )

@@ -174,7 +174,6 @@ class DraftApproval(DraftServiceBase):
             "actor_type": command.actor_type,
             "client": command.client,
             "command": "approve_draft",
-            "installation_id": self.installation_id,
         }
         with self.repo.unit_of_work() as uow:
             transaction = self.repo.bind(uow)
@@ -242,7 +241,6 @@ class DraftApproval(DraftServiceBase):
                     entity_id=revision.id,
                     actor_type=command.actor_type,
                     client=command.client,
-                    installation_id=self.installation_id,
                     occurred_at=now,
                     details={
                         "decision_record_id": decision.id,

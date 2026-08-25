@@ -48,7 +48,6 @@ def test_select_web_endpoint_reuses_the_same_workspace(services, monkeypatch) ->
     monkeypatch.setattr(
         "cv_engine.runtime.web._health_identity",
         lambda _endpoint: {
-            "installation_id": services.workspace.installation_id(),
             "workspace_id": services.workspace.workspace_id,
         },
     )
@@ -81,7 +80,7 @@ def test_select_web_endpoint_avoids_a_foreign_process(services, monkeypatch) -> 
     monkeypatch.setattr("cv_engine.runtime.web._port_is_open", lambda _host, _port: True)
     monkeypatch.setattr(
         "cv_engine.runtime.web._health_identity",
-        lambda _endpoint: {"installation_id": "foreign", "workspace_id": "foreign"},
+        lambda _endpoint: {"workspace_id": "foreign"},
     )
     monkeypatch.setattr("cv_engine.runtime.web._free_loopback_port", lambda _host: 49152)
 

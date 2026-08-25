@@ -59,7 +59,6 @@ class SqlAlchemyTrackingRepository(SqlAlchemyRepositoryBase):
         reason: str,
         actor_type: str,
         client: str,
-        installation_id: str,
         occurred_at: str,
         terminal_outcome: str | None,
         corrects_event_id: str | None = None,
@@ -118,7 +117,6 @@ class SqlAlchemyTrackingRepository(SqlAlchemyRepositoryBase):
                     reason=reason,
                     actor_type=actor_type,
                     client=client,
-                    installation_id=installation_id,
                     occurred_at=occurred_at,
                     payload_json=payload or {},
                     created_at=occurred_at,
@@ -134,7 +132,6 @@ class SqlAlchemyTrackingRepository(SqlAlchemyRepositoryBase):
         next_action_date: str | None,
         actor_type: str,
         client: str,
-        installation_id: str,
         occurred_at: str,
     ) -> str:
         event_id = new_id()
@@ -167,7 +164,6 @@ class SqlAlchemyTrackingRepository(SqlAlchemyRepositoryBase):
                     reason="",
                     actor_type=actor_type,
                     client=client,
-                    installation_id=installation_id,
                     occurred_at=occurred_at,
                     payload_json={
                         "next_action": next_action,

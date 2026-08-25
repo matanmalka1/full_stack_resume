@@ -62,7 +62,7 @@ introducing HTTP or React.
 ### 3.1 Workspace and configuration
 
 - Add explicit Workspace path/config models and marker validation.
-- Add separate Workspace ID and installation ID.
+- Add a Workspace ID.
 - Implement config precedence: CLI > environment > Workspace config > defaults.
 - Add fail-closed marker policy for all normal v2 commands. The read-only v1
   migration-source adapter this once required was deleted on 2026-08-19 with the

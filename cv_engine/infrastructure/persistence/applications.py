@@ -24,7 +24,6 @@ class SqlAlchemyApplicationRepository(SqlAlchemyRepositoryBase):
         created_at: str,
         actor_type: str,
         client: str,
-        installation_id: str,
     ) -> None:
         with self.transaction() as connection:
             connection.execute(
@@ -50,7 +49,6 @@ class SqlAlchemyApplicationRepository(SqlAlchemyRepositoryBase):
                     reason="application created",
                     actor_type=actor_type,
                     client=client,
-                    installation_id=installation_id,
                     occurred_at=created_at,
                     payload_json={},
                     created_at=created_at,

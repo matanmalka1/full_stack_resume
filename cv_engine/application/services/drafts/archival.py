@@ -102,7 +102,6 @@ class DraftArchival(DraftServiceBase):
                     entity_id=working.id,
                     actor_type=command.actor_type,
                     client=command.client,
-                    installation_id=self.installation_id,
                     occurred_at=now,
                     details={
                         "artifact_version_id": artifact_version_id,
@@ -159,7 +158,6 @@ class DraftArchival(DraftServiceBase):
                     entity_id=working.id,
                     actor_type=command.actor_type,
                     client=command.client,
-                    installation_id=self.installation_id,
                     occurred_at=utc_now(),
                     details={
                         "artifact_version_id": artifact_version_id,

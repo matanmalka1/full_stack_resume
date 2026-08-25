@@ -122,7 +122,6 @@ class ApplicationService(ServiceBase[PreparationRepository]):
                 snapshot_id=snapshot_id,
                 actor_type=command.actor_type,
                 client=command.client,
-                installation_id=self.installation_id,
             )
         except ValueError as exc:
             raise PreconditionFailed(str(exc)) from exc
@@ -175,7 +174,6 @@ class ApplicationService(ServiceBase[PreparationRepository]):
                         entity_id=created_id,
                         actor_type=command.actor_type,
                         client=command.client,
-                        installation_id=self.installation_id,
                         occurred_at=now,
                         details={
                             "source_hash": payload.sha256,

@@ -10,7 +10,6 @@ from ..infrastructure.persistence import (
     Repository,
     create_database_engine,
     current_database_revision,
-    upgrade_database,
 )
 from ..runtime.config import mask_value
 from ..runtime.workspace import Workspace, create_workspace, load_workspace
@@ -41,7 +40,7 @@ def workspace_command(
             knowledge_source=args.knowledge_from.resolve() if args.knowledge_from else None,
         )
         _print(
-            {**created.describe(), "installation_id": created.installation_id(), "created": True}
+            {**created.describe(), "created": True}
         )
         return 0
     if args.workspace_command == "status":
@@ -51,30 +50,9 @@ def workspace_command(
         _print(
             {
                 **opened.describe(),
-                "installation_id": opened.installation_id(),
                 "database_url": mask_value("database_url", database_url),
                 "schema_version": schema_version,
                 "configuration": config.describe(),
-            }
-        )
-        return 0
-    if args.workspace_command == "upgrade":
-        opened = opened or load_workspace(root)
-        database_url = str(config.get("database_url"))
-        before, after = upgrade_database(database_url)
-        _, integrity_problems = _database_status(database_url)
-        if integrity_problems:
-            raise ValueError(
-                "workspace upgrade completed but the database integrity check failed: "
-                + "; ".join(integrity_problems)
-            )
-        _print(
-            {
-                **opened.describe(),
-                "database_url": mask_value("database_url", database_url),
-                "schema_version_before": before,
-                "schema_version": after,
-                "upgraded": before != after,
             }
         )
         return 0

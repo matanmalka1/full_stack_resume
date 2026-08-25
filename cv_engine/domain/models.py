@@ -584,7 +584,6 @@ class AuditRecord(StrictModel):
     entity_id: str
     actor_type: Literal["user", "system"]
     client: Literal["web", "cli", "worker"]
-    installation_id: str
     occurred_at: str
     details: dict[str, Any] = {}
 

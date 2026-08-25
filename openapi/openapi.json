@@ -2270,14 +2270,10 @@
       },
       "HealthResponse": {
         "additionalProperties": false,
-        "description": "What `cv web` probes to tell its own instance from a foreign process.\n\n`installation_id` and `workspace_id` together answer \"is the process on this\nport mine, and is it serving the Workspace I am about to open\". The version\nsurfaces are the §17 provenance set, reported so a client can refuse to talk\nto an instance it does not understand.",
+        "description": "What `cv web` probes to tell its own instance from a foreign process.\n\n`workspace_id` answers \"is the process on this port serving the Workspace I\nam about to open\". The version surfaces are the §17 provenance set, reported\nso a client can refuse to talk to an instance it does not understand.",
         "properties": {
           "api_version": {
             "title": "Api Version",
-            "type": "string"
-          },
-          "installation_id": {
-            "title": "Installation Id",
             "type": "string"
           },
           "knowledge": {
@@ -2302,7 +2298,6 @@
         },
         "required": [
           "status",
-          "installation_id",
           "workspace_id",
           "product_version",
           "api_version",

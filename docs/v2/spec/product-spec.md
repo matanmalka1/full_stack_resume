@@ -239,8 +239,7 @@ CandidateContext may explicitly override the filename name. Renderers and filena
 normalizers receive CandidateContext and must not contain a candidate literal.
 
 The Workspace has explicit roots for knowledge, state, artifacts, temporary files, and
-logs. It has a durable Workspace ID and marker. The runtime has a separate installation
-ID. Development, copy, test, and live data classes are explicit metadata, not inferred
+logs. It has a durable Workspace ID and marker. Development, copy, test, and live data classes are explicit metadata, not inferred
 from directory names.
 
 ## 8. Job intake and snapshots
@@ -488,7 +487,6 @@ Audit actor identity is intentionally local and non-authenticated:
 ```text
 actor_type: user | system
 client: web | cli | worker
-installation_id
 ```
 
 The primary UI may display `You` for `actor_type=user`; technical client identity
@@ -502,7 +500,7 @@ starts FastAPI and the Operation worker, opens the default browser unless `--no-
 is supplied, and performs graceful shutdown.
 
 The default endpoint is `127.0.0.1:8765`. If that endpoint belongs to the same
-installation/Workspace, the existing instance is opened. If another process owns it,
+Workspace, the existing instance is opened. If another process owns it,
 the supervisor chooses a free port and reports/opens it.
 
 Production serves the built React application from FastAPI under the same origin. The
@@ -631,8 +629,8 @@ Queued cancellation is immediate. Running cancellation is best-effort and preven
 activation. A completed output after cancellation is recorded as inactive evidence.
 Retry creates a new Operation with `retry_of_operation_id` and a new idempotency key.
 
-Analyze, generate, approve, and render use idempotency. The scope is installation ID +
-operation type + key. Reuse with the same payload hash returns the original result;
+Analyze, generate, approve, and render use idempotency. The scope is operation type +
+key. Reuse with the same payload hash returns the original result;
 reuse with another hash fails. Automatic retry is limited to one delayed attempt for
 explicit transient network/provider/browser-startup failures.
 

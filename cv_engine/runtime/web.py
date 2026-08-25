@@ -87,10 +87,7 @@ def select_web_endpoint(
     if not _port_is_open(preferred.host, preferred.port):
         return preferred
     identity = _health_identity(preferred)
-    if identity is not None and (
-        identity.get("installation_id") == services.workspace.installation_id()
-        and identity.get("workspace_id") == services.workspace.workspace_id
-    ):
+    if identity is not None and identity.get("workspace_id") == services.workspace.workspace_id:
         return WebEndpoint(preferred.host, preferred.port, reuse_existing=True)
     return WebEndpoint(DEFAULT_HOST, _free_loopback_port(DEFAULT_HOST))
 

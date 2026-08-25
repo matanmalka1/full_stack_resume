@@ -57,7 +57,6 @@ class TrackingService(ServiceBase[TrackingRepository]):
                 entity_id=entity_id,
                 actor_type=actor_type,
                 client=client,
-                installation_id=self.installation_id,
                 occurred_at=occurred_at,
                 details=details or {},
             )
@@ -90,7 +89,6 @@ class TrackingService(ServiceBase[TrackingRepository]):
                 reason=command.reason,
                 actor_type=command.actor_type,
                 client=command.client,
-                installation_id=self.installation_id,
                 occurred_at=now,
                 terminal_outcome=terminal_outcome_after(
                     application.get("terminal_outcome"), target
@@ -154,7 +152,6 @@ class TrackingService(ServiceBase[TrackingRepository]):
                     reason=command.reason.strip(),
                     actor_type=command.actor_type,
                     client=command.client,
-                    installation_id=self.installation_id,
                     occurred_at=now,
                     terminal_outcome=terminal_outcome_after(
                         application.get("terminal_outcome"), target
@@ -194,7 +191,6 @@ class TrackingService(ServiceBase[TrackingRepository]):
                     next_action_date=command.next_action_date,
                     actor_type=command.actor_type,
                     client=command.client,
-                    installation_id=self.installation_id,
                     occurred_at=now,
                 )
                 self._audit(
@@ -317,7 +313,6 @@ class TrackingService(ServiceBase[TrackingRepository]):
                     reason="submission recorded",
                     actor_type=actor_type,
                     client=client,
-                    installation_id=self.installation_id,
                     occurred_at=submitted_at,
                     terminal_outcome=terminal_outcome_after(
                         application.get("terminal_outcome"), ApplicationStatus.APPLIED

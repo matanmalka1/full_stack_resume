@@ -219,13 +219,30 @@ def database_url() -> str:
     return str(resolve_config(env=os.environ).get("database_url"))
 
 
+def alembic_head() -> str:
+    """The single registered head, read from Alembic rather than pinned here.
+
+    A literal revision in the test gate has to be edited by hand for every
+    migration, and the edit is invisible until the whole database suite errors
+    at setup. Deriving it means a new revision needs no change here at all.
+    """
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    heads = ScriptDirectory.from_config(Config(str(SOURCE_ROOT / "alembic.ini"))).get_heads()
+    if len(heads) != 1:
+        raise RuntimeError(f"Alembic must have exactly one head, found {heads}")
+    return heads[0]
+
+
 @pytest.fixture(scope="session")
 def database_engine(database_url: str) -> Iterator[Engine]:
     engine = create_database_engine(database_url)
-    if current_database_revision(engine) != "0002":
+    head = alembic_head()
+    if current_database_revision(engine) != head:
         engine.dispose()
         raise RuntimeError(
-            "test database is not at Alembic revision 0002; run "
+            f"test database is not at Alembic revision {head}; run "
             "'./.venv/bin/alembic upgrade head' first"
         )
     yield engine

@@ -69,7 +69,6 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         source_metadata: dict[str, Any] | None = None,
         actor_type: str = "user",
         client: str = "cli",
-        installation_id: str = "unconfigured-test-installation",
     ) -> tuple[str, str]:
         if not company.strip() or not target_role.strip():
             raise PreconditionFailed("company and target role are required")
@@ -97,7 +96,6 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                     source_metadata,
                     actor_type,
                     client,
-                    installation_id,
                 )
                 uow.commit()
         else:
@@ -116,7 +114,6 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                 source_metadata,
                 actor_type,
                 client,
-                installation_id,
             )
         return app_id, snap_id
 
@@ -136,7 +133,6 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         source_metadata: dict[str, Any] | None,
         actor_type: str,
         client: str,
-        installation_id: str,
     ) -> None:
         self.applications._insert_application(
             application_id=app_id,
@@ -148,7 +144,6 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
             created_at=now,
             actor_type=actor_type,
             client=client,
-            installation_id=installation_id,
         )
         with self.transaction() as connection:
             connection.execute(

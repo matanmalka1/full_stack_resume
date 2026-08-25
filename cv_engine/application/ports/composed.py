@@ -200,7 +200,6 @@ class TrackingRepository(ReadinessRepository, Protocol):
         reason: str,
         actor_type: str,
         client: str,
-        installation_id: str,
         occurred_at: str,
         terminal_outcome: str | None,
         corrects_event_id: str | None = None,
@@ -216,7 +215,6 @@ class TrackingRepository(ReadinessRepository, Protocol):
         next_action_date: str | None,
         actor_type: str,
         client: str,
-        installation_id: str,
         occurred_at: str,
     ) -> str: ...
 

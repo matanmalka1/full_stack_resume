@@ -160,7 +160,6 @@ No service constructs paths from a repository root. A Workspace/config layer sup
 
 ```text
 knowledge_root
-state_root
 artifacts_root
 temp_root
 logs_root
@@ -189,8 +188,9 @@ There is no exception. The read-only v1 source adapter that once held one was de
 on 2026-08-19 with the migration it served, so a v1 root is refused outright rather than
 read under conditions.
 
-`installation_id` is durable runtime identity stored in state metadata and remains
-separate from `workspace_id`, even though v2.0 operates one Workspace at a time.
+`installation_id` was retired on 2026-08-25. v2.0 is one user on one machine, so it was
+a constant repeated on every row of four tables and distinguished nothing; `workspace_id`
+carries the identity that is actually used.
 
 During development:
 
@@ -237,7 +237,7 @@ PostgreSQL stores structured state and relationships:
 - Operation, lease, idempotency, failure, retry, and output metadata
 - safe settings
 - Knowledge audit and cross-store mutation journal
-- schema, installation, and Workspace metadata
+- schema and Workspace metadata
 
 The database is addressed by the resolved `database_url` setting (`CV_DATABASE_URL` in
 environment and `.env` surfaces), not by a path inside the Workspace. One process-wide SQLAlchemy
@@ -250,9 +250,9 @@ guards over deliberately mutable tables, and four exact transition guards. Appli
 `current_status` validity is one CHECK constraint, which covers both INSERT and UPDATE.
 Business workflows remain in domain/application code.
 
-Alembic owns explicit numbered revisions and schema version metadata. The revision graph
-has one head, `workspace upgrade` applies it explicitly, and normal runtime composition
-does not perform hidden migrations as a startup side effect.
+Alembic owns explicit numbered revisions, schema version metadata, and schema upgrades.
+The revision graph has one head, `alembic upgrade head` applies it explicitly, and normal
+runtime composition does not perform hidden migrations as a startup side effect.
 
 ### 6.2 Object storage
 
@@ -508,7 +508,7 @@ validated; TypeScript types are generated and checked for drift. A small handwri
 WorkingDraft responses emit ETags. PATCH requires If-Match and maps to the application's
 expected version. Version mismatch is `409`; stale/missing domain prerequisites are
 `412`. Analyze, generate, approve, and render accept idempotency keys scoped by
-installation + operation type + key. Reuse with another payload hash is
+operation type + key. Reuse with another payload hash is
 `409 IDEMPOTENCY_KEY_REUSED`.
 
 Problems follow RFC-style Problem Details with stable code and safe context. Internal
@@ -556,7 +556,7 @@ arbitrary file uploads.
 
 `cv web` defaults to `127.0.0.1:8765`, opens the default browser, and supports
 `--no-open`. It probes a health/identity endpoint to determine whether the existing port
-belongs to the same installation and Workspace. If so it opens that instance; if a
+belongs to the same Workspace. If so it opens that instance; if a
 foreign process owns the port it selects and reports another free port.
 
 Production supports current Chrome/Chromium and Safari. Full E2E uses Chromium;
@@ -597,9 +597,9 @@ v2.0 has no built-in Workspace backup or restore command. PostgreSQL lifecycle a
 environment-level backup policy remain outside the application; this development-only
 replacement starts from an empty database and does not migrate historical data.
 
-Schema upgrade is explicit through `cv workspace upgrade`, backed by Alembic. Runtime
-surfaces report the current schema revision and database integrity result; a new
-binary/runtime never performs a hidden live data migration.
+Schema upgrade is explicit through `alembic upgrade head`. Runtime surfaces report the
+current schema revision and database integrity result; a new binary/runtime never
+performs a hidden live data migration.
 
 ## 17. Version surfaces
 

@@ -14,7 +14,6 @@ def health(services: Services) -> HealthResponse:
     identity = services.identity
     return HealthResponse(
         status="ok",
-        installation_id=identity.installation_id,
         workspace_id=identity.workspace_id,
         product_version=identity.product_version,
         api_version=identity.api_version,
