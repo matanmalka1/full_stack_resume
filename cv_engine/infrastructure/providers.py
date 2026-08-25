@@ -23,7 +23,6 @@ adapter cannot disagree with the record the application writes.
 from __future__ import annotations
 
 import json
-import os
 import time
 import urllib.error
 import urllib.request
@@ -192,10 +191,11 @@ class OpenAIResponsesProvider:
     boundary does not add an SDK dependency. The response is still validated by
     the shared Pydantic output contract before it can enter core state.
 
-    The API key is read from the environment and held only on this instance. It
-    is never returned, logged, or written into provenance: `ProviderContext` has
-    no field it could occupy, and the sanitizer removes any header-shaped key
-    that a provider echoes back.
+    The API key is supplied by the caller - resolved through the config
+    contract, not read from the environment here - and held only on this
+    instance. It is never returned, logged, or written into provenance:
+    `ProviderContext` has no field it could occupy, and the sanitizer removes
+    any header-shaped key that a provider echoes back.
     """
 
     name = "openai"
@@ -208,7 +208,7 @@ class OpenAIResponsesProvider:
         timeout: int = 90,
     ):
         self.model = model
-        self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
+        self.api_key = api_key
         if not self.api_key:
             raise ProviderRefused("OPENAI_API_KEY is required when provider=openai")
         self.timeout = timeout
@@ -382,12 +382,13 @@ class OpenAIProvider:
         contracts: TaskContracts,
         *,
         default_model: str,
+        api_key: str | None = None,
         client_factory: Any = None,
     ):
         self._contracts = contracts
         self._default_model = default_model
         self._client_factory = client_factory or (
-            lambda model: OpenAIResponsesProvider(model=model)
+            lambda model: OpenAIResponsesProvider(model=model, api_key=api_key)
         )
 
     def _run(self, task: str, context: StrictModel):

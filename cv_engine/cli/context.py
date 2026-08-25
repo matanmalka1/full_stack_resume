@@ -38,7 +38,7 @@ def _resolve_root(args: argparse.Namespace) -> tuple[Path, Any]:
     if args.repo is not None:
         print("WARNING: --repo is deprecated; use --workspace", file=sys.stderr)
     selected = args.workspace or args.repo
-    config = resolve_config(cli={"workspace": selected}, env=os.environ)
+    config = resolve_config(cli={"workspace": selected}, env=os.environ, repo_root=_repo_root())
     root = Path(config.get("workspace") or _repo_root()).resolve()
     return root, config
 
@@ -94,6 +94,7 @@ def _workspace_config(args: argparse.Namespace, workspace: Workspace) -> Any:
         cli={"workspace": args.workspace or args.repo},
         env=os.environ,
         workspace_root=workspace.root,
+        repo_root=_repo_root(),
     )
 
 

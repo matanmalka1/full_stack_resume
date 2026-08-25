@@ -11,3 +11,8 @@ data/snapshots/
 data/verification/
 tmp/
 .workspace/
+
+# Secrets: real values stay out of Git; the committed template does not.
+.env
+.env.*
+!.env.example

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from .. import __version__
 from ..api import ApiLimits, ApiServices, InstanceIdentity
@@ -52,9 +53,14 @@ from .execution import ForegroundOperationExecutor, OperationWorker
 from .workspace import Workspace, WorkspaceError
 
 
+def _repo_root() -> Path:
+    """The repository root, where a `.env` lives when no Workspace is open."""
+    return Path(__file__).resolve().parent.parent.parent
+
+
 def _default_config() -> RuntimeConfig:
     """The settings a caller that passed none is implicitly asking for."""
-    return resolve_config(env=os.environ)
+    return resolve_config(env=os.environ, repo_root=_repo_root())
 
 
 @dataclass(frozen=True)
@@ -161,10 +167,12 @@ def build_services(
     # including the ones that never call a provider. `None` here is what the
     # services turn into an explicit refusal when AI mode is *requested*.
     resolved_provider = provider
-    if resolved_provider is None and os.environ.get("OPENAI_API_KEY"):
+    api_key = resolved_config.get("openai_api_key")
+    if resolved_provider is None and api_key:
         resolved_provider = OpenAIProvider(
             resolved_knowledge.task_contracts(),
             default_model=str(resolved_config.get("model")),
+            api_key=str(api_key),
         )
     shared = {
         "repository": resolved_repository,

@@ -18,12 +18,19 @@ class Setting:
     `workspace_scoped` is false only for settings that select the Workspace
     itself: a value stored inside a Workspace cannot decide which Workspace to
     open without arguing with itself.
+
+    `secret` marks a value that carries a credential. It changes nothing about
+    how the value is read or used - only how it is displayed. Masking happens
+    at the display boundary, never in the value handed to a connector: a
+    masked URL that reached `create_engine` would be a connection string
+    pointing at a host called `***`.
     """
 
     name: str
     env: str
     default: Any = None
     workspace_scoped: bool = True
+    secret: bool = False
 
 
 # The HTTP body limit lives here rather than in the API package because the
@@ -40,9 +47,16 @@ SETTINGS: dict[str, Setting] = {
             "database_url",
             "CV_DATABASE_URL",
             default="postgresql+psycopg://cv:cv@127.0.0.1:5433/cv",
+            secret=True,
         ),
         Setting("provider", "CV_PROVIDER", default="deterministic"),
         Setting("model", "CV_MODEL", default="gpt-5.6"),
+        # Read through the config contract rather than from `os.environ` at the
+        # point of use, so that one layer decides where a credential comes from
+        # and one flag decides how it is shown. Absent means no AI adapter is
+        # built at all, which is what keeps the deterministic workflow reaching
+        # Ready with nothing configured.
+        Setting("openai_api_key", "OPENAI_API_KEY", default=None, secret=True),
         Setting("api_max_body_bytes", "CV_API_MAX_BODY_BYTES", default=API_MAX_BODY_BYTES_DEFAULT),
         # Unset in production: the built UI is served same-origin, so there is no
         # second origin to allow. A value here is the one development Vite origin
@@ -63,7 +77,80 @@ SETTINGS: dict[str, Setting] = {
     )
 }
 
-SOURCES = ("cli", "environment", "workspace-config", "default")
+ENV_FILE_NAME = ".env"
+MASK = "***"
+
+
+def parse_env_file(text: str) -> dict[str, str]:
+    """Parse the small `KEY=value` subset a `.env` file actually needs.
+
+    Deliberately not `python-dotenv`: the supported surface here is one
+    assignment per line, `#` comments, optional `export ` prefixes, and
+    single- or double-quoted values. A dependency would buy shell-style
+    interpolation and multi-line values, neither of which any setting in
+    `SETTINGS` can hold.
+
+    A malformed line is skipped rather than raised on. A `.env` is developer
+    convenience, and refusing to start because of a stray line in a file that
+    the real environment can override anyway would be the wrong trade.
+    """
+    values: dict[str, str] = {}
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].lstrip()
+        key, separator, value = line.partition("=")
+        if not separator:
+            continue
+        key = key.strip()
+        if not key:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        values[key] = value
+    return values
+
+
+def load_env_file(path: Path) -> dict[str, str]:
+    """Read one `.env` file, or nothing if it is absent or unreadable."""
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return {}
+    return parse_env_file(text)
+
+
+def env_file_path(workspace_root: Path | None, repo_root: Path | None = None) -> Path | None:
+    """Where the `.env` for this run lives.
+
+    The Workspace root when one is open, the repository root otherwise. Only
+    one file is read: merging two would make "which file set this" a question
+    with no answer visible in `cv workspace status`.
+    """
+    if workspace_root is not None:
+        return Path(workspace_root) / ENV_FILE_NAME
+    if repo_root is not None:
+        return Path(repo_root) / ENV_FILE_NAME
+    return None
+
+
+def mask_value(name: str, value: Any) -> Any:
+    """The display form of one setting's value.
+
+    An unset secret shows as `None`, not as `***`: "no key is configured" and
+    "a key is configured and withheld" are different facts, and collapsing
+    them would hide the one that explains why AI mode is off.
+    """
+    setting = SETTINGS.get(name)
+    if setting is None or not setting.secret or value is None or value == "":
+        return value
+    return MASK
+
+
+SOURCES = ("cli", "environment", "env-file", "workspace-config", "default")
 
 
 @dataclass(frozen=True)
@@ -91,8 +178,14 @@ class RuntimeConfig:
         return self.values[name].source
 
     def describe(self) -> dict[str, dict[str, Any]]:
+        """The reportable form: secret values masked, sources intact.
+
+        `source` is never masked. Knowing a credential arrived from the
+        environment rather than a `.env` is exactly what makes a stale value
+        diagnosable, and it reveals nothing about the value itself.
+        """
         return {
-            name: {"value": resolved.value, "source": resolved.source}
+            name: {"value": mask_value(name, resolved.value), "source": resolved.source}
             for name, resolved in sorted(self.values.items())
         }
 
@@ -120,10 +213,24 @@ def resolve_config(
     cli: Mapping[str, Any] | None = None,
     env: Mapping[str, str] | None = None,
     workspace_root: Path | None = None,
+    repo_root: Path | None = None,
+    env_file: Mapping[str, str] | None = None,
 ) -> RuntimeConfig:
-    """Apply the precedence CLI > environment > Workspace config > default."""
+    """Apply CLI > environment > `.env` file > Workspace config > default.
+
+    The `.env` layer sits below the real environment on purpose: a value a
+    developer exported deliberately in this shell must not be silently
+    overridden by a file they last edited weeks ago. The reverse order is how
+    a stale file becomes a defect that reads as a code bug.
+
+    `env_file` may be passed directly, which is what lets a caller resolve
+    against a known mapping without touching the filesystem.
+    """
     cli = cli or {}
     env = env if env is not None else {}
+    if env_file is None:
+        path = env_file_path(workspace_root, repo_root)
+        env_file = load_env_file(path) if path is not None else {}
     stored = load_workspace_config(workspace_root) if workspace_root is not None else {}
     values: dict[str, Resolved] = {}
     for name, setting in SETTINGS.items():
@@ -131,6 +238,8 @@ def resolve_config(
             values[name] = Resolved(cli[name], "cli")
         elif env.get(setting.env):
             values[name] = Resolved(env[setting.env], "environment")
+        elif env_file.get(setting.env):
+            values[name] = Resolved(env_file[setting.env], "env-file")
         elif setting.workspace_scoped and stored.get(name) is not None:
             values[name] = Resolved(stored[name], "workspace-config")
         else:

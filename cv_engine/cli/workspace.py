@@ -12,6 +12,7 @@ from ..infrastructure.persistence import (
     current_database_revision,
     upgrade_database,
 )
+from ..runtime.config import mask_value
 from ..runtime.workspace import Workspace, create_workspace, load_workspace
 from .context import CommandContext, _command, _workspace_config
 from .output import _print
@@ -51,7 +52,7 @@ def workspace_command(
             {
                 **opened.describe(),
                 "installation_id": opened.installation_id(),
-                "database_url": database_url,
+                "database_url": mask_value("database_url", database_url),
                 "schema_version": schema_version,
                 "configuration": config.describe(),
             }
@@ -70,7 +71,7 @@ def workspace_command(
         _print(
             {
                 **opened.describe(),
-                "database_url": database_url,
+                "database_url": mask_value("database_url", database_url),
                 "schema_version_before": before,
                 "schema_version": after,
                 "upgraded": before != after,

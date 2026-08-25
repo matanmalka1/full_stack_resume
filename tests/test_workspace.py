@@ -17,7 +17,7 @@ import pytest
 from helpers import CliRun, run_cli
 
 from cv_engine.runtime.composition import build_services
-from cv_engine.runtime.config import CONFIG_NAME, resolve_config
+from cv_engine.runtime.config import CONFIG_NAME, parse_env_file, resolve_config
 from cv_engine.runtime.workspace import (
     MARKER_NAME,
     WorkspaceError,
@@ -154,6 +154,51 @@ def test_config_precedence_is_cli_then_env_then_workspace_then_default(tmp_path:
     )
     with pytest.raises(WorkspaceError, match="unknown Workspace config settings"):
         resolve_config(cli={}, env={}, workspace_root=workspace.root)
+
+
+def test_env_file_sits_below_the_real_environment_and_secrets_are_masked(tmp_path: Path) -> None:
+    """A `.env` supplies values, an exported variable still overrides it.
+
+    The precedence direction is the point. A stale `.env` silently beating a
+    variable the developer exported in this shell is what turns a config
+    mistake into a defect that reads as a code bug.
+    """
+    workspace = create_workspace(tmp_path / "ws")
+    (workspace.root / ".env").write_text(
+        "# comment\n"
+        "export CV_DATABASE_URL='postgresql+psycopg://cv:filepw@127.0.0.1:5433/fromfile'\n"
+        'CV_MODEL="model-from-file"\n'
+        "OPENAI_API_KEY=sk-from-file\n",
+        encoding="utf-8",
+    )
+
+    resolved = resolve_config(cli={}, env={}, workspace_root=workspace.root)
+    assert resolved.source("model") == "env-file"
+    assert resolved.get("model") == "model-from-file"
+    # The value the code connects with is the real one, never the masked form.
+    assert resolved.get("database_url").endswith("/fromfile")
+    assert resolved.get("openai_api_key") == "sk-from-file"
+
+    overridden = resolve_config(
+        cli={}, env={"CV_MODEL": "env-model"}, workspace_root=workspace.root
+    )
+    assert (overridden.get("model"), overridden.source("model")) == ("env-model", "environment")
+
+    # Masking happens only at the display boundary, and only for secrets.
+    described = resolved.describe()
+    assert described["database_url"]["value"] == "***"
+    assert described["openai_api_key"]["value"] == "***"
+    assert described["model"]["value"] == "model-from-file"
+    # Sources stay visible: "why is this value in effect" must remain answerable.
+    assert described["database_url"]["source"] == "env-file"
+    # An unset secret reports as unset rather than as a withheld value.
+    assert resolve_config(cli={}, env={}).describe()["openai_api_key"]["value"] is None
+
+
+def test_env_file_parsing_ignores_comments_blanks_and_malformed_lines() -> None:
+    assert parse_env_file(
+        "\n# comment\nexport A=1\nB='two'\nC=\nnot-an-assignment\n  D = spaced \n"
+    ) == {"A": "1", "B": "two", "C": "", "D": "spaced"}
 
 
 # --- CLI surface ------------------------------------------------------------
