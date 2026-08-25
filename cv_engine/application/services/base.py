@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Generic, TypeVar, cast
 
-from ...domain.draft_markdown import parse_draft
 from ...domain.facts import FactStore
 from ...domain.knowledge import Knowledge
 from ...domain.models import (
@@ -34,7 +33,6 @@ from ..ports import (
     Renderer,
     RevisionPayloadStore,
     SnapshotPayload,
-    TaskContracts,
     WorkingDraftReader,
 )
 from .proposals import ProviderEvidence
@@ -118,60 +116,6 @@ class ServiceBase(Generic[RepoT]):
         except OSError as exc:
             raise InfrastructureFailure(f"could not read working Markdown: {exc}") from exc
 
-    def stored_draft(self, manifest_location: Any) -> DraftDocument:
-        try:
-            return self.artifacts.load_draft(manifest_location)
-        except (OSError, ValueError) as exc:
-            raise InfrastructureFailure(f"could not load stored draft: {exc}") from exc
-
-    def artifact_text(self, location: Any) -> str:
-        try:
-            return self.artifacts.read_document(location)
-        except OSError as exc:
-            raise InfrastructureFailure(f"could not read stored artifact: {exc}") from exc
-
-    def registered_draft(self, reference: str) -> DraftDocument:
-        """Load one registered immutable claim manifest through the store.
-
-        The counterpart to `stored_draft`, which loads a *working* draft from a
-        filesystem path and stays as it is. This one takes the reference an
-        `artifact_versions` row carries, so it finds the payload wherever
-        storage actually keeps it.
-
-        The distinction is the whole point: a working draft is mutable, local,
-        and addressed by path; an approved revision's manifest is immutable,
-        registered, and addressed by reference. Resolving the second to a local
-        path worked only because the two happened to live on the same disk.
-        """
-        try:
-            return parse_draft(self.registered_text(reference))
-        except (OSError, ValueError) as exc:
-            raise InfrastructureFailure(f"could not load stored draft: {exc}") from exc
-
-    def registered_text(self, reference: str) -> str:
-        """One registered immutable payload's text, through the store."""
-        try:
-            return self.snapshot_payloads.read_payload_text(reference)
-        except OSError as exc:
-            raise InfrastructureFailure(f"could not read stored artifact: {exc}") from exc
-
-    @staticmethod
-    def markdown_reference_beside(manifest_reference: str) -> str:
-        """The approved Markdown reference that sits beside a claim manifest.
-
-        `paths_beside` in filesystem terms: an approved revision keeps
-        `resume.json` and `resume.md` under one key prefix, so the sibling is
-        derived from the reference rather than from a directory listing. The
-        manifest is registered at the revision's structured payload reference,
-        which is why this is a rename of the final segment and nothing more.
-        """
-        head, _, tail = manifest_reference.rpartition("/")
-        if tail != "resume.json" or not head:
-            raise InfrastructureFailure(
-                f"claim manifest is not an approved revision payload: {manifest_reference}"
-            )
-        return f"{head}/resume.md"
-
     @property
     def renderer(self) -> Renderer:
         if self._renderer is None:
@@ -191,18 +135,6 @@ class ServiceBase(Generic[RepoT]):
         if self._provider is None:
             raise DependencyUnavailable("AI mode was requested but no provider is configured")
         return self._provider
-
-    def task_contracts(self) -> TaskContracts:
-        """The declared AI task contracts, re-read per command like Knowledge.
-
-        Read through the Knowledge port for the same reason facts are: a cached
-        copy could disagree with the file a later command reads, and the
-        contract version it carries is written into a permanent record.
-        """
-        try:
-            return self._knowledge.task_contracts()
-        except OSError as exc:
-            raise InfrastructureFailure(f"could not read the AI task contracts: {exc}") from exc
 
     def preserve(
         self,

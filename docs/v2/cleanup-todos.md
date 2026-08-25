@@ -27,8 +27,15 @@ or weaken an existing acceptance gate.
       versioning now begins only with a concrete payload schema and reader/writer.
 - [x] **TODO 10 — completed (`73bb020`):** retired `compat.py`; omitted-source compatibility
       resolution now lives at the CLI boundary.
-- [ ] **TODO 11:** slim `ServiceBase` by moving single-consumer helpers to their owning
-      services.
+- [x] **TODO 11 — completed:** slimmed `ServiceBase` without replacing it with another
+      abstraction. The three approved-payload helpers used only by `RenderingService`
+      moved there as private methods; the unused `stored_draft`, `artifact_text`, and
+      `task_contracts` helpers were removed. Provider-response preservation remains in
+      the base because both analysis and draft services consume it. The change removed
+      68 lines from the shared base, preserved behavior and error messages, and added no
+      test items. Ruff, formatting, and diff checks passed in the agent session; the
+      focused rendering regression and Class A non-browser gate passed in the user's
+      environment.
 - [x] **TODO 12:** enforce the existing ports with a type checker or propose a
       specification-compliant reduced port surface.
 - [x] **TODO 13:** measured 178/201 MB dedicated virtualenvs and one shared 554 MB

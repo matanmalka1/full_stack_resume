@@ -213,6 +213,32 @@ export OPENAI_API_KEY='...'
 Provider output is Pydantic-validated and deterministic hard gaps remain authoritative.
 The adapter uses strict Structured Outputs through the Responses API.
 
+## Local Web UI
+
+Two ways to run it, for two different jobs.
+
+**Developing the frontend** — no build step:
+
+```bash
+./.venv/bin/cv web --no-open   # the API on 127.0.0.1:8765
+cd frontend && npm run dev     # the UI on 127.0.0.1:5173
+```
+
+Vite compiles on demand and reloads on save. It proxies `/api` to the backend, so the
+two are one origin from the browser's point of view. This is the normal loop; nothing
+here needs `npm run build`.
+
+**Running the product** — one server, no Node process:
+
+```bash
+cd frontend && npm run build   # once, and after changing the frontend
+./.venv/bin/cv web
+```
+
+`cv web` serves the built assets from FastAPI itself and opens a browser. It refuses to
+start without a build rather than serving a stale one. `npm run build` also runs
+`tsc -b` and the design-token check, so it is slower than `npm run dev` by design.
+
 ## Historical record
 
 The pre-v1 and v1 generation workflows are retired, and the `cv migrate` commands that

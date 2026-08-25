@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from ...domain.draft_markdown import parse_draft
 from ...domain.knowledge import Knowledge
 from ...domain.models import (
     DraftDocument,
@@ -59,6 +60,30 @@ class ExecutedRender:
 class RenderingService(ServiceBase[ReadinessRepository]):
     """Rendering an approved revision and reporting ready state."""
 
+    def _registered_draft(self, reference: str) -> DraftDocument:
+        """Load one approved claim manifest through immutable payload storage."""
+        try:
+            return parse_draft(self._registered_text(reference))
+        except (OSError, ValueError) as exc:
+            raise InfrastructureFailure(f"could not load stored draft: {exc}") from exc
+
+    def _registered_text(self, reference: str) -> str:
+        """Read one registered immutable payload as text."""
+        try:
+            return self.snapshot_payloads.read_payload_text(reference)
+        except OSError as exc:
+            raise InfrastructureFailure(f"could not read stored artifact: {exc}") from exc
+
+    @staticmethod
+    def _markdown_reference_beside(manifest_reference: str) -> str:
+        """Derive the approved Markdown reference beside its claim manifest."""
+        head, _, tail = manifest_reference.rpartition("/")
+        if tail != "resume.json" or not head:
+            raise InfrastructureFailure(
+                f"claim manifest is not an approved revision payload: {manifest_reference}"
+            )
+        return f"{head}/resume.md"
+
     def render(self, application_id: str) -> RenderResult:
         try:
             revision_id = self.repo.latest_approved_revision(application_id).id
@@ -91,7 +116,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         # resolved to a local path. Resolving them worked only while storage
         # happened to be the same disk the Workspace sits on.
         manifest_reference = manifest_record["path"]
-        draft = self.registered_draft(manifest_reference)
+        draft = self._registered_draft(manifest_reference)
         profile = profiles.get(draft.profile)
         _, analysis = bound_analysis(
             self.repo,
@@ -105,7 +130,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         )
         source_report = validate_draft(
             draft,
-            self.registered_text(self.markdown_reference_beside(manifest_reference)),
+            self._registered_text(self._markdown_reference_beside(manifest_reference)),
             facts,
             profile,
             analysis,
