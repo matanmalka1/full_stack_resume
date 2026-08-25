@@ -112,6 +112,28 @@ class ObjectStore(Protocol):
         """
         ...
 
+    def render_location(self, key: str, staging_root: Path) -> Path:
+        """Where Chromium should write the payload destined for `key`.
+
+        The store decides, because only the store knows whether that location
+        *is* the stored object. On a filesystem store it is: the render writes
+        straight to the artifact root and ingest is a read. On a remote store it
+        is scratch space that ingest uploads from.
+
+        `render_cleanup` answers the consequence of that difference, and the two
+        must be read together: deleting the render location is correct in the
+        second case and destroys the payload in the first.
+        """
+        ...
+
+    def render_cleanup(self, path: Path) -> bool:
+        """Whether `path` is scratch to delete after ingest, and delete it.
+
+        Returns True when the file was scratch and has been removed, False when
+        the render location is the stored object and must be left alone.
+        """
+        ...
+
 
 def validate_key(key: str) -> str:
     """Refuse any key that could become a traversal, then return it unchanged.
@@ -250,6 +272,26 @@ class LocalObjectStore:
             return StoredObject(key=key, sha256=sha256_bytes(payload), size=len(payload))
         return self.put(key, resolved_source.read_bytes())
 
+    def render_location(self, key: str, staging_root: Path) -> Path:  # noqa: ARG002
+        """The artifact path itself: here the render target is the stored object.
+
+        `staging_root` is accepted and ignored deliberately - the protocol
+        passes it because a remote store needs it. Rendering into scratch and
+        then copying would write every artifact twice on the one backend where
+        the copy buys nothing, and would reintroduce the temp-then-publish step
+        this design removed.
+        """
+        return self._path(key)
+
+    def render_cleanup(self, path: Path) -> bool:  # noqa: ARG002
+        """Never. On this store the rendered file *is* the payload.
+
+        Deleting it after ingest would delete the artifact the row points at,
+        which is why this returns False rather than doing nothing quietly: the
+        caller is told the file was kept on purpose.
+        """
+        return False
+
     def keys_under(self, prefix: str) -> Iterator[str]:
         """Every key stored beneath `prefix`, in sorted order.
 
@@ -381,6 +423,26 @@ class S3ObjectStore:
         """
         payload = self.get(key)
         return StoredObject(key=key, sha256=sha256_bytes(payload), size=len(payload))
+
+    def render_location(self, key: str, staging_root: Path) -> Path:
+        """Scratch space. The bucket cannot be a render target.
+
+        Keyed by the object key so two concurrent renders cannot collide on one
+        scratch file, and rooted in the Workspace temp directory so nothing
+        Chromium writes lands in the artifact tree - a stray file there would
+        look like an artifact to anything walking it.
+        """
+        return Path(staging_root) / "render" / validate_key(key)
+
+    def render_cleanup(self, path: Path) -> bool:
+        """Always: the payload is in the bucket, this is a leftover copy."""
+        try:
+            Path(path).unlink()
+        except FileNotFoundError:
+            return False
+        except OSError as exc:
+            raise InfrastructureFailure(f"render scratch could not be removed: {path}") from exc
+        return True
 
     def ingest(self, key: str, source: Path) -> StoredObject:
         """Upload a renderer-written file, read once.

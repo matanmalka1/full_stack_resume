@@ -25,6 +25,7 @@ from .object_store import (
     ObjectAlreadyExists,
     ObjectNotFound,
     ObjectStore,
+    validate_key,
 )
 from .paths import relative_within, resolve_within
 
@@ -95,6 +96,7 @@ class PayloadStore:
         """
         self._workspace_root = Path(workspace.root).resolve()
         self._artifacts_root = resolve_within(self._workspace_root, workspace.artifacts_root)
+        self._temp_root = resolve_within(self._workspace_root, workspace.temp_root)
         self._objects = object_store or LocalObjectStore(self._artifacts_root)
 
     @classmethod
@@ -220,17 +222,31 @@ class PayloadStore:
         recruiter_pdf_filename: str,
     ) -> RenderTargets:
         return RenderTargets(
-            html=self.output_path(
-                application_id, revision_id, html_artifact_version_id, suffix="html"
+            html=self._render_location(
+                self.output_path(
+                    application_id, revision_id, html_artifact_version_id, suffix="html"
+                )
             ),
-            pdf=self.output_path(
-                application_id, revision_id, pdf_artifact_version_id, suffix="pdf"
+            pdf=self._render_location(
+                self.output_path(application_id, revision_id, pdf_artifact_version_id, suffix="pdf")
             ),
-            screenshot=self.output_path(
-                application_id, revision_id, screenshot_artifact_version_id, suffix="png"
+            screenshot=self._render_location(
+                self.output_path(
+                    application_id, revision_id, screenshot_artifact_version_id, suffix="png"
+                )
             ),
             recruiter_pdf_filename=recruiter_pdf_filename,
         )
+
+    def _render_location(self, destination: Path) -> Path:
+        """Where Chromium writes the output destined for `destination`.
+
+        The store decides. On the local store this is the artifact path itself,
+        so the render target *is* the stored object and nothing is written
+        twice. On a remote store it is scratch under the Workspace temp root,
+        which `ingest_render_output` uploads and then removes.
+        """
+        return self._objects.render_location(self._key(destination), self._temp_root)
 
     def ingest_render_output(self, path: Path) -> SnapshotPayload:
         """Take one rendered output into storage, keyed by where it belongs.
@@ -243,31 +259,61 @@ class PayloadStore:
         through `open_artifact` - so they belong under the same keys, with the
         same containment rules and the same reference format.
 
-        The key is derived from the path through `_approved_destination`, which
-        is what refuses a rendered output that landed somewhere the layout does
-        not approve. The bytes are read once and that read is what is stored and
-        what is hashed; the caller registers this digest rather than re-hashing
-        the file, so the recorded hash describes what storage holds rather than
-        what the filesystem held a moment later.
+        `path` is the render target the caller was handed, which may be the
+        artifact location or scratch, depending on the backend. The key is
+        recovered by asking the store where each approved output would have been
+        rendered and matching - rather than deriving a key from the path, which
+        only works while the two coincide. An unapproved layout still cannot be
+        ingested, because the candidate keys come from `output_path`.
+
+        The bytes are read once and that read is what is stored and what is
+        hashed; the caller registers this digest rather than re-hashing the
+        file, so the recorded hash describes what storage holds rather than what
+        the filesystem held a moment later. Scratch is removed afterwards, and
+        only when the store says the file was scratch: on the local store the
+        rendered file *is* the payload and deleting it would destroy the
+        artifact the row points at.
 
         A `Path` travels inward here and nothing carrying one travels back:
         the return value is the same storage-neutral `SnapshotPayload` that
         every other commit produces.
         """
-        key = self._key(path)
+        rendered = Path(path)
+        key = self._key_for_render_location(rendered)
         try:
-            stored = self._objects.ingest(key, Path(path))
+            stored = self._objects.ingest(key, rendered)
         except ObjectNotFound as exc:
             raise ArtifactPayloadMissing(
                 "the rendered output was not written to its render target"
             ) from exc
         except ObjectAlreadyExists as exc:
             raise FileExistsError(f"immutable payload already exists: {key}") from exc
+        self._objects.render_cleanup(rendered)
         return SnapshotPayload(
             reference=self._reference_for_key(key),
             sha256=stored.sha256,
             size=stored.size,
         )
+
+    def _key_for_render_location(self, rendered: Path) -> str:
+        """The object key one render location belongs to.
+
+        On the local store the render location is the artifact path, so the key
+        derives from it directly. On a remote store it is scratch named after
+        the key, so the key is read back out of it and then validated against
+        the approved layout - never trusted as a path.
+        """
+        try:
+            return self._key(rendered)
+        except ValueError:
+            staging = resolve_within(self._temp_root, "render")
+            try:
+                relative = relative_within(staging, rendered).as_posix()
+            except ValueError as exc:
+                raise ValueError(
+                    f"payload destination is not an approved layout: {rendered}"
+                ) from exc
+            return self._key(self._path_for_key(validate_key(relative)))
 
     def provider_path(self, application_id: str, operation_id: str, artifact_id: str) -> Path:
         return self._target(
