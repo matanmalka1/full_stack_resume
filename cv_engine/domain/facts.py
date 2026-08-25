@@ -129,7 +129,7 @@ def render_fact_source(title: str, source: FactSource) -> str:
     payload = json.dumps(source.model_dump(mode="json"), ensure_ascii=False, indent=2)
     return (
         f"# {title}\n\n"
-        "This file is an authoritative v1 fact source. Edit facts through the fact "
+        "This file is an authoritative fact source. Edit facts through the fact "
         "lifecycle; profiles may reference IDs but must not copy content.\n\n"
         f"```json\n{payload}\n```\n"
     )

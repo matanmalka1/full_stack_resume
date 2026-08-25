@@ -36,9 +36,8 @@ class UnitOfWork(Protocol):
 
     Declared here because whether a command's records land together is an
     application decision, not a storage detail. A successful scope still rolls
-    back unless the use-case explicitly calls ``commit()``. M1 defines this
-    contract while preserving v1 command grouping; M2 makes it load-bearing for
-    the multi-record v2 commands.
+    back unless the use-case explicitly calls ``commit()``. The contract is
+    load-bearing for the multi-record commands, which must land atomically.
     """
 
     def __enter__(self) -> UnitOfWork: ...

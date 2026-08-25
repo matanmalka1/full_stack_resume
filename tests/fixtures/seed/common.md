@@ -1,6 +1,6 @@
 # Common Canonical Facts
 
-This file is an authoritative v1 fact source. Edit facts through the fact lifecycle; profiles may reference IDs but must not copy content.
+This file is an authoritative fact source. Edit facts through the fact lifecycle; profiles may reference IDs but must not copy content.
 
 ```json
 {

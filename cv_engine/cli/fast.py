@@ -1,8 +1,9 @@
-"""Legacy-signature resolvers and the fast no-pause flow that chains them.
+"""Source-ID resolvers and the fast no-pause flow that chains them.
 
-`_latest_*` fill in the source ID a v1 CLI signature omitted; `_fast` is the
-explicit no-pause flow itself, an approval instruction rather than a bypass,
-recorded as such and passing through every validation and blocker unchanged.
+`_latest_*` fill in the source ID an application-scoped CLI command omits;
+`_fast` is the explicit no-pause flow itself, an approval instruction rather
+than a bypass, recorded as such and passing through every validation and
+blocker unchanged.
 """
 
 from __future__ import annotations
@@ -35,30 +36,30 @@ def _job_text(args: argparse.Namespace) -> str:
 
 
 def _latest_job_snapshot_id(repository: Any, application_id: str) -> str:
-    """The snapshot a legacy CLI signature meant when it named none.
+    """The snapshot an application-scoped command meant when it named none.
 
-    v2 commands take explicit source IDs. The v1 CLI signatures do not carry
-    one, so the resolution happens here, at the CLI boundary, where `latest`
-    is a query convenience rather than part of what a command means.
+    Use-cases take explicit source IDs. The CLI accepts an Application ID
+    without one, so the resolution happens here, at the CLI boundary, where
+    `latest` is a query convenience rather than part of what a command means.
     """
     return repository.latest_snapshot(application_id)["id"]
 
 
 def _latest_job_analysis_id(repository: Any, application_id: str) -> str:
-    """The analysis a legacy CLI signature meant when it named none."""
+    """The analysis an application-scoped command meant when it named none."""
     return repository.latest_analysis(application_id)[0]
 
 
 def _latest_selection_plan_id(repository: Any, application_id: str) -> str:
-    """The immutable plan a legacy CLI signature meant when it named none."""
+    """The immutable plan an application-scoped command meant when it named none."""
     return repository.latest_selection_plan(application_id).id
 
 
 def _active_working_draft(repository: Any, application_id: str):
-    """The draft a legacy CLI signature meant when it named none.
+    """The draft an application-scoped command meant when it named none.
 
-    v2's draft commands take a WorkingDraft ID and an exact edit version. The
-    v1 signatures carry an Application ID, so the resolution happens here, at
+    The draft use-cases take a WorkingDraft ID and an exact edit version. The
+    CLI commands carry an Application ID, so the resolution happens here, at
     the boundary where `active` is a query convenience rather than part of what
     a command means.
     """
@@ -69,7 +70,7 @@ def _matching_validation_run(repository: Any, working) -> dict[str, Any] | None:
     """The ValidationRun that describes this exact draft version, if there is one.
 
     Approval takes a run ID, and it verifies the binding itself. Resolving the
-    run here is what lets `cv approve` keep its v1 signature: the CLI answers
+    run here is what lets `cv approve` take just an Application ID: the CLI answers
     "which run did the user mean" and refuses when the answer is none, instead
     of approval quietly creating a run that could only ever agree with itself.
     """

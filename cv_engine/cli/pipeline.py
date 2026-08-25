@@ -160,8 +160,8 @@ def _validate(context: CommandContext) -> int:
 def _approve(context: CommandContext) -> int:
     """Approve the run the user already obtained, or refuse and name `cv validate`.
 
-    The resolution is the CLI's, not approval's. `cv approve` keeps its v1
-    signature, so the boundary answers which ValidationRun the user meant; when
+    The resolution is the CLI's, not approval's. `cv approve` takes just an
+    Application ID, so the boundary answers which ValidationRun the user meant; when
     no run describes the exact draft in front of them, the honest answer is to
     say so rather than to manufacture one that agrees with itself.
     """

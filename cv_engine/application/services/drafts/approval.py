@@ -9,7 +9,7 @@ from ....domain.models import AuditRecord, DecisionRecord, DraftDocument, Workin
 from ....util import canonical_json, new_id, sha256_text, utc_now
 from ...commands import ApprovalResult, ApproveDraftCommand
 from ...errors import (
-    # Re-exported: the v1 CLI and test suite catch WorkflowError from here, and
+    # Re-exported: the CLI and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     VALIDATION_STALE,
     InfrastructureFailure,

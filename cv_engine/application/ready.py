@@ -18,8 +18,8 @@ def qualify_ready_revision(
     """Re-derive Ready qualification from one revision's stored immutable evidence.
 
     Qualification belongs to the revision, not to the application's active context or
-    recruitment status. The optional IDs are convenience inputs for legacy callers;
-    once resolved, every check below is exact and revision-bound.
+    recruitment status. The optional IDs are convenience inputs for callers that
+    name only the application; once resolved, every check is exact and revision-bound.
     """
     revision = (
         repo.approved_revision(approved_revision_id)

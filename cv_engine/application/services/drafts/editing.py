@@ -7,7 +7,7 @@ from ....domain.drafts import apply_claim_edit, draft_claims, remove_claim
 from ....domain.validation import validate_draft as run_draft_validation
 from ...commands import EditResult, UpdateWorkingDraftCommand, WorkingDraftUpdateResult
 from ...errors import (
-    # Re-exported: the v1 CLI and test suite catch WorkflowError from here, and
+    # Re-exported: the CLI and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     PreconditionFailed,
     StateConflict,

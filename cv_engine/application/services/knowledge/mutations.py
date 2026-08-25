@@ -28,7 +28,7 @@ from ....domain.models import (
 )
 from ...commands import FactMutationResult
 from ...errors import (
-    # Re-exported: the v1 CLI and test suite catch WorkflowError from here, and
+    # Re-exported: the CLI and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     KnowledgeRejected,
     PreconditionFailed,
