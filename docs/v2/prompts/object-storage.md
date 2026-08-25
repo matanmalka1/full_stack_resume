@@ -102,12 +102,19 @@ What is filesystem-bound is the *implementation*: `os.rename`, `mkdir`, `sha256_
 
 Three things stay on the local filesystem. These are decisions, not oversights.
 
-1. **`working/` drafts.** `FilesystemArtifactStore` (`infrastructure/artifacts.py`) and
-   the `ArtifactStore` protocol handle the *mutable* working draft. The user decided on
-   2026-08-25 that this stays local: it is rewritten on every autosave, latency matters,
-   and it is not an immutable record. **Do not touch `ArtifactStore` or
-   `FilesystemArtifactStore`.** The 16 `Path` references in that protocol are correct for
-   what it does.
+1. **`working/` drafts — the *mutable* draft only.** `FilesystemArtifactStore`
+   (`infrastructure/artifacts.py`) owns the working draft. The user decided on 2026-08-25
+   that this stays local: it is rewritten on every autosave, latency matters, and it is
+   not an immutable record.
+
+   **Do not touch** `working_paths()`, `write_working_draft()`, `load_working_draft()`,
+   `working_markdown()`, or the `working/` layout. The `Path` references those carry are
+   correct for what they do.
+
+   **This fence is about draft storage, not about the whole class.** `ArtifactStore` also
+   exposes `relative()`, which is *reference derivation*, not draft storage — and
+   `rendering.py` uses it for rendered outputs, which are immutable payloads that belong
+   in the object store. Changing that caller is in scope. See §3.
 
 2. **`RenderTargets`.** Chromium (via Playwright) writes real files to real paths. It
    cannot write to an object store. `RenderTargets.html/pdf/screenshot` stay `Path`.
@@ -119,9 +126,34 @@ Three things stay on the local filesystem. These are decisions, not oversights.
 
 ## 3. The seam
 
-Every immutable payload passes through **one** method: `PayloadStore.commit()`
-(`payloads.py:241`). Its callers are `commit_snapshot`, `commit_draft_snapshot`,
-`commit_provider_response`, and `commit_revision`.
+There are **two** write paths, not one. An earlier version of this prompt claimed a single
+seam; that was wrong, and it was found during S1 on 2026-08-25.
+
+**Path 1 — `PayloadStore.commit()` (`payloads.py:241`).** Five of the six payload
+families go through it: `commit_snapshot`, `commit_draft_snapshot`,
+`commit_provider_response`, and `commit_revision` (which commits two).
+
+**Path 2 — the renderer, which bypasses `commit()` entirely.** Chromium writes
+`targets.html/pdf/screenshot` to their **final** paths, and
+`application/services/rendering.py:230-234` registers them with
+`self.artifacts.relative(path)` + `sha256_file(path)`. That path never sees
+`_approved_destination()` and never gets the overwrite refusal.
+
+So rendered outputs need their own treatment: **render to a temporary directory, then
+ingest the file into the store.** `RenderTargets` still carries `Path` — Chromium needs
+a real file — but the path becomes temporary, and the store owns the final location.
+
+Two hard conditions on that work:
+
+- **The stored `reference` string must come out byte-identical to what `relative()`
+  produces today.** Another agent is converting the `artifact_versions` table right now
+  (§0). If you cannot reproduce the exact format, stop and ask.
+- **The `sha256` must be computed over what goes into storage**, not over a file re-read
+  afterwards — the same principle as `open_artifact()` (§4).
+
+**Do these separately.** Convert the five `commit()` families first, in their own commit.
+Rendered outputs are a second, separate commit, because that one alone touches
+`rendering.py`. Do not mix them.
 
 `commit()` today does: derive target → `mkdir` → refuse if exists → write to a temp file
 under `temp_root` → validate → hash → `os.rename` into place.
@@ -204,17 +236,30 @@ overwrite refusal and containment checks.
 **Hand back:** the new files and a `ruff` / type-check result. Say plainly that no
 behaviour has changed yet because nothing consumes it.
 
-### S2 — `PayloadStore` consumes `ObjectStore`
+### S2a — `PayloadStore` consumes `ObjectStore`
 
 Rewrite `PayloadStore` internals to go through the injected store. Delete the temp-file
 machinery (§6). Public methods keep their exact signatures and return types.
 
+This covers the five families that already go through `commit()`. **Leave rendered
+outputs alone in this stage.**
+
 **This is a pure refactor: with `LocalObjectStore` injected, behaviour is identical.**
 
-**Gate — hand back:**
+### S2b — Rendered outputs (separate commit)
+
+Route the three rendered outputs through the store: render to a temporary directory, then
+ingest. This is the only stage that touches `application/services/rendering.py`, which is
+why it is kept apart from S2a.
+
+Honour both conditions in §3 — the `reference` format is frozen, and the hash covers what
+is stored.
+
+**Gate for S2a + S2b — hand back:**
 - `./.venv/bin/python -m pytest -m "not browser"` — expected: unchanged from baseline
   (331 test functions today). Any difference is a finding, not noise.
-- `docs/v2/smoke-run.md` end to end — must still reach `preparation_state: ready`.
+- `docs/v2/smoke-run.md` end to end — must still reach `preparation_state: ready`. This is
+  the only check that exercises the render path, so it is not optional here.
 
 ### S3 — `S3ObjectStore`
 
@@ -289,6 +334,9 @@ State the problem and its consequences, then wait.
 5. `docs/v2/smoke-run.md` reaches `preparation_state: ready` with the local store.
 6. The same smoke run reaches `ready` against MinIO or R2.
 7. Overwriting an existing immutable payload is refused in **both** implementations.
+7b. **All six payload families go through the store** — including the three rendered
+   outputs. `rendering.py` no longer registers a payload it wrote directly to a final
+   path, and the `reference` strings it stores are byte-identical to the previous format.
 8. `open_artifact()` still hashes the bytes it returns, captured once.
 9. Temp-staging and `temp_orphans()` are deleted, not disabled.
 10. `cv_engine/infrastructure/persistence/` is **untouched**.
