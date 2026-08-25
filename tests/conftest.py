@@ -238,7 +238,10 @@ def isolated_database(database_engine: Engine, monkeypatch: pytest.MonkeyPatch) 
     table_names = ", ".join(f'"{name}"' for name in metadata.tables)
     with database_engine.begin() as connection:
         connection.execute(text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE"))
-    monkeypatch.setenv("CV_DATABASE_URL", str(database_engine.url))
+    monkeypatch.setenv(
+        "CV_DATABASE_URL",
+        database_engine.url.render_as_string(hide_password=False),
+    )
 
 
 @pytest.fixture
