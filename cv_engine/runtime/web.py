@@ -108,14 +108,15 @@ class WebRuntime:
             raise WebRuntimeError("an existing endpoint does not need another runtime")
         self.services = services
         self.endpoint = endpoint
+        # A production build is optional. Without one the supervisor still runs
+        # the API and the Operation worker, which is exactly what the Vite dev
+        # server proxies to, so `npm run dev` needs no `npm run build` first.
+        # Refusing here would have blocked the development loop this command's
+        # own error message recommended.
         try:
-            self.frontend_dist = validate_frontend_build(frontend_dist)
-        except FrontendBuildError as exc:
-            raise WebRuntimeError(
-                "frontend build is missing; run `cd frontend && npm run build` before "
-                "`cv web`. To develop the frontend instead, no build is needed: run "
-                "`cv web --no-open` for the API and `npm run dev` for the UI."
-            ) from exc
+            self.frontend_dist: Path | None = validate_frontend_build(frontend_dist)
+        except FrontendBuildError:
+            self.frontend_dist = None
         app = create_app(
             build_api_services(services, config=config),
             host=endpoint.host,

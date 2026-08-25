@@ -235,9 +235,11 @@ cd frontend && npm run build   # once, and after changing the frontend
 ./.venv/bin/cv web
 ```
 
-`cv web` serves the built assets from FastAPI itself and opens a browser. It refuses to
-start without a build rather than serving a stale one. `npm run build` also runs
-`tsc -b` and the design-token check, so it is slower than `npm run dev` by design.
+`cv web` serves the built assets from FastAPI itself and opens a browser. Without a
+build it still starts, serving the API and the Operation worker alone - that is the
+dev loop above, where the UI comes from Vite - and reports `"frontend_dist": null` so
+the mode is visible rather than guessed. `npm run build` also runs `tsc -b` and the
+design-token check, so it is slower than `npm run dev` by design.
 
 ## Historical record
 

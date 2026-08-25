@@ -19,13 +19,16 @@ def _web(context: CommandContext) -> int:
         open_existing(endpoint, open_browser=open_browser)
         return 0
 
-    frontend_dist = source_frontend_dist()
-    runtime = WebRuntime(services, endpoint, frontend_dist, config=context.config)
+    runtime = WebRuntime(services, endpoint, source_frontend_dist(), config=context.config)
     _print(
         {
             "url": endpoint.url,
             "reused_existing": False,
-            "frontend_dist": str(frontend_dist),
+            # None when no production build is present: the API and the worker
+            # run, and the UI is expected to come from `npm run dev`.
+            "frontend_dist": (
+                None if runtime.frontend_dist is None else str(runtime.frontend_dist)
+            ),
         }
     )
     sys.stdout.flush()

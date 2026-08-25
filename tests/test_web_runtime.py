@@ -10,7 +10,7 @@ from helpers import ACCOUNT_MANAGER_JOB
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.cli import build_parser
-from cv_engine.runtime.web import WebEndpoint, WebRuntime, WebRuntimeError, select_web_endpoint
+from cv_engine.runtime.web import WebEndpoint, WebRuntime, select_web_endpoint
 
 
 def _frontend_build(root: Path) -> Path:
@@ -63,15 +63,25 @@ def test_web_command_defaults_to_the_contract_endpoint_and_accepts_no_open() -> 
     assert args.no_open is True
 
 
-def test_web_runtime_reports_a_missing_frontend_build_without_a_traceback(
-    services, tmp_path: Path
-) -> None:
-    try:
-        WebRuntime(services, WebEndpoint("127.0.0.1", 18765), tmp_path / "missing")
-    except WebRuntimeError as exc:
-        assert "npm run build" in str(exc)
-    else:
-        raise AssertionError("a missing production build must refuse cv web")
+def test_web_runtime_serves_the_api_without_a_frontend_build(services, tmp_path: Path) -> None:
+    """No build means the Vite dev loop, not a refusal.
+
+    `npm run dev` proxies /api to this supervisor, so requiring `npm run build`
+    first would block the very loop it was recommending.
+    """
+    runtime = WebRuntime(services, WebEndpoint("127.0.0.1", 18765), tmp_path / "missing")
+
+    assert runtime.frontend_dist is None
+
+
+def test_web_runtime_serves_a_present_frontend_build(services, tmp_path: Path) -> None:
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<!doctype html>", encoding="utf-8")
+
+    runtime = WebRuntime(services, WebEndpoint("127.0.0.1", 18765), dist)
+
+    assert runtime.frontend_dist == dist.resolve()
 
 
 def test_select_web_endpoint_avoids_a_foreign_process(services, monkeypatch) -> None:
