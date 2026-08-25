@@ -44,8 +44,8 @@ each worktree. To install the browser again without replacing the environment:
 - `data/applications.sqlite3` stores mutable application state and immutable history.
 - `artifacts/working/` contains replaceable working drafts; approved/rendered versions
   are immutable version directories under `artifacts/<application-id>/`.
-- Legacy files under `outputs/`, `jobs/status.csv`, and `base/cv_base.md` remain
-  immutable historical evidence.
+- `base/` and `profiles/` hold the canonical source facts; a new Workspace copies them
+  in, so they are live input rather than archive.
 
 ## Default workflow
 
@@ -265,7 +265,8 @@ deselected.
 
 ## Historical artifacts
 
-The pre-v1 generation scripts have been retired. Legacy files under `outputs/`,
-`jobs/status.csv`, and `base/cv_base.md` remain immutable historical evidence and must
-not be hand-edited, overwritten, or used as the active tailoring workflow. New work
-uses `cv` exclusively.
+The pre-v1 generation scripts have been retired, and the v1 submission data they wrote
+(`outputs/`, `jobs/status.csv`, `cv-html/`) has been removed: every row was an unsent
+`draft`, so it recorded no submission and preserved no evidence. It stays recoverable
+from Git history. `base/` and `profiles/` remain, as live source facts. New work uses
+`cv` exclusively.

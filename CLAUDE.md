@@ -6,7 +6,9 @@ working rule set. Reading them is the reading requirement.
 ## What this system is
 
 A single-candidate CV tailoring tool. One user, no auth. v2 starts with an empty
-database; v1 is a frozen archive in Git and is never migrated, opened, or written to.
+database. v2 has replaced v1: the v1 submission data was unsent drafts carrying no
+evidence and was removed on 2026-08-25, recoverable from Git history. `base/` and
+`profiles/` are not archive — a new Workspace copies them in as live source facts.
 
 **Changed 2026-08-25: "local only, not deployed, no cloud" is no longer true of
 storage.** Immutable payloads sit behind an object-storage abstraction and can live in
@@ -24,8 +26,8 @@ One thing is not regenerable, and it is where care belongs:
 
 **Immutable records already written** — approved revisions, submitted artifacts, job
 snapshots of postings that later vanish from the web. Overwriting one destroys evidence
-that cannot be reproduced from anything else. This is forward-looking: it is about what
-v2 accumulates, not about history.
+that cannot be reproduced from anything else. This is forward-looking: it guards what
+v2 accumulates. No such record exists yet.
 
 ## Specifications
 
@@ -159,8 +161,8 @@ what remains. A hard failure is never relabelled as a warning.
 - Do not silently change workflow, validation behavior, fact semantics, application
   statuses, or artifact lifecycle.
 - Work only in the v2 branch/worktree against an explicitly marked, isolated Workspace.
-  Never write into the v1 archive. The `looks_legacy` guard refuses to open or mark a v1
-  root; do not route around it.
+  The marker guard refuses to open an unmarked directory or to overwrite an existing
+  marker; do not route around it.
 - Preserve unrelated user changes in a dirty worktree. One agent at a time per worktree
   and isolated Workspace: concurrent edits race the test runner and make every
   measurement meaningless. Parallel agents are permitted only under
@@ -200,7 +202,14 @@ re-add them; see `docs/v2/m2-remaining.md`.
 PostgreSQL replacement 2026-08-25: retired the built-in Workspace backup/restore control
 and the frozen file-database schema-fingerprint control. This task starts every development
 database empty; Alembic's single-head/revision registration guard and explicit foreign-key
-integrity check now own schema safety. `looks_legacy` remains the archive-isolation guard.
+integrity check now own schema safety.
+
+Retired 2026-08-25: **`looks_legacy` and the archive-isolation control.** The v1
+submission data was 22 unsent `draft` rows — no submission, no evidence — and was
+deleted. `jobs/status.csv` was the guard's only signature, so it could no longer fire on
+any real directory, and its two tests passed only because they wrote that file
+themselves. There is no archive left to isolate. The marker guard still refuses an
+unmarked directory and an unsafe purpose/data-class pair. Do not re-add it.
 
 M3 close 2026-08-23: **no control was retirable.** Every remaining control still guards
 an active failure mode, and M3 exercised several of them: fresh count reconciliation

@@ -13,11 +13,6 @@ MARKER_NAME = ".cv-workspace.json"
 WORKSPACE_VERSION = 2
 KNOWLEDGE_DIRS = ("base", "profiles", "rendering", "config", "ai")
 
-# A v1 root is recognised by the tracker the pre-v1 and v1 workflows wrote, not
-# by its directory name. `base/cv_base.md` is deliberately not in this list: the
-# v2 knowledge copy legitimately carries the legacy source files as evidence.
-LEGACY_SIGNATURES = ("jobs/status.csv",)
-
 Purpose = Literal["development", "test", "live"]
 DataClass = Literal["copy", "test", "live"]
 
@@ -57,10 +52,6 @@ def default_roots(root: Path) -> dict[str, Path]:
         "temp_root": root / "tmp",
         "logs_root": root / "logs",
     }
-
-
-def looks_legacy(root: Path) -> bool:
-    return any((root / signature).exists() for signature in LEGACY_SIGNATURES)
 
 
 class Workspace:
@@ -182,19 +173,13 @@ def create_workspace(
 ) -> Workspace:
     """Create an isolated Workspace and its marker.
 
-    A directory that carries v1 tracking data is refused outright. v1 is a
-    frozen archive, not a migration source: no v2 command writes a marker — or
-    anything else — into it. There is no override.
+    A directory that already carries a marker is refused outright: creating a
+    Workspace never rewrites an existing one. There is no override.
     """
     root = Path(root).resolve()
     _check_combination(purpose, data_class)
     if (root / MARKER_NAME).exists():
         raise WorkspaceError(f"a Workspace marker already exists at {root}")
-    if looks_legacy(root):
-        raise WorkspaceError(
-            f"refusing to mark a legacy v1 root as a v2 Workspace: {root}. "
-            "v1 is a frozen archive; create the Workspace in a separate directory."
-        )
     root.mkdir(parents=True, exist_ok=True)
     source = Path(knowledge_source).resolve() if knowledge_source is not None else None
     if source is not None:
@@ -263,18 +248,13 @@ def knowledge_source_hash(source: Path) -> str:
 def load_workspace(root: Path) -> Workspace:
     """Open a Workspace, or refuse.
 
-    Fail-closed: a missing, legacy, unknown, or unsafe marker is an error rather
+    Fail-closed: a missing, unknown, or unsafe marker is an error rather
     than a default. Every normal v2 command reaches its data through this
     function, so there is one place where that decision is made.
     """
     root = Path(root).resolve()
     path = root / MARKER_NAME
     if not path.is_file():
-        if looks_legacy(root):
-            raise WorkspaceError(
-                f"{root} is a legacy v1 root with no v2 Workspace marker. "
-                "v1 is a frozen archive and is never opened as a Workspace."
-            )
         raise WorkspaceError(
             f"no v2 Workspace marker at {root}. Create one with 'cv workspace init'."
         )

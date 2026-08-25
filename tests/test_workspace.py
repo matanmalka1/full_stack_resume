@@ -1,8 +1,8 @@
 """Workspace identity, fail-closed guards, and config precedence.
 
 These are the M1 foundations every later v2 command depends on: if a directory
-can be opened without a marker, or a legacy v1 root can be written to, no later
-safety property means anything.
+can be opened without a marker, or an unsafe marker can be opened as live data,
+no later safety property means anything.
 """
 
 from __future__ import annotations
@@ -84,15 +84,6 @@ def test_workspace_markers_fail_closed_for_plain_legacy_invalid_and_reused_roots
     plain.mkdir()
     with pytest.raises(WorkspaceError, match="no v2 Workspace marker"):
         load_workspace(plain)
-    legacy = tmp_path / "legacy"
-    (legacy / "jobs").mkdir(parents=True)
-    (legacy / "jobs/status.csv").write_text("company,role\n", encoding="utf-8")
-
-    with pytest.raises(WorkspaceError, match="is a legacy v1 root"):
-        load_workspace(legacy)
-    with pytest.raises(WorkspaceError, match="refusing to mark a legacy v1 root"):
-        create_workspace(legacy)
-    assert not (legacy / MARKER_NAME).exists()
     workspace = create_workspace(tmp_path / "ws")
     with pytest.raises(WorkspaceError, match="already exists"):
         create_workspace(workspace.root)
@@ -260,21 +251,6 @@ def test_cli_module_entry_point_reports_the_failure_exit_code(tmp_path: Path) ->
     assert "no v2 Workspace marker" in result.stderr
 
 
-@pytest.fixture
-def legacy_root(tmp_path: Path) -> Path:
-    """A v1 root as the guards see one: tracking data, no v2 marker.
-
-    v1 is a frozen archive. The guards exist so no v2 command ever opens or
-    writes into it, which is the only reason the archive stays trustworthy.
-    """
-    root = tmp_path / "legacy-source"
-    (root / "jobs").mkdir(parents=True)
-    (root / "jobs/status.csv").write_text("company,role\nalpha,dev\n", encoding="utf-8")
-    (root / "base").mkdir()
-    (root / "base/cv_base.md").write_text("# legacy base\n", encoding="utf-8")
-    return root
-
-
 def _tree(root: Path) -> dict[str, bytes]:
     return {
         path.relative_to(root).as_posix(): path.read_bytes()
@@ -317,7 +293,7 @@ def test_cli_workspace_surface_guards_normal_and_unmarked_roots(
     assert json.loads(result.stdout)["root"] == str(workspace_root)
 
 
-def test_cli_commands_fail_closed_without_writes(tmp_path: Path, legacy_root: Path) -> None:
+def test_cli_commands_fail_closed_without_writes(tmp_path: Path) -> None:
     plain = tmp_path / "plain-cli-root"
     plain.mkdir()
 
@@ -335,7 +311,6 @@ def test_cli_commands_fail_closed_without_writes(tmp_path: Path, legacy_root: Pa
 
     roots = [
         (plain, "no v2 Workspace marker"),
-        (legacy_root, "is a legacy v1 root"),
         (unknown.root, "unsupported Workspace version 999"),
         (unsafe.root, "may not open live data"),
     ]

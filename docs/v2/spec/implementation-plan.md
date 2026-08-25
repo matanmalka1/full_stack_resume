@@ -200,8 +200,8 @@ database.
 - [x] No M2 code points to live v1 paths.
 
 The final archive-isolation item is met by construction rather than by a check: no code
-reads v1 at all. The `looks_legacy` guard remains so that no v2 command can open or mark
-the archive.
+reads v1 at all. The `looks_legacy` guard that backed it was retired on 2026-08-25 with
+the v1 submission data it recognised; see CLAUDE.md.
 
 Per-item commits and evidence are in `docs/v2/m2-remaining.md` §G, which is the record of
 state; they are not duplicated here.
