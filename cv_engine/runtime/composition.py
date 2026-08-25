@@ -80,7 +80,7 @@ class Services:
 
 
 def build_object_store(workspace: Workspace, config: RuntimeConfig) -> ObjectStore:
-    """Select the immutable payload backend from configuration.
+    """Choose the immutable payload backend named by configuration.
 
     Local is the default and stays the default: a caller that configures
     nothing gets exactly the filesystem behaviour it had, which is what keeps
