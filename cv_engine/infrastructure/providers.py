@@ -87,15 +87,6 @@ _REDACTED_KEYS = frozenset(
 _REDACTED_ITEM_TYPES = frozenset({"reasoning"})
 
 
-class ProviderError(ProviderUnavailable):
-    """Backwards-compatible alias for an unclassified provider transport failure.
-
-    Kept as a name because `ProviderUnavailable` is the honest default for a
-    call that did not produce a usable answer and did not identify itself as
-    anything more specific.
-    """
-
-
 class StructuredOutputClient(Protocol):
     """Transport: one strict Structured Outputs call, and what it cost.
 
