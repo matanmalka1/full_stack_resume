@@ -156,7 +156,7 @@ def build_services(
     )
     resolved_artifacts = artifacts or FilesystemArtifactStore(workspace)
     resolved_payloads = payloads or PayloadStore(
-        workspace, build_object_store(workspace, config or _default_config())
+        workspace, build_object_store(workspace, resolved_config)
     )
     resolved_renderer = renderer or PlaywrightRenderer(workspace.knowledge_root)
     # Built only when a key is configured. The deterministic workflow must
