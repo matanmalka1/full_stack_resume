@@ -64,7 +64,7 @@ class _PayloadRoots:
 
 
 class PayloadStore:
-    """Immutable v2 payload storage, independent of SQLite registration."""
+    """Immutable v2 payload storage, independent of database registration."""
 
     _OUTPUT_SUFFIXES = {".html", ".pdf", ".png"}
     _TEMP_DIRECTORY = "payloads"
@@ -248,7 +248,7 @@ class PayloadStore:
         """Stage, validate, hash, and atomically publish one immutable payload.
 
         The returned metadata is the registration boundary. The caller registers it
-        in SQLite; a failure there deliberately leaves a safe filesystem orphan.
+        in the database; a failure there deliberately leaves a safe filesystem orphan.
         """
         target = self._approved_destination(destination)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -308,7 +308,7 @@ class PayloadStore:
     ) -> SnapshotPayload:
         """Materialize one archived WorkingDraft version as an immutable payload.
 
-        SQLite registration stays with the caller, exactly as it does for
+        Database registration stays with the caller, exactly as it does for
         revisions: a failure there leaves a safe filesystem orphan rather than
         an archived pointer with nothing behind it.
         """
@@ -339,7 +339,7 @@ class PayloadStore:
         disagree with the adapter that applied it; it validates that they parse
         as JSON, which is what the approved layout promises about the file.
 
-        Registration in SQLite stays with the caller, exactly as it does for
+        Database registration stays with the caller, exactly as it does for
         revisions and archived drafts: a failure there leaves a reconcilable
         filesystem orphan rather than a pointer to nothing.
         """
@@ -451,7 +451,7 @@ class PayloadStore:
     ) -> RevisionPayloads:
         """Commit and re-hash both immutable ApprovedRevision payloads.
 
-        SQLite registration is deliberately left to the caller. If either
+        Database registration is deliberately left to the caller. If either
         registration later fails, these files are safe reconciliation orphans.
         """
 

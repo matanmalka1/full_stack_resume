@@ -17,7 +17,8 @@ target_metadata = metadata
 
 
 def database_url() -> str:
-    return str(resolve_config(env=os.environ).get("database_url"))
+    configured = config.get_main_option("sqlalchemy.url")
+    return configured or str(resolve_config(env=os.environ).get("database_url"))
 
 
 def run_migrations_offline() -> None:
