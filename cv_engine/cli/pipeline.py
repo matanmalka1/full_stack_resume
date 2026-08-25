@@ -185,13 +185,12 @@ def _approve(context: CommandContext) -> int:
     _print(
         {
             "version": approved.version,
-            "directory": str(
-                services.artifacts.resolve(
-                    context.repository.approved_revision(
-                        approved.revision_id
-                    ).resume_markdown_reference
-                ).parent
-            ),
+            # The stored reference, not a resolved local path: under object
+            # storage the payload has no local path, and printing one would
+            # name a file that does not exist.
+            "approved_markdown": context.repository.approved_revision(
+                approved.revision_id
+            ).resume_markdown_reference,
             "revision_id": approved.revision_id,
             "decision_record_id": approved.decision_record_id,
         }
@@ -226,7 +225,7 @@ def _render(context: CommandContext) -> int:
     _print(
         {
             "operation_id": completed.id,
-            "pdf": str(services.artifacts.resolve(pdf_record["path"])),
+            "pdf": pdf_record["path"],
             "filename": pdf_metadata.get("recruiter_filename"),
             "ready_validation": report.model_dump(mode="json"),
         }

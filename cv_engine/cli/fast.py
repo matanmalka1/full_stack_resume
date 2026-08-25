@@ -200,15 +200,14 @@ def _fast(
         "application_id": ingested.application_id,
         "approval": {
             "version": approved.version,
-            "directory": services.artifacts.resolve(
-                services.repository.approved_revision(
-                    approved.revision_id
-                ).resume_markdown_reference
-            ).parent,
+            # The stored reference, not a resolved local path - see pipeline.py.
+            "approved_markdown": services.repository.approved_revision(
+                approved.revision_id
+            ).resume_markdown_reference,
             "revision_id": approved.revision_id,
             "decision_record_id": approved.decision_record_id,
         },
-        "pdf": str(services.artifacts.resolve(pdf_record["path"])),
+        "pdf": pdf_record["path"],
         "filename": pdf_metadata.get("recruiter_filename"),
         "ready": qualification.ready_qualified,
     }

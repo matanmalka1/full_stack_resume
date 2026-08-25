@@ -207,7 +207,7 @@ def test_cli_fast_mode_refuses_pre_render_validation_failure(
 
 
 @pytest.mark.browser
-def test_cli_fast_mode_completes_definition_of_done(cli_runner) -> None:
+def test_cli_fast_mode_completes_definition_of_done(cli_runner, workspace_root: Path) -> None:
     result = cli_runner(
         "fast",
         "--company",
@@ -220,4 +220,8 @@ def test_cli_fast_mode_completes_definition_of_done(cli_runner) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
     assert payload["ready"] is True
-    assert Path(payload["pdf"]).is_file()
+    # The CLI reports the stored reference, which is what artifact_versions
+    # carries and what resolves under either storage backend. On the local
+    # store it is Workspace-relative, so the payload is still checkable here.
+    assert payload["pdf"].startswith("artifacts/outputs/")
+    assert (workspace_root / payload["pdf"]).is_file()
