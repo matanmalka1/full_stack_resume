@@ -177,7 +177,18 @@ def test_env_file_sits_below_the_real_environment_and_secrets_are_masked(tmp_pat
     assert resolved.get("model") == "model-from-file"
     # The value the code connects with is the real one, never the masked form.
     assert resolved.get("database_url").endswith("/fromfile")
-    assert resolved.get("openai_api_key") == "sk-from-file"
+
+    # `OPENAI_API_KEY` is environment-only: the file names it, and it is still
+    # not configured. This is what keeps `unset OPENAI_API_KEY` sufficient to
+    # mean "no provider", which CLAUDE.md, the smoke run, and every offline
+    # test assume.
+    assert resolved.get("openai_api_key") is None
+    assert resolved.source("openai_api_key") == "default"
+    from_environment = resolve_config(
+        cli={}, env={"OPENAI_API_KEY": "sk-from-env"}, workspace_root=workspace.root
+    )
+    assert from_environment.get("openai_api_key") == "sk-from-env"
+    assert from_environment.source("openai_api_key") == "environment"
 
     overridden = resolve_config(
         cli={}, env={"CV_MODEL": "env-model"}, workspace_root=workspace.root
@@ -187,7 +198,7 @@ def test_env_file_sits_below_the_real_environment_and_secrets_are_masked(tmp_pat
     # Masking happens only at the display boundary, and only for secrets.
     described = resolved.describe()
     assert described["database_url"]["value"] == "***"
-    assert described["openai_api_key"]["value"] == "***"
+    assert from_environment.describe()["openai_api_key"]["value"] == "***"
     assert described["model"]["value"] == "model-from-file"
     # Sources stay visible: "why is this value in effect" must remain answerable.
     assert described["database_url"]["source"] == "env-file"

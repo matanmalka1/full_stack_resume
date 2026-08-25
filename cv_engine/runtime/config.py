@@ -24,6 +24,17 @@ class Setting:
     at the display boundary, never in the value handed to a connector: a
     masked URL that reached `create_engine` would be a connection string
     pointing at a host called `***`.
+
+    `environment_only` refuses the `.env` layer for one setting, so it can be
+    supplied by a real environment variable and nothing else. It exists for
+    `OPENAI_API_KEY`. Everything in this repository - `CLAUDE.md`,
+    `docs/v2/smoke-run.md`, and every test that asserts the offline path -
+    treats "the variable is unset" as "no provider is configured". A `.env`
+    able to supply the key would silently break that equivalence: `unset
+    OPENAI_API_KEY` would no longer disarm AI, because unset is not the same
+    as overridden, and a developer who forgot a file would spend money without
+    knowing. Keeping the key out of files also keeps it out of the place
+    credentials actually leak from, which is a committed file.
     """
 
     name: str
@@ -31,6 +42,7 @@ class Setting:
     default: Any = None
     workspace_scoped: bool = True
     secret: bool = False
+    environment_only: bool = False
 
 
 # The HTTP body limit lives here rather than in the API package because the
@@ -55,8 +67,15 @@ SETTINGS: dict[str, Setting] = {
         # point of use, so that one layer decides where a credential comes from
         # and one flag decides how it is shown. Absent means no AI adapter is
         # built at all, which is what keeps the deterministic workflow reaching
-        # Ready with nothing configured.
-        Setting("openai_api_key", "OPENAI_API_KEY", default=None, secret=True),
+        # Ready with nothing configured - and `environment_only` is what keeps
+        # `unset OPENAI_API_KEY` sufficient to mean absent.
+        Setting(
+            "openai_api_key",
+            "OPENAI_API_KEY",
+            default=None,
+            secret=True,
+            environment_only=True,
+        ),
         Setting("api_max_body_bytes", "CV_API_MAX_BODY_BYTES", default=API_MAX_BODY_BYTES_DEFAULT),
         # Unset in production: the built UI is served same-origin, so there is no
         # second origin to allow. A value here is the one development Vite origin
@@ -223,6 +242,9 @@ def resolve_config(
     overridden by a file they last edited weeks ago. The reverse order is how
     a stale file becomes a defect that reads as a code bug.
 
+    A setting marked `environment_only` skips that layer entirely: see
+    `Setting` for why `OPENAI_API_KEY` must not be suppliable by a file.
+
     `env_file` may be passed directly, which is what lets a caller resolve
     against a known mapping without touching the filesystem.
     """
@@ -238,7 +260,7 @@ def resolve_config(
             values[name] = Resolved(cli[name], "cli")
         elif env.get(setting.env):
             values[name] = Resolved(env[setting.env], "environment")
-        elif env_file.get(setting.env):
+        elif not setting.environment_only and env_file.get(setting.env):
             values[name] = Resolved(env_file[setting.env], "env-file")
         elif setting.workspace_scoped and stored.get(name) is not None:
             values[name] = Resolved(stored[name], "workspace-config")
