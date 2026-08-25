@@ -123,6 +123,11 @@ class ObjectStore(Protocol):
         `render_cleanup` answers the consequence of that difference, and the two
         must be read together: deleting the render location is correct in the
         second case and destroys the payload in the first.
+
+        The returned location is ready to be written to: the store creates any
+        directory the renderer would need. Chromium is handed this path and
+        writes to it directly, so a location whose parent does not exist is not
+        a location - it is a `FileNotFoundError` the renderer raises.
         """
         ...
 
@@ -280,8 +285,15 @@ class LocalObjectStore:
         then copying would write every artifact twice on the one backend where
         the copy buys nothing, and would reintroduce the temp-then-publish step
         this design removed.
+
+        The parent directory is created here because this is where the render
+        location is decided. `put` creates it for a payload that arrives as
+        bytes, but a rendered output never passes through `put` on this store -
+        ingest reads it in place - so nothing else would.
         """
-        return self._path(key)
+        path = self._path(key)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return resolve_within(self._root, path)
 
     def render_cleanup(self, path: Path) -> bool:  # noqa: ARG002
         """Never. On this store the rendered file *is* the payload.
@@ -431,8 +443,13 @@ class S3ObjectStore:
         scratch file, and rooted in the Workspace temp directory so nothing
         Chromium writes lands in the artifact tree - a stray file there would
         look like an artifact to anything walking it.
+
+        The parent directory is created here, as on the local store: Chromium
+        writes to this path directly and cannot create it.
         """
-        return Path(staging_root) / "render" / validate_key(key)
+        path = Path(staging_root) / "render" / validate_key(key)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
 
     def render_cleanup(self, path: Path) -> bool:
         """Always: the payload is in the bucket, this is a leftover copy."""
