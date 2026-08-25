@@ -27,6 +27,24 @@ const jsonResponse = (body: unknown, status = 200): Response =>
     headers: { "Content-Type": "application/json" },
   });
 
+/* The screen reads the Application projection for every Operation, not only a succeeded
+   analyze: that read is what lets a running Operation publish its workflow stage. It is
+   a background read that answers no assertion here, so these tests route by URL rather
+   than by call position - a positional queue hands the projection whichever response the
+   next assertion was waiting for. */
+const projectionUrl = "/api/v1/applications/app-1";
+const projection = {
+  application: { id: "app-1" },
+  review_reasons: [],
+  working_draft_state: "none",
+  active_operation: null,
+  active_analysis_id: null,
+  active_selection_plan_id: null,
+};
+
+const postCalls = (fetchMock: { mock: { calls: unknown[][] } }) =>
+  fetchMock.mock.calls.filter((call) => (call[1] as RequestInit | undefined)?.method === "POST");
+
 /* Retries and refetching are off inside the test client: the poll interval is covered by
    its own unit tests, and a live timer here would make every assertion racy. */
 const renderPage = (children: ReactNode) => {
@@ -245,30 +263,32 @@ describe("OperationPage", () => {
   });
 
   it("cancels only when the backend exposes the action and keeps the returned state", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(operation()))
-      .mockResolvedValueOnce(
-        jsonResponse(
-          operation({
-            status: "cancelled",
-            is_terminal: true,
-            phase: "completed",
-            available_actions: ["retry"],
-          }),
-        ),
-      );
+    const cancelled = operation({
+      status: "cancelled",
+      is_terminal: true,
+      phase: "completed",
+      available_actions: ["retry"],
+    });
+    let cancelRequested = false;
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") {
+        cancelRequested = true;
+        return Promise.resolve(jsonResponse(cancelled));
+      }
+      if (url === projectionUrl) {
+        return Promise.resolve(jsonResponse(projection));
+      }
+      return Promise.resolve(jsonResponse(cancelRequested ? cancelled : operation()));
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage(<OperationPage />);
     fireEvent.click(await screen.findByRole("button", { name: "ביטול הפעולה" }));
 
     expect(await screen.findByRole("button", { name: "ניסיון חוזר" })).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      "/api/v1/operations/op-1/cancel",
-      expect.objectContaining({ method: "POST" }),
-    );
+    expect(postCalls(fetchMock)).toHaveLength(1);
+    expect(postCalls(fetchMock)[0]?.[0]).toBe("/api/v1/operations/op-1/cancel");
   });
 
   it("follows a retry to the new Operation named by the accepted response", async () => {
@@ -285,27 +305,32 @@ describe("OperationPage", () => {
       retry_of_operation_id: "op-1",
       available_actions: ["cancel"],
     });
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(terminal))
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(queued), {
-          status: 202,
-          headers: {
-            "Content-Type": "application/json",
-            Location: "/api/v1/operations/op-2",
-          },
-        }),
-      )
-      .mockResolvedValueOnce(jsonResponse(queued));
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") {
+        return Promise.resolve(
+          new Response(JSON.stringify(queued), {
+            status: 202,
+            headers: {
+              "Content-Type": "application/json",
+              Location: "/api/v1/operations/op-2",
+            },
+          }),
+        );
+      }
+      if (url === projectionUrl) {
+        return Promise.resolve(jsonResponse(projection));
+      }
+      return Promise.resolve(jsonResponse(url.endsWith("op-2") ? queued : terminal));
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage(<OperationPage />);
     fireEvent.click(await screen.findByRole("button", { name: "ניסיון חוזר" }));
 
     expect(await screen.findByRole("button", { name: "ביטול הפעולה" })).toBeInTheDocument();
-    await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2));
-    const retryRequest = fetchMock.mock.calls[1];
+    await waitFor(() => expect(postCalls(fetchMock)).toHaveLength(1));
+    const retryRequest = postCalls(fetchMock)[0];
     expect(retryRequest?.[0]).toBe("/api/v1/operations/op-1/retry");
     expect(retryRequest?.[1]).toEqual(
       expect.objectContaining({
@@ -313,7 +338,7 @@ describe("OperationPage", () => {
         headers: expect.any(Headers),
       }),
     );
-    expect((retryRequest?.[1]?.headers as Headers).get("Idempotency-Key")).not.toBeNull();
+    expect(((retryRequest?.[1] as RequestInit).headers as Headers).get("Idempotency-Key")).not.toBeNull();
   });
 
   it("keeps the safe Operation visible when retry is refused with a conflict", async () => {
@@ -328,20 +353,22 @@ describe("OperationPage", () => {
         },
         409,
       );
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        jsonResponse(
-          operation({
-            status: "failed",
-            is_terminal: true,
-            phase: "completed",
-            available_actions: ["retry"],
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(conflictResponse())
-      .mockResolvedValueOnce(conflictResponse());
+    const failed = operation({
+      status: "failed",
+      is_terminal: true,
+      phase: "completed",
+      available_actions: ["retry"],
+    });
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") {
+        return Promise.resolve(conflictResponse());
+      }
+      if (url === projectionUrl) {
+        return Promise.resolve(jsonResponse(projection));
+      }
+      return Promise.resolve(jsonResponse(failed));
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage(<OperationPage />);
@@ -352,11 +379,18 @@ describe("OperationPage", () => {
     );
     expect(screen.getByText("נכשלה")).toBeInTheDocument();
 
-    const firstKey = (fetchMock.mock.calls[1]?.[1]?.headers as Headers).get("Idempotency-Key");
+    const keyOf = (call: unknown[] | undefined) =>
+      ((call?.[1] as RequestInit | undefined)?.headers as Headers | undefined)?.get(
+        "Idempotency-Key",
+      );
+    const firstKey = keyOf(postCalls(fetchMock)[0]);
+    expect(firstKey).not.toBeNull();
+
+    /* A refused retry is the same command retried, so it must carry the key it carried
+       the first time: a fresh one would let the backend queue two attempts. */
     fireEvent.click(screen.getByRole("button", { name: "ניסיון חוזר" }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
-    const secondKey = (fetchMock.mock.calls[2]?.[1]?.headers as Headers).get("Idempotency-Key");
-    expect(secondKey).toBe(firstKey);
+    await waitFor(() => expect(postCalls(fetchMock)).toHaveLength(2));
+    expect(keyOf(postCalls(fetchMock)[1])).toBe(firstKey);
   });
 
   it("does not invent an action when the backend exposes none", async () => {

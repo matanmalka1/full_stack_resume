@@ -489,7 +489,7 @@ describe("DraftEditorPage preview", () => {
     const editors = await screen.findAllByLabelText("טקסט השורה");
     fireEvent.change(editors[0]!, { target: { value: "typed then switched away" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "תצוגה" }));
+    fireEvent.click(screen.getByRole("button", { name: "תצוגה ואישור" }));
 
     expect(screen.getAllByLabelText("טקסט השורה")[0]).toHaveValue("typed then switched away");
     expect(screen.getByTitle("תצוגה מקדימה של הטיוטה")).toBeInTheDocument();

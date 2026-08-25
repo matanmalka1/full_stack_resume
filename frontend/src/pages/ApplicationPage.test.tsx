@@ -130,7 +130,9 @@ describe("ApplicationPage", () => {
     renderPage();
 
     expect(await screen.findByRole("heading", { level: 1, name: "Acme" })).toBeInTheDocument();
-    expect(screen.getByText("תפקיד היעד: Backend Engineer")).toBeInTheDocument();
+    /* The masthead sets the role as the company's subtitle, where a "תפקיד היעד:" label
+       would only repeat what its position already says. */
+    expect(screen.getByText("Backend Engineer")).toBeInTheDocument();
     expect(screen.getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
     expect(screen.getByText("אין טיוטה פעילה")).toBeInTheDocument();
   });
