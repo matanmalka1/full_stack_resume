@@ -2,6 +2,8 @@
 
 Status: **Approved for v2.0 implementation (2026-08-17)**
 
+PostgreSQL/object-storage plan amendment: **2026-08-25**
+
 Product authority: `docs/v2/spec/product-spec.md`
 
 Architecture: `docs/v2/spec/architecture.md`
@@ -14,18 +16,17 @@ The implementation sequence is:
 
 `Review -> Architecture -> Plan -> Implement -> Test -> Verify`
 
-Work occurs on long-lived branch `v2-main` in the isolated worktree
-`../resume_python-v2`. A single developer working sequentially uses small milestone
-commits rather than additional feature branches. A separate feature branch is justified
-only for genuinely parallel work.
+Work occurs on the active v2 branch/worktree against an explicitly marked, isolated
+Workspace and dedicated PostgreSQL database. A single developer working sequentially
+uses small milestone commits rather than additional feature branches. Parallel lanes
+follow `docs/v2/process/execution-protocol.md` and isolate files, database, object-store
+namespace, temp output, and ports.
 
 No v2 process opens the v1 Workspace, in development or otherwise. All development,
 Alpha, and Beta use explicit test/copy Workspace markers.
 
-The current repository authority files describe v1 and prohibit the Web UI as out of
-v1. After this document set is approved and before M1 implementation, update repository
-authority so v2 scope is expressly permitted and the v2 product specification becomes
-the top authority for v2. This is a required gate, not an implicit reinterpretation.
+Repository authority has already handed off to v2. `AGENTS.md` and the approved v2
+specifications govern current work; the v1 documents remain frozen evidence.
 
 ## 2. M0 — v1 baseline and isolation
 
@@ -99,7 +100,8 @@ source-ID resolvers.
 
 ### 3.4 M1 acceptance
 
-- [x] Domain/application code imports no FastAPI, SQLite, path layout, or provider HTTP.
+- [x] Domain/application code imports no FastAPI, SQLAlchemy/psycopg, path layout, or
+      provider HTTP.
 - [x] CLI completes the deterministic v1 Definition of Done through services.
 - [x] Selected facts, claims, validation outcomes, Ready eligibility, and decision
       behavior retain semantic parity with v1.
@@ -125,18 +127,19 @@ them inside endpoints later.
 
 ### 4.1 Schema and repositories
 
-- Design the explicit v2 SQLite schema and numbered SQL migrations.
-- Configure foreign keys, WAL, busy timeout, short transactions, and narrow immutable
-  constraints/triggers.
-- Implement repositories by transactional ownership and UnitOfWork.
-- Implement filesystem stores for snapshots, revisions, outputs, provider responses,
-  temp files, and manifests.
+- Design the explicit v2 PostgreSQL schema and numbered Alembic revisions.
+- Configure foreign keys, transaction boundaries/isolation, row-level claiming, and
+  narrow immutable constraints/triggers.
+- Implement SQLAlchemy Core repositories by transactional ownership and UnitOfWork;
+  do not introduce ORM Sessions or mapped entities.
+- Implement a storage-neutral ObjectStore for snapshots, revisions, outputs, provider
+  responses, and manifests, with local default and optional S3-compatible adapters.
 - Implement UUIDv4 IDs, UTC timestamps, and SHA-256 hashes. Introduce a serialization
   version only with a concrete versioned payload reader and writer.
 
 ### 4.2 Domain records
 
-- Add immutable JobSnapshot filesystem payloads and metadata.
+- Add immutable JobSnapshot object-store payloads and PostgreSQL metadata.
 - Add immutable JobAnalysis and SelectionPlan versions.
 - Add the one mutable WorkingDraft with edit version/content hash.
 - Add immutable ValidationRun and ApprovedRevision records.
@@ -173,32 +176,32 @@ them inside endpoints later.
 - Implement contextual pending fact, confirmation/promotion, attachment, and
   SelectionPlan flows.
 
-### 4.6 Workspace backup and restore
+### 4.6 Database lifecycle and storage portability
 
-Rescoped on 2026-08-19, when v1 became a frozen archive rather than data to migrate.
-Two of the three original bullets — a v1 inventory and mapping contract, and a migration
-engine built against fixtures and copies — lost their subject entirely and are withdrawn.
-What remains protects what v2 itself accumulates.
+Superseded on 2026-08-25 with the PostgreSQL/object-storage baseline. The built-in
+Workspace backup/restore command was retired: PostgreSQL and bucket lifecycle belong to
+the configured environment, while this development baseline always starts from an empty
+database.
 
-- Add Workspace backup, restore into a new directory, and the open/reconcile path that
-  proves a restored Workspace works.
-
-No separate manifest or hash list. Artifact hashes already live in `artifact_versions`
-and the database verifies itself, so a second list beside them could only drift and would
-then have to be adjudicated against them. The proof a backup is good is that it opens.
+- Apply schema changes explicitly through Alembic with one registered head.
+- Prove an empty-database upgrade and foreign-key integrity.
+- Keep immutable payload references identical under local and S3-compatible storage.
+- Keep the deterministic local workflow operational without cloud configuration or boto3.
 
 ### 4.7 M2 acceptance
 
-- [x] Repositories/UoW pass real SQLite integration tests.
+- [x] Repositories/UoW pass real PostgreSQL integration tests.
 - [x] All immutable entities reject update/delete bypasses as required.
 - [x] Projection/action policy is internally consistent under concurrency fixtures.
 - [x] ETag, idempotency, leases, cancellation, retry, and SOURCE_CHANGED pass.
 - [x] Journal crash windows recover or quarantine explicitly.
-- [x] Backup restores to an independently openable/reconcilable Workspace.
+- [x] Alembic topology and empty-database upgrade checks pass.
+- [x] Local and S3-compatible object-store contracts preserve immutable payload identity.
 - [x] No M2 code points to live v1 paths.
 
-Item 7 is met by construction rather than by a check: no code reads v1 at all. The
-`looks_legacy` guard remains so that no v2 command can open or mark the archive.
+The final archive-isolation item is met by construction rather than by a check: no code
+reads v1 at all. The `looks_legacy` guard remains so that no v2 command can open or mark
+the archive.
 
 Per-item commits and evidence are in `docs/v2/m2-remaining.md` §G, which is the record of
 state; they are not duplicated here.
@@ -252,7 +255,7 @@ large frontend.
 
 ### 5.4 M3 acceptance
 
-- [x] Real FastAPI + worker + SQLite + filesystem test completes the API sequence
+- [x] Real FastAPI + worker + PostgreSQL + object-store test completes the API sequence
       Create -> Analyze -> Review if needed -> Draft -> Edit -> Validate -> Approve ->
       Render -> Ready.
 - [x] The no-review path receives an initial SelectionPlan from Analyze and can
@@ -369,14 +372,15 @@ data as a test environment.
 - Run macOS runtime, Chrome, WebKit, and rendering verification.
 - Run manual OpenAI analysis/draft smoke and record execution metadata.
 - Verify performance regression budgets and investigate material regressions.
-- Verify backup, restore, open, and reconciliation.
+- Verify Alembic topology, empty-database upgrade, object-store contracts, and the
+  configured environment's data-protection policy.
 - Run the complete v2 Definition of Done and publish the acceptance report.
 
 ### 8.3 Release states
 
 Engineering Complete means all M0-M6 code/document/test work is done.
 
-Release Ready additionally means the acceptance report, backup/restore, macOS
+Release Ready additionally means the acceptance report, database/storage lifecycle, macOS
 verification, and manual provider smoke have passed.
 
 There is no cutover event. v2 starts with an empty database and v1 stays a frozen archive

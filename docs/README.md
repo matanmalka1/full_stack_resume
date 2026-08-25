@@ -44,7 +44,15 @@ v2 starts with an empty database and there is no migration from v1.
 - `v2/m2-remaining.md` — M2 state, closed. Kept for its evidence, not updated.
 - `v2/cleanup-todos.md` — non-milestone cleanup items.
 - `v2/process/execution-protocol.md` — how work is split across parallel agents. Adds to
-  `CLAUDE.md`; repeats none of it.
+  `AGENTS.md`; repeats none of it.
+- `v2/smoke-run.md` — deterministic no-AI CLI run against a fresh PostgreSQL database
+  and isolated Workspace.
+
+The 2026-08-25 persistence baseline is PostgreSQL/SQLAlchemy/Alembic plus a
+storage-neutral local-or-S3-compatible object store. Runtime configuration supports one
+`.env` below the real process environment; `OPENAI_API_KEY` remains environment-only and
+all configured secrets are masked at reporting boundaries. `v2/spec/architecture.md`
+owns these technical contracts.
 
 ## v1 — `v1/`
 

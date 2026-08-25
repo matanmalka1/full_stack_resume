@@ -4,7 +4,7 @@ Status: **Active working protocol (2026-08-19)**
 
 Scope: how multi-agent implementation work is organized in this repository. This document
 describes the *process*; it grants no authorization and overrides no product document.
-`CLAUDE.md` and the approved specifications remain authoritative, and every rule they
+`AGENTS.md` and the approved specifications remain authoritative, and every rule they
 state applies to every lane. Only the multi-agent additions are written here.
 
 It was derived from the M1 boundary refactor, which ran seven stages across three parallel
@@ -73,11 +73,13 @@ sequentially dependent, say so and run it serially.
 ### Runtime isolation
 
 A separate git worktree separates the *files*. It does not separate what the tests touch,
-and that is what `CLAUDE.md`'s concurrency rule is actually about: two lanes writing the
-same SQLite database or the same rendered output race the test runner, and the numbers
+and that is what `AGENTS.md`'s concurrency rule is actually about: two lanes writing the
+same PostgreSQL database/schema, object-store namespace, or rendered output race the test
+runner, and the numbers
 they report become meaningless without either lane failing. So a lane also gets its own:
 
-- Workspace root and its marker, SQLite database, and payload/artifact tree;
+- Workspace root and its marker, a dedicated PostgreSQL database, and a dedicated
+  local payload tree or S3-compatible bucket prefix;
 - temp roots and test output directories;
 - any bound port, when a lane runs the API or a browser.
 
@@ -104,7 +106,7 @@ which strategy it uses so integration does not assume a shim exists.
 
 ## 5. Git protocol
 
-`CLAUDE.md`'s rules on small scoped commits, destructive operations, and isolated
+`AGENTS.md`'s rules on small scoped commits, destructive operations, and isolated
 Workspaces apply unchanged to every lane. What multi-agent work adds:
 
 - One git worktree per lane, all based on the same commit. No executor commits to the
@@ -142,7 +144,7 @@ A lane reports done only when all of these hold, with command output quoted:
 5. Anything not achievable mechanically is reported as a finding, **not** worked around. A
    lane that discovers it needs to change behaviour stops and reports.
 
-Reporting follows `CLAUDE.md`: passed / failed / remaining, with command evidence.
+Reporting follows `AGENTS.md`: passed / failed / remaining, with command evidence.
 
 ### Lead integration
 
@@ -151,7 +153,7 @@ Reporting follows `CLAUDE.md`: passed / failed / remaining, with command evidenc
    reconcile only the cross-lane call sites left to integration.
 3. Prove no module still imports a moved symbol from its old home (grep the old paths).
 4. One verification at boundary close: the gate for the boundary's highest change class
-   under `CLAUDE.md`, run over the merged tree, plus the semantic-parity check. For a
+   under `AGENTS.md`, run over the merged tree, plus the semantic-parity check. For a
    Class B boundary that is golden hashes, the architecture test, and an offline CLI run
    on top of the non-browser suite; for Class C it adds the browser suite and a
    `0001`-only database upgrading cleanly to head. The browser suite is skipped only when
@@ -181,7 +183,7 @@ Saying "this does not need three lanes" is a valid and expected outcome of plann
 
 ## 8. Stop conditions
 
-`CLAUDE.md`'s stop conditions hold for every agent in every wave. Lane work adds these,
+`AGENTS.md`'s stop conditions hold for every agent in every wave. Lane work adds these,
 which are specific to moving code under exclusive ownership:
 
 - a move cannot be made without changing behaviour, or a test asserts on something the

@@ -2,6 +2,8 @@
 
 Status: **Approved for v2.0 implementation (2026-08-17)**
 
+Persistence, object-storage, and secret-configuration amendments: **2026-08-25**
+
 Product version: **2.0**
 
 Base v1 revision: **`v1.0.0` / `2cc31c7`**
@@ -15,8 +17,10 @@ Official target platform: macOS
 ## תקציר מנהלים
 
 v2.0 הופך את מנוע ה-CLI המאומת של v1 ל-Workspace מקומי מלא למועמד יחיד.
-המערכת כוללת FastAPI מקומי, ממשק React בעברית, SQLite ל-state מובנה
-ו-filesystem ל-snapshots ולתוצרים immutable. ה-CLI וה-Web אינם קוראים זה לזה;
+המערכת כוללת FastAPI מקומי, ממשק React בעברית, PostgreSQL ל-state מובנה
+ו-object-storage abstraction ל-snapshots ולתוצרים immutable. ברירת המחדל היא
+אחסון מקומי, וניתן לבחור bucket תואם S3 בלי לשנות references במסד.
+ה-CLI וה-Web אינם קוראים זה לזה;
 שניהם clients של אותה שכבת application.
 
 הזרימה המרכזית היא:
@@ -32,7 +36,7 @@ AI מסווג ומציע ניסוח תחת חוזים מובנים. הוא אי�
 ישירות. עובדות canonical, policy דטרמיניסטי ו-validation נשארים סמכותיים. מסלול
 דטרמיניסטי מלא עד Ready PDF ממשיך לעבוד ללא API key.
 
-הפיתוח מתבצע ב-branch `v2-main` וב-worktree המבודד `../resume_python-v2`.
+הפיתוח מתבצע ב-branch/worktree הפעיל של v2 וב-Workspace מבודד ומסומן במפורש.
 הפיתוח משתמש בעותקים בלבד. אין dual-write. v1 הוא ארכיון קפוא ב-Git ואינו נפתח,
 נקרא או נכתב על ידי v2 — אין מיגרציה ואין cutover.
 
@@ -57,10 +61,9 @@ An internal naming or packaging decision may change without approval when observ
 behavior and every invariant remain unchanged. A semantic change, scope expansion,
 migration risk, or weakened factual boundary requires an explicit decision.
 
-The repository's current agent instructions still describe v1 and prohibit the Web UI
-as out of v1. They must be updated through an explicit authority handoff after these v2
-documents are approved and before M1 implementation begins. This draft does not
-silently override those instructions.
+Repository authority has handed off to v2. `AGENTS.md` governs repository work and points
+to this specification set; the v1 documents remain frozen evidence rather than active
+instructions.
 
 ## 2. Product goal
 
@@ -85,8 +88,10 @@ views and diagnostic interfaces.
 - FastAPI is the local backend and serves the production React build.
 - React, TypeScript, Vite, Tailwind CSS, React Router, TanStack Query, and React Hook
   Form form the frontend baseline. Radix primitives may be used selectively.
-- SQLite stores structured state and relationships.
-- The filesystem stores immutable or heavy payloads.
+- PostgreSQL stores structured state and relationships through SQLAlchemy Core and
+  explicit Alembic revisions.
+- Immutable or heavy payloads use a storage-neutral object-store boundary. Local
+  filesystem storage is the default; an S3-compatible bucket is optional.
 - Facts, Profiles, selection policies, prompts, task contracts, and rendering rules
   remain version-controlled files and independent sources of truth.
 - The CLI and FastAPI call the same application services directly. The CLI does not use
@@ -129,14 +134,17 @@ v2.0 includes:
   internal and external submissions, status correction, and overdue warnings after the
   first vertical slice is complete.
 - Recruiter-facing PDF download and human-readable provenance/decision Markdown export.
-- Full backup, restore, and reconciliation commands.
+- Explicit schema upgrade and reconciliation commands. PostgreSQL and remote-bucket
+  backup/restore remain environment responsibilities rather than Workspace commands.
 
 ## 5. Explicit non-goals
 
 The following are not part of v2.0:
 
 - Multiple candidates or candidate administration.
-- Authentication, cloud deployment, sync, PostgreSQL, or SQLAlchemy.
+- Authentication, multi-user/tenant behavior, sync, or managed application deployment.
+- Additional structured-state databases, ORMs, or broad storage-provider abstractions
+  beyond PostgreSQL/SQLAlchemy Core and the local/S3-compatible object stores.
 - Automatic job extraction from URLs, LinkedIn, or JS-heavy sites.
 - Job-description PDF parsing or arbitrary file uploads.
 - Additional AI providers or a provider selector.
@@ -203,15 +211,15 @@ decision.
     events.
 18. Submitted artifacts and ApprovedRevisions are never overwritten or automatically
     deleted.
-19. SQLite owns structured state and relationships; the filesystem owns immutable/heavy
-    payloads; Knowledge files own canonical knowledge. No mutable content has two
-    simultaneous sources of truth.
+19. PostgreSQL owns structured state and relationships; the configured object store owns
+    immutable/heavy payloads; Knowledge files own canonical knowledge. No mutable content
+    has two simultaneous sources of truth.
 20. Every approved output stores exact provenance sufficient to identify its candidate
     context, job context, knowledge context, policies, prompts, provider execution, and
     artifacts.
 21. Normal queries never expose partially committed cross-store mutations.
 22. Web and CLI concurrency must remain correct through optimistic versions, atomic
-    SQLite claims, leases, idempotency where required, and commit-time precondition
+    PostgreSQL claims, leases, idempotency where required, and commit-time precondition
     checks.
 23. v2 starts with an empty database. It is proven by running its own workflow, not by
     being pointed at existing data to see what happens.
@@ -374,8 +382,10 @@ or plan, and policies needed for the task. It does not receive the entire fact s
 historical artifacts by default. The UI explains that job descriptions and relevant
 profile facts may be sent when AI is enabled; no per-call consent dialog is required.
 
-An OpenAI key is backend/environment configuration only. It is never stored in SQLite,
-sent to React, or written to logs. Settings expose only whether it is configured.
+An OpenAI key is backend/environment configuration only. It is resolved through the
+runtime configuration contract but is environment-only: `.env` and Workspace config
+cannot enable it. It is never stored in PostgreSQL, sent to React, or written to logs.
+Settings expose only whether it is configured.
 
 When a key is configured, `ai_enabled` defaults to true. Commands still choose an
 explicit `ai` or `deterministic` mode. There is no ambiguous `auto` execution mode, no
@@ -383,7 +393,7 @@ model picker, and no dynamic model discovery. Default model and per-task overrid
 in configuration, and exact provider/model metadata is stored on every run.
 
 Parsed output and a sanitized raw response are preserved. Raw responses are immutable
-artifacts rather than SQLite blobs. Response ID, model, usage, latency, hash,
+artifacts rather than PostgreSQL blobs. Response ID, model, usage, latency, hash,
 refusal/error metadata, and contract/prompt versions are recorded. Secrets and hidden
 chain-of-thought are never retained.
 
@@ -452,7 +462,7 @@ the editor.
 
 `submit_application` verifies an explicit `ready_qualified` ApprovedRevision and exact
 PDF artifact, creates an immutable Submission, transitions to `applied` if necessary,
-and appends status/audit history in one SQLite transaction. It never resolves `latest`
+and appends status/audit history in one PostgreSQL transaction. It never resolves `latest`
 inside the command. The revision need not match the current active snapshot/analysis;
 that case returns `READY_REVISION_FOR_OLDER_SNAPSHOT` or
 `READY_REVISION_FOR_OLDER_ANALYSIS` as a non-blocking historical-context warning.
@@ -511,10 +521,10 @@ timezone, and secrets remain backend/Workspace configuration.
 
 ## 16. Storage, provenance, and retention
 
-SQLite stores Applications, analyses, SelectionPlans, WorkingDraft, ValidationRun
-metadata/reports, Operations, artifact metadata, submissions, settings, and audit.
+PostgreSQL stores Applications, analyses, SelectionPlans, WorkingDraft, ValidationRun
+metadata/reports, Operations, artifact metadata, submissions, safe settings, and audit.
 
-The filesystem under `artifacts_root` stores:
+The configured object store holds immutable payloads under the same storage-neutral keys:
 
 ```text
 snapshots/{application_id}/{snapshot_id}.txt
@@ -525,8 +535,11 @@ outputs/{application_id}/{revision_id}/{artifact_id}.pdf
 ```
 
 Screenshots, manifests, sanitized provider responses, and other immutable payloads use
-the same ID-based policy. Friendly filenames exist only at export/download. Paths are
-never API inputs and are validated against their configured root before access.
+the same ID-based policy. `LocalObjectStore` maps keys below `artifacts_root`;
+`S3ObjectStore` maps the same keys below the configured bucket/prefix. Database rows keep
+the same Workspace-relative references under either backend. Friendly filenames exist
+only at export/download. Storage keys and local paths are never API inputs and are
+validated before access.
 
 Each approved revision records a global knowledge-store version for coarse audit and an
 exact knowledge context containing the facts, candidate context, Profile, candidate
@@ -607,7 +620,7 @@ specific rather than one global mutex.
 Operations store a full structured, secret-free payload and hash, resource IDs,
 expected versions/hashes, provider/model, timestamps, phases, safe user message,
 technical log reference, and failure metadata. The shared Operation runner uses atomic
-SQLite claiming, leases, and heartbeat. Under `cv web`, the supervisor hosts background
+PostgreSQL claiming, leases, and heartbeat. Under `cv web`, the supervisor hosts background
 worker loops. A standalone CLI command that creates an Operation atomically claims and
 executes that Operation in the foreground in the same CLI process, using the identical
 runner, lease, heartbeat, idempotency, and commit checks; it never requires FastAPI or
@@ -660,7 +673,8 @@ Rollout stages are:
 
 1. Alpha on a test Workspace.
 2. Beta on a Workspace seeded from the candidate's own Knowledge, used for real work.
-3. Release Ready after full engineering, backup/restore, and acceptance evidence.
+3. Release Ready after full engineering, environment-level data-protection verification,
+   and acceptance evidence.
 
 `Engineering Complete` and `Release Ready` are distinct; `Cutover Complete` and `Live`
 no longer exist as states, because nothing is cut over. Going live means starting to use
@@ -695,7 +709,8 @@ v2.0 is Release Ready only when all of the following are demonstrably true:
       next actions work after the vertical-slice gate.
 - [ ] Hebrew UI, Hebrew/English CV preview, RTL/LTR behavior, Chrome, and Safari checks
       pass at their defined coverage levels.
-- [ ] Backup is verified, restored, opened, and reconciled.
+- [ ] Alembic topology and empty-database upgrade pass, and the configured environment's
+      PostgreSQL/object-store backup policy is verified outside the application.
 - [ ] Every applicable v1 safety invariant and material regression risk remains
       represented and passing. Individual legacy test cases need not be retained when
       a smaller scenario or matrix provides the same failure signal.

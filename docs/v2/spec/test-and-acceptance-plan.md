@@ -2,14 +2,16 @@
 
 Status: **Approved for v2.0 implementation (2026-08-17)**
 
+PostgreSQL/object-storage gate amendment: **2026-08-25**
+
 Product authority: `docs/v2/spec/product-spec.md`
 
 ## 1. Test strategy
 
 Release readiness is based on invariants, failure recovery, and complete user journeys.
-It is not based on a broad line-coverage percentage or raw test count. Raw count is nevertheless a useful review signal: rapid growth without new
-product risk usually indicates duplicated scenarios or tests coupled to implementation
-shape.
+It is not based on a broad line-coverage percentage or raw test count. Raw count is
+nevertheless a useful review signal: rapid growth without new product risk usually
+indicates duplicated scenarios or tests coupled to implementation shape.
 
 All applicable v1 safety invariants and material regression risks remain represented.
 Individual v1 test items do not have to survive when one clearer scenario, table-driven
@@ -60,7 +62,9 @@ commands do not resolve latest sources.
 
 ### 2.3 Repository integration tests
 
-Use real temporary SQLite and filesystem Workspaces. Cover:
+Use a real isolated PostgreSQL database and the real configured object-store adapter.
+Local storage is the default test backend; the S3-compatible adapter receives focused
+contract coverage. Cover:
 
 - numbered migrations
 - foreign keys and constraints
@@ -69,7 +73,7 @@ Use real temporary SQLite and filesystem Workspaces. Cover:
 - status/audit projection consistency
 - artifact identity/hash/path registration
 - Workspace markers and guards
-- WAL/busy behavior relevant to CLI/Web concurrency
+- transaction isolation, row locking, and claiming behavior relevant to CLI/Web concurrency
 - query projections and one-snapshot consistency
 
 ### 2.4 API contract tests
@@ -108,9 +112,9 @@ Avoid blanket DOM snapshots.
 
 ### 2.6 Full Web E2E
 
-Playwright E2E runs a built React application, real FastAPI, real worker, real SQLite,
-real filesystem, and real renderer against a temporary Workspace. Only the external AI
-provider is stubbed in automated CI.
+Playwright E2E runs a built React application, real FastAPI, real worker, real PostgreSQL,
+the configured object store, and real renderer against a temporary Workspace and isolated
+database. Only the external AI provider is stubbed in automated CI.
 
 The central E2E must not mock application services or state projections.
 
@@ -130,11 +134,13 @@ Retain and expand v1 coverage for:
 
 Use focused visual screenshots where useful, not broad pixel-perfect PDF comparisons.
 
-### 2.8 Backup tests
+### 2.8 Database lifecycle and object-store tests
 
-Archive creation alone is never a successful backup test. A backup is proven by
-restoring it into a new directory, opening the restored Workspace through the normal
-fail-closed path, and reconciling it.
+The application has no built-in Workspace backup/restore command. Test Alembic's
+single-head topology, revision registration, and upgrade of an empty PostgreSQL database.
+Exercise immutable create-if-absent semantics, hash verification, key validation, and
+storage-neutral references against both object-store adapters. Environment-level backup
+drills are deployment evidence, not application test cases.
 
 ## 3. Deterministic parity
 
@@ -311,8 +317,8 @@ Inject and verify the following crash windows. They may share one failure-inject
 matrix rather than eight independent test items:
 
 1. crash before filesystem replace
-2. crash after replace and before SQLite commit
-3. SQLite mutation committed but journal not marked COMMITTED
+2. crash after replace and before PostgreSQL commit
+3. PostgreSQL mutation committed but journal not marked COMMITTED
 4. staged file missing or corrupted
 5. old hash mismatch
 6. new hash mismatch
@@ -403,23 +409,21 @@ Targets on a reasonable local development Mac:
 These are investigation thresholds rather than noisy hard CI timing failures. A
 material regression requires explanation and remediation or explicit acceptance.
 
-## 13. Backup and restore acceptance
+## 13. Database lifecycle and data-protection acceptance
 
-The test must:
+Application-owned acceptance must prove:
 
-1. create a complete backup containing SQLite, Knowledge, immutable payloads, the
-   Workspace marker, and restore-required config
-2. restore to a new temporary directory, never over an existing Workspace
-3. validate the restored Workspace marker and schema
-4. open the restored Workspace through the runtime/application layer
-5. run database integrity and full reconciliation
+1. Alembic has one head and every revision is registered
+2. an empty PostgreSQL database upgrades to the current schema explicitly
+3. normal runtime startup never performs a hidden migration
+4. foreign-key integrity and immutable-row guards hold on the upgraded schema
+5. local and S3-compatible object stores preserve create-if-absent immutability, hashes,
+   validated keys, and storage-neutral database references
 
-Passing archive creation alone is a failure of the acceptance procedure.
-
-There is no separate manifest to verify. Artifact hashes live in `artifact_versions` and
-the database checks itself, so a hash list beside them could only drift and would then
-have to be adjudicated against them. Reconciliation on the restored Workspace is the
-comparison, over the record the product actually keeps.
+PostgreSQL and bucket backup/restore are environment-level responsibilities. When a
+deployment policy is introduced, its restore drill belongs in deployment evidence and
+must cover both stores consistently; the application does not claim that a Workspace
+archive is a complete backup.
 
 ## 14. Migration acceptance — withdrawn
 
@@ -455,7 +459,9 @@ CI must include:
 - backend unit/integration tests
 - frontend typecheck/lint/unit tests
 - OpenAPI validation and generated-type drift
-- real SQLite/filesystem integration
+- real PostgreSQL plus local-object-store integration
+- Alembic topology and empty-database upgrade checks
+- focused S3-compatible object-store contract tests
 - Chromium Web E2E
 - rendering/PDF/ATS tests
 - security and failure-injection tests
@@ -465,7 +471,7 @@ Release additionally requires:
 - macOS runtime and browser verification
 - WebKit smoke
 - manual live OpenAI smoke
-- full backup/restore drill
+- environment-level PostgreSQL/object-store data-protection verification when configured
 - performance review
 - completed acceptance report
 
@@ -484,9 +490,9 @@ The final report records for every product DoD item:
 - relevant versions/hashes
 - warnings accepted and why they are permitted
 - environment/platform/browser
-- backup and restore drill references
+- database lifecycle and environment data-protection references
 - live-provider smoke metadata without secrets
 
 A hard failure cannot be relabeled as a warning. Release Ready is not declared with any
-unresolved invariant, restore failure, or approval safety
+unresolved invariant, schema-upgrade failure, or approval safety
 gap.

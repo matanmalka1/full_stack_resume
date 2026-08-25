@@ -38,6 +38,19 @@ until the complete M4 gate passes. `cv web`, browser launch, port supervision, a
 runtime packaging remain M6 work. Development may use Vite and FastAPI directly; M4 still
 adds the production build/static-serving integration required by §6.2.
 
+## Cross-cutting baseline updates — 2026-08-25
+
+The PostgreSQL persistence line and object-storage line merged into `main` at `db1629e`;
+local object storage remains the zero-configuration default and S3-compatible storage is
+optional. Configuration/secrets hygiene then closed in `1061c66` and `b24dd5f`: one
+Workspace-or-repository `.env` sits below the real environment, configured secrets are
+masked only at display boundaries, and `OPENAI_API_KEY` is environment-only so `unset`
+still proves the deterministic path is disarmed. `2bfae11` is formatting/readability only
+and changes no product contract.
+
+These are cross-cutting infrastructure amendments, not completion evidence for Stage F.
+The next product boundary remains the real built-Web E2E and failure/accessibility matrix.
+
 ## A — Design pass
 
 **Stage A is complete as a design boundary.** It defines the information architecture,
@@ -833,8 +846,9 @@ Focused runtime evidence on 2026-08-24:
 | `python -m pip check` | **passed** | the added Uvicorn runtime dependency is consistent with the environment |
 | manual `cv web --no-open --port 18765` against a fresh test Workspace | **passed** | health reported schema `0002`, FastAPI served the built React root, and Ctrl+C stopped Uvicorn and the worker without a traceback |
 
-- [ ] A real built-Web E2E completes Create through Ready against FastAPI, worker, SQLite,
-      filesystem, and renderer without mocking application services or projections.
+- [ ] A real built-Web E2E completes Create through Ready against FastAPI, worker,
+      PostgreSQL, the configured object store, and renderer without mocking application
+      services or projections.
 - [ ] The journey covers review-required and no-review paths.
 - [ ] The central failure matrix covers unsupported edit, validation block, stale validation,
       ETag conflict, provider failure, `SOURCE_CHANGED`, render failure/retry, and old Ready

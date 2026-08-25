@@ -2,6 +2,8 @@
 
 Status: **Approved for v2.0 implementation (2026-08-17)**
 
+PostgreSQL/object-storage baseline and secret-configuration amendment: **2026-08-25**
+
 Product authority: `docs/v2/spec/product-spec.md`
 
 Baseline: `v1.0.0` / `2cc31c7`
@@ -111,8 +113,8 @@ A small façade may compose them for convenience but contains no business logic.
 
 ### 3.3 Infrastructure
 
-Infrastructure implements SQLAlchemy Core repositories, PostgreSQL UnitOfWork, filesystem
-payload stores, KnowledgeRepository, OpenAI provider, rendering, operation
+Infrastructure implements SQLAlchemy Core repositories, PostgreSQL UnitOfWork,
+local/S3-compatible object stores, KnowledgeRepository, OpenAI provider, rendering, operation
 claiming/execution, logging, and Alembic integration.
 
 Repository boundaries follow transactional ownership and use-cases rather than tables:
@@ -237,8 +239,8 @@ PostgreSQL stores structured state and relationships:
 - Knowledge audit and cross-store mutation journal
 - schema, installation, and Workspace metadata
 
-The database is addressed by the resolved `database_url` setting (`CV_DATABASE_URL` at
-the environment layer), not by a path inside the Workspace. One process-wide SQLAlchemy
+The database is addressed by the resolved `database_url` setting (`CV_DATABASE_URL` in
+environment and `.env` surfaces), not by a path inside the Workspace. One process-wide SQLAlchemy
 `Engine` per URL owns pooling and connection health. UnitOfWork and multi-query projection
 reads use explicit transactions; stable projections use `REPEATABLE READ`.
 
@@ -564,6 +566,30 @@ Chromium configured by Playwright. Local Chrome is diagnostic only.
 Structured rotating logs under `logs_root` include timestamp, level, Operation ID,
 Application ID, phase, error code, and log reference. v2.0 offers an Open Logs Folder
 action rather than a logs screen.
+
+### 15.1 Runtime configuration and secrets
+
+`runtime/config.py` is the single resolution contract. Precedence is:
+
+`CLI > process environment > one .env file > Workspace config > default`
+
+When a Workspace is open, only `{workspace_root}/.env` is considered; otherwise the
+repository-root `.env` is considered. The two files are never merged. Real environment
+variables therefore override stale developer files. The supported `.env` syntax is the
+small documented `KEY=value` subset, implemented without an additional dependency.
+
+Each setting declares whether it is Workspace-scoped, secret, or environment-only.
+`database_url` is secret. `OPENAI_API_KEY` is both secret and environment-only, so an
+`unset OPENAI_API_KEY` reliably disables the OpenAI adapter even when a `.env` exists.
+AWS credentials remain ambient boto3 configuration rather than values copied through
+the application contract.
+
+Masking occurs only at display/reporting boundaries. Any CLI/API/log/error surface that
+reports a configuration value must show `***` for a configured secret while preserving
+the non-secret source label; `cv workspace status` follows this rule, and unset secrets
+remain visibly unset. Connectors always receive the original value, never the masked
+representation. `.env` and `.env.*` are ignored by Git, while `.env.example` is the
+committed safe inventory of supported variables.
 
 ## 16. Database lifecycle and upgrade
 

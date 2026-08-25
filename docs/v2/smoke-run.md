@@ -32,11 +32,12 @@ echo "$CV_SMOKE_WS"
 echo "$CV_SMOKE_DB"
 ```
 
-`OPENAI_API_KEY` being unset is the point of the exercise: if any step reaches for a key,
-it must fail loudly rather than quietly spend. `pg_isready` must report that the local
-Compose service accepts connections before continuing. The commands assume the documented
-Compose defaults; when those defaults are overridden, set `CV_DATABASE_URL` to the matching
-fresh database instead.
+`OPENAI_API_KEY` being unset is the point of the exercise. It is environment-only, so a
+repository or Workspace `.env` cannot re-enable AI after this `unset`. If any step reaches
+for a key, it must fail loudly rather than quietly spend. `pg_isready` must report that the
+local Compose service accepts connections before continuing. The commands assume the
+documented Compose defaults; when those defaults are overridden, set `CV_DATABASE_URL` to
+the matching fresh database instead.
 
 ## 1. Create an isolated Workspace
 
@@ -59,8 +60,9 @@ cv_cli --workspace "$CV_SMOKE_WS" workspace status
 ```
 
 `workspace upgrade` applies Alembic to the fresh PostgreSQL database. `workspace status`
-should then report the five roots under `$CV_SMOKE_WS`, the configured database URL, and
-schema revision `0002`.
+should then report the five roots under `$CV_SMOKE_WS`, `database_url: "***"` (with its
+configuration source still visible), and schema revision `0002`. The real URL remains in
+memory for SQLAlchemy; masking is display-only.
 
 ## 2. Ingest a posting
 

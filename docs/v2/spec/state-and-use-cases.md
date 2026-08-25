@@ -2,6 +2,8 @@
 
 Status: **Approved for v2.0 implementation (2026-08-17)**
 
+PostgreSQL transaction terminology amendment: **2026-08-25**
+
 Product authority: `docs/v2/spec/product-spec.md`
 
 ## 1. Purpose
@@ -556,7 +558,7 @@ mutates the old fact content.
 Input names Application ID, ApprovedRevision ID, exact PDF Artifact ID, submission time,
 and metadata. It verifies the revision's current `ready_qualified` status, exact PDF,
 and current artifact integrity; inserts immutable Submission; transitions to `applied`
-if required; and appends status/audit events in one SQLite transaction. It never
+if required; and appends status/audit events in one PostgreSQL transaction. It never
 resolves latest implicitly. Active-context compatibility is not a precondition: when
 the active snapshot or analysis is newer, the outcome includes the corresponding
 `READY_REVISION_FOR_OLDER_*` warning.
