@@ -33,6 +33,10 @@ Backend/runtime:
 - Jinja2 for resume HTML
 - Playwright-managed Chromium for rendering and render validation
 - `pypdf` for PDF extraction and ATS checks
+- `boto3`, in the optional `s3` extra only, for the S3/R2 payload backend. Optional
+  because the local store is the default: the deterministic workflow must reach Ready
+  with nothing configured and no cloud SDK installed, so it is imported inside the
+  adapter rather than at module scope
 
 Frontend:
 
@@ -237,12 +241,18 @@ immutability bypasses. Business workflows remain in domain/application code.
 The database uses explicit numbered SQL migrations and schema version metadata. It does
 not depend on application startup side effects to perform an unguarded migration.
 
-### 6.2 Filesystem
+### 6.2 Object storage
 
-The filesystem stores immutable/heavy payloads:
+Immutable/heavy payloads sit behind `ObjectStore`, which speaks keys and bytes and
+carries no `Path`. Two implementations satisfy it: `LocalObjectStore`, the default,
+which maps a key onto a file under `{artifacts_root}`; and `S3ObjectStore`, which puts
+it in an S3-compatible bucket (R2 and MinIO via `endpoint_url`). The composition root
+selects one from `CV_OBJECT_STORE`; `PayloadStore` never branches on the backend.
+
+The key layout is the same either way:
 
 ```text
-{artifacts_root}/
+{artifacts_root}/ or {bucket}/{prefix}/
   snapshots/{application_id}/{snapshot_id}.txt
   revisions/{application_id}/{revision_id}/resume.json
   revisions/{application_id}/{revision_id}/resume.md
@@ -251,6 +261,28 @@ The filesystem stores immutable/heavy payloads:
   outputs/{application_id}/{revision_id}/{artifact_id}.png
   provider/{application_id}/{operation_id}/{artifact_id}.json
 ```
+
+**References are storage-neutral and their format is frozen.** `artifact_versions`
+stores a Workspace-relative string (`artifacts/snapshots/{app}/{id}.txt`); an object key
+is the same string without the `artifacts/` prefix. A row is identical under either
+backend, so a Workspace can change storage without rewriting SQLite.
+
+Key validation is shared by both implementations rather than delegated to each. A
+crafted key - traversal, absolute, empty segment, backslash, drive prefix - is refused
+identically, because a payload's address must not depend on which backend is
+configured. "S3 has no `..`" is not a reason to skip the check.
+
+Three things stay on the local filesystem by decision: the mutable `working/` draft,
+which is rewritten on every autosave and is not an immutable record; `RenderTargets`,
+because Chromium writes real files to real paths and cannot write to a bucket; and
+Knowledge sources, which are version-controlled inputs rather than artifacts.
+
+A rendered output is the one payload family that reaches storage as a location rather
+than as bytes. The store decides where it is written: on the local store that is the
+artifact path itself, so the rendered file *is* the stored object; on a remote store it
+is scratch under `{temp_root}/render/`, uploaded and then removed. Deleting the render
+location is correct in the second case and would destroy the payload in the first,
+which is why the store answers the question rather than the caller.
 
 Additional manifests use immutable UUID-based names. Every payload has SHA-256 metadata
 in SQLite. Recruiter-friendly names are Content-Disposition/export names, never the
@@ -292,12 +324,22 @@ and provenance; the system is not event-sourced.
 
 The normal artifact protocol is:
 
-`write temp -> validate -> hash -> atomic rename -> register in SQLite`
+`validate bytes -> conditional store under key -> register in SQLite`
+
+There is no temp-then-rename staging. Validation runs on the bytes before the key is
+claimed, so a payload that fails it never occupies its destination - which is what temp
+staging bought, without the temp file. The write itself refuses to replace an existing
+payload: `O_EXCL` locally, a conditional PUT (`IfNoneMatch: "*"`) on S3 and R2. That
+also closes the window an `exists()` check followed by a rename left open.
+
+The hash is computed by the store over the bytes it stored, in the same read, and is
+what the caller registers. Re-hashing the payload afterwards would describe a second
+read rather than the stored object.
 
 Before registration, the artifact is invisible to normal queries. If registration
 fails, reconciliation sees a safe orphan. A full journal is not required where orphan
 reconciliation provides deterministic safety and no active state can reference the
-file.
+payload.
 
 ### 7.2 Knowledge mutation journal
 
@@ -519,6 +561,14 @@ action rather than a logs screen.
 artifacts, Workspace marker/config needed to restore, and a manifest with hashes.
 `cv workspace verify-backup` verifies the archive. Acceptance additionally restores to
 a temporary directory, opens the restored Workspace, and reconciles it.
+
+**Open gap, `CV_OBJECT_STORE=s3` only.** Backup copies `artifacts_root` from the
+filesystem, so with payloads in a bucket it captures the Workspace's SQLite rows and
+Knowledge but none of the immutable payloads those rows point at. Restoring such an
+archive yields a Workspace whose records name payloads it does not contain. The local
+default is unaffected and backup remains complete there. Do not rely on
+`cv workspace backup` as the only copy of a bucket-backed Workspace until backup reads
+through `ObjectStore`.
 
 Upgrade is explicit:
 

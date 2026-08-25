@@ -5,9 +5,16 @@ working rule set. Reading them is the reading requirement.
 
 ## What this system is
 
-A single-candidate CV tailoring tool. One user, local only, not deployed, no auth, no
-cloud. v2 starts with an empty database; v1 is a frozen archive in Git and is never
-migrated, opened, or written to.
+A single-candidate CV tailoring tool. One user, no auth. v2 starts with an empty
+database; v1 is a frozen archive in Git and is never migrated, opened, or written to.
+
+**Changed 2026-08-25: "local only, not deployed, no cloud" is no longer true of
+storage.** Immutable payloads sit behind an object-storage abstraction and can live in
+an S3-compatible bucket. Local remains the default and the deterministic workflow still
+reaches Ready with nothing configured and no cloud SDK installed, so a developer who
+configures nothing sees what this file always described. What stopped being true is the
+claim that no other option exists. Everything else in the non-goals below still holds:
+no auth, one candidate, one user.
 
 Almost everything the engine produces is regenerable in seconds: drafts, selections,
 renders, projections. Getting one of them wrong costs a re-run. Calibrate effort to
@@ -121,8 +128,9 @@ what remains. A hard failure is never relabelled as a warning.
 
 - Implement only approved v2.0 scope and respect every non-goal in
   `docs/v2/spec/product-spec.md`.
-- The local FastAPI + React Web UI is authorized in this worktree. Cloud deployment,
-  authentication, PostgreSQL, multi-candidate support, and broad multi-provider support
+- The local FastAPI + React Web UI is authorized in this worktree. Object storage for
+  immutable payloads (S3/R2) is authorized and implemented; local is the default.
+  Authentication, PostgreSQL, multi-candidate support, and broad multi-provider support
   are not.
 - Keep the CLI first-class. It calls the application layer directly, does not require
   FastAPI, and the deterministic workflow must reach Ready without an AI key.
