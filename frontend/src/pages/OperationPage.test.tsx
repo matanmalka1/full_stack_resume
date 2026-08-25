@@ -83,11 +83,11 @@ describe("OperationPage", () => {
     first.unmount();
 
     renderPage(<OperationPage />);
-    await screen.findByRole("heading", { level: 1, name: "הושלמה" });
+    await screen.findByRole("heading", { level: 1, name: "ניתוח המשרה" });
     await waitFor(() => expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1));
   });
 
-  it("names the status in Hebrew and reports the phase", async () => {
+  it("names the operation in the heading and reports status and phase separately", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(operation())));
 
     renderPage(<OperationPage />);
@@ -95,9 +95,13 @@ describe("OperationPage", () => {
     /* Matched by accessible name rather than by finding the heading and then reading it:
        the heading is on screen from the first render carrying its loading text, so a
        bare findByRole resolves before the Operation arrives. */
-    expect(await screen.findByRole("heading", { level: 1, name: "מתבצעת" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "ניתוח המשרה" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("מתבצעת")).toBeInTheDocument();
     expect(screen.getByText("בביצוע")).toBeInTheDocument();
   });
+
 
   it("lets a backend message pick its own direction inside the RTL shell", async () => {
     vi.stubGlobal(
@@ -136,7 +140,7 @@ describe("OperationPage", () => {
     expect(
       screen.queryByRole("button", { name: "המשך במצב דטרמיניסטי" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("נכשלה");
+    expect(screen.getByText("נכשלה")).toBeInTheDocument();
   });
 
   it("sends SOURCE_CHANGED back to the current application context without hiding retry", async () => {
@@ -204,7 +208,7 @@ describe("OperationPage", () => {
 
     renderPage(<OperationPage />);
 
-    expect(await screen.findByRole("heading", { level: 1, name: "בוטלה" })).toBeInTheDocument();
+    expect(await screen.findByText("בוטלה")).toBeInTheDocument();
     expect(screen.getByText(/לא הופעלה תוצאה חדשה/)).toBeInTheDocument();
   });
 
@@ -346,7 +350,7 @@ describe("OperationPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "לא ניתן ליצור ניסיון חוזר במצב הנוכחי.",
     );
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("נכשלה");
+    expect(screen.getByText("נכשלה")).toBeInTheDocument();
 
     const firstKey = (fetchMock.mock.calls[1]?.[1]?.headers as Headers).get("Idempotency-Key");
     fireEvent.click(screen.getByRole("button", { name: "ניסיון חוזר" }));
@@ -371,7 +375,7 @@ describe("OperationPage", () => {
 
     renderPage(<OperationPage />);
 
-    expect(await screen.findByRole("heading", { level: 1, name: "מתבצעת" })).toBeInTheDocument();
+    expect(await screen.findByText("מתבצעת")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "ביטול הפעולה" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "ניסיון חוזר" })).not.toBeInTheDocument();
     /* The way back belongs to a finished Operation. While one is still running, leaving
@@ -403,5 +407,10 @@ describe("OperationPage", () => {
       "href",
       "/applications/app-1",
     );
+    /* `succeeded` and `completed` are both "הושלמה"; this is the one fixture that holds
+       both at once. The screen printed that word four times over — heading, badge, phase,
+       and both halves of the announcement — saying it repeatedly and never saying which
+       operation had finished. */
+    expect(screen.getAllByText("הושלמה")).toHaveLength(1);
   });
 });

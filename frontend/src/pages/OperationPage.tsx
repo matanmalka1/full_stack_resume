@@ -9,6 +9,7 @@ import type {
   OperationFailureCode,
   OperationPhase,
   OperationStatus,
+  OperationType,
 } from "../api/contracts";
 import { isTerminalOperation, operationQueryOptions } from "../api/operations";
 import { operationQueryKey } from "../api/operations";
@@ -34,6 +35,18 @@ const statusLabels: Record<OperationStatus, string> = {
   failed: "נכשלה",
   cancelled: "בוטלה",
   interrupted: "נקטעה",
+};
+
+/* What the operation is, which the status alone never says. Keyed by the generated
+   union, so a new backend operation type fails the build rather than reaching the
+   heading untranslated. */
+const operationTypeLabels: Record<OperationType, string> = {
+  analyze_job: "ניתוח המשרה",
+  propose_selection_plan: "בחירת העובדות",
+  create_draft: "יצירת הטיוטה",
+  regenerate_section: "יצירה מחדש של פרק",
+  regenerate_claim: "יצירה מחדש של טענה",
+  render_revision: "יצירת קובץ קורות החיים",
 };
 
 const statusTones: Record<OperationStatus, StatusTone> = {
@@ -194,7 +207,16 @@ const usePhaseAnnouncement = (
 
     const cancellation =
       cancellationRequestedAt == null ? "" : " בקשת הביטול התקבלה.";
-    const spoken = `${statusLabels[status]}. ${phaseLabels[phase]}.${cancellation}`;
+    /* Status and phase are two axes that share vocabulary at their ends: `succeeded`
+       and `completed` are both "הושלמה". Announcing both verbatim makes a listener
+       hear one word twice and learn nothing from the repeat, so the phase is spoken
+       only when it differs from the status. */
+    const statusText = statusLabels[status];
+    const phaseText = phaseLabels[phase];
+    const spoken =
+      phaseText === statusText
+        ? `${statusText}.${cancellation}`
+        : `${statusText}. ${phaseText}.${cancellation}`;
 
     if (lastAnnounced.current !== spoken) {
       lastAnnounced.current = spoken;
@@ -276,7 +298,12 @@ export const OperationPage = () => {
         }
         id="route-heading"
       >
-        {operation === undefined ? "מצב הפעולה" : statusLabels[operation.status]}
+        {/* The heading names the work; the badge below carries its status. Printing the
+            status here too made a finished operation say the same word twice before the
+            reader learned which operation it was. */}
+        {operation === undefined
+          ? "מצב הפעולה"
+          : operationTypeLabels[operation.operation_type]}
       </PageHeading>
 
       <LiveRegion>{announcement}</LiveRegion>
@@ -313,7 +340,13 @@ export const OperationPage = () => {
             <StatusBadge tone={statusTones[operation.status]}>
               {statusLabels[operation.status]}
             </StatusBadge>
-            <span className="text-body text-cv-text-muted">{phaseLabels[operation.phase]}</span>
+            {/* Phase is the progress axis and only says something the status badge has
+                not already said while work is still moving. At a terminal status the two
+                collapse onto the same word — `succeeded` and `completed` are both
+                "הושלמה" — so the phase is dropped rather than printed twice. */}
+            {terminal ? null : (
+              <span className="text-body text-cv-text-muted">{phaseLabels[operation.phase]}</span>
+            )}
           </div>
 
           {/* A.3: the safe progress line comes from the backend and is English today, so

@@ -64,3 +64,26 @@ const actionLabels: Record<string, string> = {
 };
 
 export const actionLabel = (action: string): string => actionLabels[action] ?? action;
+
+/* Hebrew reasons for a blocked action, in the same partial-map shape and for the same
+   reason as `actionLabels`: `BlockedActionResponse.reasons` is `list[str]`, and it
+   carries review and staleness codes alongside the action-policy ones. A code with no
+   name here is reported as itself rather than guessed at, so an unnamed reason reads as
+   a missing translation instead of a wrong explanation.
+
+   These sentences say what is missing, not what the code is called. The disclosure they
+   sit in is what the F gate means by explaining a blocker without requiring the reader
+   to know an identifier. */
+const blockedReasonLabels: Record<string, string> = {
+  NO_REVIEW_DECISION_REQUIRED: "אין החלטת סקירה שממתינה להכרעה.",
+  ANALYSIS_OR_SELECTION_PLAN_REQUIRED: "נדרשים ניתוח משרה ותוכנית בחירת עובדות פעילים.",
+  WORKING_DRAFT_REQUIRED: "אין טיוטה פעילה לעבוד עליה.",
+  VALIDATED_DRAFT_REQUIRED: "נדרשת טיוטה שעברה אימות.",
+  VALIDATION_REQUIRED: "יש להריץ אימות על הטיוטה לפני האישור.",
+  VALIDATION_FAILED: "האימות נכשל. יש לתקן את החסימות ולאמת מחדש.",
+  APPROVED_REVISION_REQUIRED: "נדרשת גרסה מאושרת.",
+  ACTION_NOT_AVAILABLE: "הפעולה אינה זמינה במצב הנוכחי.",
+};
+
+export const blockedReasonLabel = (reason: string): string =>
+  blockedReasonLabels[reason] ?? reason;

@@ -17,6 +17,7 @@ import { ApplicationActions } from "./ApplicationActions";
 import { actionDestination } from "./actionDestinations";
 import {
   actionLabel,
+  blockedReasonLabel,
   preparationStateLabels,
   preparationStateTones,
   workingDraftStateLabels,
@@ -222,8 +223,7 @@ export const ApplicationPage = () => {
               <SummaryList
                 items={detail.blocked_actions.map((blocked) => ({
                   term: actionLabel(blocked.action),
-                  value: blocked.reasons.join(" · "),
-                  ltr: true,
+                  value: blocked.reasons.map(blockedReasonLabel).join(" "),
                 }))}
               />
             </TechnicalDetails>
