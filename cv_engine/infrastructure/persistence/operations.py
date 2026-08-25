@@ -740,9 +740,7 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
                 "completed_at": None,
             }
 
-    def idempotency_receipt(
-        self, command_type: str, idempotency_key: str
-    ) -> dict[str, Any] | None:
+    def idempotency_receipt(self, command_type: str, idempotency_key: str) -> dict[str, Any] | None:
         with self.read_connection() as connection:
             row = (
                 connection.execute(

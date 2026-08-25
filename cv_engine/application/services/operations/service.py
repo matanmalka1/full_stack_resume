@@ -90,9 +90,7 @@ class OperationService(ServiceBase[OperationRepository]):
             provider=command.provider,
             model=command.model,
         )
-        return as_operation_view(
-            self.repo.create_operation(request)
-        )
+        return as_operation_view(self.repo.create_operation(request))
 
     def submit_draft(
         self,
@@ -151,9 +149,7 @@ class OperationService(ServiceBase[OperationRepository]):
             provider=command.provider,
             model="rules-v1" if command.provider == "deterministic" else None,
         )
-        return as_operation_view(
-            self.repo.create_operation(request)
-        )
+        return as_operation_view(self.repo.create_operation(request))
 
     def submit_selection_plan_proposal(
         self,
@@ -192,9 +188,7 @@ class OperationService(ServiceBase[OperationRepository]):
             provider="openai",
             model=command.model,
         )
-        return as_operation_view(
-            self.repo.create_operation(request)
-        )
+        return as_operation_view(self.repo.create_operation(request))
 
     def submit_regeneration(
         self,
@@ -262,9 +256,7 @@ class OperationService(ServiceBase[OperationRepository]):
             provider="openai",
             model=None,
         )
-        return as_operation_view(
-            self.repo.create_operation(request)
-        )
+        return as_operation_view(self.repo.create_operation(request))
 
     def submit_replacement_draft(
         self,
@@ -339,9 +331,7 @@ class OperationService(ServiceBase[OperationRepository]):
             provider="deterministic",
             model="playwright",
         )
-        return as_operation_view(
-            self.repo.create_operation(request)
-        )
+        return as_operation_view(self.repo.create_operation(request))
 
     def cancel(self, operation_id: str) -> OperationView:
         """Cancel queued work outright; ask running work to stop (§19).
@@ -464,9 +454,7 @@ class OperationService(ServiceBase[OperationRepository]):
             model=original.model,
             retry_of_operation_id=original.id,
         )
-        return as_operation_view(
-            self.repo.create_operation(request)
-        )
+        return as_operation_view(self.repo.create_operation(request))
 
     def get(self, operation_id: str) -> OperationView:
         """Operation status as a query contract (§20), never the runner record."""
