@@ -1,6 +1,6 @@
 {
   "profile_id": "development.v1",
-  "version": "1.2.0",
+  "version": "1.9.0",
   "track": "development",
   "profile": "development",
   "default_emphasis": "development-balanced",
@@ -12,7 +12,8 @@
   "normalized_role": "Full Stack Developer",
   "safe_headlines": [
     "Full Stack Developer",
-    "Backend-Oriented Full-Stack Developer"
+    "Backend-Oriented Full-Stack Developer",
+    "Full-Stack Developer | React, TypeScript & Python"
   ],
   "required_tags": [
     "development"
@@ -26,9 +27,12 @@
       "name_en": "Professional Summary",
       "name_he": "תקציר מקצועי",
       "fact_ids": [
+        "development.summary.frontend",
+        "development.summary.backend",
+        "development.summary.delivery",
         "development.summary"
       ],
-      "max_claims": 1
+      "max_claims": 3
     },
     {
       "name_en": "Work Experience",
@@ -36,8 +40,8 @@
       "fact_ids": [
         "development.phdigital.role",
         "development.phdigital.dates",
-        "development.phdigital.fullstack",
         "development.phdigital.crm",
+        "development.phdigital.fullstack",
         "development.phdigital.integrations",
         "development.phdigital.cicd",
         "development.phdigital.nextjs",
@@ -56,6 +60,21 @@
       "min_quantitative_per_role": 1
     },
     {
+      "name_en": "Projects",
+      "name_he": "פרויקטים",
+      "fact_ids": [
+        "development.project.mm_backend_core.title",
+        "development.project.mm_backend_core.links",
+        "development.project.mm_backend_core"
+      ],
+      "pinned_fact_ids": [
+        "development.project.mm_backend_core.title",
+        "development.project.mm_backend_core.links",
+        "development.project.mm_backend_core"
+      ],
+      "max_claims": 3
+    },
+    {
       "name_en": "Education",
       "name_he": "השכלה",
       "fact_ids": [
@@ -67,13 +86,13 @@
       "name_en": "Core Skills",
       "name_he": "מיומנויות ליבה",
       "fact_ids": [
+        "development.skills.frontend",
         "development.skills.backend",
         "development.skills.databases",
-        "development.skills.ai",
-        "development.skills.frontend",
-        "development.skills.devops"
+        "development.skills.devops",
+        "development.skills.ai"
       ],
-      "max_claims": 3
+      "max_claims": 4
     },
     {
       "name_en": "Languages",
@@ -86,5 +105,6 @@
       ],
       "max_claims": 4
     }
-  ]
+  ],
+  "headline": "Full-Stack Developer | React, TypeScript & Python"
 }

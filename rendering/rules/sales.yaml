@@ -6,5 +6,41 @@
   "required_concepts": ["Professional Summary", "Work Experience", "Core Skills"],
   "conditional_sections": ["Leadership", "Tools", "Technology Background", "Selected Achievements", "Education", "Languages"],
   "contact_links": ["email", "linkedin"],
-  "directions": ["ltr", "rtl"]
+  "directions": ["ltr", "rtl"],
+  "keyword_emphasis": {
+    "terms": [
+      "30% improvement",
+      "4-8 new customers",
+      "account leadership",
+      "B2B Sales",
+      "business relationships",
+      "complex deals",
+      "Full-Stack Development",
+      "needs discovery",
+      "pipeline",
+      "forecasts",
+      "KPIs",
+      "negotiation",
+      "prospecting",
+      "closing",
+      "production CRM",
+      "workflow automation",
+      "Priority ERP",
+      "Excel"
+    ],
+    "sections": [
+      "Professional Summary",
+      "Sales Experience",
+      "Technology Background",
+      "Technology Experience",
+      "Business & Technology Tools",
+      "Sales & Technical Skills",
+      "תקציר מקצועי",
+      "ניסיון במכירות",
+      "ניסיון טכנולוגי",
+      "כישורי מכירות וטכנולוגיה"
+    ],
+    "styles": ["paragraph", "bullet", "item"],
+    "max_groups_per_line": 2
+  }
 }

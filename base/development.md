@@ -4,7 +4,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
 
 ```json
 {
-  "source_version": "1.0.0",
+  "source_version": "1.0.4",
   "facts": [
     {
       "fact_id": "development.summary",
@@ -39,36 +39,36 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "status": "canonical",
       "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
-      "effective_dates": "2025/2026",
+      "effective_dates": "2025-02/2026-06",
       "replaces": null,
       "source_file": "",
       "resume_style": "heading"
     },
     {
       "fact_id": "development.phdigital.dates",
-      "meaning": "PH.Digital role dates are 2025-2026.",
+      "meaning": "PH.Digital role dates are February 2025 to June 2026, approximately 1 year and 5 months.",
       "renderings": {
-        "en": "2025 - 2026",
-        "he": "2025 - 2026"
+        "en": "February 2025 - June 2026",
+        "he": "פברואר 2025 - יוני 2026"
       },
       "tags": [
         "development",
         "date"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
+      "provenance": "base/cv_base.md; months supplied by the user 2026-08-17 from their LinkedIn employment record (Feb 2025 - Jun 2026, 1 yr 5 mos)",
       "confirmed_at": null,
-      "effective_dates": "2025/2026",
+      "effective_dates": "2025-02/2026-06",
       "replaces": null,
       "source_file": "",
       "resume_style": "date"
     },
     {
       "fact_id": "development.phdigital.fullstack",
-      "meaning": "Built and maintained production applications with React and Python/FastAPI from PostgreSQL data models and APIs through frontend implementation.",
+      "meaning": "Built and maintained full-stack applications with React, TypeScript, and Python/FastAPI from PostgreSQL data models and APIs through frontend implementation.",
       "renderings": {
-        "en": "Built and maintained production applications with React and Python/FastAPI, owning features from PostgreSQL data modeling and APIs through frontend implementation.",
-        "he": "פיתוח ותחזוקה של מערכות production ב-React וב-Python/FastAPI, כולל אחריות על פיצ'רים ממודלי נתונים ב-PostgreSQL ו-APIs ועד המימוש בצד הלקוח."
+        "en": "Built and maintained full-stack applications with React, TypeScript, and Python/FastAPI, owning features from PostgreSQL data modeling and APIs through frontend implementation.",
+        "he": "פיתוח ותחזוקה של אפליקציות full-stack ב-React, ב-TypeScript וב-Python/FastAPI, כולל אחריות על פיצ'רים ממודלי נתונים ב-PostgreSQL ו-APIs ועד המימוש בצד הלקוח."
       },
       "tags": [
         "development",
@@ -76,7 +76,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
         "full-stack"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
+      "provenance": "base/cv_base.md; TypeScript added on explicit user confirmation 2026-08-17 that the main PH.Digital production applications were written in TypeScript",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -203,10 +203,10 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
     },
     {
       "fact_id": "development.skills.frontend",
-      "meaning": "Frontend skills: React, Next.js, TypeScript, JavaScript.",
+      "meaning": "Frontend skills: React, Next.js, TypeScript, JavaScript, Tailwind CSS.",
       "renderings": {
-        "en": "Frontend: React, Next.js, TypeScript, JavaScript",
-        "he": "Frontend: React, Next.js, TypeScript, JavaScript"
+        "en": "Frontend: React, Next.js, TypeScript, JavaScript, Tailwind CSS",
+        "he": "Frontend: React, Next.js, TypeScript, JavaScript, Tailwind CSS"
       },
       "tags": [
         "development",
@@ -214,7 +214,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
         "frontend"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
+      "provenance": "base/cv_base.md; Tailwind CSS surfaced on user confirmation 2026-08-17 from canonical development.phdigital.nextjs and situational.vite_tailwind",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -263,10 +263,10 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
     },
     {
       "fact_id": "development.skills.devops",
-      "meaning": "DevOps/tool skills: Docker, GitHub Actions, Git, GitHub, Postman, AWS EC2.",
+      "meaning": "DevOps and testing tool skills: Docker, GitHub Actions, Git, AWS EC2, pytest, Vitest, Postman.",
       "renderings": {
-        "en": "DevOps and Tools: Docker, GitHub Actions, Git, GitHub, Postman, AWS EC2",
-        "he": "DevOps וכלים: Docker, GitHub Actions, Git, GitHub, Postman, AWS EC2"
+        "en": "DevOps & Testing: Docker, GitHub Actions, Git, AWS EC2, pytest, Vitest, Postman",
+        "he": "DevOps ובדיקות: Docker, GitHub Actions, Git, AWS EC2, pytest, Vitest, Postman"
       },
       "tags": [
         "development",
@@ -274,7 +274,7 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
         "devops"
       ],
       "status": "canonical",
-      "provenance": "base/cv_base.md; migrated without strengthening",
+      "provenance": "base/cv_base.md; pytest and Vitest surfaced on user confirmation 2026-08-17 from canonical situational.testing and development.phdigital.nextjs",
       "confirmed_at": null,
       "effective_dates": null,
       "replaces": null,
@@ -334,6 +334,135 @@ This file is an authoritative v1 fact source. Edit facts through the fact lifecy
       "status": "canonical",
       "provenance": "base/cv_base.md; migrated without strengthening",
       "confirmed_at": null,
+      "effective_dates": null,
+      "replaces": null,
+      "source_file": "",
+      "resume_style": "bullet"
+    },
+    {
+      "fact_id": "development.summary.frontend",
+      "meaning": "Summary-level frontend positioning: builds user-facing applications with React, Next.js, and TypeScript.",
+      "renderings": {
+        "en": "Full-Stack Developer experienced in React, Next.js, and TypeScript.",
+        "he": "מפתח Full-Stack עם ניסיון ב-React, ב-Next.js וב-TypeScript."
+      },
+      "tags": [
+        "development",
+        "summary",
+        "frontend",
+        "nextjs"
+      ],
+      "status": "canonical",
+      "provenance": "Summary restatement of canonical development.phdigital.nextjs and development.skills.frontend; no new claim. User request 2026-08-17 to lead with TypeScript/React positioning.",
+      "confirmed_at": "2026-08-17",
+      "effective_dates": null,
+      "replaces": null,
+      "source_file": "",
+      "resume_style": "paragraph"
+    },
+    {
+      "fact_id": "development.summary.backend",
+      "meaning": "Summary-level backend positioning: production APIs, workflow systems, and PostgreSQL-based applications built with Python/FastAPI.",
+      "renderings": {
+        "en": "Strong backend experience building production APIs, workflow systems, and PostgreSQL-based applications with Python/FastAPI.",
+        "he": "ניסיון backend חזק בבניית APIs ב-production, מערכות workflow ואפליקציות מבוססות PostgreSQL עם Python/FastAPI."
+      },
+      "tags": [
+        "development",
+        "summary",
+        "backend",
+        "databases"
+      ],
+      "status": "canonical",
+      "provenance": "Summary restatement of canonical development.phdigital.fullstack and development.phdigital.crm; no new claim. User request 2026-08-17.",
+      "confirmed_at": "2026-08-17",
+      "effective_dates": null,
+      "replaces": null,
+      "source_file": "",
+      "resume_style": "paragraph"
+    },
+    {
+      "fact_id": "development.summary.delivery",
+      "meaning": "Summary-level delivery positioning: owns features from architecture and data modeling through frontend implementation, testing, and CI/CD.",
+      "renderings": {
+        "en": "Takes features from architecture and data modeling through frontend implementation, testing, and CI/CD.",
+        "he": "מוביל פיצ׳רים מארכיטקטורה ומידול נתונים ועד למימוש frontend, בדיקות ו-CI/CD."
+      },
+      "tags": [
+        "development",
+        "summary",
+        "full-stack",
+        "testing",
+        "devops"
+      ],
+      "status": "canonical",
+      "provenance": "Summary restatement of canonical development.phdigital.fullstack and development.phdigital.cicd; no new claim. User request 2026-08-17.",
+      "confirmed_at": "2026-08-17",
+      "effective_dates": null,
+      "replaces": null,
+      "source_file": "",
+      "resume_style": "paragraph"
+    },
+    {
+      "fact_id": "development.project.mm_backend_core.title",
+      "meaning": "Project name and shape: mm-backend-core is a Node.js/Express CLI.",
+      "renderings": {
+        "en": "mm-backend-core — Node.js / Express CLI",
+        "he": "mm-backend-core — CLI ב-Node.js / Express"
+      },
+      "tags": [
+        "development",
+        "project",
+        "project-title",
+        "backend",
+        "nodejs"
+      ],
+      "status": "canonical",
+      "provenance": "Project name as published; verified against https://github.com/matanmalka1/mm-backend-core and npm mm-backend-core@2.0.2.",
+      "confirmed_at": null,
+      "effective_dates": null,
+      "replaces": null,
+      "source_file": "",
+      "resume_style": "heading"
+    },
+    {
+      "fact_id": "development.project.mm_backend_core.links",
+      "meaning": "mm-backend-core is publicly published on npm and public on GitHub; both are verifiable by a reader.",
+      "renderings": {
+        "en": "npmjs.com/package/mm-backend-core | github.com/matanmalka1/mm-backend-core",
+        "he": "npmjs.com/package/mm-backend-core | github.com/matanmalka1/mm-backend-core"
+      },
+      "tags": [
+        "development",
+        "project",
+        "open-source"
+      ],
+      "status": "canonical",
+      "provenance": "Both URLs resolved 2026-08-17: npm registry returned mm-backend-core@2.0.2 (MIT, node>=18); GitHub API returned a public JavaScript repository.",
+      "confirmed_at": null,
+      "effective_dates": null,
+      "replaces": null,
+      "source_file": "",
+      "resume_style": "date"
+    },
+    {
+      "fact_id": "development.project.mm_backend_core",
+      "meaning": "Personal open-source project: built and published mm-backend-core, an npm-distributed Node.js/Express CLI that scaffolds a MongoDB REST API template with JWT auth and refresh tokens, RBAC, Passport OAuth, file uploads, Zod validation, Helmet/rate-limiting/mongo-sanitize security middleware, Winston logging, and Vitest/Supertest tests. Not PH.Digital work.",
+      "renderings": {
+        "en": "Built and published mm-backend-core on npm, a Node.js/Express backend scaffolding CLI generating a MongoDB REST API with JWT/RBAC authentication, OAuth, validation, security middleware, and automated testing.",
+        "he": "פיתוח ופרסום של mm-backend-core ב-npm — CLI ליצירת שלד backend ב-Node.js/Express, המייצר REST API על MongoDB עם אימות JWT/RBAC, OAuth, ולידציה, middleware אבטחה ובדיקות אוטומטיות."
+      },
+      "tags": [
+        "development",
+        "project",
+        "backend",
+        "nodejs",
+        "open-source",
+        "testing"
+      ],
+      "status": "canonical",
+      "provenance": "User statement 2026-08-17, independently verified against https://github.com/matanmalka1/mm-backend-core (public, JavaScript, MIT) and the npm registry (mm-backend-core@2.0.2, engines node>=18); template package.json confirms express@5, mongoose, passport OAuth, jsonwebtoken, multer, zod, helmet, express-rate-limit, express-mongo-sanitize, winston, vitest, supertest. Personal/open-source work; not attributable to PH.Digital.",
+      "confirmed_at": "2026-08-17",
       "effective_dates": null,
       "replaces": null,
       "source_file": "",

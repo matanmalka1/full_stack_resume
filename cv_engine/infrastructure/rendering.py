@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -29,7 +30,8 @@ from ..domain.render_validation import (
 from ..util import sha256_file
 
 MIXED_LTR = re.compile(
-    r"(?:https?://\S+|[\w.+-]+@[\w.-]+|\+?\d[\d() .-]{5,}|\b(?:B2B|CRM|ERP|KPIs?|SaaS|Full-Stack|"
+    r"(?:https?://\S+|[\w.+-]+@[\w.-]+|\+\d(?:[\d() .-]*\d)?|\b(?:B2B|CRM|ERP|KPIs?|SaaS|"
+    r"Full-Stack(?: Development| Developer)?|"
     r"Priority ERP|Excel|WhatsApp|Teams|Python|FastAPI|React|PostgreSQL|API|APIs|PDF|CI/CD|OpenAPI|"
     r"GitHub Actions|Node\.js|TypeScript|JavaScript|Flask|Express|SQL|AWS EC2|LLM)\b|\d+(?:[.-]\d+)*%?)"
 )
@@ -47,6 +49,96 @@ def _bidi(value: str, rtl: bool) -> Markup:
         cursor = match.end()
     parts.append(html.escape(value[cursor:]))
     return Markup("".join(parts))
+
+
+def _emphasis_config(repo: Path, track: str) -> dict[str, Any]:
+    """Read the track's render-time keyword emphasis settings.
+
+    Emphasis is a rendering decision, so it lives here rather than in a fact.
+    A track that configures nothing simply gets no emphasis.
+    """
+    # Tech Sales has its own factual Track, but deliberately shares the Sales
+    # rendering schema. Looking for ``tech-sales.yaml`` silently disabled Sales
+    # emphasis for the CVs that need commercial and technical terms to scan.
+    rules_track = "sales" if track == "tech-sales" else track
+    path = repo / "rendering" / "rules" / f"{rules_track}.yaml"
+    if not path.is_file():
+        return {}
+    rules = json.loads(path.read_text(encoding="utf-8"))
+    config = rules.get("keyword_emphasis") or {}
+    terms = [term for term in config.get("terms", []) if term]
+    if not terms:
+        return {}
+    # Longest first so "Node.js" wins the position that "Node" would also claim.
+    pattern = "|".join(
+        rf"\b{re.escape(term)}\b" if term[0].isalnum() and term[-1].isalnum() else re.escape(term)
+        for term in sorted(terms, key=len, reverse=True)
+    )
+    return {
+        "pattern": re.compile(pattern, re.IGNORECASE),
+        "sections": frozenset(config.get("sections", ())),
+        "styles": frozenset(config.get("styles", ("bullet",))),
+        "max_groups": int(config.get("max_groups_per_line", 2)),
+    }
+
+
+def _layout_class(draft: DraftDocument) -> str:
+    """Use a short Sales CV's page without risking dense documents.
+
+    This changes presentation only. It never adds, removes, or rewrites a claim,
+    and its thresholds are deterministic from the approved document.
+    """
+    if draft.track.value not in {"sales", "tech-sales"}:
+        return ""
+    claims = [claim for section in draft.sections for claim in section.claims]
+    character_count = sum(len(claim.text) for claim in claims)
+    if len(claims) <= 25 and character_count <= 2_000:
+        return "spacious"
+    if len(claims) > 32 or character_count > 2_700:
+        return "compact"
+    return ""
+
+
+def _emphasis_spans(value: str, config: dict[str, Any]) -> list[tuple[int, int]]:
+    """Character spans to emphasize, computed on the plain text.
+
+    Neighbouring terms separated only by punctuation ("React, TypeScript") read
+    as one thing to a scanning eye, so they merge into a single group before the
+    per-line cap applies - otherwise a cap of two would split a list mid-phrase.
+    """
+    groups: list[list[int]] = []
+    for match in config["pattern"].finditer(value):
+        start, end = match.span()
+        if groups and start - groups[-1][1] <= 2 and not value[groups[-1][1] : start].strip(" ,/&"):
+            groups[-1][1] = end
+            continue
+        groups.append([start, end])
+    return [(start, end) for start, end in groups[: config["max_groups"]]]
+
+
+def _claim_html(claim: Any, rtl: bool, section_name: str, config: dict[str, Any]) -> Markup:
+    """Escape first, then wrap emphasis around already-escaped segments.
+
+    The emphasis never runs as a replacement over generated markup: spans are
+    found in the plain text, each segment is escaped independently, and the tags
+    are added between segments. A term that happens to look like markup is
+    therefore still escaped, never interpreted.
+    """
+    if (
+        not config
+        or claim.style not in config["styles"]
+        or (config["sections"] and section_name not in config["sections"])
+    ):
+        return _bidi(claim.text, rtl)
+    value = claim.text
+    parts: list[Markup] = []
+    cursor = 0
+    for start, end in _emphasis_spans(value, config):
+        parts.append(_bidi(value[cursor:start], rtl))
+        parts.append(Markup("<strong>") + _bidi(value[start:end], rtl) + Markup("</strong>"))
+        cursor = end
+    parts.append(_bidi(value[cursor:], rtl))
+    return Markup("").join(parts)
 
 
 def _contact_html(claim: Any, rtl: bool, candidate: CandidateContext) -> Markup:
@@ -78,11 +170,13 @@ def compose_html(draft: DraftDocument, repo: Path, candidate: CandidateContext) 
         undefined=StrictUndefined,
     )
     template = environment.get_template(template_name)
+    emphasis = _emphasis_config(repo, draft.track.value)
     sections = [
         {
             "name": section.name,
             "claims": [
-                {"style": claim.style, "html": _bidi(claim.text, rtl)} for claim in section.claims
+                {"style": claim.style, "html": _claim_html(claim, rtl, section.name, emphasis)}
+                for claim in section.claims
             ],
         }
         for section in draft.sections
@@ -91,6 +185,7 @@ def compose_html(draft: DraftDocument, repo: Path, candidate: CandidateContext) 
         name=draft.name,
         headline=_bidi(draft.headline.text, rtl),
         headline_text=draft.headline.text,
+        layout_class=_layout_class(draft),
         contacts=[_contact_html(claim, rtl, candidate) for claim in draft.contacts],
         sections=sections,
     )

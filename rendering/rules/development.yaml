@@ -3,7 +3,54 @@
   "track": "development",
   "default_pages": 1,
   "maximum_pages": 1,
-  "required_sections": ["Professional Summary", "Work Experience", "Education", "Core Skills", "Languages"],
-  "contact_links": ["email", "linkedin", "github"],
-  "direction": "ltr"
+  "required_sections": [
+    "Professional Summary",
+    "Work Experience",
+    "Projects",
+    "Education",
+    "Core Skills",
+    "Languages"
+  ],
+  "contact_links": [
+    "email",
+    "linkedin",
+    "github"
+  ],
+  "direction": "ltr",
+  "keyword_emphasis": {
+    "terms": [
+      "workflow automation",
+      "background jobs",
+      "GitHub Actions CI/CD",
+      "Node.js/Express",
+      "Python/FastAPI",
+      "JWT/RBAC",
+      "Tailwind CSS",
+      "AWS EC2",
+      "REST API",
+      "GitHub Actions",
+      "TypeScript",
+      "React",
+      "Next.js",
+      "Node.js",
+      "Express",
+      "Python",
+      "FastAPI",
+      "PostgreSQL",
+      "MongoDB",
+      "MySQL",
+      "Docker",
+      "CI/CD"
+    ],
+    "sections": [
+      "Work Experience",
+      "Projects",
+      "ניסיון מקצועי",
+      "פרויקטים"
+    ],
+    "styles": [
+      "bullet"
+    ],
+    "max_groups_per_line": 2
+  }
 }

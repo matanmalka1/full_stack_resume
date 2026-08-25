@@ -6,8 +6,13 @@
       "version": "1.0.0",
       "profile": "tech-sales",
       "section": "Professional Summary",
-      "emphases": ["new-business"],
-      "fact_ids": ["sales.summary.tech", "sales.summary.new_business"],
+      "emphases": [
+        "new-business"
+      ],
+      "fact_ids": [
+        "sales.summary.tech",
+        "sales.summary.new_business"
+      ],
       "style": "paragraph",
       "renderings": {
         "en": "Full-cycle B2B Sales professional with account leadership and hands-on Full-Stack Development experience, combining prospecting, needs discovery, negotiation, and closing with practical understanding of software products and workflows.",
@@ -19,8 +24,14 @@
       "version": "1.0.0",
       "profile": "tech-sales",
       "section": "Professional Summary",
-      "emphases": ["tech-consultative-sales", "balanced-sales"],
-      "fact_ids": ["sales.summary.tech", "sales.summary.new_business"],
+      "emphases": [
+        "tech-consultative-sales",
+        "balanced-sales"
+      ],
+      "fact_ids": [
+        "sales.summary.tech",
+        "sales.summary.new_business"
+      ],
       "style": "paragraph",
       "renderings": {
         "en": "Commercial and technical professional combining full-cycle B2B Sales, needs discovery, negotiation, and closing with hands-on Full-Stack Development experience.",
@@ -32,8 +43,13 @@
       "version": "1.0.0",
       "profile": "tech-sales",
       "section": "Professional Summary",
-      "emphases": ["account-growth"],
-      "fact_ids": ["sales.summary.tech", "sales.summary.account"],
+      "emphases": [
+        "account-growth"
+      ],
+      "fact_ids": [
+        "sales.summary.tech",
+        "sales.summary.account"
+      ],
       "style": "paragraph",
       "renderings": {
         "en": "B2B Sales and account-management professional with hands-on Full-Stack Development experience, combining customer growth, retention, and commercial ownership with practical understanding of software products and workflows.",
@@ -45,8 +61,14 @@
       "version": "1.0.0",
       "profile": "tech-sales",
       "section": "Professional Summary",
-      "emphases": ["new-business"],
-      "fact_ids": ["sales.summary.tenure", "sales.summary.tech", "sales.summary.new_business"],
+      "emphases": [
+        "new-business"
+      ],
+      "fact_ids": [
+        "sales.summary.tenure",
+        "sales.summary.tech",
+        "sales.summary.new_business"
+      ],
       "style": "paragraph",
       "renderings": {
         "en": "B2B sales professional with nearly 6 years of experience across full-cycle sales and team leadership, combined with hands-on Full-Stack development experience. Experienced in prospecting, needs discovery, negotiation, closing, and post-sale follow-through, with a practical understanding of software products and workflows.",
@@ -58,8 +80,15 @@
       "version": "1.0.0",
       "profile": "tech-sales",
       "section": "Professional Summary",
-      "emphases": ["tech-consultative-sales", "balanced-sales"],
-      "fact_ids": ["sales.summary.tenure", "sales.summary.tech", "sales.summary.new_business"],
+      "emphases": [
+        "tech-consultative-sales",
+        "balanced-sales"
+      ],
+      "fact_ids": [
+        "sales.summary.tenure",
+        "sales.summary.tech",
+        "sales.summary.new_business"
+      ],
       "style": "paragraph",
       "renderings": {
         "en": "B2B sales professional with nearly 6 years of experience across full-cycle sales and team leadership, combined with hands-on Full-Stack development experience. Experienced in needs discovery, negotiation, and closing across the full sales cycle, with a practical understanding of software products and workflows.",
@@ -71,8 +100,14 @@
       "version": "1.0.0",
       "profile": "tech-sales",
       "section": "Professional Summary",
-      "emphases": ["account-growth"],
-      "fact_ids": ["sales.summary.tenure", "sales.summary.tech", "sales.summary.account"],
+      "emphases": [
+        "account-growth"
+      ],
+      "fact_ids": [
+        "sales.summary.tenure",
+        "sales.summary.tech",
+        "sales.summary.account"
+      ],
       "style": "paragraph",
       "renderings": {
         "en": "B2B sales professional with nearly 6 years of experience across full-cycle sales and team leadership, combined with hands-on Full-Stack development experience. Experienced in managing recurring customers, growing existing accounts, and retaining business, with a practical understanding of software products and workflows.",
@@ -85,7 +120,9 @@
       "profile": "tech-sales",
       "section": "Sales Experience",
       "emphases": [],
-      "fact_ids": ["sales.metric.performance"],
+      "fact_ids": [
+        "sales.metric.performance"
+      ],
       "style": "bullet",
       "renderings": {
         "en": "Increased team sales revenue by approximately 30% during the management period.",
@@ -98,7 +135,10 @@
       "profile": "tech-sales",
       "section": "Sales Experience",
       "emphases": [],
-      "fact_ids": ["sales.cycle.negotiation", "sales.achievement.complex_deals"],
+      "fact_ids": [
+        "sales.cycle.negotiation",
+        "sales.achievement.complex_deals"
+      ],
       "style": "bullet",
       "renderings": {
         "en": "Negotiated pricing, credit, payment terms, quantities, and delivery, winning complex B2B deals and tenders.",
@@ -129,7 +169,9 @@
       "profile": "tech-sales",
       "section": "Technology Experience",
       "emphases": [],
-      "fact_ids": ["development.phdigital.fullstack"],
+      "fact_ids": [
+        "development.phdigital.fullstack"
+      ],
       "style": "bullet",
       "renderings": {
         "en": "Built production software end to end across data models, APIs, and frontend experiences, providing hands-on understanding of how software products are designed and delivered.",
@@ -142,7 +184,10 @@
       "profile": "tech-sales",
       "section": "Technology Experience",
       "emphases": [],
-      "fact_ids": ["development.phdigital.crm", "development.phdigital.integrations"],
+      "fact_ids": [
+        "development.phdigital.crm",
+        "development.phdigital.integrations"
+      ],
       "style": "bullet",
       "renderings": {
         "en": "Built a production CRM on PostgreSQL and WhatsApp/email integrations that automated workflows, document generation, and operational status tracking.",
@@ -155,7 +200,9 @@
       "profile": "tech-sales",
       "section": "Technology Background",
       "emphases": [],
-      "fact_ids": ["development.phdigital.fullstack"],
+      "fact_ids": [
+        "development.phdigital.fullstack"
+      ],
       "style": "bullet",
       "renderings": {
         "en": "Built production software end to end across data models, APIs, and frontend experiences, providing hands-on understanding of how software products are designed and delivered.",
@@ -168,11 +215,68 @@
       "profile": "tech-sales",
       "section": "Technology Background",
       "emphases": [],
-      "fact_ids": ["development.phdigital.crm", "development.phdigital.integrations"],
+      "fact_ids": [
+        "development.phdigital.crm",
+        "development.phdigital.integrations"
+      ],
       "style": "bullet",
       "renderings": {
         "en": "Built a production CRM and WhatsApp/email integrations that automated workflows, document generation, and operational status tracking.",
         "he": "פיתוח מערכת CRM ב-production ואינטגרציות WhatsApp ודוא\"ל לאוטומציית תהליכים, הפקת מסמכים ומעקב סטטוסים תפעולי."
+      }
+    },
+    {
+      "rule_id": "development.summary.frontend-forward",
+      "version": "1.1.0",
+      "profile": "development",
+      "section": "Professional Summary",
+      "emphases": [
+        "development-balanced"
+      ],
+      "fact_ids": [
+        "development.summary.frontend",
+        "development.summary.backend",
+        "development.summary.delivery"
+      ],
+      "style": "paragraph",
+      "renderings": {
+        "en": "Full-Stack Developer working across React, Next.js, and TypeScript on the frontend and Python/FastAPI with PostgreSQL on the backend. Builds APIs, workflow-driven systems, integrations, and CI/CD, with end-to-end ownership from data modeling through frontend delivery.",
+        "he": "מפתח Full-Stack העובד ב-React, ב-Next.js וב-TypeScript בצד הלקוח וב-Python/FastAPI עם PostgreSQL בצד השרת. בונה APIs, מערכות מבוססות workflow, אינטגרציות ו-CI/CD, עם אחריות מקצה לקצה ממידול נתונים ועד מסירת ה-frontend."
+      }
+    },
+    {
+      "rule_id": "development.summary.backend-forward",
+      "version": "1.0.0",
+      "profile": "development",
+      "section": "Professional Summary",
+      "emphases": [
+        "development-backend",
+        "development-ai"
+      ],
+      "fact_ids": [
+        "development.summary.frontend",
+        "development.summary.backend",
+        "development.summary.delivery"
+      ],
+      "style": "paragraph",
+      "renderings": {
+        "en": "Full-Stack Developer with strong backend experience building production APIs, workflow systems, and PostgreSQL-based applications with Python/FastAPI, alongside hands-on React, Next.js, and TypeScript. Takes features from architecture and data modeling through frontend implementation, testing, and CI/CD.",
+        "he": "מפתח Full-Stack עם ניסיון backend חזק בבניית APIs ב-production, מערכות workflow ואפליקציות מבוססות PostgreSQL עם Python/FastAPI, לצד ניסיון מעשי ב-React, ב-Next.js וב-TypeScript. מוביל פיצ׳רים מארכיטקטורה ומידול נתונים ועד למימוש frontend, בדיקות ו-CI/CD."
+      }
+    },
+    {
+      "rule_id": "development.leader.revenue",
+      "version": "1.0.0",
+      "profile": "development",
+      "section": "Work Experience",
+      "emphases": [],
+      "fact_ids": [
+        "sales.metric.performance"
+      ],
+      "style": "bullet",
+      "renderings": {
+        "en": "Increased team sales revenue by approximately 30% during the management period.",
+        "he": "הגדלת הכנסות המכירות של הצוות בכ-30% לאורך תקופת הניהול."
       }
     }
   ]

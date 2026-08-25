@@ -18,16 +18,37 @@
     h2 { margin: 0 0 1.6mm; color: #237568; border-bottom: 1px solid #c9d8d5; padding-bottom: .7mm; font-size: 9pt; }
     p { margin: 0 0 1.3mm; }
     h3 { margin: 1.5mm 0 0; font-size: 10.2pt; }
+    h3[dir="auto"] { text-align: right; }
     .date { color: #64707c; font-size: 8.3pt; margin: .2mm 0 .9mm; }
     .bullet { display: grid; grid-template-columns: 3.2mm 1fr; margin: 0 0 .75mm; }
     .bullet-dot { font-weight: 700; }
     .item { margin: 0 0 .75mm; }
     bdi[dir="ltr"] { unicode-bidi: isolate; }
     .claim { break-inside: avoid; }
+    strong { font-weight: 700; }
+    .page.spacious { font-size: 10.3pt; line-height: 1.42; padding: 13mm 16mm 10mm; }
+    .page.spacious header { padding: 1.3mm 5.5mm 4.2mm 0; }
+    .page.spacious h1 { font-size: 25pt; }
+    .page.spacious .headline { margin-top: 1.8mm; font-size: 11pt; }
+    .page.spacious .contacts { font-size: 8.8pt; line-height: 1.36; }
+    .page.spacious section { margin-top: 4.5mm; }
+    .page.spacious h2 { margin-bottom: 1.8mm; padding-bottom: .8mm; font-size: 8.5pt; }
+    .page.spacious p { margin-bottom: 1.6mm; }
+    .page.spacious h3 { margin-top: 1.8mm; font-size: 10.8pt; }
+    .page.spacious .date { font-size: 8.8pt; margin: .3mm 0 1.05mm; }
+    .page.spacious .bullet { grid-template-columns: 3.6mm 1fr; margin-bottom: .95mm; }
+    .page.spacious .item { margin-bottom: .95mm; }
+    .page.compact { font-size: 9.2pt; line-height: 1.31; padding: 10mm 14mm 8mm; }
+    .page.compact header { padding-bottom: 3mm; }
+    .page.compact section { margin-top: 3.1mm; }
+    .page.compact h2 { margin-bottom: 1.35mm; padding-bottom: .55mm; }
+    .page.compact h3 { margin-top: 1.25mm; font-size: 9.9pt; }
+    .page.compact .date { margin-bottom: .7mm; }
+    .page.compact .bullet, .page.compact .item { margin-bottom: .55mm; }
   </style>
 </head>
 <body>
-<main class="page" data-cv-page>
+<main class="page{% if layout_class %} {{ layout_class }}{% endif %}" data-cv-page>
   <header>
     <div><h1>{{ name }}</h1><div class="headline">{{ headline }}</div></div>
     <div class="contacts">{% for contact in contacts %}<div>{{ contact }}</div>{% endfor %}</div>
@@ -36,11 +57,11 @@
   <section data-section="{{ section.name }}">
     <h2>{{ section.name }}</h2>
     {% for claim in section.claims %}
-      {% if claim.style == "heading" %}<h3 class="claim">{{ claim.html }}</h3>
-      {% elif claim.style == "date" %}<div class="date claim">{{ claim.html }}</div>
-      {% elif claim.style == "paragraph" %}<p class="claim">{{ claim.html }}</p>
-      {% elif claim.style == "item" %}<div class="item claim">{{ claim.html }}</div>
-      {% else %}<div class="bullet claim"><span class="bullet-dot">•</span><span>{{ claim.html }}</span></div>{% endif %}
+      {% if claim.style == "heading" %}<h3 class="claim" dir="auto">{{ claim.html }}</h3>
+      {% elif claim.style == "date" %}<div class="date claim" dir="auto">{{ claim.html }}</div>
+      {% elif claim.style == "paragraph" %}<p class="claim" dir="auto">{{ claim.html }}</p>
+      {% elif claim.style == "item" %}<div class="item claim" dir="auto">{{ claim.html }}</div>
+      {% else %}<div class="bullet claim"><span class="bullet-dot">•</span><span dir="auto">{{ claim.html }}</span></div>{% endif %}
     {% endfor %}
   </section>
   {% endfor %}
