@@ -92,7 +92,6 @@ def build_parser() -> argparse.ArgumentParser:
     workspace_sub.add_parser(
         "status", help="show Workspace identity, roots, and resolved configuration"
     )
-    workspace_sub.add_parser("upgrade", help="apply pending Alembic migrations")
     ingest = sub.add_parser("ingest", help="create an application and immutable job snapshot")
     _add_job_input(ingest)
 

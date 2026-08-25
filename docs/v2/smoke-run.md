@@ -55,11 +55,11 @@ Workspace has no canonical facts and drafting has nothing to draw on.
 a real Workspace.
 
 ```bash
-cv_cli --workspace "$CV_SMOKE_WS" workspace upgrade
+./.venv/bin/alembic upgrade head
 cv_cli --workspace "$CV_SMOKE_WS" workspace status
 ```
 
-`workspace upgrade` applies Alembic to the fresh PostgreSQL database. `workspace status`
+Alembic upgrades the fresh PostgreSQL database directly. `workspace status`
 should then report the five roots under `$CV_SMOKE_WS`, `database_url: "***"` (with its
 configuration source still visible), and schema revision `0002`. The real URL remains in
 memory for SQLAlchemy; masking is display-only.

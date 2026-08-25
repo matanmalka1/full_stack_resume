@@ -3,6 +3,7 @@ from __future__ import annotations
 from functools import cache
 from typing import Any
 
+from alembic.runtime.migration import MigrationContext
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.engine import Connection
 
@@ -18,6 +19,12 @@ def create_database_engine(database_url: str) -> Engine:
     PostgreSQL pools.
     """
     return create_engine(database_url, pool_pre_ping=True)
+
+
+def current_database_revision(engine: Engine) -> str | None:
+    """Return the revision recorded by Alembic, or ``None`` before migration."""
+    with engine.connect() as connection:
+        return MigrationContext.configure(connection).get_current_revision()
 
 
 def _engine_for(repository_or_engine: Any) -> Engine:
