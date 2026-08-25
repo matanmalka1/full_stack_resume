@@ -56,4 +56,20 @@ describe("workflowStepsFor", () => {
     expect(current(steps)).toBeUndefined();
     expect(completed(steps)).toEqual(["משרה חדשה", "ניתוח", "טיוטה", "אימות", "מוכן"]);
   });
+
+  /* `none` is a screen outside the workflow, which is not a sixth position on it. It is
+     excluded from this function's input rather than mapped to a row of five upcoming
+     steps: the landmark renders nothing at all for it.
+
+     `tsc -b` is what enforces this, not vitest. The guard is the `@ts-expect-error`
+     below: widen the parameter back to the full union and it goes unused, which fails
+     the typecheck. There is deliberately no runtime assertion here - at runtime the call
+     returns five upcoming steps and throws nothing, so any `expect` around it would pass
+     whether the type accepted `none` or not. */
+  it("excludes a screen outside the workflow from the steps it maps", () => {
+    // @ts-expect-error `none` has no steps; WorkflowLandmarkSteps renders no landmark.
+    const rejectedAtCompileTime = () => workflowStepsFor("none");
+
+    expect(rejectedAtCompileTime).toBeTypeOf("function");
+  });
 });

@@ -3,12 +3,15 @@ import { describe, expect, it } from "vitest";
 import { actionDestination } from "./actionDestinations";
 
 describe("Stage E action destinations", () => {
-  it("routes validation from the Application projection", () => {
-    expect(actionDestination("validate", "app 1")).toBe("/applications/app%201/validation");
+  /* Both act on the draft the workspace is holding, so both resolve to it: the panel
+     that reports the validation result and the dialog that approves it are already on
+     that screen. */
+  it("routes validation to the draft workspace", () => {
+    expect(actionDestination("validate", "app 1")).toBe("/applications/app%201/draft");
   });
 
-  it("routes approval from the Application projection", () => {
-    expect(actionDestination("approve", "app 1")).toBe("/applications/app%201/approval");
+  it("routes approval to the draft workspace", () => {
+    expect(actionDestination("approve", "app 1")).toBe("/applications/app%201/draft");
   });
 
   it("keeps review on its established destination", () => {

@@ -10,6 +10,7 @@ import {
 } from "../api/applications";
 import { ApiProblem } from "../api/client";
 import type { ApplicationIntake, DuplicateMatch } from "../api/contracts";
+import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { useAppForm } from "../forms/useAppForm";
 import { ActionBar } from "../ui/ActionBar";
 import { Button } from "../ui/Button";
@@ -68,6 +69,9 @@ type SubmitResult =
 
 export const NewApplicationPage = () => {
   const navigate = useNavigate();
+  /* The intake screen is the one place `intake` is the projection's own answer, so it
+     states it rather than relying on the landmark's initial value. */
+  useWorkflowStage("intake");
   const {
     formState: { errors },
     getValues,

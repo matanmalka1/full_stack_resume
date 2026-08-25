@@ -1,11 +1,9 @@
 import { isValidElement } from "react";
 import { describe, expect, it } from "vitest";
 
-import { ApprovalPage } from "../pages/ApprovalPage";
+import { DraftEditorPage } from "../pages/DraftEditorPage";
 import { ReadyPage } from "../pages/ReadyPage";
-import { RenderPage } from "../pages/RenderPage";
 import { SettingsPage } from "../pages/SettingsPage";
-import { ValidationPage } from "../pages/ValidationPage";
 import { router } from "./router";
 
 const stageERoute = (path: string) => router.routes[0]?.children?.find((route) => route.path === path);
@@ -15,16 +13,17 @@ const stageEElementType = (path: string) => {
 };
 
 describe("Stage E routes", () => {
-  it("mounts ValidationPage at the validation path", () => {
-    expect(stageEElementType("applications/:applicationId/validation")).toBe(ValidationPage);
+  /* Validation, approval, and render are states of the draft workspace, so the route
+     table must not carry a screen for any of them. Keeping the assertion as "no route"
+     rather than deleting it means a re-added interstitial fails here. */
+  it("keeps validation, approval, and render off the route table", () => {
+    expect(stageERoute("applications/:applicationId/validation")).toBeUndefined();
+    expect(stageERoute("applications/:applicationId/approval")).toBeUndefined();
+    expect(stageERoute("approved-revisions/:approvedRevisionId/render")).toBeUndefined();
   });
 
-  it("mounts ApprovalPage at the approval path", () => {
-    expect(stageEElementType("applications/:applicationId/approval")).toBe(ApprovalPage);
-  });
-
-  it("mounts RenderPage for an exact approved revision", () => {
-    expect(stageEElementType("approved-revisions/:approvedRevisionId/render")).toBe(RenderPage);
+  it("mounts the draft workspace, which owns validation and approval", () => {
+    expect(stageEElementType("applications/:applicationId/draft")).toBe(DraftEditorPage);
   });
 
   it("mounts ReadyPage for an exact approved revision", () => {

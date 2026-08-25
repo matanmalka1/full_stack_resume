@@ -115,16 +115,29 @@ export const ApplicationPage = () => {
 
   return (
     <Card aria-labelledby="route-heading">
-      <PageHeading
-        description={
-          detail === undefined
-            ? "טוען את מצב המועמדות…"
-            : `תפקיד היעד: ${detail.application.target_role}`
-        }
-        id="route-heading"
-      >
-        {detail === undefined ? "מועמדות" : detail.application.company}
-      </PageHeading>
+      {/* The masthead answers "which job is this, and where has it got to" before any
+          control: the company reads as the title, the role sits under it, and the two
+          state badges are on the same line rather than in a row of their own below. */}
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-cv-border pb-5">
+        <div className="min-w-0">
+          <PageHeading id="route-heading">
+            {detail === undefined ? "מועמדות" : detail.application.company}
+          </PageHeading>
+          <p className="mt-1 text-body text-cv-text-muted" dir="auto">
+            {detail === undefined ? "טוען את מצב המועמדות…" : detail.application.target_role}
+          </p>
+        </div>
+        {detail === undefined ? null : (
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge tone={preparationStateTones[detail.preparation_state]}>
+              {preparationStateLabels[detail.preparation_state]}
+            </StatusBadge>
+            <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
+              {workingDraftStateLabels[detail.working_draft_state]}
+            </StatusBadge>
+          </div>
+        )}
+      </div>
 
       {query.error === null ? null : (
         <Callout
@@ -154,15 +167,6 @@ export const ApplicationPage = () => {
         ) : null
       ) : (
         <div className="mt-6 flex flex-col gap-6">
-          <div className="flex flex-wrap items-center gap-3">
-            <StatusBadge tone={preparationStateTones[detail.preparation_state]}>
-              {preparationStateLabels[detail.preparation_state]}
-            </StatusBadge>
-            <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
-              {workingDraftStateLabels[detail.working_draft_state]}
-            </StatusBadge>
-          </div>
-
           {detail.active_operation == null ? null : (
             <Callout
               action={
@@ -218,19 +222,27 @@ export const ApplicationPage = () => {
 
           <ApplicationActions detail={detail} />
 
-          {detail.blocked_actions.length === 0 ? null : (
-            <TechnicalDetails summary="פעולות שאינן זמינות כעת">
-              <SummaryList
-                items={detail.blocked_actions.map((blocked) => ({
-                  term: actionLabel(blocked.action),
-                  value: blocked.reasons.map(blockedReasonLabel).join(" "),
-                }))}
-              />
-            </TechnicalDetails>
-          )}
-
+          {/* One collapsed block, not three. Blocked actions and the identifier table are
+              both answers to "why" and "which record" - useful when something looks wrong,
+              and noise in front of the action the screen is actually offering. */}
           <TechnicalDetails>
-            <SummaryList items={identifiers(detail)} />
+            <div className="flex flex-col gap-4">
+              {detail.blocked_actions.length === 0 ? null : (
+                <div>
+                  <p className="mb-2 font-semibold text-cv-text">פעולות שאינן זמינות כעת</p>
+                  <SummaryList
+                    items={detail.blocked_actions.map((blocked) => ({
+                      term: actionLabel(blocked.action),
+                      value: blocked.reasons.map(blockedReasonLabel).join(" "),
+                    }))}
+                  />
+                </div>
+              )}
+              <div>
+                <p className="mb-2 font-semibold text-cv-text">מזהי הרשומות</p>
+                <SummaryList items={identifiers(detail)} />
+              </div>
+            </div>
           </TechnicalDetails>
         </div>
       )}

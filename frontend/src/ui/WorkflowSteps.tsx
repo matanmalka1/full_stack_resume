@@ -10,15 +10,15 @@ export interface WorkflowStep {
 }
 
 const stateClasses: Record<WorkflowStepState, string> = {
-  complete: "text-cv-success",
-  current: "font-semibold text-cv-accent",
-  upcoming: "text-cv-text-muted",
+  complete: "text-cv-text-muted",
+  current: "font-bold text-cv-accent",
+  upcoming: "text-cv-text-muted/70",
 };
 
 const nodeClasses: Record<WorkflowStepState, string> = {
   complete: "border-cv-success bg-cv-success text-cv-on-accent",
-  current: "border-cv-accent bg-cv-accent text-cv-on-accent ring-4 ring-cv-accent-soft",
-  upcoming: "border-cv-border-strong bg-cv-surface text-cv-text-muted",
+  current: "border-cv-accent bg-cv-accent text-cv-on-accent ring-3 ring-cv-accent-soft",
+  upcoming: "border-cv-border-strong/40 bg-cv-surface text-cv-text-muted",
 };
 
 interface WorkflowStepsProps {
@@ -27,48 +27,62 @@ interface WorkflowStepsProps {
 }
 
 /* A.1: the landmark shows completed, current, and future stages. Future stages are not
-   navigable, so the steps are text, never links. */
+   navigable, so the steps are text, never links.
+
+   It is a breadcrumb on the header line rather than a band of its own: the stage is
+   orientation, and at nine rem of full-width chrome it was pushing the actual work of
+   every screen below the fold. Narrow widths keep only the current step, which is the
+   "current-step summary" A.4 frame 4 asks for. */
 export const WorkflowSteps = ({ label, steps }: WorkflowStepsProps) => {
+  const current = steps.find((step) => step.state === "current");
+
   return (
-    <nav
-      aria-label={label}
-      className="overflow-x-auto border-b border-cv-border bg-cv-surface/80"
-    >
-      <ol className="mx-auto flex min-w-[42rem] max-w-5xl px-6 py-4 text-support">
+    <nav aria-label={label} className="min-w-0">
+      <ol className="flex items-center gap-1 md:gap-1.5">
         {steps.map((step, index) => (
           <li
             aria-current={step.state === "current" ? "step" : undefined}
             className={cx(
-              "relative flex flex-1 flex-col items-center gap-2 px-2 text-center",
+              "items-center gap-1.5 text-support",
+              /* Below md only the current step is shown, so the breadcrumb never
+                 wraps the header onto a second line. */
+              step.state === "current" ? "flex" : "hidden md:flex",
               stateClasses[step.state],
             )}
             key={step.label}
           >
-            {index === steps.length - 1 ? null : (
-              <span
-                aria-hidden="true"
-                className={cx(
-                  "absolute top-[1.125rem] start-[calc(50%+1.25rem)] h-0.5 w-[calc(100%-2.5rem)]",
-                  step.state === "complete" ? "bg-cv-success" : "bg-cv-border",
-                )}
-              />
-            )}
             <span
               className={cx(
-                "relative z-10 flex size-9 items-center justify-center rounded-pill border text-support font-bold shadow-surface transition-transform duration-200",
+                "flex size-5 shrink-0 items-center justify-center rounded-pill border text-[0.6875rem] font-bold",
                 nodeClasses[step.state],
               )}
             >
               {step.state === "complete" ? (
-                <Check aria-hidden="true" className="size-4" strokeWidth={3} />
+                <Check aria-hidden="true" className="size-3" strokeWidth={3} />
               ) : (
                 <span aria-hidden="true">{index + 1}</span>
               )}
             </span>
-            <span>{step.label}</span>
+            <span className="whitespace-nowrap">{step.label}</span>
+            {index === steps.length - 1 ? null : (
+              <span
+                aria-hidden="true"
+                className={cx(
+                  "ms-1 hidden h-px w-4 md:block lg:w-6",
+                  step.state === "complete" ? "bg-cv-success/50" : "bg-cv-border",
+                )}
+              />
+            )}
           </li>
         ))}
       </ol>
+      {/* The compact form drops the other steps visually, so the position is still
+          stated in text for anyone reading only the current one. */}
+      {current === undefined ? null : (
+        <span className="sr-only md:hidden">
+          {`שלב ${steps.indexOf(current) + 1} מתוך ${steps.length}`}
+        </span>
+      )}
     </nav>
   );
 };

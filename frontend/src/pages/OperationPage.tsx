@@ -14,6 +14,7 @@ import type {
 import { isTerminalOperation, operationQueryOptions } from "../api/operations";
 import { operationQueryKey } from "../api/operations";
 import { settingsQueryOptions } from "../api/settings";
+import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { Callout } from "../ui/Callout";
 import { Card } from "../ui/Card";
 import { LiveRegion } from "../ui/LiveRegion";
@@ -246,10 +247,17 @@ export const OperationPage = () => {
   const queryClient = useQueryClient();
   const analyzeSucceeded = operation?.operation_type === "analyze_job" && operation.status === "succeeded";
   const settingsQuery = useQuery({ ...settingsQueryOptions, enabled: analyzeSucceeded });
+  /* Enabled for any operation, not only a succeeded analyze: the projection is what
+     lets a running Operation publish the stage it belongs to, so the landmark keeps
+     showing the workflow position instead of dropping back to the intake step for as
+     long as the operation is on screen. */
   const applicationQuery = useQuery({
     ...applicationDetailQueryOptions(operation?.application_id ?? ""),
-    enabled: analyzeSucceeded,
+    enabled: operation !== undefined,
   });
+  useWorkflowStage(
+    applicationQuery.data === undefined ? "unknown" : applicationQuery.data.preparation_state,
+  );
   const autoDraft = useMutation({
     mutationFn: async ({ applicationId, analysisId, planId }: { applicationId: string; analysisId: string; planId: string }) =>
       startDraftGeneration(
@@ -296,6 +304,7 @@ export const OperationPage = () => {
             ? "הפעולה הסתיימה והעדכון האוטומטי נעצר."
             : "העמוד מתעדכן מעצמו עד לסיום הפעולה."
         }
+        eyebrow={terminal ? "פעולה שהסתיימה" : "פעולה מתבצעת"}
         id="route-heading"
       >
         {/* The heading names the work; the badge below carries its status. Printing the
@@ -387,10 +396,11 @@ export const OperationPage = () => {
             </Callout>
           ) : null}
 
-          <SummaryList items={progressItems(operation)} />
-
           <TechnicalDetails>
-            <SummaryList items={technicalItems(operation)} />
+            <div className="flex flex-col gap-4">
+              <SummaryList items={progressItems(operation)} />
+              <SummaryList items={technicalItems(operation)} />
+            </div>
           </TechnicalDetails>
 
           <OperationActions operation={operation} />

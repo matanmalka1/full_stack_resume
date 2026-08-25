@@ -29,11 +29,14 @@ import { PageHeading } from "../ui/PageHeading";
 import { StatusBadge } from "../ui/StatusBadge";
 import { TechnicalDetails } from "../ui/TechnicalDetails";
 import { ViewSwitch } from "../ui/ViewSwitch";
+import { DraftApprovalDialog } from "./DraftApprovalDialog";
 import { DraftClaimCard } from "./DraftClaimCard";
 import { DraftConflictDialog } from "./DraftConflictDialog";
 import { DraftFactPanel } from "./DraftFactPanel";
 import { DraftPreview } from "./DraftPreview";
+import { DraftRenderPanel } from "./DraftRenderPanel";
 import { DraftSaveState } from "./DraftSaveState";
+import { DraftValidationPanel } from "./DraftValidationPanel";
 import { removability } from "./claimRemoval";
 import { useDraftAutosave } from "./useDraftAutosave";
 import { actionLabel, workingDraftStateLabels, workingDraftStateTones } from "./applicationLabels";
@@ -92,6 +95,16 @@ export const DraftEditorPage = () => {
      being unmounted: switching views must not discard text the user has typed, and an
      unmounted editor would take its visible text with it. */
   const [view, setView] = useState<"editor" | "preview">("editor");
+  /* The three screens that used to follow the editor are states of this one workspace.
+     None of them changes what is sent: the validation panel runs the same command, the
+     dialog is A.4 frame 5's own approval dialog, and the render panel keeps rendering an
+     explicit action on the exact revision the approval returned. */
+  const [approvalOpen, setApprovalOpen] = useState(false);
+  const [validationStale, setValidationStale] = useState(false);
+  const [exactPassingRunId, setExactPassingRunId] = useState<string | null>(null);
+  /* The revision this workspace just approved. Held here rather than read from the
+     projection so the render step names the exact revision the approval returned. */
+  const [approvedRevisionId, setApprovedRevisionId] = useState<string | null>(null);
 
   /* A save changes the draft, so the read that produced it is stale by definition. The
      new token is installed directly - it is the one the response returned for the version
@@ -117,6 +130,16 @@ export const DraftEditorPage = () => {
     },
     [applicationId, queryClient, workingDraftId],
   );
+
+  /* Stable, because the panel reports through it from an effect: a fresh function each
+     render would make that effect re-run on every render of this screen. */
+  const onExactPassingRun = useCallback((runId: string | null) => {
+    setExactPassingRunId(runId);
+    /* A fresh exact passing run is the answer to the staleness the approval reported. */
+    if (runId !== null) {
+      setValidationStale(false);
+    }
+  }, []);
 
   const autosave = useDraftAutosave({
     etag: draftQuery.data?.etag ?? null,
@@ -220,7 +243,7 @@ export const DraftEditorPage = () => {
         eyebrow="סביבת עריכה"
         id="route-heading"
       >
-        עריכת הטיוטה
+        עריכה, אימות ואישור
       </PageHeading>
 
       <div className="mt-6 flex flex-col gap-6">
@@ -286,11 +309,15 @@ export const DraftEditorPage = () => {
           <div className="flex flex-col gap-6">
             <div className="lg:hidden">
               <ViewSwitch
-                label="מעבר בין העריכה לתצוגה"
+                label="מעבר בין העריכה לתצוגה ולאישור"
                 onChange={setView}
+                /* The second pane is no longer only a preview: it carries the validation
+                   result and the approval too, so at narrow widths it is named for what
+                   it holds rather than leaving those controls behind a label that does
+                   not mention them. */
                 options={[
                   { label: "עריכה", value: "editor" },
-                  { label: "תצוגה", value: "preview" },
+                  { label: "תצוגה ואישור", value: "preview" },
                 ]}
                 value={view}
               />
@@ -436,19 +463,65 @@ export const DraftEditorPage = () => {
                 </div>
               </div>
 
+              {/* The right pane is the document and everything said about it: the live
+                  preview, the validation result for the exact version shown, and the
+                  approval that follows from it. Those last two were screens; reaching
+                  them meant leaving the text they describe. */}
               <div
                 className={cx(
-                  "min-w-0 lg:sticky lg:top-24 lg:flex-1 lg:basis-5/12",
-                  view === "preview" ? undefined : "hidden lg:block",
+                  "flex min-w-0 flex-col gap-5 lg:sticky lg:top-20 lg:flex-1 lg:basis-5/12",
+                  view === "preview" ? undefined : "hidden lg:flex",
                 )}
               >
                 <DraftPreview draft={draft} />
+
+                <DraftValidationPanel
+                  applicationId={applicationId}
+                  draft={draft}
+                  onExactPassingRun={onExactPassingRun}
+                  stale={validationStale}
+                />
+
+                {approvedRevisionId === null ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface">
+                    <p className="text-support leading-6 text-cv-text-muted">
+                      {exactPassingRunId === null
+                        ? "האישור נפתח אחרי אימות שעבר על הגרסה המוצגת."
+                        : "האימות עבר על הגרסה המוצגת."}
+                    </p>
+                    <Button
+                      disabled={exactPassingRunId === null}
+                      onClick={() => setApprovalOpen(true)}
+                    >
+                      אישור הגרסה
+                    </Button>
+                  </div>
+                ) : (
+                  <DraftRenderPanel approvedRevisionId={approvedRevisionId} />
+                )}
               </div>
             </div>
 
             <TechnicalDetails>
               <LtrText>{`${draft.id} · v${draft.edit_version}`}</LtrText>
             </TechnicalDetails>
+
+            <DraftApprovalDialog
+              applicationId={applicationId}
+              detail={detail}
+              draft={draft}
+              onApproved={(revisionId) => {
+                setApprovalOpen(false);
+                setApprovedRevisionId(revisionId);
+              }}
+              onClose={() => setApprovalOpen(false)}
+              onStale={() => {
+                setApprovalOpen(false);
+                setValidationStale(true);
+              }}
+              open={approvalOpen}
+              validationRunId={exactPassingRunId}
+            />
 
             <DraftConflictDialog
               current={draft}

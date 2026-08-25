@@ -1,41 +1,56 @@
 @import "tailwindcss";
 
+/* Hebrew-first typography. Heebo is a true Hebrew family with matching Latin
+   glyphs, so a mixed line does not switch face mid-sentence; index.html loads it.
+   The fallbacks below are real Hebrew faces rather than a generic sans, so an
+   offline Workspace still renders Hebrew in a face designed for it. */
+
 @theme {
-  --color-cv-canvas: #f5f7fb;
-  --color-cv-canvas-strong: #e9eef7;
-  --color-cv-surface: #ffffff;
-  --color-cv-surface-muted: #f1f5f9;
+  /* Warm archival ink. The canvas is a toned paper, the surfaces sit above it in
+     warm parchment, and the accent is a deep archival teal with a brass
+     companion. Canvas and surface are two clearly different values, so a card
+     reads as a card without needing a heavy border. */
+  --color-cv-canvas: #ebe6dc;
+  --color-cv-canvas-strong: #ded7c9;
+  --color-cv-surface: #fbf9f5;
+  --color-cv-surface-muted: #f2eee5;
   --color-cv-surface-raised: #ffffff;
-  --color-cv-border: #dbe3ee;
+  --color-cv-surface-sunken: #e4ddd0;
+  --color-cv-border: #d5ccba;
   /* Control edges use the strong token; the lighter border stays decorative and is
      reserved for cards and separators rather than being a control's only boundary. */
-  --color-cv-border-strong: #64748b;
-  --color-cv-text: #172033;
-  --color-cv-text-muted: #526077;
-  --color-cv-accent: #4f46e5;
-  --color-cv-accent-hover: #4338ca;
-  --color-cv-accent-soft: #eef2ff;
-  --color-cv-brand-deep: #312e81;
-  --color-cv-success: #047857;
-  --color-cv-success-soft: #ecfdf5;
-  --color-cv-warning: #92400e;
-  --color-cv-warning-soft: #fffbeb;
-  --color-cv-blocker: #b42318;
-  --color-cv-blocker-hover: #912018;
-  --color-cv-blocker-soft: #fff1f2;
-  --color-cv-focus: #4f46e5;
-  --color-cv-on-accent: #ffffff;
-  --font-sans: "SF Pro Text", "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", "Arial Hebrew", Arial, sans-serif;
+  --color-cv-border-strong: #7d7461;
+  --color-cv-text: #1e2a2b;
+  --color-cv-text-muted: #59635e;
+  --color-cv-accent: #0f5c5b;
+  --color-cv-accent-hover: #0b4746;
+  --color-cv-accent-soft: #dbeceb;
+  --color-cv-brand-deep: #072e2e;
+  --color-cv-brass: #8a6a1f;
+  --color-cv-brass-soft: #f5ead1;
+  --color-cv-success: #1f6b45;
+  --color-cv-success-soft: #e2f0e6;
+  --color-cv-warning: #8a5a12;
+  --color-cv-warning-soft: #f9eed8;
+  --color-cv-blocker: #9c2f24;
+  --color-cv-blocker-hover: #7e251c;
+  --color-cv-blocker-soft: #f8e5e1;
+  --color-cv-focus: #0f5c5b;
+  --color-cv-on-accent: #fbf9f5;
+  --font-sans: "Heebo", "Assistant", "Rubik", "Arial Hebrew", "Noto Sans Hebrew",
+    system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
-  /* A.2 typography scale: 16px body, 14px supporting text, 20/24/32px headings. */
+  /* A.2 typography scale: 16px body, 14px supporting text, 20/24/32px headings.
+     Line heights run slightly taller than the Latin defaults: Hebrew has no
+     ascender/descender rhythm to lean on, so the extra leading is what keeps a
+     paragraph legible rather than dense. */
   --text-support: 0.875rem;
-  --text-support--line-height: 1.5;
+  --text-support--line-height: 1.6;
   --text-body: 1rem;
-  --text-body--line-height: 1.625;
+  --text-body--line-height: 1.7;
   --text-heading-sm: 1.25rem;
-  --text-heading-sm--line-height: 1.4;
+  --text-heading-sm--line-height: 1.45;
   --text-heading-md: 1.5rem;
   --text-heading-md--line-height: 1.35;
   --text-heading-lg: 2rem;
@@ -44,13 +59,16 @@
   /* A.2 spacing: 4px base, so the 8/12/16/24/32px gaps are 2/3/4/6/8. */
   --spacing: 0.25rem;
 
-  /* A.2 surfaces: harmonious radii and three restrained elevation levels. */
-  --radius-control: 0.625rem;
-  --radius-surface: 1rem;
+  /* A.2 surfaces: harmonious radii and restrained elevation. The shadows are
+     warm-toned rather than blue-grey, so they read as paper depth on the toned
+     canvas instead of a floating glass panel. */
+  --radius-control: 0.5rem;
+  --radius-surface: 0.875rem;
   --radius-pill: 9999px;
-  --shadow-surface: 0 1px 2px rgb(15 23 42 / 0.04), 0 10px 30px -22px rgb(49 46 129 / 0.24);
-  --shadow-floating: 0 18px 48px -24px rgb(30 41 59 / 0.28);
-  --shadow-overlay: 0 24px 64px -20px rgb(23 32 51 / 0.34);
+  --shadow-surface: 0 1px 2px rgb(40 30 12 / 0.06), 0 8px 20px -16px rgb(40 30 12 / 0.35);
+  --shadow-floating: 0 2px 4px rgb(40 30 12 / 0.07), 0 18px 40px -24px rgb(40 30 12 / 0.45);
+  --shadow-overlay: 0 28px 70px -24px rgb(23 18 8 / 0.5);
+  --shadow-document: 0 1px 3px rgb(40 30 12 / 0.1), 0 24px 56px -32px rgb(40 30 12 / 0.5);
 }
 :root {
   color: var(--color-cv-text);
@@ -59,6 +77,10 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   font-feature-settings: "kern" 1, "liga" 1;
+  /* Hebrew letterforms are uniform-height and lose their word shape when tracked
+     out, so the shell tracks slightly tight and the LTR islands below opt back
+     out of it. */
+  letter-spacing: -0.006em;
 }
 
 html {
@@ -69,7 +91,13 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background: var(--color-cv-canvas);
+  background:
+    /* A faint paper grain, drawn from the tokens rather than an asset, so the
+       canvas has a surface instead of reading as flat fill. */
+    radial-gradient(circle at 18% 12%, rgb(255 255 255 / 0.55), transparent 42%),
+    radial-gradient(circle at 82% 0%, rgb(138 106 31 / 0.07), transparent 38%),
+    var(--color-cv-canvas);
+  background-attachment: fixed;
 }
 
 button,
@@ -122,6 +150,8 @@ pre {
   direction: ltr;
   text-align: left;
   unicode-bidi: isolate;
+  /* The Hebrew tracking above is wrong for Latin IDs and codes. */
+  letter-spacing: normal;
 }
 
 .mono-code {
@@ -129,11 +159,13 @@ pre {
   text-align: left;
   font-family: var(--font-mono);
   unicode-bidi: plaintext;
+  letter-spacing: normal;
 }
 
 /* A.5: the modal dialog is the only overlay surface. */
 dialog::backdrop {
-  background: rgb(23 32 51 / 0.4);
+  background: rgb(23 18 8 / 0.45);
+  backdrop-filter: blur(2px);
 }
 
 ::selection {

@@ -240,11 +240,16 @@ describe("ApplicationPage", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("link", { name: "אישור הגרסה" })).toHaveAttribute("href", "/applications/app-1/approval");
-    expect(screen.getByRole("link", { name: "אימות הטיוטה" })).toHaveAttribute("href", "/applications/app-1/validation");
+    /* Both resolve to the workspace holding the draft they act on. */
+    expect(await screen.findByRole("link", { name: "אישור הגרסה" })).toHaveAttribute("href", "/applications/app-1/draft");
+    expect(screen.getByRole("link", { name: "אימות הטיוטה" })).toHaveAttribute("href", "/applications/app-1/draft");
   });
 
-  it("links render to the exact approved revision named by the projection", async () => {
+  /* Rendering happens in the draft workspace, on the revision the approval there
+     returned, so this screen has no destination for it. It names the recommended action
+     rather than inventing a link - the same honest default it applies to any action whose
+     screen it does not own. */
+  it("names a recommended render without inventing a destination for it", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail({
       preparation_state: "approved",
       latest_approved_revision_id: "revision 1",
@@ -254,7 +259,8 @@ describe("ApplicationPage", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("link", { name: "יצירת קובץ קורות החיים" })).toHaveAttribute("href", "/approved-revisions/revision%201/render");
+    expect(await screen.findByText(/הפעולה המומלצת כעת היא/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "יצירת קובץ קורות החיים" })).not.toBeInTheDocument();
   });
 
   it("keeps an older Ready revision reachable from its explicit projection ID", async () => {

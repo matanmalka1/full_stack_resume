@@ -34,12 +34,20 @@ const stageForPreparationState: Record<PreparationState, Stage> = {
   ready: "ready",
 };
 
-/* `intake` is the screen that exists before an Application does. `unknown` is an
-   Application whose projection has not arrived yet, which is a different thing: its
-   intake is behind it, but the stage it is on is not this module's to guess. */
-export type WorkflowStage = PreparationState | "intake" | "unknown";
+/* Three kinds of screen, not two.
 
-export const workflowStepsFor = (stage: WorkflowStage): WorkflowStep[] => {
+   `intake` is the screen that exists before an Application does. `unknown` is an
+   Application whose projection has not arrived yet, which is a different thing: its
+   intake is behind it, but the stage it is on is not this module's to guess.
+
+   `none` is a screen standing outside the workflow altogether - Settings, a not-found
+   route - where no stage is the honest answer and the landmark has nothing to report. */
+export type WorkflowStage = PreparationState | "intake" | "none" | "unknown";
+
+/* `none` never reaches here: the landmark renders no steps at all for it, rather than a
+   row of five in which every one is `upcoming`. Every other stage keeps its exact
+   behavior. */
+export const workflowStepsFor = (stage: Exclude<WorkflowStage, "none">): WorkflowStep[] => {
   const current =
     stage === "intake"
       ? 0
@@ -57,19 +65,38 @@ export const workflowStepsFor = (stage: WorkflowStage): WorkflowStep[] => {
 };
 
 const WorkflowStageContext = createContext<((stage: WorkflowStage) => void) | undefined>(undefined);
+const WorkflowStageValueContext = createContext<WorkflowStage>("intake");
 
 /* The landmark is a shell region (A.1) but the projection belongs to the page, so the
-   page states the stage rather than the shell inferring it from the URL. A screen that
-   reads no projection publishes nothing and leaves the intake default in place. */
+   page states the stage rather than the shell inferring it from the URL.
+
+   Publishing is mandatory, because the claim is no longer reset on unmount: a route that
+   says nothing inherits whatever the previous screen left behind. Each of the three kinds
+   says its own - an Application route its `PreparationState`, the intake screen `intake`,
+   and a screen outside the workflow `none`. */
 export const WorkflowLandmark = ({ children }: { children: ReactNode }) => {
   const [stage, setStage] = useState<WorkflowStage>("intake");
 
   return (
-    <WorkflowStageContext.Provider value={setStage}>
-      <WorkflowSteps label="שלבי הכנת קורות החיים" steps={workflowStepsFor(stage)} />
-      {children}
-    </WorkflowStageContext.Provider>
+    <WorkflowStageValueContext.Provider value={stage}>
+      <WorkflowStageContext.Provider value={setStage}>{children}</WorkflowStageContext.Provider>
+    </WorkflowStageValueContext.Provider>
   );
+};
+
+/* Split from the provider so the shell can place the steps inside the header while the
+   stage itself still comes from the page rendered below it. */
+export const WorkflowLandmarkSteps = () => {
+  const stage = useContext(WorkflowStageValueContext);
+
+  /* Off-workflow screens get no landmark rather than a stale one. Without this, removing
+     the unmount reset would leave Settings showing whichever stage the previous screen
+     published - the breadcrumb still claiming "אימות" while the user is in Settings. */
+  if (stage === "none") {
+    return null;
+  }
+
+  return <WorkflowSteps label="שלבי הכנת קורות החיים" steps={workflowStepsFor(stage)} />;
 };
 
 export const useWorkflowStage = (stage: WorkflowStage): void => {
@@ -77,8 +104,12 @@ export const useWorkflowStage = (stage: WorkflowStage): void => {
 
   useEffect(() => {
     publish?.(stage);
-    /* Leaving the screen takes its claim with it, so a landmark can never outlive the
-       projection that produced it. */
-    return () => publish?.("intake");
+    /* No reset on unmount. Resetting here produced a flash of `intake` between two
+       screens that were both mid-workflow - the landmark appearing to restart while the
+       user moved from the editor to the operation it queued.
+
+       That makes publishing mandatory rather than optional: a screen that publishes
+       nothing now inherits the stage the previous one left behind. Every route states
+       its own answer, including `intake` and `none`. */
   }, [publish, stage]);
 };

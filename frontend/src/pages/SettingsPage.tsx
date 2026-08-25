@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ApiProblem } from "../api/client";
 import type { UpdateSettingsRequest } from "../api/contracts";
 import { settingsQueryKey, settingsQueryOptions, updateSettings } from "../api/settings";
+import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { Button } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { Card } from "../ui/Card";
@@ -13,6 +14,9 @@ import { PageHeading } from "../ui/PageHeading";
 import { Select } from "../ui/Select";
 
 export const SettingsPage = () => {
+  /* Settings stands outside the workflow, so it reports no stage rather than leaving the
+     landmark showing whichever one the previous screen published. */
+  useWorkflowStage("none");
   const queryClient = useQueryClient();
   const query = useQuery(settingsQueryOptions);
   const [form, setForm] = useState<UpdateSettingsRequest | null>(null);

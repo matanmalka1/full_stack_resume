@@ -5,15 +5,21 @@ import { ApplicationPage } from "../pages/ApplicationPage";
 import { DraftEditorPage } from "../pages/DraftEditorPage";
 import { NewApplicationPage } from "../pages/NewApplicationPage";
 import { OperationPage } from "../pages/OperationPage";
-import { ApprovalPage } from "../pages/ApprovalPage";
 import { ReadyPage } from "../pages/ReadyPage";
-import { RenderPage } from "../pages/RenderPage";
 import { ReviewPage } from "../pages/ReviewPage";
 import { RoutePlaceholder } from "../pages/RoutePlaceholder";
 import { SettingsPage } from "../pages/SettingsPage";
-import { ValidationPage } from "../pages/ValidationPage";
 import { RouteErrorBoundary } from "./RouteErrorBoundary";
 
+/* Four screens carry the workflow: intake, the Application context, the draft workspace,
+   and Ready.
+
+   Validation, approval, and render are not among them. Each was a screen holding a single
+   button, and each acted on the draft the editor was already showing, so reaching one
+   meant leaving the text it described. They are now states of the workspace: a panel, a
+   dialog, and an inline step. Review and Operation keep their own routes because each has
+   something of its own to show - a decision form, and durable progress that outlives the
+   screen that queued it. */
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -40,20 +46,10 @@ export const router = createBrowserRouter([
         element: <ReviewPage />,
       },
       {
+        /* The draft workspace: edit, preview, validate, approve, and render, on the one
+           screen that holds the draft all five act on. */
         path: "applications/:applicationId/draft",
         element: <DraftEditorPage />,
-      },
-      {
-        path: "applications/:applicationId/validation",
-        element: <ValidationPage />,
-      },
-      {
-        path: "applications/:applicationId/approval",
-        element: <ApprovalPage />,
-      },
-      {
-        path: "approved-revisions/:approvedRevisionId/render",
-        element: <RenderPage />,
       },
       {
         path: "approved-revisions/:approvedRevisionId/ready",

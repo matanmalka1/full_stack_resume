@@ -95,24 +95,41 @@ export const ReadyPage = () => {
         ) : null}
         {revision === undefined ? <p className="text-body text-cv-text-muted">טוען את הגרסה…</p> : (
           <>
-            <SummaryList items={[
-              { term: "גרסה מאושרת", value: revision.id, ltr: true },
-              { term: "מספר גרסה", value: revision.version_number, ltr: true },
-              { term: "ValidationRun", value: revision.validation_run_id, ltr: true },
-              { term: "HTML", value: revision.html_artifact_version_id ?? "חסר", ltr: true },
-              { term: "PDF", value: revision.pdf_artifact_version_id ?? "חסר", ltr: true },
-            ]} />
+            {/* The document is the point of this screen. It is presented as a page on the
+                canvas - full width, paper elevation, nothing competing beside it - rather
+                than as one item in a list of identifiers. */}
             {revision.html_artifact_version_id == null ? null : (
               <iframe
-                className="h-[44rem] w-full rounded-control border border-cv-border bg-white"
+                className="h-[46rem] w-full rounded-surface border border-cv-border bg-cv-surface-raised shadow-document"
                 sandbox=""
                 src={approvedPreviewSrc(revision.id, revision.html_artifact_version_id)}
                 title="תצוגה מאושרת של קורות החיים"
               />
             )}
+
+            {/* What a person needs about the version, in words. The identifiers behind
+                them stay in the collapsed block below. */}
+            <SummaryList items={[
+              { term: "מספר גרסה", value: revision.version_number, ltr: true },
+              { term: "קובץ HTML", value: revision.html_artifact_version_id == null ? "חסר" : "קיים" },
+              { term: "קובץ PDF", value: revision.pdf_artifact_version_id == null ? "חסר" : "קיים" },
+            ]} />
+
             <ValidationReportView report={revision.ready_validation} />
-            <TechnicalDetails summary="מקור האישור">
-              <pre className="overflow-auto text-support">{JSON.stringify(revision.decision_provenance, null, 2)}</pre>
+
+            <TechnicalDetails>
+              <div className="flex flex-col gap-4">
+                <SummaryList items={[
+                  { term: "גרסה מאושרת", value: revision.id, ltr: true },
+                  { term: "ValidationRun", value: revision.validation_run_id, ltr: true },
+                  { term: "HTML", value: revision.html_artifact_version_id ?? "חסר", ltr: true },
+                  { term: "PDF", value: revision.pdf_artifact_version_id ?? "חסר", ltr: true },
+                ]} />
+                <div>
+                  <p className="mb-2 font-semibold text-cv-text">מקור האישור</p>
+                  <pre className="overflow-auto text-support">{JSON.stringify(revision.decision_provenance, null, 2)}</pre>
+                </div>
+              </div>
             </TechnicalDetails>
           </>
         )}

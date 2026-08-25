@@ -19,4 +19,18 @@ test.describe("the application shell", () => {
 
     await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
   });
+
+  /* A screen publishes its stage, and the landmark holds it until the next screen speaks:
+     it is no longer reset on unmount, because resetting flashed `intake` between two
+     mid-workflow screens. That makes a screen outside the workflow say so explicitly, and
+     this is the assertion that fails if one forgets - the landmark would otherwise carry
+     the previous screen's stage into Settings and keep claiming it. */
+  test("drops the workflow landmark on a screen outside the workflow", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("navigation", { name: "שלבי הכנת קורות החיים" })).toBeVisible();
+
+    await page.getByRole("link", { name: "הגדרות" }).click();
+
+    await expect(page.getByRole("navigation", { name: "שלבי הכנת קורות החיים" })).toHaveCount(0);
+  });
 });
