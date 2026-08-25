@@ -138,13 +138,9 @@ what remains. A hard failure is never relabelled as a warning.
   `docs/v2/spec/product-spec.md`, except for its superseded persistence choice described
   above.
 - The local FastAPI + React Web UI and its local PostgreSQL service are authorized in this
-  worktree. Object storage for immutable payloads (S3/R2) is authorized and implemented;
-  local is the default. Cloud deployment, authentication, multi-candidate support, and
-  broad multi-provider support are not.
+  worktree. Object storage for immutable payloads (S3/R2) is authorized and implemented.
 - Keep the CLI first-class. It calls the application layer directly, does not require
   FastAPI, and the deterministic workflow must reach Ready without an AI key.
-- Do not begin Dashboard/tracking UI before the Web/API vertical slice reaches Ready
-  with its central failure paths passing.
 - Do not perform unrelated refactors or cleanup.
 - Do not edit generated HTML by hand; fix the source, template, renderer, or rules.
 - The dependency baseline is `docs/v2/spec/architecture.md` section 2. Add a dependency
@@ -160,9 +156,6 @@ what remains. A hard failure is never relabelled as a warning.
   and product semantics stay the same.
 - Do not silently change workflow, validation behavior, fact semantics, application
   statuses, or artifact lifecycle.
-- Work only in the v2 branch/worktree against an explicitly marked, isolated Workspace.
-  The marker guard refuses to open an unmarked directory or to overwrite an existing
-  marker; do not route around it.
 - Preserve unrelated user changes in a dirty worktree. One agent at a time per worktree
   and isolated Workspace: concurrent edits race the test runner and make every
   measurement meaningless. Parallel agents are permitted only under
