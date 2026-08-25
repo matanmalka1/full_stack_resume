@@ -10,7 +10,7 @@ data/migration/
 data/snapshots/
 data/verification/
 tmp/
-.workspace/
+logs/
 
 # Secrets: real values stay out of Git; the committed template does not.
 .env
