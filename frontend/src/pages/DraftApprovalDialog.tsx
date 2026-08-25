@@ -10,7 +10,9 @@ import { Button } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { Checkbox } from "../ui/Checkbox";
 import { Dialog } from "../ui/Dialog";
+import { LtrText } from "../ui/LtrText";
 import { SummaryList } from "../ui/SummaryList";
+import { TechnicalDetails } from "../ui/TechnicalDetails";
 
 interface DraftApprovalDialogProps {
   applicationId: string;
@@ -103,15 +105,19 @@ export const DraftApprovalDialog = ({
     >
       <p>האישור יוצר רשומה קבועה מהטיוטה ומריצת האימות המדויקות הבאות.</p>
       {detail === undefined || draft === undefined || run === undefined ? null : (
-        <SummaryList
-          items={[
-            { term: "חברה", value: detail.application.company },
-            { term: "תפקיד", value: detail.application.target_role },
-            { term: "גרסת טיוטה", value: draft.edit_version, ltr: true },
-            { term: "תוצאת אימות", value: run.passed ? "עברה" : "נכשלה" },
-            { term: "מזהה ריצת האימות", value: run.validation_run_id, ltr: true },
-          ]}
-        />
+        <div className="flex flex-col gap-3">
+          <SummaryList
+            items={[
+              { term: "חברה", value: detail.application.company },
+              { term: "תפקיד", value: detail.application.target_role },
+              { term: "גרסת טיוטה", value: draft.edit_version, ltr: true },
+              { term: "תוצאת אימות", value: run.passed ? "עברה" : "נכשלה" },
+            ]}
+          />
+          <TechnicalDetails summary="פרטי ריצת האימות">
+            <LtrText>{run.validation_run_id}</LtrText>
+          </TechnicalDetails>
+        </div>
       )}
       {approval.error === null ||
       (approval.error instanceof ApiProblem &&

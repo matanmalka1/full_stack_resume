@@ -124,16 +124,19 @@ afterEach(() => {
 });
 
 describe("ApplicationPage", () => {
-  it("names the application and reports both projected states in Hebrew", async () => {
+  it("names the page without repeating shell context and reports both projected states", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail())));
 
     renderPage();
 
-    expect(await screen.findByRole("heading", { level: 1, name: "Acme" })).toBeInTheDocument();
-    /* The masthead sets the role as the company's subtitle, where a "תפקיד היעד:" label
-       would only repeat what its position already says. */
-    expect(screen.getByText("Backend Engineer")).toBeInTheDocument();
-    expect(screen.getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "מצב המועמדות" }),
+    ).toBeInTheDocument();
+    /* The heading is static and appears during loading, so the projected state—not the
+       h1—is the synchronization point for assertions about the loaded application. */
+    expect(await screen.findByText("ממתין לניתוח המשרה")).toBeInTheDocument();
+    expect(screen.queryByText("Acme")).not.toBeInTheDocument();
+    expect(screen.queryByText("Backend Engineer")).not.toBeInTheDocument();
     expect(screen.getByText("אין טיוטה פעילה")).toBeInTheDocument();
   });
 

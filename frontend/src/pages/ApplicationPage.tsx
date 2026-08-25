@@ -143,17 +143,16 @@ export const ApplicationPage = () => {
 
   return (
     <Card aria-labelledby="route-heading">
-      {/* The masthead answers "which job is this, and where has it got to" before any
-          control: the company reads as the title, the role sits under it, and the two
-          state badges are on the same line rather than in a row of their own below. */}
+      {/* The persistent shell already names the company and role. This masthead names
+          the page and reports its two state axes without repeating that context. */}
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-cv-border pb-5">
         <div className="min-w-0">
-          <PageHeading id="route-heading">
-            {detail === undefined ? "מועמדות" : detail.application.company}
+          <PageHeading
+            description={detail === undefined ? "טוען את מצב המועמדות…" : undefined}
+            id="route-heading"
+          >
+            מצב המועמדות
           </PageHeading>
-          <p className="mt-1 text-body text-cv-text-muted" dir="auto">
-            {detail === undefined ? "טוען את מצב המועמדות…" : detail.application.target_role}
-          </p>
         </div>
         {detail === undefined ? null : (
           <div className="flex flex-wrap items-center gap-2">

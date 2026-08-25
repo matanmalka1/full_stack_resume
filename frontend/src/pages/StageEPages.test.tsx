@@ -192,7 +192,10 @@ describe("DraftApprovalDialog", () => {
     expect(dialog).toHaveTextContent("Acme");
     expect(dialog).toHaveTextContent("Engineer");
     expect(dialog).toHaveTextContent("4");
-    expect(dialog).toHaveTextContent("run-1");
+    const validationRunId = screen.getByText("run-1");
+    expect(validationRunId).not.toBeVisible();
+    fireEvent.click(screen.getByText("פרטי ריצת האימות"));
+    expect(validationRunId).toBeVisible();
     const approve = await screen.findByRole("button", { name: "אישור הגרסה" });
     expect(approve).toBeDisabled();
     fireEvent.click(screen.getByRole("checkbox")); fireEvent.click(approve);

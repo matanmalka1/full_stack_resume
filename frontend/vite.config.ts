@@ -12,10 +12,15 @@ export default defineConfig({
     globals: false,
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
+    /* Each UI file creates its own jsdom and QueryClient. Running all of those
+       environments at once can starve Testing Library's one-second async queries on
+       a development laptop, producing cascades of timeouts after otherwise-correct
+       renders. File isolation remains on; only file scheduling is serial. */
+    fileParallelism: false,
     restoreMocks: true,
   },
   server: {
-    host: "127.0.0.1",
+    host: "localhost",
     port: 5173,
     strictPort: true,
     proxy: {
