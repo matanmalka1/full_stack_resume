@@ -4,9 +4,10 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Iterator
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from api_harness import api_with_worker
@@ -19,6 +20,8 @@ from helpers import (
     run_cli,
 )
 from seed import V2_IDENTITY_FACT, write_canonical_sources
+from sqlalchemy import text
+from sqlalchemy.engine import Engine
 
 import cv_engine
 from cv_engine.application.commands import (
@@ -51,9 +54,15 @@ from cv_engine.infrastructure.knowledge import (
     load_profile_store,
     seed_fact_before_workspace,
 )
-from cv_engine.infrastructure.persistence import Repository
+from cv_engine.infrastructure.persistence import (
+    Repository,
+    create_database_engine,
+    current_database_revision,
+)
+from cv_engine.infrastructure.persistence.tables import metadata
 from cv_engine.infrastructure.rendering import render_pdf, validate_rendered
 from cv_engine.runtime.composition import Services, build_services
+from cv_engine.runtime.config import resolve_config
 from cv_engine.runtime.workspace import Workspace, create_workspace, load_workspace
 from cv_engine.util import new_id
 
@@ -66,15 +75,15 @@ SOURCE_ROOT = Path(__file__).resolve().parent.parent
 # that way, and every later result is then partly v1 code.
 def _foreign_modules() -> dict[str, str]:
     return {
-        name: module.__file__
+        name: cast(str, module.__file__)
         for name, module in sorted(sys.modules.items())
         if name.startswith("cv_engine")
         and getattr(module, "__file__", None)
-        and SOURCE_ROOT not in Path(module.__file__).resolve().parents
+        and SOURCE_ROOT not in Path(cast(str, module.__file__)).resolve().parents
     }
 
 
-_IMPORTED_FROM = Path(cv_engine.__file__).resolve().parent.parent
+_IMPORTED_FROM = Path(cast(str, cv_engine.__file__)).resolve().parent.parent
 assert _IMPORTED_FROM == SOURCE_ROOT, (
     f"tests import cv_engine from {_IMPORTED_FROM}, not the worktree under test ({SOURCE_ROOT})"
 )
@@ -85,7 +94,7 @@ assert not _foreign_modules(), (
 # Only acceptance tests that validate real layout/PDF behavior use this fixture.
 # Integrity tests create the same artifact/version graph with a deterministic
 # renderer double, so Chromium is not paid for when the behavior under test is
-# hashes, linkage, lifecycle, or SQLite state.
+# hashes, linkage, lifecycle, or database state.
 BROWSER_FIXTURES = frozenset({"render_validator"})
 
 
@@ -205,6 +214,33 @@ def workspace(workspace_root: Path) -> Workspace:
     return load_workspace(workspace_root)
 
 
+@pytest.fixture(scope="session")
+def database_url() -> str:
+    return str(resolve_config(env=os.environ).get("database_url"))
+
+
+@pytest.fixture(scope="session")
+def database_engine(database_url: str) -> Iterator[Engine]:
+    engine = create_database_engine(database_url)
+    if current_database_revision(engine) != "0002":
+        engine.dispose()
+        raise RuntimeError(
+            "test database is not at Alembic revision 0002; run "
+            "'./.venv/bin/alembic upgrade head' first"
+        )
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def isolated_database(database_engine: Engine, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Give every test the same empty PostgreSQL schema and configured URL."""
+    table_names = ", ".join(f'"{name}"' for name in metadata.tables)
+    with database_engine.begin() as connection:
+        connection.execute(text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE"))
+    monkeypatch.setenv("CV_DATABASE_URL", str(database_engine.url))
+
+
 @pytest.fixture
 def fact_store(workspace_root: Path) -> FactStore:
     return load_fact_store(workspace_root / "base")
@@ -260,8 +296,8 @@ def ai_services(workspace: Workspace, fake_openai: FakeOpenAI, task_contracts) -
 
 
 @pytest.fixture
-def application_repo(tmp_path: Path) -> Repository:
-    return Repository(tmp_path / "applications.sqlite3")
+def application_repo(database_engine: Engine) -> Repository:
+    return Repository(database_engine)
 
 
 @pytest.fixture

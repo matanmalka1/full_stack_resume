@@ -141,7 +141,7 @@ def test_emphasis_disagreement_is_an_approval_gate(
         profile_store,
     )
     # An emphasis the Profile does not allow used to reach build_draft and raise
-    # there, after the analysis had already been written to SQLite.
+    # there, after the analysis had already been written to the database.
     disallowed = merge_classification(
         deterministic,
         classification_proposal(

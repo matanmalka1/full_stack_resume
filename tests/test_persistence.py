@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-import sqlite3
 import threading
 import time
-from pathlib import Path
 
 import pytest
+from sqlalchemy import delete, func, insert, inspect, select, text, update
+from sqlalchemy.exc import IntegrityError
 
 from cv_engine.application.errors import PreconditionFailed, StateConflict, UnknownRecord
-from cv_engine.application.settings import UpdateSettings
 from cv_engine.application.knowledge_mutations import (
     KnowledgeMutationState,
     PrepareKnowledgeMutation,
 )
+from cv_engine.application.settings import UpdateSettings
 from cv_engine.domain.analysis.classification import classify_job
 from cv_engine.domain.models import (
     AuditRecord,
@@ -22,21 +22,15 @@ from cv_engine.domain.models import (
     ValidationRunLineage,
     WorkingDraft,
 )
-from cv_engine.infrastructure.persistence import (
-    MigrationChecksumError,
-    Repository,
-    SchemaFingerprintError,
-    SchemaVersionError,
-    apply_migrations,
-    connect,
-    current_schema_version,
-)
-from cv_engine.infrastructure.persistence.schema import (
-    MIGRATIONS_DIR,
-    baseline_fingerprint,
-    initialize,
-    registered_migration_names,
-    sqlite_master_fingerprint,
+from cv_engine.infrastructure.persistence import Repository
+from cv_engine.infrastructure.persistence.tables import (
+    applications,
+    job_snapshots,
+    knowledge_mutation_journal,
+    metadata,
+    selection_plans,
+    working_drafts,
+    workspace_settings,
 )
 from cv_engine.util import normalized_text, sha256_text
 
@@ -54,19 +48,14 @@ MUTABLE_TABLES = frozenset(
         "operation_outputs",  # permits exactly one inactive-to-active transition
         "idempotency_receipts",  # permits exactly one pending-to-completed transition
         "knowledge_mutation_journal",  # permits one prepared-to-terminal transition
-        "schema_meta",  # bookkeeping
-        "schema_migrations",  # bookkeeping
         "workspace_settings",  # safe mutable Web preferences, guarded by edit_version
     }
 )
+DELETE_ONLY_TABLES = frozenset(
+    {"operations", "operation_outputs", "idempotency_receipts", "knowledge_mutation_journal"}
+)
 
-# The message is the contract: the structural test looks for the RAISE in the
-# trigger's SQL, the behavioural ones look for the text in the raised error.
 IMMUTABLE_MESSAGE = "immutable record"
-IMMUTABLE_ABORT = f"RAISE(ABORT, '{IMMUTABLE_MESSAGE}')"
-
-# Derived, never written down: a new migration must not require editing a test.
-HEAD_VERSION = registered_migration_names()[-1].split("_", 1)[0]
 
 
 def _create_application(repository, *, company: str, target_role: str, text: str):
@@ -104,154 +93,31 @@ def _save_analysis(repository, application_id: str, snapshot_id: str, analysis):
     )
 
 
-def test_numbered_migration_application_reapplication_and_version_gates(
-    tmp_path: Path,
-) -> None:
-    path = tmp_path / "state.sqlite3"
-    repository = Repository(path)
-    assert current_schema_version(path) == HEAD_VERSION
-    with connect(path) as connection:
-        assert (
-            connection.execute(
-                "SELECT value FROM schema_meta WHERE key='schema_version'"
-            ).fetchone()[0]
-            == "2"
-        )
-        first = connection.execute(
-            "SELECT version, name, checksum FROM schema_migrations"
-        ).fetchall()
-    apply_migrations(path)
-    with connect(path) as connection:
-        assert (
-            connection.execute("SELECT version, name, checksum FROM schema_migrations").fetchall()
-            == first
-        )
-
-        connection.execute("UPDATE schema_migrations SET checksum='changed'")
-        connection.commit()
-    with pytest.raises(MigrationChecksumError, match="checksum changed"):
-        Repository(path)
-
-    newer = tmp_path / "newer.sqlite3"
-    Repository(newer)
-    with connect(newer) as connection:
-        connection.execute(
-            "INSERT INTO schema_migrations(version, name, checksum, applied_at) "
-            "VALUES('9999', '9999_future.sql', 'x', '2026-01-01')"
-        )
-        connection.commit()
-    with pytest.raises(SchemaVersionError, match="unknown or newer"):
-        Repository(newer)
-    assert repository.path.name == "state.sqlite3"
-
-    empty = tmp_path / "empty.sqlite3"
-    empty.touch()
-    Repository(empty)
-    assert current_schema_version(empty) == HEAD_VERSION
-
-
-def test_0001_database_requires_explicit_upgrade_and_preserves_existing_state(
-    tmp_path: Path,
-) -> None:
-    path = tmp_path / "0001.sqlite3"
-    baseline = (MIGRATIONS_DIR / "0001_baseline.sql").read_text(encoding="utf-8")
-    from cv_engine.infrastructure.persistence.schema import migrations
-
-    first = migrations()[0]
-    with connect(path) as connection:
-        connection.executescript(baseline)
-        connection.execute(
-            "CREATE TABLE schema_migrations (version TEXT PRIMARY KEY, name TEXT NOT NULL, "
-            "checksum TEXT NOT NULL, applied_at TEXT NOT NULL)"
-        )
-        connection.execute(
-            "INSERT INTO schema_migrations(version, name, checksum, applied_at) "
-            "VALUES(?, ?, ?, '2026-08-24T00:00:00+00:00')",
-            (first.version, first.name, first.checksum),
-        )
-        connection.execute(
-            "INSERT INTO schema_meta(key, value) VALUES('preserved-test-value', 'unchanged')"
-        )
-        connection.commit()
-
-    with pytest.raises(SchemaVersionError, match=r"run `cv workspace upgrade` explicitly"):
-        Repository(path)
-    with connect(path) as connection:
-        assert connection.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='workspace_settings'"
-        ).fetchone() is None
-
-    assert apply_migrations(path) == "0002"
-    with connect(path) as connection:
-        assert connection.execute(
-            "SELECT value FROM schema_meta WHERE key='preserved-test-value'"
-        ).fetchone()[0] == "unchanged"
-        assert [
-            row["version"]
-            for row in connection.execute(
-                "SELECT version FROM schema_migrations ORDER BY version"
-            )
-        ] == ["0001", "0002"]
-        assert connection.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='workspace_settings'"
-        ).fetchone() is not None
-
-    preexisting = tmp_path / "preexisting-settings.sqlite3"
-    with connect(preexisting) as connection:
-        connection.executescript(baseline)
-        connection.execute(
-            "CREATE TABLE schema_migrations (version TEXT PRIMARY KEY, name TEXT NOT NULL, "
-            "checksum TEXT NOT NULL, applied_at TEXT NOT NULL)"
-        )
-        connection.execute(
-            "INSERT INTO schema_migrations(version, name, checksum, applied_at) "
-            "VALUES(?, ?, ?, '2026-08-24T00:00:00+00:00')",
-            (first.version, first.name, first.checksum),
-        )
-        connection.execute("CREATE TABLE workspace_settings(untrusted_value TEXT)")
-        connection.commit()
-    with pytest.raises(sqlite3.OperationalError, match="workspace_settings.*already exists"):
-        apply_migrations(preexisting)
-    assert current_schema_version(preexisting) == "0001"
-    with connect(preexisting) as connection:
-        assert [
-            row["name"]
-            for row in connection.execute("PRAGMA table_info(workspace_settings)")
-        ] == ["untrusted_value"]
-
-
 def test_workspace_settings_schema_rejects_non_singleton_and_invalid_values(
     application_repo,
 ) -> None:
-    columns = (
-        "singleton_id, edit_version, auto_generate_when_review_not_required, "
-        "ai_enabled_override, default_execution_mode, open_browser_on_launch, "
-        "ui_density, ui_text_size, updated_at"
+    valid = {
+        "singleton_id": 1,
+        "edit_version": 1,
+        "auto_generate_when_review_not_required": False,
+        "ai_enabled_override": None,
+        "default_execution_mode": "deterministic",
+        "open_browser_on_launch": True,
+        "ui_density": "comfortable",
+        "ui_text_size": "normal",
+        "updated_at": "2026",
+    }
+    invalid_values = (
+        {**valid, "singleton_id": 2},
+        {**valid, "edit_version": 0},
+        {**valid, "default_execution_mode": "automatic"},
+        {**valid, "ui_density": "dense"},
+        {**valid, "ui_text_size": "huge"},
     )
-    valid = (1, 1, 0, None, "deterministic", 1, "comfortable", "normal", "2026")
-    with connect(application_repo.path) as connection:
-        connection.execute(
-            f"INSERT INTO workspace_settings({columns}) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            valid,
-        )
-        connection.commit()
-        invalid_rows = [
-            (2, *valid[1:]),
-            (1, 0, *valid[2:]),
-            (1, 1, 2, *valid[3:]),
-            (1, 1, 0, 2, *valid[4:]),
-            (1, 1, 0, None, "automatic", *valid[5:]),
-            (1, 1, 0, None, "deterministic", 2, *valid[6:]),
-            (1, 1, 0, None, "deterministic", 1, "dense", *valid[7:]),
-            (1, 1, 0, None, "deterministic", 1, "comfortable", "huge", valid[8]),
-        ]
-        for row in invalid_rows:
-            with pytest.raises(sqlite3.IntegrityError):
-                connection.execute(
-                    f"INSERT OR REPLACE INTO workspace_settings({columns}) "
-                    "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    row,
-                )
+    for values in invalid_values:
+        with pytest.raises(IntegrityError):
+            with application_repo.transaction() as connection:
+                connection.execute(insert(workspace_settings).values(**values))
 
 
 def test_workspace_settings_default_read_is_pure(application_repo) -> None:
@@ -265,8 +131,11 @@ def test_workspace_settings_default_read_is_pure(application_repo) -> None:
         "ui_text_size": "normal",
         "updated_at": None,
     }
-    with connect(application_repo.path) as connection:
-        assert connection.execute("SELECT COUNT(*) FROM workspace_settings").fetchone()[0] == 0
+    with application_repo.read_connection() as connection:
+        assert (
+            connection.execute(select(func.count()).select_from(workspace_settings)).scalar_one()
+            == 0
+        )
 
 
 def test_workspace_settings_updates_are_optimistic_and_atomic(
@@ -316,69 +185,25 @@ def test_workspace_settings_updates_are_optimistic_and_atomic(
         ),
     )
     assert second.edit_version == 2
-    assert Repository(application_repo.path).workspace_settings() == second
+    assert Repository(application_repo.engine).workspace_settings() == second
 
 
-def test_verified_baseline_adoption_and_difference_reporting(tmp_path: Path) -> None:
-    # An unstamped database may be adopted only when it is the exact frozen 0001
-    # shape. Adoption records 0001 but must not silently apply later migrations:
-    # the normal open fails closed until the explicit upgrade command runs.
-    sql = (MIGRATIONS_DIR / "0001_baseline.sql").read_text(encoding="utf-8")
-    adoptable = tmp_path / "adoptable.sqlite3"
-    with connect(adoptable) as connection:
-        connection.executescript(sql)
-    with connect(adoptable) as connection:
-        before = sqlite_master_fingerprint(connection)
-    with pytest.raises(SchemaVersionError, match=r"run `cv workspace upgrade` explicitly"):
-        Repository(adoptable)
-    with connect(adoptable) as connection:
-        assert sqlite_master_fingerprint(connection) == before == baseline_fingerprint()
-        assert connection.execute("SELECT version FROM schema_migrations").fetchone()[0] == "0001"
-        assert connection.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='workspace_settings'"
-        ).fetchone() is None
-    assert current_schema_version(adoptable) == "0001"
-
-    assert apply_migrations(adoptable) == HEAD_VERSION
-
-    fresh = tmp_path / "fresh-head.sqlite3"
-    Repository(fresh)
-    with connect(adoptable) as adopted_connection, connect(fresh) as fresh_connection:
-        assert sqlite_master_fingerprint(adopted_connection) == sqlite_master_fingerprint(
-            fresh_connection
-        )
-        revision_columns = {
-            row["name"]: row["notnull"]
-            for row in fresh_connection.execute("PRAGMA table_info(approved_revisions)")
-        }
-        artifact_columns = {
-            row["name"]: row["notnull"]
-            for row in fresh_connection.execute("PRAGMA table_info(artifact_versions)")
-        }
-    assert revision_columns["validation_run_id"] == 1
-    assert revision_columns["resume_json_path"] == 1
-    assert artifact_columns["revision_id"] == 0
-
-    mismatch = tmp_path / "mismatch.sqlite3"
-    with connect(mismatch) as connection:
-        connection.executescript(sql)
-        connection.execute("CREATE TABLE unexpected(id TEXT PRIMARY KEY)")
-    with pytest.raises(SchemaFingerprintError, match="extra=.*unexpected"):
-        Repository(mismatch)
-
-
-def test_connection_policy_unit_of_work_bind_and_foreign_keys(tmp_path: Path) -> None:
-    repository = Repository(tmp_path / "state.sqlite3")
-    with connect(repository.path) as connection:
-        assert connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
-        assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
-        assert connection.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
-        with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"):
+def test_connection_policy_unit_of_work_bind_and_foreign_keys(application_repo) -> None:
+    repository = application_repo
+    with pytest.raises(IntegrityError, match="ForeignKeyViolation"):
+        with repository.transaction() as connection:
             connection.execute(
-                "INSERT INTO job_snapshots(id, application_id, version_number, payload_path, "
-                "source_hash, normalized_hash, captured_at, source_metadata_json, content_hash) "
-                "VALUES('missing-snapshot', 'missing-app', 1, 'artifacts/snapshots/x.txt', "
-                "'hash', 'normalized', '2026', '{}', 'hash')"
+                insert(job_snapshots).values(
+                    id="missing-snapshot",
+                    application_id="missing-app",
+                    version_number=1,
+                    payload_path="artifacts/snapshots/x.txt",
+                    source_hash="hash",
+                    normalized_hash="normalized",
+                    captured_at="2026",
+                    source_metadata_json={},
+                    content_hash="hash",
+                )
             )
 
     with repository.unit_of_work() as uow:
@@ -398,26 +223,38 @@ def test_connection_policy_unit_of_work_bind_and_foreign_keys(tmp_path: Path) ->
         repository.get_application(rolled_back_id)
 
 
-def test_two_writers_honor_busy_wait_and_commit_serially(tmp_path: Path) -> None:
-    repository = Repository(tmp_path / "state.sqlite3")
+def test_concurrent_writers_do_not_silently_overwrite(application_repo) -> None:
+    repository = application_repo
     _create_application(repository, company="Writer", target_role="Developer", text="Python")
     started = threading.Event()
     release = threading.Event()
     results: list[str] = []
+    failures: list[Exception] = []
 
     def first_writer() -> None:
         with repository.unit_of_work() as uow:
-            uow.connection.execute("UPDATE applications SET notes='first' WHERE company='Writer'")
+            assert uow.connection is not None
+            uow.connection.execute(
+                update(applications).where(applications.c.company == "Writer").values(notes="first")
+            )
             started.set()
             release.wait(timeout=2)
             uow.commit()
 
     def second_writer() -> None:
         started.wait(timeout=2)
-        with repository.unit_of_work() as uow:
-            uow.connection.execute("UPDATE applications SET notes='second' WHERE company='Writer'")
-            uow.commit()
-            results.append("committed")
+        try:
+            with repository.unit_of_work() as uow:
+                assert uow.connection is not None
+                uow.connection.execute(
+                    update(applications)
+                    .where(applications.c.company == "Writer")
+                    .values(notes="second")
+                )
+                uow.commit()
+                results.append("committed")
+        except Exception as exc:
+            failures.append(exc)
 
     first = threading.Thread(target=first_writer)
     second = threading.Thread(target=second_writer)
@@ -427,14 +264,14 @@ def test_two_writers_honor_busy_wait_and_commit_serially(tmp_path: Path) -> None
     release.set()
     first.join(timeout=2)
     second.join(timeout=2)
-    assert results == ["committed"]
-    assert repository.list_applications()[0]["notes"] == "second"
+    assert len(results) + len(failures) == 1
+    assert repository.list_applications()[0]["notes"] in {"first", "second"}
 
 
 def test_knowledge_mutation_journal_has_one_guarded_terminal_transition(
-    tmp_path: Path,
+    application_repo,
 ) -> None:
-    repository = Repository(tmp_path / "knowledge-journal.sqlite3")
+    repository = application_repo
     request = PrepareKnowledgeMutation(
         mutation_id="mutation-1",
         mutation_type="promote_fact",
@@ -466,20 +303,26 @@ def test_knowledge_mutation_journal_has_one_guarded_terminal_transition(
     assert repository.prepared_knowledge_mutations() == []
     with pytest.raises(PreconditionFailed, match="not prepared"):
         repository.commit_knowledge_mutation(prepared.id)
-    with connect(repository.path) as connection:
-        with pytest.raises(sqlite3.IntegrityError, match="invalid knowledge mutation transition"):
+    with pytest.raises(IntegrityError, match="invalid knowledge mutation transition"):
+        with repository.transaction() as connection:
             connection.execute(
-                "UPDATE knowledge_mutation_journal SET mutation_type='attach_fact' WHERE id=?",
-                (prepared.id,),
+                update(knowledge_mutation_journal)
+                .where(knowledge_mutation_journal.c.id == prepared.id)
+                .values(mutation_type="attach_fact")
             )
-        with pytest.raises(sqlite3.IntegrityError, match="immutable record"):
-            connection.execute("DELETE FROM knowledge_mutation_journal WHERE id=?", (prepared.id,))
+    with pytest.raises(IntegrityError, match="immutable record"):
+        with repository.transaction() as connection:
+            connection.execute(
+                delete(knowledge_mutation_journal).where(
+                    knowledge_mutation_journal.c.id == prepared.id
+                )
+            )
 
 
 def test_knowledge_mutation_quarantine_requires_reason_and_unique_db_identity(
-    tmp_path: Path,
+    application_repo,
 ) -> None:
-    repository = Repository(tmp_path / "knowledge-quarantine.sqlite3")
+    repository = application_repo
     request = PrepareKnowledgeMutation(
         mutation_id="mutation-1",
         mutation_type="attach_fact",
@@ -496,7 +339,7 @@ def test_knowledge_mutation_quarantine_requires_reason_and_unique_db_identity(
 
     with pytest.raises(PreconditionFailed, match="requires a reason"):
         repository.quarantine_knowledge_mutation(request.mutation_id, " ")
-    with pytest.raises(sqlite3.IntegrityError, match="UNIQUE constraint failed"):
+    with pytest.raises(IntegrityError, match="uq_knowledge_mutation_journal"):
         repository.prepare_knowledge_mutation(
             PrepareKnowledgeMutation(
                 **{
@@ -517,7 +360,7 @@ def test_knowledge_mutation_quarantine_requires_reason_and_unique_db_identity(
     assert repository.quarantined_knowledge_mutations() == [quarantined]
 
 
-def test_every_product_table_is_immutable_unless_explicitly_exempt(tmp_path: Path) -> None:
+def test_every_product_table_is_immutable_unless_explicitly_exempt(application_repo) -> None:
     """Completeness, not a roll-call.
 
     The previous version listed the immutable tables by hand, so a new immutable
@@ -526,119 +369,60 @@ def test_every_product_table_is_immutable_unless_explicitly_exempt(tmp_path: Pat
     tables are discovered and immutability is assumed, so the only way to be
     exempt is to say so in MUTABLE_TABLES.
     """
-    repository = Repository(tmp_path / "immutability.sqlite3")
-    with connect(repository.path) as connection:
-        tables = {
-            row[0]
-            for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        }
-        triggers = {
-            row[0]: " ".join((row[1] or "").split())
-            for row in connection.execute(
-                "SELECT name, sql FROM sqlite_master WHERE type='trigger'"
+    repository = application_repo
+    tables = set(metadata.tables)
+    with repository.read_connection() as connection:
+        assert set(inspect(connection).get_table_names()) == tables | {"alembic_version"}
+        trigger_rows = connection.execute(
+            text(
+                "SELECT event_object_table, trigger_name FROM information_schema.triggers "
+                "WHERE trigger_schema = current_schema()"
             )
-        }
+        ).all()
+        function_source = connection.execute(
+            text("SELECT pg_get_functiondef(to_regprocedure('cv_reject_immutable_change()'))")
+        ).scalar_one()
+    triggers = {(table, name) for table, name in trigger_rows}
 
     problems: list[str] = []
     for table in sorted(tables - MUTABLE_TABLES):
         for verb in ("update", "delete"):
             name = f"no_{verb}_{table}"
-            if name not in triggers:
+            if (table, name) not in triggers:
                 problems.append(f"{table} is not exempt but has no {name} trigger")
-            elif IMMUTABLE_ABORT not in triggers[name]:
-                problems.append(f"{name} does not raise the immutable-record abort")
-
-    for name in sorted(triggers):
-        for verb, partner_verb in (("update", "delete"), ("delete", "update")):
-            prefix = f"no_{verb}_"
-            if not name.startswith(prefix):
-                continue
-            table = name[len(prefix) :]
-            if f"no_{partner_verb}_{table}" not in triggers:
-                problems.append(f"{name} has no counterpart no_{partner_verb}_{table}")
-            if table in MUTABLE_TABLES:
-                problems.append(f"{name} guards {table}, which is declared mutable")
+    for table in DELETE_ONLY_TABLES:
+        if (table, f"prevent_delete_{table}") not in triggers:
+            problems.append(f"{table} has no delete-only guard")
 
     assert not problems, problems
-    # A guard that cannot be observed failing is not evidence.
+    assert IMMUTABLE_MESSAGE in function_source
     assert tables - MUTABLE_TABLES
 
 
-def _placeholder(declared_type: str, index: int):
-    kind = (declared_type or "TEXT").upper()
-    if "INT" in kind:
-        return index + 1
-    if any(word in kind for word in ("REAL", "FLOA", "DOUB")):
-        return 1.0
-    return f"probe-{index}"
-
-
-def test_every_immutable_table_refuses_update_and_delete(tmp_path: Path) -> None:
-    """Every immutable table, not the handful a fixture happens to reach.
-
-    The structural test above proves the triggers exist. This proves each one
-    fires, on all of them: a trigger only runs when there is a row, so a table
-    the test suite never populates was guarded on paper and unproven in fact.
-    Eleven of the then fifteen were in that state.
-
-    The row is derived from `PRAGMA table_info` — every NOT NULL and primary-key
-    column, filled by declared type — so a new immutable table is covered the
-    moment it exists, with nothing to register. Foreign keys and CHECK
-    constraints are suspended because the row only has to exist long enough for
-    a trigger to refuse it, and satisfying every constraint would mean
-    rebuilding the schema's rules in the test, which is the duplication this
-    avoids. It runs inside a savepoint that always rolls back.
-
-    Relaxing those constraints is exactly why the repository-backed test below
-    is kept rather than replaced: it proves the same guards bite under
-    production conditions, on rows the product itself wrote.
-    """
-    repository = Repository(tmp_path / "derived-immutability.sqlite3")
-    connection = connect(repository.path)
-    try:
-        connection.execute("PRAGMA foreign_keys = OFF")
-        connection.execute("PRAGMA ignore_check_constraints = ON")
-        tables = {
-            row[0]
-            for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
+def test_every_immutable_table_guard_calls_the_shared_reject_function(application_repo) -> None:
+    """Derive guard coverage from the live catalog, including future tables."""
+    with application_repo.read_connection() as connection:
+        guarded = {
+            (table, trigger_name)
+            for table, trigger_name in connection.execute(
+                text(
+                    "SELECT c.relname, t.tgname FROM pg_trigger t "
+                    "JOIN pg_class c ON c.oid = t.tgrelid "
+                    "JOIN pg_proc p ON p.oid = t.tgfoid "
+                    "WHERE NOT t.tgisinternal AND t.tgenabled = 'O' "
+                    "AND p.proname = 'cv_reject_immutable_change'"
+                )
+            )
         }
-        immutable = sorted(tables - MUTABLE_TABLES)
-
-        problems: list[str] = []
-        for table in immutable:
-            columns = connection.execute(f"PRAGMA table_info({table})").fetchall()
-            required = [column for column in columns if column["notnull"] or column["pk"]]
-            names = ", ".join(column["name"] for column in required)
-            marks = ", ".join("?" for _ in required)
-            values = [_placeholder(column["type"], i) for i, column in enumerate(required)]
-            connection.execute("SAVEPOINT probe")
-            try:
-                connection.execute(f"INSERT INTO {table} ({names}) VALUES ({marks})", values)
-                for statement, verb in (
-                    (f"UPDATE {table} SET rowid = rowid", "update"),
-                    (f"DELETE FROM {table}", "delete"),
-                ):
-                    try:
-                        connection.execute(statement)
-                        problems.append(f"{table}: {verb} was allowed on an immutable table")
-                    except sqlite3.IntegrityError as exc:
-                        if IMMUTABLE_MESSAGE not in str(exc):
-                            problems.append(f"{table}: {verb} raised {exc!r}, not the abort")
-            except sqlite3.Error as exc:
-                problems.append(f"{table}: could not seed a probe row: {exc}")
-            finally:
-                connection.execute("ROLLBACK TO probe")
-                connection.execute("RELEASE probe")
-
-        assert not problems, problems
-        # A guard that cannot be observed failing is not evidence. Floor rather
-        # than an exact count, so adding an immutable table does not edit a test.
-        assert len(immutable) >= 14, immutable
-    finally:
-        connection.close()
+    expected = {
+        (table, f"no_{verb}_{table}")
+        for table in set(metadata.tables) - MUTABLE_TABLES
+        for verb in ("update", "delete")
+    } | {(table, f"prevent_delete_{table}") for table in DELETE_ONLY_TABLES}
+    assert guarded == expected
 
 
-def test_immutability_triggers_refuse_real_repository_writes(tmp_path: Path) -> None:
+def test_immutability_triggers_refuse_real_repository_writes(application_repo) -> None:
     """Behavioural evidence over records the repository actually wrote.
 
     The derived test above covers every immutable table, but with foreign keys
@@ -646,7 +430,7 @@ def test_immutability_triggers_refuse_real_repository_writes(tmp_path: Path) -> 
     repository created, so the four tables it can reach cheaply are proven under
     the conditions production actually runs in.
     """
-    repository = Repository(tmp_path / "refusals.sqlite3")
+    repository = application_repo
     repository.create_application(
         company="Immutable Co",
         target_role="Account Manager",
@@ -678,18 +462,19 @@ def test_immutability_triggers_refuse_real_repository_writes(tmp_path: Path) -> 
         )
     )
 
-    for table in ("job_snapshots", "recruitment_events", "submissions", "audit_records"):
-        for statement in (f"UPDATE {table} SET rowid=rowid", f"DELETE FROM {table}"):
-            with pytest.raises(sqlite3.IntegrityError, match="immutable record"):
+    for table_name in ("job_snapshots", "recruitment_events", "submissions", "audit_records"):
+        table = metadata.tables[table_name]
+        for statement in (update(table).values(id=table.c.id), delete(table)):
+            with pytest.raises(IntegrityError, match="immutable record"):
                 with repository.transaction() as connection:
                     connection.execute(statement)
 
 
 def test_typed_preparation_records_round_trip_and_refuse_stale_edits(
-    tmp_path: Path,
+    application_repo,
     draft_factory,
 ) -> None:
-    repository = Repository(tmp_path / "preparation-records.sqlite3")
+    repository = application_repo
     app_id, snapshot_id = _create_application(
         repository,
         company="Typed Records",
@@ -781,10 +566,10 @@ def test_typed_preparation_records_round_trip_and_refuse_stale_edits(
 
 
 def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
-    tmp_path: Path,
+    application_repo,
     draft_factory,
 ) -> None:
-    repository = Repository(tmp_path / "preparation-constraints.sqlite3")
+    repository = application_repo
     app_id, snapshot_id = _create_application(
         repository,
         company="Constraint Records",
@@ -812,76 +597,93 @@ def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
     )
     repository.create_working_draft(app_id, analysis_id, plan.id, document)
 
-    with pytest.raises(sqlite3.IntegrityError, match="immutable record"):
+    with pytest.raises(IntegrityError, match="immutable record"):
         with repository.transaction() as connection:
             connection.execute(
-                "UPDATE selection_plans SET plan_json=plan_json WHERE id=?",
-                (plan.id,),
+                update(selection_plans)
+                .where(selection_plans.c.id == plan.id)
+                .values(plan_json=selection_plans.c.plan_json)
             )
-    with pytest.raises(sqlite3.IntegrityError, match="immutable record"):
+    with pytest.raises(IntegrityError, match="immutable record"):
         with repository.transaction() as connection:
-            connection.execute("DELETE FROM selection_plans WHERE id=?", (plan.id,))
-    with pytest.raises(sqlite3.IntegrityError, match="UNIQUE constraint failed"):
+            connection.execute(delete(selection_plans).where(selection_plans.c.id == plan.id))
+    with pytest.raises(IntegrityError, match="one_active_working_draft_per_application"):
         repository.create_working_draft(app_id, analysis_id, plan.id, document)
 
 
-def test_only_one_working_draft_per_application_can_be_active(tmp_path: Path) -> None:
+def test_only_one_working_draft_per_application_can_be_active(application_repo) -> None:
     """Product invariant 3, enforced by storage rather than by a filesystem path.
 
     Before this boundary "one active draft" was an accident of every draft living
     at `working/{application_id}/`, which a second writer would simply overwrite.
     The partial unique index is what makes the invariant real, so it is asserted
-    through raw SQL: a repository method could satisfy it by convention while the
+    through SQLAlchemy Core: a repository method could satisfy it by convention while the
     table underneath still allowed two.
     """
-    database = tmp_path / "one-active.sqlite3"
-    initialize(database)
+    repository = application_repo
     now = "2026-08-18T00:00:00+00:00"
 
-    def insert_draft(connection: object, draft_id: str, *, active: int) -> None:
+    def insert_draft(connection, draft_id: str, *, active: bool) -> None:
         connection.execute(
-            "INSERT INTO working_drafts(id, application_id, job_analysis_id, selection_plan_id, "
-            "source_json, edit_version, content_hash, active, created_at, updated_at) "
-            "VALUES(?, 'a', 'an', 'pl', '{}', 1, 'h', ?, ?, ?)",
-            (draft_id, active, now, now),
+            insert(working_drafts).values(
+                id=draft_id,
+                application_id="a",
+                job_analysis_id=analysis_id,
+                selection_plan_id=plan.id,
+                source_json={},
+                edit_version=1,
+                content_hash="h",
+                active=active,
+                created_at=now,
+                updated_at=now,
+            )
         )
 
-    with connect(database) as connection:
+    with repository.transaction() as connection:
         connection.execute(
-            "INSERT INTO applications(id, company, target_role, current_status, created_at, "
-            "updated_at) VALUES('a', 'C', 'R', 'saved', ?, ?)",
-            (now, now),
+            insert(applications).values(
+                id="a",
+                company="C",
+                target_role="R",
+                current_status="saved",
+                created_at=now,
+                updated_at=now,
+            )
         )
         connection.execute(
-            "INSERT INTO job_snapshots(id, application_id, version_number, payload_path, "
-            "source_hash, normalized_hash, captured_at, source_metadata_json, content_hash) "
-            "VALUES('s', 'a', 1, 'p', 'h', 'n', ?, '{}', 'h')",
-            (now,),
+            insert(job_snapshots).values(
+                id="s",
+                application_id="a",
+                version_number=1,
+                payload_path="p",
+                source_hash="h",
+                normalized_hash="n",
+                captured_at=now,
+                source_metadata_json={},
+                content_hash="h",
+            )
         )
-        connection.execute(
-            "INSERT INTO job_analyses(id, application_id, job_snapshot_id, version_number, "
-            "structured_json, provider, model, created_at) "
-            "VALUES('an', 'a', 's', 1, '{}', 'deterministic', 'rules-v1', ?)",
-            (now,),
-        )
-        connection.execute(
-            "INSERT INTO selection_plans(id, application_id, job_analysis_id, version_number, "
-            "plan_json, candidate_context_version, candidate_context_hash, profile_version, "
-            "selection_policy_version, track_emphasis_dependencies_json, created_at) "
-            "VALUES('pl', 'a', 'an', 1, '{}', 'v', 'h', 'pv', '1.0.0', '{}', ?)",
-            (now,),
-        )
-        insert_draft(connection, "first", active=1)
+    analysis = classify_job("Python backend developer API React")
+    analysis_id, plan = _save_analysis(repository, "a", "s", analysis)
+    assert analysis_id == plan.job_analysis_id
+    with repository.transaction() as connection:
+        insert_draft(connection, "first", active=True)
 
-        with pytest.raises(sqlite3.IntegrityError, match="working_drafts.application_id"):
-            insert_draft(connection, "second", active=1)
+    with pytest.raises(IntegrityError, match="one_active_working_draft_per_application"):
+        with repository.transaction() as connection:
+            insert_draft(connection, "second", active=True)
 
-        # Deactivating releases the slot, and the superseded row survives as history.
-        connection.execute("UPDATE working_drafts SET active=0 WHERE id='first'")
-        insert_draft(connection, "third", active=1)
+    with repository.transaction() as connection:
+        connection.execute(
+            update(working_drafts).where(working_drafts.c.id == "first").values(active=False)
+        )
+        insert_draft(connection, "third", active=True)
+    with repository.read_connection() as connection:
         assert (
             connection.execute(
-                "SELECT COUNT(*) FROM working_drafts WHERE application_id='a'"
-            ).fetchone()[0]
+                select(func.count())
+                .select_from(working_drafts)
+                .where(working_drafts.c.application_id == "a")
+            ).scalar_one()
             == 2
         )

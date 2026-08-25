@@ -1,21 +1,18 @@
 from __future__ import annotations
 
-import sqlite3
-from pathlib import Path
-
 import pytest
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 
 from cv_engine.application.commands import IngestCommand, NextActionCommand
 from cv_engine.domain.models import ApplicationStatus
-from cv_engine.infrastructure.persistence import connect, current_schema_version
-from cv_engine.infrastructure.persistence.schema import (
-    MIGRATIONS_DIR,
-    registered_migration_names,
+from cv_engine.infrastructure.persistence import current_database_revision
+from cv_engine.infrastructure.persistence.tables import (
+    applications,
+    job_snapshots,
+    recruitment_events,
 )
 from cv_engine.util import normalized_text, sha256_text
-
-SCHEMA_FIXTURE = Path(__file__).parent / "fixtures/schema_sqlite_master.tsv"
-HEAD_SCHEMA_FIXTURE = Path(__file__).parent / "fixtures/schema_head_sqlite_master.tsv"
 
 
 def _create(repo, *, company: str, target_role: str, text: str):
@@ -27,18 +24,6 @@ def _create(repo, *, company: str, target_role: str, text: str):
         source_hash=digest,
         normalized_hash=sha256_text(normalized_text(text)),
     )
-
-
-def _sqlite_master_fingerprint(path: Path) -> list[tuple[str, str, str, str]]:
-    with sqlite3.connect(path) as connection:
-        rows = connection.execute(
-            "SELECT type, name, tbl_name, sql FROM sqlite_master "
-            # schema_migrations is runner bookkeeping, not part of the product
-            # schema whose fixture bytes are intentionally frozen.
-            "WHERE sql IS NOT NULL AND name != 'schema_migrations' "
-            "ORDER BY type, name"
-        ).fetchall()
-    return [(kind, name, table, " ".join(ddl.split())) for kind, name, table, ddl in rows]
 
 
 def test_recruitment_event_and_transition_contract(application_repo) -> None:
@@ -55,17 +40,25 @@ def test_recruitment_event_and_transition_contract(application_repo) -> None:
         ApplicationStatus("preparing")
     with pytest.raises(ValueError):
         ApplicationStatus("ready")
-    with connect(repo.path) as connection:
+    with repo.read_connection() as connection:
         history = connection.execute(
-            "SELECT from_status, to_status, actor_type, client FROM recruitment_events "
-            "WHERE application_id=? ORDER BY rowid",
-            (app_id,),
-        ).fetchall()
-        with pytest.raises(sqlite3.IntegrityError, match="invalid recruitment status"):
-            connection.execute(
-                "UPDATE applications SET current_status='ready' WHERE id=?", (app_id,)
+            select(
+                recruitment_events.c.from_status,
+                recruitment_events.c.to_status,
+                recruitment_events.c.actor_type,
+                recruitment_events.c.client,
             )
-    assert [tuple(row) for row in history] == [(None, "saved", "user", "cli")]
+            .where(recruitment_events.c.application_id == app_id)
+            .order_by(recruitment_events.c.occurred_at, recruitment_events.c.seq)
+        ).all()
+    with pytest.raises(IntegrityError, match="ck_applications_current_status"):
+        with repo.transaction() as connection:
+            connection.execute(
+                update(applications)
+                .where(applications.c.id == app_id)
+                .values(current_status="ready")
+            )
+    assert history == [(None, "saved", "user", "cli")]
 
 
 def test_immutable_job_snapshot_trigger(application_repo) -> None:
@@ -73,10 +66,12 @@ def test_immutable_job_snapshot_trigger(application_repo) -> None:
     _, snapshot_id = _create(
         repo, company="Acme", target_role="Developer", text="Original exact text"
     )
-    with pytest.raises(sqlite3.IntegrityError, match="immutable record"):
+    with pytest.raises(IntegrityError, match="immutable record"):
         with repo.transaction() as connection:
             connection.execute(
-                "UPDATE job_snapshots SET source_hash='changed' WHERE id=?", (snapshot_id,)
+                update(job_snapshots)
+                .where(job_snapshots.c.id == snapshot_id)
+                .values(source_hash="changed")
             )
 
 
@@ -98,54 +93,8 @@ def test_next_action_is_not_a_status(application_repo) -> None:
     assert repo.recruitment_event(event_id)["event_type"] == "next_action"
 
 
-def test_sqlite_master_fingerprint_matches_the_recorded_schema(tmp_path: Path) -> None:
-    """Every table, index, and trigger the baseline creates, recorded verbatim.
-
-    This froze the M1 baseline while later migrations added to it, so that a
-    database created at M1 could still be upgraded. Squashing the chain retired
-    that job: with one migration there is no earlier shape to stay compatible
-    with. What it still catches is a schema change nobody meant to make —
-    dropping a trigger while editing the table above it moves this fixture, and
-    moving it has to be deliberate.
-    """
-    baseline_path = tmp_path / "baseline.sqlite3"
-    with connect(baseline_path) as connection:
-        connection.executescript((MIGRATIONS_DIR / "0001_baseline.sql").read_text(encoding="utf-8"))
-    expected = [
-        tuple(line.split("\t", 3))
-        for line in SCHEMA_FIXTURE.read_text(encoding="utf-8").splitlines()
-    ]
-    assert _sqlite_master_fingerprint(baseline_path) == expected
-
-
 def test_database_is_at_registered_head_schema(application_repo) -> None:
-    # The fingerprint proves what the baseline creates; this proves the runner
-    # actually recorded it, so a database that silently skipped the migration
-    # fails here rather than at the first query that needs a missing table.
-    registered_head = registered_migration_names()[-1].split("_", 1)[0]
-    assert current_schema_version(application_repo.path) == registered_head
-
-
-def test_head_schema_fingerprint_adds_only_workspace_settings(tmp_path: Path) -> None:
-    head_path = tmp_path / "head.sqlite3"
-    from cv_engine.infrastructure.persistence import Repository
-
-    Repository(head_path)
-    baseline_rows = [
-        tuple(line.split("\t", 3))
-        for line in SCHEMA_FIXTURE.read_text(encoding="utf-8").splitlines()
-    ]
-    head_additions = [
-        tuple(line.split("\t", 3))
-        for line in HEAD_SCHEMA_FIXTURE.read_text(encoding="utf-8").splitlines()
-    ]
-    expected = sorted([*baseline_rows, *head_additions], key=lambda row: (row[0], row[1]))
-    actual = _sqlite_master_fingerprint(head_path)
-    assert actual == expected
-
-    assert head_additions == [next(row for row in actual if row[1] == "workspace_settings")]
-    assert set(actual) - set(baseline_rows) == set(head_additions)
-    assert set(baseline_rows) - set(actual) == set()
+    assert current_database_revision(application_repo.engine) == "0002"
 
 
 def test_ready_is_not_persisted_and_submission_storage_commits_atomically(
@@ -219,7 +168,7 @@ def test_ready_is_not_persisted_and_submission_storage_commits_atomically(
     )
     assert repo.integrity_check() == []
 
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(IntegrityError):
         repo.insert_submission(
             "fake-internal",
             app_id,
@@ -233,7 +182,7 @@ def test_ready_is_not_persisted_and_submission_storage_commits_atomically(
     # One artifact, one submission. The table is immutable, so a duplicate cannot
     # be corrected afterwards: the history would permanently say a CV was sent
     # twice when it was sent once.
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(IntegrityError):
         repo.insert_submission(
             "submission-duplicate",
             app_id,

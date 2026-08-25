@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Event, Lock, Thread
 
 import pytest
 from helpers import ACCOUNT_MANAGER_JOB, run_cli, validate_active_draft
 from pydantic import ValidationError
+from sqlalchemy import delete, update
+from sqlalchemy.exc import IntegrityError
 
 from cv_engine.application.commands import (
     AnalyzeCommand,
@@ -46,6 +47,7 @@ from cv_engine.application.operations import (
 )
 from cv_engine.domain.models import ValidationIssue, ValidationReport
 from cv_engine.infrastructure.persistence import Repository
+from cv_engine.infrastructure.persistence.tables import operations
 from cv_engine.runtime.execution import ForegroundOperationExecutor, OperationWorker
 from cv_engine.util import new_id
 
@@ -138,7 +140,7 @@ def _stored_request(application_id: str, key: str = "request-1") -> CreateOperat
     )
 
 
-def test_sqlite_operation_creation_is_idempotent_and_projects_active_work(services) -> None:
+def test_operation_creation_is_idempotent_and_projects_active_work(services) -> None:
     ingested = services.applications.ingest(
         IngestCommand(company="Operation Co", target_role="Developer", job_text="Python role")
     )
@@ -166,7 +168,7 @@ def test_sqlite_operation_creation_is_idempotent_and_projects_active_work(servic
     assert detail.active_operation.status is OperationStatus.QUEUED
 
 
-def test_sqlite_operation_rejects_idempotency_key_with_another_payload(services) -> None:
+def test_operation_rejects_idempotency_key_with_another_payload(services) -> None:
     ingested = services.applications.ingest(
         IngestCommand(company="Conflict Co", target_role="Developer", job_text="Python role")
     )
@@ -197,18 +199,23 @@ def test_terminal_operation_rows_cannot_be_rewritten_or_deleted(services) -> Non
     )
     with services.repository.transaction() as connection:
         connection.execute(
-            "UPDATE operations SET status='cancelled', phase='completed', finished_at=? WHERE id=?",
-            ("2026-08-19T08:01:00+00:00", created.id),
+            update(operations)
+            .where(operations.c.id == created.id)
+            .values(
+                status="cancelled",
+                phase="completed",
+                finished_at="2026-08-19T08:01:00+00:00",
+            )
         )
 
-    with pytest.raises(sqlite3.IntegrityError, match="immutable terminal operation"):
+    with pytest.raises(IntegrityError, match="immutable terminal operation"):
         with services.repository.transaction() as connection:
             connection.execute(
-                "UPDATE operations SET message='rewritten' WHERE id=?", (created.id,)
+                update(operations).where(operations.c.id == created.id).values(message="rewritten")
             )
-    with pytest.raises(sqlite3.IntegrityError, match="immutable record"):
+    with pytest.raises(IntegrityError, match="immutable record"):
         with services.repository.transaction() as connection:
-            connection.execute("DELETE FROM operations WHERE id=?", (created.id,))
+            connection.execute(delete(operations).where(operations.c.id == created.id))
 
 
 def test_two_runners_racing_one_operation_produce_one_claim(services) -> None:
@@ -222,7 +229,7 @@ def test_two_runners_racing_one_operation_produce_one_claim(services) -> None:
     barrier = Barrier(2)
 
     def claim(runner_id: str):
-        repository = Repository(services.workspace.database_path)
+        repository = Repository(services.repository.engine)
         barrier.wait(timeout=2)
         return repository.claim_operation(
             created.id,
@@ -290,6 +297,7 @@ def test_foreground_executor_and_worker_race_one_operation_without_duplicate_exe
         ]
 
     assert executions == 1
+    assert foreground_result is not None
     assert foreground_result.status is OperationStatus.SUCCEEDED
     assert services.repository.operation(operation.id).status is OperationStatus.SUCCEEDED
     assert worker_result is None or worker_result.id == operation.id
@@ -408,13 +416,13 @@ def test_startup_interrupts_a_queued_operation_with_an_expired_runner_lease(serv
     operation = _operation_for_runner(services, "Expired Queued Co")
     with services.repository.transaction() as connection:
         connection.execute(
-            "UPDATE operations SET lease_owner='dead-runner', heartbeat_at=?, lease_expires_at=? "
-            "WHERE id=?",
-            (
-                "2026-08-19T07:59:00+00:00",
-                "2026-08-19T07:59:30+00:00",
-                operation.id,
-            ),
+            update(operations)
+            .where(operations.c.id == operation.id)
+            .values(
+                lease_owner="dead-runner",
+                heartbeat_at="2026-08-19T07:59:00+00:00",
+                lease_expires_at="2026-08-19T07:59:30+00:00",
+            )
         )
 
     interrupted = services.repository.interrupt_expired_operations(now="2026-08-19T08:00:00+00:00")
@@ -1044,14 +1052,14 @@ def test_worker_shutdown_requests_cancellation_and_prevents_activation(services)
     assert services.repository.operation(operation.id).status is OperationStatus.CANCELLED
 
 
-# --- repository methods against real SQLite ---------------------------------
+# --- repository methods against real PostgreSQL ------------------------------
 #
 # The tests above drive Operations through the runner and the services, which is
 # where the product's behaviour lives. These drive eight repository methods
 # directly, because their refusals are the branches a successful run never
 # takes: a lease claimed by someone else, an output activated after
 # cancellation, a receipt completed twice. Acceptance item 1 asks for the
-# repository under real SQLite, and a method whose only coverage is the happy
+# repository under real PostgreSQL, and a method whose only coverage is the happy
 # path is not covered.
 
 

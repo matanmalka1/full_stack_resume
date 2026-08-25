@@ -9,13 +9,15 @@ from __future__ import annotations
 
 import json
 import shutil
-import sqlite3
 import uuid
 from pathlib import Path
+from typing import cast
 
 import pytest
 from fastapi.testclient import TestClient
 from helpers import ACCOUNT_MANAGER_JOB, approve_active_draft, validate_active_draft
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.exc import IntegrityError
 
 from cv_engine.api.app import API_PREFIX, create_app
 from cv_engine.application.commands import (
@@ -33,17 +35,23 @@ from cv_engine.application.errors import (
 from cv_engine.application.ready import qualify_ready_revision
 from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.domain.models import DecisionRecord
-from cv_engine.infrastructure.persistence import connect
-from cv_engine.infrastructure.persistence.artifacts import SqliteArtifactRepository
-from cv_engine.infrastructure.persistence.drafts import SqliteDraftRepository
+from cv_engine.infrastructure.persistence.artifacts import SqlAlchemyArtifactRepository
+from cv_engine.infrastructure.persistence.drafts import SqlAlchemyDraftRepository
+from cv_engine.infrastructure.persistence.repository import Repository
+from cv_engine.infrastructure.persistence.tables import (
+    approved_revisions,
+    decision_records,
+    metadata,
+)
 from cv_engine.runtime.composition import Services, build_api_services
 from cv_engine.runtime.workspace import Workspace
 from cv_engine.util import normalized_text, sha256_file, sha256_text
 
 
-def _rows(services: Services, sql: str, *params) -> list[dict]:
-    with connect(services.repository.path) as connection:
-        return [dict(row) for row in connection.execute(sql, params).fetchall()]
+def _rows(services: Services, table) -> list[dict]:
+    repository = cast(Repository, services.repository)
+    with repository.read_connection() as connection:
+        return [dict(row) for row in connection.execute(select(table)).mappings()]
 
 
 def _persisted(services: Services) -> dict[str, int]:
@@ -56,15 +64,11 @@ def _persisted(services: Services) -> dict[str, int]:
     next table automatically: a list would have gone on passing while a new table
     quietly gained a row.
     """
-    with connect(services.repository.path) as connection:
-        tables = sorted(
-            row[0]
-            for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            if not row[0].startswith("sqlite_")
-        )
+    repository = cast(Repository, services.repository)
+    with repository.read_connection() as connection:
         return {
-            table: connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-            for table in tables
+            table.name: connection.execute(select(func.count()).select_from(table)).scalar_one()
+            for table in metadata.sorted_tables
         }
 
 
@@ -219,7 +223,7 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
         job_snapshot_id=working.source.job_snapshot_id,
     )
 
-    original_create = SqliteDraftRepository.create_approved_revision
+    original_create = SqlAlchemyDraftRepository.create_approved_revision
     observed: dict[str, bool] = {}
 
     def require_payloads_first(repository, *args, **kwargs):
@@ -230,7 +234,9 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
         observed["payloads_precede_row"] = True
         return original_create(repository, *args, **kwargs)
 
-    monkeypatch.setattr(SqliteDraftRepository, "create_approved_revision", require_payloads_first)
+    monkeypatch.setattr(
+        SqlAlchemyDraftRepository, "create_approved_revision", require_payloads_first
+    )
 
     approved = approve_active_draft(services, app_id)
 
@@ -296,12 +302,14 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
         services.repository.active_working_draft(app_id)
 
     for statement in (
-        "UPDATE approved_revisions SET draft_content_hash=draft_content_hash WHERE id=?",
-        "DELETE FROM approved_revisions WHERE id=?",
+        update(approved_revisions)
+        .where(approved_revisions.c.id == revision.id)
+        .values(draft_content_hash=approved_revisions.c.draft_content_hash),
+        delete(approved_revisions).where(approved_revisions.c.id == revision.id),
     ):
-        with pytest.raises(sqlite3.IntegrityError, match="immutable record"):
+        with pytest.raises(IntegrityError, match="immutable record"):
             with services.repository.transaction() as connection:
-                connection.execute(statement, (revision.id,))
+                connection.execute(statement)
 
 
 def test_latest_decision_uses_revision_order_when_approvals_share_a_timestamp(
@@ -373,7 +381,7 @@ def test_latest_decision_uses_revision_order_when_approvals_share_a_timestamp(
 # --- 3. records may not cross application ownership boundaries -------------
 
 
-def test_foreign_working_projection_cannot_replace_the_sqlite_source(
+def test_foreign_working_projection_cannot_replace_the_database_source(
     workspace_root: Path, drafted_application
 ) -> None:
     target = drafted_application("Target Co")
@@ -383,14 +391,14 @@ def test_foreign_working_projection_cannot_replace_the_sqlite_source(
     for name in ("resume.md", "resume.claims.json"):
         shutil.copy2(working / other.application_id / name, working / target.application_id / name)
     # Validation is its own command now, and it legitimately records a run: it
-    # validated the draft SQLite holds, which the foreign projection did not
+    # validated the draft the database holds, which the foreign projection did not
     # replace. So the baseline is taken *after* it, and what the assertion then
     # measures is approval alone - which is the command under test.
     validated = validate_active_draft(services, target.application_id)
     before_target = _persisted(services)
     before_other = _persisted(services)
 
-    # SQLite is authoritative, so the foreign projection cannot become the
+    # The database is authoritative, so the foreign projection cannot become the
     # approved content. It does not silently lose either: approval refuses while
     # the projection disagrees with the stored draft, so a corrupted or
     # hand-copied working file cannot reach a revision at all.
@@ -405,7 +413,7 @@ def test_foreign_working_projection_cannot_replace_the_sqlite_source(
 
     assert _persisted(services) == before_target
     assert _persisted(services) == before_other
-    # Regenerating rewrites the projection from SQLite, and approval proceeds.
+    # Regenerating rewrites the projection from the database, and approval proceeds.
     services.drafts.draft(
         DraftCommand(
             application_id=target.application_id,
@@ -426,14 +434,14 @@ def test_approval_builds_typed_decision_and_artifacts_cannot_cross_applications(
     stranger = drafted_application("Stranger Co", role="Key Account Manager")
     services = owner.services
     inserted: list[DecisionRecord] = []
-    original_insert = SqliteArtifactRepository.insert_decision
+    original_insert = SqlAlchemyArtifactRepository.insert_decision
 
     def capture_insert(repository, record: DecisionRecord) -> None:
         assert isinstance(record, DecisionRecord)
         inserted.append(record)
         original_insert(repository, record)
 
-    monkeypatch.setattr(SqliteArtifactRepository, "insert_decision", capture_insert)
+    monkeypatch.setattr(SqlAlchemyArtifactRepository, "insert_decision", capture_insert)
     approved = approve_active_draft(services, owner.application_id)
     owner_markdown = services.repository.latest_artifact_version(
         owner.application_id, "resume_markdown", "approved"
@@ -462,7 +470,7 @@ def test_approval_builds_typed_decision_and_artifacts_cannot_cross_applications(
         )
 
     assert _persisted(services) == before
-    assert [row["application_id"] for row in _rows(services, "SELECT * FROM decision_records")] == [
+    assert [row["application_id"] for row in _rows(services, decision_records)] == [
         owner.application_id
     ]
 

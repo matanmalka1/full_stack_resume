@@ -3,10 +3,13 @@ from __future__ import annotations
 import json
 import uuid
 from pathlib import Path
+from typing import cast
 
 import pytest
 from helpers import approve_active_draft
 from helpers import working_claim as _working_claim
+from sqlalchemy import delete, update
+from sqlalchemy.exc import IntegrityError
 
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand
 from cv_engine.application.errors import KnowledgeRejected, PreconditionFailed
@@ -14,13 +17,14 @@ from cv_engine.application.knowledge_mutations import PrepareKnowledgeMutation
 from cv_engine.domain.facts import FactStore
 from cv_engine.domain.models import FactStatus
 from cv_engine.infrastructure.knowledge import FactStoreError, load_fact_store
-from cv_engine.infrastructure.persistence import connect
+from cv_engine.infrastructure.persistence.repository import Repository
+from cv_engine.infrastructure.persistence.tables import fact_events
 from cv_engine.runtime.composition import Services, build_services
 
 NEW_FACT = {
-    "fact_id": "situational.sqlite",
-    "meaning": "Used SQLite for local application state in a personal project.",
-    "renderings": {"en": "Used SQLite for local application state in a personal project."},
+    "fact_id": "situational.postgres",
+    "meaning": "Used PostgreSQL for local application state in a personal project.",
+    "renderings": {"en": "Used PostgreSQL for local application state in a personal project."},
     "tags": ["development", "situational", "databases"],
     "provenance": "candidate wording from the user; not yet verified",
     "resume_style": "bullet",
@@ -36,11 +40,11 @@ def test_new_fact_is_persisted_as_pending_and_cannot_reach_a_cv(services: Servic
     result = services.knowledge_lifecycle.add_fact("situational_skills.md", dict(NEW_FACT))
 
     assert result.fact.status is FactStatus.PENDING
-    stored = _reload(services).get("situational.sqlite")
+    stored = _reload(services).get("situational.postgres")
     assert stored.status is FactStatus.PENDING
     assert stored.source_file == "base/situational_skills.md"
     with pytest.raises(FactStoreError, match="not canonical"):
-        _reload(services).get("situational.sqlite", canonical_only=True)
+        _reload(services).get("situational.postgres", canonical_only=True)
 
 
 def test_contextual_pending_fact_gets_a_generated_uuid(services: Services) -> None:
@@ -91,7 +95,7 @@ def test_knowledge_file_mutation_is_validated_staged_activated_and_restored(
     assert staged.staged_reference == "tmp/knowledge/staged-create/new"
 
     services.knowledge.activate_staged(staged)
-    assert _reload(services).get("situational.sqlite").status is FactStatus.PENDING
+    assert _reload(services).get("situational.postgres").status is FactStatus.PENDING
     services.knowledge.restore_staged(staged)
     assert source.read_bytes() == before
     services.knowledge.discard_staged(staged)
@@ -169,10 +173,10 @@ def test_startup_finishes_crashes_before_and_after_file_activation(
     monkeypatch.setattr(services.knowledge_lifecycle, "_complete_prepared", original_complete)
     recovered = build_services(services.workspace)
     assert recovered.repository.knowledge_mutation(mutation.id).state.value == "COMMITTED"
-    assert _reload(recovered).get("situational.sqlite").status is FactStatus.PENDING
-    assert len(recovered.knowledge_lifecycle.fact_history("situational.sqlite").events) == 1
+    assert _reload(recovered).get("situational.postgres").status is FactStatus.PENDING
+    assert len(recovered.knowledge_lifecycle.fact_history("situational.postgres").events) == 1
 
-    second_payload = {**NEW_FACT, "fact_id": "situational.sqlite.second"}
+    second_payload = {**NEW_FACT, "fact_id": "situational.postgres.second"}
 
     def interrupt_after(mutation):
         staged = recovered.knowledge.staged_from_mutation(mutation)
@@ -183,7 +187,7 @@ def test_startup_finishes_crashes_before_and_after_file_activation(
     with pytest.raises(RuntimeError, match="after replace"):
         recovered.knowledge_lifecycle.add_fact("situational_skills.md", second_payload)
     recovered_again = build_services(services.workspace)
-    assert _reload(recovered_again).get("situational.sqlite.second").status is FactStatus.PENDING
+    assert _reload(recovered_again).get("situational.postgres.second").status is FactStatus.PENDING
     assert len(recovered_again.knowledge_lifecycle.fact_history().events) == 2
 
 
@@ -197,18 +201,18 @@ def test_startup_marks_committed_db_mutation_without_duplicate_event(
         nonlocal calls
         calls += 1
         if calls == 1:
-            raise RuntimeError("after SQLite commit")
+            raise RuntimeError("after database commit")
         return original_commit(mutation_id, committed_at=committed_at)
 
     monkeypatch.setattr(services.repository, "commit_knowledge_mutation", fail_once)
-    with pytest.raises(RuntimeError, match="after SQLite commit"):
+    with pytest.raises(RuntimeError, match="after database commit"):
         services.knowledge_lifecycle.add_fact("situational_skills.md", dict(NEW_FACT))
-    assert len(services.repository.fact_events("situational.sqlite")) == 1
+    assert len(services.repository.fact_events("situational.postgres")) == 1
     assert len(services.repository.prepared_knowledge_mutations()) == 1
 
     recovered = build_services(services.workspace)
     assert recovered.repository.prepared_knowledge_mutations() == []
-    assert len(recovered.repository.fact_events("situational.sqlite")) == 1
+    assert len(recovered.repository.fact_events("situational.postgres")) == 1
 
 
 def test_audit_failure_restores_source_and_quarantines(
@@ -360,12 +364,12 @@ def test_pending_fact_does_not_invalidate_drafts_built_from_canonical_facts(
     assert after.lifecycle_version != before.lifecycle_version
 
     services.knowledge_lifecycle.promote_fact(
-        "situational.sqlite", "confirmed", explicitly_confirmed=True
+        "situational.postgres", "confirmed", explicitly_confirmed=True
     )
     assert _reload(services).version == before.version
 
     services.knowledge_lifecycle.promote_fact(
-        "situational.sqlite", "canonical", explicitly_confirmed=True
+        "situational.postgres", "canonical", explicitly_confirmed=True
     )
     assert _reload(services).version != before.version
 
@@ -377,13 +381,13 @@ def test_promotion_requires_explicit_confirmation_and_a_legal_transition(
 
     with pytest.raises(KnowledgeRejected, match="explicit confirmation"):
         services.knowledge_lifecycle.promote_fact(
-            "situational.sqlite", "confirmed", explicitly_confirmed=False
+            "situational.postgres", "confirmed", explicitly_confirmed=False
         )
     with pytest.raises(KnowledgeRejected, match="invalid fact transition"):
         services.knowledge_lifecycle.promote_fact(
-            "situational.sqlite", "canonical", explicitly_confirmed=True
+            "situational.postgres", "canonical", explicitly_confirmed=True
         )
-    assert _reload(services).get("situational.sqlite").status is FactStatus.PENDING
+    assert _reload(services).get("situational.postgres").status is FactStatus.PENDING
 
 
 def test_lifecycle_survives_process_boundaries_through_the_cli(
@@ -395,7 +399,7 @@ def test_lifecycle_survives_process_boundaries_through_the_cli(
         "--source",
         "situational_skills.md",
         "--fact-id",
-        "situational.sqlite",
+        "situational.postgres",
         "--meaning",
         NEW_FACT["meaning"],
         "--en",
@@ -412,23 +416,23 @@ def test_lifecycle_survives_process_boundaries_through_the_cli(
     assert added.returncode == 0, added.stdout + added.stderr
     assert json.loads(added.stdout)["fact"]["status"] == "pending"
 
-    unconfirmed = cli_subprocess("fact", "confirm", "situational.sqlite")
+    unconfirmed = cli_subprocess("fact", "confirm", "situational.postgres")
     assert unconfirmed.returncode == 2
     assert "requires explicit --confirm" in unconfirmed.stderr
 
-    assert cli_subprocess("fact", "confirm", "situational.sqlite", "--confirm").returncode == 0
-    assert cli_subprocess("fact", "promote", "situational.sqlite", "--confirm").returncode == 0
+    assert cli_subprocess("fact", "confirm", "situational.postgres", "--confirm").returncode == 0
+    assert cli_subprocess("fact", "promote", "situational.postgres", "--confirm").returncode == 0
 
     listed = cli_subprocess("fact", "list", "--status", "canonical")
     assert listed.returncode == 0
     ids = [fact["fact_id"] for fact in json.loads(listed.stdout)]
-    assert "situational.sqlite" in ids
+    assert "situational.postgres" in ids
     assert (
-        load_fact_store(workspace_root / "base").get("situational.sqlite").status
+        load_fact_store(workspace_root / "base").get("situational.postgres").status
         is FactStatus.CANONICAL
     )
 
-    history = json.loads(cli_subprocess("fact", "history", "situational.sqlite").stdout)
+    history = json.loads(cli_subprocess("fact", "history", "situational.postgres").stdout)
     assert [(event["from_status"], event["to_status"]) for event in history] == [
         (None, "pending"),
         ("pending", "confirmed"),
@@ -449,12 +453,14 @@ def test_duplicate_fact_ids_are_refused(services: Services) -> None:
 
 def test_lifecycle_events_are_immutable(services: Services) -> None:
     services.knowledge_lifecycle.add_fact("situational_skills.md", dict(NEW_FACT))
+    repository = cast(Repository, services.repository)
 
-    with connect(services.repository.path) as connection:
-        with pytest.raises(Exception, match="immutable record"):
-            connection.execute("UPDATE fact_events SET to_status='canonical'")
-        with pytest.raises(Exception, match="immutable record"):
-            connection.execute("DELETE FROM fact_events")
+    with pytest.raises(IntegrityError, match="immutable record"):
+        with repository.transaction() as connection:
+            connection.execute(update(fact_events).values(to_status="canonical"))
+    with pytest.raises(IntegrityError, match="immutable record"):
+        with repository.transaction() as connection:
+            connection.execute(delete(fact_events))
 
 
 def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) -> None:
