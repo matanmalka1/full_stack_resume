@@ -41,6 +41,12 @@ If a specification conflicts with existing behavior, stop and say so. Do not
 reinterpret a conflict silently. The pre-v1 generation workflow is retired; historical
 sources and artifacts are evidence, not an active workflow.
 
+Persistence exception, decided 2026-08-25: this file and
+`docs/v2/spec/architecture.md` own the PostgreSQL/SQLAlchemy/Alembic baseline. Older
+product and acceptance documents that still describe embedded database storage or list
+PostgreSQL as a non-goal are superseded on that subject only; they do not trigger the
+stop rule above.
+
 ## Change classes
 
 The class follows from what the change touches, not from how it feels.
@@ -53,13 +59,15 @@ Gates: the focused tests, then the non-browser suite once.
 
 **Class B — contract.** Changes a stored value's meaning, a signature, a projection
 field, or a contracted message.
-Gates: Class A, plus golden hashes, the architecture test, and an offline CLI run.
+Gates: Class A, plus golden hashes, the architecture test, and a deterministic no-AI CLI
+run against the configured PostgreSQL service.
 The reasoning goes in the commit message.
 
 **Class C — schema or artifact paths.** A change to the baseline schema, or to where
 immutable payloads live.
-Gates: Class B, plus the browser suite and the frozen schema fingerprint. A fingerprint
-that moves must be regenerated deliberately, with the entry-level diff stated.
+Gates: Class B, plus the browser suite and the Alembic migration-topology and empty-database
+upgrade checks. A baseline revision change must be deliberate, with the generated schema
+diff stated.
 
 Gates are per boundary, not per commit, and the user runs them. While iterating, hand
 over only the focused tests for what changed; hand over the class's full gate once, when
@@ -74,8 +82,9 @@ difference from it; an unexplained delta is a finding, not noise.
 These are cheap and have each caught a real bug in this repository. Prefer them over
 process:
 
-- **Run the CLI offline, end to end** — `ingest → analyze → draft → validate → approve
-  → render → ready → reconcile`, with `OPENAI_API_KEY` unset, against a fresh Workspace.
+- **Run the deterministic CLI end to end** — `ingest → analyze → draft → validate → approve
+  → render → ready → reconcile`, with `OPENAI_API_KEY` unset, against a fresh Workspace
+  and a running configured PostgreSQL database.
   This is what found approval silently destroying unimported manual edits.
 - **Golden hashes** — they must not move unless output was meant to change.
 - **Immutability triggers** on records that must never be rewritten.
@@ -113,17 +122,15 @@ what remains. A hard failure is never relabelled as a warning.
   immutable. Never overwrite or relocate one.
 - Never invent a value a record never carried. A field that cannot be derived stays
   NULL.
-- Back up before anything that could destroy a written record: `cv workspace backup
-  --into <new directory>`, then restore it and open it. A backup nobody has restored is
-  not a backup.
 
 ## Scope
 
-- Implement only approved v2.0 scope and respect every non-goal in
-  `docs/v2/spec/product-spec.md`.
-- The local FastAPI + React Web UI is authorized in this worktree. Cloud deployment,
-  authentication, PostgreSQL, multi-candidate support, and broad multi-provider support
-  are not.
+- Implement only approved v2.0 scope and respect the non-goals in
+  `docs/v2/spec/product-spec.md`, except for its superseded persistence choice described
+  above.
+- The local FastAPI + React Web UI and its local PostgreSQL service are authorized in this
+  worktree. Cloud deployment, authentication, multi-candidate support, and broad
+  multi-provider support are not.
 - Keep the CLI first-class. It calls the application layer directly, does not require
   FastAPI, and the deterministic workflow must reach Ready without an AI key.
 - Do not begin Dashboard/tracking UI before the Web/API vertical slice reaches Ready
@@ -179,9 +186,13 @@ state that none was retirable and why. A guard that has never failed since it wa
 is a candidate for merging into a derived check.
 
 Retired 2026-08-19: the **Migration safety** section and the v1 arm of Class C. None of
-those rules ever fired — they guarded a migration that was then not performed. Replaced
-by three derived checks: the frozen schema fingerprint, `looks_legacy`, and
-`cv workspace backup`. Do not re-add them; see `docs/v2/m2-remaining.md`.
+those rules ever fired — they guarded a migration that was then not performed. Do not
+re-add them; see `docs/v2/m2-remaining.md`.
+
+PostgreSQL replacement 2026-08-25: retired the built-in Workspace backup/restore control
+and the frozen file-database schema-fingerprint control. This task starts every development
+database empty; Alembic's single-head/revision registration guard and explicit foreign-key
+integrity check now own schema safety. `looks_legacy` remains the archive-isolation guard.
 
 M3 close 2026-08-23: **no control was retirable.** Every remaining control still guards
 an active failure mode, and M3 exercised several of them: fresh count reconciliation
