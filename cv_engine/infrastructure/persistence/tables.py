@@ -285,7 +285,15 @@ approved_revisions = Table(
     Column("selection_policy_version", Text, nullable=False),
     Column("track_emphasis_dependencies_json", JSONB, nullable=False),
     Column(
-        "validation_run_id", String, ForeignKey("validation_runs.id"), nullable=False, unique=True
+        "validation_run_id",
+        String,
+        ForeignKey(
+            "validation_runs.id",
+            name="fk_approved_revisions_validation_run_id_validation_runs",
+            use_alter=True,
+        ),
+        nullable=False,
+        unique=True,
     ),
     Column("validator_versions_json", JSONB, nullable=False),
     Column("decision_provenance_json", JSONB, nullable=False),
@@ -642,7 +650,7 @@ Index(
 workspace_settings = Table(
     "workspace_settings",
     metadata,
-    Column("singleton_id", Integer, primary_key=True),
+    Column("singleton_id", Integer, primary_key=True, autoincrement=False),
     Column("edit_version", Integer, nullable=False),
     Column("auto_generate_when_review_not_required", Boolean, nullable=False),
     Column("ai_enabled_override", Boolean),

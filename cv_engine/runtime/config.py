@@ -36,7 +36,11 @@ SETTINGS: dict[str, Setting] = {
     setting.name: setting
     for setting in (
         Setting("workspace", "CV_WORKSPACE", workspace_scoped=False),
-        Setting("database", "CV_DATABASE"),
+        Setting(
+            "database_url",
+            "CV_DATABASE_URL",
+            default="postgresql+psycopg://cv:cv@127.0.0.1:5433/cv",
+        ),
         Setting("provider", "CV_PROVIDER", default="deterministic"),
         Setting("model", "CV_MODEL", default="gpt-5.6"),
         Setting("api_max_body_bytes", "CV_API_MAX_BODY_BYTES", default=API_MAX_BODY_BYTES_DEFAULT),
