@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any, Self
+
+from sqlalchemy import func, insert, select, update
+from sqlalchemy.engine import Connection, Engine
 
 from ...application.errors import (
     LineageBroken,
@@ -16,54 +17,32 @@ from ...domain.models import (
     SelectionManifest,
     SelectionPlan,
 )
-from ...util import canonical_json, new_id, utc_now
-from .applications import SqliteApplicationRepository
-from .base import SqliteRepositoryBase, sqlite_unit_of_work
-from .connection import SqliteUnitOfWork
-
-_SNAPSHOT_COLUMNS = (
-    "id, application_id, version_number, payload_path, source_hash, normalized_hash, "
-    "source_url, captured_at, source_metadata_json, content_hash, prior_snapshot_id"
-)
+from ...util import new_id, utc_now
+from .applications import SqlAlchemyApplicationRepository
+from .base import SqlAlchemyRepositoryBase, sqlalchemy_unit_of_work
+from .connection import SqlAlchemyUnitOfWork
+from .tables import applications, job_analyses, job_snapshots, selection_plans
 
 
-def _require_owned_snapshot(
-    connection: Any,
-    application_id: str | None,
-    snapshot_id: str,
-    subject: str,
-) -> None:
-    """Refuse to link a record to a job snapshot another application owns."""
-    row = connection.execute(
-        "SELECT application_id FROM job_snapshots WHERE id=?", (snapshot_id,)
-    ).fetchone()
-    if row is None:
-        raise LineageBroken(f"a {subject} cannot reference an unknown job snapshot: {snapshot_id}")
-    if row["application_id"] != application_id:
-        raise LineageBroken(
-            f"a {subject} cannot reference a job snapshot belonging to another application"
-        )
-
-
-class SqlitePreparationRepository(SqliteRepositoryBase):
+class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
     def __init__(
         self,
-        path: Path,
-        connection: Any | None = None,
-        applications: SqliteApplicationRepository | None = None,
+        engine: Engine,
+        connection: Connection | None = None,
+        applications: SqlAlchemyApplicationRepository | None = None,
     ):
-        super().__init__(path, connection)
-        self.applications = applications or SqliteApplicationRepository(path, connection)
+        super().__init__(engine, connection)
+        self.applications = applications or SqlAlchemyApplicationRepository(engine, connection)
 
     def bind(self, uow: UnitOfWork) -> Self:
-        sqlite_uow = sqlite_unit_of_work(uow)
-        if sqlite_uow.connection is None:
+        sqlalchemy_uow = sqlalchemy_unit_of_work(uow)
+        if sqlalchemy_uow.connection is None:
             raise RuntimeError("UnitOfWork is not active")
-        if sqlite_uow.path.resolve() != self.path.resolve():
+        if sqlalchemy_uow.engine is not self.engine:
             raise ValueError("UnitOfWork belongs to another database")
         return type(self)(
-            self.path,
-            sqlite_uow.connection,
+            self.engine,
+            sqlalchemy_uow.connection,
             self.applications.bind(uow),
         )
 
@@ -95,7 +74,7 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
         now = captured_at or utc_now()
 
         if self._bound_connection is None:
-            with SqliteUnitOfWork(self.path) as uow:
+            with SqlAlchemyUnitOfWork(self.engine) as uow:
                 bound = self.bind(uow)
                 bound._create_application_records(
                     app_id,
@@ -167,19 +146,19 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
         )
         with self.transaction() as connection:
             connection.execute(
-                "INSERT INTO job_snapshots(id, application_id, version_number, payload_path, source_hash, normalized_hash, source_url, captured_at, source_metadata_json, content_hash, prior_snapshot_id) "
-                "VALUES(?, ?, 1, ?, ?, ?, ?, ?, ?, ?, NULL)",
-                (
-                    snap_id,
-                    app_id,
-                    payload_path,
-                    source_hash,
-                    normalized_hash,
-                    source_url,
-                    now,
-                    canonical_json(source_metadata or {}),
-                    source_hash,
-                ),
+                insert(job_snapshots).values(
+                    id=snap_id,
+                    application_id=app_id,
+                    version_number=1,
+                    payload_path=payload_path,
+                    source_hash=source_hash,
+                    normalized_hash=normalized_hash,
+                    source_url=source_url,
+                    captured_at=now,
+                    source_metadata_json=source_metadata or {},
+                    content_hash=source_hash,
+                    prior_snapshot_id=None,
+                )
             )
 
     def add_job_snapshot(
@@ -195,29 +174,28 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
     ) -> str:
         with self.transaction() as connection:
             prior = connection.execute(
-                "SELECT id, version_number FROM job_snapshots WHERE application_id=? "
-                "ORDER BY version_number DESC LIMIT 1",
-                (application_id,),
-            ).fetchone()
+                select(job_snapshots.c.id, job_snapshots.c.version_number)
+                .where(job_snapshots.c.application_id == application_id)
+                .order_by(job_snapshots.c.version_number.desc())
+                .limit(1)
+            ).mappings().one_or_none()
             if prior is None:
                 raise UnknownRecord(application_id)
             resolved_snapshot_id = snapshot_id or new_id()
             connection.execute(
-                "INSERT INTO job_snapshots(id, application_id, version_number, payload_path, source_hash, normalized_hash, source_url, captured_at, source_metadata_json, content_hash, prior_snapshot_id) "
-                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    resolved_snapshot_id,
-                    application_id,
-                    prior["version_number"] + 1,
-                    payload_path,
-                    source_hash,
-                    normalized_hash,
-                    source_url,
-                    captured_at or utc_now(),
-                    canonical_json(source_metadata or {}),
-                    source_hash,
-                    prior["id"],
-                ),
+                insert(job_snapshots).values(
+                    id=resolved_snapshot_id,
+                    application_id=application_id,
+                    version_number=prior["version_number"] + 1,
+                    payload_path=payload_path,
+                    source_hash=source_hash,
+                    normalized_hash=normalized_hash,
+                    source_url=source_url,
+                    captured_at=captured_at or utc_now(),
+                    source_metadata_json=source_metadata or {},
+                    content_hash=source_hash,
+                    prior_snapshot_id=prior["id"],
+                )
             )
         return resolved_snapshot_id
 
@@ -226,15 +204,29 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
 
         The adapter deliberately does not decide what constitutes a duplicate.
         Normalization and the three matching contracts belong to the application
-        use-case, not to SQLite collation rules.
+        use-case, not to database collation rules.
         """
         with self.read_connection() as connection:
             rows = connection.execute(
-                "SELECT a.id AS application_id, a.company, a.target_role, "
-                "j.source_url, j.normalized_hash "
-                "FROM applications AS a JOIN job_snapshots AS j ON j.application_id=a.id "
-                "ORDER BY a.created_at, a.id, j.version_number"
-            ).fetchall()
+                select(
+                    applications.c.id.label("application_id"),
+                    applications.c.company,
+                    applications.c.target_role,
+                    job_snapshots.c.source_url,
+                    job_snapshots.c.normalized_hash,
+                )
+                .select_from(
+                    applications.join(
+                        job_snapshots,
+                        job_snapshots.c.application_id == applications.c.id,
+                    )
+                )
+                .order_by(
+                    applications.c.created_at,
+                    applications.c.id,
+                    job_snapshots.c.version_number,
+                )
+            ).mappings().all()
         return [dict(row) for row in rows]
 
     def snapshot_for_content_hash(
@@ -242,19 +234,21 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
     ) -> dict[str, Any] | None:
         with self.read_connection() as connection:
             row = connection.execute(
-                f"SELECT {_SNAPSHOT_COLUMNS} FROM job_snapshots "
-                "WHERE application_id=? AND content_hash=?",
-                (application_id, content_hash),
-            ).fetchone()
+                select(job_snapshots).where(
+                    job_snapshots.c.application_id == application_id,
+                    job_snapshots.c.content_hash == content_hash,
+                )
+            ).mappings().one_or_none()
         return dict(row) if row is not None else None
 
     def latest_snapshot(self, application_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
             row = connection.execute(
-                f"SELECT {_SNAPSHOT_COLUMNS} FROM job_snapshots WHERE application_id=? "
-                "ORDER BY version_number DESC LIMIT 1",
-                (application_id,),
-            ).fetchone()
+                select(job_snapshots)
+                .where(job_snapshots.c.application_id == application_id)
+                .order_by(job_snapshots.c.version_number.desc())
+                .limit(1)
+            ).mappings().one_or_none()
         if row is None:
             raise UnknownRecord(f"no snapshot for application {application_id}")
         return dict(row)
@@ -262,9 +256,8 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
     def get_snapshot(self, snapshot_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
             row = connection.execute(
-                f"SELECT {_SNAPSHOT_COLUMNS} FROM job_snapshots WHERE id=?",
-                (snapshot_id,),
-            ).fetchone()
+                select(job_snapshots).where(job_snapshots.c.id == snapshot_id)
+            ).mappings().one_or_none()
         if row is None:
             raise UnknownRecord(f"no job snapshot {snapshot_id}")
         return dict(row)
@@ -288,24 +281,24 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
         selection_plan_id = new_id()
         now = utc_now()
         with self.transaction() as connection:
-            row = connection.execute(
-                "SELECT COALESCE(MAX(version_number), 0) + 1 AS version "
-                "FROM job_analyses WHERE application_id=?",
-                (application_id,),
-            ).fetchone()
+            version = connection.execute(
+                select(
+                    (func.coalesce(func.max(job_analyses.c.version_number), 0) + 1).label(
+                        "version"
+                    )
+                ).where(job_analyses.c.application_id == application_id)
+            ).scalar_one()
             connection.execute(
-                "INSERT INTO job_analyses(id, application_id, job_snapshot_id, version_number, structured_json, provider, model, created_at) "
-                "VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    analysis_id,
-                    application_id,
-                    snapshot_id,
-                    row["version"],
-                    analysis.model_dump_json(),
-                    provider,
-                    model,
-                    now,
-                ),
+                insert(job_analyses).values(
+                    id=analysis_id,
+                    application_id=application_id,
+                    job_snapshot_id=snapshot_id,
+                    version_number=version,
+                    structured_json=analysis.model_dump(mode="json"),
+                    provider=provider,
+                    model=model,
+                    created_at=now,
+                )
             )
             self._insert_selection_plan(
                 connection,
@@ -321,22 +314,21 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
                 now,
             )
             connection.execute(
-                "UPDATE applications SET language=?, track=?, profile=?, emphasis=?, "
-                "classification_confidence=?, fit_level=?, updated_at=? WHERE id=?",
-                (
-                    analysis.language,
-                    analysis.track.value,
-                    analysis.profile.value,
-                    analysis.emphasis.value,
-                    analysis.confidence,
-                    analysis.fit.value,
-                    now,
-                    application_id,
-                ),
+                update(applications)
+                .where(applications.c.id == application_id)
+                .values(
+                    language=analysis.language,
+                    track=analysis.track.value,
+                    profile=analysis.profile.value,
+                    emphasis=analysis.emphasis.value,
+                    classification_confidence=analysis.confidence,
+                    fit_level=analysis.fit.value,
+                    updated_at=now,
+                )
             )
             plan_row = connection.execute(
-                "SELECT * FROM selection_plans WHERE id=?", (selection_plan_id,)
-            ).fetchone()
+                select(selection_plans).where(selection_plans.c.id == selection_plan_id)
+            ).mappings().one_or_none()
         return analysis_id, self._selection_plan_record(plan_row)
 
     def create_selection_plan(
@@ -357,8 +349,8 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
         now = created_at or utc_now()
         with self.transaction() as connection:
             existing = connection.execute(
-                "SELECT * FROM selection_plans WHERE id=?", (selection_plan_id,)
-            ).fetchone()
+                select(selection_plans).where(selection_plans.c.id == selection_plan_id)
+            ).mappings().one_or_none()
             if existing is not None:
                 stored = self._selection_plan_record(existing)
                 expected = {
@@ -390,13 +382,13 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
                 now,
             )
             row = connection.execute(
-                "SELECT * FROM selection_plans WHERE id=?", (selection_plan_id,)
-            ).fetchone()
+                select(selection_plans).where(selection_plans.c.id == selection_plan_id)
+            ).mappings().one_or_none()
         return self._selection_plan_record(row)
 
     @staticmethod
     def _insert_selection_plan(
-        connection: Any,
+        connection: Connection,
         selection_plan_id: str,
         application_id: str,
         job_analysis_id: str,
@@ -409,36 +401,33 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
         created_at: str,
     ) -> None:
         analysis = connection.execute(
-            "SELECT application_id FROM job_analyses WHERE id=?", (job_analysis_id,)
-        ).fetchone()
+            select(job_analyses.c.application_id).where(job_analyses.c.id == job_analysis_id)
+        ).mappings().one_or_none()
         if analysis is None or analysis["application_id"] != application_id:
             raise LineageBroken(
                 "a selection plan cannot reference a job analysis belonging to another application"
             )
         version = connection.execute(
-            "SELECT COALESCE(MAX(version_number), 0) + 1 AS version "
-            "FROM selection_plans WHERE application_id=?",
-            (application_id,),
-        ).fetchone()["version"]
+            select(
+                (func.coalesce(func.max(selection_plans.c.version_number), 0) + 1).label(
+                    "version"
+                )
+            ).where(selection_plans.c.application_id == application_id)
+        ).scalar_one()
         connection.execute(
-            "INSERT INTO selection_plans(id, application_id, job_analysis_id, "
-            "version_number, plan_json, candidate_context_version, "
-            "candidate_context_hash, profile_version, selection_policy_version, "
-            "track_emphasis_dependencies_json, created_at) "
-            "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                selection_plan_id,
-                application_id,
-                job_analysis_id,
-                version,
-                canonical_json(plan.model_dump(mode="json")),
-                candidate_context_version,
-                candidate_context_hash,
-                profile_version,
-                selection_policy_version,
-                canonical_json(track_emphasis_dependencies),
-                created_at,
-            ),
+            insert(selection_plans).values(
+                id=selection_plan_id,
+                application_id=application_id,
+                job_analysis_id=job_analysis_id,
+                version_number=version,
+                plan_json=plan.model_dump(mode="json"),
+                candidate_context_version=candidate_context_version,
+                candidate_context_hash=candidate_context_hash,
+                profile_version=profile_version,
+                selection_policy_version=selection_policy_version,
+                track_emphasis_dependencies_json=track_emphasis_dependencies,
+                created_at=created_at,
+            )
         )
 
     @staticmethod
@@ -451,20 +440,20 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
             application_id=record["application_id"],
             job_analysis_id=record["job_analysis_id"],
             version_number=record["version_number"],
-            plan=SelectionManifest.model_validate_json(record["plan_json"]),
+            plan=SelectionManifest.model_validate(record["plan_json"]),
             candidate_context_version=record["candidate_context_version"],
             candidate_context_hash=record["candidate_context_hash"],
             profile_version=record["profile_version"],
             selection_policy_version=record["selection_policy_version"],
-            track_emphasis_dependencies=json.loads(record["track_emphasis_dependencies_json"]),
+            track_emphasis_dependencies=record["track_emphasis_dependencies_json"],
             created_at=record["created_at"],
         )
 
     def selection_plan(self, selection_plan_id: str) -> SelectionPlan:
         with self.read_connection() as connection:
             row = connection.execute(
-                "SELECT * FROM selection_plans WHERE id=?", (selection_plan_id,)
-            ).fetchone()
+                select(selection_plans).where(selection_plans.c.id == selection_plan_id)
+            ).mappings().one_or_none()
         if row is None:
             raise UnknownRecord(f"no selection plan {selection_plan_id}")
         return self._selection_plan_record(row)
@@ -472,10 +461,11 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
     def latest_selection_plan(self, application_id: str) -> SelectionPlan:
         with self.read_connection() as connection:
             row = connection.execute(
-                "SELECT * FROM selection_plans WHERE application_id=? "
-                "ORDER BY version_number DESC LIMIT 1",
-                (application_id,),
-            ).fetchone()
+                select(selection_plans)
+                .where(selection_plans.c.application_id == application_id)
+                .order_by(selection_plans.c.version_number.desc())
+                .limit(1)
+            ).mappings().one_or_none()
         if row is None:
             raise UnknownRecord(f"no selection plan for application {application_id}")
         return self._selection_plan_record(row)
@@ -483,14 +473,14 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
     @staticmethod
     def _analysis_record(row: Any) -> dict[str, Any]:
         record = dict(row)
-        record["analysis"] = JobAnalysis.model_validate_json(record.pop("structured_json"))
+        record["analysis"] = JobAnalysis.model_validate(record.pop("structured_json"))
         return record
 
     def get_analysis(self, analysis_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
             row = connection.execute(
-                "SELECT * FROM job_analyses WHERE id=?", (analysis_id,)
-            ).fetchone()
+                select(job_analyses).where(job_analyses.c.id == analysis_id)
+            ).mappings().one_or_none()
         if row is None:
             raise UnknownRecord(f"no job analysis {analysis_id}")
         return self._analysis_record(row)
@@ -498,18 +488,20 @@ class SqlitePreparationRepository(SqliteRepositoryBase):
     def analyses(self, application_id: str) -> list[dict[str, Any]]:
         with self.read_connection() as connection:
             rows = connection.execute(
-                "SELECT * FROM job_analyses WHERE application_id=? ORDER BY version_number",
-                (application_id,),
-            ).fetchall()
+                select(job_analyses)
+                .where(job_analyses.c.application_id == application_id)
+                .order_by(job_analyses.c.version_number)
+            ).mappings().all()
         return [self._analysis_record(row) for row in rows]
 
     def latest_analysis(self, application_id: str) -> tuple[str, JobAnalysis]:
         with self.read_connection() as connection:
             row = connection.execute(
-                "SELECT id, structured_json FROM job_analyses WHERE application_id=? "
-                "ORDER BY version_number DESC LIMIT 1",
-                (application_id,),
-            ).fetchone()
+                select(job_analyses.c.id, job_analyses.c.structured_json)
+                .where(job_analyses.c.application_id == application_id)
+                .order_by(job_analyses.c.version_number.desc())
+                .limit(1)
+            ).mappings().one_or_none()
         if row is None:
             raise UnknownRecord(f"no analysis for application {application_id}")
-        return row["id"], JobAnalysis.model_validate_json(row["structured_json"])
+        return row["id"], JobAnalysis.model_validate(row["structured_json"])
