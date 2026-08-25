@@ -1,12 +1,13 @@
-# Multi-Track CV Engine v1
+# Multi-Track CV Engine v2
 
 Fact-safe CV generation and application tracking for Development, Sales, and Tech
-Sales. The product is CLI-first; no Web UI is required.
+Sales. The CLI is first-class and reaches Ready without an AI key; a local Web UI is
+optional.
 
-The binding specification is [`docs/v1/upgrade-handoff.md`](docs/v1/upgrade-handoff.md).
-Architecture, review evidence, and the staged plan are in `docs/v1/architecture.md`,
-`docs/v1/review.md`, and `docs/v1/implementation-plan.md`. [`docs/README.md`](docs/README.md)
-maps every document, v1 and v2.
+The binding specifications are under [`docs/v2/spec/`](docs/v2/spec/):
+`product-spec.md`, `state-and-use-cases.md`, `architecture.md`, and
+`implementation-plan.md`. [`docs/README.md`](docs/README.md) maps every document, and
+`docs/v1/` is the frozen v1 record.
 
 ## Setup
 
@@ -33,15 +34,16 @@ each worktree. To install the browser again without replacing the environment:
 ## Architecture
 
 - `base/common.md`, `base/sales.md`, `base/development.md`, and
-  `base/situational_skills.md` are the modular canonical fact store after migration.
+  `base/situational_skills.md` are the modular canonical fact store.
 - `profiles/` selects and weights facts without duplicating content.
 - `rendering/rules/` and `rendering/templates/` define Development, Sales LTR/RTL,
   and deterministic profile-specific presentations of canonical facts. Tech Sales
   can therefore shorten Development evidence into business-value wording without
   changing or duplicating the underlying fact.
-- `cv_engine/` owns deterministic workflow, validation, persistence, rendering, AI
-  boundaries, and migration.
-- `data/applications.sqlite3` stores mutable application state and immutable history.
+- `cv_engine/` owns deterministic workflow, validation, persistence, rendering, and AI
+  boundaries.
+- PostgreSQL stores mutable application state and immutable history, through
+  SQLAlchemy Core and numbered Alembic revisions.
 - `artifacts/working/` contains replaceable working drafts; approved/rendered versions
   are immutable version directories under `artifacts/<application-id>/`.
 - `base/` and `profiles/` hold the canonical source facts; a new Workspace copies them
@@ -137,7 +139,7 @@ is never inferred from them.
 New information is never written straight into a CV. It enters the store as a `pending`
 fact, is confirmed, is promoted to `canonical`, and only then may a Profile section offer
 it to the selection policy. Every step writes to the canonical source file under `base/`
-and appends an immutable event to `fact_events` in SQLite, so the status survives the
+and appends an immutable event to `fact_events`, so the status survives the
 process and the trail explains who promoted what.
 
 ```bash
@@ -211,25 +213,11 @@ export OPENAI_API_KEY='...'
 Provider output is Pydantic-validated and deterministic hard gaps remain authoritative.
 The adapter uses strict Structured Outputs through the Responses API.
 
-## Historical migration verification
+## Historical record
 
-The pre-v1 to v1 migration is complete. Its frozen result is recorded in
-[`docs/v1/retrospective-migration-verification.json`](docs/v1/retrospective-migration-verification.json),
-with restore instructions in
-[`docs/v1/migration-restore.md`](docs/v1/migration-restore.md). The CLI retains only
-read-only verification commands for that historical evidence, and both require a valid
-marked v2 Workspace:
-
-```bash
-./.venv/bin/cv migrate verify-snapshot --snapshot data/snapshots/<timestamp>
-./.venv/bin/cv migrate verify-live --snapshot data/snapshots/<timestamp>
-```
-
-The v1 to v2 migration workflow is implemented in M2/M6 according to
-[`docs/v2/spec/migration-plan.md`](docs/v2/spec/migration-plan.md) §7 stages A–G. Its sole path
-into an unmarked v1 source is `LegacyV1Source`, which inventories and reads the source
-without writing a marker, inventory report, snapshot, temporary file, or migrated state
-there. Never extract a snapshot over a live repository.
+The pre-v1 and v1 generation workflows are retired, and the `cv migrate` commands that
+verified them were removed with the migration they served. `docs/v1/` remains the frozen
+written record; nothing in v2 reads v1 data.
 
 ## Tests
 
@@ -267,6 +255,12 @@ deselected.
 
 The pre-v1 generation scripts have been retired, and the v1 submission data they wrote
 (`outputs/`, `jobs/status.csv`, `cv-html/`) has been removed: every row was an unsent
-`draft`, so it recorded no submission and preserved no evidence. It stays recoverable
-from Git history. `base/` and `profiles/` remain, as live source facts. New work uses
-`cv` exclusively.
+`draft`, so it recorded no submission and preserved no evidence. The v1 source documents
+it was generated from — `base/cv_base.md`, `base/cv-formatted.md`, `base/cv-pdf/` — and
+the superseded `ai/prompts/system-v1.md` were removed with it. Nothing in v2 read them:
+the canonical fact sources are `common.md`, `sales.md`, `development.md`, and
+`situational_skills.md`, and the task contract names `system-v2.md`.
+
+Facts migrated out of `cv_base.md` still cite it in their `provenance`. Those strings are
+the historical record of where a fact came from and are deliberately left unchanged; the
+file they name is recoverable from Git history. New work uses `cv` exclusively.
