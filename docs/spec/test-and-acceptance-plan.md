@@ -17,8 +17,7 @@ All applicable v1 safety invariants and material regression risks remain represe
 Individual v1 test items do not have to survive when one clearer scenario, table-driven
 matrix, or end-to-end journey detects the same failures. Refactoring may move, merge,
 or delete tests, but it may not silently remove coverage of factual safety,
-deterministic validation, rendering, ATS, artifact immutability, or CLI
-behavior.
+deterministic validation, rendering, ATS, or artifact immutability.
 
 The lists in this plan define required evidence, not a one-test-per-bullet structure.
 Related variants should normally share one scenario or matrix. A new test item is
@@ -73,7 +72,7 @@ contract coverage. Cover:
 - status/audit projection consistency
 - artifact identity/hash/path registration
 - fixed project-path containment
-- transaction isolation, row locking, and claiming behavior relevant to CLI/Web concurrency
+- transaction isolation, row locking, and claiming behavior relevant to API/worker concurrency
 - query projections and one-snapshot consistency
 
 ### 2.4 API contract tests
@@ -238,14 +237,14 @@ Create
 - submit the exact older `ready_qualified` revision/PDF and assert success plus the
   older-snapshot/analysis warning rather than a false precondition failure
 
-### 5.6 Approval and CLI execution boundaries
+### 5.6 Approval and execution boundaries
 
 - approve an exact validated WorkingDraft and assert the active draft pointer is clear
 - assert `newer_draft_in_progress=false` until a later draft is explicitly created
-- run analyze/generate/render from CLI with no FastAPI/`cv web` process and assert the
-  foreground runner uses leases/heartbeat/idempotency and completes the Operations
-- run `cv fast` and assert it records explicit user/CLI approval and cannot bypass a
-  validation blocker
+- run analyze/generate/render through the Operation runner and assert it uses
+  leases/heartbeat/idempotency and completes the Operations
+- assert fast mode records explicit user approval and cannot bypass a validation
+  blocker
 
 ## 6. AI tests
 
@@ -288,16 +287,16 @@ Required concurrency scenarios (they may be grouped into a smaller number of
 table-driven or journey tests):
 
 - two autosaves with the same ETag
-- CLI edit during Web autosave
+- a second client's edit during Web autosave
 - source changes during generation
 - duplicate analyze/generate/render idempotency requests
 - duplicate approve request with the same idempotency key
 - same key with a different payload hash
 - two workers attempt to claim one Operation
-- foreground CLI runner races a Web worker for one Operation and only one claims it
-- CLI render contending with the global Web-worker render lease remains queued with an
-  observable waiting phase and completes/cancels without an immediate lock failure or
-  duplicate render
+- two runners race for one Operation and only one claims it
+- a render contending with the global render lease remains queued with an observable
+  waiting phase and completes/cancels without an immediate lock failure or duplicate
+  render
 - expired lease and restart
 - cancellation before execution
 - cancellation after an immutable output exists but before activation
@@ -398,7 +397,7 @@ runtime checks on macOS.
 
 Targets on a reasonable local development Mac:
 
-- `cv web` to usable UI: approximately 5 seconds, excluding initial Chromium install
+- API start to usable UI: approximately 5 seconds, excluding initial Chromium install
 - Create Application: under 1 second
 - ordinary local queries/autosave: approximately 300 ms or less
 - HTML preview refresh: under 1 second

@@ -1,12 +1,12 @@
 # Multi-Track CV Engine v2
 
 Fact-safe CV generation and application tracking for Development, Sales, and Tech
-Sales. The CLI is first-class and reaches Ready without an AI key; a local Web UI is
-optional.
+Sales. A FastAPI backend and a React frontend; the deterministic workflow reaches
+Ready without an AI key.
 
 The binding specifications are under [`docs/spec/`](docs/spec/):
-`product-spec.md`, `state-and-use-cases.md`, `architecture.md`, and
-`implementation-plan.md`. [`docs/README.md`](docs/README.md) maps every document.
+`product-spec.md`, `state-and-use-cases.md`, and `architecture.md`.
+[`docs/README.md`](docs/README.md) maps every document.
 
 ## Setup
 
@@ -50,15 +50,20 @@ each worktree. To install the browser again without replacing the environment:
 
 ## Default workflow
 
-The Web UI is the product interface. Start it, and it opens on the local application:
+The Web UI is the product interface. The system runs as two processes - the API and
+the Operation worker - over one database:
 
 ```bash
-./.venv/bin/cv web
+./.venv/bin/python -m uvicorn cv_engine.runtime.asgi:app   # the API on 127.0.0.1:8765
+./.venv/bin/python -m cv_engine.worker                 # queued work
 ```
 
-Everything below describes what the engine does, whichever interface drives it. The
-Web UI calls the same application services the API exposes; the CLI keeps only the
-runtime and maintenance commands documented under "Maintenance".
+The API serves HTTP and starts no background work; the worker claims queued
+Operations under a lease, so neither process supervises the other and a worker that
+dies leaves its work recoverable by the next one.
+
+Everything below describes what the engine does. The Web UI calls the same application
+services the API exposes.
 
 **Create the application and its immutable job snapshot.** A posting is captured once
 and never re-fetched, because a job description that later vanishes from the web is
@@ -121,9 +126,9 @@ attached to a Profile, and adding or confirming one never invalidates drafts alr
 built from the canonical facts. Promoting one to canonical does change the canonical
 surface, so the working draft is rebuilt afterwards.
 
-Writing a fact with a chosen identity, and correcting a canonical fact by creating a
-replacement that `replaces` it, stay CLI paths (`docs/spec/product-spec.md` section 17).
-Identity is generated everywhere else, and a correction never mutates the old fact.
+Correcting a canonical fact means creating a replacement that `replaces` it, which
+`POST /api/v1/facts` accepts. Identity is always generated - a caller-chosen fact ID is
+refused - and a correction never mutates the fact it supersedes.
 
 ## Tracking and inspection
 
@@ -137,16 +142,18 @@ append-only, and a correction appends an event rather than editing the one it co
 
 ## Maintenance
 
-The CLI is the runtime and maintenance surface. It starts the Web UI, verifies stored
-evidence, and exports data:
+Reconciliation checks database references, artifact hashes, and the fact lifecycle:
 
 ```bash
-./.venv/bin/cv reconcile                    # database references, artifact hashes, fact lifecycle
-./.venv/bin/cv export data/applications.csv # versioned CSV plus a schema sidecar
+curl -X POST -H "Origin: http://127.0.0.1:8765" \
+  http://127.0.0.1:8765/api/v1/maintenance/reconciliations
 ```
 
-`reconcile` verifies every registered artifact through the configured payload store, so
-it reports the truth under local storage and under an S3 bucket alike.
+It reports and never repairs: a mismatch against an immutable record is something to be
+told about, not something a route may quietly fix. `200` carries the report whether or
+not it passed, and `passed` is the field to read. Verification goes through the
+configured payload store, so it reports the truth under local storage and under an S3
+bucket alike.
 
 ## Optional AI provider
 
@@ -169,26 +176,31 @@ Two ways to run it, for two different jobs.
 **Developing the frontend** — no build step:
 
 ```bash
-./.venv/bin/cv web --no-open   # the API on 127.0.0.1:8765
-cd frontend && npm run dev     # the UI on 127.0.0.1:5173
+./.venv/bin/python -m uvicorn cv_engine.runtime.asgi:app --reload  # 127.0.0.1:8765
+./.venv/bin/python -m cv_engine.worker                         # queued work
+cd frontend && npm run dev                                     # 127.0.0.1:5173
 ```
 
 Vite compiles on demand and reloads on save. It proxies `/api` to the backend, so the
 two are one origin from the browser's point of view. This is the normal loop; nothing
 here needs `npm run build`.
 
-**Running the product** — one server, no Node process:
+**Running the product** — no Node process:
 
 ```bash
 cd frontend && npm run build   # once, and after changing the frontend
-./.venv/bin/cv web
+./.venv/bin/python -m uvicorn cv_engine.runtime.asgi:app
+./.venv/bin/python -m cv_engine.worker
 ```
 
-`cv web` serves the built assets from FastAPI itself and opens a browser. Without a
-build it still starts, serving the API and the Operation worker alone - that is the
-dev loop above, where the UI comes from Vite - and reports `"frontend_dist": null` so
-the mode is visible rather than guessed. `npm run build` also runs `tsc -b` and the
-design-token check, so it is slower than `npm run dev` by design.
+FastAPI serves the built assets itself, same-origin with the API. Without a build it
+still starts and serves the API alone - that is the dev loop above, where the UI comes
+from Vite. `npm run build` also runs `tsc -b` and the design-token check, so it is
+slower than `npm run dev` by design.
+
+Serving on a port other than the default needs `CV_API_PORT` as well as uvicorn's
+`--port`: the origin policy allows the origin the app believes it answers on, so
+telling only uvicorn refuses every state-changing request from the app's own UI.
 
 ## Tests
 

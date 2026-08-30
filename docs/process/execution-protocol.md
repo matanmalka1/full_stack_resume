@@ -58,7 +58,7 @@ violation, not a merge conflict to resolve later.
 
 A **lead-only set**, if one is needed, is declared up front and edited by nobody else in wave
 1. It is derived from actual cross-lane coupling rather than file category: a composition
-root, CLI module, shared fixture, or hub is not automatically lead-only. A trivial edit may
+root, shared fixture, or hub is not automatically lead-only. A trivial edit may
 be assigned to one lane when that keeps ownership disjoint.
 
 If a lane discovers that it needs a file outside its ownership, it pauses that edit and
@@ -154,13 +154,13 @@ Reporting follows `AGENTS.md`: passed / failed / remaining, with command evidenc
    the merged tree, plus the semantic-parity check. That is the non-browser suite, plus
    whichever of `AGENTS.md`'s three named cases the boundary triggered — golden hashes and
    the browser suite for a rendering or artifact-path change, the migration checks for a
-   schema change, an offline CLI run for a change to a stored value's meaning, a public
-   signature, or a projection field. The browser suite is skipped only when the boundary
+   schema change, the deterministic no-AI pipeline test for a change to a stored value's
+   meaning, a public signature, or a projection field. The browser suite is skipped only when the boundary
    cannot affect a rendering or browser path.
    This is not the re-run section 9 warns against — no lane produces a full-suite run, and
    the merged tree is not the tree any lane tested. It is the boundary's only full run, and
    the first one over the code as it will actually ship.
-5. Update the current milestone tracker — `docs/m4-remaining.md` — with what landed and
+5. Update the current milestone tracker — `docs/m5-remaining.md` — with what landed and
    what remains. It is the only record of state, and it moves with the milestone.
 6. Report per package, with command evidence.
 
@@ -199,8 +199,8 @@ failure. Three of M1's stops were substantive and two changed the plan.
 An implementing agent's report is a claim, and the accepting side checks it. Checking is
 not re-running everything that already passed: a green suite re-run under the same
 conditions produces no new information, and M1's evidence section is what excess looks
-like — a fresh environment re-ran the browser-complete suite, the golden test, and the CLI
-lifecycle, and an independent reviewer then reproduced the same runs a third time.
+like — a fresh environment re-ran the browser-complete suite, the golden test, and the
+fact lifecycle, and an independent reviewer then reproduced the same runs a third time.
 
 The accepting side checks the four things a report cannot establish about itself:
 

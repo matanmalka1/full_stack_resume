@@ -1,4 +1,4 @@
-# Local-First CV Application v2.0 Product Specification
+# CV Application v2.0 Product Specification
 
 Status: **Approved for v2.0 implementation (2026-08-17)**
 
@@ -16,12 +16,12 @@ Official target platform: macOS
 
 ## תקציר מנהלים
 
-v2.0 הופך את מנוע ה-CLI המאומת של v1 לאפליקציה מקומית מלאה למועמד יחיד.
+v2.0 הופך את מנוע v1 המאומת לאפליקציה מקומית מלאה למועמד יחיד.
 המערכת כוללת FastAPI מקומי, ממשק React בעברית, PostgreSQL ל-state מובנה
 ו-object-storage abstraction ל-snapshots ולתוצרים immutable. ברירת המחדל היא
 אחסון מקומי, וניתן לבחור bucket תואם S3 בלי לשנות references במסד.
-ה-CLI וה-Web אינם קוראים זה לזה;
-שניהם clients של אותה שכבת application.
+ה-Web הוא ה-client היחיד.
+המערכת רצה בשני תהליכים מעל אותה שכבת application: ה-API ו-worker ה-Operations.
 
 הזרימה המרכזית היא:
 
@@ -65,7 +65,7 @@ migration risk, or weakened factual boundary requires an explicit decision.
 > decisions that require human judgment, produce and edit a fact-linked CV, validate and
 > explicitly approve one exact revision, render a valid and ATS-readable PDF, understand
 > every blocker and available action, and track the recruitment process through either
-> Web or CLI clients backed by the same application layer.
+> Web clients backed by one application layer.
 
 The Web UI makes the v1 engine accessible; it does not replace its safety model. A
 normal Web workflow must not require the user to know entity IDs, hashes, filesystem
@@ -74,12 +74,10 @@ views and diagnostic interfaces.
 
 ## 3. Product boundaries
 
-- v2.0 is local-first and single-user.
 - The application represents one candidate and one canonical knowledge source.
 - The domain must not hardcode `Matan`, a particular filename, or another candidate
   identity. A single `CandidateContext` supplies the candidate-specific policy.
 - There is no candidate selector, candidate CRUD, or multi-candidate UI.
-- FastAPI is the local backend and serves the production React build.
 - React, TypeScript, Vite, Tailwind CSS, React Router, TanStack Query, and React Hook
   Form form the frontend baseline. Radix primitives may be used selectively.
 - PostgreSQL stores structured state and relationships through SQLAlchemy Core and
@@ -88,12 +86,11 @@ views and diagnostic interfaces.
   filesystem storage is the default; an S3-compatible bucket is optional.
 - Facts, Profiles, selection policies, prompts, task contracts, and rendering rules
   remain version-controlled files and independent sources of truth.
-- The Web UI is the product interface. The CLI is the runtime and maintenance surface:
-  it starts the Web UI, verifies stored evidence, exports data, and keeps the
-  canonical-correction path of section 17. A product use-case belongs to the API and
-  the Web UI, not to a second client.
-- Both call the same application services directly. The CLI does not use HTTP and does
-  not require the Web server; the deterministic workflow reaches Ready with no AI key.
+- The Web UI is the product interface and the API is its only client. Maintenance is an
+  API concern like any other. A second client for a use-case the API owns has a second
+  contract to keep compatible and no capability the first lacks.
+- The API calls the same application services directly; the deterministic workflow
+  reaches Ready with no AI key.
 - v2.0 officially targets macOS. Portable code is preferred, but Windows and Linux do
   not block release.
 - The UI supports current Chrome/Chromium with full E2E coverage and current Safari
@@ -103,7 +100,7 @@ views and diagnostic interfaces.
 
 v2.0 includes:
 
-- A local application rooted in the project and a `cv web` runtime supervisor.
+- A local application rooted in the project, run as an API process and a worker process.
 - A Hebrew, desktop-first Web UI with basic responsive behavior.
 - FastAPI `/api/v1` endpoints backed by explicit application use-cases.
 - Job creation from required pasted text, an optional provenance URL, and a browser-read
@@ -140,7 +137,7 @@ v2.0 includes:
 The following are not part of v2.0:
 
 - Multiple candidates or candidate administration.
-- Authentication, multi-user/tenant behavior, sync, or managed application deployment.
+- Authentication, multi-user/tenant behavior, sync.
 - Additional structured-state databases, ORMs, or broad storage-provider abstractions
   beyond PostgreSQL/SQLAlchemy Core and the local/S3-compatible object stores.
 - Automatic job extraction from URLs, LinkedIn, or JS-heavy sites.
@@ -157,7 +154,6 @@ The following are not part of v2.0:
 - Charts, advanced analytics, or Web CSV export.
 - General CSV or data import.
 - WebSocket or SSE progress transport.
-- Hard deletion through the Web UI.
 - Automatic application or schema updates.
 
 No non-goal may enter v2.0 as a supposedly small convenience without an explicit scope
@@ -216,7 +212,7 @@ decision.
     context, job context, knowledge context, policies, prompts, provider execution, and
     artifacts.
 21. Normal queries never expose partially committed cross-store mutations.
-22. Web and CLI concurrency must remain correct through optimistic versions, atomic
+22. API and worker concurrency must remain correct through optimistic versions, atomic
     PostgreSQL claims, leases, idempotency where required, and commit-time precondition
     checks.
 23. v2 starts with an empty database. It is proven by running its own workflow, not by
@@ -344,9 +340,8 @@ created.
 A no-pause flow that chains validation, approval, rendering, and Ready checks is an
 explicit user approval instruction and is recorded as one, with `actor_type=user` and
 the originating client. It never bypasses blockers or validation and never auto-approves
-merely because an AI Operation completed. The v1 `cv fast` command implemented this and
-was removed with the other CLI product commands; the guarantee binds whichever interface
-offers the flow.
+merely because an AI Operation completed. No interface offers this flow in v2.0; the
+guarantee binds whichever one does.
 
 A prior Ready projection remains usable while a newer SelectionPlan or WorkingDraft is
 in progress under the same JobSnapshot and JobAnalysis. The UI shows `Ready` and
@@ -445,7 +440,7 @@ Operation, warnings, available actions, blocked actions with reason codes, a nul
 recommended action, and the `newer_draft_in_progress` flag. These values are computed
 within one consistent read transaction.
 
-The backend owns action policy. React and CLI do not implement a second state machine.
+The backend owns action policy. React does not implement a second state machine.
 
 ## 14. Recruitment tracking
 
@@ -484,22 +479,27 @@ Audit actor identity is intentionally local and non-authenticated:
 
 ```text
 actor_type: user | system
-client: web | cli | worker
+client:     web | worker      (what a new record may name)
 ```
+
+Stored records may carry a client outside that set. They are immutable, so the read set
+stays wider than the write set; widening what may be written is a decision, not a side
+effect of reading.
 
 The primary UI may display `You` for `actor_type=user`; technical client identity
 belongs to provenance rather than the normal timeline label.
 
 ## 15. Runtime and local security
 
-`cv web` is a runtime supervisor, not a shell alias for Uvicorn. It validates the
-the schema, detects the process/port state, builds the composition root,
-starts FastAPI and the Operation worker, opens the default browser unless `--no-open`
-is supplied, and performs graceful shutdown.
+The system runs as two processes over one database: `uvicorn cv_engine.runtime.asgi:app`
+serves HTTP and starts no background work, and `python -m cv_engine.worker` claims
+queued Operations under a lease. Neither supervises the other; a worker that dies leaves
+its claims to expire for the next worker to reclaim.
 
-The default endpoint is `127.0.0.1:8765`. If that endpoint belongs to the same
-compatible CV application, the existing instance is opened. If another process owns it,
-the supervisor chooses a free port and reports/opens it.
+The default endpoint is `127.0.0.1:8765`. The port is chosen by whoever starts the
+process, and the app is told the same value through `CV_API_PORT`, because the origin
+policy allows the origin the app believes it answers on. Nothing probes for a free port
+or opens a browser.
 
 Production serves the built React application from FastAPI under the same origin. The
 server binds only to loopback, has no wildcard CORS, and validates `Origin` on mutating
@@ -511,9 +511,9 @@ Playwright-managed Chromium is the normal renderer. Local Chrome is a diagnostic
 fallback only and is never selected silently.
 
 Safe UI settings in v2.0 are limited to automatic generation when review is not
-required, `ai_enabled`, default execution mode (`ai` or `deterministic`), basic UI
-preferences, and `open_browser_on_launch`. Model/task overrides, timezone, and secrets
-remain backend/project configuration.
+required, `ai_enabled`, default execution mode (`ai` or `deterministic`), and basic UI
+preferences. Model/task overrides, timezone, and secrets remain backend/project
+configuration.
 
 ## 16. Storage, provenance, and retention
 
@@ -574,8 +574,9 @@ failure.
 Creating a fact from a claim copies the exact user text without AI rewriting. Meaning,
 tags, provenance, dates, and other metadata require explicit input.
 
-Canonical corrections remain a CLI concern in v2.0 and create a new fact with a
-`replaces` relationship rather than mutating old content.
+Canonical corrections create a new fact with a `replaces` relationship rather than
+mutating old content. `POST /api/v1/facts` accepts `replaces`; the new fact enters at
+`pending` like any other, so a correction is confirmed and promoted explicitly.
 
 Cross-store Knowledge mutations use a narrow durable journal with old/new hashes,
 paths, staged path, DB mutation identity, and deterministic recovery. An unreconciled
@@ -585,7 +586,7 @@ does not block read-only history, export, or recruitment tracking.
 Superseded facts add historical warnings. A fact known to be incorrect receives a
 stronger historical warning. Neither case rewrites an immutable prior revision.
 
-Manual file and CLI Knowledge changes remain supported. Before a relevant command, the
+Manual edits to the Knowledge files remain supported. Before a relevant command, the
 backend re-reads or re-hashes exact dependencies instead of trusting a long-lived
 cache. A change produces `knowledge_changed`/`SOURCE_CHANGED`; it is never silently
 reloaded into an editor form currently open by the user.
@@ -616,12 +617,10 @@ specific rather than one global mutex.
 Operations store a full structured, secret-free payload and hash, resource IDs,
 expected versions/hashes, provider/model, timestamps, phases, safe user message,
 technical log reference, and failure metadata. The shared Operation runner uses atomic
-PostgreSQL claiming, leases, and heartbeat. Under `cv web`, the supervisor hosts background
-worker loops. A caller that creates an Operation outside the supervisor may claim and
-execute it in the foreground of its own process, using the identical runner, lease,
-heartbeat, idempotency, and commit checks; that path never requires FastAPI or
-`cv web`. Expired queued/running work becomes `interrupted` after restart; AI/browser
-work is never resumed mid-call.
+PostgreSQL claiming, leases, and heartbeat. The worker process hosts the background
+worker loops, and the claim contract holds for more than one of them: whichever claims a
+row first owns it. Expired queued/running work becomes `interrupted` after restart;
+AI/browser work is never resumed mid-call.
 
 Queued cancellation is immediate. Running cancellation is best-effort and prevents
 activation. A completed output after cancellation is recorded as inactive evidence.
@@ -655,7 +654,7 @@ Artifacts are accessed only by artifact ID. Download resolves and contains the l
 path, verifies integrity/root containment, and supplies a friendly Content-Disposition
 filename. No general path endpoint exists.
 
-The existing CLI data export is reviewed for actual consumers during M1. A retained
+The existing data export is reviewed for actual consumers during M1. A retained
 export uses a versioned v2 schema by default. `--legacy-format` is added only when a
 real existing consumer is identified; v2 does not create speculative compatibility.
 
@@ -683,8 +682,8 @@ worktree of the frozen commit. There is no v2 database downgrade.
 
 v2.0 is Release Ready only when all of the following are demonstrably true:
 
-- [ ] `cv web` starts the local application without manual Python/Node steps.
-- [ ] Web and CLI use the same application layer and permission policy.
+- [ ] The API and worker processes start the local application without manual Node steps.
+- [ ] The API and worker use the same application layer and permission policy.
 - [ ] One Application completes the full Web vertical slice through Ready PDF.
 - [ ] The central failure paths are exercised through the same slice.
 - [ ] Review is exception-based and every review reason is explicit and resolvable.
@@ -697,7 +696,7 @@ v2.0 is Release Ready only when all of the following are demonstrably true:
 - [ ] Current preparation, blockers, staleness, active work, actions, and Ready state are
       understandable from the UI without opening logs.
 - [ ] Normal Web use does not require technical IDs, hashes, paths, or architecture.
-- [ ] Concurrent CLI/Web saves and Operations preserve all invariants.
+- [ ] Concurrent saves and Operations preserve all invariants.
 - [ ] Idempotency, cancellation, retry, lease expiry, and SOURCE_CHANGED behavior pass.
 - [ ] Knowledge journal recovery is deterministic or explicitly quarantined under every
       tested crash window.

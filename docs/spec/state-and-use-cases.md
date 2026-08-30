@@ -283,9 +283,10 @@ terminal outcome are updated transactionally while the original event remains.
 `closed` is archival. The last accepted/rejected/withdrawn outcome remains in
 `terminal_outcome` and history.
 
-Audit actors use `actor_type=user|system` and `client=web|cli|worker`. There is no
-authenticated username in v2.0; the UI may label the local
-user as `You`.
+Audit actors use `actor_type=user|system`. A new record names `client=web|worker`;
+stored records may carry a wider set, because they are immutable and a reader that
+refused an existing value would fail on real data. There is no authenticated username
+in v2.0; the UI may label the local user as `You`.
 
 Preparation commands never alter RecruitmentStatus. Drafting after `applied` leaves the
 Application applied.
@@ -487,9 +488,8 @@ reused key with another payload fails.
 A no-pause flow is an explicit user approval action. It may orchestrate
 validate -> approve -> render -> Ready checks with `actor_type=user` and the
 originating client, but it is subject to every exact-validation, warning confirmation,
-blocker, and idempotency rule above. The v1 `cv fast` command implemented this and was
-removed with the other CLI product commands; the rule binds whichever interface offers
-the flow.
+blocker, and idempotency rule above. No interface offers it in v2.0; the rule binds
+whichever one does.
 
 Warnings may require one general confirmation. No warning that actually requires a
 specific resolution may reach this command as a warning.
@@ -550,8 +550,8 @@ tags, provenance, and other required metadata are supplied explicitly. It create
 pending fact and does not authorize the claim until the lifecycle/attachment/plan is
 complete.
 
-Canonical correction remains a CLI path that creates a replacement fact; it never
-mutates the old fact content.
+Canonical correction creates a replacement fact carrying `replaces`; it never mutates
+the old fact content.
 
 ## 18. Tracking commands
 
@@ -577,7 +577,7 @@ required and records explicit provenance.
 ### `transition_recruitment_status`
 
 Applies only an allowed forward transition. Actor, timestamp, from/to and source
-Web/CLI/system are mandatory; reason is optional for a normal transition.
+Actor and client are mandatory; reason is optional for a normal transition.
 
 ### `correct_recruitment_status`
 

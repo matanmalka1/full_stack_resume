@@ -1,13 +1,8 @@
 # M5 — remaining work
 
-Status: **not started; unblocked on 2026-08-30.** The M4 gate closed by decision rather
-than by evidence — `docs/m4-remaining.md` §F records what was retired and what it costs.
-M5 therefore starts without a proven built-Web journey behind it: the screens this
-milestone adds have no end-to-end safety net, and their own evidence has to carry more
-weight than it would have.
-
-Authority for scope and gates is `docs/spec/implementation-plan.md`. This file records
-only what M5 must still do; M4's record stays in its own tracker and is not amended here.
+Status: **not started.** The screens this milestone adds have no end-to-end browser
+journey behind them — no automated test drives the built Web against a running backend —
+so their own evidence has to carry more weight than it otherwise would.
 
 ## Where things are written
 
@@ -16,28 +11,34 @@ One fact, one place.
 | Question | Answer lives in |
 | --- | --- |
 | What M5 must still do | **this file** |
-| What M4 must still do | `docs/m4-remaining.md` |
 | Product semantics and UI scope | `docs/spec/product-spec.md` |
 | State, action, command, and query contracts | `docs/spec/state-and-use-cases.md` |
 | Layer boundaries | `docs/spec/architecture.md` |
-| Non-milestone cleanup | `docs/cleanup-todos.md` |
+| Required evidence | `docs/spec/test-and-acceptance-plan.md` |
 
 ## What already landed
 
-The interface split is done on the backend. The CLI is the runtime and maintenance
-surface, and the API carries the product use-cases that used to be CLI-only. What remains
-is the Web UI for three of them, and the CLI retirement that follows it.
+The system is a FastAPI backend and a React frontend, run as two processes over one
+database: `uvicorn cv_engine.runtime.asgi:app` and `python -m cv_engine.worker`. The API
+starts no background work; the worker claims queued Operations under a lease.
 
-| Capability | API | Web | CLI command still present |
-| --- | --- | --- | --- |
-| Fact lifecycle | done (`/api/v1/facts`, 9 routes) | **missing** | `fact` (7 of 8 subcommands) |
-| Recruitment tracking | done (5 routes under `/applications/{id}`) | **missing** | `status`, `correct-status`, `submit`, `external-submit`, `action` |
-| Provenance export | done (`GET /approved-revisions/{id}/decision-markdown`) | **missing** | `decision-markdown` |
-| Claim editing | already covered by `PATCH /working-drafts/{id}` | done | `edit-claim` — redundant, retire with the rest |
+What remains is the Web UI for three capabilities the API already serves.
 
-`cv fact add` is **not** on the retirement list. `docs/spec/product-spec.md` §17 keeps
-canonical corrections — a new fact carrying `replaces` — as a CLI concern in v2.0, and the
-UI does not expose fact-ID creation. It stays after M5.
+| Capability | API | Web |
+| --- | --- | --- |
+| Fact lifecycle | done (`/api/v1/facts`, 9 routes) | **missing** |
+| Recruitment tracking | done (5 routes under `/applications/{id}`) | **missing** |
+| Provenance export | done (`GET /approved-revisions/{id}/decision-markdown`) | **missing** |
+| Claim editing | done (`PATCH /working-drafts/{id}`) | done |
+
+Maintenance has no separate surface:
+
+- **Reconciliation** is `POST /api/v1/maintenance/reconciliations`, behind a
+  `MaintenanceService`. It holds the payload store and repository directly, which is why
+  it is a service and not a router helper — `ApiServices` carries neither.
+- **CSV export** is `infrastructure/exports.py`, projected by
+  `application/maintenance.py`. It has no route: §"Deferred, not in M5" keeps CSV Web
+  export out of this milestone.
 
 ## M5 scope
 
@@ -85,20 +86,20 @@ claim, not a general Knowledge Manager — the broader Knowledge UI is deferred 
       `content` and `content_hash`; the suggested save name arrives in
       `Content-Disposition`, not as a body field.
 
-### 4 — CLI retirement
+### 4 — runtime constraints to know before touching either process
 
-Only after the Web equivalents ship and their gate passes:
-
-- [ ] Delete `fact` (keeping `add`), `status`, `correct-status`, `submit`,
-      `external-submit`, `action`, `edit-claim`, `decision-markdown`, their parser
-      entries, and the CLI-bound tests and fixtures that remain (`cli_runner`,
-      `cli_subprocess`, `run_cli`).
-- [ ] Final CLI surface: `web`, `reconcile`, `export`, `fact add`.
-- [ ] Update `README.md` and `CLAUDE.md` to the final command list.
+- **The worker's signal handlers are skipped off the main thread.** `signal.signal`
+  raises there, so a caller running the worker in a thread owns the stop event instead.
+- **`CV_API_PORT` is not uvicorn's `--port`.** The origin policy allows the origin the
+  app believes it answers on, so serving on another port without setting this refuses
+  every state-changing request from the app's own UI.
+- **The project root is fixed at the installed code location.** Nothing selects it at
+  runtime. A test that needs another root injects `AppPaths.from_root(...)` into
+  composition; `tests/asgi_factory.py` is what a subprocess-served test loads.
 
 ## Frontend conventions this work must hold
 
-Established by M4 and enforced by the build, not by review:
+Enforced by the build, not by review:
 
 - types come from the generated `openapi/types.ts` through `src/api/contracts.ts`;
   regenerate the contract and the types whenever a route changes;
@@ -109,17 +110,15 @@ Established by M4 and enforced by the build, not by review:
 - the UI is Hebrew and RTL with explicit LTR islands for IDs and technical values;
 - no screen requires technical IDs, hashes, paths, or architecture knowledge of the user.
 
-## Known consequence carried in from the CLI reduction
+## Known consequence: hand edits to `resume.md`
 
-`cv sync-draft` was deleted at the user's direction. It imported edits made directly to
-the working `resume.md` file, and the v2 use-case list does not include it — claims are
-edited through the draft's own autosave.
+Nothing imports edits made directly to the working `resume.md` file. Claims are edited
+through the draft's own autosave, and the v2 use-case list has no import path.
 
-The data-loss guard it was paired with **stays**: approval still refuses while the
-projection holds an edit storage has not imported, because approval rebuilds the
-projection from the database and would otherwise destroy that edit without a word. What
-changed is the remedy. A user who edits `resume.md` by hand can now only re-apply the
-change in the editor or regenerate and discard it.
+The data-loss guard **stays**: approval refuses while the projection holds an edit
+storage has not imported, because approval rebuilds the projection from the database and
+would otherwise destroy that edit without a word. A user who edits `resume.md` by hand
+can only re-apply the change in the editor, or regenerate and discard it.
 
 - [ ] Decide whether the draft editor should surface that refusal as something a user can
       act on, or whether the projection file should stop being writable in a way that
@@ -132,6 +131,29 @@ AI-generated decision explanations, AI-assisted semantic claim linkage, a broade
 Knowledge UI, CSV Web export, notifications, calendar integration, analytics, additional
 providers, i18n, and hosted or multi-candidate operation (`docs/spec/product-spec.md`
 §23).
+
+## Open engineering questions
+
+Not milestone scope; each is a decision to make deliberately rather than a task to pick
+up as cleanup.
+
+- [ ] **The port hierarchy is unflattened.** `DraftRepository -> ReadinessRepository ->
+      TrackingRepository -> ApplicationRepository` is linear and each level adds its own
+      methods, so flattening means duplicating them. The MRO breakage that prompted the
+      original split came from base order inside one class, not from depth. Decide
+      whether the chain earns its keep; do not refactor it as cleanup.
+- [ ] **Whether the AI task contract belongs in `knowledge_context`.**
+      `ai/contracts/task_contracts.json` is the single source of contract and prompt
+      versions, and both are stored on every provider run and on the registered response
+      artifact. They are deliberately **not** in `Knowledge.versions()`, so editing a
+      prompt does not stale existing drafts and does not move any
+      `knowledge_context_hash`. Adding them would move every stored hash and every golden
+      that depends on one. Decide it on its own, with the hash movement stated up front.
+- [ ] **Backend-suite reduction, second boundary.** A first pass consolidated duplicated
+      evidence across 17 test files without changing production code. Roughly 75 further
+      removals remain before the original half-size target is met; continue only through
+      a fresh redundancy audit, with integrity, immutability, recovery, golden, and
+      rendering failures cut last.
 
 ## Cleanup carried forward
 

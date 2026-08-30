@@ -9,14 +9,11 @@ Binding on what the product does. Changes by an approved decision.
 | `product-spec.md` | Scope, invariants, non-goals, Definition of Done |
 | `state-and-use-cases.md` | Lifecycle, commands, queries, permissions, HTTP mapping |
 | `architecture.md` | Layer boundaries, filesystem layout, schema shape, dependency baseline |
-| `implementation-plan.md` | Milestones and their gates |
 | `test-and-acceptance-plan.md` | Test layers, golden matrix, release gates |
 
 ## State and process
 
-- `m4-remaining.md` — what is done, what remains, what is blocked.
-- `cleanup-todos.md` — non-milestone cleanup items.
-- `smoke-run.md` — deterministic no-AI CLI run against a fresh PostgreSQL database.
+- `m5-remaining.md` — what is done, what remains, what is blocked.
 - `process/execution-protocol.md` — how work is split across parallel agents.
 
 ## Baseline

@@ -14,5 +14,5 @@ because that would silently disagree with the backend Origin allowlist.
 
 `npm run build` writes the production bundle to `frontend/dist`. A production caller passes
 that directory explicitly as `frontend_dist` to `cv_engine.api.create_app`; FastAPI then
-serves assets and React Router entry points under the same origin. `cv web`, process/port
+serves assets and React Router entry points under the same origin. Process/port
 supervision, and browser launch remain M6 work.

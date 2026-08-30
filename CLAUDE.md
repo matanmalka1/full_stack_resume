@@ -31,7 +31,6 @@ task. Read the one that owns what you are changing:
 | Product scope, invariants, non-goals | `docs/spec/product-spec.md` |
 | Lifecycle, commands, queries, permissions | `docs/spec/state-and-use-cases.md` |
 | Layer boundaries, filesystem layout, schema shape | `docs/spec/architecture.md` |
-| Milestone stages and gates | `docs/spec/implementation-plan.md` |
 
 If a specification conflicts with existing behavior, say so. Do not reinterpret a
 conflict silently.
@@ -108,13 +107,17 @@ Report what passed, what failed, and what remains. Never claim completion with
   product semantics stay the same.
 - Do not silently change workflow, validation behavior, fact semantics, application
   statuses, or artifact lifecycle.
-- The Web UI is the product interface; the CLI is runtime and maintenance only. Every
-  product use-case belongs to the API and the Web UI. The CLI keeps `web`, the
-  maintenance commands, and the canonical-correction path the specification assigns to
-  it (`docs/spec/product-spec.md` section 17). Adding a product command to the CLI
-  builds a second client for a use-case the API already owns.
-- Both interfaces call the application layer directly. The deterministic workflow
-  reaches Ready with no AI key and without FastAPI running.
+- React is the product interface and FastAPI is the API. React is the API's only
+  client. A second client for a use-case the API already owns is not added.
+- The system runs as two processes sharing one PostgreSQL database, neither
+  supervising the other: `uvicorn cv_engine.runtime.asgi:app` serves HTTP and creates
+  Operations; `python -m cv_engine.worker` executes them through the Operation runner.
+  The API starts no background work.
+- The project root is fixed at the installed code location. It is not selectable by
+  argument, setting, or environment variable. A test needing another root injects
+  `AppPaths.from_root(...)` into composition.
+- Routers map HTTP to a use-case and back. Logic belongs to the application layer,
+  which the API calls directly. The deterministic workflow reaches Ready with no AI key.
 - Do not edit generated HTML by hand; fix the source, template, renderer, or rules.
 - Add a dependency only when it enforces a contract, reduces rendering risk, or gives a
   concrete portability benefit. The baseline is `docs/spec/architecture.md` section 2.

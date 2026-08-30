@@ -10,17 +10,20 @@ Baseline: `v1.0.0` / `2cc31c7`
 
 ## 1. Architecture objective
 
-v2.0 adds a local Web product without creating a second workflow engine. FastAPI and
-the CLI are independent clients of one synchronous application layer. Existing domain
-and validation behavior is preserved and separated from orchestration, storage, and
-transport concerns.
+v2.0 is a Web product over one synchronous application layer. FastAPI is its only
+client; the React UI reaches the application layer through the API and nowhere else.
+Existing domain and validation behavior is preserved and separated from orchestration,
+storage, and transport concerns.
 
 The primary architecture rule is:
 
-`domain <- application <- infrastructure / api / cli / runtime`
+`domain <- application <- infrastructure / api / runtime`
 
 Dependencies point inward. Product semantics live in domain/application code, not in
-routers, React components, SQL triggers, templates, or CLI dispatch.
+routers, React components, SQL triggers, or templates.
+
+There is one client. A second surface for a use-case the API already owns has a second
+contract to keep compatible and no capability the first lacks.
 
 ## 2. Required technology baseline
 
@@ -75,7 +78,7 @@ cv_engine/
   application/
   infrastructure/
   api/
-  cli/
+  worker/
   runtime/
 frontend/
 ```
@@ -130,18 +133,21 @@ Repository boundaries follow transactional ownership and use-cases rather than t
 `PreparationRepository` may own JobSnapshot metadata, JobAnalysis, SelectionPlan,
 ValidationRun, and ApprovedRevision metadata where their transactions belong together.
 
-### 3.4 API and CLI
+### 3.4 API
 
 FastAPI routers map HTTP DTOs, headers, and application errors to use-cases and
 responses. They do not load Profiles, select facts, call providers, validate claims,
 calculate fit, or write history directly.
 
-The CLI is the runtime and maintenance surface. It starts the Web UI, verifies stored
-evidence, exports data, and keeps the canonical-correction path; it resolves arguments
-and calls the same application services, and it does not call FastAPI. Product
-use-cases belong to the API and the Web UI: a CLI command for a use-case the API owns
-is a second client, with a second contract to keep compatible and no capability the
-first lacks. Application contracts are not distorted to preserve a CLI signature.
+Maintenance is an API concern like any other. Reconciliation is
+`POST /api/v1/maintenance/reconciliations` behind a `MaintenanceService`, which holds
+the payload store and repository directly - `ApiServices` carries neither, so this
+cannot be a router helper. CSV export is a function of the application layer with no
+route, because writing the file is not yet a product use-case.
+
+Every product use-case belongs to the API and the Web UI. A second surface for a
+use-case the API owns has a second contract to keep compatible and no capability the
+first lacks.
 
 The v1 `Engine` compatibility façade was removed once the clients called the
 application services directly. It was never a v2 architectural boundary, and no code
@@ -153,9 +159,16 @@ refers to it.
 configuration, repositories, UnitOfWork factory, services, provider, renderer,
 operation worker, and API dependencies. No DI framework is used.
 
-`cv web` is a supervisor responsible for schema gates,
-process/port detection, worker lifecycle, browser launch, and graceful shutdown.
-FastAPI remains a Web server and does not become the installation/process manager.
+The system runs as two processes over one database, and neither supervises the other:
+
+- `uvicorn cv_engine.runtime.asgi:app` serves HTTP. It starts no background work, so an app
+  lifespan never spawns a worker per test client.
+- `python -m cv_engine.worker` claims queued Operations under a lease.
+
+A worker that dies leaves its claims to expire, and the next worker's
+`recover_startup()` reclaims them. That lease is what makes the split safe.
+
+FastAPI remains a Web server and does not become a process manager.
 
 ## 4. Application paths
 
@@ -170,7 +183,7 @@ logs_root
 ```
 
 All mutable and immutable local paths remain contained below that root. Tests inject a
-temporary root directly into composition; production CLI commands do not expose that
+temporary root directly into composition; the running processes do not expose that
 injection surface. Nothing points v2 at v1. The archive is read by a person with a text
 editor or `git worktree add`, never by this engine.
 
@@ -187,8 +200,8 @@ as an explicit dependency, eliminating candidate literals from code.
 Existing semantic fact IDs are preserved. New v2 facts use UUIDv4 technical identity;
 a human slug is optional metadata and never a foreign key.
 
-Knowledge dependencies are re-read or re-hashed before relevant commands. Manual file
-and CLI edits remain valid inputs; a changed context produces `knowledge_changed` or
+Knowledge dependencies are re-read or re-hashed before relevant commands. Manual edits
+to the source files remain valid inputs; a changed context produces `knowledge_changed` or
 `SOURCE_CHANGED` and is never silently loaded into an open editor form.
 
 ## 6. Persistence boundary
@@ -390,20 +403,19 @@ review reasons, stale reasons and primary reason, active Operation, available ac
 blocked actions and reason codes, nullable recommended action, active-context IDs,
 milestone IDs, and `newer_draft_in_progress` in one consistent read transaction.
 
-API and CLI consume this policy. React does not duplicate it.
+The API consumes this policy. React does not duplicate it.
 
 ## 10. Operation runner
 
 Operation is an application/infrastructure concern, not the central domain aggregate.
-The Operation runner has two hosts but one execution contract. Under `cv web`,
-lightweight worker loops run inside the supervised local backend process, poll/claim
-PostgreSQL rows atomically, and execute jobs outside requests. A caller that creates an
-Operation outside the supervisor attempts to claim that row and runs it in the
-foreground of its own process with the same leases, heartbeat, resource locks,
-cancellation, idempotency, and optimistic activation checks. If another eligible runner
-claims the same row first, the foreground caller observes that one Operation through its
-terminal outcome rather than duplicating it. It does not require FastAPI or a running Web server. Neither host
-is a separately deployed service or requires Celery/Redis.
+The worker process is the one host: it runs lightweight loops that poll and claim
+PostgreSQL rows atomically and execute jobs outside requests, under leases, heartbeat,
+resource locks, cancellation, idempotency, and optimistic activation checks.
+
+The claim contract does not assume a single claimer. Two workers may run: whichever
+claims a row first owns it, and the other observes that Operation through its terminal
+outcome rather than duplicating it. That is what makes the worker safe to run in more
+than one copy. It requires neither Celery nor Redis.
 
 Default limits are:
 
@@ -415,10 +427,9 @@ Locks are resource-specific. Render for one Application does not block analysis 
 another.
 
 Contention for the global render/browser slot is queueing, not an immediate failure. A
-CLI foreground render remains queued with an observable `waiting_for_render_slot`
-phase and waits/polls the same durable Operation until an eligible runner claims it or
-the user cancels/interruption policy applies. It never starts a duplicate render merely
-because a Web worker owns the current global lease.
+render waiting for the slot stays queued with an observable `waiting_for_render_slot`
+phase until an eligible runner claims it or the user cancels. It never starts a
+duplicate render merely because another runner owns the current global lease.
 
 Operation records contain type, full secret-free structured payload and hash,
 idempotency key, provider/model, source IDs, expected versions/hashes, lifecycle
@@ -526,10 +537,10 @@ arbitrary file uploads.
 
 ## 15. Runtime behavior
 
-`cv web` defaults to `127.0.0.1:8765`, opens the default browser, and supports
-`--no-open`. It probes a health/identity endpoint to determine whether the existing port
-is a compatible CV application. If so it opens that instance; if a
-foreign process owns the port it selects and reports another free port.
+The API defaults to `127.0.0.1:8765`. The port is uvicorn's to bind, but the app must
+also be told it, through `CV_API_PORT`: the origin policy allows the origin the app
+believes it answers on, so a port given only to uvicorn refuses every state-changing
+request from the app's own UI.
 
 Production supports current Chrome/Chromium and Safari. Full E2E uses Chromium;
 central-flow smoke tests use WebKit. Resume PDF rendering always uses the managed
@@ -543,7 +554,7 @@ action rather than a logs screen.
 
 `runtime/config.py` is the single resolution contract. Precedence is:
 
-`CLI > process environment > project .env file > project config > default`
+`process environment > project .env file > project config > default`
 
 Only the repository-root `.env` is considered. Real environment variables override
 stale developer files. The supported `.env` syntax is the
@@ -555,7 +566,7 @@ Each setting declares whether it is secret or environment-only.
 AWS credentials remain ambient boto3 configuration rather than values copied through
 the application contract.
 
-Masking occurs only at display/reporting boundaries. Any CLI/API/log/error surface that
+Masking occurs only at display/reporting boundaries. Any API, log, or error surface that
 reports a configuration value must show `***` for a configured secret while preserving
 the non-secret source label, and unset secrets
 remain visibly unset. Connectors always receive the original value, never the masked
