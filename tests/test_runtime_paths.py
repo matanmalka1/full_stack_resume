@@ -101,6 +101,7 @@ def test_cli_module_entry_point_reports_unknown_commands() -> None:
     )
     assert result.returncode == 2
 
+
 def test_cli_has_no_root_selector_or_lifecycle_command() -> None:
     parser = build_parser()
     help_text = parser.format_help().casefold()

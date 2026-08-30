@@ -417,6 +417,183 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/facts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List facts and their lifecycle status */
+        get: operations["list_facts_api_v1_facts_get"];
+        put?: never;
+        /**
+         * Create a pending fact
+         * @description `201`: a new fact always enters at `pending`, whoever asked for it.
+         *
+         *     The application layer generates the identity and refuses a supplied one, so
+         *     the payload carries content only.
+         */
+        post: operations["create_fact_api_v1_facts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/facts/from-claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a pending fact from an unsupported manual claim
+         * @description The claim's exact text becomes the fact's rendering, unrewritten.
+         */
+        post: operations["create_fact_from_claim_api_v1_facts_from_claim_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/facts/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the immutable fact lifecycle trail
+         * @description Declared before `/{fact_id}`, so `history` is not read as a fact ID.
+         */
+        get: operations["read_fact_history_api_v1_facts_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/facts/{fact_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one fact and its lifecycle events */
+        get: operations["read_fact_api_v1_facts__fact_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/facts/{fact_id}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Offer a canonical fact to a Profile section
+         * @description Attachment offers the fact to a pool; it does not select it.
+         */
+        post: operations["attach_fact_api_v1_facts__fact_id__attachments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/facts/{fact_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Promote a pending fact to confirmed
+         * @description `confirm: false` is refused, not interpreted: see `FactTransitionRequest`.
+         */
+        post: operations["confirm_fact_api_v1_facts__fact_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/facts/{fact_id}/confirm-and-use": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Promote, attach, and select one fact as one command
+         * @description One logical command: it promotes, attaches, and creates the replacement
+         *     plan, or it reports a complete failure. There is no partial outcome to
+         *     report, so there is no partial success status.
+         */
+        post: operations["confirm_and_use_fact_api_v1_facts__fact_id__confirm_and_use_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/facts/{fact_id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one fact's lifecycle trail */
+        get: operations["read_one_fact_history_api_v1_facts__fact_id__history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/facts/{fact_id}/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Promote a confirmed fact to canonical */
+        post: operations["promote_fact_api_v1_facts__fact_id__promote_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -1190,12 +1367,65 @@ export interface components {
             /** Items */
             items: components["schemas"]["ArtifactVersionResponse"][];
         };
+        /**
+         * AttachFactRequest
+         * @description Offer one canonical fact to a Profile section's candidate pool.
+         */
+        AttachFactRequest: {
+            /**
+             * Pin
+             * @default false
+             */
+            pin: boolean;
+            /** Profile */
+            profile: string;
+            /** Section */
+            section: string;
+        };
         /** BlockedActionResponse */
         BlockedActionResponse: {
             /** Action */
             action: string;
             /** Reasons */
             reasons: string[];
+        };
+        /**
+         * CaptureClaimFactRequest
+         * @description A fact created from an unsupported manual claim in a working draft.
+         *
+         *     The claim's exact text is copied without AI rewriting, so `renderings` is
+         *     absent: the English rendering comes from the claim itself. Everything the
+         *     claim cannot supply - meaning, tags, provenance - is explicit input.
+         */
+        CaptureClaimFactRequest: {
+            /** Application Id */
+            application_id: string;
+            /** Claim Id */
+            claim_id: string;
+            /** Effective Dates */
+            effective_dates?: string | null;
+            /** English */
+            english?: string | null;
+            /** Hebrew */
+            hebrew?: string | null;
+            /** Meaning */
+            meaning: string;
+            /** Provenance */
+            provenance?: string | null;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** Replaces */
+            replaces?: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "common.md" | "sales.md" | "development.md" | "situational_skills.md";
+            /** Tags */
+            tags: string[];
         };
         /**
          * ClaimPatchRequest
@@ -1233,6 +1463,41 @@ export interface components {
             next_action_date?: string | null;
             /** Terminal Outcome */
             terminal_outcome?: string | null;
+        };
+        /**
+         * ConfirmAndUseFactRequest
+         * @description Promote, attach, and select one fact as a single recoverable command.
+         */
+        ConfirmAndUseFactRequest: {
+            /** Application Id */
+            application_id: string;
+            /** Job Analysis Id */
+            job_analysis_id: string;
+            /** Profile */
+            profile: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** Section */
+            section: string;
+        };
+        /**
+         * ConfirmAndUseFactResponse
+         * @description The one logical command's whole outcome: promoted, attached, selected.
+         */
+        ConfirmAndUseFactResponse: {
+            /** Event Ids */
+            event_ids: string[];
+            fact: components["schemas"]["FactResponse"];
+            /** Facts Version */
+            facts_version: string;
+            /** Lifecycle Version */
+            lifecycle_version: string;
+            /** Profile Store Version */
+            profile_store_version: string;
+            selection_plan: components["schemas"]["SelectionPlan"];
         };
         /**
          * CreateAnalysisRequest
@@ -1496,6 +1761,202 @@ export interface components {
          * @enum {string}
          */
         Emphasis: "development-balanced" | "development-backend" | "development-ai" | "new-business" | "account-growth" | "leadership" | "tech-consultative-sales" | "balanced-sales";
+        /**
+         * FactAttachmentResponse
+         * @description Where the fact was offered, not where that Profile is stored.
+         *
+         *     The application result also carries `profile_source`, the Profile
+         *     document's repository-relative path. `profile` and `section` already say
+         *     which pool the fact joined, so the location is dropped here rather than
+         *     published: architecture 14 forbids an endpoint exposing a stored path, and
+         *     that rule is about the value, not about whether its field name happens to
+         *     match the guard's pattern.
+         */
+        FactAttachmentResponse: {
+            /** Event Id */
+            event_id: string;
+            fact: components["schemas"]["FactResponse"];
+            /** Facts Version */
+            facts_version: string;
+            /** Lifecycle Version */
+            lifecycle_version: string;
+            /** Pinned */
+            pinned: boolean;
+            /** Profile */
+            profile: string;
+            /** Profile Store Version */
+            profile_store_version: string;
+            /** Section */
+            section: string;
+        };
+        /**
+         * FactContentRequest
+         * @description What a new fact says. Identity is generated, so it is not accepted here.
+         *
+         *     `renderings` is the language-keyed display text; English is required by the
+         *     domain model. Meaning, tags, and provenance require explicit input and are
+         *     never inferred or AI-written.
+         */
+        FactContentRequest: {
+            /** Effective Dates */
+            effective_dates?: string | null;
+            /** Meaning */
+            meaning: string;
+            /** Provenance */
+            provenance: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** Renderings */
+            renderings: {
+                [key: string]: string;
+            };
+            /** Replaces */
+            replaces?: string | null;
+            /**
+             * Resume Style
+             * @enum {string}
+             */
+            resume_style: "paragraph" | "heading" | "date" | "bullet" | "item" | "contact";
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "common.md" | "sales.md" | "development.md" | "situational_skills.md";
+            /** Tags */
+            tags: string[];
+        };
+        /** FactDetailResponse */
+        FactDetailResponse: {
+            /** Events */
+            events: components["schemas"]["FactEventResponse"][];
+            fact: components["schemas"]["FactResponse"];
+        };
+        /**
+         * FactEventResponse
+         * @description One entry of the immutable fact lifecycle trail.
+         */
+        FactEventResponse: {
+            /** Application Id */
+            application_id: string | null;
+            /** Claim Id */
+            claim_id: string | null;
+            /** Created At */
+            created_at: string;
+            /** Event Type */
+            event_type: string;
+            /** Fact Hash */
+            fact_hash: string;
+            /** Fact Id */
+            fact_id: string;
+            /** Facts Version */
+            facts_version: string;
+            /** From Status */
+            from_status: string | null;
+            /** Id */
+            id: string;
+            /** Lifecycle Version */
+            lifecycle_version: string;
+            /** Reason */
+            reason: string;
+            /** Source */
+            source: string;
+            /** To Status */
+            to_status: string;
+        };
+        /** FactHistoryResponse */
+        FactHistoryResponse: {
+            /** Events */
+            events: components["schemas"]["FactEventResponse"][];
+        };
+        /**
+         * FactListItemResponse
+         * @description One fact, beside the status its audit trail last recorded.
+         *
+         *     `recorded_status` is `null` for a fact the trail never saw, which is what
+         *     reconciliation exists to notice; it is not the same as the fact's status.
+         */
+        FactListItemResponse: {
+            fact: components["schemas"]["FactResponse"];
+            /** Recorded Status */
+            recorded_status?: string | null;
+        };
+        /** FactListResponse */
+        FactListResponse: {
+            /** Items */
+            items: components["schemas"]["FactListItemResponse"][];
+        };
+        /**
+         * FactMutationResponse
+         * @description One fact after a lifecycle write, with the versions that write produced.
+         */
+        FactMutationResponse: {
+            /** Event Id */
+            event_id: string;
+            fact: components["schemas"]["FactResponse"];
+            /** Facts Version */
+            facts_version: string;
+            /** Lifecycle Version */
+            lifecycle_version: string;
+        };
+        /**
+         * FactResponse
+         * @description One fact as a client sees it: its content, without where it is stored.
+         */
+        FactResponse: {
+            /** Confirmed At */
+            confirmed_at?: string | null;
+            /** Effective Dates */
+            effective_dates?: string | null;
+            /** Fact Id */
+            fact_id: string;
+            /** Link Target */
+            link_target?: string | null;
+            /** Meaning */
+            meaning: string;
+            /** Provenance */
+            provenance: string;
+            /** Renderings */
+            renderings: {
+                [key: string]: string;
+            };
+            /** Replaces */
+            replaces?: string | null;
+            /** Resume Style */
+            resume_style: string;
+            /** Source */
+            source: string;
+            status: components["schemas"]["FactStatus"];
+            /** Tags */
+            tags: string[];
+        };
+        /**
+         * FactStatus
+         * @enum {string}
+         */
+        FactStatus: "pending" | "confirmed" | "canonical";
+        /**
+         * FactTransitionRequest
+         * @description A promotion along `pending -> confirmed -> canonical`.
+         *
+         *     `confirm` is the explicit confirmation the specification requires for a
+         *     status change. It defaults to `false` so that omitting it refuses the
+         *     transition rather than performing it.
+         */
+        FactTransitionRequest: {
+            /**
+             * Confirm
+             * @default false
+             */
+            confirm: boolean;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+        };
         /**
          * GenerateWorkingDraftRequest
          * @description What `POST /applications/{id}/working-draft/generate` accepts.
@@ -1824,6 +2285,39 @@ export interface components {
             /** Working Draft Id */
             working_draft_id: string;
         };
+        /**
+         * SelectionCandidate
+         * @description One fact's full accounting in the selection decision.
+         *
+         *     Recorded so a later reader can answer not only which policy ran but why
+         *     fact A beat fact B: the ranking is the lexicographic tuple
+         *     (gap_substitute, semantic_score, keyword_hits, -pool_index).
+         */
+        SelectionCandidate: {
+            /** Emphasis Score */
+            emphasis_score: number;
+            /** Fact Id */
+            fact_id: string;
+            /** Gap Substitute */
+            gap_substitute: boolean;
+            /** Keyword Hits */
+            keyword_hits: number;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "pinned" | "selected" | "rescued" | "omitted";
+            /** Pool Index */
+            pool_index: number;
+            /** Profile Score */
+            profile_score: number;
+            /** Reason */
+            reason?: ("below_section_budget" | "not_relevant_to_emphasis" | "evicted_by_required_tag_rescue" | "not_in_profile_pool" | "excluded_by_user") | null;
+            /** Section */
+            section: string;
+            /** Semantic Score */
+            semantic_score: number;
+        };
         /** SelectionChangeResponse */
         SelectionChangeResponse: {
             /** Application Id */
@@ -1840,6 +2334,79 @@ export interface components {
             selection_plan_id: string;
             /** Working Draft Id */
             working_draft_id: string;
+        };
+        /**
+         * SelectionManifest
+         * @description The engine's selection decision, as decided at build time.
+         *
+         *     Manual claim edits afterwards do not rewrite this record; they set
+         *     `superseded_by_manual_edit` so the audit trail keeps the original decision
+         *     instead of quietly reshaping itself around the edit.
+         */
+        SelectionManifest: {
+            /**
+             * Candidates
+             * @default []
+             */
+            candidates: components["schemas"]["SelectionCandidate"][];
+            emphasis: components["schemas"]["Emphasis"];
+            /** Emphasis Policy Version */
+            emphasis_policy_version: string;
+            /** Policy Version */
+            policy_version: string;
+            /**
+             * Preferred Tag Coverage
+             * @default {}
+             */
+            preferred_tag_coverage: {
+                [key: string]: string[];
+            };
+            /**
+             * Required Tag Coverage
+             * @default {}
+             */
+            required_tag_coverage: {
+                [key: string]: string[];
+            };
+            /**
+             * Selected Fact Ids
+             * @default []
+             */
+            selected_fact_ids: string[];
+            /**
+             * Superseded By Manual Edit
+             * @default false
+             */
+            superseded_by_manual_edit: boolean;
+        };
+        /**
+         * SelectionPlan
+         * @description One immutable, versioned fact-selection decision for an analysis.
+         */
+        SelectionPlan: {
+            /** Application Id */
+            application_id: string;
+            /** Candidate Context Hash */
+            candidate_context_hash: string;
+            /** Candidate Context Version */
+            candidate_context_version: string;
+            /** Created At */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Job Analysis Id */
+            job_analysis_id: string;
+            plan: components["schemas"]["SelectionManifest"];
+            /** Profile Version */
+            profile_version: string;
+            /** Selection Policy Version */
+            selection_policy_version: string;
+            /** Track Emphasis Dependencies */
+            track_emphasis_dependencies: {
+                [key: string]: string;
+            };
+            /** Version Number */
+            version_number: number;
         };
         /** SelectionPlanResponse */
         SelectionPlanResponse: {
@@ -2759,6 +3326,325 @@ export interface operations {
                 };
                 content: {
                     "application/octet-stream": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_facts_api_v1_facts_get: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["FactStatus"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FactListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_fact_api_v1_facts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FactContentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FactMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_fact_from_claim_api_v1_facts_from_claim_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaptureClaimFactRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FactMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_fact_history_api_v1_facts_history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FactHistoryResponse"];
+                };
+            };
+        };
+    };
+    read_fact_api_v1_facts__fact_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FactDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attach_fact_api_v1_facts__fact_id__attachments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttachFactRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FactAttachmentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_fact_api_v1_facts__fact_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FactTransitionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FactMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_and_use_fact_api_v1_facts__fact_id__confirm_and_use_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmAndUseFactRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmAndUseFactResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_one_fact_history_api_v1_facts__fact_id__history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FactHistoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    promote_fact_api_v1_facts__fact_id__promote_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FactTransitionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FactMutationResponse"];
                 };
             };
             /** @description Validation Error */

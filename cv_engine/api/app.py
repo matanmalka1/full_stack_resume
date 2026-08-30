@@ -26,6 +26,7 @@ from .routers import (
     applications,
     approved_revisions,
     artifacts,
+    facts,
     health,
     operations,
     settings,
@@ -84,6 +85,7 @@ def create_app(
     app.include_router(approved_revisions.router, prefix=API_PREFIX)
     app.include_router(artifacts.router, prefix=API_PREFIX)
     app.include_router(operations.router, prefix=API_PREFIX)
+    app.include_router(facts.router, prefix=API_PREFIX)
     app.include_router(settings.router, prefix=API_PREFIX)
     app.include_router(validation_runs.router, prefix=API_PREFIX)
     if frontend_dist is not None:

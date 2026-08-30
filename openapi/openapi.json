@@ -1401,6 +1401,31 @@
         "title": "ArtifactVersionsResponse",
         "type": "object"
       },
+      "AttachFactRequest": {
+        "additionalProperties": false,
+        "description": "Offer one canonical fact to a Profile section's candidate pool.",
+        "properties": {
+          "pin": {
+            "default": false,
+            "title": "Pin",
+            "type": "boolean"
+          },
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          },
+          "section": {
+            "title": "Section",
+            "type": "string"
+          }
+        },
+        "required": [
+          "profile",
+          "section"
+        ],
+        "title": "AttachFactRequest",
+        "type": "object"
+      },
       "BlockedActionResponse": {
         "additionalProperties": false,
         "properties": {
@@ -1421,6 +1446,112 @@
           "reasons"
         ],
         "title": "BlockedActionResponse",
+        "type": "object"
+      },
+      "CaptureClaimFactRequest": {
+        "additionalProperties": false,
+        "description": "A fact created from an unsupported manual claim in a working draft.\n\nThe claim's exact text is copied without AI rewriting, so `renderings` is\nabsent: the English rendering comes from the claim itself. Everything the\nclaim cannot supply - meaning, tags, provenance - is explicit input.",
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "claim_id": {
+            "title": "Claim Id",
+            "type": "string"
+          },
+          "effective_dates": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Dates"
+          },
+          "english": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "English"
+          },
+          "hebrew": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hebrew"
+          },
+          "meaning": {
+            "minLength": 1,
+            "title": "Meaning",
+            "type": "string"
+          },
+          "provenance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provenance"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "replaces": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaces"
+          },
+          "source": {
+            "enum": [
+              "common.md",
+              "sales.md",
+              "development.md",
+              "situational_skills.md"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "application_id",
+          "claim_id",
+          "source",
+          "meaning",
+          "tags"
+        ],
+        "title": "CaptureClaimFactRequest",
         "type": "object"
       },
       "ClaimPatchRequest": {
@@ -1540,6 +1671,82 @@
           "current_status"
         ],
         "title": "CloseApplicationResponse",
+        "type": "object"
+      },
+      "ConfirmAndUseFactRequest": {
+        "additionalProperties": false,
+        "description": "Promote, attach, and select one fact as a single recoverable command.",
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "job_analysis_id": {
+            "title": "Job Analysis Id",
+            "type": "string"
+          },
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "section": {
+            "title": "Section",
+            "type": "string"
+          }
+        },
+        "required": [
+          "application_id",
+          "job_analysis_id",
+          "profile",
+          "section"
+        ],
+        "title": "ConfirmAndUseFactRequest",
+        "type": "object"
+      },
+      "ConfirmAndUseFactResponse": {
+        "additionalProperties": false,
+        "description": "The one logical command's whole outcome: promoted, attached, selected.",
+        "properties": {
+          "event_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Event Ids",
+            "type": "array"
+          },
+          "fact": {
+            "$ref": "#/components/schemas/FactResponse"
+          },
+          "facts_version": {
+            "title": "Facts Version",
+            "type": "string"
+          },
+          "lifecycle_version": {
+            "title": "Lifecycle Version",
+            "type": "string"
+          },
+          "profile_store_version": {
+            "title": "Profile Store Version",
+            "type": "string"
+          },
+          "selection_plan": {
+            "$ref": "#/components/schemas/SelectionPlan"
+          }
+        },
+        "required": [
+          "fact",
+          "event_ids",
+          "selection_plan",
+          "facts_version",
+          "lifecycle_version",
+          "profile_store_version"
+        ],
+        "title": "ConfirmAndUseFactResponse",
         "type": "object"
       },
       "CreateAnalysisRequest": {
@@ -2214,6 +2421,476 @@
         ],
         "title": "Emphasis",
         "type": "string"
+      },
+      "FactAttachmentResponse": {
+        "additionalProperties": false,
+        "description": "Where the fact was offered, not where that Profile is stored.\n\nThe application result also carries `profile_source`, the Profile\ndocument's repository-relative path. `profile` and `section` already say\nwhich pool the fact joined, so the location is dropped here rather than\npublished: architecture 14 forbids an endpoint exposing a stored path, and\nthat rule is about the value, not about whether its field name happens to\nmatch the guard's pattern.",
+        "properties": {
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "fact": {
+            "$ref": "#/components/schemas/FactResponse"
+          },
+          "facts_version": {
+            "title": "Facts Version",
+            "type": "string"
+          },
+          "lifecycle_version": {
+            "title": "Lifecycle Version",
+            "type": "string"
+          },
+          "pinned": {
+            "title": "Pinned",
+            "type": "boolean"
+          },
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          },
+          "profile_store_version": {
+            "title": "Profile Store Version",
+            "type": "string"
+          },
+          "section": {
+            "title": "Section",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fact",
+          "event_id",
+          "facts_version",
+          "lifecycle_version",
+          "profile",
+          "section",
+          "pinned",
+          "profile_store_version"
+        ],
+        "title": "FactAttachmentResponse",
+        "type": "object"
+      },
+      "FactContentRequest": {
+        "additionalProperties": false,
+        "description": "What a new fact says. Identity is generated, so it is not accepted here.\n\n`renderings` is the language-keyed display text; English is required by the\ndomain model. Meaning, tags, and provenance require explicit input and are\nnever inferred or AI-written.",
+        "properties": {
+          "effective_dates": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Dates"
+          },
+          "meaning": {
+            "minLength": 1,
+            "title": "Meaning",
+            "type": "string"
+          },
+          "provenance": {
+            "minLength": 1,
+            "title": "Provenance",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "renderings": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Renderings",
+            "type": "object"
+          },
+          "replaces": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaces"
+          },
+          "resume_style": {
+            "enum": [
+              "paragraph",
+              "heading",
+              "date",
+              "bullet",
+              "item",
+              "contact"
+            ],
+            "title": "Resume Style",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "common.md",
+              "sales.md",
+              "development.md",
+              "situational_skills.md"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source",
+          "meaning",
+          "renderings",
+          "tags",
+          "provenance",
+          "resume_style"
+        ],
+        "title": "FactContentRequest",
+        "type": "object"
+      },
+      "FactDetailResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/FactEventResponse"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "fact": {
+            "$ref": "#/components/schemas/FactResponse"
+          }
+        },
+        "required": [
+          "fact",
+          "events"
+        ],
+        "title": "FactDetailResponse",
+        "type": "object"
+      },
+      "FactEventResponse": {
+        "additionalProperties": false,
+        "description": "One entry of the immutable fact lifecycle trail.",
+        "properties": {
+          "application_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Application Id"
+          },
+          "claim_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim Id"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "event_type": {
+            "title": "Event Type",
+            "type": "string"
+          },
+          "fact_hash": {
+            "title": "Fact Hash",
+            "type": "string"
+          },
+          "fact_id": {
+            "title": "Fact Id",
+            "type": "string"
+          },
+          "facts_version": {
+            "title": "Facts Version",
+            "type": "string"
+          },
+          "from_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Status"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "lifecycle_version": {
+            "title": "Lifecycle Version",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "to_status": {
+            "title": "To Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "fact_id",
+          "source",
+          "event_type",
+          "from_status",
+          "to_status",
+          "application_id",
+          "claim_id",
+          "reason",
+          "fact_hash",
+          "facts_version",
+          "lifecycle_version",
+          "created_at"
+        ],
+        "title": "FactEventResponse",
+        "type": "object"
+      },
+      "FactHistoryResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/FactEventResponse"
+            },
+            "title": "Events",
+            "type": "array"
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "title": "FactHistoryResponse",
+        "type": "object"
+      },
+      "FactListItemResponse": {
+        "additionalProperties": false,
+        "description": "One fact, beside the status its audit trail last recorded.\n\n`recorded_status` is `null` for a fact the trail never saw, which is what\nreconciliation exists to notice; it is not the same as the fact's status.",
+        "properties": {
+          "fact": {
+            "$ref": "#/components/schemas/FactResponse"
+          },
+          "recorded_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded Status"
+          }
+        },
+        "required": [
+          "fact"
+        ],
+        "title": "FactListItemResponse",
+        "type": "object"
+      },
+      "FactListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FactListItemResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "FactListResponse",
+        "type": "object"
+      },
+      "FactMutationResponse": {
+        "additionalProperties": false,
+        "description": "One fact after a lifecycle write, with the versions that write produced.",
+        "properties": {
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "fact": {
+            "$ref": "#/components/schemas/FactResponse"
+          },
+          "facts_version": {
+            "title": "Facts Version",
+            "type": "string"
+          },
+          "lifecycle_version": {
+            "title": "Lifecycle Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fact",
+          "event_id",
+          "facts_version",
+          "lifecycle_version"
+        ],
+        "title": "FactMutationResponse",
+        "type": "object"
+      },
+      "FactResponse": {
+        "additionalProperties": false,
+        "description": "One fact as a client sees it: its content, without where it is stored.",
+        "properties": {
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "effective_dates": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Dates"
+          },
+          "fact_id": {
+            "title": "Fact Id",
+            "type": "string"
+          },
+          "link_target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link Target"
+          },
+          "meaning": {
+            "title": "Meaning",
+            "type": "string"
+          },
+          "provenance": {
+            "title": "Provenance",
+            "type": "string"
+          },
+          "renderings": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Renderings",
+            "type": "object"
+          },
+          "replaces": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaces"
+          },
+          "resume_style": {
+            "title": "Resume Style",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FactStatus"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "fact_id",
+          "meaning",
+          "renderings",
+          "tags",
+          "status",
+          "provenance",
+          "source",
+          "resume_style"
+        ],
+        "title": "FactResponse",
+        "type": "object"
+      },
+      "FactStatus": {
+        "enum": [
+          "pending",
+          "confirmed",
+          "canonical"
+        ],
+        "title": "FactStatus",
+        "type": "string"
+      },
+      "FactTransitionRequest": {
+        "additionalProperties": false,
+        "description": "A promotion along `pending -> confirmed -> canonical`.\n\n`confirm` is the explicit confirmation the specification requires for a\nstatus change. It defaults to `false` so that omitting it refuses the\ntransition rather than performing it.",
+        "properties": {
+          "confirm": {
+            "default": false,
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "title": "FactTransitionRequest",
+        "type": "object"
       },
       "GenerateWorkingDraftRequest": {
         "additionalProperties": false,
@@ -2897,6 +3574,85 @@
         "title": "ReplaceWorkingDraftRequest",
         "type": "object"
       },
+      "SelectionCandidate": {
+        "additionalProperties": false,
+        "description": "One fact's full accounting in the selection decision.\n\nRecorded so a later reader can answer not only which policy ran but why\nfact A beat fact B: the ranking is the lexicographic tuple\n(gap_substitute, semantic_score, keyword_hits, -pool_index).",
+        "properties": {
+          "emphasis_score": {
+            "title": "Emphasis Score",
+            "type": "integer"
+          },
+          "fact_id": {
+            "title": "Fact Id",
+            "type": "string"
+          },
+          "gap_substitute": {
+            "title": "Gap Substitute",
+            "type": "boolean"
+          },
+          "keyword_hits": {
+            "title": "Keyword Hits",
+            "type": "integer"
+          },
+          "outcome": {
+            "enum": [
+              "pinned",
+              "selected",
+              "rescued",
+              "omitted"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "pool_index": {
+            "title": "Pool Index",
+            "type": "integer"
+          },
+          "profile_score": {
+            "title": "Profile Score",
+            "type": "integer"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "below_section_budget",
+                  "not_relevant_to_emphasis",
+                  "evicted_by_required_tag_rescue",
+                  "not_in_profile_pool",
+                  "excluded_by_user"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "section": {
+            "title": "Section",
+            "type": "string"
+          },
+          "semantic_score": {
+            "title": "Semantic Score",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "fact_id",
+          "section",
+          "pool_index",
+          "profile_score",
+          "emphasis_score",
+          "semantic_score",
+          "keyword_hits",
+          "gap_substitute",
+          "outcome"
+        ],
+        "title": "SelectionCandidate",
+        "type": "object"
+      },
       "SelectionChangeResponse": {
         "additionalProperties": false,
         "properties": {
@@ -2935,6 +3691,140 @@
           "plan"
         ],
         "title": "SelectionChangeResponse",
+        "type": "object"
+      },
+      "SelectionManifest": {
+        "additionalProperties": false,
+        "description": "The engine's selection decision, as decided at build time.\n\nManual claim edits afterwards do not rewrite this record; they set\n`superseded_by_manual_edit` so the audit trail keeps the original decision\ninstead of quietly reshaping itself around the edit.",
+        "properties": {
+          "candidates": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SelectionCandidate"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "emphasis": {
+            "$ref": "#/components/schemas/Emphasis"
+          },
+          "emphasis_policy_version": {
+            "title": "Emphasis Policy Version",
+            "type": "string"
+          },
+          "policy_version": {
+            "title": "Policy Version",
+            "type": "string"
+          },
+          "preferred_tag_coverage": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "default": {},
+            "title": "Preferred Tag Coverage",
+            "type": "object"
+          },
+          "required_tag_coverage": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "default": {},
+            "title": "Required Tag Coverage",
+            "type": "object"
+          },
+          "selected_fact_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Selected Fact Ids",
+            "type": "array"
+          },
+          "superseded_by_manual_edit": {
+            "default": false,
+            "title": "Superseded By Manual Edit",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "policy_version",
+          "emphasis",
+          "emphasis_policy_version"
+        ],
+        "title": "SelectionManifest",
+        "type": "object"
+      },
+      "SelectionPlan": {
+        "additionalProperties": false,
+        "description": "One immutable, versioned fact-selection decision for an analysis.",
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "candidate_context_hash": {
+            "title": "Candidate Context Hash",
+            "type": "string"
+          },
+          "candidate_context_version": {
+            "title": "Candidate Context Version",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_analysis_id": {
+            "title": "Job Analysis Id",
+            "type": "string"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/SelectionManifest"
+          },
+          "profile_version": {
+            "title": "Profile Version",
+            "type": "string"
+          },
+          "selection_policy_version": {
+            "title": "Selection Policy Version",
+            "type": "string"
+          },
+          "track_emphasis_dependencies": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Track Emphasis Dependencies",
+            "type": "object"
+          },
+          "version_number": {
+            "title": "Version Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "application_id",
+          "job_analysis_id",
+          "version_number",
+          "plan",
+          "candidate_context_version",
+          "candidate_context_hash",
+          "profile_version",
+          "selection_policy_version",
+          "track_emphasis_dependencies",
+          "created_at"
+        ],
+        "title": "SelectionPlan",
         "type": "object"
       },
       "SelectionPlanResponse": {
@@ -4596,6 +5486,454 @@
         "summary": "Download one registered artifact by ID",
         "tags": [
           "artifacts"
+        ]
+      }
+    },
+    "/api/v1/facts": {
+      "get": {
+        "operationId": "list_facts_api_v1_facts_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/FactStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List facts and their lifecycle status",
+        "tags": [
+          "facts"
+        ]
+      },
+      "post": {
+        "description": "`201`: a new fact always enters at `pending`, whoever asked for it.\n\nThe application layer generates the identity and refuses a supplied one, so\nthe payload carries content only.",
+        "operationId": "create_fact_api_v1_facts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FactContentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create a pending fact",
+        "tags": [
+          "facts"
+        ]
+      }
+    },
+    "/api/v1/facts/from-claim": {
+      "post": {
+        "description": "The claim's exact text becomes the fact's rendering, unrewritten.",
+        "operationId": "create_fact_from_claim_api_v1_facts_from_claim_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaptureClaimFactRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create a pending fact from an unsupported manual claim",
+        "tags": [
+          "facts"
+        ]
+      }
+    },
+    "/api/v1/facts/history": {
+      "get": {
+        "description": "Declared before `/{fact_id}`, so `history` is not read as a fact ID.",
+        "operationId": "read_fact_history_api_v1_facts_history_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactHistoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Read the immutable fact lifecycle trail",
+        "tags": [
+          "facts"
+        ]
+      }
+    },
+    "/api/v1/facts/{fact_id}": {
+      "get": {
+        "operationId": "read_fact_api_v1_facts__fact_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fact_id",
+            "required": true,
+            "schema": {
+              "title": "Fact Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read one fact and its lifecycle events",
+        "tags": [
+          "facts"
+        ]
+      }
+    },
+    "/api/v1/facts/{fact_id}/attachments": {
+      "post": {
+        "description": "Attachment offers the fact to a pool; it does not select it.",
+        "operationId": "attach_fact_api_v1_facts__fact_id__attachments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fact_id",
+            "required": true,
+            "schema": {
+              "title": "Fact Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttachFactRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactAttachmentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Offer a canonical fact to a Profile section",
+        "tags": [
+          "facts"
+        ]
+      }
+    },
+    "/api/v1/facts/{fact_id}/confirm": {
+      "post": {
+        "description": "`confirm: false` is refused, not interpreted: see `FactTransitionRequest`.",
+        "operationId": "confirm_fact_api_v1_facts__fact_id__confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fact_id",
+            "required": true,
+            "schema": {
+              "title": "Fact Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FactTransitionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Promote a pending fact to confirmed",
+        "tags": [
+          "facts"
+        ]
+      }
+    },
+    "/api/v1/facts/{fact_id}/confirm-and-use": {
+      "post": {
+        "description": "One logical command: it promotes, attaches, and creates the replacement\nplan, or it reports a complete failure. There is no partial outcome to\nreport, so there is no partial success status.",
+        "operationId": "confirm_and_use_fact_api_v1_facts__fact_id__confirm_and_use_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fact_id",
+            "required": true,
+            "schema": {
+              "title": "Fact Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmAndUseFactRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfirmAndUseFactResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Promote, attach, and select one fact as one command",
+        "tags": [
+          "facts"
+        ]
+      }
+    },
+    "/api/v1/facts/{fact_id}/history": {
+      "get": {
+        "operationId": "read_one_fact_history_api_v1_facts__fact_id__history_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fact_id",
+            "required": true,
+            "schema": {
+              "title": "Fact Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactHistoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read one fact's lifecycle trail",
+        "tags": [
+          "facts"
+        ]
+      }
+    },
+    "/api/v1/facts/{fact_id}/promote": {
+      "post": {
+        "operationId": "promote_fact_api_v1_facts__fact_id__promote_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fact_id",
+            "required": true,
+            "schema": {
+              "title": "Fact Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FactTransitionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Promote a confirmed fact to canonical",
+        "tags": [
+          "facts"
         ]
       }
     },
