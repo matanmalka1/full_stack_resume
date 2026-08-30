@@ -28,7 +28,6 @@ class SqlAlchemySettingsRepository(SqlAlchemyRepositoryBase):
                 None if row["ai_enabled_override"] is None else bool(row["ai_enabled_override"])
             ),
             default_execution_mode=row["default_execution_mode"],
-            open_browser_on_launch=bool(row["open_browser_on_launch"]),
             ui_density=row["ui_density"],
             ui_text_size=row["ui_text_size"],
             updated_at=row["updated_at"],
@@ -60,7 +59,6 @@ class SqlAlchemySettingsRepository(SqlAlchemyRepositoryBase):
                 ),
                 "ai_enabled_override": settings.ai_enabled_override,
                 "default_execution_mode": settings.default_execution_mode,
-                "open_browser_on_launch": settings.open_browser_on_launch,
                 "ui_density": settings.ui_density,
                 "ui_text_size": settings.ui_text_size,
                 "updated_at": now,
@@ -78,7 +76,6 @@ class SqlAlchemySettingsRepository(SqlAlchemyRepositoryBase):
             ),
             ai_enabled_override=settings.ai_enabled_override,
             default_execution_mode=settings.default_execution_mode,
-            open_browser_on_launch=settings.open_browser_on_launch,
             ui_density=settings.ui_density,
             ui_text_size=settings.ui_text_size,
             updated_at=now,

@@ -10,7 +10,6 @@ SETTINGS_FIELDS = {
     "ai_enabled",
     "ai_enabled_override",
     "default_execution_mode",
-    "open_browser_on_launch",
     "ui_density",
     "ui_text_size",
     "provider_configured",
@@ -23,7 +22,6 @@ def _update_body(**overrides) -> dict:
         "auto_generate_when_review_not_required": False,
         "ai_enabled_override": None,
         "default_execution_mode": "deterministic",
-        "open_browser_on_launch": True,
         "ui_density": "comfortable",
         "ui_text_size": "normal",
         **overrides,
@@ -49,7 +47,6 @@ def test_settings_api_returns_pure_defaults_etag_and_no_secret_surface(api_worke
         "ai_enabled": False,
         "ai_enabled_override": None,
         "default_execution_mode": "deterministic",
-        "open_browser_on_launch": True,
         "ui_density": "comfortable",
         "ui_text_size": "normal",
         "provider_configured": False,
@@ -106,7 +103,6 @@ def test_settings_patch_updates_live_and_rejects_a_stale_etag_without_writing(
     requested = _update_body(
         auto_generate_when_review_not_required=True,
         ai_enabled_override=False,
-        open_browser_on_launch=False,
         ui_density="compact",
         ui_text_size="large",
     )

@@ -17,7 +17,6 @@ class StoredSettings(BoundaryDTO):
     auto_generate_when_review_not_required: bool = False
     ai_enabled_override: bool | None = None
     default_execution_mode: ExecutionMode = "deterministic"
-    open_browser_on_launch: bool = True
     ui_density: UiDensity = "comfortable"
     ui_text_size: UiTextSize = "normal"
     updated_at: str | None = None
@@ -29,7 +28,6 @@ class SettingsView(BoundaryDTO):
     ai_enabled: bool
     ai_enabled_override: bool | None
     default_execution_mode: ExecutionMode
-    open_browser_on_launch: bool
     ui_density: UiDensity
     ui_text_size: UiTextSize
     provider_configured: bool
@@ -40,7 +38,6 @@ class UpdateSettings(BoundaryDTO):
     auto_generate_when_review_not_required: bool
     ai_enabled_override: bool | None = None
     default_execution_mode: ExecutionMode
-    open_browser_on_launch: bool
     ui_density: UiDensity
     ui_text_size: UiTextSize
 

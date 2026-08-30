@@ -172,7 +172,7 @@ const renderPage = (aiEnabled = true) => {
       ai_enabled: aiEnabled,
       ai_enabled_override: aiEnabled,
       default_execution_mode: "deterministic",
-      open_browser_on_launch: true,
+     
       provider_configured: aiEnabled,
       ui_density: "comfortable",
       ui_text_size: "normal",

@@ -27,7 +27,6 @@ export const SettingsPage = () => {
         auto_generate_when_review_not_required: settings.auto_generate_when_review_not_required,
         ai_enabled_override: settings.ai_enabled_override,
         default_execution_mode: settings.default_execution_mode,
-        open_browser_on_launch: settings.open_browser_on_launch,
         ui_density: settings.ui_density,
         ui_text_size: settings.ui_text_size,
       });
@@ -74,9 +73,6 @@ export const SettingsPage = () => {
                 <option value="normal">רגיל</option><option value="large">גדול</option>
               </Select>
             )}</Field>
-            <Checkbox checked={form.open_browser_on_launch} hint="הערך ייכנס לפעולה עם supervisor ב־M6." onChange={(event) => setForm({ ...form, open_browser_on_launch: event.currentTarget.checked })}>
-              פתיחת הדפדפן בהפעלת סביבת ה־Web
-            </Checkbox>
             <Button disabled={save.isPending} type="submit">{save.isPending ? "שומר…" : "שמירת הגדרות"}</Button>
           </form>
         )}

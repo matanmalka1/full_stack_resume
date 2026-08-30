@@ -5,7 +5,7 @@ import { aiRegenerationAvailable, executionProvider } from "./settings";
 
 const settings = (overrides: Partial<Settings> = {}): Settings => ({
   edit_version: 0, auto_generate_when_review_not_required: false, ai_enabled: true,
-  ai_enabled_override: null, default_execution_mode: "deterministic", open_browser_on_launch: true,
+  ai_enabled_override: null, default_execution_mode: "deterministic",
   provider_configured: true, ui_density: "comfortable", ui_text_size: "normal", ...overrides,
 });
 

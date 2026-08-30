@@ -63,7 +63,7 @@ const operation = (): Operation => ({
 
 const settings = (overrides: Partial<Settings> = {}): Settings => ({
   edit_version: 0, auto_generate_when_review_not_required: false, ai_enabled: false, ai_enabled_override: null,
-  default_execution_mode: "deterministic", open_browser_on_launch: true, provider_configured: false,
+  default_execution_mode: "deterministic", provider_configured: false,
   ui_density: "comfortable", ui_text_size: "normal", updated_at: null, ...overrides,
 });
 
@@ -310,6 +310,6 @@ describe("SettingsPage", () => {
     await screen.findByRole("status");
     const request = fetchMock.mock.calls.find((call) => call[1]?.method === "PATCH");
     expect((request?.[1]?.headers as Headers).get("If-Match")).toBe('"settings-1"');
-    expect(Object.keys(JSON.parse(String(request?.[1]?.body))).sort()).toEqual(["ai_enabled_override", "auto_generate_when_review_not_required", "default_execution_mode", "open_browser_on_launch", "ui_density", "ui_text_size"].sort());
+    expect(Object.keys(JSON.parse(String(request?.[1]?.body))).sort()).toEqual(["ai_enabled_override", "auto_generate_when_review_not_required", "default_execution_mode", "ui_density", "ui_text_size"].sort());
   });
 });

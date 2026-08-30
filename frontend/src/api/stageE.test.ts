@@ -61,7 +61,7 @@ const settings = {
   ai_enabled: true,
   ai_enabled_override: null,
   default_execution_mode: "deterministic",
-  open_browser_on_launch: true,
+ 
   provider_configured: true,
   ui_density: "comfortable",
   ui_text_size: "normal",
@@ -133,7 +133,7 @@ describe("settings client", () => {
       auto_generate_when_review_not_required: false,
       ai_enabled_override: null,
       default_execution_mode: "deterministic",
-      open_browser_on_launch: true,
+     
       ui_density: "comfortable",
       ui_text_size: "normal",
     }, '"settings-2"');

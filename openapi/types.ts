@@ -752,6 +752,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/maintenance/reconciliations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reconcile stored evidence and the fact lifecycle
+         * @description Check database references, artifact hashes, and the fact lifecycle.
+         */
+        post: operations["reconcile_api_v1_maintenance_reconciliations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/{operation_id}": {
         parameters: {
             query?: never;
@@ -2095,6 +2115,30 @@ export interface components {
             events: components["schemas"]["FactEventResponse"][];
         };
         /**
+         * FactLifecycleReportResponse
+         * @description The fact lifecycle checked against its audit trail.
+         */
+        FactLifecycleReportResponse: {
+            /** Fact Counts */
+            fact_counts: {
+                [key: string]: number;
+            };
+            /** Facts Version */
+            facts_version: string;
+            /** Journal Prepared */
+            journal_prepared: number;
+            /** Journal Quarantined */
+            journal_quarantined: number;
+            /** Lifecycle Version */
+            lifecycle_version: string;
+            /** Passed */
+            passed: boolean;
+            /** Problems */
+            problems: string[];
+            /** Tracked Facts */
+            tracked_facts: number;
+        };
+        /**
          * FactListItemResponse
          * @description One fact, beside the status its audit trail last recorded.
          *
@@ -2423,6 +2467,22 @@ export interface components {
             message: string;
         };
         /**
+         * ReconciliationResponse
+         * @description Whether stored evidence and the fact lifecycle agree.
+         *
+         *     `problems` describes stored artifacts; the lifecycle keeps its own list, so
+         *     a reader can tell which half is broken instead of seeing one merged list.
+         */
+        ReconciliationResponse: {
+            /** Artifact Versions Checked */
+            artifact_versions_checked: number;
+            fact_lifecycle: components["schemas"]["FactLifecycleReportResponse"];
+            /** Passed */
+            passed: boolean;
+            /** Problems */
+            problems: string[];
+        };
+        /**
          * RegenerateClaimRequest
          * @description What `POST /working-drafts/{id}/regenerate-claim` accepts (§14).
          */
@@ -2690,8 +2750,6 @@ export interface components {
             default_execution_mode: "deterministic" | "ai";
             /** Edit Version */
             edit_version: number;
-            /** Open Browser On Launch */
-            open_browser_on_launch: boolean;
             /** Provider Configured */
             provider_configured: boolean;
             /**
@@ -2798,8 +2856,6 @@ export interface components {
              * @enum {string}
              */
             default_execution_mode: "deterministic" | "ai";
-            /** Open Browser On Launch */
-            open_browser_on_launch: boolean;
             /**
              * Ui Density
              * @enum {string}
@@ -3061,7 +3117,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does. */
+                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key. */
                 "Idempotency-Key"?: string | null;
             };
             path: {
@@ -3216,7 +3272,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does. */
+                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key. */
                 "Idempotency-Key"?: string | null;
             };
             path: {
@@ -3557,7 +3613,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does. */
+                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key. */
                 "Idempotency-Key"?: string | null;
             };
             path: {
@@ -3595,7 +3651,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does. */
+                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key. */
                 "Idempotency-Key"?: string | null;
             };
             path: {
@@ -3765,7 +3821,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does. */
+                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key. */
                 "Idempotency-Key"?: string | null;
             };
             path: {
@@ -4200,6 +4256,26 @@ export interface operations {
             };
         };
     };
+    reconcile_api_v1_maintenance_reconciliations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconciliationResponse"];
+                };
+            };
+        };
+    };
     operation_api_v1_operations__operation_id__get: {
         parameters: {
             query?: never;
@@ -4266,7 +4342,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does. */
+                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key. */
                 "Idempotency-Key"?: string | null;
             };
             path: {
@@ -4495,7 +4571,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does. */
+                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key. */
                 "Idempotency-Key"?: string | null;
             };
             path: {
@@ -4630,7 +4706,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does. */
+                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key. */
                 "Idempotency-Key"?: string | null;
             };
             path: {
@@ -4668,7 +4744,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key, exactly as the CLI does. */
+                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key. */
                 "Idempotency-Key"?: string | null;
             };
             path: {
