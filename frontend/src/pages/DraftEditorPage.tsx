@@ -105,6 +105,15 @@ export const DraftEditorPage = () => {
   /* The revision this editor just approved. Held here rather than read from the
      projection so the render step names the exact revision the approval returned. */
   const [approvedRevisionId, setApprovedRevisionId] = useState<string | null>(null);
+  /* Approval deactivates the WorkingDraft atomically. Prefer the exact command response;
+     after a reload, the projection may recover the same pending render step only when
+     there is no newer active draft and the latest approved revision is the current
+     preparation milestone. */
+  const renderRevisionId =
+    approvedRevisionId ??
+    (workingDraftId === null && detail?.preparation_state === "approved"
+      ? (detail.latest_approved_revision_id ?? null)
+      : null);
 
   /* A save changes the draft, so the read that produced it is stale by definition. The
      new token is installed directly - it is the one the response returned for the version
@@ -254,7 +263,7 @@ export const DraftEditorPage = () => {
           <ErrorCallout error={draftQuery.error} title="לא ניתן לטעון את הטיוטה" />
         )}
 
-        {detail !== undefined && workingDraftId === null ? (
+        {detail !== undefined && workingDraftId === null && renderRevisionId === null ? (
           <Callout
             action={
               <Link className={buttonClasses("primary")} to={applicationHref}>
@@ -273,7 +282,7 @@ export const DraftEditorPage = () => {
             <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
               {workingDraftStateLabels[detail.working_draft_state]}
             </StatusBadge>
-            <DraftSaveState state={autosave} />
+            {workingDraftId === null ? null : <DraftSaveState state={autosave} />}
           </div>
         )}
 
@@ -301,7 +310,9 @@ export const DraftEditorPage = () => {
           </Callout>
         ))}
 
-        {draft === undefined ? (
+        {renderRevisionId !== null ? (
+          <DraftRenderPanel approvedRevisionId={renderRevisionId} />
+        ) : draft === undefined ? (
           workingDraftId === null || draftQuery.error !== null ? null : (
             <p className="text-body text-cv-text-muted">טוען את הטיוטה…</p>
           )
@@ -482,23 +493,19 @@ export const DraftEditorPage = () => {
                   stale={validationStale}
                 />
 
-                {approvedRevisionId === null ? (
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface">
-                    <p className="text-support leading-6 text-cv-text-muted">
-                      {exactPassingRunId === null
-                        ? "האישור נפתח אחרי אימות שעבר על הגרסה המוצגת."
-                        : "האימות עבר על הגרסה המוצגת."}
-                    </p>
-                    <Button
-                      disabled={exactPassingRunId === null}
-                      onClick={() => setApprovalOpen(true)}
-                    >
-                      אישור הגרסה
-                    </Button>
-                  </div>
-                ) : (
-                  <DraftRenderPanel approvedRevisionId={approvedRevisionId} />
-                )}
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface">
+                  <p className="text-support leading-6 text-cv-text-muted">
+                    {exactPassingRunId === null
+                      ? "האישור נפתח אחרי אימות שעבר על הגרסה המוצגת."
+                      : "האימות עבר על הגרסה המוצגת."}
+                  </p>
+                  <Button
+                    disabled={exactPassingRunId === null}
+                    onClick={() => setApprovalOpen(true)}
+                  >
+                    אישור הגרסה
+                  </Button>
+                </div>
               </div>
             </div>
 

@@ -25,6 +25,7 @@ import { type StatusTone } from "../ui/status";
 import { SummaryList, type SummaryItem } from "../ui/SummaryList";
 import { TechnicalDetails } from "../ui/TechnicalDetails";
 import { OperationActions } from "./OperationActions";
+import { preparationStateNextStep } from "./applicationLabels";
 import { autoDraftSources } from "./autoDraft";
 
 /* Keyed by the generated unions, so a status or phase added to the backend lifecycle
@@ -334,13 +335,32 @@ export const OperationPage = () => {
      the work is over that sentence is spent, and "the automatic refresh has stopped" is a
      fact about polling machinery offered to someone who wants to know what happened. So a
      finished operation describes its outcome instead, and a successful one names what it
-     produced when the outputs say. */
+     produced when the outputs say.
+
+     What comes next is the projection's answer, not this screen's: the sentence is the
+     same `preparationStateNextStep` the Application screen shows, read from the same
+     projection, so this reports the workflow position rather than deciding one (A.1). The
+     detail query polls while an Operation is live and stops at a terminal status, so by
+     the time this renders the stage it names is the post-operation stage.
+
+     Pointing at the other screen instead - "go back and it will tell you" - was the same
+     deferral the finished Operation used to make with its buttons, on a screen that
+     already holds the answer. */
+  /* The lookup is guarded rather than indexed straight: `preparation_state` is a union
+     the backend owns, and a projection carrying a stage this build does not know would
+     otherwise stringify `undefined` into the sentence. Missing copy falls back to the
+     deferral, which is always true. */
+  const nextStep = applicationQuery.data
+    ? (preparationStateNextStep[applicationQuery.data.preparation_state] ?? null)
+    : null;
+  const completion =
+    produced.length === 0 ? "הפעולה הושלמה." : `הפעולה הושלמה ויצרה ${joinHebrewList(produced)}.`;
   const description = !terminal
     ? "העמוד מתעדכן מעצמו עד לסיום הפעולה."
     : succeeded
-      ? produced.length === 0
-        ? "הפעולה הושלמה. חזרה למועמדות מציגה מה הפעולה הבאה."
-        : `הפעולה הושלמה ויצרה ${joinHebrewList(produced)}. חזרה למועמדות מציגה מה הפעולה הבאה.`
+      ? nextStep === null
+        ? `${completion} חזרה למועמדות מציגה מה הפעולה הבאה.`
+        : `${completion} ${nextStep}`
       : "הפעולה הסתיימה והעדכון האוטומטי נעצר.";
 
   return (

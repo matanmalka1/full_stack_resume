@@ -485,4 +485,41 @@ describe("OperationPage", () => {
       ),
     ).toBeInTheDocument();
   });
+
+  it("names what the workflow is waiting on next, from the projection", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === projectionUrl) {
+          return Promise.resolve(
+            jsonResponse({ ...projection, preparation_state: "draft_in_progress" }),
+          );
+        }
+        return Promise.resolve(
+          jsonResponse(
+            operation({
+              operation_type: "create_draft",
+              status: "succeeded",
+              is_terminal: true,
+              phase: "completed",
+              outputs: [
+                { output_type: "working_draft", output_id: "draft-1", active: true },
+              ],
+            }),
+          ),
+        );
+      }),
+    );
+
+    renderPage(<OperationPage />);
+
+    /* The stage sentence is the Application screen's own copy, read from the same
+       projection: this screen reports the workflow position rather than deciding one. */
+    expect(
+      await screen.findByText(
+        "הפעולה הושלמה ויצרה טיוטה. יש טיוטה פעילה לעבוד עליה. כשהיא מוכנה, אימות בודק אותה מול העובדות הקנוניות.",
+      ),
+    ).toBeInTheDocument();
+  });
 });

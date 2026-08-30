@@ -299,6 +299,43 @@ describe("DraftEditorPage", () => {
     );
   });
 
+  it("keeps the approved revision render step after approval deactivates the draft", async () => {
+    const fetchMock = vi.fn((input: unknown) => {
+      const url = String(input);
+      if (url.includes("/approved-revisions/revision-1")) {
+        return Promise.resolve(
+          jsonResponse({
+            id: "revision-1",
+            application_id: "app-1",
+            ready_qualified: false,
+          }),
+        );
+      }
+      return Promise.resolve(
+        jsonResponse(
+          detail({
+            active_working_draft_id: null,
+            latest_approved_revision_id: "revision-1",
+            preparation_state: "approved",
+            working_draft_state: "none",
+          }),
+        ),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "הגרסה אושרה" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "יצירת HTML ו־PDF" })).toBeEnabled(),
+    );
+    expect(screen.queryByText("אין כרגע טיוטה פעילה למועמדות הזו")).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.every((call) => !String(call[0]).startsWith(DRAFT_PATH))).toBe(
+      true,
+    );
+  });
+
   it("states why a structural line stays instead of offering a removal that would be refused", async () => {
     stubReads({});
 

@@ -171,17 +171,6 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
       </Link>
     );
 
-  const editButton =
-    editHref === null ? null : (
-      <Link
-        className={buttonClasses(editRecommended ? "primary" : "secondary")}
-        key="edit"
-        to={editHref}
-      >
-        עריכת הטיוטה
-      </Link>
-    );
-
   const draftButton = canDraft ? (
     <Button
       disabled={settings === undefined || draft.isPending}
@@ -194,8 +183,37 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
   ) : null;
   const routeButton = (key: string, href: string | null, label: string, emphasized: boolean) =>
     href === null ? null : <Link className={buttonClasses(emphasized ? "primary" : "secondary")} key={key} to={href}>{label}</Link>;
-  const validationButton = routeButton("validate", validationHref, "אימות הטיוטה", recommended === "validate");
-  const approvalButton = routeButton("approve", approvalHref, "אישור הגרסה", recommended === "approve");
+  /* `update_working_draft`, `validate` and `approve` all resolve to the draft editor:
+     validation is a panel on that screen and approval is a dialog opened from it, so all
+     three are the same link wearing three labels. Offered side by side they read as three
+     destinations and ask the reader to choose between them, when every choice arrives at
+     the same place - and on this screen the row had four buttons, three of which went to
+     one URL.
+
+     So they collapse to one control. Which of the three names it is the projection's
+     recommendation, not this screen's guess; with none of them recommended the furthest
+     along is the honest label, because that is the one the workflow is waiting on. The
+     approval dialog behind it carries the acknowledgement and the immutability warning,
+     which is why nothing here needs to restate them: this button navigates, it does not
+     commit. */
+  /* Furthest along wins the label: if approval is offered the draft is validated and
+     approving is what the workflow is waiting on, and so down the chain. The projection's
+     recommendation decides emphasis only - it never picks a different destination, since
+     there is only one. */
+  const draftScreen =
+    approvalHref !== null
+      ? { href: approvalHref, label: "אישור הגרסה" }
+      : validationHref !== null
+        ? { href: validationHref, label: "אימות הטיוטה" }
+        : editHref !== null
+          ? { href: editHref, label: "עריכת הטיוטה" }
+          : null;
+  const draftScreenButton = routeButton(
+    "draft-screen",
+    draftScreen?.href ?? null,
+    draftScreen?.label ?? "",
+    recommended === "approve" || recommended === "validate" || recommended === "update_working_draft",
+  );
   const readyButton = routeButton("ready", readyHref, "צפייה בגרסה המוכנה", detail.preparation_state === "ready");
 
   return (
@@ -262,9 +280,7 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
           analyzeButton,
           reviewButton,
           draftButton,
-          editButton,
-          validationButton,
-          approvalButton,
+          draftScreenButton,
           readyButton,
         ].filter((button) => button !== null);
 
@@ -276,9 +292,10 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
           ["analyze", analyzeRecommended],
           ["review", reviewRecommended],
           ["draft", draftRecommended],
-          ["edit", editRecommended],
-          ["validate", recommended === "validate"],
-          ["approve", recommended === "approve"],
+          [
+            "draft-screen",
+            editRecommended || recommended === "validate" || recommended === "approve",
+          ],
           ["ready", detail.preparation_state === "ready"],
         ]);
         const emphasized =
