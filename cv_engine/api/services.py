@@ -18,6 +18,7 @@ from ..application.services.analysis import AnalysisService
 from ..application.services.applications import ApplicationService
 from ..application.services.drafts import DraftService
 from ..application.services.knowledge import KnowledgeService
+from ..application.services.maintenance import MaintenanceService
 from ..application.services.operations import OperationService
 from ..application.services.projections import ApplicationQueryService
 from ..application.services.rendering import RenderingService
@@ -56,6 +57,7 @@ class ApiServices:
     rendering: RenderingService
     tracking: TrackingService
     knowledge: KnowledgeService
+    maintenance: MaintenanceService
     operations: OperationService
     settings: SettingsService
     identity: InstanceIdentity

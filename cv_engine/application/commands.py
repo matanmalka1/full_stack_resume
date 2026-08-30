@@ -2,7 +2,7 @@
 
 These models are deliberately storage-neutral. A client receives identities,
 validated domain documents, and workflow state; local paths are resolved only
-by CLI compatibility code or an infrastructure adapter.
+by an infrastructure adapter.
 """
 
 from __future__ import annotations
@@ -18,6 +18,17 @@ class BoundaryDTO(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
+#: Who a new record may name as its originating client. There is no default: a
+#: command that records who acted must be told, because a wrong default is
+#: indistinguishable from a correct one once it is in the audit trail.
+WriteClient = Literal["web", "worker"]
+
+#: What may be read back. Some stored records name a client outside the write
+#: set, and they are immutable, so a reader that refused the value would fail on
+#: real data. Deliberately wider than `WriteClient`: widening what may be
+#: written is a decision, not a side effect of reading.
+StoredClient = Literal["web", "cli", "worker"]
+
 DuplicateMatchReason = Literal["source_url", "normalized_text", "company_title"]
 
 
@@ -27,7 +38,7 @@ class IngestCommand(BoundaryDTO):
     job_text: str
     source_url: str | None = None
     actor_type: Literal["user", "system"] = "user"
-    client: Literal["web", "cli", "worker"] = "cli"
+    client: WriteClient
     acknowledged_duplicates: bool = False
 
 
@@ -44,13 +55,13 @@ class CreateJobSnapshotCommand(BoundaryDTO):
     source_url: str | None = None
     source_metadata: dict[str, Any] = {}
     actor_type: Literal["user", "system"] = "user"
-    client: Literal["web", "cli", "worker"] = "cli"
+    client: WriteClient
 
 
 class CloseApplicationCommand(BoundaryDTO):
     application_id: str
     actor_type: Literal["user", "system"] = "user"
-    client: Literal["web", "cli", "worker"] = "cli"
+    client: WriteClient
 
 
 class AnalyzeCommand(BoundaryDTO):
@@ -240,14 +251,14 @@ class ArchiveWorkingDraftCommand(BoundaryDTO):
     """§14: materialize the historical snapshot, then clear the active pointer.
 
     `actor_type` and `client` are carried rather than assumed, because this
-    command writes an audit record. A Web archive recorded as `cli` is a false
-    statement in the one place that exists to answer who did it.
+    command writes an audit record. A Web archive recorded as anything else is
+    a false statement in the one place that exists to answer who did it.
     """
 
     working_draft_id: str
     expected_edit_version: int
     actor_type: Literal["user", "system"] = "user"
-    client: Literal["web", "cli", "worker"] = "cli"
+    client: WriteClient
 
 
 class ReplaceWorkingDraftCommand(BoundaryDTO):
@@ -273,7 +284,7 @@ class ReplaceWorkingDraftCommand(BoundaryDTO):
     keep_previous: bool = False
     provider: Literal["deterministic", "openai"] = "deterministic"
     actor_type: Literal["user", "system"] = "user"
-    client: Literal["web", "cli", "worker"] = "cli"
+    client: WriteClient
 
 
 class ValidateDraftCommand(BoundaryDTO):
@@ -300,7 +311,7 @@ class ApproveDraftCommand(BoundaryDTO):
     expected_edit_version: int
     validation_run_id: str
     actor_type: Literal["user", "system"] = "user"
-    client: Literal["web", "cli", "worker"] = "cli"
+    client: WriteClient
 
 
 class RenderCommand(BoundaryDTO):
@@ -314,7 +325,7 @@ class RecruitmentStatusCommand(BoundaryDTO):
     reason: str = ""
     occurred_at: str | None = None
     actor_type: Literal["user", "system"] = "user"
-    client: Literal["web", "cli", "worker"] = "cli"
+    client: WriteClient
 
 
 class RecruitmentCorrectionCommand(BoundaryDTO):
@@ -324,7 +335,7 @@ class RecruitmentCorrectionCommand(BoundaryDTO):
     reason: str = Field(min_length=1)
     occurred_at: str | None = None
     actor_type: Literal["user", "system"] = "user"
-    client: Literal["web", "cli", "worker"] = "cli"
+    client: WriteClient
 
 
 class SubmissionCommand(BoundaryDTO):
@@ -334,7 +345,7 @@ class SubmissionCommand(BoundaryDTO):
     submitted_at: str = Field(min_length=1)
     metadata: dict[str, Any] = {}
     actor_type: Literal["user", "system"] = "user"
-    client: Literal["web", "cli", "worker"] = "cli"
+    client: WriteClient
 
 
 class ExternalSubmissionCommand(BoundaryDTO):
@@ -343,7 +354,7 @@ class ExternalSubmissionCommand(BoundaryDTO):
     artifact_version_id: str | None = None
     metadata: dict[str, Any] = {}
     actor_type: Literal["user", "system"] = "user"
-    client: Literal["web", "cli", "worker"] = "cli"
+    client: WriteClient
 
 
 class NextActionCommand(BoundaryDTO):
@@ -352,7 +363,7 @@ class NextActionCommand(BoundaryDTO):
     next_action_date: str | None = None
     occurred_at: str | None = None
     actor_type: Literal["user", "system"] = "user"
-    client: Literal["web", "cli", "worker"] = "cli"
+    client: WriteClient
 
 
 class DuplicateMatch(BoundaryDTO):
@@ -612,6 +623,21 @@ class FactReconciliationResult(BoundaryDTO):
     problems: list[str]
     journal_prepared: int = 0
     journal_quarantined: int = 0
+
+
+class ReconciliationResult(BoundaryDTO):
+    """The whole-instance reconciliation report.
+
+    `passed` is the conjunction of both halves: stored evidence agreeing with
+    the database, and the fact lifecycle agreeing with its audit trail. A
+    caller that reads only one half would report a healthy instance while the
+    other half is broken.
+    """
+
+    passed: bool
+    artifact_versions_checked: int
+    problems: list[str]
+    fact_lifecycle: FactReconciliationResult
 
 
 def fact_event_view(record: dict[str, Any]) -> FactEventView:

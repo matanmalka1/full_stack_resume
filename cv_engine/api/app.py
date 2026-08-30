@@ -1,11 +1,11 @@
 """The FastAPI application.
 
 `create_app` builds a server and nothing else. It does not start the Operation
-worker: the worker is hosted by the `cv web` supervisor (M6 §8.1), because
+worker: the worker is its own process (`python -m cv_engine.worker`), because
 FastAPI is a server rather than a process manager, and a worker tied to an app
-lifespan would start a second one for every test client. In M3 the test harness
-runs an app and a worker side by side, which is the same arrangement the
-supervisor will make.
+lifespan would start a second one for every test client. The test harness runs an
+app and a worker side by side, which is the same arrangement the two processes
+make in production.
 """
 
 from __future__ import annotations
@@ -28,6 +28,7 @@ from .routers import (
     artifacts,
     facts,
     health,
+    maintenance,
     operations,
     settings,
     tracking,
@@ -90,6 +91,7 @@ def create_app(
     app.include_router(settings.router, prefix=API_PREFIX)
     app.include_router(tracking.router, prefix=API_PREFIX)
     app.include_router(validation_runs.router, prefix=API_PREFIX)
+    app.include_router(maintenance.router, prefix=API_PREFIX)
     if frontend_dist is not None:
         # Added last, so it runs first. It handles only safe static GET/HEAD
         # requests and passes every API path through to the existing transport

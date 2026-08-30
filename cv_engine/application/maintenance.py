@@ -1,9 +1,12 @@
 """Maintenance operations: integrity reconciliation and data export.
 
-These are the operations the CLI keeps after the Web UI became the product
-interface. They are not product capabilities - nothing here creates, edits, or
-approves a record - so they live in the application layer where the CLI can
-call them without the CLI holding logic of its own.
+These are not product capabilities - nothing here creates, edits, or approves a
+record - so they live in the application layer, where any caller reaches them
+without holding logic of its own.
+
+This layer projects an export; it does not write one. Touching the filesystem
+here would put storage layout in the layer that must stay independent of it,
+so the CSV writer lives in `infrastructure/exports.py`.
 """
 
 from __future__ import annotations

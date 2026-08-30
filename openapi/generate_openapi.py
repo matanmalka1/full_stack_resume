@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import sys
+from dataclasses import fields
 from pathlib import Path
 from typing import Any, cast
 
@@ -30,18 +31,27 @@ from cv_engine.runtime.config import API_MAX_BODY_BYTES_DEFAULT  # noqa: E402
 OUTPUT = ROOT / "openapi" / "openapi.json"
 
 
+#: Filled in for real; every other field is a placeholder the route table
+#: never dereferences.
+_DESCRIBED_FIELDS = {"identity", "limits"}
+
+
 def schema_only_services() -> ApiServices:
+    """An `ApiServices` whose service fields are placeholders.
+
+    The service names are read from the dataclass rather than listed here. A
+    hand-written list silently stops covering a service somebody adds, which is
+    how this generator broke once: it kept constructing the container the way it
+    looked when the list was written.
+    """
     placeholder = cast(Any, None)
+    services = {
+        field.name: placeholder
+        for field in fields(ApiServices)
+        if field.name not in _DESCRIBED_FIELDS
+    }
     return ApiServices(
-        applications=placeholder,
-        queries=placeholder,
-        analysis=placeholder,
-        drafts=placeholder,
-        rendering=placeholder,
-        tracking=placeholder,
-        knowledge=placeholder,
-        operations=placeholder,
-        settings=placeholder,
+        **services,
         identity=InstanceIdentity(
             product_version="schema-only",
             api_version=API_VERSION,
