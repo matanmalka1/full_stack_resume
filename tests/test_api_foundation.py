@@ -112,9 +112,7 @@ def test_structured_runtime_log_keeps_full_traceback_but_redacts_credentials(
 ) -> None:
     event_sink = StructuredRuntimeLogger(tmp_path, tmp_path / "logs", "server.jsonl")
     try:
-        raise RuntimeError(
-            "Authorization: Bearer token-value api_key=plain-value sk-live-secret"
-        )
+        raise RuntimeError("Authorization: Bearer token-value api_key=plain-value sk-live-secret")
     except RuntimeError as error:
         event_sink.record("request.failed", "ERROR", {"path": "/api/v1/example"}, error)
 
@@ -437,9 +435,7 @@ def test_the_committed_openapi_schema_matches_the_application() -> None:
     exists.
     """
     schema = build_schema()
-    validation_response = schema["paths"][f"{API_PREFIX}/applications"]["post"][
-        "responses"
-    ]["422"]
+    validation_response = schema["paths"][f"{API_PREFIX}/applications"]["post"]["responses"]["422"]
 
     assert set(validation_response["content"]) == {PROBLEM_CONTENT_TYPE}
     validation_schema = validation_response["content"][PROBLEM_CONTENT_TYPE]["schema"]

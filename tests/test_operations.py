@@ -334,14 +334,8 @@ def test_worker_logs_claim_and_terminal_result_but_not_an_empty_poll(
     assert result.status is OperationStatus.SUCCEEDED
     assert empty_result is None
     assert len(caplog.messages) == message_count
-    assert any(
-        f"operation claimed id={operation.id}" in message
-        for message in caplog.messages
-    )
-    assert any(
-        f"operation completed id={operation.id}" in message
-        for message in caplog.messages
-    )
+    assert any(f"operation claimed id={operation.id}" in message for message in caplog.messages)
+    assert any(f"operation completed id={operation.id}" in message for message in caplog.messages)
     entries = [
         json.loads(line)
         for line in (tmp_path / "logs" / "operations.jsonl")
@@ -356,9 +350,7 @@ def test_worker_logs_claim_and_terminal_result_but_not_an_empty_poll(
         "operation.phase_changed",
         "operation.succeeded",
     ]
-    assert [
-        entry["phase"] for entry in entries if entry["event"] == "operation.phase_changed"
-    ] == [
+    assert [entry["phase"] for entry in entries if entry["event"] == "operation.phase_changed"] == [
         OperationPhase.PRE_EXECUTION_CHECK.value,
         OperationPhase.EXECUTING.value,
         OperationPhase.PRE_ACTIVATION_CHECK.value,

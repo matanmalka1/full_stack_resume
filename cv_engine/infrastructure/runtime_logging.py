@@ -73,9 +73,7 @@ class StructuredRuntimeLogger:
                     "exception_type": type(error).__name__,
                     "exception_detail": redact_log_text(str(error)),
                     "traceback": redact_log_text(
-                        "".join(
-                            traceback.format_exception(type(error), error, error.__traceback__)
-                        )
+                        "".join(traceback.format_exception(type(error), error, error.__traceback__))
                     ),
                 }
             )

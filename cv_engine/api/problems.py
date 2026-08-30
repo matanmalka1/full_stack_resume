@@ -209,9 +209,7 @@ async def application_error_handler(request: Request, exc: Exception) -> JSONRes
     )
 
 
-async def request_validation_error_handler(
-    request: Request, exc: Exception
-) -> JSONResponse:
+async def request_validation_error_handler(request: Request, exc: Exception) -> JSONResponse:
     """Turn FastAPI/Pydantic request failures into the one public error shape.
 
     Pydantic includes the rejected input in its native error dictionaries. Only

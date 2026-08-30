@@ -152,8 +152,7 @@ class OperationRunner:
             return self.operation_failure_logger(error, operation, error_code)
         except Exception as logging_error:
             logger.warning(
-                "structured worker failure log unavailable operation_id=%s "
-                "exception_type=%s",
+                "structured worker failure log unavailable operation_id=%s exception_type=%s",
                 operation_id,
                 type(logging_error).__name__,
             )
@@ -162,9 +161,7 @@ class OperationRunner:
     def _cancelled(self, operation_id: str) -> bool:
         return self.repository.cancellation_requested(operation_id)
 
-    def _set_phase(
-        self, operation_id: str, phase: OperationPhase
-    ) -> PersistedOperation:
+    def _set_phase(self, operation_id: str, phase: OperationPhase) -> PersistedOperation:
         self.repository.set_operation_phase(
             operation_id,
             phase,
@@ -252,9 +249,7 @@ class OperationRunner:
 
         while True:
             try:
-                operation = self._set_phase(
-                    operation_id, OperationPhase.PRE_EXECUTION_CHECK
-                )
+                operation = self._set_phase(operation_id, OperationPhase.PRE_EXECUTION_CHECK)
                 handler.check_sources(operation, self.repository)
                 if self._cancelled(operation_id):
                     return self.repository.complete_operation(

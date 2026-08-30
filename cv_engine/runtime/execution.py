@@ -96,9 +96,7 @@ class OperationWorker:
                 self._active_ids.discard(claimed.id)
 
     def _log_result(self, operation: PersistedOperation, duration_ms: int) -> None:
-        failure_code = (
-            operation.failure_code.value if operation.failure_code is not None else None
-        )
+        failure_code = operation.failure_code.value if operation.failure_code is not None else None
         fields = {
             "runner_id": self.runner.runner_id,
             "attempts_completed": operation.attempts_completed,
@@ -124,9 +122,7 @@ class OperationWorker:
         else:
             level = "INFO"
             logger.info("operation completed id=%s duration_ms=%s", operation.id, duration_ms)
-        self.runner.record_event(
-            f"operation.{operation.status.value}", level, operation, fields
-        )
+        self.runner.record_event(f"operation.{operation.status.value}", level, operation, fields)
 
     def serve(self, stop: Event) -> None:
         recovered = self.recover_startup()
