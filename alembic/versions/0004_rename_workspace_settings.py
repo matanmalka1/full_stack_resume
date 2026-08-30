@@ -25,12 +25,11 @@ def upgrade() -> None:
         "singleton",
     ):
         op.execute(
-            f'ALTER TABLE app_settings RENAME CONSTRAINT '
+            f"ALTER TABLE app_settings RENAME CONSTRAINT "
             f'"ck_workspace_settings_{suffix}" TO "ck_app_settings_{suffix}"'
         )
     op.execute(
-        'ALTER TABLE app_settings RENAME CONSTRAINT '
-        '"pk_workspace_settings" TO "pk_app_settings"'
+        'ALTER TABLE app_settings RENAME CONSTRAINT "pk_workspace_settings" TO "pk_app_settings"'
     )
 
 
@@ -43,11 +42,10 @@ def downgrade() -> None:
         "singleton",
     ):
         op.execute(
-            f'ALTER TABLE app_settings RENAME CONSTRAINT '
+            f"ALTER TABLE app_settings RENAME CONSTRAINT "
             f'"ck_app_settings_{suffix}" TO "ck_workspace_settings_{suffix}"'
         )
     op.execute(
-        'ALTER TABLE app_settings RENAME CONSTRAINT '
-        '"pk_app_settings" TO "pk_workspace_settings"'
+        'ALTER TABLE app_settings RENAME CONSTRAINT "pk_app_settings" TO "pk_workspace_settings"'
     )
     op.rename_table("app_settings", "workspace_settings")
