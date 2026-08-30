@@ -76,11 +76,7 @@ def _free_loopback_port(host: str) -> int:
         return int(candidate.getsockname()[1])
 
 
-def select_web_endpoint(
-    services: Services,
-    *,
-    preferred_port: int | None = None,
-) -> WebEndpoint:
+def select_web_endpoint(*, preferred_port: int | None = None) -> WebEndpoint:
     preferred_port = DEFAULT_PORT if preferred_port is None else preferred_port
     if not 1 <= preferred_port <= 65535:
         raise WebRuntimeError("Web port must be between 1 and 65535")

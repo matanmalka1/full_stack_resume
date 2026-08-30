@@ -12,7 +12,7 @@ from .output import _print
 @_command("web")
 def _web(context: CommandContext) -> int:
     services = context.built_services
-    endpoint = select_web_endpoint(services, preferred_port=context.args.port)
+    endpoint = select_web_endpoint(preferred_port=context.args.port)
     open_browser = not context.args.no_open and services.settings.read().open_browser_on_launch
     if endpoint.reuse_existing:
         _print({"url": endpoint.url, "reused_existing": True})

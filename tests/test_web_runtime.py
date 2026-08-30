@@ -43,14 +43,14 @@ def _post_json(url: str, body: dict, *, origin: str) -> tuple[int, dict, str | N
         return response.status, json.loads(response.read()), response.headers.get("Location")
 
 
-def test_select_web_endpoint_reuses_the_same_application(services, monkeypatch) -> None:
+def test_select_web_endpoint_reuses_the_same_application(monkeypatch) -> None:
     monkeypatch.setattr("cv_engine.runtime.web._port_is_open", lambda _host, _port: True)
     monkeypatch.setattr(
         "cv_engine.runtime.web._health_identity",
         lambda _endpoint: {"product_version": "2.0.0"},
     )
 
-    endpoint = select_web_endpoint(services)
+    endpoint = select_web_endpoint()
 
     assert endpoint == WebEndpoint("127.0.0.1", 8765, reuse_existing=True)
 
@@ -84,7 +84,7 @@ def test_web_runtime_serves_a_present_frontend_build(services, tmp_path: Path) -
     assert runtime.frontend_dist == dist.resolve()
 
 
-def test_select_web_endpoint_avoids_a_foreign_process(services, monkeypatch) -> None:
+def test_select_web_endpoint_avoids_a_foreign_process(monkeypatch) -> None:
     monkeypatch.setattr("cv_engine.runtime.web._port_is_open", lambda _host, _port: True)
     monkeypatch.setattr(
         "cv_engine.runtime.web._health_identity",
@@ -92,7 +92,7 @@ def test_select_web_endpoint_avoids_a_foreign_process(services, monkeypatch) -> 
     )
     monkeypatch.setattr("cv_engine.runtime.web._free_loopback_port", lambda _host: 49152)
 
-    endpoint = select_web_endpoint(services)
+    endpoint = select_web_endpoint()
 
     assert endpoint == WebEndpoint("127.0.0.1", 49152)
 

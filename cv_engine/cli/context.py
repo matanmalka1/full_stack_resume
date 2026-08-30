@@ -1,8 +1,7 @@
 """Resolving the fixed application root and building command services.
 
-`CommandContext` carries what one command was given, opened as far as that
-command needs; the `_command` registry binds a command name to its handler
-and the stage (`root` or `services`) it requires.
+`CommandContext` carries what one command was given; the `_command` registry
+binds a command name to its handler.
 """
 
 from __future__ import annotations
@@ -28,8 +27,12 @@ def _repo_root() -> Path:
     return Path(test_root).resolve() if test_root else Path(__file__).resolve().parent.parent.parent
 
 
-def _resolve_root(args: argparse.Namespace) -> tuple[Path, Any]:
-    """Return the repository root and its configuration."""
+def _resolve_root() -> tuple[Path, Any]:
+    """Return the fixed repository root and its configuration.
+
+    The root is not a command's to choose: it comes from the installed
+    location, or from `CV_TEST_PROJECT_ROOT` for an isolated test project.
+    """
     root = _repo_root().resolve()
     config = resolve_config(env=os.environ, project_root=root)
     return root, config
@@ -37,7 +40,7 @@ def _resolve_root(args: argparse.Namespace) -> tuple[Path, Any]:
 
 @dataclass
 class CommandContext:
-    """What one command was given, opened as far as that command needs.
+    """What one command was given.
 
     Every command uses the same fixed root and composition.
     """
@@ -66,20 +69,20 @@ class CommandContext:
 Handler = Callable[[CommandContext], int]
 
 
-_HANDLERS: dict[str, tuple[str, Handler]] = {}
+_HANDLERS: dict[str, Handler] = {}
 
 
-def _command(name: str, *, needs: str = "services") -> Callable[[Handler], Handler]:
-    """Register the handler for one top-level command and the stage it needs."""
+def _command(name: str) -> Callable[[Handler], Handler]:
+    """Register the handler for one top-level command."""
 
     def register(handler: Handler) -> Handler:
-        _HANDLERS[name] = (needs, handler)
+        _HANDLERS[name] = handler
         return handler
 
     return register
 
 
-def _build_context(args: argparse.Namespace, root: Path, config: Any, needs: str) -> CommandContext:
+def _build_context(args: argparse.Namespace, root: Path, config: Any) -> CommandContext:
     context = CommandContext(args=args, root=root, config=config)
     context.paths = AppPaths.from_root(root)
     context.services = build_services(context.paths, config=context.config)

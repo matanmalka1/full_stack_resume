@@ -46,13 +46,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        root, config = _resolve_root(args)
+        root, config = _resolve_root()
     except (ConfigError, PathConfigurationError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
-    needs, handler = _HANDLERS[args.command]
+    handler = _HANDLERS[args.command]
     try:
-        return handler(_build_context(args, root, config, needs))
+        return handler(_build_context(args, root, config))
     except (
         ValueError,
         KeyError,
