@@ -15,6 +15,7 @@ One fact, one place. This file is the only record of current M4 state.
 | Frontend dependency and layer boundaries | `docs/spec/architecture.md` |
 | Required Web evidence | `docs/spec/test-and-acceptance-plan.md` |
 | Non-milestone cleanup | `docs/cleanup-todos.md` |
+| What M5 must still do | `docs/m5-remaining.md` |
 
 ## Boundary and sequence
 

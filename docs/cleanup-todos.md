@@ -2,7 +2,7 @@
 
 Non-milestone cleanup items, tracked here so they do not compete with milestone scope in
 the current tracker, `docs/m4-remaining.md`. Anything that becomes milestone work moves
-there.
+there, or to `docs/m5-remaining.md` when it belongs to M5.
 
 Execution rule: work serially. Complete and verify one item, then wait for explicit user
 approval before starting the next. These items do not silently expand product semantics
