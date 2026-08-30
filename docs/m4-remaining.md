@@ -32,8 +32,9 @@ Work stays serial in this worktree. The implementation order is:
 5. validation, approval, rendering, and Ready;
 6. central failure paths, accessibility, browser coverage, and the M4 gate.
 
-Dashboard, tracking, submission, and Application Detail are M5 work and remain prohibited
-until the complete M4 gate passes. `cv web`, browser launch, port supervision, and Node-free
+Dashboard, tracking, submission, and Application Detail were M5 work, prohibited until the
+complete M4 gate passed. That gate was closed by decision on 2026-08-30 without its
+browser-journey evidence (§F), so the prohibition is lifted and M5 may begin. `cv web`, browser launch, port supervision, and Node-free
 runtime packaging remain M6 work. Development may use Vite and FastAPI directly; M4 still
 adds the production build/static-serving integration required by §6.2.
 
@@ -826,10 +827,64 @@ Focused evidence on 2026-08-24, run by the implementing agent against the workin
 | `cd frontend && npx vitest run src/api/settingsBehavior.test.ts src/pages/StageEPages.test.tsx src/pages/ValidationReportView.test.tsx` | **21 passed in 3 files** | deterministic fallback, exact approval modal/error behavior, displayed-revision historical warning, validation resolution copy, and the existing Stage E page contracts |
 | `git diff --check` | **passed** | the working patch has no whitespace errors |
 
+## F — M4 gate — closed deliberately on 2026-08-30, not passed
+
+**This gate's remaining evidence was retired by decision, not produced.** Recording that
+plainly matters more than the checkboxes: nothing below was proven, and no later milestone
+may cite Stage F as evidence that the built Web talks to the real backend.
+
+### What was retired
+
+| Gate item | Status |
+| --- | --- |
+| A real built-Web E2E completing Create through Ready against FastAPI, worker, PostgreSQL, object store, and renderer | **not proven — retired** |
+| The journey covering review-required and no-review paths | **not proven — retired** |
+| E2E failure cases: render failure/retry, old Ready with a newer draft | **not proven — retired** |
+| Chromium full E2E passes | partially standing: `npm run e2e` passes 5 tests over the shell and intake form only |
+| axe on New Application, Analysis Review, Draft Editor, Validation, Ready | **not proven — retired**; axe currently scans the intake screen only |
+| The UI explains state, blockers, and safe next actions without technical IDs | held by unit/component evidence in Stages C-E, never by a browser journey |
+
+The WebKit smoke and six of the eight central failure cases were already retired on
+2026-08-30 with reasons that stand on their own: `playwright.config.ts` declares only
+`chromium`, and the six cases are proven against the real client code in
+`useDraftAutosave.test.ts`, `DraftEditorPage.test.tsx`, `claimRemoval.test.ts`,
+`ValidationReportView.test.tsx`, `stageE.test.ts`, and `OperationPage.test.tsx`. Those
+six are genuinely covered elsewhere. The items in the table above are not.
+
+### The attempt, and why it is not in the tree
+
+`f1972ff` added `frontend/e2e/stage-f-journey.spec.ts`, `frontend/e2e/serve-real-app.py`,
+and a production Playwright configuration. `be3352a` reverted it. The revert commit records
+no reason, so none is invented here. The work is recoverable with
+`git revert be3352a` if this decision is reopened.
+
+### What this costs
+
+`playwright.config.ts` runs `vite preview` — a static build with no FastAPI, worker, or
+PostgreSQL. The two remaining specs cover the shell and the intake form. **No automated
+test in this repository proves the built Web application reaches a real backend.** The
+deterministic pipeline test proves the engine; the Vitest suites prove the client against a
+mocked transport; nothing joins them. A defect in that seam — production static serving,
+same-origin routing, the real Operation poll against a real worker — reaches the user
+first.
+
+`cv web` runtime evidence partly offsets this. `tests/test_web_runtime.py` proved real
+loopback HTTP, production frontend delivery, and a queued Analyze completed by the
+supervised worker. That is the seam tested from the Python side, without a browser.
+
+### Retired control
+
+CLAUDE.md's "Keeping this file small" rule asks each milestone to name one retired control.
+**M4 names this gate's browser-journey requirement.** That is a larger retirement than the
+rule anticipates: the rule expects a guard that never fired, and this is a guard that was
+never built. It is named here so the milestone does not also spend a second retirement.
+
 ## Current next action
 
-**Stages B, C, and D are closed on their applicable gates. Stage E implementation is complete
-and closed on its applicable Class C gate.
+**M4 is closed.** Stages B, C, and D are closed on their applicable gates. Stage E is
+closed on its applicable Class C gate. Stage F — the M4 gate — was closed deliberately on
+2026-08-30 without its browser-journey evidence; §F records exactly what was retired and
+what that costs. **The next boundary is M5, in `docs/m5-remaining.md`.**
 
 **The Known gap recorded here is closed.** A terminal Operation screen was a dead end: it
 reported that the Operation had finished and offered no way forward, and the destination

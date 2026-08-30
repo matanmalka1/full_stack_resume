@@ -234,10 +234,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
           render's evidence is not evidence, and "it survives cancellation" is a
           weaker claim than "it is all there or none of it is".
 
-        A failing render still registers, under `rendered-invalid`. The
-        artifacts are real, the validation report says why they are unusable,
-        and the runner's `activate_outputs=False` keeps every output inactive -
-        which is the failed-validation behavior Stage F already had, unchanged.
+    
         """
         command = prepared.command
         draft = prepared.draft

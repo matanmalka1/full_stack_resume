@@ -1,9 +1,10 @@
 # M5 — remaining work
 
-Status: **not started.** M5 is blocked until the M4 gate in `docs/m4-remaining.md` §F
-closes. `docs/m4-remaining.md` §"Boundary and sequence" states it directly: Dashboard,
-tracking, submission, and Application Detail are M5 work and remain prohibited until the
-complete M4 gate passes.
+Status: **not started; unblocked on 2026-08-30.** The M4 gate closed by decision rather
+than by evidence — `docs/m4-remaining.md` §F records what was retired and what it costs.
+M5 therefore starts without a proven built-Web journey behind it: the screens this
+milestone adds have no end-to-end safety net, and their own evidence has to carry more
+weight than it would have.
 
 Authority for scope and gates is `docs/spec/implementation-plan.md`. This file records
 only what M5 must still do; M4's record stays in its own tracker and is not amended here.
