@@ -1,7 +1,7 @@
 """The deterministic pipeline, driven through the application layer.
 
 `ingest -> analyze -> draft -> validate -> approve -> render -> ready ->
-reconcile`, with no AI key, no HTTP, and no CLI. This is the check CLAUDE.md
+reconcile`, with no AI key and no HTTP server. This is the check CLAUDE.md
 names as the one that has caught real defects here - approval silently
 destroying unimported manual edits - and it belongs to the engine rather than
 to any one client. Driving it through `application/` is what makes it prove

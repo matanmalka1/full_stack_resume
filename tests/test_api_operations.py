@@ -1,9 +1,8 @@
-"""M3 Stage C: the Operations surface, and the harness that makes it observable.
+"""The Operations surface and the harness that makes it observable.
 
-Stage D onwards submits Operations over HTTP. Until those endpoints exist the
-work is submitted through the application service the CLI already uses, which is
-the point: the Operation is the same durable row either way, and the endpoints
-under test are the ones that report and steer it.
+Operations are submitted through the application service and exposed through
+the API as the same durable rows the worker claims. The endpoints under test
+report and steer those rows without becoming an execution host.
 """
 
 from __future__ import annotations
@@ -18,7 +17,7 @@ from cv_engine.runtime.composition import build_api_services
 
 
 def _queued_analysis(services, company: str, *, idempotency_key: str = "stage-c-analysis"):
-    """One real queued Operation: exactly what `cv analyze` submits."""
+    """One real queued analysis Operation, submitted through the application service."""
     ingested = services.applications.ingest(
         IngestCommand(
             company=company,

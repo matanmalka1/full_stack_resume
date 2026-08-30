@@ -23,12 +23,6 @@ class BoundaryDTO(BaseModel):
 #: indistinguishable from a correct one once it is in the audit trail.
 WriteClient = Literal["web", "worker"]
 
-#: What may be read back. Some stored records name a client outside the write
-#: set, and they are immutable, so a reader that refused the value would fail on
-#: real data. Deliberately wider than `WriteClient`: widening what may be
-#: written is a decision, not a side effect of reading.
-StoredClient = Literal["web", "cli", "worker"]
-
 DuplicateMatchReason = Literal["source_url", "normalized_text", "company_title"]
 
 

@@ -2,8 +2,8 @@
 
 `create_app` starts no worker: FastAPI is a server, not a process manager, and a
 worker bound to an app lifespan would start a second one for every `TestClient`.
-So the arrangement the M6 supervisor will make is made here instead, in a
-harness the API tests share.
+The harness therefore starts the two hosts side by side, as independent
+production processes would run them.
 
 It has to exist for the Operation endpoints to mean anything. A `202` and a
 `Location` are only true if something is executing the queue, and a status that

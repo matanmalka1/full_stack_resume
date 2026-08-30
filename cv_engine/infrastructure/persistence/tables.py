@@ -244,11 +244,7 @@ recruitment_events = Table(
         name="to_status",
     ),
     CheckConstraint("actor_type IN ('user', 'system')", name="actor_type"),
-    # The stored set, wider than what may be written. Some existing rows name a
-    # client outside the write set and cannot be rewritten - these tables have
-    # no-update triggers. `WriteClient` in `application/commands.py` is the
-    # narrower set new writes are held to.
-    CheckConstraint("client IN ('web', 'cli', 'worker')", name="client"),
+    CheckConstraint("client IN ('web', 'worker')", name="client"),
     CheckConstraint(
         "event_type != 'status_correction' OR "
         "(corrects_event_id IS NOT NULL AND length(trim(reason)) > 0)",
@@ -437,11 +433,7 @@ audit_records = Table(
     Column("occurred_at", Text, nullable=False),
     Column("details_json", JSONB, nullable=False, server_default=text("'{}'::jsonb")),
     CheckConstraint("actor_type IN ('user', 'system')", name="actor_type"),
-    # The stored set, wider than what may be written. Some existing rows name a
-    # client outside the write set and cannot be rewritten - these tables have
-    # no-update triggers. `WriteClient` in `application/commands.py` is the
-    # narrower set new writes are held to.
-    CheckConstraint("client IN ('web', 'cli', 'worker')", name="client"),
+    CheckConstraint("client IN ('web', 'worker')", name="client"),
 )
 Index(
     "idx_audit_records_application",

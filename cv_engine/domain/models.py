@@ -583,9 +583,7 @@ class AuditRecord(StrictModel):
     entity_type: str
     entity_id: str
     actor_type: Literal["user", "system"]
-    #: The stored set: this models a persisted row, including ones whose
-    #: client is outside what may be written today.
-    client: Literal["web", "cli", "worker"]
+    client: Literal["web", "worker"]
     occurred_at: str
     details: dict[str, Any] = {}
 

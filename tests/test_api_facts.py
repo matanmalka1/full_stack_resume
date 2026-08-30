@@ -3,7 +3,7 @@
 What these pin is the specification's refusals, not just the happy path: a
 promotion without explicit confirmation must fail, identity must not be
 caller-chosen, and only a canonical fact may enter a Profile pool. Each of
-those was previously reachable only through the CLI.
+those previously lacked an API surface.
 """
 
 from __future__ import annotations

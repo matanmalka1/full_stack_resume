@@ -487,7 +487,7 @@ def test_runner_activates_outputs_and_completes_in_one_activation_transaction(se
     runner = OperationRunner(
         services.repository,
         {OperationType.ANALYZE_JOB: _Handler(execute=lambda *_args: prepared)},
-        runner_id="foreground-cli",
+        runner_id="foreground-test",
     )
 
     result = runner.run(operation.id)
@@ -636,7 +636,7 @@ def test_an_unclassified_infrastructure_failure_is_terminal_and_not_retried(
 def test_foreground_analysis_reuses_an_explicit_idempotency_key(services) -> None:
     ingested = services.applications.ingest(
         IngestCommand(
-            company="CLI Operation Co",
+            company="Foreground Operation Co",
             target_role="Account Manager",
             job_text=ACCOUNT_MANAGER_JOB,
             client="web",

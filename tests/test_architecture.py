@@ -1,6 +1,6 @@
 """The layering rule, enforced on the import graph rather than by review.
 
-`domain <- application <- infrastructure / cli / runtime`: dependencies point
+`domain <- application <- infrastructure / api / runtime / worker`: dependencies point
 inward. These tests are the M1 acceptance criterion that domain and application
 code carries no FastAPI, persistence-library, filesystem-layout, browser, or provider HTTP
 dependency, expressed so it keeps holding as later milestones add code.
@@ -45,7 +45,7 @@ ALLOWED_INTERNAL = {
     "application": {"domain", "application", "util"},
     # `api -> application`, and nothing outward of it. The composition root in
     # `runtime` builds the services and hands them in, so `api` never imports
-    # `runtime`, `infrastructure`, or `cli`. `domain` is allowed here for the
+    # `runtime` or `infrastructure`. `domain` is allowed here for the
     # package as a whole and forbidden inside `routers/`, which is checked
     # separately below.
     "api": {"domain", "application", "api", "util"},
@@ -178,9 +178,8 @@ def _defines_application_status_transition_table(path: Path) -> bool:
 def _layer_modules(name: str) -> list[Path]:
     """The modules that make up a top-level layer, whether it is one file or a package.
 
-    A layer that starts as a single module (`cli.py`) and later becomes a
-    package (`cli/`) must keep the same coverage without the check being
-    rewritten by hand for the new shape.
+    A layer that moves between a single module and a package must keep the same
+    coverage without the check being rewritten by hand for the new shape.
     """
     package = ENGINE / name
     if package.is_dir():
@@ -326,7 +325,7 @@ def test_domain_and_application_dependencies_point_inward() -> None:
 
 
 def test_infrastructure_does_not_import_its_composition_root() -> None:
-    """Adapters point inward only: no `infrastructure -> runtime / api / cli`.
+    """Adapters point inward only: no `infrastructure -> runtime / api / worker`.
 
     The inward test above iterates `domain`, `application`, and `api`, because
     its other half asserts storage purity and `infrastructure` is the layer
@@ -355,9 +354,9 @@ def test_known_outer_layer_policy_debt_does_not_grow() -> None:
     empty set rather than being deleted, so a re-introduced offender fails
     here instead of arriving with a fresh allowlist of its own.
 
-    `worker` is scanned rather than `cli` because it is now the process host
-    that is not the API: a host that reached past the composition root into the
-    database directly is the boundary this rule exists to catch.
+    `worker` is the process host that is not the API: a host that reached past
+    the composition root into the database directly is the boundary this rule
+    exists to catch.
     """
     offenders: set[str] = set()
     for path in _layer_modules("worker"):
@@ -531,7 +530,7 @@ def test_api_is_not_imported_by_the_layers_it_serves() -> None:
     The direction is `api -> application` and `runtime -> api`. An import
     pointing the other way - a service reaching for an HTTP schema, a repository
     raising something defined in a router - is how a transport concern becomes
-    load-bearing for the CLI, which does not go through HTTP at all.
+    load-bearing inside the layers the API is meant to serve.
     """
     offenders: list[str] = []
     for layer in ("domain", "application", "infrastructure", "worker"):

@@ -69,10 +69,9 @@ def validate_active_draft(services: Services, application_id: str):
 def approve_active_draft(services: Services, application_id: str, *, revision_id=None):
     """Validate, then approve exactly what that run passed.
 
-    This is what `cv approve` does at the CLI boundary, and it is what every
-    caller must now do: approval no longer validates for itself, so a test that
-    approves has to obtain the run first - which is the whole point of the
-    change.
+    Approval no longer validates for itself, so a caller must obtain the exact
+    run first. Keeping that sequence in one helper prevents tests from quietly
+    bypassing the binding the product requires.
     """
     validated = validate_active_draft(services, application_id)
     return services.drafts.approve_draft(

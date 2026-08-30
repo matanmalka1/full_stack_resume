@@ -511,7 +511,7 @@ def deterministic_renderer(monkeypatch: pytest.MonkeyPatch) -> None:
     through HTTP and the Operation worker without paying for a browser. What is
     substituted is the same two module functions in both cases - the seam is
     `infrastructure.rendering`, not the port - so an API render exercises the
-    identical service, handler, and registration path the CLI render does.
+    identical service, handler, and registration path the worker render uses.
 
     Tests that are *about* rendering, PDF geometry, or ATS text use the
     `render_validator` fixture instead and are browser-marked by collection.

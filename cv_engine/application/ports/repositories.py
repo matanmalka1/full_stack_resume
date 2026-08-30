@@ -279,7 +279,7 @@ class KnowledgeMutationRepository(Protocol):
 
 
 class OperationRepository(Protocol):
-    """Durable Operations shared by foreground and background runners."""
+    """Durable Operations shared safely by concurrent claimers."""
 
     def create_operation(
         self,

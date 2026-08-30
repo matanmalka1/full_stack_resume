@@ -45,8 +45,8 @@ def api(services):
     """The real app over the isolated test project.
 
     The Operation worker is deliberately absent: `create_app` builds a server,
-    and the worker is hosted by the supervisor. Stages that need one start it
-    alongside the app rather than inside it.
+    not a process host. Tests that need a worker start one alongside the app,
+    matching the two independent production processes.
     """
     with TestClient(create_app(build_api_services(services))) as client:
         yield client
@@ -61,8 +61,7 @@ def test_health_reports_this_instance_and_its_version_surfaces(api, services) ->
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    # The value a caller probes to tell this instance from a foreign process
-    # on the same port.
+    # Runtime identity is versioned product state, not a selectable root ID.
     assert "workspace_id" not in body
     assert body["api_version"] == "1"
     assert body["knowledge"] == services.knowledge_lifecycle.knowledge_versions().model_dump()

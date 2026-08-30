@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import pytest
 from conftest import alembic_head
+from pydantic import ValidationError
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError, ProgrammingError
 
 from cv_engine.application.commands import IngestCommand, NextActionCommand
-from cv_engine.domain.models import ApplicationStatus
+from cv_engine.domain.models import ApplicationStatus, AuditRecord
 from cv_engine.infrastructure.persistence import current_database_revision
 from cv_engine.infrastructure.persistence.tables import (
     applications,
@@ -61,6 +62,47 @@ def test_recruitment_event_and_transition_contract(application_repo) -> None:
                 .values(current_status="ready")
             )
     assert history == [(None, "saved", "user", "web")]
+
+
+def test_removed_cli_client_is_refused_at_the_command_and_database_boundaries(
+    application_repo,
+) -> None:
+    with pytest.raises(ValidationError):
+        IngestCommand(
+            company="Removed Client",
+            target_role="Developer",
+            job_text="Python role",
+            client="cli",  # type: ignore[arg-type]
+        )
+    with pytest.raises(ValidationError):
+        AuditRecord(
+            id="removed-client-audit",
+            application_id="application",
+            action="test",
+            entity_type="application",
+            entity_id="application",
+            actor_type="user",
+            client="cli",  # type: ignore[arg-type]
+            occurred_at="2026-08-30T12:00:00+00:00",
+        )
+
+    app_id, _ = _create(
+        application_repo,
+        company="Database Client Guard",
+        target_role="Developer",
+        text="Python role",
+    )
+    with pytest.raises(IntegrityError, match="ck_recruitment_events_client"):
+        application_repo.insert_next_action_event(
+            application_id=app_id,
+            next_action="Follow up",
+            next_action_date="2026-09-01",
+            actor_type="user",
+            client="cli",
+            occurred_at="2026-08-30T12:00:00+00:00",
+        )
+
+    assert application_repo.get_application(app_id)["next_action"] is None
 
 
 def test_immutable_job_snapshot_trigger(application_repo) -> None:
