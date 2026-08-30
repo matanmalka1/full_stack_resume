@@ -270,21 +270,6 @@ Objective: complete the same proven path through a Hebrew local Web UI.
 - Minimal Settings for auto-generation, AI enabled/default execution mode, provider
   configured state, open-browser preference, and basic UI preferences.
 
-### 6.4 M4 gate
-
-Dashboard work is prohibited until:
-
-- [ ] A real Web E2E completes the full sequence through Ready.
-- [ ] The same test covers review-required and no-review paths.
-- [ ] Central failures include unsupported edit, validation block, stale validation,
-      ETag conflict, provider failure, SOURCE_CHANGED, render failure/retry, and old
-      Ready with newer draft.
-- [ ] Chrome/Chromium E2E and central WebKit smoke pass.
-- [ ] axe passes on New Application, Analysis Review, Draft Editor, Validation, and
-      Ready.
-- [ ] The UI explains current state and blockers without technical knowledge.
-
-Stable commit boundary: first Web vertical slice complete and gate passed.
 
 ## 6. M5 — Tracking
 

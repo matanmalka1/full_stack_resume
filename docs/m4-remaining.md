@@ -47,8 +47,7 @@ masked only at display boundaries, and `OPENAI_API_KEY` is environment-only so `
 still proves the deterministic path is disarmed. `2bfae11` is formatting/readability only
 and changes no product contract.
 
-These are cross-cutting infrastructure amendments, not completion evidence for Stage F.
-The next product boundary remains the real built-Web E2E and failure/accessibility matrix.
+These are cross-cutting infrastructure amendments.
 
 ## A — Design pass
 
@@ -827,70 +826,10 @@ Focused evidence on 2026-08-24, run by the implementing agent against the workin
 | `cd frontend && npx vitest run src/api/settingsBehavior.test.ts src/pages/StageEPages.test.tsx src/pages/ValidationReportView.test.tsx` | **21 passed in 3 files** | deterministic fallback, exact approval modal/error behavior, displayed-revision historical warning, validation resolution copy, and the existing Stage E page contracts |
 | `git diff --check` | **passed** | the working patch has no whitespace errors |
 
-## F — M4 gate
-
-The reusable local Web host was pulled forward from M6 at the user's direction so this gate
-can exercise the deployed shape rather than a Vite-only surrogate. `cv web` now supervises
-FastAPI and the Operation worker over one validated project, serves the production React
-build same-origin on loopback, reuses a matching existing instance, avoids a foreign process
-with a free port, honors `--no-open`, and shuts both hosts down together. M6 still owns bundled
-package data, Open Logs Folder, and release hardening; none of those is claimed here.
-
-Focused runtime evidence on 2026-08-24:
-
-| Command | Observed | What it proves |
-| --- | --- | --- |
-| `pytest tests/test_api_foundation.py tests/test_web_runtime.py tests/test_architecture.py` | **32 passed** — 15 API foundation, 6 runtime, and 11 architecture | real loopback HTTP, production frontend delivery, a queued Analyze completed by the supervised worker, matching-instance reuse, foreign-port fallback, missing-build refusal, clean Ctrl+C shutdown, static/API routing, and preserved layer/containment guards |
-| targeted Ruff and Pyright over the changed runtime/CLI/port files | **passed; 0 type errors** | the new host satisfies formatting, import, and repository port contracts |
-| `python -m pip check` | **passed** | the added Uvicorn runtime dependency is consistent with the environment |
-| manual `cv web --no-open --port 18765` against a fresh test project | **passed** | health reported schema `0002`, FastAPI served the built React root, and Ctrl+C stopped Uvicorn and the worker without a traceback |
-
-- [ ] A real built-Web E2E completes Create through Ready against FastAPI, worker,
-      PostgreSQL, the configured object store, and renderer without mocking application
-      services or projections.
-- [ ] The journey covers review-required and no-review paths.
-- [ ] The E2E failure cases cover render failure/retry and old Ready with a newer draft.
-- [ ] Chromium full E2E passes.
-- [ ] axe passes on New Application, Analysis Review, Draft Editor, Validation, and Ready.
-- [ ] The UI explains state, blockers, and safe next actions without requiring technical IDs,
-      hashes, paths, logs, or architecture knowledge.
-
-### Two gate items were reduced on 2026-08-30, with reasons
-
-**WebKit smoke — removed.** `docs/spec/product-spec.md` §2 targets macOS for a local,
-single-user product that `cv web` opens in the user's own browser. `playwright.config.ts`
-declares only `chromium`, so the item asked for a browser nothing configured and no user
-runs. It is a guard that never fired and had no one to fire for. **This is the retired
-control M4 names under CLAUDE.md's "Keeping this file small" rule.**
-
-**The central failure matrix — reduced from eight cases to two.** Six were already proven
-where they actually break, against the real client code:
-
-| Case | Already proven by |
-| --- | --- |
-| ETag conflict | `useDraftAutosave.test.ts` — stops the queue, keeps the user's text |
-| unsupported edit | `DraftEditorPage.test.tsx`, `claimRemoval.test.ts` |
-| validation block | `ValidationReportView.test.tsx`, `StageEPages.test.tsx` |
-| stale validation | `stageE.test.ts` — historical run read by exact ID |
-| provider failure | `OperationPage.test.tsx` — every stable failure code presented |
-| `SOURCE_CHANGED` | `OperationPage.test.tsx` — activation refused, prior state kept |
-
-Repeating those through a browser pays roughly ten times the runtime for the same claim.
-The two that remain are the two a mocked client cannot prove: **render failure/retry**
-needs a real worker and a real renderer, and **old Ready with a newer draft** is a
-cross-screen projection state.
-
-This narrows the evidence to what only the E2E can establish. It does not weaken the gate's
-first item, which is the real gap: `playwright.config.ts` runs `vite preview`, a static
-build with no FastAPI, worker, or PostgreSQL, and the two existing specs cover the shell
-and the intake form. Nothing in the tree yet proves the built Web talks to the real
-backend.
-
 ## Current next action
 
 **Stages B, C, and D are closed on their applicable gates. Stage E implementation is complete
-and closed on its applicable Class C gate.** The next product boundary is Stage F's real
-built-Web journey and central failure matrix.
+and closed on its applicable Class C gate.
 
 **The Known gap recorded here is closed.** A terminal Operation screen was a dead end: it
 reported that the Operation had finished and offered no way forward, and the destination

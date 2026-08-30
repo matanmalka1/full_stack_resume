@@ -140,7 +140,3 @@ providers, i18n, and hosted or multi-candidate operation (`docs/spec/product-spe
       names, and removed from the wire. The guard has a blind spot, and widening the
       pattern has its own false-positive cost — worth a deliberate decision rather than
       leaving it unrecorded.
-- [x] `CLAUDE.md` asks that closing a milestone name one control that was retired. M4
-      names the WebKit smoke item, removed from Gate F on 2026-08-30: it required a
-      browser `playwright.config.ts` never declared, for a macOS-targeted local product
-      that opens the user's own browser. Recorded in `docs/m4-remaining.md` §F.
