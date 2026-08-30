@@ -85,6 +85,7 @@ const isFitLevel = memberOf<FitLevel>(fitLabels);
 export interface AnalysisGap {
   requirement: string;
   severity: "hard" | "warning";
+  reason: string;
 }
 
 export interface Classification {
@@ -95,10 +96,21 @@ export interface Classification {
   fit: FitLevel | null;
   gaps: AnalysisGap[];
   decided: string[];
+  /* The descriptive half of the document: what the analysis concluded and why, as
+     opposed to the four scalars a decision may override. Read the same defensively
+     narrow way - an unreadable field is absent rather than `undefined` on screen. */
+  rationale: string | null;
+  confidence: number | null;
+  keywords: string[];
+  mandatoryRequirements: string[];
+  preferredRequirements: string[];
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
+
+const stringsFrom = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 
 const gapsFrom = (value: unknown): AnalysisGap[] => {
   if (!Array.isArray(value)) {
@@ -109,15 +121,22 @@ const gapsFrom = (value: unknown): AnalysisGap[] => {
       return [];
     }
     return gap.severity === "hard" || gap.severity === "warning"
-      ? [{ requirement: gap.requirement, severity: gap.severity }]
+      ? [
+          {
+            requirement: gap.requirement,
+            severity: gap.severity,
+            reason: typeof gap.reason === "string" ? gap.reason : "",
+          },
+        ]
       : [];
   });
 };
 
 /* A narrow read of the analysis document, which is carried as an opaque object on the
    wire on purpose: it is a versioned domain document, and a hand-written HTTP copy of
-   its schema could only drift. Seven scalars and the gap list are read here so the user
-   can see what they are deciding about; anything unreadable is reported as absent.
+   its schema could only drift. The scalars, the gap list, and the descriptive fields the
+   analysis screen shows are read here so the user can see both what they are deciding
+   about and what the analysis concluded; anything unreadable is reported as absent.
 
    It answers `null` unless the latest analysis *is* the active one. `latest_analysis` is
    the newest analysis of any snapshot, while `active_analysis_id` is the newest for the
@@ -143,5 +162,15 @@ export const classificationFromAnalysis = (detail: ApplicationDetail): Classific
     fit: isFitLevel(analysis.fit) ? analysis.fit : null,
     gaps: gapsFrom(analysis.gaps),
     decided: Object.keys(override),
+    rationale: typeof analysis.rationale === "string" ? analysis.rationale : null,
+    /* `confidence` is a 0..1 float in the domain model. A non-finite value is absent
+       rather than rendered, so a malformed document cannot print "NaN%". */
+    confidence:
+      typeof analysis.confidence === "number" && Number.isFinite(analysis.confidence)
+        ? analysis.confidence
+        : null,
+    keywords: stringsFrom(analysis.keywords),
+    mandatoryRequirements: stringsFrom(analysis.mandatory_requirements),
+    preferredRequirements: stringsFrom(analysis.preferred_requirements),
   };
 };

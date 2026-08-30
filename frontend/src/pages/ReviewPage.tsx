@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
-import { type Classification, applyAnalysisDecisions, classificationFromAnalysis } from "../api/analyses";
+import { applyAnalysisDecisions, classificationFromAnalysis } from "../api/analyses";
 import { applicationDetailQueryKey, applicationDetailQueryOptions } from "../api/applications";
 import { ApiProblem } from "../api/client";
 import type { Reason } from "../api/contracts";
@@ -14,7 +14,7 @@ import { Card } from "../ui/Card";
 import { LtrText } from "../ui/LtrText";
 import { PageHeading } from "../ui/PageHeading";
 import { StatusBadge } from "../ui/StatusBadge";
-import { SummaryList, type SummaryItem } from "../ui/SummaryList";
+import { SummaryList } from "../ui/SummaryList";
 import { TechnicalDetails } from "../ui/TechnicalDetails";
 import {
   CLASSIFICATION_REASON,
@@ -24,37 +24,8 @@ import {
   emptyDecisions,
   hasDecision,
 } from "./ReviewDecisionForm";
-import {
-  emphasisLabels,
-  fitLabels,
-  fitTones,
-  gapSeverityLabels,
-  languageLabels,
-  profileLabels,
-  trackLabels,
-} from "./analysisLabels";
+import { classificationItems, fitLabels, fitTones, gapSeverityLabels } from "./analysisLabels";
 import { actionLabel } from "./applicationLabels";
-
-const UNKNOWN = "לא ידוע";
-
-const classificationItems = (classification: Classification): SummaryItem[] => [
-  {
-    term: "מסלול",
-    value: classification.track === null ? UNKNOWN : trackLabels[classification.track],
-  },
-  {
-    term: "פרופיל",
-    value: classification.profile === null ? UNKNOWN : profileLabels[classification.profile],
-  },
-  {
-    term: "דגש",
-    value: classification.emphasis === null ? UNKNOWN : emphasisLabels[classification.emphasis],
-  },
-  {
-    term: "שפה",
-    value: classification.language === null ? UNKNOWN : languageLabels[classification.language],
-  },
-];
 
 /* A.4 frame 2: reason navigation, one decision form, the effects summary, Back, and one
    Apply-all-decisions submission. The projection is the source of truth throughout - this

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 
+import { classificationFromAnalysis } from "../api/analyses";
 import { applicationDetailQueryOptions } from "../api/applications";
 import { ApiProblem } from "../api/client";
 import type { ApplicationDetail, BlockedAction, Reason } from "../api/contracts";
@@ -13,6 +14,7 @@ import { PageHeading } from "../ui/PageHeading";
 import { StatusBadge } from "../ui/StatusBadge";
 import { SummaryList, type SummaryItem } from "../ui/SummaryList";
 import { TechnicalDetails } from "../ui/TechnicalDetails";
+import { AnalysisPanel, SupersededAnalysisNote } from "./AnalysisPanel";
 import { ApplicationActions } from "./ApplicationActions";
 import { actionDestination } from "./actionDestinations";
 import {
@@ -151,6 +153,12 @@ export const ApplicationPage = () => {
   const query = useQuery(applicationDetailQueryOptions(applicationId));
   const detail = query.data;
   const noteworthy = detail === undefined ? [] : noteworthyBlockedActions(detail);
+  /* The same narrow read the review screen uses, and the same guard: it answers `null`
+     unless the analysis on record is the active one, so a superseded analysis is named
+     as superseded rather than shown as the classification in force. */
+  const classification = detail === undefined ? null : classificationFromAnalysis(detail);
+  const supersededAnalysis =
+    detail !== undefined && classification === null && detail.latest_analysis != null;
   /* The landmark follows the projection, and says nothing at all until it arrives. */
   useWorkflowStage(detail === undefined ? "unknown" : detail.preparation_state);
 
@@ -267,6 +275,15 @@ export const ApplicationPage = () => {
               אותה.
             </Callout>
           ) : null}
+
+          {/* What the analysis concluded, above the control that acts on it. It is the
+              reasoning behind the stage the masthead reports, so it belongs on this
+              screen rather than on a route the reader would have to leave for. */}
+          {classification === null ? null : (
+            <AnalysisPanel classification={classification} detail={detail} />
+          )}
+
+          {supersededAnalysis ? <SupersededAnalysisNote /> : null}
 
           {/* What the workflow is waiting on, in front of the control rather than behind a
               disclosure. Without it the card body was a single button in an empty box,

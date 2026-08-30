@@ -59,6 +59,41 @@ const queued = (overrides: Partial<Operation> = {}): Operation => ({
   ...overrides,
 });
 
+/* An Application whose analysis is on record and active. The base fixture leaves both
+   fields absent, which is the pre-analysis state, so only the tests that opt in here
+   render the analysis panel. */
+const analyzed = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =>
+  detail({
+    preparation_state: "ready_to_draft",
+    available_actions: ["draft"],
+    recommended_action: "draft",
+    active_analysis_id: "analysis-1",
+    latest_analysis: {
+      id: "analysis-1",
+      application_id: "app-1",
+      job_snapshot_id: "snap-1",
+      version_number: 1,
+      analysis: {
+        track: "development",
+        profile: "development",
+        emphasis: "development-backend",
+        language: "en",
+        fit: "medium",
+        confidence: 0.82,
+        rationale: "The posting is a backend role.",
+        keywords: ["FastAPI", "PostgreSQL"],
+        mandatory_requirements: ["5 years of Python"],
+        preferred_requirements: ["Kubernetes"],
+        gaps: [{ requirement: "Kubernetes", severity: "warning", reason: "no matching fact" }],
+        user_override: {},
+      },
+      provider: "deterministic",
+      model: "rules-v1",
+      created_at: "2026-08-24T07:00:00Z",
+    },
+    ...overrides,
+  });
+
 const jsonResponse = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
     status,
@@ -533,5 +568,50 @@ describe("ApplicationPage", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("אין מועמדות במזהה הזה.");
     expect(screen.queryByRole("button", { name: "ניתוח המשרה" })).not.toBeInTheDocument();
+  });
+
+  /* The analysis is the reasoning behind the stage this screen reports, so it is read
+     here rather than on a route of its own. */
+  it("shows what the analysis concluded once one is active", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(analyzed())));
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "ניתוח המשרה" })).toBeInTheDocument();
+    expect(screen.getByText("התאמה בינונית")).toBeInTheDocument();
+    expect(screen.getByText("פיתוח צד שרת")).toBeInTheDocument();
+    expect(screen.getByText("The posting is a backend role.")).toBeInTheDocument();
+    expect(screen.getByText("FastAPI")).toBeInTheDocument();
+    expect(screen.getByText("5 years of Python")).toBeInTheDocument();
+    /* A gap is reported with its severity and the backend's own reason. */
+    expect(screen.getByText("no matching fact")).toBeInTheDocument();
+    expect(screen.getByText("פער לתשומת לב")).toBeInTheDocument();
+  });
+
+  it("says nothing about an analysis before one exists", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail())));
+
+    renderPage();
+
+    expect(await screen.findByText("ממתין לניתוח המשרה")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "ניתוח המשרה" })).not.toBeInTheDocument();
+  });
+
+  /* `latest_analysis` is the newest analysis of any snapshot and `active_analysis_id` the
+     newest for the active one. When they diverge the stored analysis describes a posting
+     that is no longer the one in force, so it is named as superseded instead of shown. */
+  it("does not present a superseded analysis as the one in force", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonResponse(analyzed({ active_analysis_id: "analysis-9" }))),
+    );
+
+    renderPage();
+
+    expect(
+      await screen.findByText("הניתוח שעל המסך אינו הניתוח הפעיל"),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "ניתוח המשרה" })).not.toBeInTheDocument();
+    expect(screen.queryByText("The posting is a backend role.")).not.toBeInTheDocument();
   });
 });

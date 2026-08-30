@@ -31,6 +31,11 @@ const analysis = (overrides: Record<string, unknown> = {}) => ({
     { requirement: "German", severity: "warning", reason: "missing" },
   ],
   user_override: { profile: "account-manager" },
+  rationale: "The posting is an account-growth role.",
+  confidence: 0.82,
+  keywords: ["CRM", "renewals"],
+  mandatory_requirements: ["5 years of Kubernetes"],
+  preferred_requirements: ["German"],
   ...overrides,
 });
 
@@ -134,10 +139,15 @@ describe("classificationFromAnalysis", () => {
       language: "he",
       fit: "low",
       gaps: [
-        { requirement: "5 years of Kubernetes", severity: "hard" },
-        { requirement: "German", severity: "warning" },
+        { requirement: "5 years of Kubernetes", severity: "hard", reason: "missing" },
+        { requirement: "German", severity: "warning", reason: "missing" },
       ],
       decided: ["profile"],
+      rationale: "The posting is an account-growth role.",
+      confidence: 0.82,
+      keywords: ["CRM", "renewals"],
+      mandatoryRequirements: ["5 years of Kubernetes"],
+      preferredRequirements: ["German"],
     });
   });
 
@@ -146,7 +156,14 @@ describe("classificationFromAnalysis", () => {
       detail({
         latest_analysis: {
           ...detail().latest_analysis!,
-          analysis: analysis({ track: "quantum-sales", fit: "excellent", gaps: "not-a-list" }),
+          analysis: analysis({
+            track: "quantum-sales",
+            fit: "excellent",
+            gaps: "not-a-list",
+            rationale: 42,
+            confidence: "high",
+            keywords: ["CRM", 7],
+          }),
         },
       }),
     );
@@ -155,6 +172,11 @@ describe("classificationFromAnalysis", () => {
     expect(read?.track).toBeNull();
     expect(read?.fit).toBeNull();
     expect(read?.gaps).toEqual([]);
+    expect(read?.rationale).toBeNull();
+    /* A non-numeric confidence is absent rather than rendered as NaN%. */
+    expect(read?.confidence).toBeNull();
+    /* A mixed list keeps the strings and drops what is not one, rather than failing whole. */
+    expect(read?.keywords).toEqual(["CRM"]);
     /* The values it *can* read are still read: one unknown does not blank the rest. */
     expect(read?.profile).toBe("account-manager");
   });
