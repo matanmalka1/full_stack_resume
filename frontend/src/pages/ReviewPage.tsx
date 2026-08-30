@@ -241,6 +241,10 @@ export const ReviewPage = () => {
           )}
 
           <ActionBar
+            /* The bar carries its own top margin only while it is a grouped panel. With
+               nothing but the back link it is a plain control, so the separation from the
+               decisions above is stated here. */
+            className="mt-8"
             primary={
               mine.length === 0 ? (
                 back

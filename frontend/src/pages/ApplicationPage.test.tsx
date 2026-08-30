@@ -137,6 +137,32 @@ describe("ApplicationPage", () => {
     expect(await screen.findByText("ממתין לניתוח המשרה")).toBeInTheDocument();
     expect(screen.queryByText("Acme")).not.toBeInTheDocument();
     expect(screen.queryByText("Backend Engineer")).not.toBeInTheDocument();
+    /* The draft axis is suppressed while the stage already implies it: at
+       `needs_analysis` a draft cannot exist, so "there is no active draft" beside
+       "waiting for the job analysis" is a restatement, not a second state. */
+    expect(screen.queryByText("אין טיוטה פעילה")).not.toBeInTheDocument();
+  });
+
+  it("reports the draft axis once the stage no longer implies it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          detail({
+            preparation_state: "ready_to_draft",
+            working_draft_state: "none",
+            active_analysis_id: "analysis-1",
+            active_selection_plan_id: "plan-1",
+            available_actions: ["create_draft"],
+            recommended_action: "create_draft",
+          }),
+        ),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("מוכן ליצירת טיוטה")).toBeInTheDocument();
     expect(screen.getByText("אין טיוטה פעילה")).toBeInTheDocument();
   });
 

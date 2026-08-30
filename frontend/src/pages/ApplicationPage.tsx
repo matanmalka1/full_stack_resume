@@ -74,6 +74,14 @@ const noteworthyBlockedActions = (detail: ApplicationDetail): BlockedAction[] =>
     blocked.reasons.some((reason) => !IMPLIED_BY_STAGE.has(reason)),
   );
 
+/* `working_draft_state === "none"` is news once the workflow has reached a stage where a
+   draft could exist. Before that it restates the preparation stage, and the masthead is
+   the worst place for a restatement: two badges of equal weight read as two independent
+   facts. */
+const draftStateIsImplied = (detail: ApplicationDetail): boolean =>
+  detail.working_draft_state === "none" &&
+  (detail.preparation_state === "needs_analysis" || detail.preparation_state === "needs_review");
+
 /* Review reasons and stale reasons carry the same shape, and both frame a backend
    sentence rather than replacing it: the message is the server's plain-language
    explanation and the code stays collapsed (A.2).
@@ -145,7 +153,7 @@ export const ApplicationPage = () => {
     <Card aria-labelledby="route-heading">
       {/* The persistent shell already names the company and role. This masthead names
           the page and reports its two state axes without repeating that context. */}
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-cv-border pb-5">
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-cv-border pb-4">
         <div className="min-w-0">
           <PageHeading
             description={detail === undefined ? "טוען את מצב המועמדות…" : undefined}
@@ -159,9 +167,17 @@ export const ApplicationPage = () => {
             <StatusBadge tone={preparationStateTones[detail.preparation_state]}>
               {preparationStateLabels[detail.preparation_state]}
             </StatusBadge>
-            <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
-              {workingDraftStateLabels[detail.working_draft_state]}
-            </StatusBadge>
+            {/* The draft axis is reported only where it says something the preparation
+                stage does not. Before the analysis exists a draft cannot, so "there is no
+                active draft" beside "waiting for the job analysis" is the same
+                redundancy `IMPLIED_BY_STAGE` removes from the blocked-action list - and
+                it costs a badge in the masthead, which is where the screen's two states
+                are supposed to be distinguishable at a glance. */}
+            {draftStateIsImplied(detail) ? null : (
+              <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
+                {workingDraftStateLabels[detail.working_draft_state]}
+              </StatusBadge>
+            )}
           </div>
         )}
       </div>
@@ -193,7 +209,7 @@ export const ApplicationPage = () => {
           <p className="mt-6 text-body text-cv-text-muted">טוען את מצב המועמדות…</p>
         ) : null
       ) : (
-        <div className="mt-6 flex flex-col gap-6">
+        <div className="mt-5 flex flex-col gap-5">
           {detail.active_operation == null ? null : (
             <Callout
               action={

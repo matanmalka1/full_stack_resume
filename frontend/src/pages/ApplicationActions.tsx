@@ -279,10 +279,17 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
 
         return (
           <ActionBar
+            /* The offered action continues the next-step sentence above it, so with
+               nothing beside it it starts where that sentence starts rather than at the
+               far edge of the card. */
+            align="start"
             /* The bar's own top margin assumes it closes a page. Here it is one item in a
-               gap-spaced column that now opens with the next-step sentence, so the gap is
-               the spacing and the margin would double it. */
-            className="mt-0"
+               gap-spaced column that opens with the next-step sentence, so the gap is the
+               spacing and a margin would double it. `cx` concatenates rather than
+               resolving Tailwind conflicts, so this is `!mt-0` and not `mt-0`: against the
+               grouped bar's own `mt-8` the winner would otherwise be whichever rule the
+               stylesheet emits last, not the one named here. */
+            className="!mt-0"
             primary={emphasized}
             secondary={rest.length === 0 ? undefined : rest}
           />
