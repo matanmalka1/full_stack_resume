@@ -30,6 +30,7 @@ from .routers import (
     health,
     operations,
     settings,
+    tracking,
     validation_runs,
     working_drafts,
 )
@@ -87,6 +88,7 @@ def create_app(
     app.include_router(operations.router, prefix=API_PREFIX)
     app.include_router(facts.router, prefix=API_PREFIX)
     app.include_router(settings.router, prefix=API_PREFIX)
+    app.include_router(tracking.router, prefix=API_PREFIX)
     app.include_router(validation_runs.router, prefix=API_PREFIX)
     if frontend_dist is not None:
         # Added last, so it runs first. It handles only safe static GET/HEAD

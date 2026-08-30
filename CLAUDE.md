@@ -50,7 +50,8 @@ Three things earn more than that, and only these:
 - **A change to rendering or an artifact path** also needs the golden hashes and the
   browser suite.
 - **A change to a stored value's meaning, a public signature, or a projection field**
-  also needs a deterministic no-AI CLI run against a fresh PostgreSQL database.
+  also needs the deterministic no-AI pipeline test against a fresh PostgreSQL database
+  (`tests/test_pipeline_end_to_end.py`).
 
 While iterating, hand over only the focused commands. Hand over the boundary's full gate
 once, when the work closes, ordered, with what each command proves. A gate that already
@@ -61,9 +62,11 @@ against its baseline before asking for a re-run.
 
 Cheap, and each has caught a real bug here. Prefer these over process:
 
-- **Run the deterministic CLI end to end** — `ingest → analyze → draft → validate →
-  approve → render → ready → reconcile`, `OPENAI_API_KEY` unset, fresh database. This
-  found approval silently destroying unimported manual edits.
+- **Run the deterministic pipeline end to end** — `ingest → analyze → draft → validate
+  → approve → render → ready → reconcile`, `OPENAI_API_KEY` unset, fresh database. It
+  drives the application services directly, so it proves the engine works rather than
+  that one client knows how to call it. This found approval silently destroying
+  unimported manual edits.
 - **Golden hashes** — they must not move unless output was meant to change.
 - **Immutability triggers** on records that must never be rewritten.
 - **Derived guards.** Derive a check from the code or schema rather than maintaining a
@@ -105,8 +108,13 @@ Report what passed, what failed, and what remains. Never claim completion with
   product semantics stay the same.
 - Do not silently change workflow, validation behavior, fact semantics, application
   statuses, or artifact lifecycle.
-- Keep the CLI first-class. It calls the application layer directly, does not require
-  FastAPI, and reaches Ready without an AI key.
+- The Web UI is the product interface; the CLI is runtime and maintenance only. Every
+  product use-case belongs to the API and the Web UI. The CLI keeps `web`, the
+  maintenance commands, and the canonical-correction path the specification assigns to
+  it (`docs/spec/product-spec.md` section 17). Adding a product command to the CLI
+  builds a second client for a use-case the API already owns.
+- Both interfaces call the application layer directly. The deterministic workflow
+  reaches Ready with no AI key and without FastAPI running.
 - Do not edit generated HTML by hand; fix the source, template, renderer, or rules.
 - Add a dependency only when it enforces a contract, reduces rendering risk, or gives a
   concrete portability benefit. The baseline is `docs/spec/architecture.md` section 2.

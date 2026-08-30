@@ -1,4 +1,4 @@
-"""Commands that edit or sync working-draft claims against facts."""
+"""The claim edit command."""
 
 from __future__ import annotations
 
@@ -33,10 +33,3 @@ def _edit_claim(context: CommandContext) -> int:
         template_version=args.template_version,
     )
     return _print_claim_edit(services, args.application_id, edited)
-
-
-@_command("sync-draft")
-def _sync_draft(context: CommandContext) -> int:
-    services = context.built_services
-    edited = services.drafts.sync_working_claims(context.args.application_id)
-    return _print_claim_edit(services, context.args.application_id, edited)

@@ -32,14 +32,22 @@ class DraftApproval(DraftServiceBase):
         projection from it, so an unimported file edit would be destroyed without
         a word. `validate` deliberately reports on the stored draft instead of
         refusing, because that report is true; approval is the trust boundary and
-        the point of loss, so the refusal belongs here. The edit is never touched:
-        the user imports it with `cv sync-draft` or discards it by regenerating.
+        the point of loss, so the refusal belongs here.
+
+        The edit is never touched. Editing the projection file by hand is no
+        longer a supported path - claims are edited through the draft's own
+        autosave, which the database sees - so the way forward is to make the
+        edit again there, or to regenerate and discard it. The refusal stays
+        either way: silently destroying a user's writing is the failure this
+        exists to prevent, and it does not become acceptable because the file
+        was edited outside the product.
         """
         stored = self.working_markdown(application_id)
         if stored and stored != serialize_markdown(draft):
             raise StateConflict(
                 "the working Markdown projection differs from the stored draft; "
-                "import it with 'cv sync-draft' or regenerate the draft to discard it"
+                "re-apply the change through the draft editor, or regenerate the "
+                "draft to discard it"
             )
 
     def _require_binding_validation(

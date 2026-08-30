@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from ....domain.draft_markdown import synchronize_markdown_claims
 from ....domain.drafts import apply_claim_edit, draft_claims, remove_claim
 from ....domain.validation import validate_draft as run_draft_validation
 from ...commands import EditResult, UpdateWorkingDraftCommand, WorkingDraftUpdateResult
@@ -77,42 +76,6 @@ class DraftEditing(DraftServiceBase):
         self, application_id: str, claim_id: str, text: str, fact_ids: list[str]
     ) -> EditResult:
         return self.edit_claim(application_id, claim_id, fact_ids, text=text)
-
-    def sync_working_claims(self, application_id: str) -> EditResult:
-        knowledge = self.load_knowledge()
-        facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
-        working = working_draft_record(self.repo, application_id)
-        draft = working.source
-        _, analysis = bound_analysis(self.repo, application_id, draft, profiles, facts)
-        try:
-            updated = synchronize_markdown_claims(
-                draft, self.working_markdown(application_id), facts
-            )
-        except ValueError as exc:
-            raise PreconditionFailed(f"working draft synchronization rejected: {exc}") from exc
-        changed = self._commit_edit(working, updated)
-        stored = self.store_working_draft(changed.source)
-        report = run_draft_validation(
-            changed.source,
-            stored.markdown,
-            facts,
-            profiles.get(updated.profile),
-            analysis,
-            policies=policies,
-            presentations=knowledge.presentations,
-        )
-        self.repo.record_validation(
-            application_id,
-            "manual-markdown-sync",
-            report,
-            lineage=self._lineage(changed, knowledge),
-        )
-        return EditResult(
-            application_id=application_id,
-            working_draft_id=changed.id,
-            edit_version=changed.edit_version,
-            validation=report,
-        )
 
     def update_working_draft(self, command: UpdateWorkingDraftCommand) -> WorkingDraftUpdateResult:
         """§14 autosave: apply one structured patch to one exact draft version.

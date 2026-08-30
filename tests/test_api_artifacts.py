@@ -566,3 +566,36 @@ def test_a_delivery_survives_the_payload_being_deleted_in_the_same_window(
     stored.unlink()
 
     assert b"".join(delivery.stream.chunks()) == original
+
+
+def test_decision_markdown_exports_provenance_and_refuses_another_application(
+    api_worker, approved_application
+) -> None:
+    """The human-readable provenance record, bound to the Application that owns it."""
+    setup = approved_application("Decision Export Co")
+    other = approved_application("Other Decision Co")
+    revision_id = setup.approved.revision_id
+
+    exported = _get(
+        api_worker,
+        f"/approved-revisions/{revision_id}/decision-markdown"
+        f"?application_id={setup.application_id}",
+    )
+    mismatched = _get(
+        api_worker,
+        f"/approved-revisions/{revision_id}/decision-markdown"
+        f"?application_id={other.application_id}",
+    )
+
+    assert exported.status_code == 200, exported.text
+    body = exported.json()
+    assert body["approved_revision_id"] == revision_id
+    assert body["application_id"] == setup.application_id
+    assert body["content"].strip()
+    assert body["content_hash"]
+    # The save name is transport, not a body field: nothing in the contract is
+    # shaped like a stored location.
+    assert "filename" not in body
+    assert "attachment" in exported.headers["Content-Disposition"]
+
+    assert mismatched.status_code == 409, mismatched.text

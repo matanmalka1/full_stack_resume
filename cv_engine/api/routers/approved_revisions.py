@@ -25,8 +25,17 @@ from ...application.commands import RenderCommand
 from ...util import new_id
 from ..dependencies import Services
 from ..headers import IdempotencyKey
-from ..responses import accepted_operation, artifact_response, inline_html_response
-from ..schemas.artifacts import ApprovedRevisionResponse, RenderRevisionRequest
+from ..responses import (
+    accepted_operation,
+    artifact_response,
+    content_disposition,
+    inline_html_response,
+)
+from ..schemas.artifacts import (
+    ApprovedRevisionResponse,
+    DecisionMarkdownResponse,
+    RenderRevisionRequest,
+)
 from ..schemas.operations import OperationResponse
 
 router = APIRouter(prefix="/approved-revisions", tags=["approved-revisions"])
@@ -141,3 +150,37 @@ def export_recruiter_pdf(
         approved_revision_id, pdf_artifact_version_id
     )
     return artifact_response(delivery)
+
+
+@router.get(
+    "/{approved_revision_id}/decision-markdown",
+    response_model=DecisionMarkdownResponse,
+    summary="Export human-readable provenance for one approved revision",
+)
+def export_decision_markdown(
+    approved_revision_id: str,
+    services: Services,
+    response: Response,
+    application_id: str = Query(
+        description=(
+            "The Application this revision is expected to belong to. Stated by "
+            "the caller rather than inferred, so a mismatch is a refusal naming "
+            "the broken lineage instead of an export of another Application's "
+            "provenance."
+        ),
+    ),
+) -> DecisionMarkdownResponse:
+    """`200` and the document; `409` when the revision belongs elsewhere.
+
+    Returned as content rather than streamed as a file. This is the
+    human-readable provenance record - what was selected, which gaps were
+    accepted, which overrides were recorded - and a client that receives it as
+    text can show it beside the revision it explains. The suggested save name
+    travels in `Content-Disposition`, and `content_hash` names exactly what was
+    produced, so a caller that saves it can prove later which export it holds.
+    """
+    export = services.drafts.export_decision_markdown(application_id, approved_revision_id)
+    response.headers["Content-Disposition"] = content_disposition(export.filename)
+    return DecisionMarkdownResponse.model_validate(
+        export.model_dump(mode="json", exclude={"filename"})
+    )

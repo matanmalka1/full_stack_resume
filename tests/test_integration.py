@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from helpers import ACCOUNT_MANAGER_JOB, validate_active_draft
+import pytest
+from helpers import ACCOUNT_MANAGER_JOB, approve_active_draft, validate_active_draft
 from helpers import working_claim as _working_claim
 
 from cv_engine.application.commands import (
     IngestCommand,
 )
-from cv_engine.application.errors import WorkflowError
+from cv_engine.application.errors import StateConflict, WorkflowError
 from cv_engine.domain.draft_markdown import parse_draft, serialize_markdown
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.runtime.paths import AppPaths
@@ -67,7 +68,16 @@ def test_filesystem_working_draft_unconditionally_overwrites_the_projection(
     assert first_markdown != replacement_stored.markdown
 
 
-def test_validate_extracts_safe_manual_markdown_wording(drafted_application) -> None:
+def test_validate_reports_on_the_stored_draft_not_the_edited_file(
+    drafted_application,
+) -> None:
+    """`validate` describes what storage holds, which is what approval will freeze.
+
+    A hand edit to the projection file is not absorbed by validating: the report
+    would otherwise vouch for wording the database never saw. Editing the file
+    by hand is no longer a supported path, and the guarantee that matters is
+    that nothing quietly adopts such an edit.
+    """
     setup = drafted_application("Manual Edit")
     services, app_id = setup
     markdown = setup.markdown
@@ -81,13 +91,18 @@ def test_validate_extracts_safe_manual_markdown_wording(drafted_application) -> 
 
     assert report.passed, report.model_dump()
     assert _working_claim(services, app_id, "sales.metric.performance").claim_type == "canonical"
-    synced = services.drafts.sync_working_claims(app_id)
-    assert synced.validation.passed, synced.validation.model_dump()
-    assert _working_claim(services, app_id, "sales.metric.performance").claim_type == "derived"
 
 
-def test_validate_preserves_unsupported_manual_markdown_as_pending(drafted_application) -> None:
-    setup = drafted_application("Pending Edit")
+def test_approval_refuses_while_the_projection_holds_an_unimported_edit(
+    drafted_application,
+) -> None:
+    """The data-loss guard: approval rebuilds the projection from the database.
+
+    An unimported file edit would be destroyed without a word, so approval
+    refuses rather than overwriting it. The refusal is the whole protection -
+    it names the two ways forward and touches nothing.
+    """
+    setup = drafted_application("Unimported Edit")
     services, app_id = setup
     markdown = setup.markdown
     claim = _working_claim(services, app_id, "sales.metric.performance")
@@ -100,13 +115,13 @@ def test_validate_preserves_unsupported_manual_markdown_as_pending(drafted_appli
         encoding="utf-8",
     )
 
-    report = validate_active_draft(services, app_id).report
+    with pytest.raises(StateConflict) as refusal:
+        approve_active_draft(services, app_id)
 
-    assert report.passed
-    synced = services.drafts.sync_working_claims(app_id)
-    assert not synced.validation.passed
-    assert any(issue.code == "pending-claim" for issue in synced.validation.issues)
-    assert _working_claim(services, app_id, "sales.metric.performance").claim_type == "pending"
+    assert "differs from the stored draft" in str(refusal.value)
+    assert services.repository.approved_revisions(app_id) == []
+    # The edit is never touched: refusing is what keeps it recoverable.
+    assert "direct SaaS Sales" in markdown.read_text(encoding="utf-8")
 
 
 def test_cli_exposes_style_safe_composite_edit(drafted_application, cli_runner) -> None:

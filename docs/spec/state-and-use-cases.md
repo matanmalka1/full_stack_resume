@@ -9,7 +9,7 @@ Product authority: `docs/spec/product-spec.md`
 ## 1. Purpose
 
 This document defines the detailed lifecycle, state projections, commands, queries,
-outcomes, and permission policy shared by CLI and Web. It is normative for behavior but
+outcomes, and permission policy shared by every client. It is normative for behavior but
 must not override the product specification.
 
 Commands always name the immutable sources they act on. Query/UI conveniences may
@@ -484,10 +484,12 @@ action explicitly creates another WorkingDraft with `parent_revision_id`, analys
 and SelectionPlan ID. The same idempotency key/payload returns the same revision. A
 reused key with another payload fails.
 
-The CLI compatibility command `cv fast` is an explicit user approval action. It may
-orchestrate validate -> approve -> render -> Ready checks with
-`actor_type=user/client=cli`, but it is subject to every exact-validation, warning
-confirmation, blocker, and idempotency rule above.
+A no-pause flow is an explicit user approval action. It may orchestrate
+validate -> approve -> render -> Ready checks with `actor_type=user` and the
+originating client, but it is subject to every exact-validation, warning confirmation,
+blocker, and idempotency rule above. The v1 `cv fast` command implemented this and was
+removed with the other CLI product commands; the rule binds whichever interface offers
+the flow.
 
 Warnings may require one general confirmation. No warning that actually requires a
 specific resolution may reach this command as a warning.
@@ -516,7 +518,7 @@ compatibility is not required to export a historical qualified revision.
 ### `export_decision_markdown(application_id, approved_revision_id)`
 
 Produces a human-readable provenance/decision export. Diagnostic JSON remains available
-through API/CLI but is not the primary human export.
+through the API but is not the primary human export.
 
 ## 17. Knowledge commands
 

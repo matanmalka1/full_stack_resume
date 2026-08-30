@@ -45,6 +45,13 @@ if set(FactSource.__args__) != set(FACT_SOURCE_NAMES):
     )
 
 
+#: The lifecycle statuses a client may filter a fact listing by. Re-exported
+#: from the schemas package so routers name transport types only: a router that
+#: imports a domain type is building, inspecting, or serialising a domain object,
+#: which is how business logic arrives in a router.
+FactStatusFilter = FactStatus
+
+
 class FactResponse(HttpSchema):
     """One fact as a client sees it: its content, without where it is stored."""
 

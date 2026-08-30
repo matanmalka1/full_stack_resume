@@ -197,6 +197,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/applications/{application_id}/external-submissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a submission made outside the system
+         * @description `201`: recorded without inventing a revision or an artifact that never was.
+         */
+        post: operations["record_external_submission_api_v1_applications__application_id__external_submissions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/applications/{application_id}/job-snapshots": {
         parameters: {
             query?: never;
@@ -208,6 +228,100 @@ export interface paths {
         put?: never;
         /** Create a new immutable job snapshot */
         post: operations["create_job_snapshot_api_v1_applications__application_id__job_snapshots_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/next-action": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set or clear the one active next action
+         * @description States what the one active next action now is, in whole.
+         *
+         *     Sending both fields empty clears it: the request carries the complete value
+         *     rather than a partial edit, and the schema requires both fields so an
+         *     omitted one cannot be read as "leave it alone". `PATCH` rather than `PUT`
+         *     because `PUT` is outside this API's allowed methods, and widening transport
+         *     policy for one route's verb would be the wrong trade.
+         */
+        patch: operations["set_next_action_api_v1_applications__application_id__next_action_patch"];
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Transition recruitment status with an immutable history
+         * @description `200`: asking for the status an Application already holds is not an error.
+         *
+         *     The application layer returns the current state unchanged rather than
+         *     appending a second identical event, so a client that retries a transition
+         *     it already made does not write a duplicate into the trail.
+         */
+        post: operations["transition_status_api_v1_applications__application_id__status_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/status-corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Append a reasoned correction to recruitment history
+         * @description `201`: a correction appends an event; it never edits the one it corrects.
+         */
+        post: operations["correct_status_api_v1_applications__application_id__status_corrections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/submissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record an internal submission of one exact qualified revision
+         * @description `201`: an immutable Submission, refused unless the evidence still qualifies.
+         *
+         *     Ready qualification is re-derived from stored evidence at submission time,
+         *     so a revision whose PDF was replaced or whose hashes no longer match is a
+         *     `412` rather than a recorded claim that something was sent.
+         */
+        post: operations["submit_application_api_v1_applications__application_id__submissions_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -286,6 +400,33 @@ export interface paths {
          *     asked at a different resource.
          */
         get: operations["approved_revision_detail_api_v1_approved_revisions__approved_revision_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/approved-revisions/{approved_revision_id}/decision-markdown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export human-readable provenance for one approved revision
+         * @description `200` and the document; `409` when the revision belongs elsewhere.
+         *
+         *     Returned as content rather than streamed as a file. This is the
+         *     human-readable provenance record - what was selected, which gaps were
+         *     accepted, which overrides were recorded - and a client that receives it as
+         *     text can show it beside the revision it explains. The suggested save name
+         *     travels in `Content-Disposition`, and `content_hash` names exactly what was
+         *     produced, so a caller that saves it can prove later which export it holds.
+         */
+        get: operations["export_decision_markdown_api_v1_approved_revisions__approved_revision_id__decision_markdown_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1090,6 +1231,24 @@ export interface components {
             /** Items */
             items: components["schemas"]["ApplicationListItemResponse"][];
         };
+        /**
+         * ApplicationMutationResponse
+         * @description One Application's tracked state after a write, and the event that moved it.
+         */
+        ApplicationMutationResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Current Status */
+            current_status: string;
+            /** Event Id */
+            event_id?: string | null;
+            /** Next Action */
+            next_action?: string | null;
+            /** Next Action Date */
+            next_action_date?: string | null;
+            /** Terminal Outcome */
+            terminal_outcome?: string | null;
+        };
         /** ApplicationResponse */
         ApplicationResponse: {
             /** Classification Confidence */
@@ -1500,6 +1659,27 @@ export interface components {
             selection_plan: components["schemas"]["SelectionPlan"];
         };
         /**
+         * CorrectStatusRequest
+         * @description A reasoned correction appended to the trail.
+         *
+         *     The corrected event is never deleted or altered, so both the event being
+         *     corrected and the reason are required: a correction that named neither
+         *     would be indistinguishable from an ordinary transition.
+         */
+        CorrectStatusRequest: {
+            /** Corrects Event Id */
+            corrects_event_id: string;
+            /** Occurred At */
+            occurred_at?: string | null;
+            /** Reason */
+            reason: string;
+            /**
+             * Target Status
+             * @enum {string}
+             */
+            target_status: "saved" | "applied" | "recruiter_screen" | "interview" | "assignment" | "final_stage" | "offer" | "accepted" | "rejected" | "withdrawn" | "closed";
+        };
+        /**
          * CreateAnalysisRequest
          * @description What `POST /applications/{id}/analyses` accepts.
          *
@@ -1627,6 +1807,28 @@ export interface components {
             plan: components["schemas"]["SelectionPlanResponse"];
             /** Selection Plan Id */
             selection_plan_id: string;
+        };
+        /**
+         * DecisionMarkdownResponse
+         * @description One revision's provenance as a human-readable document.
+         *
+         *     The suggested save name travels in `Content-Disposition`, the way the
+         *     recruiter PDF's does, rather than as a body field: a download name is a
+         *     transport concern, and a schema property shaped like a filename is
+         *     indistinguishable from a stored location to anything reading the contract.
+         *
+         *     `content_hash` names exactly what was produced, so a saved copy stays
+         *     checkable against the record it came from.
+         */
+        DecisionMarkdownResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Approved Revision Id */
+            approved_revision_id: string;
+            /** Content */
+            content: string;
+            /** Content Hash */
+            content_hash: string;
         };
         /** DecisionRecordResponse */
         DecisionRecordResponse: {
@@ -1761,6 +1963,27 @@ export interface components {
          * @enum {string}
          */
         Emphasis: "development-balanced" | "development-backend" | "development-ai" | "new-business" | "account-growth" | "leadership" | "tech-consultative-sales" | "balanced-sales";
+        /**
+         * ExternalSubmissionRequest
+         * @description A submission made outside the system, recorded without inventing evidence.
+         *
+         *     `artifact_version_id` may name an already registered artifact, and stays
+         *     absent when there is none: a field that cannot be derived stays null rather
+         *     than being filled with a value the record never carried.
+         */
+        ExternalSubmissionRequest: {
+            /** Artifact Version Id */
+            artifact_version_id?: string | null;
+            /**
+             * Metadata
+             * @default {}
+             */
+            metadata: {
+                [key: string]: unknown;
+            };
+            /** Submitted At */
+            submitted_at: string;
+        };
         /**
          * FactAttachmentResponse
          * @description Where the fact was offered, not where that Profile is stored.
@@ -2058,6 +2281,21 @@ export interface components {
             presentations: string;
             /** Profiles */
             profiles: string;
+        };
+        /**
+         * NextActionRequest
+         * @description Set or clear the one active next action, stated in whole.
+         *
+         *     Both fields are required and both are nullable. Clearing is a real request
+         *     - sending `null` for each is how a client says the action is done - and
+         *     requiring them is what keeps that distinguishable from an omitted field
+         *     meaning "leave it alone".
+         */
+        NextActionRequest: {
+            /** Next Action */
+            next_action: string | null;
+            /** Next Action Date */
+            next_action_date: string | null;
         };
         /**
          * OperationAction
@@ -2470,10 +2708,85 @@ export interface components {
             updated_at?: string | null;
         };
         /**
+         * SubmissionResponse
+         * @description A recorded submission, with any staleness the caller should see.
+         *
+         *     `warnings` carries the `READY_REVISION_FOR_OLDER_*` codes: the submission
+         *     succeeded, and the active snapshot or analysis has moved on since the
+         *     revision was approved. They are reported, not raised - active-context
+         *     compatibility is not a precondition for submitting a qualified revision.
+         */
+        SubmissionResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Approved Revision Id */
+            approved_revision_id?: string | null;
+            /** Current Status */
+            current_status: string;
+            /** Event Id */
+            event_id?: string | null;
+            /** Next Action */
+            next_action?: string | null;
+            /** Next Action Date */
+            next_action_date?: string | null;
+            /** Pdf Artifact Version Id */
+            pdf_artifact_version_id?: string | null;
+            /** Submission Id */
+            submission_id: string;
+            /** Terminal Outcome */
+            terminal_outcome?: string | null;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: string[];
+        };
+        /**
+         * SubmitApplicationRequest
+         * @description One exact qualified revision and the exact PDF that was sent.
+         *
+         *     Both IDs are explicit. A submission that resolved the latest revision for
+         *     itself could record having sent something the user never saw, which is the
+         *     one claim in this system that cannot be re-derived afterwards.
+         */
+        SubmitApplicationRequest: {
+            /** Approved Revision Id */
+            approved_revision_id: string;
+            /**
+             * Metadata
+             * @default {}
+             */
+            metadata: {
+                [key: string]: unknown;
+            };
+            /** Pdf Artifact Version Id */
+            pdf_artifact_version_id: string;
+            /** Submitted At */
+            submitted_at: string;
+        };
+        /**
          * Track
          * @enum {string}
          */
         Track: "development" | "sales" | "tech-sales";
+        /**
+         * TransitionStatusRequest
+         * @description An allowed forward transition. `reason` is optional for a normal move.
+         */
+        TransitionStatusRequest: {
+            /** Occurred At */
+            occurred_at?: string | null;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /**
+             * Target Status
+             * @enum {string}
+             */
+            target_status: "saved" | "recruiter_screen" | "interview" | "assignment" | "final_stage" | "offer" | "accepted" | "rejected" | "withdrawn" | "closed";
+        };
         /** UpdateSettingsRequest */
         UpdateSettingsRequest: {
             /** Ai Enabled Override */
@@ -3030,6 +3343,41 @@ export interface operations {
             };
         };
     };
+    record_external_submission_api_v1_applications__application_id__external_submissions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExternalSubmissionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmissionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_job_snapshot_api_v1_applications__application_id__job_snapshots_post: {
         parameters: {
             query?: never;
@@ -3052,6 +3400,146 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CreateJobSnapshotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_next_action_api_v1_applications__application_id__next_action_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NextActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    transition_status_api_v1_applications__application_id__status_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransitionStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    correct_status_api_v1_applications__application_id__status_corrections_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_application_api_v1_applications__application_id__submissions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitApplicationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmissionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3159,6 +3647,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovedRevisionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_decision_markdown_api_v1_approved_revisions__approved_revision_id__decision_markdown_get: {
+        parameters: {
+            query: {
+                /** @description The Application this revision is expected to belong to. Stated by the caller rather than inferred, so a mismatch is a refusal naming the broken lineage instead of an export of another Application's provenance. */
+                application_id: string;
+            };
+            header?: never;
+            path: {
+                approved_revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionMarkdownResponse"];
                 };
             };
             /** @description Validation Error */

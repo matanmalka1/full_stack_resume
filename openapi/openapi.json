@@ -577,6 +577,70 @@
         "title": "ApplicationListResponse",
         "type": "object"
       },
+      "ApplicationMutationResponse": {
+        "additionalProperties": false,
+        "description": "One Application's tracked state after a write, and the event that moved it.",
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "current_status": {
+            "title": "Current Status",
+            "type": "string"
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
+          },
+          "next_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action"
+          },
+          "next_action_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action Date"
+          },
+          "terminal_outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terminal Outcome"
+          }
+        },
+        "required": [
+          "application_id",
+          "current_status"
+        ],
+        "title": "ApplicationMutationResponse",
+        "type": "object"
+      },
       "ApplicationResponse": {
         "additionalProperties": false,
         "properties": {
@@ -1749,6 +1813,57 @@
         "title": "ConfirmAndUseFactResponse",
         "type": "object"
       },
+      "CorrectStatusRequest": {
+        "additionalProperties": false,
+        "description": "A reasoned correction appended to the trail.\n\nThe corrected event is never deleted or altered, so both the event being\ncorrected and the reason are required: a correction that named neither\nwould be indistinguishable from an ordinary transition.",
+        "properties": {
+          "corrects_event_id": {
+            "minLength": 1,
+            "title": "Corrects Event Id",
+            "type": "string"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          },
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "target_status": {
+            "enum": [
+              "saved",
+              "applied",
+              "recruiter_screen",
+              "interview",
+              "assignment",
+              "final_stage",
+              "offer",
+              "accepted",
+              "rejected",
+              "withdrawn",
+              "closed"
+            ],
+            "title": "Target Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_status",
+          "corrects_event_id",
+          "reason"
+        ],
+        "title": "CorrectStatusRequest",
+        "type": "object"
+      },
       "CreateAnalysisRequest": {
         "additionalProperties": false,
         "description": "What `POST /applications/{id}/analyses` accepts.\n\n`job_snapshot_id` is explicit: an analyze command that picked its own source\ncould classify something other than what the user was looking at.",
@@ -2058,6 +2173,36 @@
           "plan"
         ],
         "title": "CreateSelectionPlanResponse",
+        "type": "object"
+      },
+      "DecisionMarkdownResponse": {
+        "additionalProperties": false,
+        "description": "One revision's provenance as a human-readable document.\n\nThe suggested save name travels in `Content-Disposition`, the way the\nrecruiter PDF's does, rather than as a body field: a download name is a\ntransport concern, and a schema property shaped like a filename is\nindistinguishable from a stored location to anything reading the contract.\n\n`content_hash` names exactly what was produced, so a saved copy stays\ncheckable against the record it came from.",
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "approved_revision_id": {
+            "title": "Approved Revision Id",
+            "type": "string"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "application_id",
+          "approved_revision_id",
+          "content",
+          "content_hash"
+        ],
+        "title": "DecisionMarkdownResponse",
         "type": "object"
       },
       "DecisionRecordResponse": {
@@ -2421,6 +2566,39 @@
         ],
         "title": "Emphasis",
         "type": "string"
+      },
+      "ExternalSubmissionRequest": {
+        "additionalProperties": false,
+        "description": "A submission made outside the system, recorded without inventing evidence.\n\n`artifact_version_id` may name an already registered artifact, and stays\nabsent when there is none: a field that cannot be derived stays null rather\nthan being filled with a value the record never carried.",
+        "properties": {
+          "artifact_version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Version Id"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Metadata",
+            "type": "object"
+          },
+          "submitted_at": {
+            "minLength": 1,
+            "title": "Submitted At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "submitted_at"
+        ],
+        "title": "ExternalSubmissionRequest",
+        "type": "object"
       },
       "FactAttachmentResponse": {
         "additionalProperties": false,
@@ -3133,6 +3311,40 @@
           "candidate_context"
         ],
         "title": "KnowledgeVersions",
+        "type": "object"
+      },
+      "NextActionRequest": {
+        "additionalProperties": false,
+        "description": "Set or clear the one active next action, stated in whole.\n\nBoth fields are required and both are nullable. Clearing is a real request\n- sending `null` for each is how a client says the action is done - and\nrequiring them is what keeps that distinguishable from an omitted field\nmeaning \"leave it alone\".",
+        "properties": {
+          "next_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action"
+          },
+          "next_action_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action Date"
+          }
+        },
+        "required": [
+          "next_action",
+          "next_action_date"
+        ],
+        "title": "NextActionRequest",
         "type": "object"
       },
       "OperationAction": {
@@ -3978,6 +4190,139 @@
         "title": "SettingsResponse",
         "type": "object"
       },
+      "SubmissionResponse": {
+        "additionalProperties": false,
+        "description": "A recorded submission, with any staleness the caller should see.\n\n`warnings` carries the `READY_REVISION_FOR_OLDER_*` codes: the submission\nsucceeded, and the active snapshot or analysis has moved on since the\nrevision was approved. They are reported, not raised - active-context\ncompatibility is not a precondition for submitting a qualified revision.",
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "approved_revision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved Revision Id"
+          },
+          "current_status": {
+            "title": "Current Status",
+            "type": "string"
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
+          },
+          "next_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action"
+          },
+          "next_action_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action Date"
+          },
+          "pdf_artifact_version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdf Artifact Version Id"
+          },
+          "submission_id": {
+            "title": "Submission Id",
+            "type": "string"
+          },
+          "terminal_outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terminal Outcome"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "application_id",
+          "current_status",
+          "submission_id"
+        ],
+        "title": "SubmissionResponse",
+        "type": "object"
+      },
+      "SubmitApplicationRequest": {
+        "additionalProperties": false,
+        "description": "One exact qualified revision and the exact PDF that was sent.\n\nBoth IDs are explicit. A submission that resolved the latest revision for\nitself could record having sent something the user never saw, which is the\none claim in this system that cannot be re-derived afterwards.",
+        "properties": {
+          "approved_revision_id": {
+            "minLength": 1,
+            "title": "Approved Revision Id",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Metadata",
+            "type": "object"
+          },
+          "pdf_artifact_version_id": {
+            "minLength": 1,
+            "title": "Pdf Artifact Version Id",
+            "type": "string"
+          },
+          "submitted_at": {
+            "minLength": 1,
+            "title": "Submitted At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approved_revision_id",
+          "pdf_artifact_version_id",
+          "submitted_at"
+        ],
+        "title": "SubmitApplicationRequest",
+        "type": "object"
+      },
       "Track": {
         "enum": [
           "development",
@@ -3986,6 +4331,49 @@
         ],
         "title": "Track",
         "type": "string"
+      },
+      "TransitionStatusRequest": {
+        "additionalProperties": false,
+        "description": "An allowed forward transition. `reason` is optional for a normal move.",
+        "properties": {
+          "occurred_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "target_status": {
+            "enum": [
+              "saved",
+              "recruiter_screen",
+              "interview",
+              "assignment",
+              "final_stage",
+              "offer",
+              "accepted",
+              "rejected",
+              "withdrawn",
+              "closed"
+            ],
+            "title": "Target Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_status"
+        ],
+        "title": "TransitionStatusRequest",
+        "type": "object"
       },
       "UpdateSettingsRequest": {
         "additionalProperties": false,
@@ -4988,6 +5376,59 @@
         ]
       }
     },
+    "/api/v1/applications/{application_id}/external-submissions": {
+      "post": {
+        "description": "`201`: recorded without inventing a revision or an artifact that never was.",
+        "operationId": "record_external_submission_api_v1_applications__application_id__external_submissions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExternalSubmissionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record a submission made outside the system",
+        "tags": [
+          "tracking"
+        ]
+      }
+    },
     "/api/v1/applications/{application_id}/job-snapshots": {
       "post": {
         "operationId": "create_job_snapshot_api_v1_applications__application_id__job_snapshots_post",
@@ -5037,6 +5478,218 @@
         "summary": "Create a new immutable job snapshot",
         "tags": [
           "applications"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/next-action": {
+      "patch": {
+        "description": "States what the one active next action now is, in whole.\n\nSending both fields empty clears it: the request carries the complete value\nrather than a partial edit, and the schema requires both fields so an\nomitted one cannot be read as \"leave it alone\". `PATCH` rather than `PUT`\nbecause `PUT` is outside this API's allowed methods, and widening transport\npolicy for one route's verb would be the wrong trade.",
+        "operationId": "set_next_action_api_v1_applications__application_id__next_action_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NextActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set or clear the one active next action",
+        "tags": [
+          "tracking"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/status": {
+      "post": {
+        "description": "`200`: asking for the status an Application already holds is not an error.\n\nThe application layer returns the current state unchanged rather than\nappending a second identical event, so a client that retries a transition\nit already made does not write a duplicate into the trail.",
+        "operationId": "transition_status_api_v1_applications__application_id__status_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitionStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Transition recruitment status with an immutable history",
+        "tags": [
+          "tracking"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/status-corrections": {
+      "post": {
+        "description": "`201`: a correction appends an event; it never edits the one it corrects.",
+        "operationId": "correct_status_api_v1_applications__application_id__status_corrections_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrectStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Append a reasoned correction to recruitment history",
+        "tags": [
+          "tracking"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/submissions": {
+      "post": {
+        "description": "`201`: an immutable Submission, refused unless the evidence still qualifies.\n\nReady qualification is re-derived from stored evidence at submission time,\nso a revision whose PDF was replaced or whose hashes no longer match is a\n`412` rather than a recorded claim that something was sent.",
+        "operationId": "submit_application_api_v1_applications__application_id__submissions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitApplicationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record an internal submission of one exact qualified revision",
+        "tags": [
+          "tracking"
         ]
       }
     },
@@ -5220,6 +5873,60 @@
           }
         },
         "summary": "Read one approved revision and its Ready qualification",
+        "tags": [
+          "approved-revisions"
+        ]
+      }
+    },
+    "/api/v1/approved-revisions/{approved_revision_id}/decision-markdown": {
+      "get": {
+        "description": "`200` and the document; `409` when the revision belongs elsewhere.\n\nReturned as content rather than streamed as a file. This is the\nhuman-readable provenance record - what was selected, which gaps were\naccepted, which overrides were recorded - and a client that receives it as\ntext can show it beside the revision it explains. The suggested save name\ntravels in `Content-Disposition`, and `content_hash` names exactly what was\nproduced, so a caller that saves it can prove later which export it holds.",
+        "operationId": "export_decision_markdown_api_v1_approved_revisions__approved_revision_id__decision_markdown_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "approved_revision_id",
+            "required": true,
+            "schema": {
+              "title": "Approved Revision Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The Application this revision is expected to belong to. Stated by the caller rather than inferred, so a mismatch is a refusal naming the broken lineage instead of an export of another Application's provenance.",
+            "in": "query",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "description": "The Application this revision is expected to belong to. Stated by the caller rather than inferred, so a mismatch is a refusal naming the broken lineage instead of an export of another Application's provenance.",
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionMarkdownResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export human-readable provenance for one approved revision",
         "tags": [
           "approved-revisions"
         ]

@@ -88,8 +88,12 @@ views and diagnostic interfaces.
   filesystem storage is the default; an S3-compatible bucket is optional.
 - Facts, Profiles, selection policies, prompts, task contracts, and rendering rules
   remain version-controlled files and independent sources of truth.
-- The CLI and FastAPI call the same application services directly. The CLI does not use
-  HTTP and does not require the Web server.
+- The Web UI is the product interface. The CLI is the runtime and maintenance surface:
+  it starts the Web UI, verifies stored evidence, exports data, and keeps the
+  canonical-correction path of section 17. A product use-case belongs to the API and
+  the Web UI, not to a second client.
+- Both call the same application services directly. The CLI does not use HTTP and does
+  not require the Web server; the deterministic workflow reaches Ready with no AI key.
 - v2.0 officially targets macOS. Portable code is preferred, but Windows and Linux do
   not block release.
 - The UI supports current Chrome/Chromium with full E2E coverage and current Safari
@@ -337,11 +341,12 @@ approval; the user may retry or explicitly create a new WorkingDraft from that
 revision. `newer_draft_in_progress` becomes true only after such a later draft is
 created.
 
-The v1 `cv fast` workflow remains available as a CLI compatibility command. Invoking
-it is itself an explicit user approval instruction and is recorded with
-`actor_type=user`, `client=cli`. It may chain exact validation, approval, rendering,
-and Ready checks, but it never bypasses blockers or validation and never auto-approves
-merely because an AI Operation completed.
+A no-pause flow that chains validation, approval, rendering, and Ready checks is an
+explicit user approval instruction and is recorded as one, with `actor_type=user` and
+the originating client. It never bypasses blockers or validation and never auto-approves
+merely because an AI Operation completed. The v1 `cv fast` command implemented this and
+was removed with the other CLI product commands; the guarantee binds whichever interface
+offers the flow.
 
 A prior Ready projection remains usable while a newer SelectionPlan or WorkingDraft is
 in progress under the same JobSnapshot and JobAnalysis. The UI shows `Ready` and
@@ -612,9 +617,9 @@ Operations store a full structured, secret-free payload and hash, resource IDs,
 expected versions/hashes, provider/model, timestamps, phases, safe user message,
 technical log reference, and failure metadata. The shared Operation runner uses atomic
 PostgreSQL claiming, leases, and heartbeat. Under `cv web`, the supervisor hosts background
-worker loops. A standalone CLI command that creates an Operation atomically claims and
-executes that Operation in the foreground in the same CLI process, using the identical
-runner, lease, heartbeat, idempotency, and commit checks; it never requires FastAPI or
+worker loops. A caller that creates an Operation outside the supervisor may claim and
+execute it in the foreground of its own process, using the identical runner, lease,
+heartbeat, idempotency, and commit checks; that path never requires FastAPI or
 `cv web`. Expired queued/running work becomes `interrupted` after restart; AI/browser
 work is never resumed mid-call.
 

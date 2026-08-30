@@ -68,3 +68,21 @@ class ApprovedRevisionResponse(HttpSchema):
     # `dict`, matching `ValidationRunResponse.report`: reports are one shape
     # across the API, and giving this one a typed model would make two.
     ready_validation: ValidationReportResponse
+
+
+class DecisionMarkdownResponse(HttpSchema):
+    """One revision's provenance as a human-readable document.
+
+    The suggested save name travels in `Content-Disposition`, the way the
+    recruiter PDF's does, rather than as a body field: a download name is a
+    transport concern, and a schema property shaped like a filename is
+    indistinguishable from a stored location to anything reading the contract.
+
+    `content_hash` names exactly what was produced, so a saved copy stays
+    checkable against the record it came from.
+    """
+
+    application_id: str
+    approved_revision_id: str
+    content: str
+    content_hash: str

@@ -136,13 +136,16 @@ FastAPI routers map HTTP DTOs, headers, and application errors to use-cases and
 responses. They do not load Profiles, select facts, call providers, validate claims,
 calculate fit, or write history directly.
 
-The CLI resolves arguments and compatibility aliases, then calls the same application
-services. It does not call FastAPI. Legacy commands may use a compatibility resolver
-with warnings; application contracts are not distorted to preserve an obsolete CLI
-signature.
+The CLI is the runtime and maintenance surface. It starts the Web UI, verifies stored
+evidence, exports data, and keeps the canonical-correction path; it resolves arguments
+and calls the same application services, and it does not call FastAPI. Product
+use-cases belong to the API and the Web UI: a CLI command for a use-case the API owns
+is a second client, with a second contract to keep compatible and no capability the
+first lacks. Application contracts are not distorted to preserve a CLI signature.
 
-The v1 `Engine` compatibility façade was removed once the CLI called the application
-services directly. It was never a v2 architectural boundary, and no code refers to it.
+The v1 `Engine` compatibility façade was removed once the clients called the
+application services directly. It was never a v2 architectural boundary, and no code
+refers to it.
 
 ### 3.5 Runtime and composition
 
@@ -394,12 +397,12 @@ API and CLI consume this policy. React does not duplicate it.
 Operation is an application/infrastructure concern, not the central domain aggregate.
 The Operation runner has two hosts but one execution contract. Under `cv web`,
 lightweight worker loops run inside the supervised local backend process, poll/claim
-PostgreSQL rows atomically, and execute jobs outside requests. A standalone CLI command
-that creates an Operation attempts to claim that row and runs it in the foreground in
-the CLI process with the same leases, heartbeat, resource locks, cancellation,
-idempotency, and optimistic activation checks. If another eligible runner claims the
-same row first, the CLI observes that one Operation through its terminal outcome rather
-than duplicating it. It does not require FastAPI or a running Web server. Neither host
+PostgreSQL rows atomically, and execute jobs outside requests. A caller that creates an
+Operation outside the supervisor attempts to claim that row and runs it in the
+foreground of its own process with the same leases, heartbeat, resource locks,
+cancellation, idempotency, and optimistic activation checks. If another eligible runner
+claims the same row first, the foreground caller observes that one Operation through its
+terminal outcome rather than duplicating it. It does not require FastAPI or a running Web server. Neither host
 is a separately deployed service or requires Celery/Redis.
 
 Default limits are:

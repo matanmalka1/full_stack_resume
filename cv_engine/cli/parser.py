@@ -99,10 +99,6 @@ def build_parser() -> argparse.ArgumentParser:
     edit_mode.add_argument("--template", choices=["canonical-renderings"])
     edit.add_argument("--template-version", default="1.0.0")
     edit.add_argument("--fact-id", action="append", required=True)
-    sync = sub.add_parser(
-        "sync-draft", help="extract marked manual Markdown edits and classify their claims"
-    )
-    sync.add_argument("application_id")
     export = sub.add_parser("export", help="export application data to CSV")
     export.add_argument("output", type=Path)
     sub.add_parser(

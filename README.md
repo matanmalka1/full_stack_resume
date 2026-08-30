@@ -50,74 +50,43 @@ each worktree. To install the browser again without replacing the environment:
 
 ## Default workflow
 
-Create the application and immutable job snapshot:
+The Web UI is the product interface. Start it, and it opens on the local application:
 
 ```bash
-./.venv/bin/cv ingest \
-  --company 'Example' \
-  --role 'Account Manager' \
-  --job-file /path/to/job-description.txt \
-  --url 'https://example.com/job'
+./.venv/bin/cv web
 ```
 
-Use the returned application ID:
+Everything below describes what the engine does, whichever interface drives it. The
+Web UI calls the same application services the API exposes; the CLI keeps only the
+runtime and maintenance commands documented under "Maintenance".
 
-```bash
-./.venv/bin/cv analyze <application-id>
-./.venv/bin/cv draft <application-id>
-./.venv/bin/cv validate <application-id>
-```
+**Create the application and its immutable job snapshot.** A posting is captured once
+and never re-fetched, because a job description that later vanishes from the web is
+evidence nothing else can reproduce.
 
-A draft records the exact job snapshot and job analysis it was built from, and every
-later step — validation, approval, rendering, and the `ready` recheck — uses that exact
-analysis rather than whichever one is newest. Two consequences follow. A new job
-snapshot must be analyzed before anything is drafted against it, and a later analysis
-that materially changes Track, Profile, Emphasis, language, Fit, gaps, or keywords
-invalidates the working draft, so re-run `draft` before approving. A re-run that
-reproduces the same classification changes nothing and leaves the draft valid.
+**Analyze, draft, review.** A draft records the exact job snapshot and job analysis it
+was built from, and every later step — validation, approval, rendering, and the Ready
+recheck — uses that exact analysis rather than whichever one is newest. Two
+consequences follow. A new job snapshot must be analyzed before anything is drafted
+against it, and a later analysis that materially changes Track, Profile, Emphasis,
+language, Fit, gaps, or keywords invalidates the working draft, so regenerate it before
+approving. A re-run that reproduces the same classification changes nothing and leaves
+the draft valid.
 
-`draft` stops for review. It never renders by default. Manual edits are classified as
-exact canonical wording, a versioned deterministic composite, conservatively
-extractive derived wording, or a pending claim that blocks approval. Edit one claim
-through the unified CLI flow with:
+Drafting stops for review and never renders by default. Manual edits are classified as
+exact canonical wording, a versioned deterministic composite, conservatively extractive
+derived wording, or a pending claim that blocks approval. Unsupported wording is
+retained as `pending`; it is never silently discarded and cannot be approved. Structural
+Markdown edits or removed claim markers remain hard failures.
 
-```bash
-./.venv/bin/cv edit-claim <application-id> <claim-id> \
-  --text 'A complete clause preserved from the canonical rendering' \
-  --fact-id sales.cycle.discovery
+**Approve, render, and read Ready.** Approval freezes exactly the content one
+ValidationRun passed, so approving requires obtaining that run first: nothing can
+approve content that nothing vouched for. Rendering runs the same content, claim, PDF,
+ATS, link, direction, filename, and visual gates every time.
 
-./.venv/bin/cv edit-claim <application-id> <claim-id> \
-  --template canonical-renderings \
-  --fact-id sales.metric.recurring_customers \
-  --fact-id sales.metric.performance
-```
-
-Edits made directly to existing marked claim lines in `resume.md` are extracted and
-classified by `validate`, or explicitly with `cv sync-draft <application-id>`. Structural
-Markdown edits or removed markers remain hard failures. Unsupported wording is retained
-as `pending`; it is never silently discarded and cannot be approved.
-
-Then approve, render, and inspect the complete ready result:
-
-```bash
-./.venv/bin/cv approve <application-id>
-./.venv/bin/cv render <application-id>
-./.venv/bin/cv ready <application-id>
-```
-
-Explicit fast mode removes the review pause but runs the same content, claim,
-rendering, PDF, ATS, link, direction, filename, and visual gates:
-
-```bash
-./.venv/bin/cv fast \
-  --company 'Example' \
-  --role 'Account Manager' \
-  --job-file /path/to/job-description.txt
-```
-
-Low fit and material classification ambiguity stop by default. Record explicit
-overrides through `analyze --track ... --profile ... --emphasis ...` and, when the user
-accepts a low fit, `--accept-low-fit`. Overrides never authorize fabricated facts.
+Low fit and material classification ambiguity stop by default. Explicit Track, Profile,
+and Emphasis overrides are recorded as decisions, as is accepting a low fit. Overrides
+never authorize fabricated facts.
 
 Emphasis is a content decision, not a label. A Profile's `fact_ids` are the candidate
 pool a section may draw from, and `config/emphasis.json` weights the canonical fact tags
@@ -141,72 +110,53 @@ it to the selection policy. Every step writes to the canonical source file under
 and appends an immutable event to `fact_events`, so the status survives the
 process and the trail explains who promoted what.
 
-```bash
-./.venv/bin/cv fact list --status pending
-./.venv/bin/cv fact add \
-  --source situational_skills.md \
-  --fact-id situational.sqlite \
-  --meaning 'Used SQLite for local application state in a personal project.' \
-  --en 'Used SQLite for local application state in a personal project.' \
-  --tag development --tag situational \
-  --style bullet \
-  --provenance 'candidate wording from the user; not yet verified'
-./.venv/bin/cv fact confirm situational.sqlite --confirm
-./.venv/bin/cv fact promote situational.sqlite --confirm
-./.venv/bin/cv fact attach situational.sqlite --profile development --section 'Technical Skills'
-./.venv/bin/cv fact show situational.sqlite
-./.venv/bin/cv fact history
-```
-
 A manual draft edit the fact store cannot support becomes a `pending` claim that blocks
-approval. Capture its wording as a candidate fact instead of retyping it:
+approval. Its wording is captured as a candidate fact rather than retyped: the claim's
+exact text becomes the fact's rendering, with no AI rewriting, and meaning, tags, and
+provenance are explicit input.
 
-```bash
-./.venv/bin/cv fact capture <application-id> <claim-id> \
-  --source sales.md \
-  --fact-id sales.leadership.pipeline_review \
-  --meaning 'Introduced a weekly pipeline review with the Sales team.' \
-  --tag sales --tag leadership
-```
+Explicit confirmation is required for every promotion, and `pending -> canonical` in one
+step is refused. Until a fact is canonical it cannot be rendered, linked to a claim, or
+attached to a Profile, and adding or confirming one never invalidates drafts already
+built from the canonical facts. Promoting one to canonical does change the canonical
+surface, so the working draft is rebuilt afterwards.
 
-`--confirm` is required for every promotion, and `pending -> canonical` in one step is
-refused. Only `cv fact add`/`capture --canonical` — the specification's explicit "add this
-to the source of truth" — may write a fact as canonical immediately. Until a fact is
-canonical it cannot be rendered, linked to a claim, or attached to a Profile, and adding
-or confirming one never invalidates drafts already built from the canonical facts.
-Promoting one to canonical does change the canonical surface, so rebuild the working
-draft with `cv draft <application-id>` afterwards.
+Writing a fact with a chosen identity, and correcting a canonical fact by creating a
+replacement that `replaces` it, stay CLI paths (`docs/spec/product-spec.md` section 17).
+Identity is generated everywhere else, and a correction never mutates the old fact.
 
 ## Tracking and inspection
 
+An internal submission requires the exact qualified ApprovedRevision and PDF artifact IDs;
+Ready qualification is re-derived from stored evidence at submission time, so a revision
+whose PDF was replaced is refused rather than recorded. An external submission records
+what is known without creating either identity, and a field that cannot be derived stays
+null. `applied` is submission-owned: it is reached by recording a submission, never by
+asking for it. Recruitment history, corrections, audit records, and submissions are
+append-only, and a correction appends an event rather than editing the one it corrects.
+
+## Maintenance
+
+The CLI is the runtime and maintenance surface. It starts the Web UI, verifies stored
+evidence, and exports data:
+
 ```bash
-./.venv/bin/cv list
-./.venv/bin/cv show <application-id>
-./.venv/bin/cv versions <application-id>
-./.venv/bin/cv decision <application-id>
-./.venv/bin/cv decision-markdown <application-id> --revision <revision-id> --output decision.md
-./.venv/bin/cv submit <application-id> --revision <revision-id> \
-  --pdf-artifact <pdf-artifact-version-id> --submitted-at 2026-08-19T10:00:00+00:00
-./.venv/bin/cv external-submit <application-id> --submitted-at 2026-08-19T10:00:00+00:00
-./.venv/bin/cv correct-status <application-id> interview \
-  --corrects-event <event-id> --reason 'Status was entered on the wrong application'
-./.venv/bin/cv action <application-id> --next-action 'Follow up' --date 2026-08-20
-./.venv/bin/cv export data/applications.csv
-./.venv/bin/cv reconcile
+./.venv/bin/cv reconcile                    # database references, artifact hashes, fact lifecycle
+./.venv/bin/cv export data/applications.csv # versioned CSV plus a schema sidecar
 ```
 
-An internal submission requires the exact qualified ApprovedRevision and PDF artifact IDs.
-An external submission records what is known without creating either identity. Recruitment
-history, corrections, audit records, and submissions are append-only.
+`reconcile` verifies every registered artifact through the configured payload store, so
+it reports the truth under local storage and under an S3 bucket alike.
 
 ## Optional AI provider
 
-The deterministic engine completes the entire workflow offline. To request an OpenAI
-classification proposal through the provider-neutral structured task contract:
+The deterministic engine completes the entire workflow offline. Configuring a key
+enables OpenAI classification proposals through the provider-neutral structured task
+contract; analysis then accepts a provider and model, and the Web UI offers the choice
+where the engine allows it:
 
 ```bash
 export OPENAI_API_KEY='...'
-./.venv/bin/cv analyze <application-id> --provider openai --model gpt-5.6
 ```
 
 Provider output is Pydantic-validated and deterministic hard gaps remain authoritative.

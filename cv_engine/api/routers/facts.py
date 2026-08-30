@@ -17,7 +17,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, status
 
-from ...domain.models import FactStatus
 from ..dependencies import Services
 from ..schemas.facts import (
     AttachFactRequest,
@@ -32,6 +31,7 @@ from ..schemas.facts import (
     FactListResponse,
     FactMutationResponse,
     FactResponse,
+    FactStatusFilter,
     FactTransitionRequest,
     fact_event_response,
 )
@@ -42,7 +42,7 @@ router = APIRouter(prefix="/facts", tags=["facts"])
 @router.get("", response_model=FactListResponse, summary="List facts and their lifecycle status")
 def list_facts(
     services: Services,
-    fact_status: Annotated[FactStatus | None, Query(alias="status")] = None,
+    fact_status: Annotated[FactStatusFilter | None, Query(alias="status")] = None,
 ) -> FactListResponse:
     result = services.knowledge.list_facts(fact_status.value if fact_status else None)
     return FactListResponse(
