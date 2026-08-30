@@ -20,7 +20,7 @@ from ..commands import (
     RenderResult,
 )
 from ..errors import (
-    # Re-exported: the CLI and test suite catch WorkflowError from here, and
+    # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     ApplicationError,
     InfrastructureFailure,
@@ -234,7 +234,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
           render's evidence is not evidence, and "it survives cancellation" is a
           weaker claim than "it is all there or none of it is".
 
-    
+
         """
         command = prepared.command
         draft = prepared.draft

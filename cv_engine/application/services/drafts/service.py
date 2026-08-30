@@ -24,7 +24,7 @@ class DraftService(
 ):
     """The working draft: generation, manual edits, validation, approval.
 
-    One service, still, because that is what the CLI, the API, and the
+    One service, still, because that is what the API and the
     Operation runner hold and what the lifecycle needs: every group here reads
     and writes the same active draft under the same optimistic version. What
     the split changes is where each group is written down - generation no

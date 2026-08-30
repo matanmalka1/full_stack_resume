@@ -16,7 +16,7 @@ from ...domain.selection import EmphasisPolicyStore
 from ...util import new_id
 from ..chain import ChainError, check_draft_chain
 from ..errors import (
-    # Re-exported: the CLI and test suite catch WorkflowError from here, and
+    # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     DependencyUnavailable,
     InfrastructureFailure,

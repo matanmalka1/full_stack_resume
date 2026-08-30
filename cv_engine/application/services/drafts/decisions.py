@@ -5,7 +5,7 @@ from __future__ import annotations
 from ....util import sha256_text
 from ...commands import DecisionMarkdownExport
 from ...errors import (
-    # Re-exported: the CLI and test suite catch WorkflowError from here, and
+    # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     StateConflict,
     UnknownRecord,

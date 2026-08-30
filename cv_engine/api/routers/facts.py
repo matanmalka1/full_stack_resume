@@ -5,10 +5,9 @@ Manager (product-spec.md 561-567): facts are reached from the claim that needs
 them, created as `pending`, promoted only on explicit confirmation, and
 attached to a Profile section before a plan can select them.
 
-Two capabilities deliberately have no route. Creating a fact with a
-caller-chosen ID stays out because identity is generated, and canonical
-corrections - a new fact carrying `replaces` - remain a CLI concern in v2.0.
-Both are refusals the specification makes, not gaps.
+Creating a fact with a caller-chosen ID deliberately has no route: identity is
+generated. That is a refusal the specification makes, not a gap. A canonical
+correction is an ordinary create carrying `replaces`.
 """
 
 from __future__ import annotations

@@ -15,7 +15,7 @@ def create_database_engine(database_url: str) -> Engine:
     This remains the single connection-policy authority: repositories and
     units of work for one URL share the same pool and connection health policy.
     An Engine is process-wide infrastructure, not per-service state; caching it
-    also prevents repeated CLI/service composition from accumulating idle
+    also prevents repeated service composition from accumulating idle
     PostgreSQL pools.
     """
     return create_engine(database_url, pool_pre_ping=True)

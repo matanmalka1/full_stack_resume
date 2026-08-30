@@ -14,6 +14,7 @@ from ..commands import (
     RecruitmentStatusCommand,
     SubmissionCommand,
     SubmissionResult,
+    WriteClient,
 )
 from ..errors import StateConflict, UnknownRecord, ValidationBlocked
 from ..ports import TrackingRepository
@@ -44,7 +45,7 @@ class TrackingService(ServiceBase[TrackingRepository]):
         entity_type: str,
         entity_id: str,
         actor_type: Literal["user", "system"],
-        client: Literal["web", "cli", "worker"],
+        client: WriteClient,
         occurred_at: str,
         details: dict | None = None,
     ) -> None:
@@ -286,7 +287,7 @@ class TrackingService(ServiceBase[TrackingRepository]):
         submitted_at: str,
         metadata: dict,
         actor_type: Literal["user", "system"],
-        client: Literal["web", "cli", "worker"],
+        client: WriteClient,
         warnings: list[str],
     ) -> SubmissionResult:
         application_id = application["id"]

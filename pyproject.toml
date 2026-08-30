@@ -28,7 +28,7 @@ s3 = [
 ]
 test = [
   # Starlette's TestClient is the only reason an HTTP client is here at all; no
-  # ASGI server ships in M3, since `uvicorn` and `cv web` are M6 scope.
+  # The ASGI server the API process runs under.
   #
   # `httpx2`, not `httpx`: starlette 1.6 imports `httpx2 as httpx` in its test
   # client and falls back to `httpx` with a DeprecationWarning. The warning is
@@ -40,9 +40,6 @@ test = [
   "pytest>=8.3,<10",
   "ruff>=0.9,<1",
 ]
-
-[project.scripts]
-cv = "cv_engine.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["cv_engine*"]

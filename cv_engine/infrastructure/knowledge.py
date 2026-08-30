@@ -189,7 +189,7 @@ class FileKnowledge:
 
     This is the only place that knows the knowledge layout inside the project.
     Every command re-reads through it rather than holding a long-lived cache,
-    so a manual or CLI edit between commands is seen rather than assumed away.
+    so a manual edit between commands is seen rather than assumed away.
     """
 
     def __init__(

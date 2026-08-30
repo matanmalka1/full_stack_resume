@@ -71,13 +71,6 @@ class StoredPayload:
     size: int
 
 
-@dataclass(frozen=True)
-class _PayloadRoots:
-    root: Path
-    artifacts_root: Path
-    temp_root: Path
-
-
 class PayloadStore:
     """Immutable v2 payload storage, independent of database registration."""
 
@@ -99,17 +92,6 @@ class PayloadStore:
         self._artifacts_root = resolve_within(self._project_root, paths.artifacts_root)
         self._temp_root = resolve_within(self._project_root, paths.temp_root)
         self._objects = object_store or LocalObjectStore(self._artifacts_root)
-
-    @classmethod
-    def for_project_root(cls, root: Path) -> PayloadStore:
-        resolved = Path(root).resolve()
-        return cls(
-            _PayloadRoots(
-                root=resolved,
-                artifacts_root=resolved / "artifacts",
-                temp_root=resolved / "tmp",
-            )
-        )
 
     @staticmethod
     def _component(value: str, *, name: str) -> str:

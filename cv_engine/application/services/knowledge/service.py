@@ -30,7 +30,7 @@ from ...commands import (
     fact_event_view,
 )
 from ...errors import (
-    # Re-exported: the CLI and test suite catch WorkflowError from here, and
+    # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     InfrastructureFailure,
     KnowledgeRejected,
@@ -211,7 +211,7 @@ class KnowledgeService(KnowledgeMutationEngine):
         except KeyError as exc:
             raise KnowledgeRejected(f"unknown fact transition command: {command}") from exc
         if not explicitly_confirmed:
-            raise KnowledgeRejected(f"promotion to {target.value} requires explicit --confirm")
+            raise KnowledgeRejected(f"promotion to {target.value} requires explicit confirmation")
         return self.promote_fact(
             fact_id,
             target.value,

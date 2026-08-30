@@ -1,54 +1,23 @@
-"""Where an Operation actually runs: in the caller, or in a worker pool.
+"""Where an Operation actually runs: the worker pool that hosts it.
 
-The runner itself is `application/operation_runner.py`. This is the two hosts
-it can run inside — the foreground one the CLI drives, and the supervised pool
-`cv web` owns — which is why the module is named for the role rather than for
-Operations. Its siblings here are named the same way: composition,
-config, application paths.
+The runner itself is `application/operation_runner.py`. This is the host it
+runs inside, which is why the module is named for the role rather than for
+Operations. Its siblings here are named the same way: composition, config,
+application paths.
 """
 
 from __future__ import annotations
 
 from concurrent.futures import Future, ThreadPoolExecutor
 from threading import Event, Lock
-from time import sleep
 
 from ..application.operation_runner import OperationRunner
-from ..application.operations import PersistedOperation, is_terminal_operation
+from ..application.operations import PersistedOperation
 from ..application.ports import OperationRepository
 
 
-class ForegroundOperationExecutor:
-    """Drive or observe one durable Operation without FastAPI or ``cv web``."""
-
-    def __init__(
-        self,
-        repository: OperationRepository,
-        runner: OperationRunner,
-        *,
-        poll_interval_seconds: float = 0.25,
-        sleeper=sleep,
-    ):
-        self.repository = repository
-        self.runner = runner
-        self.poll_interval_seconds = poll_interval_seconds
-        self.sleeper = sleeper
-
-    def execute(self, operation_id: str) -> PersistedOperation:
-        self.repository.interrupt_expired_operations()
-        while True:
-            current = self.repository.operation(operation_id)
-            if is_terminal_operation(current.status):
-                return current
-            if current.status.value == "queued":
-                current = self.runner.run(operation_id)
-                if is_terminal_operation(current.status):
-                    return current
-            self.sleeper(self.poll_interval_seconds)
-
-
 class OperationWorker:
-    """Small in-process worker pool intended for supervision by ``cv web``."""
+    """Small in-process worker pool, hosted by ``python -m cv_engine.worker``."""
 
     def __init__(
         self,

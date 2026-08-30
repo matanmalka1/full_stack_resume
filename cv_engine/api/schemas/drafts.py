@@ -110,7 +110,7 @@ class UpdateWorkingDraftRequest(HttpSchema):
     def validate_patch(self) -> UpdateWorkingDraftRequest:
         """Refused as a bad request, before any of it is applied.
 
-        The command carries the same invariant for the CLI, but a contradiction
+        The command carries the same invariant, but a contradiction
         that only surfaced there would reach the client as a 500 rather than as
         the `422` an unusable request deserves.
         """

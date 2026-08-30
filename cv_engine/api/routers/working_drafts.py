@@ -11,9 +11,9 @@ conditional replacements of it, and because an action that silently accepted
 `If-Match: *` would be exactly the lost update the header exists to prevent.
 
 Every command that writes provenance is told it is being called from the web.
-The application layer defaults to `cli` because the CLI is the older caller, so
-a router that stayed silent would record a browser's approval as a person at a
-terminal - permanently, in an immutable `decision_provenance`.
+The application layer has no default, so a router that stayed silent fails to
+construct the command rather than guessing - which is what keeps a wrong actor
+out of an immutable `decision_provenance`.
 
 Draft generation and replacement are not here. They are addressed to the
 Application, which owns the one active draft, and live beside `analyses` in the

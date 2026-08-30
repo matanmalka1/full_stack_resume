@@ -9,7 +9,8 @@ overrides are typed rather than flattened to `str`.
 
 Actor and client are not accepted from the wire. They are provenance, not
 input: a request arriving at this API came from the Web client by definition,
-and letting a caller name itself `cli` would let it write a false audit trail.
+and letting a caller name its own client would let it write a false audit
+trail.
 """
 
 from __future__ import annotations

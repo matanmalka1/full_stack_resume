@@ -6,7 +6,7 @@ from typing import cast
 from ...domain.models import WorkingDraft
 from ..artifacts import verify_artifact
 from ..errors import (
-    # Re-exported: the CLI and test suite catch WorkflowError from here, and
+    # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     InfrastructureFailure,
     UnknownRecord,
@@ -42,7 +42,7 @@ from .base import ServiceBase
 
 
 class ApplicationQueryService(ServiceBase[QueryRepository]):
-    """Storage-neutral read projections for CLI, API, and future UI clients."""
+    """Storage-neutral read projections for the API and its clients."""
 
     def _state_inputs(self, transaction, application_record, knowledge):
         application_id = application_record["id"]

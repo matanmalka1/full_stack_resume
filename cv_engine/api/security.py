@@ -114,8 +114,7 @@ class OriginPolicyMiddleware:
 
     A missing Origin is refused rather than allowed. A browser sends one on
     every cross-origin request and on same-origin non-GET requests, so a
-    mutation without an Origin is not the browser case this product serves. The
-    CLI does not go through HTTP at all.
+    mutation without an Origin is not the browser case this product serves.
 
     `allowed` is the same-origin set plus, in development only, the single
     configured Vite origin. There is no wildcard, and no way to configure a list.

@@ -1,7 +1,7 @@
 """Storage-neutral contracts and lifecycle rules for persisted Operations.
 
 Operations coordinate application services; they are not domain aggregates.  This
-module therefore owns the values shared by the persistence adapter, runner, CLI, and query
+module therefore owns the values shared by the persistence adapter, runner, and query
 projection without importing any of those hosts.
 """
 

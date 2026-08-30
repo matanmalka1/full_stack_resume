@@ -68,7 +68,7 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         captured_at: str | None = None,
         source_metadata: dict[str, Any] | None = None,
         actor_type: str = "user",
-        client: str = "cli",
+        client: str,
     ) -> tuple[str, str]:
         if not company.strip() or not target_role.strip():
             raise PreconditionFailed("company and target role are required")

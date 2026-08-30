@@ -337,7 +337,7 @@ class OperationService(ServiceBase[OperationRepository]):
         """Cancel queued work outright; ask running work to stop (§19).
 
         The narrow view is the contract for every client of this service - the
-        CLI and the API alike. Only the runner reads the full record, and it
+        every caller alike. Only the runner reads the full record, and it
         reads it from the repository rather than from here.
         """
         return as_operation_view(self.repo.request_operation_cancellation(operation_id))
