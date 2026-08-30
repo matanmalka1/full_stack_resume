@@ -16,7 +16,7 @@ Official target platform: macOS
 
 ## תקציר מנהלים
 
-v2.0 הופך את מנוע v1 המאומת לאפליקציה מקומית מלאה למועמד יחיד.
+v2.0 הופך את מנוע v1 המאומת לאפליקציה מלאה למועמד יחיד.
 המערכת כוללת FastAPI מקומי, ממשק React בעברית, PostgreSQL ל-state מובנה
 ו-object-storage abstraction ל-snapshots ולתוצרים immutable. ברירת המחדל היא
 אחסון מקומי, וניתן לבחור bucket תואם S3 בלי לשנות references במסד.
@@ -103,7 +103,7 @@ views and diagnostic interfaces.
 
 The product includes:
 
-- A local application rooted in the project, run as an API process and a worker process.
+- An application rooted in the project, run as an API process and a worker process.
 - A Hebrew, desktop-first Web UI with basic responsive behavior.
 - FastAPI `/api/v1` endpoints backed by explicit application use-cases.
 - Job creation from required pasted text, an optional provenance URL, and a browser-read

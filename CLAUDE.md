@@ -31,6 +31,7 @@ task. Read the one that owns what you are changing:
 | Product scope, invariants, non-goals | `docs/spec/product-spec.md` |
 | Lifecycle, commands, queries, permissions | `docs/spec/state-and-use-cases.md` |
 | Layer boundaries, filesystem layout, schema shape | `docs/spec/architecture.md` |
+| Test layers and release gates | `docs/spec/test-and-acceptance-plan.md` |
 
 If a specification conflicts with existing behavior, say so. Do not reinterpret a
 conflict silently.

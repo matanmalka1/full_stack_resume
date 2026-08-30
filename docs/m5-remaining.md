@@ -26,7 +26,7 @@ What remains is the Web UI for three capabilities the API already serves.
 
 | Capability | API | Web |
 | --- | --- | --- |
-| Fact lifecycle | done (`/api/v1/facts`, 9 routes) | **missing** |
+| Fact lifecycle | done (`/api/v1/facts`, 10 routes) | **missing** |
 | Recruitment tracking | done (5 routes under `/applications/{id}`) | **missing** |
 | Provenance export | done (`GET /approved-revisions/{id}/decision-markdown`) | **missing** |
 | Claim editing | done (`PATCH /working-drafts/{id}`) | done |
