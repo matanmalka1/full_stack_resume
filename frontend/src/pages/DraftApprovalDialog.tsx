@@ -6,6 +6,7 @@ import { ApiProblem } from "../api/client";
 import type { ApplicationDetail, WorkingDraft } from "../api/contracts";
 import { workingDraftQueryKey } from "../api/drafts";
 import { approveWorkingDraft, validationRunQueryOptions } from "../api/validation";
+import { ErrorCallout } from "../app/ErrorCallout";
 import { Button } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { Checkbox } from "../ui/Checkbox";
@@ -122,11 +123,12 @@ export const DraftApprovalDialog = ({
       {approval.error === null ||
       (approval.error instanceof ApiProblem &&
         approval.error.problem.code === "VALIDATION_STALE") ? null : (
-        <Callout className="mt-4" role="alert" title="האישור לא בוצע" tone="blocker">
-          {approval.error instanceof ApiProblem
-            ? approval.error.problem.detail
-            : "הפנייה לשרת נכשלה."}
-        </Callout>
+        <ErrorCallout
+          className="mt-4"
+          error={approval.error}
+          fallbackDetail="הפנייה לשרת נכשלה."
+          fallbackTitle="האישור לא בוצע"
+        />
       )}
       {warnings.length === 0 ? null : (
         <Callout className="mt-4" title="נותרו אזהרות לא חוסמות" tone="warning">

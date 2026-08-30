@@ -2,9 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
 import { applicationDetailQueryKey } from "../api/applications";
-import { ApiProblem } from "../api/client";
 import type { WorkingDraft } from "../api/contracts";
 import { validateWorkingDraft, validationRunQueryOptions } from "../api/validation";
+import { ErrorCallout } from "../app/ErrorCallout";
 import { Button } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { LiveRegion } from "../ui/LiveRegion";
@@ -106,9 +106,11 @@ export const DraftValidationPanel = ({
       ) : null}
 
       {error === null ? null : (
-        <Callout role="alert" title="לא ניתן להשלים את האימות" tone="blocker">
-          {error instanceof ApiProblem ? error.problem.detail : "הפנייה לשרת נכשלה."}
-        </Callout>
+        <ErrorCallout
+          error={error}
+          fallbackDetail="הפנייה לשרת נכשלה."
+          fallbackTitle="לא ניתן להשלים את האימות"
+        />
       )}
 
       {run === undefined ? (

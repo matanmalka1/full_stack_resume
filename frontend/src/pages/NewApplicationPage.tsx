@@ -8,8 +8,8 @@ import {
   duplicateCheck,
   duplicateMatchesFromProblem,
 } from "../api/applications";
-import { ApiProblem } from "../api/client";
 import type { ApplicationIntake, DuplicateMatch } from "../api/contracts";
+import { ErrorCallout } from "../app/ErrorCallout";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { useAppForm } from "../forms/useAppForm";
 import { ActionBar } from "../ui/ActionBar";
@@ -20,7 +20,6 @@ import { Field } from "../ui/Field";
 import { FormSection } from "../ui/FormSection";
 import { LtrText } from "../ui/LtrText";
 import { PageHeading } from "../ui/PageHeading";
-import { TechnicalDetails } from "../ui/TechnicalDetails";
 import { TextArea, TextInput } from "../ui/TextInput";
 import { DuplicateChoices } from "./DuplicateChoices";
 import { JobTextFileField } from "./JobTextFileField";
@@ -277,20 +276,11 @@ export const NewApplicationPage = () => {
         ) : null}
 
         {failure === null ? null : (
-          <Callout
-            role="alert"
-            title={failure instanceof ApiProblem ? failure.problem.title : "יצירת המועמדות נכשלה"}
-            tone="blocker"
-          >
-            {failure instanceof ApiProblem
-              ? failure.problem.detail
-              : "הפנייה לשרת נכשלה. מה שהוזן נשמר בטופס וניתן לנסות שוב."}
-            {failure instanceof ApiProblem ? (
-              <TechnicalDetails className="mt-3">
-                <LtrText>{failure.problem.code}</LtrText>
-              </TechnicalDetails>
-            ) : null}
-          </Callout>
+          <ErrorCallout
+            error={failure}
+            fallbackDetail="הפנייה לשרת נכשלה. מה שהוזן נשמר בטופס וניתן לנסות שוב."
+            fallbackTitle="יצירת המועמדות נכשלה"
+          />
         )}
 
         <ActionBar

@@ -177,9 +177,9 @@ def test_problem_details_carry_a_stable_code_and_leak_nothing(
     response = api.post(f"{API_PREFIX}/does-not-exist", headers={"Origin": ALLOWED_ORIGIN})
 
     assert response.status_code == 404
-    # FastAPI's own 404 is not a Problem Details document; what matters here is
-    # that no handler leaks a path or a traceback. The Problem shape itself is
-    # asserted on the refusals the middlewares produce, below.
+    assert response.headers["content-type"].startswith(PROBLEM_CONTENT_TYPE)
+    assert response.json()["code"] == "ROUTE_NOT_FOUND"
+    assert response.json()["instance"] == f"{API_PREFIX}/does-not-exist"
     assert "Traceback" not in response.text
     assert str(REPO_ROOT) not in response.text
 
@@ -206,6 +206,35 @@ def test_problem_details_carry_a_stable_code_and_leak_nothing(
     assert failed.json()["detail"] == "An internal dependency failed."
     for secret in ("private.db", "Traceback", "sk-live-secret", "provider wire message"):
         assert secret not in failed.text
+
+
+def test_request_validation_uses_safe_problem_details(api) -> None:
+    response = api.post(
+        f"{API_PREFIX}/applications",
+        json={"company": {"must": "not be reflected"}},
+        headers={"Origin": ALLOWED_ORIGIN},
+    )
+
+    assert response.status_code == 422
+    assert response.headers["content-type"].startswith(PROBLEM_CONTENT_TYPE)
+    body = response.json()
+    assert body["code"] == "REQUEST_VALIDATION_FAILED"
+    assert body["instance"] == f"{API_PREFIX}/applications"
+    assert body["context"]["issues"]
+    assert all(set(issue) == {"location", "type"} for issue in body["context"]["issues"])
+    assert "must not be reflected" not in response.text
+
+
+def test_method_errors_keep_protocol_headers_in_problem_details(api) -> None:
+    response = api.delete(
+        f"{API_PREFIX}/health",
+        headers={"Origin": ALLOWED_ORIGIN},
+    )
+
+    assert response.status_code == 405
+    assert response.headers["content-type"].startswith(PROBLEM_CONTENT_TYPE)
+    assert response.headers["allow"] == "GET"
+    assert response.json()["code"] == "METHOD_NOT_ALLOWED"
 
 
 # --- transport limits -------------------------------------------------------
@@ -407,10 +436,26 @@ def test_the_committed_openapi_schema_matches_the_application() -> None:
     drifted schema means the frontend is typed against an API that no longer
     exists.
     """
+    schema = build_schema()
+    validation_response = schema["paths"][f"{API_PREFIX}/applications"]["post"][
+        "responses"
+    ]["422"]
+
+    assert set(validation_response["content"]) == {PROBLEM_CONTENT_TYPE}
+    validation_schema = validation_response["content"][PROBLEM_CONTENT_TYPE]["schema"]
+    assert validation_schema == {"$ref": "#/components/schemas/ProblemDetails"}
+    problem_schema = schema["components"]["schemas"]["ProblemDetails"]
+    assert set(problem_schema["required"]) == {
+        "type",
+        "title",
+        "status",
+        "code",
+        "detail",
+    }
     assert OUTPUT.is_file(), (
         "openapi/openapi.json is missing; run `python openapi/generate_openapi.py`"
     )
-    assert OUTPUT.read_text(encoding="utf-8") == render(build_schema()), (
+    assert OUTPUT.read_text(encoding="utf-8") == render(schema), (
         "openapi/openapi.json is stale; regenerate it with "
         "`python openapi/generate_openapi.py` and state the diff in the commit message"
     )

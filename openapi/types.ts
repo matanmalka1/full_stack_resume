@@ -2247,11 +2247,6 @@ export interface components {
             /** Selection Plan Id */
             selection_plan_id: string;
         };
-        /** HTTPValidationError */
-        HTTPValidationError: {
-            /** Detail */
-            detail?: components["schemas"]["ValidationError"][];
-        };
         /**
          * HealthResponse
          * @description Health and version surfaces for the local process.
@@ -2448,6 +2443,17 @@ export interface components {
          * @enum {string}
          */
         PreparationState: "needs_analysis" | "needs_review" | "ready_to_draft" | "draft_in_progress" | "ready_for_approval" | "approved" | "ready";
+        ProblemDetails: {
+            code: string;
+            context?: {
+                [key: string]: unknown;
+            };
+            detail: string;
+            instance?: string;
+            status: number;
+            title: string;
+            type: string;
+        };
         /**
          * ProfileName
          * @enum {string}
@@ -2893,19 +2899,6 @@ export interface components {
              */
             claim_removals: string[];
         };
-        /** ValidationError */
-        ValidationError: {
-            /** Context */
-            ctx?: Record<string, never>;
-            /** Input */
-            input?: unknown;
-            /** Location */
-            loc: (string | number)[];
-            /** Message */
-            msg: string;
-            /** Error Type */
-            type: string;
-        };
         /** ValidationIssueResponse */
         ValidationIssueResponse: {
             /** Code */
@@ -3102,13 +3095,13 @@ export interface operations {
                     "application/json": components["schemas"]["AnalysisDecisionsResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3140,13 +3133,13 @@ export interface operations {
                     "application/json": components["schemas"]["CreateSelectionPlanResponse"] | components["schemas"]["OperationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3167,6 +3160,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApplicationListResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3193,13 +3195,13 @@ export interface operations {
                     "application/json": components["schemas"]["CreateApplicationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3226,13 +3228,13 @@ export interface operations {
                     "application/json": components["schemas"]["DuplicateCheckResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3257,13 +3259,13 @@ export interface operations {
                     "application/json": components["schemas"]["ApplicationDetailResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3295,13 +3297,13 @@ export interface operations {
                     "application/json": components["schemas"]["OperationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3326,13 +3328,13 @@ export interface operations {
                     "application/json": components["schemas"]["ArtifactVersionsResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3357,13 +3359,13 @@ export interface operations {
                     "application/json": components["schemas"]["CloseApplicationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3388,13 +3390,13 @@ export interface operations {
                     "application/json": components["schemas"]["DecisionRecordResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3423,13 +3425,13 @@ export interface operations {
                     "application/json": components["schemas"]["SubmissionResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3458,13 +3460,13 @@ export interface operations {
                     "application/json": components["schemas"]["CreateJobSnapshotResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3493,13 +3495,13 @@ export interface operations {
                     "application/json": components["schemas"]["ApplicationMutationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3528,13 +3530,13 @@ export interface operations {
                     "application/json": components["schemas"]["ApplicationMutationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3563,13 +3565,13 @@ export interface operations {
                     "application/json": components["schemas"]["ApplicationMutationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3598,13 +3600,13 @@ export interface operations {
                     "application/json": components["schemas"]["SubmissionResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3636,13 +3638,13 @@ export interface operations {
                     "application/json": components["schemas"]["OperationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3674,13 +3676,13 @@ export interface operations {
                     "application/json": components["schemas"]["OperationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3705,13 +3707,13 @@ export interface operations {
                     "application/json": components["schemas"]["ApprovedRevisionResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3739,13 +3741,13 @@ export interface operations {
                     "application/json": components["schemas"]["DecisionMarkdownResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3772,13 +3774,13 @@ export interface operations {
                     "text/html": string;
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3806,13 +3808,13 @@ export interface operations {
                     "application/pdf": string;
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3844,13 +3846,13 @@ export interface operations {
                     "application/json": components["schemas"]["OperationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3875,13 +3877,13 @@ export interface operations {
                     "application/json": components["schemas"]["ArtifactVersionDetailResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3906,13 +3908,13 @@ export interface operations {
                     "application/octet-stream": string;
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3937,13 +3939,13 @@ export interface operations {
                     "application/json": components["schemas"]["FactListResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -3970,13 +3972,13 @@ export interface operations {
                     "application/json": components["schemas"]["FactMutationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4003,13 +4005,13 @@ export interface operations {
                     "application/json": components["schemas"]["FactMutationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4030,6 +4032,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FactHistoryResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4054,13 +4065,13 @@ export interface operations {
                     "application/json": components["schemas"]["FactDetailResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4089,13 +4100,13 @@ export interface operations {
                     "application/json": components["schemas"]["FactAttachmentResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4124,13 +4135,13 @@ export interface operations {
                     "application/json": components["schemas"]["FactMutationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4159,13 +4170,13 @@ export interface operations {
                     "application/json": components["schemas"]["ConfirmAndUseFactResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4190,13 +4201,13 @@ export interface operations {
                     "application/json": components["schemas"]["FactHistoryResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4225,13 +4236,13 @@ export interface operations {
                     "application/json": components["schemas"]["FactMutationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4254,6 +4265,15 @@ export interface operations {
                     "application/json": components["schemas"]["HealthResponse"];
                 };
             };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     reconcile_api_v1_maintenance_reconciliations_post: {
@@ -4272,6 +4292,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReconciliationResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4296,13 +4325,13 @@ export interface operations {
                     "application/json": components["schemas"]["OperationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4327,13 +4356,13 @@ export interface operations {
                     "application/json": components["schemas"]["OperationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4361,13 +4390,13 @@ export interface operations {
                     "application/json": components["schemas"]["OperationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4390,6 +4419,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SettingsResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4421,13 +4459,13 @@ export interface operations {
                     "application/json": components["schemas"]["SettingsResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4452,13 +4490,13 @@ export interface operations {
                     "application/json": components["schemas"]["ValidationRunDetailResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4483,13 +4521,13 @@ export interface operations {
                     "application/json": components["schemas"]["WorkingDraftResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4521,13 +4559,13 @@ export interface operations {
                     "application/json": components["schemas"]["WorkingDraftUpdateResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4556,13 +4594,13 @@ export interface operations {
                     "application/json": components["schemas"]["SelectionChangeResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4594,13 +4632,13 @@ export interface operations {
                     "application/json": components["schemas"]["ApprovalResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4629,13 +4667,13 @@ export interface operations {
                     "application/json": components["schemas"]["ArchivedWorkingDraftResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4660,13 +4698,13 @@ export interface operations {
                     "application/json": components["schemas"]["WorkingDraftFactsResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4691,13 +4729,13 @@ export interface operations {
                     "text/html": string;
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4729,13 +4767,13 @@ export interface operations {
                     "application/json": components["schemas"]["OperationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4767,13 +4805,13 @@ export interface operations {
                     "application/json": components["schemas"]["OperationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4802,13 +4840,13 @@ export interface operations {
                     "application/json": components["schemas"]["ValidationRunResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description The request did not match the API contract. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };

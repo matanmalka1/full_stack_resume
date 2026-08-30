@@ -12,10 +12,13 @@ structured logs.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
-from fastapi import Request
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException
 
 from ..application.errors import (
     ApplicationError,
@@ -32,6 +35,45 @@ from ..application.errors import (
 from .request_logging import RuntimeEventSink, record_runtime_event
 
 PROBLEM_CONTENT_TYPE = "application/problem+json"
+
+# FastAPI otherwise documents its native ``{"detail": [...]}`` validation body
+# even when a custom handler serves Problem Details. Kept beside the serializer so
+# the runtime and generated contract have one owner.
+PROBLEM_DETAILS_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "required": ["type", "title", "status", "code", "detail"],
+    "properties": {
+        "type": {"type": "string"},
+        "title": {"type": "string"},
+        "status": {"type": "integer"},
+        "code": {"type": "string"},
+        "detail": {"type": "string"},
+        "context": {"type": "object", "additionalProperties": True},
+        "instance": {"type": "string"},
+    },
+}
+REQUEST_VALIDATION_OPENAPI_RESPONSE: dict[str, Any] = {
+    "description": "The request did not match the API contract.",
+    "content": {
+        PROBLEM_CONTENT_TYPE: {
+            "schema": {"$ref": "#/components/schemas/ProblemDetails"},
+        }
+    },
+}
+
+
+def install_problem_details_openapi(app: FastAPI) -> None:
+    """Register the shared error component referenced by router responses."""
+    default_openapi = app.openapi
+
+    def openapi_with_problem_details() -> dict[str, Any]:
+        schema = default_openapi()
+        components = schema.setdefault("components", {}).setdefault("schemas", {})
+        components["ProblemDetails"] = PROBLEM_DETAILS_SCHEMA
+        return schema
+
+    app.openapi = openapi_with_problem_details
+
 
 # Most specific first: the lookup walks the MRO, and `ValidationBlocked`,
 # `LineageBroken`, and `KnowledgeRejected` all derive from `PreconditionFailed`.
@@ -51,13 +93,26 @@ STATUS_BY_ERROR: dict[type[ApplicationError], int] = {
 
 TITLES: dict[int, str] = {
     400: "Bad Request",
+    403: "Forbidden",
     404: "Not Found",
+    405: "Method Not Allowed",
     409: "Conflict",
     412: "Precondition Failed",
     413: "Payload Too Large",
     422: "Unprocessable Content",
     500: "Internal Server Error",
     503: "Service Unavailable",
+}
+
+HTTP_ERROR_CODES: dict[int, str] = {
+    400: "BAD_REQUEST",
+    403: "FORBIDDEN",
+    404: "ROUTE_NOT_FOUND",
+    405: "METHOD_NOT_ALLOWED",
+    413: "PAYLOAD_TOO_LARGE",
+    422: "REQUEST_VALIDATION_FAILED",
+    500: "INTERNAL_ERROR",
+    503: "SERVICE_UNAVAILABLE",
 }
 
 
@@ -80,6 +135,7 @@ def problem(
     detail: str,
     *,
     context: dict[str, Any] | None = None,
+    headers: Mapping[str, str] | None = None,
     instance: str | None = None,
 ) -> JSONResponse:
     body: dict[str, Any] = {
@@ -93,7 +149,12 @@ def problem(
         body["context"] = context
     if instance:
         body["instance"] = instance
-    return JSONResponse(status_code=status, content=body, media_type=PROBLEM_CONTENT_TYPE)
+    return JSONResponse(
+        status_code=status,
+        content=body,
+        headers=headers,
+        media_type=PROBLEM_CONTENT_TYPE,
+    )
 
 
 def _safe_context(error: ApplicationError) -> dict[str, Any] | None:
@@ -138,6 +199,82 @@ def _safe_detail(error: ApplicationError) -> str:
 async def application_error_handler(request: Request, exc: Exception) -> JSONResponse:
     error = exc if isinstance(exc, ApplicationError) else ApplicationError(str(exc))
     status = status_for(error)
+    return _request_problem(
+        request,
+        status,
+        error.code,
+        _safe_detail(error),
+        context=_safe_context(error),
+        error=error,
+    )
+
+
+async def request_validation_error_handler(
+    request: Request, exc: Exception
+) -> JSONResponse:
+    """Turn FastAPI/Pydantic request failures into the one public error shape.
+
+    Pydantic includes the rejected input in its native error dictionaries. Only
+    locations and stable error types cross the HTTP boundary so request bodies do
+    not get reflected back or copied into logs.
+    """
+    error = exc if isinstance(exc, RequestValidationError) else None
+    issues = (
+        []
+        if error is None
+        else [
+            {
+                "location": [str(part) for part in issue["loc"]],
+                "type": issue["type"],
+            }
+            for issue in error.errors()
+        ]
+    )
+    return _request_problem(
+        request,
+        422,
+        "REQUEST_VALIDATION_FAILED",
+        "The request did not match the API contract.",
+        context={"issues": issues} if issues else None,
+    )
+
+
+async def http_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Normalize router and framework HTTP errors without echoing exception detail."""
+    status = exc.status_code if isinstance(exc, HTTPException) else 500
+    code = HTTP_ERROR_CODES.get(status, f"HTTP_{status}")
+    headers = exc.headers if isinstance(exc, HTTPException) else None
+    return _request_problem(
+        request,
+        status,
+        code,
+        TITLES.get(status, "Request failed."),
+        headers=headers,
+    )
+
+
+async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Record an unexpected failure and expose no exception text."""
+    return _request_problem(
+        request,
+        500,
+        "INTERNAL_ERROR",
+        "The request could not be completed.",
+        error=exc,
+    )
+
+
+def _request_problem(
+    request: Request,
+    status: int,
+    code: str,
+    detail: str,
+    *,
+    context: dict[str, Any] | None = None,
+    error: BaseException | None = None,
+    headers: Mapping[str, str] | None = None,
+) -> JSONResponse:
+    """Shared logging and response path for failures owned by the HTTP adapter."""
     event_sink: RuntimeEventSink | None = getattr(request.app.state, "event_sink", None)
     is_server_failure = status >= 500
     record_runtime_event(
@@ -148,14 +285,15 @@ async def application_error_handler(request: Request, exc: Exception) -> JSONRes
             "method": request.method,
             "path": request.url.path,
             "status": status,
-            "error_code": error.code,
+            "error_code": code,
         },
         error if is_server_failure else None,
     )
     return problem(
         status,
-        error.code,
-        _safe_detail(error),
-        context=_safe_context(error),
+        code,
+        detail,
+        context=context,
+        headers=headers,
         instance=request.url.path,
     )

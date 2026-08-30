@@ -2,11 +2,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { ApiProblem } from "../api/client";
 import { operationQueryKey } from "../api/operations";
 import { approvedRevisionQueryOptions, renderApprovedRevision } from "../api/revisions";
+import { ErrorCallout } from "../app/ErrorCallout";
 import { Button, buttonClasses } from "../ui/Button";
-import { Callout } from "../ui/Callout";
 
 interface DraftRenderPanelProps {
   approvedRevisionId: string;
@@ -51,11 +50,11 @@ export const DraftRenderPanel = ({ approvedRevisionId }: DraftRenderPanelProps) 
       </div>
 
       {revisionQuery.error === null && render.error === null ? null : (
-        <Callout role="alert" title="לא ניתן להתחיל את יצירת הקובץ" tone="blocker">
-          {(render.error ?? revisionQuery.error) instanceof ApiProblem
-            ? ((render.error ?? revisionQuery.error) as ApiProblem).problem.detail
-            : "הפנייה לשרת נכשלה. הגרסה המאושרת נשמרה."}
-        </Callout>
+        <ErrorCallout
+          error={render.error ?? revisionQuery.error}
+          fallbackDetail="הפנייה לשרת נכשלה. הגרסה המאושרת נשמרה."
+          fallbackTitle="לא ניתן להתחיל את יצירת הקובץ"
+        />
       )}
 
       <div className="flex flex-wrap gap-3">

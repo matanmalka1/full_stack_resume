@@ -1,12 +1,6 @@
-export interface ProblemDetails {
-  type: string;
-  title: string;
-  status: number;
-  code: string;
-  detail: string;
-  context?: Record<string, unknown>;
-  instance?: string;
-}
+import type { ApiSchemas } from "./contracts";
+
+export type ProblemDetails = ApiSchemas["ProblemDetails"];
 
 export class ApiProblem extends Error {
   readonly problem: ProblemDetails;
@@ -71,11 +65,37 @@ const fallbackProblem = (response: Response): ProblemDetails => {
   };
 };
 
+const clientProblem = (
+  code: string,
+  title: string,
+  detail: string,
+): ProblemDetails => ({
+  type: `about:blank#${code.toLowerCase()}`,
+  title,
+  status: 0,
+  code,
+  detail,
+});
+
+const isAbortError = (error: unknown): boolean =>
+  error instanceof DOMException && error.name === "AbortError";
+
+const invalidServerResponse = (): ApiProblem =>
+  new ApiProblem(
+    clientProblem(
+      "INVALID_SERVER_RESPONSE",
+      "התקבלה תשובה לא תקינה",
+      "השרת החזיר תשובה שלא ניתן לקרוא. אפשר לרענן ולנסות שוב.",
+    ),
+  );
+
 export const apiRequest = async <T>(
   path: ApiPath,
   options: ApiRequestOptions = {},
 ): Promise<ApiResponse<T>> => {
-  const headers = new Headers({ Accept: JSON_CONTENT_TYPE });
+  const headers = new Headers({
+    Accept: `${JSON_CONTENT_TYPE}, ${PROBLEM_CONTENT_TYPE}`,
+  });
 
   if (options.body !== undefined) {
     headers.set("Content-Type", JSON_CONTENT_TYPE);
@@ -87,16 +107,41 @@ export const apiRequest = async <T>(
     headers.set("Idempotency-Key", options.idempotencyKey);
   }
 
-  const response = await fetch(path, {
-    method: options.method ?? "GET",
-    headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    signal: options.signal,
-  });
-  const payload = await readJson(response);
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      method: options.method ?? "GET",
+      headers,
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      signal: options.signal,
+    });
+  } catch (error) {
+    // TanStack Query uses AbortError as control flow when a query is cancelled.
+    if (isAbortError(error)) throw error;
+    throw new ApiProblem(
+      clientProblem(
+        "NETWORK_UNAVAILABLE",
+        "לא ניתן להגיע לשרת",
+        "החיבור לשרת נכשל. אפשר לבדוק שהשרת פועל ולנסות שוב.",
+      ),
+    );
+  }
+
+  let payload: unknown;
+  try {
+    payload = await readJson(response);
+  } catch {
+    if (!response.ok) {
+      throw new ApiProblem(fallbackProblem(response));
+    }
+    throw invalidServerResponse();
+  }
 
   if (!response.ok) {
     throw new ApiProblem(isProblemDetails(payload) ? payload : fallbackProblem(response));
+  }
+  if (payload === undefined) {
+    throw invalidServerResponse();
   }
 
   return {

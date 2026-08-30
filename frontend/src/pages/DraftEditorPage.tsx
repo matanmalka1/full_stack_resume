@@ -4,7 +4,6 @@ import { useCallback, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { applicationDetailQueryKey, applicationDetailQueryOptions } from "../api/applications";
-import { ApiProblem } from "../api/client";
 import { type QueuedOperation, operationQueryKey } from "../api/operations";
 import type { DraftClaim, DraftFact, WorkingDraftUpdate } from "../api/contracts";
 import {
@@ -19,6 +18,7 @@ import {
   workingDraftQueryOptions,
 } from "../api/drafts";
 import { aiRegenerationAvailable, settingsQueryOptions } from "../api/settings";
+import { ErrorCallout } from "../app/ErrorCallout";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { Button, buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
@@ -40,24 +40,6 @@ import { DraftValidationPanel } from "./DraftValidationPanel";
 import { removability } from "./claimRemoval";
 import { useDraftAutosave } from "./useDraftAutosave";
 import { actionLabel, workingDraftStateLabels, workingDraftStateTones } from "./applicationLabels";
-
-const problemMessage = (error: unknown, fallback: string): string =>
-  error instanceof ApiProblem ? error.problem.detail : fallback;
-
-const ErrorCallout = ({ error, title }: { error: unknown; title: string }) => (
-  <Callout
-    role="alert"
-    title={error instanceof ApiProblem ? error.problem.title : title}
-    tone="blocker"
-  >
-    {problemMessage(error, "הפנייה לשרת נכשלה. אפשר לרענן את העמוד ולנסות שוב.")}
-    {error instanceof ApiProblem ? (
-      <TechnicalDetails className="mt-3">
-        <LtrText>{error.problem.code}</LtrText>
-      </TechnicalDetails>
-    ) : null}
-  </Callout>
-);
 
 /* A.4 frame 3: the editor pane. It reads the §9 projection for which draft is active and
    what is blocking, and the draft itself for the structure it edits. It derives no second
@@ -257,10 +239,18 @@ export const DraftEditorPage = () => {
 
       <div className="mt-6 flex flex-col gap-6">
         {applicationQuery.error === null ? null : (
-          <ErrorCallout error={applicationQuery.error} title="לא ניתן לטעון את מצב המועמדות" />
+          <ErrorCallout
+            error={applicationQuery.error}
+            fallbackDetail="הפנייה לשרת נכשלה. אפשר לרענן את העמוד ולנסות שוב."
+            fallbackTitle="לא ניתן לטעון את מצב המועמדות"
+          />
         )}
         {draftQuery.error === null ? null : (
-          <ErrorCallout error={draftQuery.error} title="לא ניתן לטעון את הטיוטה" />
+          <ErrorCallout
+            error={draftQuery.error}
+            fallbackDetail="הפנייה לשרת נכשלה. אפשר לרענן את העמוד ולנסות שוב."
+            fallbackTitle="לא ניתן לטעון את הטיוטה"
+          />
         )}
 
         {detail !== undefined && workingDraftId === null && renderRevisionId === null ? (
@@ -430,17 +420,11 @@ export const DraftEditorPage = () => {
                 )}
 
                 {regeneration.error === null ? null : (
-                  <Callout role="alert" title="היצירה מחדש לא הופעלה" tone="blocker">
-                    {problemMessage(
-                      regeneration.error,
-                      "לא ניתן היה להפעיל יצירה מחדש. הטיוטה נשמרה כפי שהיא.",
-                    )}
-                    {regeneration.error instanceof ApiProblem ? (
-                      <TechnicalDetails className="mt-3">
-                        <LtrText>{regeneration.error.problem.code}</LtrText>
-                      </TechnicalDetails>
-                    ) : null}
-                  </Callout>
+                  <ErrorCallout
+                    error={regeneration.error}
+                    fallbackDetail="לא ניתן היה להפעיל יצירה מחדש. הטיוטה נשמרה כפי שהיא."
+                    fallbackTitle="היצירה מחדש לא הופעלה"
+                  />
                 )}
 
                 {unsaved ? (
@@ -451,17 +435,11 @@ export const DraftEditorPage = () => {
                 ) : null}
 
                 {selection.error === null ? null : (
-                  <Callout role="alert" title="שינוי הבחירה לא בוצע" tone="blocker">
-                    {problemMessage(
-                      selection.error,
-                      "לא ניתן היה לשנות את בחירת העובדות. הטיוטה נשמרה כפי שהיא.",
-                    )}
-                    {selection.error instanceof ApiProblem ? (
-                      <TechnicalDetails className="mt-3">
-                        <LtrText>{selection.error.problem.code}</LtrText>
-                      </TechnicalDetails>
-                    ) : null}
-                  </Callout>
+                  <ErrorCallout
+                    error={selection.error}
+                    fallbackDetail="לא ניתן היה לשנות את בחירת העובדות. הטיוטה נשמרה כפי שהיא."
+                    fallbackTitle="שינוי הבחירה לא בוצע"
+                  />
                 )}
 
                 <DraftFactPanel busy={selection.isPending} facts={facts} onInclude={includeFact} />

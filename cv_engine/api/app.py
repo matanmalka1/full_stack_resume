@@ -16,14 +16,21 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from starlette.requests import Request
+from starlette.exceptions import HTTPException
 
 from ..application.errors import ApplicationError
 from .dependencies import install_services
 from .frontend import FrontendAssetsMiddleware, validate_frontend_build
-from .problems import application_error_handler, problem
+from .problems import (
+    REQUEST_VALIDATION_OPENAPI_RESPONSE,
+    application_error_handler,
+    http_error_handler,
+    install_problem_details_openapi,
+    request_validation_error_handler,
+    unexpected_error_handler,
+)
 from .request_logging import RequestLoggingMiddleware, RuntimeEventSink, record_runtime_event
 from .routers import (
     analyses,
@@ -111,20 +118,30 @@ def create_app(
     app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=services.limits.max_body_bytes)
 
     app.add_exception_handler(ApplicationError, application_error_handler)
-    app.add_exception_handler(500, _unexpected_error_handler)
+    app.add_exception_handler(RequestValidationError, request_validation_error_handler)
+    app.add_exception_handler(HTTPException, http_error_handler)
+    app.add_exception_handler(Exception, unexpected_error_handler)
 
-    app.include_router(health.router, prefix=API_PREFIX)
-    app.include_router(applications.router, prefix=API_PREFIX)
-    app.include_router(analyses.router, prefix=API_PREFIX)
-    app.include_router(working_drafts.router, prefix=API_PREFIX)
-    app.include_router(approved_revisions.router, prefix=API_PREFIX)
-    app.include_router(artifacts.router, prefix=API_PREFIX)
-    app.include_router(operations.router, prefix=API_PREFIX)
-    app.include_router(facts.router, prefix=API_PREFIX)
-    app.include_router(settings.router, prefix=API_PREFIX)
-    app.include_router(tracking.router, prefix=API_PREFIX)
-    app.include_router(validation_runs.router, prefix=API_PREFIX)
-    app.include_router(maintenance.router, prefix=API_PREFIX)
+    for router in (
+        health.router,
+        applications.router,
+        analyses.router,
+        working_drafts.router,
+        approved_revisions.router,
+        artifacts.router,
+        operations.router,
+        facts.router,
+        settings.router,
+        tracking.router,
+        validation_runs.router,
+        maintenance.router,
+    ):
+        app.include_router(
+            router,
+            prefix=API_PREFIX,
+            responses={422: REQUEST_VALIDATION_OPENAPI_RESPONSE},
+        )
+    install_problem_details_openapi(app)
     if frontend_dist is not None:
         # Added last, so it runs first. It handles only safe static GET/HEAD
         # requests and passes every API path through to the existing transport
@@ -138,26 +155,3 @@ def create_app(
     # headers, and bodies from its log fields.
     app.add_middleware(RequestLoggingMiddleware, event_sink=event_sink)
     return app
-
-
-async def _unexpected_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    """An unexpected failure says so and nothing more.
-
-    Whatever went wrong is in the structured server log with its request
-    context. The response carries no exception text, because an exception
-    message is exactly where a path or a provider response leaks.
-    """
-    event_sink: RuntimeEventSink | None = getattr(request.app.state, "event_sink", None)
-    record_runtime_event(
-        event_sink,
-        "request.failed",
-        "ERROR",
-        {"method": request.method, "path": request.url.path, "status": 500},
-        exc,
-    )
-    return problem(
-        500,
-        "INTERNAL_ERROR",
-        "The request could not be completed.",
-        instance=request.url.path,
-    )

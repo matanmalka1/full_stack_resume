@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
-import { ApiProblem } from "../api/client";
 import type { UpdateSettingsRequest } from "../api/contracts";
 import { settingsQueryKey, settingsQueryOptions, updateSettings } from "../api/settings";
+import { ErrorCallout } from "../app/ErrorCallout";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { Button } from "../ui/Button";
 import { Callout } from "../ui/Callout";
@@ -78,9 +78,11 @@ export const SettingsPage = () => {
         )}
         {save.isSuccess ? <Callout role="status" title="ההגדרות נשמרו" tone="success" /> : null}
         {query.error === null && save.error === null ? null : (
-          <Callout role="alert" title="ההגדרות לא נשמרו" tone="blocker">
-            {(save.error ?? query.error) instanceof ApiProblem ? ((save.error ?? query.error) as ApiProblem).problem.detail : "הפנייה לשרת נכשלה."}
-          </Callout>
+          <ErrorCallout
+            error={save.error ?? query.error}
+            fallbackDetail="הפנייה לשרת נכשלה."
+            fallbackTitle="ההגדרות לא נשמרו"
+          />
         )}
       </div>
     </Card>
