@@ -121,6 +121,38 @@ const technicalItems = (operation: Operation): SummaryItem[] => {
   return items;
 };
 
+/* What an operation produced, named for the reader. Deliberately a partial map over an
+   open string rather than a Record over an enum: `output_type` is `str` in the schema, so
+   a type this map does not know is skipped rather than printed raw - an internal token in
+   a success line teaches nothing and looks like a leak.
+
+   `provider_response` is deliberately absent. It is registered as an output, but it is
+   the provider's own text, and this screen states elsewhere that it shows no provider
+   text. It stays in the record and out of the result line. */
+const outputTypeLabels: Record<string, string> = {
+  job_analysis: "ניתוח המשרה",
+  selection_plan: "תוכנית בחירת העובדות",
+  working_draft: "טיוטה",
+};
+
+/* §11 separates existence from activation: a failed or cancelled Operation can own an
+   output that was recorded as inactive evidence. Only the active ones are results, so
+   only they are named - an inactive output reported as something the operation produced
+   would claim the state changed when it did not. */
+const activeOutputLabels = (operation: Operation): string[] =>
+  operation.outputs
+    .filter((output) => output.active)
+    .map((output) => outputTypeLabels[output.output_type])
+    .filter((label): label is string => label !== undefined);
+
+/* Hebrew joins a list by prefixing the last item with "ו", not by placing a separator
+   between the last two - so this is a prefix on the final label rather than a join
+   string, and a one-item list has no conjunction at all. */
+const joinHebrewList = (labels: string[]): string =>
+  labels.length <= 1
+    ? (labels[0] ?? "")
+    : `${labels.slice(0, -1).join(", ")} ו${labels[labels.length - 1]}`;
+
 const failureTones: Partial<Record<OperationStatus, StatusTone>> = {
   failed: "blocker",
   cancelled: "neutral",
@@ -295,15 +327,26 @@ export const OperationPage = () => {
   const terminal = isTerminalOperation(operation);
   const failure =
     operation?.failure_code == null ? null : failurePresentations[operation.failure_code];
+  const succeeded = operation?.status === "succeeded";
+  const produced = operation === undefined ? [] : activeOutputLabels(operation);
+
+  /* While work is moving, the description is about the page: it refreshes itself. Once
+     the work is over that sentence is spent, and "the automatic refresh has stopped" is a
+     fact about polling machinery offered to someone who wants to know what happened. So a
+     finished operation describes its outcome instead, and a successful one names what it
+     produced when the outputs say. */
+  const description = !terminal
+    ? "העמוד מתעדכן מעצמו עד לסיום הפעולה."
+    : succeeded
+      ? produced.length === 0
+        ? "הפעולה הושלמה. חזרה למועמדות מציגה מה הפעולה הבאה."
+        : `הפעולה הושלמה ויצרה ${joinHebrewList(produced)}. חזרה למועמדות מציגה מה הפעולה הבאה.`
+      : "הפעולה הסתיימה והעדכון האוטומטי נעצר.";
 
   return (
     <Card aria-labelledby="route-heading">
       <PageHeading
-        description={
-          terminal
-            ? "הפעולה הסתיימה והעדכון האוטומטי נעצר."
-            : "העמוד מתעדכן מעצמו עד לסיום הפעולה."
-        }
+        description={description}
         eyebrow={terminal ? "פעולה שהסתיימה" : "פעולה מתבצעת"}
         id="route-heading"
       >

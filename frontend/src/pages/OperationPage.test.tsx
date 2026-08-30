@@ -446,5 +446,43 @@ describe("OperationPage", () => {
        and both halves of the announcement — saying it repeatedly and never saying which
        operation had finished. */
     expect(screen.getAllByText("הושלמה")).toHaveLength(1);
+    /* Retry is offered on a succeeded Operation because the backend offers it, but it is
+       not the recommendation: emphasizing it puts the loudest control on the screen on
+       re-running work that just worked. */
+    expect(screen.getByRole("link", { name: "חזרה למועמדות" })).toHaveClass("bg-cv-accent");
+    expect(screen.getByRole("button", { name: "ניסיון חוזר" })).not.toHaveClass("bg-cv-accent");
+  });
+
+  it("names what a succeeded Operation produced, and only its active outputs", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          operation({
+            status: "succeeded",
+            is_terminal: true,
+            phase: "completed",
+            outputs: [
+              { output_type: "job_analysis", output_id: "analysis-1", active: true },
+              { output_type: "selection_plan", output_id: "plan-1", active: true },
+              /* §11: an inactive output is evidence, not a result. Naming it would claim
+                 the operation produced something it never activated. */
+              { output_type: "working_draft", output_id: "draft-1", active: false },
+              /* Registered, but it is the provider's own text and this screen shows
+                 none. */
+              { output_type: "provider_response", output_id: "resp-1", active: true },
+            ],
+          }),
+        ),
+      ),
+    );
+
+    renderPage(<OperationPage />);
+
+    expect(
+      await screen.findByText(
+        "הפעולה הושלמה ויצרה ניתוח המשרה ותוכנית בחירת העובדות. חזרה למועמדות מציגה מה הפעולה הבאה.",
+      ),
+    ).toBeInTheDocument();
   });
 });
