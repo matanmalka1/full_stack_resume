@@ -61,6 +61,7 @@ def test_deterministic_pipeline_reaches_ready_and_reconciles(
             target_role="Account Manager",
             job_text=ACCOUNT_MANAGER_JOB,
             acknowledged_duplicates=True,
+            client="web",
         )
     )
     application_id = ingested.application_id
@@ -100,6 +101,7 @@ def test_deterministic_pipeline_reaches_ready_and_reconciles(
             working_draft_id=validated.working_draft_id,
             expected_edit_version=validated.edit_version,
             validation_run_id=validated.validation_run_id,
+            client="web",
         )
     )
     assert approved.revision_id
@@ -191,6 +193,7 @@ def test_failed_pre_render_validation_blocks_approval(
             target_role="Account Manager",
             job_text=ACCOUNT_MANAGER_JOB,
             acknowledged_duplicates=True,
+            client="web",
         )
     )
     analysed = services.analysis.analyze(
@@ -222,6 +225,7 @@ def test_failed_pre_render_validation_blocks_approval(
                 working_draft_id=validated.working_draft_id,
                 expected_edit_version=validated.edit_version,
                 validation_run_id=validated.validation_run_id,
+                client="web",
             )
         )
     assert services.repository.approved_revisions(ingested.application_id) == []

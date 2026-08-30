@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Event, Lock, Thread
 
 import pytest
+from foreground import ForegroundOperationExecutor, foreground_executor
 from helpers import ACCOUNT_MANAGER_JOB, validate_active_draft
 from pydantic import ValidationError
 from sqlalchemy import delete, update
@@ -47,7 +48,7 @@ from cv_engine.application.operations import (
 from cv_engine.domain.models import ValidationIssue, ValidationReport
 from cv_engine.infrastructure.persistence import Repository
 from cv_engine.infrastructure.persistence.tables import operations
-from cv_engine.runtime.execution import ForegroundOperationExecutor, OperationWorker
+from cv_engine.runtime.execution import OperationWorker
 from cv_engine.util import new_id
 
 
@@ -141,7 +142,9 @@ def _stored_request(application_id: str, key: str = "request-1") -> CreateOperat
 
 def test_operation_creation_is_idempotent_and_projects_active_work(services) -> None:
     ingested = services.applications.ingest(
-        IngestCommand(company="Operation Co", target_role="Developer", job_text="Python role")
+        IngestCommand(
+            company="Operation Co", target_role="Developer", job_text="Python role", client="web"
+        )
     )
     request = _stored_request(ingested.application_id)
 
@@ -167,7 +170,9 @@ def test_operation_creation_is_idempotent_and_projects_active_work(services) -> 
 
 def test_operation_rejects_idempotency_key_with_another_payload(services) -> None:
     ingested = services.applications.ingest(
-        IngestCommand(company="Conflict Co", target_role="Developer", job_text="Python role")
+        IngestCommand(
+            company="Conflict Co", target_role="Developer", job_text="Python role", client="web"
+        )
     )
     request = _stored_request(ingested.application_id)
     services.repository.create_operation(
@@ -186,7 +191,9 @@ def test_operation_rejects_idempotency_key_with_another_payload(services) -> Non
 
 def test_terminal_operation_rows_cannot_be_rewritten_or_deleted(services) -> None:
     ingested = services.applications.ingest(
-        IngestCommand(company="Immutable Op Co", target_role="Developer", job_text="Python role")
+        IngestCommand(
+            company="Immutable Op Co", target_role="Developer", job_text="Python role", client="web"
+        )
     )
     created = services.repository.create_operation(
         _stored_request(ingested.application_id),
@@ -214,7 +221,9 @@ def test_terminal_operation_rows_cannot_be_rewritten_or_deleted(services) -> Non
 
 def test_two_runners_racing_one_operation_produce_one_claim(services) -> None:
     ingested = services.applications.ingest(
-        IngestCommand(company="Claim Race Co", target_role="Developer", job_text="Python role")
+        IngestCommand(
+            company="Claim Race Co", target_role="Developer", job_text="Python role", client="web"
+        )
     )
     created = services.repository.create_operation(
         _stored_request(ingested.application_id),
@@ -298,7 +307,9 @@ def test_foreground_executor_and_worker_race_one_operation_without_duplicate_exe
 
 def test_application_and_global_render_leases_queue_contending_work(services) -> None:
     first = services.applications.ingest(
-        IngestCommand(company="Lease A", target_role="Developer", job_text="Python role")
+        IngestCommand(
+            company="Lease A", target_role="Developer", job_text="Python role", client="web"
+        )
     )
     second = services.applications.ingest(
         IngestCommand(
@@ -306,6 +317,7 @@ def test_application_and_global_render_leases_queue_contending_work(services) ->
             target_role="Developer",
             job_text="Python role",
             acknowledged_duplicates=True,
+            client="web",
         )
     )
     app_one = services.repository.create_operation(_stored_request(first.application_id, "app-1"))
@@ -324,6 +336,7 @@ def test_application_and_global_render_leases_queue_contending_work(services) ->
             target_role="Developer",
             job_text="Python role",
             acknowledged_duplicates=True,
+            client="web",
         )
     )
     render_two = services.repository.create_operation(
@@ -352,6 +365,7 @@ def test_ai_resource_allows_two_operations_and_queues_the_third(services) -> Non
                 target_role="Developer",
                 job_text="Python role",
                 acknowledged_duplicates=True,
+                client="web",
             )
         )
         request = _stored_request(ingested.application_id, f"ai-{number}").model_copy(
@@ -367,7 +381,9 @@ def test_ai_resource_allows_two_operations_and_queues_the_third(services) -> Non
 
 def test_heartbeat_prevents_interruption_until_extended_lease_expires(services) -> None:
     ingested = services.applications.ingest(
-        IngestCommand(company="Heartbeat Co", target_role="Developer", job_text="Python role")
+        IngestCommand(
+            company="Heartbeat Co", target_role="Developer", job_text="Python role", client="web"
+        )
     )
     created = services.repository.create_operation(
         _stored_request(ingested.application_id),
@@ -443,6 +459,7 @@ def _ingest_for_operation(services, company: str):
             target_role="Developer",
             job_text="Python role",
             acknowledged_duplicates=True,
+            client="web",
         )
     )
 
@@ -587,6 +604,7 @@ def test_an_unclassified_infrastructure_failure_is_terminal_and_not_retried(
             company="Unclassified Co",
             target_role="Account Manager",
             job_text=ACCOUNT_MANAGER_JOB,
+            client="web",
         )
     )
     attempts = 0
@@ -608,7 +626,7 @@ def test_an_unclassified_infrastructure_failure_is_terminal_and_not_retried(
         analysis_service=services.analysis,
     )
 
-    completed = services.foreground_operations.execute(operation.id)
+    completed = foreground_executor(services).execute(operation.id)
 
     assert completed.status is OperationStatus.FAILED
     assert completed.failure_code is OperationFailureCode.VALIDATION_EXECUTION_FAILED
@@ -621,6 +639,7 @@ def test_foreground_analysis_reuses_an_explicit_idempotency_key(services) -> Non
             company="CLI Operation Co",
             target_role="Account Manager",
             job_text=ACCOUNT_MANAGER_JOB,
+            client="web",
         )
     )
     command = AnalyzeCommand(
@@ -634,7 +653,7 @@ def test_foreground_analysis_reuses_an_explicit_idempotency_key(services) -> Non
             idempotency_key="analysis-idempotency-key",
             analysis_service=services.analysis,
         )
-        return services.foreground_operations.execute(operation.id).id
+        return foreground_executor(services).execute(operation.id).id
 
     first = submit_and_run()
     second = submit_and_run()
@@ -649,6 +668,7 @@ def test_draft_operation_activates_one_validated_working_draft(services) -> None
             company="Draft Operation Co",
             target_role="Account Manager",
             job_text=ACCOUNT_MANAGER_JOB,
+            client="web",
         )
     )
     analysis = services.analysis.analyze(
@@ -667,7 +687,7 @@ def test_draft_operation_activates_one_validated_working_draft(services) -> None
         draft_service=services.drafts,
     )
 
-    completed = services.foreground_operations.execute(operation.id)
+    completed = foreground_executor(services).execute(operation.id)
 
     assert completed.status is OperationStatus.SUCCEEDED
     working_id = completed.outputs[0].output_id
@@ -682,6 +702,7 @@ def test_draft_operation_refuses_a_replaced_selection_plan(services) -> None:
             company="Draft Plan Race Co",
             target_role="Account Manager",
             job_text=ACCOUNT_MANAGER_JOB,
+            client="web",
         )
     )
     analysis = services.analysis.analyze(
@@ -712,7 +733,7 @@ def test_draft_operation_refuses_a_replaced_selection_plan(services) -> None:
         track_emphasis_dependencies=old_plan.track_emphasis_dependencies,
     )
 
-    failed = services.foreground_operations.execute(operation.id)
+    failed = foreground_executor(services).execute(operation.id)
 
     assert failed.status is OperationStatus.FAILED
     assert failed.failure_code is OperationFailureCode.SOURCE_CHANGED
@@ -726,6 +747,7 @@ def test_foreground_draft_runs_through_one_operation(services) -> None:
             company="Foreground Draft Co",
             target_role="Account Manager",
             job_text=ACCOUNT_MANAGER_JOB,
+            client="web",
         )
     )
     analysed = services.analysis.analyze(
@@ -744,7 +766,7 @@ def test_foreground_draft_runs_through_one_operation(services) -> None:
         idempotency_key="foreground-draft-key",
         draft_service=services.drafts,
     )
-    completed = services.foreground_operations.execute(operation.id)
+    completed = foreground_executor(services).execute(operation.id)
 
     assert completed.status is OperationStatus.SUCCEEDED
     outputs = {output.output_type: output.output_id for output in completed.outputs}
@@ -782,7 +804,7 @@ def test_failed_render_operation_preserves_registered_outputs_as_inactive(
         rendering_service=setup.services.rendering,
     )
 
-    failed = setup.services.foreground_operations.execute(operation.id)
+    failed = foreground_executor(setup.services).execute(operation.id)
 
     assert failed.status is OperationStatus.FAILED
     assert failed.failure_code is OperationFailureCode.RENDER_FAILED
@@ -873,7 +895,7 @@ def test_a_render_stopped_between_the_phases_keeps_registered_inactive_outputs(
         return executed
 
     monkeypatch.setattr(setup.services.rendering, "execute", execute_then_interfere)
-    stopped = setup.services.foreground_operations.execute(operation.id)
+    stopped = foreground_executor(setup.services).execute(operation.id)
 
     assert stopped.status is expected_status
     assert stopped.failure_code is expected_code
@@ -935,7 +957,7 @@ def test_a_failure_partway_through_registration_leaves_no_artifact_at_all(
         return original(self, *args, **kwargs)
 
     monkeypatch.setattr(type(repository), "register_artifact_version", fail_on_the_third)
-    failed = setup.services.foreground_operations.execute(operation.id)
+    failed = foreground_executor(setup.services).execute(operation.id)
 
     assert failed.status is OperationStatus.FAILED
     assert calls == 3, "the injected failure never reached the code under test"
@@ -955,6 +977,7 @@ def _approve_command(services, application_id) -> ApproveDraftCommand:
         working_draft_id=validated.working_draft_id,
         expected_edit_version=validated.edit_version,
         validation_run_id=validated.validation_run_id,
+        client="web",
     )
 
 

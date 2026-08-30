@@ -1,4 +1,4 @@
-"""The app and an `OperationWorker`, side by side, as `cv web` will host them.
+"""The app and an `OperationWorker`, side by side, as the two processes run them.
 
 `create_app` starts no worker: FastAPI is a server, not a process manager, and a
 worker bound to an app lifespan would start a second one for every `TestClient`.

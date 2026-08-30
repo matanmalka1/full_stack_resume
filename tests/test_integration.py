@@ -18,10 +18,13 @@ from cv_engine.runtime.paths import AppPaths
 def test_csv_export_declares_its_schema_version(services, tmp_path: Path) -> None:
     import json as _json
 
-    from cv_engine.cli import EXPORT_SCHEMA_VERSION, export_csv
+    from cv_engine.application.maintenance import EXPORT_SCHEMA_VERSION
+    from cv_engine.infrastructure.exports import export_csv
 
     ingested = services.applications.ingest(
-        IngestCommand(company="Acme", target_role="Developer", job_text="Python developer role")
+        IngestCommand(
+            company="Acme", target_role="Developer", job_text="Python developer role", client="web"
+        )
     )
     app_id = ingested.application_id
     output = export_csv(services.queries.list_applications(), tmp_path / "applications.csv")
@@ -124,23 +127,22 @@ def test_approval_refuses_while_the_projection_holds_an_unimported_edit(
     assert "direct SaaS Sales" in markdown.read_text(encoding="utf-8")
 
 
-def test_cli_exposes_style_safe_composite_edit(drafted_application, cli_runner) -> None:
-    services, app_id = drafted_application("Composite CLI")
+def test_style_safe_composite_edit_joins_two_canonical_facts(drafted_application) -> None:
+    """Editing one claim onto two facts through a template makes it composite.
+
+    The subject is the edit, not any one caller: `PATCH /working-drafts/{id}`
+    and the draft service reach the same method, so this drives the service.
+    """
+    services, app_id = drafted_application("Composite edit")
     claim = _working_claim(services, app_id, "sales.metric.recurring_customers")
 
-    result = cli_runner(
-        "edit-claim",
+    services.drafts.edit_claim(
         app_id,
         claim.claim_id,
-        "--template",
-        "canonical-renderings",
-        "--fact-id",
-        "sales.metric.recurring_customers",
-        "--fact-id",
-        "sales.metric.performance",
+        ["sales.metric.recurring_customers", "sales.metric.performance"],
+        template_id="canonical-renderings",
     )
 
-    assert result.returncode == 0, result.stdout + result.stderr
     assert (
         _working_claim(services, app_id, "sales.metric.recurring_customers").claim_type
         == "composite"

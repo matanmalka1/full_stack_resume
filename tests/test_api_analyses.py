@@ -26,6 +26,7 @@ def _application(services, company: str, *, job_text: str = ACCOUNT_MANAGER_JOB)
             target_role="Account Manager",
             job_text=job_text,
             acknowledged_duplicates=True,
+            client="web",
         )
     ).application_id
 
@@ -102,6 +103,7 @@ def test_an_analysis_whose_plan_cannot_be_written_leaves_no_analysis_behind(
             target_role="Account Manager",
             job_text=ACCOUNT_MANAGER_JOB,
             acknowledged_duplicates=True,
+            client="web",
         )
     )
     repository = services.repository

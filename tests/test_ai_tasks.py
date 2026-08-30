@@ -17,6 +17,7 @@ import json
 
 import pytest
 from fake_provider import FakeOpenAI, HTTPStatus, Timeout, envelope, refusal_envelope
+from foreground import foreground_executor
 from helpers import ACCOUNT_MANAGER_JOB
 
 from cv_engine.application.commands import (
@@ -69,6 +70,7 @@ def _ingested(services, company: str, job_text: str = ACCOUNT_MANAGER_JOB):
             target_role="Account Manager",
             job_text=job_text,
             acknowledged_duplicates=True,
+            client="web",
         )
     )
 
@@ -113,7 +115,7 @@ def _canonical_claim(working):
 
 
 def _run(services, operation_view):
-    return services.foreground_operations.execute(operation_view.id)
+    return foreground_executor(services).execute(operation_view.id)
 
 
 def _provider_artifacts(services, application_id: str) -> list[dict]:
@@ -563,6 +565,7 @@ def test_a_source_that_moves_after_execution_keeps_the_output_as_inactive_eviden
             CreateJobSnapshotCommand(
                 application_id=ingested.application_id,
                 job_text=f"{ACCOUNT_MANAGER_JOB}\nNew territory ownership.",
+                client="web",
             )
         )
         return prepared

@@ -20,6 +20,7 @@ def test_application_projection_follows_the_preparation_lifecycle(services) -> N
             company="State Co",
             target_role="Account Manager",
             job_text=ACCOUNT_MANAGER_JOB,
+            client="web",
         )
     )
     detail = services.queries.application_detail(ingested.application_id)
@@ -71,6 +72,7 @@ def test_material_ambiguity_is_a_review_reason_and_blocks_drafting(services) -> 
             company="Ambiguous State Co",
             target_role="Sales",
             job_text=AMBIGUOUS_HEBREW_JOB,
+            client="web",
         )
     )
     services.analysis.analyze(
@@ -290,7 +292,9 @@ def test_pending_claim_recommends_its_resolution_action(drafted_application) -> 
 
 def test_projection_queries_share_one_database_snapshot(services) -> None:
     ingested = services.applications.ingest(
-        IngestCommand(company="Snapshot Co", target_role="Developer", job_text="Python role")
+        IngestCommand(
+            company="Snapshot Co", target_role="Developer", job_text="Python role", client="web"
+        )
     )
     repository = services.repository
     with repository.read_transaction() as reader:

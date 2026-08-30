@@ -30,6 +30,7 @@ def _submission_command(services, application_id: str) -> SubmissionCommand:
         approved_revision_id=revision.id,
         pdf_artifact_version_id=pdf["id"],
         submitted_at="2026-08-19T10:00:00+00:00",
+        client="web",
     )
 
 
@@ -72,7 +73,7 @@ def test_repository_cannot_manually_set_ready(analyzed_application) -> None:
     assert not hasattr(services.repository, "transition_status")
     with pytest.raises(WorkflowError):
         services.tracking.transition_status(
-            RecruitmentStatusCommand(application_id=app_id, target_status="ready")
+            RecruitmentStatusCommand(application_id=app_id, target_status="ready", client="web")
         )
     assert services.repository.get_application(app_id)["current_status"] == "saved"
 
@@ -226,6 +227,7 @@ def test_ready_qualification_is_independent_of_active_context(ready_application)
             approved_revision_id=old_revision.id,
             pdf_artifact_version_id=old_pdf["id"],
             submitted_at="2026-08-19T10:00:00+00:00",
+            client="web",
         )
     )
     assert submitted.current_status == "applied"
@@ -256,6 +258,7 @@ def test_submission_binds_current_pdf_and_remains_immutable_after_later_versions
             approved_revision_id=revision.id,
             pdf_artifact_version_id=second_pdf["id"],
             submitted_at="2026-08-19T10:00:00+00:00",
+            client="web",
         )
     )
     assert result.pdf_artifact_version_id == second_pdf["id"]
@@ -325,6 +328,7 @@ def test_generic_status_transition_to_applied_is_always_blocked(ready_applicatio
                 application_id=app_id,
                 target_status="applied",
                 reason="direct bypass attempt",
+                client="web",
             )
         )
     assert services.repository.get_application(app_id)["current_status"] == "saved"
@@ -337,12 +341,14 @@ def test_external_submission_never_fabricates_revision_or_artifact(analyzed_appl
             application_id=app_id,
             submitted_at="2026-08-19T10:00:00+00:00",
             metadata={"source": "email confirmation"},
+            client="web",
         )
     )
     second = services.tracking.record_external_submission(
         ExternalSubmissionCommand(
             application_id=app_id,
             submitted_at="2026-08-19T11:00:00+00:00",
+            client="web",
         )
     )
     assert first.current_status == second.current_status == "applied"
@@ -369,6 +375,7 @@ def test_correction_is_append_only_and_terminal_outcome_survives_closed(
             target_status="withdrawn",
             reason="mistaken entry",
             occurred_at="2026-08-19T10:00:00+00:00",
+            client="web",
         )
     )
     assert withdrawn.terminal_outcome == "withdrawn"
@@ -379,6 +386,7 @@ def test_correction_is_append_only_and_terminal_outcome_survives_closed(
                 target_status="interview",
                 corrects_event_id=withdrawn.event_id or "",
                 reason=" ",
+                client="web",
             )
         )
     corrected = services.tracking.correct_recruitment_status(
@@ -388,6 +396,7 @@ def test_correction_is_append_only_and_terminal_outcome_survives_closed(
             corrects_event_id=withdrawn.event_id or "",
             reason="status was entered on the wrong application",
             occurred_at="2026-08-19T10:05:00+00:00",
+            client="web",
         )
     )
     assert corrected.current_status == "interview"
@@ -401,7 +410,7 @@ def test_correction_is_append_only_and_terminal_outcome_survives_closed(
 
     for target in ("offer", "accepted", "closed"):
         closed = services.tracking.transition_status(
-            RecruitmentStatusCommand(application_id=app_id, target_status=target)
+            RecruitmentStatusCommand(application_id=app_id, target_status=target, client="web")
         )
     assert closed.current_status == "closed"
     assert closed.terminal_outcome == "accepted"

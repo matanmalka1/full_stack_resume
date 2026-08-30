@@ -35,6 +35,7 @@ def _application(services, company: str) -> str:
             target_role="Account Manager",
             job_text=ACCOUNT_MANAGER_JOB,
             acknowledged_duplicates=True,
+            client="web",
         )
     ).application_id
 

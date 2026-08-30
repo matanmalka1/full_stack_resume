@@ -31,6 +31,7 @@ def test_duplicate_acknowledgement_precedes_every_write_and_retry_keeps_warnings
             target_role="Developer",
             job_text="A duplicate-sensitive role",
             source_url="https://jobs.example/duplicate",
+            client="web",
         )
     )
     snapshots = services.paths.artifacts_root / "snapshots"
@@ -79,7 +80,9 @@ def test_duplicate_acknowledgement_precedes_every_write_and_retry_keeps_warnings
 def test_create_job_snapshot_preserves_exact_historical_payload_and_lineage(services) -> None:
     initial_text = "Initial line\n"
     created = services.applications.ingest(
-        IngestCommand(company="Snapshot Co", target_role="Developer", job_text=initial_text)
+        IngestCommand(
+            company="Snapshot Co", target_role="Developer", job_text=initial_text, client="web"
+        )
     )
     initial = services.repository.get_snapshot(created.job_snapshot_id)
     replacement_text = "Replacement line one\r\nReplacement line two\n"
@@ -124,7 +127,9 @@ def test_job_snapshot_metadata_rolls_back_when_its_audit_insert_fails(
     services, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     created = services.applications.ingest(
-        IngestCommand(company="Audit Rollback Co", target_role="Developer", job_text="Initial")
+        IngestCommand(
+            company="Audit Rollback Co", target_role="Developer", job_text="Initial", client="web"
+        )
     )
     snapshots = services.paths.artifacts_root / "snapshots" / created.application_id
     files_before = sorted(snapshots.iterdir())
@@ -138,6 +143,7 @@ def test_job_snapshot_metadata_rolls_back_when_its_audit_insert_fails(
             CreateJobSnapshotCommand(
                 application_id=created.application_id,
                 job_text="Replacement",
+                client="web",
             )
         )
 
@@ -148,7 +154,9 @@ def test_job_snapshot_metadata_rolls_back_when_its_audit_insert_fails(
 
 def test_repeating_exact_snapshot_content_is_refused_before_a_payload_write(services) -> None:
     created = services.applications.ingest(
-        IngestCommand(company="Repeat Co", target_role="Developer", job_text="Exact text")
+        IngestCommand(
+            company="Repeat Co", target_role="Developer", job_text="Exact text", client="web"
+        )
     )
     snapshots = services.paths.artifacts_root / "snapshots" / created.application_id
     files_before = sorted(snapshots.iterdir())
@@ -158,6 +166,7 @@ def test_repeating_exact_snapshot_content_is_refused_before_a_payload_write(serv
             CreateJobSnapshotCommand(
                 application_id=created.application_id,
                 job_text="Exact text",
+                client="web",
             )
         )
     except StateConflict as error:

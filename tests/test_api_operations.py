@@ -25,6 +25,7 @@ def _queued_analysis(services, company: str, *, idempotency_key: str = "stage-c-
             target_role="Account Manager",
             job_text=ACCOUNT_MANAGER_JOB,
             acknowledged_duplicates=True,
+            client="web",
         )
     )
     return services.operations.submit_analysis(

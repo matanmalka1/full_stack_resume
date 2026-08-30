@@ -1,29 +1,35 @@
 from __future__ import annotations
 
+import json as _json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 from collections.abc import Iterator
 from dataclasses import dataclass, replace
 from pathlib import Path
+from time import monotonic, sleep
 from typing import Any, cast
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 import pytest
 from api_harness import api_with_worker
 from fake_provider import FakeOpenAI
+from foreground import foreground_executor
 from helpers import (
     ACCOUNT_MANAGER_JOB,
     AMBIGUOUS_HEBREW_JOB,
-    CliRun,
     approve_active_draft,
-    run_cli,
 )
 from seed import V2_IDENTITY_FACT, write_canonical_sources
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 import cv_engine
+from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import (
     AnalyzeCommand,
     ApprovalResult,
@@ -67,6 +73,7 @@ from cv_engine.runtime.paths import AppPaths
 from cv_engine.util import new_id
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
+TESTS_DIR = Path(__file__).resolve().parent
 
 
 # The v1 worktree ships an editable install of this package, whose finder
@@ -204,8 +211,8 @@ def project_root(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def app_paths(project_root: Path, monkeypatch: pytest.MonkeyPatch) -> AppPaths:
-    monkeypatch.setenv("CV_TEST_PROJECT_ROOT", str(project_root))
+def app_paths(project_root: Path) -> AppPaths:
+    """The test project's paths, injected rather than selected by environment."""
     return AppPaths.from_root(project_root)
 
 
@@ -315,33 +322,110 @@ def application_repo(database_engine: Engine) -> Repository:
     return Repository(database_engine)
 
 
-@pytest.fixture
-def cli_runner(project_root: Path, monkeypatch: pytest.MonkeyPatch):
-    """The CLI against the isolated test project, run in this process."""
+@dataclass(frozen=True)
+class HttpReply:
+    status: int
+    body: str
 
-    monkeypatch.setenv("CV_TEST_PROJECT_ROOT", str(project_root))
-
-    def run(*args: str) -> CliRun:
-        return run_cli(*args)
-
-    return run
+    @property
+    def json(self) -> Any:
+        return _json.loads(self.body)
 
 
-@pytest.fixture
-def cli_subprocess(project_root: Path):
-    """The CLI as a real process, for tests whose subject is that boundary."""
+class LiveApiServer:
+    """A real uvicorn process, addressed over a socket.
 
-    def run(*args: str) -> subprocess.CompletedProcess[str]:
-        env = {**os.environ, "CV_TEST_PROJECT_ROOT": str(project_root)}
-        return subprocess.run(
-            [sys.executable, "-m", "cv_engine.cli", *args],
-            text=True,
-            capture_output=True,
-            check=False,
-            env=env,
+    The in-process API tests share a composition root with the code they test.
+    This does not: every call leaves the test process, so what it proves is
+    that state is durable rather than held in a live object graph.
+    """
+
+    def __init__(self, base_url: str) -> None:
+        self.base_url = base_url
+
+    def _call(self, method: str, path: str, body: Any = None) -> HttpReply:
+        data = _json.dumps(body).encode() if body is not None else None
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
+        if method != "GET":
+            # The origin policy refuses a state-changing request that does not
+            # declare where it came from; a browser always sends one.
+            headers["Origin"] = self.base_url
+        request = Request(
+            f"{self.base_url}{API_PREFIX}{path}", data=data, method=method, headers=headers
         )
+        try:
+            with urlopen(request, timeout=30) as response:
+                return HttpReply(response.status, response.read().decode())
+        except HTTPError as error:
+            return HttpReply(error.code, error.read().decode())
+        except URLError as error:
+            # Not yet listening: the readiness poll asks before the socket is
+            # bound, and a refused connection is an answer, not a crash.
+            return HttpReply(0, str(error))
 
-    return run
+    def get(self, path: str, params: dict[str, str] | None = None) -> HttpReply:
+        query = f"?{urlencode(params)}" if params else ""
+        return self._call("GET", f"{path}{query}")
+
+    def post(self, path: str, body: Any) -> HttpReply:
+        return self._call("POST", path, body)
+
+
+@pytest.fixture
+def live_api_server(project_root: Path, database_url: str) -> Iterator[LiveApiServer]:
+    """Serve the API from a separate process against the isolated project."""
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    process = subprocess.Popen(
+        # `asgi_factory` rather than the production entry point: the root is not
+        # selectable at runtime, so a test project needs its own composition.
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "--factory",
+            "asgi_factory:build_test_app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+            "--log-level",
+            "warning",
+        ],
+        cwd=str(TESTS_DIR),
+        env={
+            **os.environ,
+            "CV_TEST_ASGI_ROOT": str(project_root),
+            "CV_DATABASE_URL": database_url,
+            "PYTHONPATH": str(TESTS_DIR),
+            # The app has to know the port it answers on, or its own origin
+            # is not the one it allows.
+            "CV_API_PORT": str(port),
+        },
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    server = LiveApiServer(f"http://127.0.0.1:{port}")
+    try:
+        deadline = monotonic() + 60
+        while monotonic() < deadline:
+            if process.poll() is not None:
+                pytest.fail(f"API process exited early:\n{process.stdout.read()}")
+            if server.get("/health").status == 200:
+                break
+            sleep(0.1)
+        else:
+            pytest.fail("API process did not become ready")
+        yield server
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
 
 
 @pytest.fixture
@@ -357,6 +441,7 @@ def analyzed_application(services: Services):
                 target_role=role,
                 job_text=job_text,
                 acknowledged_duplicates=True,
+                client="web",
             )
         )
         analysed = services.analysis.analyze(
@@ -618,6 +703,7 @@ def provider_analysis(ai_services: Services, fake_openai: FakeOpenAI):
                 target_role=role,
                 job_text=job_text,
                 acknowledged_duplicates=True,
+                client="web",
             )
         )
         queued = ai_services.operations.submit_analysis(
@@ -636,7 +722,7 @@ def provider_analysis(ai_services: Services, fake_openai: FakeOpenAI):
             idempotency_key=new_id(),
             analysis_service=ai_services.analysis,
         )
-        completed = ai_services.foreground_operations.execute(queued.id)
+        completed = foreground_executor(ai_services).execute(queued.id)
         if completed.status.value != "succeeded":
             raise AssertionError(
                 f"analysis Operation failed: {completed.failure_code} "

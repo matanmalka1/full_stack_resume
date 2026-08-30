@@ -291,7 +291,7 @@ def test_domain_and_application_dependencies_point_inward() -> None:
     storage_layout_names = set(ROOT_NAMES) | {"base_dir"}
 
     offenders: list[str] = []
-    internal_layers = {"domain", "application", "infrastructure", "api", "runtime", "cli"}
+    internal_layers = {"domain", "application", "infrastructure", "api", "runtime", "worker"}
 
     for layer in ("domain", "application", "api"):
         allowed = ALLOWED_INTERNAL[layer] | {"__own_package__"}
@@ -337,7 +337,7 @@ def test_infrastructure_does_not_import_its_composition_root() -> None:
     new outward edge fails here rather than arriving with an allowlist.
     """
     allowed = ALLOWED_INTERNAL["infrastructure"] | {"__own_package__"}
-    internal_layers = {"domain", "application", "infrastructure", "api", "runtime", "cli"}
+    internal_layers = {"domain", "application", "infrastructure", "api", "runtime", "worker"}
 
     offenders = [
         f"{path.relative_to(ENGINE)}:{line} imports {name}"
@@ -349,14 +349,18 @@ def test_infrastructure_does_not_import_its_composition_root() -> None:
 
 
 def test_known_outer_layer_policy_debt_does_not_grow() -> None:
-    """Cover CLI, infrastructure, runtime, and compat policy boundaries.
+    """Cover the outer layers' policy boundaries.
 
     The allowlist is now empty: A2, A6, and A24 are closed. It stays as an
     empty set rather than being deleted, so a re-introduced offender fails
     here instead of arriving with a fresh allowlist of its own.
+
+    `worker` is scanned rather than `cli` because it is now the process host
+    that is not the API: a host that reached past the composition root into the
+    database directly is the boundary this rule exists to catch.
     """
     offenders: set[str] = set()
-    for path in _layer_modules("cli"):
+    for path in _layer_modules("worker"):
         relative = path.relative_to(ENGINE).as_posix()
         if any(
             target == "infrastructure.db" or target.startswith("infrastructure.db.")
@@ -412,8 +416,14 @@ def test_path_containment_has_one_implementation() -> None:
     rendering_service = (ENGINE / "application/services/rendering.py").read_text(encoding="utf-8")
     assert "services.rendering.preview_approved_html(" in approved_router
     assert "return self.download_artifact(html_artifact_version_id)" in rendering_service
+    # Read the code, not the prose. This scanned the whole file once, so a
+    # docstring explaining what `content_hash` means to a client failed as
+    # though the router were computing one.
+    approved_router_code = "\n".join(
+        line for _number, line in _code_lines(ENGINE / "api/routers/approved_revisions.py")
+    )
     assert not any(
-        token in approved_router
+        token in approved_router_code
         for token in ("content_hash", ".resolve(", ".read_bytes(", ".is_file(")
     )
 
@@ -524,7 +534,7 @@ def test_api_is_not_imported_by_the_layers_it_serves() -> None:
     load-bearing for the CLI, which does not go through HTTP at all.
     """
     offenders: list[str] = []
-    for layer in ("domain", "application", "infrastructure", "cli"):
+    for layer in ("domain", "application", "infrastructure", "worker"):
         for path in _layer_modules(layer):
             offenders.extend(
                 f"{path.relative_to(ENGINE)}:{line} imports api from the {layer} layer"

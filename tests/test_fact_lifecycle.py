@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import uuid
 from pathlib import Path
 from typing import cast
@@ -388,54 +387,53 @@ def test_promotion_requires_explicit_confirmation_and_a_legal_transition(
     assert _reload(services).get("situational.postgres").status is FactStatus.PENDING
 
 
-def test_lifecycle_survives_process_boundaries_through_the_cli(
-    cli_subprocess, project_root: Path
+def test_lifecycle_survives_process_boundaries_over_http(
+    live_api_server, project_root: Path
 ) -> None:
-    added = cli_subprocess(
-        "fact",
-        "add",
-        "--source",
-        "situational_skills.md",
-        "--fact-id",
-        "situational.postgres",
-        "--meaning",
-        NEW_FACT["meaning"],
-        "--en",
-        NEW_FACT["renderings"]["en"],
-        "--tag",
-        "development",
-        "--tag",
-        "situational",
-        "--style",
-        "bullet",
-        "--provenance",
-        NEW_FACT["provenance"],
+    """Each step is a separate request against a separately started server.
+
+    The in-process API tests share one composition root, so they cannot show
+    that a promotion is durable rather than held in a live object graph. Here
+    every call crosses a real socket into a process this test did not build,
+    and the final assertion reads the file back from disk.
+    """
+    created = live_api_server.post(
+        "/facts",
+        {
+            "source": "situational_skills.md",
+            "meaning": NEW_FACT["meaning"],
+            "renderings": NEW_FACT["renderings"],
+            "tags": ["development", "situational"],
+            "provenance": NEW_FACT["provenance"],
+            "resume_style": "bullet",
+        },
     )
-    assert added.returncode == 0, added.stdout + added.stderr
-    assert json.loads(added.stdout)["fact"]["status"] == "pending"
+    assert created.status == 201, created.body
+    fact_id = created.json["fact"]["fact_id"]
+    assert created.json["fact"]["status"] == "pending"
 
-    unconfirmed = cli_subprocess("fact", "confirm", "situational.postgres")
-    assert unconfirmed.returncode == 2
-    assert "requires explicit --confirm" in unconfirmed.stderr
+    # Confirmation is explicit: an unconfirmed transition is refused rather
+    # than assumed, and the refusal must not advance the fact.
+    unconfirmed = live_api_server.post(f"/facts/{fact_id}/confirm", {"confirm": False})
+    assert unconfirmed.status == 412, unconfirmed.body
 
-    assert cli_subprocess("fact", "confirm", "situational.postgres", "--confirm").returncode == 0
-    assert cli_subprocess("fact", "promote", "situational.postgres", "--confirm").returncode == 0
+    assert live_api_server.post(f"/facts/{fact_id}/confirm", {"confirm": True}).status == 200
+    assert live_api_server.post(f"/facts/{fact_id}/promote", {"confirm": True}).status == 200
 
-    listed = cli_subprocess("fact", "list", "--status", "canonical")
-    assert listed.returncode == 0
-    ids = [fact["fact_id"] for fact in json.loads(listed.stdout)]
-    assert "situational.postgres" in ids
-    assert (
-        load_fact_store(project_root / "base").get("situational.postgres").status
-        is FactStatus.CANONICAL
-    )
+    listed = live_api_server.get("/facts", params={"status": "canonical"})
+    assert listed.status == 200, listed.body
+    assert fact_id in {item["fact"]["fact_id"] for item in listed.json["items"]}
 
-    history = json.loads(cli_subprocess("fact", "history", "situational.postgres").stdout)
-    assert [(event["from_status"], event["to_status"]) for event in history] == [
+    history = live_api_server.get(f"/facts/{fact_id}/history")
+    transitions = [(event["from_status"], event["to_status"]) for event in history.json["events"]]
+    assert transitions == [
         (None, "pending"),
         ("pending", "confirmed"),
         ("confirmed", "canonical"),
     ]
+
+    # The file on disk is the record, not the server's memory.
+    assert load_fact_store(project_root / "base").get(fact_id).status is FactStatus.CANONICAL
 
 
 def test_duplicate_fact_ids_are_refused(services: Services) -> None:

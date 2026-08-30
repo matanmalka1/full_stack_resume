@@ -1,14 +1,10 @@
 from __future__ import annotations
 
-import argparse
 import json
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
-from cv_engine.cli.parser import build_parser
 from cv_engine.runtime.config import CONFIG_NAME, ConfigError, parse_env_file, resolve_config
 from cv_engine.runtime.paths import AppPaths, PathConfigurationError
 
@@ -79,32 +75,3 @@ def test_env_file_precedence_secrets_and_parsing(tmp_path: Path) -> None:
         "A": "1",
         "B": "two",
     }
-
-
-def test_every_parser_command_has_a_registered_handler() -> None:
-    from cv_engine.cli import _HANDLERS
-
-    subparsers = next(
-        action
-        for action in build_parser()._actions
-        if isinstance(action, argparse._SubParsersAction)
-    )
-    assert set(subparsers.choices) == set(_HANDLERS)
-
-
-def test_cli_module_entry_point_reports_unknown_commands() -> None:
-    result = subprocess.run(
-        [sys.executable, "-m", "cv_engine.cli", "not-a-command"],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert result.returncode == 2
-
-
-def test_cli_has_no_root_selector_or_lifecycle_command() -> None:
-    parser = build_parser()
-    help_text = parser.format_help().casefold()
-    assert "--workspace" not in help_text
-    assert "--repo" not in help_text
-    assert "workspace" not in parser._subparsers._group_actions[0].choices

@@ -29,6 +29,7 @@ def test_ingest_commits_exact_snapshot_payload_before_registration(
             company="Payload Order",
             target_role="Developer",
             job_text=received,
+            client="web",
         )
     )
     snapshot = services.repository.get_snapshot(ingested.job_snapshot_id)
@@ -38,7 +39,10 @@ def test_ingest_commits_exact_snapshot_payload_before_registration(
 def test_commands_require_sources_owned_by_the_named_application(services) -> None:
     mine = services.applications.ingest(
         IngestCommand(
-            company="Mine Co", target_role="Account Manager", job_text=ACCOUNT_MANAGER_JOB
+            company="Mine Co",
+            target_role="Account Manager",
+            job_text=ACCOUNT_MANAGER_JOB,
+            client="web",
         )
     )
     theirs = services.applications.ingest(
@@ -47,6 +51,7 @@ def test_commands_require_sources_owned_by_the_named_application(services) -> No
             target_role="Account Manager",
             job_text=ACCOUNT_MANAGER_JOB,
             acknowledged_duplicates=True,
+            client="web",
         )
     )
 

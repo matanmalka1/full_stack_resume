@@ -421,6 +421,7 @@ def test_ready_is_the_active_preparation_state_only_while_the_context_matches(
         CreateJobSnapshotCommand(
             application_id=setup.application_id,
             job_text=ACCOUNT_MANAGER_JOB + "\n\nUpdated posting: now also owns renewals.",
+            client="web",
         )
     )
 

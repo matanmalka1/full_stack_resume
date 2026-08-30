@@ -1,7 +1,7 @@
 """The API foundation: identity, refusal mapping, transport limits, contract drift.
 
 These tests drive the real application through Starlette's `TestClient`. No ASGI
-server is involved: `uvicorn` and `cv web` are M6 scope, and the client speaks
+server is involved: the client speaks
 ASGI to the app directly.
 """
 
@@ -61,7 +61,7 @@ def test_health_reports_this_instance_and_its_version_surfaces(api, services) ->
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    # The value `cv web` probes to tell its own instance from a foreign process
+    # The value a caller probes to tell this instance from a foreign process
     # on the same port.
     assert "workspace_id" not in body
     assert body["api_version"] == "1"

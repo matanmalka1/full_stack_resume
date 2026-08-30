@@ -80,7 +80,7 @@ const deterministicSettings: Settings = {
   ai_enabled: false,
   ai_enabled_override: null,
   default_execution_mode: "deterministic",
-  open_browser_on_launch: true,
+ 
   provider_configured: false,
   ui_density: "comfortable",
   ui_text_size: "normal",
@@ -224,7 +224,7 @@ describe("ApplicationPage", () => {
       ai_enabled: true,
       ai_enabled_override: true,
       default_execution_mode: "ai",
-      open_browser_on_launch: true,
+     
       provider_configured: true,
       ui_density: "comfortable",
       ui_text_size: "normal",
@@ -288,7 +288,7 @@ describe("ApplicationPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("links validation and approval only when the projection exposes them", async () => {
+  it("collapses validation and approval into the one screen they both reach", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail({
       preparation_state: "ready_for_approval",
       working_draft_state: "validated",
@@ -299,9 +299,28 @@ describe("ApplicationPage", () => {
 
     renderPage();
 
-    /* Both resolve to the editor holding the draft they act on. */
+    /* Validation is a panel on the draft editor and approval is a dialog opened from it,
+       so both actions are one destination. Offering them side by side would ask the
+       reader to choose between two links that go to the same URL. */
     expect(await screen.findByRole("link", { name: "אישור הגרסה" })).toHaveAttribute("href", "/applications/app-1/draft");
-    expect(screen.getByRole("link", { name: "אימות הטיוטה" })).toHaveAttribute("href", "/applications/app-1/draft");
+    expect(screen.queryByRole("link", { name: "אימות הטיוטה" })).not.toBeInTheDocument();
+  });
+
+  it("names the draft screen for validation when approval is not yet offered", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail({
+      preparation_state: "draft_in_progress",
+      working_draft_state: "editing",
+      active_working_draft_id: "draft-1",
+      available_actions: ["validate"],
+      recommended_action: "validate",
+    }))));
+
+    renderPage();
+
+    /* The furthest-along offered action is the honest label: it is what the workflow is
+       waiting on. */
+    expect(await screen.findByRole("link", { name: "אימות הטיוטה" })).toHaveAttribute("href", "/applications/app-1/draft");
+    expect(screen.queryByRole("link", { name: "אישור הגרסה" })).not.toBeInTheDocument();
   });
 
   /* Rendering happens in the draft editor, on the revision the approval there
