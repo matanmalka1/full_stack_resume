@@ -4,10 +4,9 @@ Fact-safe CV generation and application tracking for Development, Sales, and Tec
 Sales. The CLI is first-class and reaches Ready without an AI key; a local Web UI is
 optional.
 
-The binding specifications are under [`docs/v2/spec/`](docs/v2/spec/):
+The binding specifications are under [`docs/spec/`](docs/spec/):
 `product-spec.md`, `state-and-use-cases.md`, `architecture.md`, and
-`implementation-plan.md`. [`docs/README.md`](docs/README.md) maps every document, and
-`docs/v1/` is the frozen v1 record.
+`implementation-plan.md`. [`docs/README.md`](docs/README.md) maps every document.
 
 ## Setup
 
@@ -240,12 +239,6 @@ build it still starts, serving the API and the Operation worker alone - that is 
 dev loop above, where the UI comes from Vite - and reports `"frontend_dist": null` so
 the mode is visible rather than guessed. `npm run build` also runs `tsc -b` and the
 design-token check, so it is slower than `npm run dev` by design.
-
-## Historical record
-
-The pre-v1 and v1 generation workflows are retired, and the `cv migrate` commands that
-verified them were removed with the migration they served. `docs/v1/` remains the frozen
-written record; nothing in v2 reads v1 data.
 
 ## Tests
 

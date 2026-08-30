@@ -1,7 +1,7 @@
 # Cleanup todos — performance and architecture findings
 
 Non-milestone cleanup items, tracked here so they do not compete with milestone scope in
-the current tracker, `docs/v2/m4-remaining.md`. Anything that becomes milestone work moves
+the current tracker, `docs/m4-remaining.md`. Anything that becomes milestone work moves
 there.
 
 Execution rule: work serially. Complete and verify one item, then wait for explicit user
@@ -258,7 +258,7 @@ or weaken an existing acceptance gate.
       duplicated backend evidence across 17 test files without changing production code.
       The user-run non-browser gate moved from **451 passed, 4 deselected** to **300 passed,
       3 deselected**; the complete **-152 collected-item** delta and the retained safety
-      boundaries are reconciled in `docs/v2/m4-remaining.md` under “Current backend-test
+      boundaries are reconciled in `docs/m4-remaining.md` under “Current backend-test
       baseline”. The initial reduction is **151 non-browser tests (33.5%)**. Approximately
       75 further removals remain before the original half-size target is met; continue only
       through a fresh redundancy audit, with integrity, immutability, recovery, golden, and

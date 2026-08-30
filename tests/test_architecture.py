@@ -59,7 +59,7 @@ ALLOWED_INTERNAL = {
     "infrastructure": {"domain", "application", "infrastructure", "util"},
 }
 
-# Known boundary debt from docs/v2/records/architecture-audit.md. New entries are not
+# Known boundary debt. New entries are not
 # permitted. Stages remove entries as they move the owning policy inward. A2, A6, and
 # A24 are all closed; the set stays so a regression fails instead of quietly seeding a
 # new allowlist.

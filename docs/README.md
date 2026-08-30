@@ -1,61 +1,30 @@
 # Documentation map
 
-Three kinds of document live here, and the kind decides how it is treated.
+## Specifications — `spec/`
 
-| Kind | Where | Rule |
-| --- | --- | --- |
-| **Specification** — binding on what the product does | `v2/spec/` | Changes only by an approved decision |
-| **Record** — what was decided, built, and verified | `v2/records/` | Frozen when its boundary closes; not updated with later state |
-| **State** — what is done, what remains, what is blocked | milestone tracker | `v2/m4-remaining.md` is the active M4 tracker |
-
-`v2/process/` holds working protocol rather than product content. `v1/` is the legacy
-record: evidence, not an active workflow. As of 2026-08-19 it is a frozen archive —
-v2 starts with an empty database and there is no migration from v1.
-`v1/migration-plan-superseded.md` records the migration that was planned and retired.
-
-## v2 specifications — `v2/spec/`
+Binding on what the product does. Changes by an approved decision.
 
 | File | Owns |
 | --- | --- |
 | `product-spec.md` | Scope, invariants, non-goals, Definition of Done |
 | `state-and-use-cases.md` | Lifecycle, commands, queries, permissions, HTTP mapping |
 | `architecture.md` | Layer boundaries, filesystem layout, schema shape, dependency baseline |
-| `implementation-plan.md` | Milestones M0–M6, their stages and gates |
+| `implementation-plan.md` | Milestones and their gates |
 | `test-and-acceptance-plan.md` | Test layers, golden matrix, release gates |
-
-## Records — `v2/records/`
-
-| File | Covers |
-| --- | --- |
-| `architecture-audit.md` | Findings A1–A29 and the M1 boundary work; frozen at M1 close |
-| `m1-acceptance.md` | M1 acceptance, its four review rounds, and its evidence |
-| `m2-schema-and-repositories.md` | M2 boundary 1 — schema, migrations, repositories |
-| `m2-domain-records.md` | M2 boundary 2 — domain records, including Stage 7b |
-| `m2-approved-revisions.md` | M2 boundary 2b-i — approved revisions and artifact binding |
-| `m2-operations.md` | M2 §4.4 — durable Operations, recovery, and Class C evidence |
-| `m2-knowledge-consistency.md` | M2 §4.5 — journaled Knowledge mutation and recovery evidence |
-| `m3-acceptance.md` | M3 API vertical-slice acceptance, matrices, gates, and offline CLI evidence |
-| `stage7-validation-report-options.md` | The option analysis behind the `ValidationReport` decision |
 
 ## State and process
 
-- `v2/m4-remaining.md` — active M4 state and design pass.
-- `v2/m3-remaining.md` — M3 state, closed and not updated with later work.
-- `v2/m2-remaining.md` — M2 state, closed. Kept for its evidence, not updated.
-- `v2/cleanup-todos.md` — non-milestone cleanup items.
-- `v2/process/execution-protocol.md` — how work is split across parallel agents. Adds to
-  `AGENTS.md`; repeats none of it.
-- `v2/smoke-run.md` — deterministic no-AI CLI run against a fresh PostgreSQL database
-  and isolated test resources.
+- `m4-remaining.md` — what is done, what remains, what is blocked.
+- `cleanup-todos.md` — non-milestone cleanup items.
+- `smoke-run.md` — deterministic no-AI CLI run against a fresh PostgreSQL database.
+- `process/execution-protocol.md` — how work is split across parallel agents.
 
-The 2026-08-25 persistence baseline is PostgreSQL/SQLAlchemy/Alembic plus a
-storage-neutral local-or-S3-compatible object store. Runtime configuration supports one
-`.env` below the real process environment; `OPENAI_API_KEY` remains environment-only and
-all configured secrets are masked at reporting boundaries. `v2/spec/architecture.md`
-owns these technical contracts.
+## Baseline
 
-## v1 — `v1/`
+Persistence is PostgreSQL/SQLAlchemy/Alembic plus a storage-neutral local-or-S3-compatible
+object store. Runtime configuration supports one `.env` below the real process
+environment; `OPENAI_API_KEY` is environment-only and configured secrets are masked at
+reporting boundaries. `spec/architecture.md` owns these contracts.
 
-`upgrade-handoff.md` is the binding description of what v1 did and why. `architecture.md`,
-`review.md`, `implementation-plan.md`, `verification.md`, `migration-restore.md`, and
-`retrospective-migration-verification.json` are its supporting evidence.
+Closed milestone records and the v1 archive were removed on 2026-08-30; they are in Git
+history.

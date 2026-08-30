@@ -46,24 +46,18 @@ For v2.0, authority is ordered as follows:
 
 1. This product specification defines binding product semantics, scope, safety, and
    observable behavior after it is approved.
-2. `docs/v2/spec/state-and-use-cases.md` defines the detailed state, command, query, and
+2. `docs/spec/state-and-use-cases.md` defines the detailed state, command, query, and
    permission contracts consistent with this specification.
-3. `docs/v2/spec/architecture.md` defines the technical architecture that implements those
+3. `docs/spec/architecture.md` defines the technical architecture that implements those
    contracts.
 4. The implementation and test plans define execution and evidence.
-5. `docs/v1/upgrade-handoff.md` and v1 behavior remain binding evidence for every v1
-   safety or factual invariant that this specification does not explicitly replace.
-6. Legacy code and data are current-state evidence, not permission to weaken a v2
-   contract.
 
 Normative terms such as **must**, **must not**, **should**, and **may** are intentional.
 An internal naming or packaging decision may change without approval when observable
 behavior and every invariant remain unchanged. A semantic change, scope expansion,
 migration risk, or weakened factual boundary requires an explicit decision.
 
-Repository authority has handed off to v2. `AGENTS.md` governs repository work and points
-to this specification set; the v1 documents remain frozen evidence rather than active
-instructions.
+`AGENTS.md` governs repository work and points to this specification set.
 
 ## 2. Product goal
 
@@ -157,7 +151,7 @@ The following are not part of v2.0:
 - Mobile-first flows or a full internationalization framework.
 - Notifications, calendar integration, recurring reminders, or follow-up automation.
 - Charts, advanced analytics, or Web CSV export.
-- General CSV or data import, including any import of the v1 archive.
+- General CSV or data import.
 - WebSocket or SSE progress transport.
 - Hard deletion through the Web UI.
 - Automatic application or schema updates.

@@ -9,7 +9,7 @@ state applies to every lane. Only the multi-agent additions are written here.
 
 It was derived from the M1 boundary refactor, which ran seven stages across three parallel
 lanes and one integration wave without a single cross-lane conflict
-(`docs/v2/records/architecture-audit.md` section 4 records what landed). Use it whenever
+Use it whenever
 implementation is split across more than one agent. Skip it when one agent working serially
 is the honest answer — see section 7.
 
@@ -161,10 +161,8 @@ Reporting follows `AGENTS.md`: passed / failed / remaining, with command evidenc
    This is not the re-run section 9 warns against — no lane produces a full-suite run, and
    the merged tree is not the tree any lane tested. It is the boundary's only full run, and
    the first one over the code as it will actually ship.
-5. Update the current milestone tracker — `docs/v2/m4-remaining.md` — with what landed and
-   what remains. It is the only record of state; the tracker moves with the milestone, and
-   a document under `docs/v2/records/` is frozen evidence for a closed boundary that is
-   never updated with later state.
+5. Update the current milestone tracker — `docs/m4-remaining.md` — with what landed and
+   what remains. It is the only record of state, and it moves with the milestone.
 6. Report per package, with command evidence.
 
 ## 7. When not to use this
@@ -217,7 +215,7 @@ The accepting side checks the four things a report cannot establish about itself
    `python3 -m venv .venv`, `./.venv/bin/python -m pip install -e '.[test]'`, and
    `./.venv/bin/playwright install chromium`. Evidence produced under another worktree's
    editable environment is not accepted, even when import-order guards prove that v2 won.
-   (`docs/v2/records/architecture-audit.md` section 6 records where this rule came from;
+   (
    it is frozen at M1 close and is not the live authority.)
 
 Re-run a gate only when one of those checks fails, when the report leaves a gate

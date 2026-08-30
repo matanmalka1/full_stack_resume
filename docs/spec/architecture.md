@@ -4,7 +4,7 @@ Status: **Approved for v2.0 implementation (2026-08-17)**
 
 PostgreSQL/object-storage, secret-configuration, and fixed-root amendment: **2026-08-25**
 
-Product authority: `docs/v2/spec/product-spec.md`
+Product authority: `docs/spec/product-spec.md`
 
 Baseline: `v1.0.0` / `2cc31c7`
 
@@ -589,16 +589,3 @@ Provenance and compatibility track at least:
 Versions may be per artifact/task rather than one global constant. Product version does
 not substitute for these surfaces.
 
-## 18. Architecture transition from v1
-
-M1 introduces boundaries around the existing behavior before FastAPI/React. Current
-validators and deterministic generation remain authoritative while orchestration leaves
-`Engine`. The CLI moved first, to prove the application layer independently.
-
-M2 supplies storage, operations, projections, action policy, and recovery foundations.
-M3 exposes the vertical slice through thin HTTP endpoints. M4 builds UI on the proven
-Application API. Dashboard work is gated until the API and Web complete one Application
-through Ready including central failure paths.
-
-No v2 implementation begins until the v2 specification set is approved and repository
-authority instructions are updated to permit the v2 scope.

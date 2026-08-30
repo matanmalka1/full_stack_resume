@@ -4,7 +4,7 @@ Status: **Approved for v2.0 implementation (2026-08-17)**
 
 PostgreSQL/object-storage gate amendment: **2026-08-25**
 
-Product authority: `docs/v2/spec/product-spec.md`
+Product authority: `docs/spec/product-spec.md`
 
 ## 1. Test strategy
 
@@ -423,16 +423,11 @@ deployment policy is introduced, its restore drill belongs in deployment evidenc
 must cover both stores consistently; the application does not claim that a project copy
 is a complete backup.
 
-## 14. Migration acceptance — withdrawn
+## 14. Evidence rule
 
-Withdrawn on 2026-08-19. v1 is a frozen archive in Git and is never migrated, so there is
-no source to account for and `unexplained = 0` has nothing to range over. v2 starts with
-an empty database.
-
-One rule from this section survives, because it was never really about migration:
-**a file is not evidence of a decision.** Nothing is treated as approved, submitted, or
-Ready because a file exists at a path; those states come from records, and a record that
-was never written stays absent rather than being inferred.
+**A file is not evidence of a decision.** Nothing is treated as approved, submitted,
+or Ready because a file exists at a path; those states come from records, and a record
+that was never written stays absent rather than being inferred.
 
 ## 15. Tracking acceptance
 

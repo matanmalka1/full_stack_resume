@@ -4,11 +4,11 @@ Status: **Approved for v2.0 implementation (2026-08-17)**
 
 PostgreSQL/object-storage plan amendment: **2026-08-25**
 
-Product authority: `docs/v2/spec/product-spec.md`
+Product authority: `docs/spec/product-spec.md`
 
-Architecture: `docs/v2/spec/architecture.md`
+Architecture: `docs/spec/architecture.md`
 
-State/use-cases: `docs/v2/spec/state-and-use-cases.md`
+State/use-cases: `docs/spec/state-and-use-cases.md`
 
 ## 1. Delivery rules
 
@@ -19,7 +19,7 @@ The implementation sequence is:
 Work occurs on the active v2 branch/worktree against a dedicated PostgreSQL database.
 A single developer working sequentially
 uses small milestone commits rather than additional feature branches. Parallel lanes
-follow `docs/v2/process/execution-protocol.md` and isolate files, database, object-store
+follow `docs/process/execution-protocol.md` and isolate files, database, object-store
 namespace, temp output, and ports.
 
 No v2 process opens v1 data, in development or otherwise. Development and Alpha use
@@ -28,30 +28,7 @@ isolated project copies and databases.
 Repository authority has already handed off to v2. `AGENTS.md` and the approved v2
 specifications govern current work; the v1 documents remain frozen evidence.
 
-## 2. M0 — v1 baseline and isolation
-
-Status: **Completed on 2026-08-17**
-
-Evidence:
-
-- Baseline commit: `2cc31c7`
-- Annotated tag: `v1.0.0`
-- Full suite: `131 passed` with `CV_REQUIRE_BROWSER=1`
-- `pip check`: passed
-- `cv reconcile`: passed against 127 registered artifact versions
-- Fact store: 86 canonical facts, no lifecycle disagreement
-- Main worktree: clean at baseline
-- v2 branch: `v2-main`
-- v2 worktree: `/Users/matanmalka/Projects/resume_python-v2`
-
-Completed M0 gates:
-
-- [x] Six v2 planning documents approved on 2026-08-17 after blocker review.
-- [x] Repository authority/agent instructions updated for v2.
-
-M1 is authorized to start; no v2 command may point to live v1 paths.
-
-## 3. M1 — Application foundation
+## 2. M1 — Application foundation
 
 Objective: prove that v1 behavior can run through clean application boundaries before
 introducing HTTP or React.
@@ -104,12 +81,12 @@ source-ID resolvers.
       passes; retaining every legacy test item is not required.
 
 M1's implementation boundary closed on 2026-08-18 at `67a80d5`. Command evidence and
-the exact scope of each criterion are recorded in `docs/v2/records/m1-acceptance.md`; the
+the exact scope of each criterion are recorded in Git history; the
 browser-required suite passed 124 tests in the dedicated v2 environment.
 
 Stable commit boundary: application seam complete and CLI green.
 
-## 4. M2 — Persistence, operations, projections, and recovery
+## 3. M2 — Persistence, operations, projections, and recovery
 
 Objective: create the durable v2 foundations required by the API rather than building
 them inside endpoints later.
@@ -192,13 +169,13 @@ The final archive-isolation item is met by construction rather than by a check: 
 reads v1 at all. The `looks_legacy` guard that backed it was retired on 2026-08-25 with
 the v1 submission data it recognised; see CLAUDE.md.
 
-Per-item commits and evidence are in `docs/v2/m2-remaining.md` §G, which is the record of
+Per-item commits and evidence are in Git history, which is the record of
 state; they are not duplicated here.
 
 Stable commit boundaries may separate schema/repositories, state policy, Operations, and
 Knowledge journal when each boundary is green and intentionally scoped.
 
-## 5. M3 — Application API vertical slice
+## 4. M3 — Application API vertical slice
 
 Objective: prove the complete workflow through the Application API before building a
 large frontend.
@@ -258,7 +235,7 @@ large frontend.
 Stable commit boundary: API vertical slice and failures green, no Dashboard endpoints
 required beyond foundational projections.
 
-## 6. M4 — React vertical slice
+## 5. M4 — React vertical slice
 
 Objective: complete the same proven path through a Hebrew local Web UI.
 
@@ -309,7 +286,7 @@ Dashboard work is prohibited until:
 
 Stable commit boundary: first Web vertical slice complete and gate passed.
 
-## 7. M5 — Tracking
+## 6. M5 — Tracking
 
 Objective: add recruitment management only after the preparation workflow is stable.
 
@@ -338,7 +315,7 @@ M5 acceptance:
 
 Stable commit boundary: v2.0 product scope complete before runtime/release hardening.
 
-## 8. M6 — Runtime, packaging, and release
+## 7. M6 — Runtime, packaging, and release
 
 Objective: make the product locally operable and prove Release Ready without using live
 data as a test environment.
@@ -375,7 +352,7 @@ verification, and manual provider smoke have passed.
 There is no cutover event. v2 starts with an empty database and v1 stays a frozen archive
 in Git, so Release Ready is the last gate rather than the one before a migration.
 
-## 9. Going live — withdrawn as an event
+## 8. Going live — withdrawn as an event
 
 Withdrawn on 2026-08-19. There is nothing to cut over: v1 is a frozen archive in Git and
 v2 starts with an empty database, so going live means creating the next application in
@@ -385,7 +362,7 @@ Rollback is running v1 from the archive. It needs no preparation — `git worktr
 against the frozen commit — and it is not a downgrade of anything, because the two
 systems never shared a database. Never downgrade the v2 database.
 
-## 10. Commit and change discipline
+## 9. Commit and change discipline
 
 - Never write into the v1 archive.
 - Keep every commit scoped to one stable boundary.
@@ -397,7 +374,7 @@ systems never shared a database. Never downgrade the v2 database.
 - Do not add deferred features while implementing a milestone.
 - Do not begin M5 before the M4 vertical-slice gate.
 
-## 11. Stop conditions
+## 10. Stop conditions
 
 Stop and request a decision for:
 

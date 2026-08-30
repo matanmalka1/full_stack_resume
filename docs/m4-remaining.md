@@ -1,8 +1,7 @@
 # M4 — remaining work
 
 Status: **M4 in progress** (started 2026-08-24). Authority for scope and gates is
-`docs/v2/spec/implementation-plan.md` §6. M3 is closed; its evidence remains frozen in
-`docs/v2/records/m3-acceptance.md`.
+`docs/spec/implementation-plan.md` §5. M3 is closed.
 
 ## Where things are written
 
@@ -11,12 +10,11 @@ One fact, one place. This file is the only record of current M4 state.
 | Question | Answer lives in |
 | --- | --- |
 | What is done, what remains, what is blocked | **this file** |
-| Product semantics and UI scope | `docs/v2/spec/product-spec.md` |
-| State, action, command, and query contracts | `docs/v2/spec/state-and-use-cases.md` |
-| Frontend dependency and layer boundaries | `docs/v2/spec/architecture.md` |
-| Required Web evidence | `docs/v2/spec/test-and-acceptance-plan.md` |
-| Closed M3 state and evidence | `docs/v2/m3-remaining.md`, `docs/v2/records/m3-acceptance.md` |
-| Non-milestone cleanup | `docs/v2/cleanup-todos.md` |
+| Product semantics and UI scope | `docs/spec/product-spec.md` |
+| State, action, command, and query contracts | `docs/spec/state-and-use-cases.md` |
+| Frontend dependency and layer boundaries | `docs/spec/architecture.md` |
+| Required Web evidence | `docs/spec/test-and-acceptance-plan.md` |
+| Non-milestone cleanup | `docs/cleanup-todos.md` |
 
 ## Boundary and sequence
 

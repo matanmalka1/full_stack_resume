@@ -4,7 +4,7 @@ Status: **Approved for v2.0 implementation (2026-08-17)**
 
 PostgreSQL transaction terminology amendment: **2026-08-25**
 
-Product authority: `docs/v2/spec/product-spec.md`
+Product authority: `docs/spec/product-spec.md`
 
 ## 1. Purpose
 
