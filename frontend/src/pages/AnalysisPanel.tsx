@@ -8,6 +8,7 @@ import { StatusBadge } from "../ui/StatusBadge";
 import { SummaryList } from "../ui/SummaryList";
 import { TechnicalDetails } from "../ui/TechnicalDetails";
 import {
+  approvalReasonLabel,
   classificationItems,
   fitLabels,
   fitTones,
@@ -15,9 +16,13 @@ import {
   overrideKeyLabels,
 } from "./analysisLabels";
 
-/* Confidence is a 0..1 float in the document and a percentage to a reader. It is rounded
-   rather than truncated, and shown as an LTR island so the digits and the sign stay in
-   their own direction inside the RTL page. */
+/* Confidence is a 0..1 float in the document and a percentage to a reader.
+
+   The sign is the Hebrew-side one and the whole value is written into the sentence rather
+   than wrapped in an A.3 LTR island. An island is for a Latin run that must not be
+   reordered - an id, a code, a filename. A percentage is a number in a Hebrew sentence,
+   and isolating it pushed the run to the end of the line, so "58%" arrived on screen
+   reading "%58". */
 const confidenceText = (confidence: number): string => `${Math.round(confidence * 100)}%`;
 
 const Section = ({ children, title }: { children: ReactNode; title: string }) => (
@@ -88,6 +93,22 @@ export const AnalysisPanel = ({
           </p>
         )}
 
+        {/* Why the classification is not settled. The projection's review reason says
+            that a decision is needed and carries the action; this says what about the
+            analysis made it necessary, which is the part a person needs in order to
+            decide rather than merely to be told to. */}
+        {classification.approvalReasons.length === 0 ? null : (
+          <Section title="מה מחייב החלטה">
+            <ul className="flex flex-col gap-1">
+              {classification.approvalReasons.map((reason) => (
+                <li className="text-support text-cv-text-muted" dir="auto" key={reason}>
+                  {approvalReasonLabel(reason)}
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
+
         {classification.rationale === null ? null : (
           <Section title="הנימוק">
             <p className="text-body leading-7 text-cv-text" dir="auto">
@@ -95,7 +116,7 @@ export const AnalysisPanel = ({
             </p>
             {classification.confidence === null ? null : (
               <p className="mt-2 text-support text-cv-text-muted">
-                רמת הביטחון בסיווג: <LtrText>{confidenceText(classification.confidence)}</LtrText>
+                רמת הביטחון בסיווג: {confidenceText(classification.confidence)}
               </p>
             )}
           </Section>

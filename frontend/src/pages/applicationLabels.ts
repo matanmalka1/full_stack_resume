@@ -106,6 +106,12 @@ const blockedReasonLabels: Record<string, string> = {
   VALIDATION_FAILED: "האימות נכשל. יש לתקן את החסימות ולאמת מחדש.",
   APPROVED_REVISION_REQUIRED: "נדרשת גרסה מאושרת.",
   ACTION_NOT_AVAILABLE: "הפעולה אינה זמינה במצב הנוכחי.",
+  /* The review reasons block later actions too, so they reach this list as blockers and
+     not only as their own callouts. Without a sentence here the raw code was printed
+     twice on the Application screen, under two actions, saying nothing. */
+  MATERIAL_CLASSIFICATION_AMBIGUITY: "סיווג המשרה ממתין להחלטה מפורשת.",
+  LOW_FIT_REQUIRES_ACCEPTANCE: "התאמה נמוכה מחייבת אישור מפורש לפני יצירת טיוטה.",
+  HARD_GAP_REQUIRES_DECISION: "פער חוסם מול הדרישות מחייב החלטה מפורשת.",
 };
 
 export const blockedReasonLabel = (reason: string): string =>

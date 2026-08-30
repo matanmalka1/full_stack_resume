@@ -104,6 +104,10 @@ export interface Classification {
   keywords: string[];
   mandatoryRequirements: string[];
   preferredRequirements: string[];
+  /* Why the classification still needs a decision, as the analysis recorded it. The
+     backend clears a reason only when an override that actually answers it is applied,
+     so this list is what remains open rather than everything ever raised. */
+  approvalReasons: string[];
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -172,5 +176,11 @@ export const classificationFromAnalysis = (detail: ApplicationDetail): Classific
     keywords: stringsFrom(analysis.keywords),
     mandatoryRequirements: stringsFrom(analysis.mandatory_requirements),
     preferredRequirements: stringsFrom(analysis.preferred_requirements),
+    /* The full recorded list, read as it arrives. Which of these are still unresolved is
+       the domain's rule - a reason clears when an override that answers it is applied -
+       and that rule is deliberately not copied here: the projection already publishes the
+       verdict as a review reason, so a second client-side copy could only drift from it.
+       This list explains that verdict rather than recomputing it. */
+    approvalReasons: stringsFrom(analysis.approval_reasons),
   };
 };

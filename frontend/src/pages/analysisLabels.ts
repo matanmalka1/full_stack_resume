@@ -71,6 +71,25 @@ export const overrideKeyLabels: Record<string, string> = {
   fit: "התאמה",
 };
 
+/* Why a classification needs a decision, in the vocabulary the analysis records. This is
+   an open string map rather than a Record over a union: `approval_reasons` is a list of
+   plain strings inside the analysis document, which travels as an opaque object on
+   purpose. A reason this build does not recognise is therefore shown as its raw code
+   rather than hidden - the reader learning an unfamiliar token beats being told nothing
+   about a gate that is holding their work. */
+export const approvalReasonLabels: Record<string, string> = {
+  "ambiguous-signals": "המשרה נושאת סימנים של יותר ממסלול אחד.",
+  "low-confidence": "רמת הביטחון בסיווג נמוכה מהסף.",
+  "track-disagreement": "המודל הציע מסלול אחר מזה שהחוקים קבעו.",
+  "profile-disagreement": "המודל הציע פרופיל אחר מזה שהחוקים קבעו.",
+  "emphasis-disagreement": "המודל הציע דגש אחר מזה שהחוקים קבעו.",
+  "inconsistent-proposal": "הצעת המודל לא הייתה עקבית עם עצמה.",
+  "unspecified-ambiguity": "הניתוח נשמר לפני שנרשמה סיבת ההחלטה.",
+};
+
+export const approvalReasonLabel = (reason: string): string =>
+  approvalReasonLabels[reason] ?? reason;
+
 export const gapSeverityLabels: Record<"hard" | "warning", string> = {
   hard: "פער חוסם",
   warning: "פער לתשומת לב",

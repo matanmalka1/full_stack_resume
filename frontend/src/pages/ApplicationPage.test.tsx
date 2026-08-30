@@ -85,6 +85,7 @@ const analyzed = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail
         mandatory_requirements: ["5 years of Python"],
         preferred_requirements: ["Kubernetes"],
         gaps: [{ requirement: "Kubernetes", severity: "warning", reason: "no matching fact" }],
+        approval_reasons: ["low-confidence"],
         user_override: {},
       },
       provider: "deterministic",
@@ -586,6 +587,46 @@ describe("ApplicationPage", () => {
     /* A gap is reported with its severity and the backend's own reason. */
     expect(screen.getByText("no matching fact")).toBeInTheDocument();
     expect(screen.getByText("פער לתשומת לב")).toBeInTheDocument();
+    /* The confidence reads as a Hebrew-side percentage, not an isolated LTR run. */
+    expect(screen.getByText("רמת הביטחון בסיווג: 82%")).toBeInTheDocument();
+  });
+
+  /* The projection's review reason says a decision is needed; the panel says what about
+     the analysis made it necessary, which is what a person needs in order to decide. */
+  it("says what about the classification requires a decision", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(analyzed())));
+
+    renderPage();
+
+    expect(await screen.findByText("מה מחייב החלטה")).toBeInTheDocument();
+    expect(screen.getByText("רמת הביטחון בסיווג נמוכה מהסף.")).toBeInTheDocument();
+  });
+
+  /* A blocked action naming a review reason gets a sentence, not the raw code it used to
+     print once per action. */
+  it("explains a review-reason blocker in words", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          analyzed({
+            preparation_state: "needs_review",
+            available_actions: ["apply_analysis_decisions"],
+            recommended_action: "apply_analysis_decisions",
+            blocked_actions: [
+              { action: "draft", reasons: ["MATERIAL_CLASSIFICATION_AMBIGUITY"] },
+            ],
+          }),
+        ),
+      ),
+    );
+
+    renderPage();
+
+    expect(
+      await screen.findByText("סיווג המשרה ממתין להחלטה מפורשת."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("MATERIAL_CLASSIFICATION_AMBIGUITY")).not.toBeInTheDocument();
   });
 
   it("says nothing about an analysis before one exists", async () => {

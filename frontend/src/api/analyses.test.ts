@@ -36,6 +36,7 @@ const analysis = (overrides: Record<string, unknown> = {}) => ({
   keywords: ["CRM", "renewals"],
   mandatory_requirements: ["5 years of Kubernetes"],
   preferred_requirements: ["German"],
+  approval_reasons: ["ambiguous-signals"],
   ...overrides,
 });
 
@@ -148,6 +149,7 @@ describe("classificationFromAnalysis", () => {
       keywords: ["CRM", "renewals"],
       mandatoryRequirements: ["5 years of Kubernetes"],
       preferredRequirements: ["German"],
+      approvalReasons: ["ambiguous-signals"],
     });
   });
 
