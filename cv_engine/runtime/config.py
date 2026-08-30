@@ -48,6 +48,11 @@ class Setting:
 # 2 MiB sits inside the approved 1-2 MB order of magnitude.
 API_MAX_BODY_BYTES_DEFAULT = 2 * 1024 * 1024
 
+#: Where the API answers by default. Declared here rather than imported from
+#: `api.app` so the configuration layer stays free of an API import.
+DEFAULT_HOST = "127.0.0.1"
+DEFAULT_PORT = 8765
+
 SETTINGS: dict[str, Setting] = {
     setting.name: setting
     for setting in (
@@ -72,6 +77,13 @@ SETTINGS: dict[str, Setting] = {
             secret=True,
             environment_only=True,
         ),
+        # The host and port the API is actually reached on. They are not the
+        # server's binding - the process is told that on the command line -
+        # but what the app believes about itself, which is what the origin
+        # policy allows. Serving on a different port without setting these
+        # refuses every state-changing request from the app's own UI.
+        Setting("api_host", "CV_API_HOST", default=DEFAULT_HOST),
+        Setting("api_port", "CV_API_PORT", default=DEFAULT_PORT),
         Setting("api_max_body_bytes", "CV_API_MAX_BODY_BYTES", default=API_MAX_BODY_BYTES_DEFAULT),
         # Unset in production: the built UI is served same-origin, so there is no
         # second origin to allow. A value here is the one development Vite origin
@@ -156,7 +168,7 @@ def mask_value(name: str, value: Any) -> Any:
     return MASK
 
 
-SOURCES = ("cli", "environment", "env-file", "project-config", "default")
+SOURCES = ("environment", "env-file", "project-config", "default")
 
 
 @dataclass(frozen=True)
@@ -215,12 +227,11 @@ def load_project_config(root: Path) -> dict[str, Any]:
 
 def resolve_config(
     *,
-    cli: Mapping[str, Any] | None = None,
     env: Mapping[str, str] | None = None,
     project_root: Path | None = None,
     env_file: Mapping[str, str] | None = None,
 ) -> RuntimeConfig:
-    """Apply CLI > environment > project `.env` > project config > default.
+    """Apply environment > project `.env` > project config > default.
 
     The `.env` layer sits below the real environment on purpose: a value a
     developer exported deliberately in this shell must not be silently
@@ -233,7 +244,6 @@ def resolve_config(
     `env_file` may be passed directly, which is what lets a caller resolve
     against a known mapping without touching the filesystem.
     """
-    cli = cli or {}
     env = env if env is not None else {}
     if env_file is None:
         path = env_file_path(project_root)
@@ -241,9 +251,7 @@ def resolve_config(
     stored = load_project_config(project_root) if project_root is not None else {}
     values: dict[str, Resolved] = {}
     for name, setting in SETTINGS.items():
-        if cli.get(name) is not None:
-            values[name] = Resolved(cli[name], "cli")
-        elif env.get(setting.env):
+        if env.get(setting.env):
             values[name] = Resolved(env[setting.env], "environment")
         elif not setting.environment_only and env_file.get(setting.env):
             values[name] = Resolved(env_file[setting.env], "env-file")

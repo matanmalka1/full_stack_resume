@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
 from ..infrastructure.paths import relative_within, resolve_within
+from .config import RuntimeConfig, resolve_config
 
 
 class PathConfigurationError(RuntimeError):
@@ -57,3 +59,24 @@ class AppPaths:
             return relative_within(self.root, path).as_posix()
         except ValueError as exc:
             raise PathConfigurationError(f"path is outside the project root: {path}") from exc
+
+
+def repo_root() -> Path:
+    """Return the fixed application root, computed from this file's location.
+
+    The root is not selectable. No environment variable, argument, or setting
+    moves it: a running process serves the installation it was installed into.
+    A test that needs a different root injects `AppPaths.from_root(...)` into
+    composition instead, which is dependency injection rather than a runtime
+    switch production code has to honour.
+
+    This module sits in `cv_engine/runtime/`, so it needs two `.parent` calls
+    to reach the directory holding `cv_engine/`.
+    """
+    return Path(__file__).resolve().parent.parent.parent
+
+
+def resolve_root() -> tuple[Path, RuntimeConfig]:
+    """Return the fixed application root and the config resolved against it."""
+    root = repo_root()
+    return root, resolve_config(env=os.environ, project_root=root)

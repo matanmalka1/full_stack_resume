@@ -71,6 +71,18 @@ def _is_api_path(request_path: str) -> bool:
     return request_path == API_PREFIX or request_path.startswith(f"{API_PREFIX}/")
 
 
+def source_frontend_dist() -> Path:
+    """Return the packaged build, or the build beside a source checkout.
+
+    A packaged install ships the build inside the distribution; a checkout has
+    it under `frontend/dist` after `npm run build`. Neither is required: the
+    API serves without one, which is what the Vite dev server proxies to.
+    """
+    packaged = Path(__file__).resolve().parent / "frontend_dist"
+    checkout = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+    return packaged if (packaged / "index.html").is_file() else checkout
+
+
 def validate_frontend_build(build_dir: Path) -> Path:
     root = Path(build_dir).resolve()
     if not root.is_dir() or not (root / "index.html").is_file():

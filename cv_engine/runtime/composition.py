@@ -23,6 +23,7 @@ from ..application.services.analysis import AnalysisService
 from ..application.services.applications import ApplicationService
 from ..application.services.drafts import DraftService
 from ..application.services.knowledge import KnowledgeService
+from ..application.services.maintenance import MaintenanceService
 from ..application.services.operations import (
     AnalysisOperationHandler,
     DraftOperationHandler,
@@ -49,18 +50,19 @@ from ..infrastructure.providers import OpenAIProvider
 from ..infrastructure.rendering import PlaywrightRenderer
 from ..util import new_id
 from .config import API_MAX_BODY_BYTES_DEFAULT, RuntimeConfig, resolve_config
-from .execution import ForegroundOperationExecutor, OperationWorker
+from .execution import OperationWorker
 from .paths import AppPaths, PathConfigurationError
 
 
-def _repo_root() -> Path:
-    """The fixed application root."""
-    return Path(__file__).resolve().parent.parent.parent
+def _config_for(root: Path) -> RuntimeConfig:
+    """The settings a caller that passed none is implicitly asking for.
 
-
-def _default_config() -> RuntimeConfig:
-    """The settings a caller that passed none is implicitly asking for."""
-    return resolve_config(env=os.environ, project_root=_repo_root())
+    Resolved against the root actually in use, not against the installation
+    root. Reading `.env` and the project config from one directory while the
+    paths point at another is how a test project silently runs on the real
+    installation's settings.
+    """
+    return resolve_config(env=os.environ, project_root=root)
 
 
 @dataclass(frozen=True)
@@ -84,7 +86,6 @@ class Services:
     knowledge_lifecycle: KnowledgeService
     operations: OperationService
     operation_runner: OperationRunner
-    foreground_operations: ForegroundOperationExecutor
     operation_worker: OperationWorker
     settings: SettingsService
 
@@ -138,7 +139,7 @@ def build_services(
     Callers may substitute any of them — that is how tests replace the browser
     and the AI provider without the application layer knowing either exists.
     """
-    resolved_config = config or _default_config()
+    resolved_config = config or _config_for(paths.root)
     resolved_database_url = database_url or str(resolved_config.get("database_url"))
     if repository is None:
         engine = create_database_engine(resolved_database_url)
@@ -202,7 +203,6 @@ def build_services(
         runner_id=f"local-{new_id()}",
         technical_logger=failure_logger.record,
     )
-    foreground = ForegroundOperationExecutor(resolved_repository, runner)
     worker = OperationWorker(resolved_repository, runner)
     knowledge_service = KnowledgeService(**shared)
     knowledge_service.recover_knowledge_mutations()
@@ -227,7 +227,6 @@ def build_services(
         knowledge_lifecycle=knowledge_service,
         operations=operation_service,
         operation_runner=runner,
-        foreground_operations=foreground,
         operation_worker=worker,
         settings=settings_service,
     )
@@ -246,7 +245,7 @@ def build_api_services(
     that simply does not carry them.
 
     The worker is deliberately not passed either: `create_app` builds a server,
-    and the supervisor hosts the worker.
+    and the worker runs as its own process.
     """
     max_body_bytes = API_MAX_BODY_BYTES_DEFAULT
     dev_origin: str | None = None
@@ -261,6 +260,11 @@ def build_api_services(
         rendering=services.rendering,
         tracking=services.tracking,
         knowledge=services.knowledge_lifecycle,
+        maintenance=MaintenanceService(
+            payloads=services.payloads,
+            repository=services.repository,
+            knowledge=services.knowledge_lifecycle,
+        ),
         operations=services.operations,
         settings=services.settings,
         identity=InstanceIdentity(
