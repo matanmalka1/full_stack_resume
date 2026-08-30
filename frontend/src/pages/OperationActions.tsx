@@ -2,29 +2,27 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { ApiProblem } from "../api/client";
 import type { Operation } from "../api/contracts";
 import {
   cancelOperation,
   operationQueryKey,
   retryOperation,
 } from "../api/operations";
+import { ErrorCallout } from "../app/ErrorCallout";
 import { Button, buttonClasses } from "../ui/Button";
-import { Callout } from "../ui/Callout";
 import { cx } from "../ui/cx";
-import { LtrText } from "../ui/LtrText";
-import { TechnicalDetails } from "../ui/TechnicalDetails";
 
 interface OperationActionsProps {
+  /* Rendered inside the Application screen rather than on the Operation's own route.
+     The two differ in one thing: the return link. On the Operation screen a finished
+     Operation is a dead end without it, since the way on depends on the application
+     projection this screen does not hold. Inline, that projection is the page around the
+     panel - a link back to the screen the reader is already looking at is not an exit. */
+  inline?: boolean;
   operation: Operation;
 }
 
-const mutationMessage = (error: unknown): string =>
-  error instanceof ApiProblem
-    ? error.problem.detail
-    : "לא ניתן להשלים את הפעולה. המצב הבטוח האחרון נשמר ואפשר לנסות שוב.";
-
-export const OperationActions = ({ operation }: OperationActionsProps) => {
+export const OperationActions = ({ inline = false, operation }: OperationActionsProps) => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   /* One key per original Operation: an uncertain response can be retried safely, while
@@ -69,21 +67,20 @@ export const OperationActions = ({ operation }: OperationActionsProps) => {
      the screen that owns that projection and lets it say what comes next. */
   const returnPath = `/applications/${encodeURIComponent(operation.application_id)}`;
 
-  if (!canCancel && !canRetry && !operation.is_terminal && error === null) {
+  const showReturn = operation.is_terminal && !inline;
+
+  if (!canCancel && !canRetry && error === null && !showReturn) {
     return null;
   }
 
   return (
     <div className="mt-2 flex flex-col gap-4 border-t border-cv-border pt-5">
       {error === null ? null : (
-        <Callout role="alert" title="הפעולה לא בוצעה" tone="blocker">
-          {mutationMessage(error)}
-          {error instanceof ApiProblem ? (
-            <TechnicalDetails className="mt-3">
-              <LtrText>{error.problem.code}</LtrText>
-            </TechnicalDetails>
-          ) : null}
-        </Callout>
+        <ErrorCallout
+          error={error}
+          fallbackDetail="לא ניתן להשלים את הפעולה. המצב הבטוח האחרון נשמר ואפשר לנסות שוב."
+          fallbackTitle="הפעולה לא בוצעה"
+        />
       )}
 
       {/* Reading order follows emphasis: the recommended way out leads the row. With
@@ -109,7 +106,7 @@ export const OperationActions = ({ operation }: OperationActionsProps) => {
             {retry.isPending ? "יוצר ניסיון חדש…" : "ניסיון חוזר"}
           </Button>
         ) : null}
-        {operation.is_terminal ? (
+        {showReturn ? (
           <Link
             className={buttonClasses(canRetry && !returnRecommended ? "secondary" : "primary")}
             to={returnPath}

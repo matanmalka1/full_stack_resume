@@ -1,35 +1,37 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
-import { startAnalysis, startDraftGeneration } from "../api/applications";
-import { ApiProblem } from "../api/client";
+import {
+  applicationDetailQueryKey,
+  startAnalysis,
+  startDraftGeneration,
+} from "../api/applications";
 import type { ApplicationDetail } from "../api/contracts";
 import { executionProvider, settingsQueryOptions } from "../api/settings";
 import { type QueuedOperation, operationQueryKey } from "../api/operations";
+import { ErrorCallout } from "../app/ErrorCallout";
 import { ActionBar } from "../ui/ActionBar";
 import { Button, buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
-import { LtrText } from "../ui/LtrText";
-import { TechnicalDetails } from "../ui/TechnicalDetails";
 import { actionDestination } from "./actionDestinations";
 import { actionLabel } from "./applicationLabels";
 
 interface ApplicationActionsProps {
   detail: ApplicationDetail;
+  /* What this component just queued. The projection reports an Operation only on its next
+     read, so without this the panel would appear a poll later than the press that caused
+     it - and a command that failed before the worker picked it up might never be reported
+     at all. The accepted `202` is the earliest and most certain answer, so it is handed
+     straight to the screen that shows it. */
+  onQueued: (operationId: string) => void;
 }
-
-const mutationMessage = (error: unknown): string =>
-  error instanceof ApiProblem
-    ? error.problem.detail
-    : "לא ניתן להפעיל את הפעולה. מצב המועמדות לא השתנה ואפשר לנסות שוב.";
 
 /* A.1: the actions come from the projection. This screen implements `analyze` and the
    no-review `create_draft` continuation; any other action the backend recommends is named
    and reported as not yet built, because inventing a destination for it would be exactly
    the second workflow state machine the information architecture forbids. */
-export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
-  const navigate = useNavigate();
+export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps) => {
   const queryClient = useQueryClient();
   /* App owns the live settings read. This subscription consumes that cache without
      opening one request per action panel; isolated renders retain the safe deterministic
@@ -48,11 +50,18 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
   const draftKey = useMemo(() => crypto.randomUUID(), [analysisId, selectionPlanId]);
 
   /* Both commands queue durable work and answer `202` with the Operation they queued, so
-     both follow it the same way: seed the accepted representation as the Operation
-     screen's first state rather than fetching it a second time, then navigate. */
-  const followQueued = ({ operation, operationPath }: QueuedOperation) => {
+     both follow it the same way - and neither navigates.
+
+     Queueing used to send the user to the Operation's own screen, which made every action
+     a round trip out of the context they were working in and back again. The projection
+     carries `active_operation` in full and starts polling the moment it appears, so the
+     Application screen reports the work in place. What the accepted `202` still buys is
+     the first state: seeding it means the panel appears immediately instead of after the
+     next poll, and the Operation screen a direct link reaches is already warm. */
+  const followQueued = ({ operation }: QueuedOperation) => {
     queryClient.setQueryData(operationQueryKey(operation.id), operation);
-    void navigate(operationPath);
+    onQueued(operation.id);
+    void queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(detail.application.id) });
   };
 
   const analyze = useMutation({
@@ -88,12 +97,11 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
   const canDraft = draftAvailable && !draftWouldReplace;
   const draftRecommended = recommended === "create_draft";
 
-  /* An action this screen can take the user to is as "built" as one it performs: the
-     review decision is committed on its own screen, not here. */
-  const reviewHref = detail.available_actions.includes("apply_analysis_decisions")
-    ? actionDestination("apply_analysis_decisions", detail.application.id)
-    : null;
-  const reviewRecommended = recommended === "apply_analysis_decisions";
+  /* The review decision has no button here and no destination anywhere: its control is a
+     panel on this same screen, directly under the analysis it decides about. It is still
+     "handled" - more completely than a link ever handled it - so it is registered below
+     rather than reported as an action whose screen was never built. */
+  const reviewHandledHere = detail.available_actions.includes("apply_analysis_decisions");
 
   /* The same, for the draft the user is holding. The editor is the screen for every
      command addressed at an existing draft, so availability of the autosave patch is what
@@ -122,7 +130,7 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
   if (canDraft) {
     handledHere.add("create_draft");
   }
-  if (reviewHref !== null) {
+  if (reviewHandledHere) {
     handledHere.add("apply_analysis_decisions");
   }
   if (editHref !== null) {
@@ -159,17 +167,6 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
           : "ניתוח מחדש של המשרה"}
     </Button>
   ) : null;
-
-  const reviewButton =
-    reviewHref === null ? null : (
-      <Link
-        className={buttonClasses(reviewRecommended ? "primary" : "secondary")}
-        key="review"
-        to={reviewHref}
-      >
-        החלטות הסקירה
-      </Link>
-    );
 
   const draftButton = canDraft ? (
     <Button
@@ -219,14 +216,11 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
   return (
     <div className="flex flex-col gap-4">
       {error === null ? null : (
-        <Callout role="alert" title="הפעולה לא בוצעה" tone="blocker">
-          {mutationMessage(error)}
-          {error instanceof ApiProblem ? (
-            <TechnicalDetails className="mt-3">
-              <LtrText>{error.problem.code}</LtrText>
-            </TechnicalDetails>
-          ) : null}
-        </Callout>
+        <ErrorCallout
+          error={error}
+          fallbackDetail="לא ניתן להפעיל את הפעולה. מצב המועמדות לא השתנה ואפשר לנסות שוב."
+          fallbackTitle="הפעולה לא בוצעה"
+        />
       )}
 
       {unbuilt === null ? null : (
@@ -278,7 +272,6 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
            the one the workflow is actually waiting on. */
         const inWorkflowOrder = [
           analyzeButton,
-          reviewButton,
           draftButton,
           draftScreenButton,
           readyButton,
@@ -290,7 +283,6 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
 
         const recommendedKey = new Map<string, boolean>([
           ["analyze", analyzeRecommended],
-          ["review", reviewRecommended],
           ["draft", draftRecommended],
           [
             "draft-screen",

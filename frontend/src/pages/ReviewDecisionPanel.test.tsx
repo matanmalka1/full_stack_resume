@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail, Reason } from "../api/contracts";
-import { ReviewPage } from "./ReviewPage";
+import { ApplicationPage } from "./ApplicationPage";
 
 const DETAIL_PATH = "/api/v1/applications/app-1";
 const APPLY_PATH = "/api/v1/analyses/analysis-1/apply-decisions";
@@ -98,10 +98,9 @@ const renderPage = () => {
 
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/applications/app-1/review"]}>
+      <MemoryRouter initialEntries={["/applications/app-1"]}>
         <Routes>
-          <Route element={<ReviewPage />} path="/applications/:applicationId/review" />
-          <Route element={<h1>מועמדות</h1>} path="/applications/:applicationId" />
+          <Route element={<ApplicationPage />} path="/applications/:applicationId" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -112,20 +111,25 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("ReviewPage", () => {
-  it("shows the current classification and the hard gap being decided about", async () => {
+describe("the review decision, on the Application screen", () => {
+  /* The subject of the decision and the controls that settle it are now on one screen:
+     the analysis panel states the classification, the panel below it decides. Scoped to
+     each region because the same Hebrew names appear in both - as a stated value above,
+     and as a select option below. */
+  it("shows the classification being decided about beside the controls", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail())));
 
     renderPage();
 
-    /* Awaited on the region, not on the h1: the heading is static and would resolve
-       before the projection had arrived. Scoped to the summary too, because the same
-       Hebrew names are also select options and an unscoped query would pass on those. */
-    const current = within(await screen.findByRole("region", { name: "הסיווג הנוכחי" }));
-    expect(current.getByText("מנהל לקוחות")).toBeInTheDocument();
-    expect(current.getByText("צמיחת לקוחות קיימים")).toBeInTheDocument();
-    expect(current.getByText("התאמה נמוכה")).toBeInTheDocument();
-    expect(current.getByText(/5 years of Kubernetes/)).toBeInTheDocument();
+    const analysis = within(await screen.findByRole("region", { name: "ניתוח המשרה" }));
+    expect(analysis.getByText("מנהל לקוחות")).toBeInTheDocument();
+    expect(analysis.getByText("צמיחת לקוחות קיימים")).toBeInTheDocument();
+    expect(analysis.getByText("התאמה נמוכה")).toBeInTheDocument();
+    expect(analysis.getByText(/5 years of Kubernetes/)).toBeInTheDocument();
+
+    expect(
+      within(screen.getByRole("region", { name: "ההחלטה שנדרשת" })).getByLabelText("מסלול"),
+    ).toBeInTheDocument();
   });
 
   it("offers a control only for the reasons it resolves and names the others as elsewhere", async () => {
@@ -146,8 +150,9 @@ describe("ReviewPage", () => {
     renderPage();
 
     expect(await screen.findByLabelText("מסלול")).toBeInTheDocument();
-    /* Not dropped, and not given a control that would not resolve it. */
-    expect(screen.getByText("החלטה שנפתרת במסך אחר")).toBeInTheDocument();
+    /* Not dropped, and not given a control that would not resolve it: it keeps its own
+       callout with the action that does. */
+    expect(screen.getByText("plain sentence for PENDING_FACT_REQUIRES_RESOLUTION")).toBeInTheDocument();
     expect(screen.getByText(/אישור עובדה ושימוש בה/)).toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
@@ -180,24 +185,37 @@ describe("ReviewPage", () => {
     expect(submit).toBeEnabled();
   });
 
-  it("commits every decision in one request and returns to the application", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(detail()))
-      .mockResolvedValueOnce(
+  it("commits every decision in one request without leaving the screen", async () => {
+    /* Routed by URL rather than by call order: the screen reads Settings as well as the
+       projection, so a queue of `mockResolvedValueOnce` answers would hand the wrong body
+       to whichever request happened to arrive second. */
+    let applied = false;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === APPLY_PATH) {
+        applied = true;
+        return Promise.resolve(
+          jsonResponse(
+            {
+              application_id: "app-1",
+              job_analysis_id: "analysis-2",
+              selection_plan_id: "plan-2",
+              created_analysis: true,
+              analysis: {},
+              plan: {},
+            },
+            201,
+          ),
+        );
+      }
+      void init;
+      /* The decision closed the reason, which the refreshed projection is what reports. */
+      return Promise.resolve(
         jsonResponse(
-          {
-            application_id: "app-1",
-            job_analysis_id: "analysis-2",
-            selection_plan_id: "plan-2",
-            created_analysis: true,
-            analysis: {},
-            plan: {},
-          },
-          201,
+          applied ? detail({ review_reasons: [], preparation_state: "ready_to_draft" }) : detail(),
         ),
-      )
-      .mockResolvedValue(jsonResponse(detail({ review_reasons: [], preparation_state: "ready_to_draft" })));
+      );
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage();
@@ -206,7 +224,10 @@ describe("ReviewPage", () => {
     fireEvent.change(screen.getByLabelText("דגש"), { target: { value: "leadership" } });
     fireEvent.click(screen.getByRole("button", { name: "החלת כל ההחלטות" }));
 
-    expect(await screen.findByRole("heading", { name: "מועמדות" })).toBeInTheDocument();
+    /* The refreshed projection reports the state that follows - here, that the reason
+       closed - on the screen the user never left. */
+    expect(await screen.findByText("מוכן ליצירת טיוטה")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "ההחלטה שנדרשת" })).not.toBeInTheDocument();
 
     const applyCall = fetchMock.mock.calls.find((call) => call[0] === APPLY_PATH);
     expect(applyCall).toBeDefined();
@@ -236,7 +257,7 @@ describe("ReviewPage", () => {
 
     expect(await screen.findByText("the submitted decisions change nothing")).toBeInTheDocument();
     /* Still on the screen, with the decision still selected: nothing safe was lost. */
-    expect(screen.getByRole("heading", { level: 1, name: "סקירת הניתוח" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "מצב המועמדות" })).toBeInTheDocument();
     expect(screen.getByLabelText("מסלול")).toHaveValue("tech-sales");
   });
 
@@ -248,8 +269,10 @@ describe("ReviewPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("הסיווג הנוכחי אינו מוצג")).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "הסיווג הנוכחי" })).not.toBeInTheDocument();
+    /* The analysis on record belongs to an older snapshot, so it is named as superseded
+       rather than shown as the classification in force. */
+    expect(await screen.findByText("הניתוח שעל המסך אינו הניתוח הפעיל")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "ניתוח המשרה" })).not.toBeInTheDocument();
     /* The decision is still offered - it goes to the active analysis either way. */
     expect(screen.getByLabelText("מסלול")).toBeInTheDocument();
   });

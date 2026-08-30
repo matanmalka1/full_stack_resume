@@ -1,5 +1,3 @@
-import { Check } from "lucide-react";
-
 import { cx } from "./cx";
 
 export type WorkflowStepState = "complete" | "current" | "upcoming";
@@ -17,10 +15,19 @@ const stateClasses: Record<WorkflowStepState, string> = {
   upcoming: "text-cv-text-muted",
 };
 
-const nodeClasses: Record<WorkflowStepState, string> = {
-  complete: "border-cv-success bg-cv-success text-cv-on-accent",
-  current: "border-cv-accent bg-cv-accent text-cv-on-accent ring-3 ring-cv-accent-soft",
-  upcoming: "border-cv-border-strong/40 bg-cv-surface text-cv-text-muted",
+/* The track each step draws under its own label: a filled segment for what is done, the
+   accent for where the work is, a hairline for what is ahead.
+
+   It replaced a row of numbered circles - filled discs, a checkmark, connecting rules -
+   which is the visual language of a wizard whose steps are pressed. None of the five is a
+   route: no stage can be opened, because which action is possible is the projection's
+   answer and not a place to navigate to. So the indicator no longer offers what it cannot
+   honour. A bar reads as progress; a numbered disc reads as a button that is ignoring
+   you. */
+const trackClasses: Record<WorkflowStepState, string> = {
+  complete: "bg-cv-success",
+  current: "bg-cv-accent",
+  upcoming: "bg-cv-border",
 };
 
 interface WorkflowStepsProps {
@@ -28,63 +35,56 @@ interface WorkflowStepsProps {
   steps: WorkflowStep[];
 }
 
-/* A.1: the landmark shows completed, current, and future stages. Future stages are not
-   navigable, so the steps are text, never links.
+/* A.1: the landmark shows completed, current, and future stages.
 
-   It is a breadcrumb on the header line rather than a band of its own: the stage is
-   orientation, and at nine rem of full-width chrome it was pushing the actual work of
-   every screen below the fold. Narrow widths keep only the current step, which is the
-   "current-step summary" A.4 frame 4 asks for. */
+   No stage is navigable, and the markup now says so. It is a `<p>`-led group rather than
+   a `<nav>`: a navigation landmark announces "here is a way to move around" to a screen
+   reader, and there is nothing in here to move to. `role="img"` with a text alternative
+   is what an indicator is - one thing that reports a position - so it is read as
+   "שלב 2 מתוך 5, ניתוח" instead of as a list of five destinations that refuse to open.
+
+   It sits on the header line rather than in a band of its own: the stage is orientation,
+   and at nine rem of full-width chrome it was pushing the actual work of every screen
+   below the fold. Narrow widths keep only the current step, which is the "current-step
+   summary" A.4 frame 4 asks for. */
 export const WorkflowSteps = ({ label, steps }: WorkflowStepsProps) => {
   const current = steps.find((step) => step.state === "current");
+  const position = current === undefined ? null : steps.indexOf(current) + 1;
+  /* One sentence for anyone not reading the bar, which is also the whole of what the bar
+     says: where the work is, and out of how many stages. */
+  const description =
+    position === null
+      ? label
+      : `${label}: שלב ${position} מתוך ${steps.length}, ${current?.label}`;
 
   return (
-    <nav aria-label={label} className="min-w-0">
-      <ol className="flex items-center gap-1 md:gap-1.5">
-        {steps.map((step, index) => (
-          <li
-            aria-current={step.state === "current" ? "step" : undefined}
+    <div aria-label={description} className="min-w-0" role="img">
+      {/* Hidden from assistive technology entirely: the group above already states the
+          position in one sentence, and reading five segment labels after it says the same
+          thing a second time, worse. */}
+      <div aria-hidden="true" className="flex items-end gap-1.5 md:gap-2">
+        {steps.map((step) => (
+          <div
             className={cx(
-              "items-center gap-1.5 text-support",
-              /* Below md only the current step is shown, so the breadcrumb never
-                 wraps the header onto a second line. */
+              "min-w-0 flex-col gap-1.5",
+              /* Below md only the current step is shown, so the indicator never wraps
+                 the header onto a second line. */
               step.state === "current" ? "flex" : "hidden md:flex",
-              stateClasses[step.state],
             )}
             key={step.label}
           >
+            <span className={cx("whitespace-nowrap text-support", stateClasses[step.state])}>
+              {step.label}
+            </span>
             <span
               className={cx(
-                "flex size-5 shrink-0 items-center justify-center rounded-pill border text-[0.6875rem] font-bold",
-                nodeClasses[step.state],
+                "h-0.5 w-full min-w-8 rounded-pill md:min-w-10 lg:min-w-14",
+                trackClasses[step.state],
               )}
-            >
-              {step.state === "complete" ? (
-                <Check aria-hidden="true" className="size-3" strokeWidth={3} />
-              ) : (
-                <span aria-hidden="true">{index + 1}</span>
-              )}
-            </span>
-            <span className="whitespace-nowrap">{step.label}</span>
-            {index === steps.length - 1 ? null : (
-              <span
-                aria-hidden="true"
-                className={cx(
-                  "ms-1 hidden h-px w-4 md:block lg:w-6",
-                  step.state === "complete" ? "bg-cv-success/50" : "bg-cv-border",
-                )}
-              />
-            )}
-          </li>
+            />
+          </div>
         ))}
-      </ol>
-      {/* The compact form drops the other steps visually, so the position is still
-          stated in text for anyone reading only the current one. */}
-      {current === undefined ? null : (
-        <span className="sr-only md:hidden">
-          {`שלב ${steps.indexOf(current) + 1} מתוך ${steps.length}`}
-        </span>
-      )}
-    </nav>
+      </div>
+    </div>
   );
 };

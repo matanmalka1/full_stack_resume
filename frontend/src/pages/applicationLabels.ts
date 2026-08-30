@@ -114,5 +114,29 @@ const blockedReasonLabels: Record<string, string> = {
   HARD_GAP_REQUIRES_DECISION: "פער חוסם מול הדרישות מחייב החלטה מפורשת.",
 };
 
+/* The recruitment axis, which is where the Application stands with the employer - as
+   opposed to `preparation_state`, which is how far the CV for it has got. The two are
+   independent and the dashboard shows both, so they need separate vocabularies.
+
+   An open string map rather than a Record over a union: `recruitment_status` is `str` at
+   the HTTP boundary, and a status this build does not know is shown as its raw value
+   rather than hidden. */
+export const recruitmentStatusLabels: Record<string, string> = {
+  saved: "נשמר",
+  applied: "הוגש",
+  recruiter_screen: "שיחת מגייס",
+  interview: "ראיון",
+  assignment: "משימה",
+  final_stage: "שלב סופי",
+  offer: "הצעה",
+  accepted: "התקבל",
+  rejected: "נדחה",
+  withdrawn: "בוטל",
+  closed: "סגור",
+};
+
+export const recruitmentStatusLabel = (status: string): string =>
+  recruitmentStatusLabels[status] ?? status;
+
 export const blockedReasonLabel = (reason: string): string =>
   blockedReasonLabels[reason] ?? reason;

@@ -1,10 +1,21 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { classificationFromAnalysis } from "../api/analyses";
-import { applicationDetailQueryOptions } from "../api/applications";
-import { ApiProblem } from "../api/client";
+import {
+  applicationDetailQueryKey,
+  applicationDetailQueryOptions,
+  startDraftGeneration,
+} from "../api/applications";
+import {
+  isTerminalOperation,
+  operationQueryKey,
+  operationQueryOptions,
+} from "../api/operations";
+import { settingsQueryOptions } from "../api/settings";
 import type { ApplicationDetail, BlockedAction, Reason } from "../api/contracts";
+import { ErrorCallout } from "../app/ErrorCallout";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
@@ -14,7 +25,10 @@ import { PageHeading } from "../ui/PageHeading";
 import { StatusBadge } from "../ui/StatusBadge";
 import { SummaryList, type SummaryItem } from "../ui/SummaryList";
 import { TechnicalDetails } from "../ui/TechnicalDetails";
+import { ActiveOperationPanel } from "./ActiveOperationPanel";
+import { type AutoDraftSources, autoDraftSources } from "./autoDraft";
 import { AnalysisPanel, SupersededAnalysisNote } from "./AnalysisPanel";
+import { ReviewDecisionPanel, resolvedByDecisionForm } from "./ReviewDecisionPanel";
 import { ApplicationActions } from "./ApplicationActions";
 import { actionDestination } from "./actionDestinations";
 import {
@@ -86,6 +100,13 @@ const noteworthyBlockedActions = (detail: ApplicationDetail): BlockedAction[] =>
    reports `stale` rather than `none` and keeps its badge; only the empty one is silent. */
 const IMPLIES_NO_DRAFT = new Set(["needs_analysis", "needs_review", "ready_to_draft"]);
 
+/* Guards against queueing the same automatic draft twice: the session record survives a
+   reload, and the in-flight set covers the gap before it is written. Both are keyed by the
+   analyze Operation that triggered the continuation. */
+const autoDraftInFlight = new Set<string>();
+
+const autoDraftStorageKey = (operationId: string): string => `stage-e:auto-draft:${operationId}`;
+
 const draftStateIsImplied = (detail: ApplicationDetail): boolean =>
   detail.working_draft_state === "none" && IMPLIES_NO_DRAFT.has(detail.preparation_state);
 
@@ -98,17 +119,23 @@ const draftStateIsImplied = (detail: ApplicationDetail): boolean =>
 const ReasonCallout = ({
   applicationId,
   reason,
+  resolvedHere = false,
   title,
   tone,
 }: {
   applicationId: string;
   reason: Reason;
+  /* The control that resolves this reason is on this screen, so the callout states the
+     requirement and offers no destination. */
+  resolvedHere?: boolean;
   title: string;
   tone: "blocker" | "warning";
 }) => {
-  const resolution = reason.allowed_resolution_actions
-    .map((action) => ({ action, href: actionDestination(action, applicationId) }))
-    .find((candidate) => candidate.href !== null);
+  const resolution = resolvedHere
+    ? undefined
+    : reason.allowed_resolution_actions
+        .map((action) => ({ action, href: actionDestination(action, applicationId) }))
+        .find((candidate) => candidate.href !== null);
 
   return (
     <Callout
@@ -123,7 +150,9 @@ const ReasonCallout = ({
       tone={tone}
     >
       <p dir="auto">{reason.message}</p>
-      {reason.allowed_resolution_actions.length === 0 || resolution !== undefined ? null : (
+      {resolvedHere ||
+      reason.allowed_resolution_actions.length === 0 ||
+      resolution !== undefined ? null : (
         <p className="mt-2">
           הפעולה שפותרת אותה: {reason.allowed_resolution_actions.map(actionLabel).join(" · ")}.
           המסך שלה מגיע בפרוסה הבאה.
@@ -150,8 +179,60 @@ export const ApplicationPage = () => {
     throw new Error("ApplicationPage rendered without an applicationId route parameter");
   }
 
+  const queryClient = useQueryClient();
   const query = useQuery(applicationDetailQueryOptions(applicationId));
   const detail = query.data;
+  /* Which Operation this screen is watching.
+
+     It cannot simply be the projection's `active_operation`, because that field is only
+     ever a `queued` or `running` record: the moment work finishes it becomes null. Read
+     straight, the panel would vanish at the instant the Operation had something to say -
+     a failure code, its guidance, the retry offer - and a failed run would leave no trace
+     on the screen that started it.
+
+     So the projection opens the watch and a query of the Operation's own closes it. The
+     id is held here across that transition, and the Operation query keeps reporting the
+     record after the projection has let go of it.
+
+     It is also set directly by whatever queued the work, from the accepted `202`: the
+     projection reports an Operation only on its next read, so waiting for it would put
+     the panel on screen a poll after the press that caused it. */
+  const [watchedId, setWatchedId] = useState<string | null>(null);
+  const activeOperationId = detail?.active_operation?.id ?? null;
+
+  useEffect(() => {
+    if (activeOperationId !== null) {
+      setWatchedId(activeOperationId);
+    }
+  }, [activeOperationId]);
+
+  /* Cleared when the user moves to another Application: the previous one's finished work
+     is not this one's. */
+  useEffect(() => setWatchedId(null), [applicationId]);
+
+  const watchedQuery = useQuery({
+    ...operationQueryOptions(watchedId ?? ""),
+    enabled: watchedId !== null,
+  });
+  /* The Operation's own query is authoritative once it has answered: it is the only one of
+     the two that reports a finished record, because `active_operation` is only ever queued
+     or running and the projection lets go the moment work ends.
+
+     The projection's copy is the fallback, and it earns its place at the other end of the
+     Operation's life: it arrives with the page, so a reload mid-run paints the panel from
+     the first render instead of after a second round trip. */
+  const watched =
+    watchedQuery.data?.id === watchedId ? watchedQuery.data : (detail?.active_operation ?? undefined);
+
+  /* The projection is refreshed once the watched Operation reaches a terminal status:
+     what it produced - a new analysis, a draft, the stage that follows - is the
+     projection's to report, and it stopped polling when `active_operation` went null. */
+  const watchedTerminal = watched !== undefined && isTerminalOperation(watched);
+  useEffect(() => {
+    if (watchedTerminal) {
+      void queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
+    }
+  }, [applicationId, queryClient, watchedTerminal, watched?.id]);
   const noteworthy = detail === undefined ? [] : noteworthyBlockedActions(detail);
   /* The same narrow read the review screen uses, and the same guard: it answers `null`
      unless the analysis on record is the active one, so a superseded analysis is named
@@ -159,6 +240,47 @@ export const ApplicationPage = () => {
   const classification = detail === undefined ? null : classificationFromAnalysis(detail);
   const supersededAnalysis =
     detail !== undefined && classification === null && detail.latest_analysis != null;
+  /* The Web automation opt-in: when Settings ask for it and the analysis raised no review
+     reason, the draft follows without a second press. It moved here with the flow. It used
+     to live on the Operation screen because that was where a succeeded analyze was seen;
+     now that queueing no longer navigates, that screen is not on the path, and leaving the
+     chain there would have silently ended the automation.
+
+     The guard itself is unchanged and still `autoDraftSources`: every workflow fact in it
+     is the server's, and the dispatch record stays keyed by the analyze Operation so a
+     reload cannot queue a second draft for work already continued. */
+  const settingsQuery = useQuery(settingsQueryOptions);
+  const autoDraft = useMutation({
+    mutationFn: async ({ analysisId, applicationId: id, planId }: AutoDraftSources) =>
+      startDraftGeneration(id, analysisId, planId, `auto-draft:${watchedId}:${analysisId}:${planId}`),
+    onSuccess: ({ operation }) => {
+      if (watchedId !== null) {
+        sessionStorage.setItem(autoDraftStorageKey(watchedId), "accepted");
+        autoDraftInFlight.delete(watchedId);
+      }
+      queryClient.setQueryData(operationQueryKey(operation.id), operation);
+      setWatchedId(operation.id);
+      void queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
+    },
+    onError: () => {
+      if (watchedId !== null) autoDraftInFlight.delete(watchedId);
+    },
+  });
+
+  useEffect(() => {
+    if (watchedId === null) return;
+    const sources = autoDraftSources(
+      watched,
+      settingsQuery.data?.settings,
+      detail,
+      sessionStorage.getItem(autoDraftStorageKey(watchedId)) === "accepted",
+      autoDraftInFlight.has(watchedId),
+    );
+    if (sources === null) return;
+    autoDraftInFlight.add(watchedId);
+    autoDraft.mutate(sources);
+  }, [detail, settingsQuery.data, watched, watchedId]);
+
   /* The landmark follows the projection, and says nothing at all until it arrives. */
   useWorkflowStage(detail === undefined ? "unknown" : detail.preparation_state);
 
@@ -196,25 +318,12 @@ export const ApplicationPage = () => {
       </div>
 
       {query.error === null ? null : (
-        <Callout
+        <ErrorCallout
           className="mt-6"
-          role="alert"
-          title={
-            query.error instanceof ApiProblem
-              ? query.error.problem.title
-              : "לא ניתן לטעון את מצב המועמדות"
-          }
-          tone="blocker"
-        >
-          {query.error instanceof ApiProblem
-            ? query.error.problem.detail
-            : "הפנייה לשרת נכשלה. אפשר לרענן את העמוד ולנסות שוב."}
-          {query.error instanceof ApiProblem ? (
-            <TechnicalDetails className="mt-3">
-              <LtrText>{query.error.problem.code}</LtrText>
-            </TechnicalDetails>
-          ) : null}
-        </Callout>
+          error={query.error}
+          fallbackDetail="הפנייה לשרת נכשלה. אפשר לרענן את העמוד ולנסות שוב."
+          fallbackTitle="לא ניתן לטעון את מצב המועמדות"
+        />
       )}
 
       {detail === undefined ? (
@@ -223,28 +332,19 @@ export const ApplicationPage = () => {
         ) : null
       ) : (
         <div className="mt-5 flex flex-col gap-5">
-          {detail.active_operation == null ? null : (
-            <Callout
-              action={
-                <Link
-                  className={buttonClasses("secondary")}
-                  to={`/operations/${encodeURIComponent(detail.active_operation.id)}`}
-                >
-                  מעבר למצב הפעולה
-                </Link>
-              }
-              title="פעולה רצה על המועמדות הזו"
-              tone="progress"
-            >
-              עד שהיא מסתיימת, מצב המועמדות כאן מתעדכן מעצמו.
-            </Callout>
-          )}
+          {/* The work itself, not a link to it. */}
+          {watched === undefined ? null : <ActiveOperationPanel operation={watched} />}
 
+          {/* A review reason whose control is the panel below states the requirement and
+              stops there: offering a link beside a form that resolves it on this very
+              screen would send the reader away from the answer. Anything the panel does
+              not resolve keeps its callout and its resolving action. */}
           {detail.review_reasons.map((reason) => (
             <ReasonCallout
               applicationId={detail.application.id}
               key={reason.code}
               reason={reason}
+              resolvedHere={resolvedByDecisionForm(reason)}
               title="נדרשת החלטה לפני המשך"
               tone="blocker"
             />
@@ -285,6 +385,11 @@ export const ApplicationPage = () => {
 
           {supersededAnalysis ? <SupersededAnalysisNote /> : null}
 
+          {/* The decision itself, directly under the analysis it is about. It was a route
+              of its own until the analysis reached this screen; keeping it there would
+              have meant deciding on one screen about something shown on another. */}
+          <ReviewDecisionPanel detail={detail} />
+
           {/* What the workflow is waiting on, in front of the control rather than behind a
               disclosure. Without it the card body was a single button in an empty box,
               and the only text explaining it was fourteen collapsed rows of blockers. */}
@@ -292,7 +397,7 @@ export const ApplicationPage = () => {
             {preparationStateNextStep[detail.preparation_state]}
           </p>
 
-          <ApplicationActions detail={detail} />
+          <ApplicationActions detail={detail} onQueued={setWatchedId} />
 
           {/* Only the blockers that are not already implied by the stage. Listing every
               later action of the workflow as "unavailable" said nothing the landmark and

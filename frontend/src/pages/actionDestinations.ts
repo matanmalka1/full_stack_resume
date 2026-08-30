@@ -8,8 +8,11 @@
 
    An action absent from the table has no screen yet, which is the honest default. */
 const destinations: Record<string, (applicationId: string) => string> = {
-  apply_analysis_decisions: (applicationId) =>
-    `/applications/${encodeURIComponent(applicationId)}/review`,
+  /* `apply_analysis_decisions` is deliberately absent. Its control is a panel on the
+     Application screen rather than a screen of its own, so it has no destination to link
+     to - the reader is already where the decision is taken. Everything that used to
+     resolve it through this table now finds nothing here, which is correct: a link would
+     lead from the form back to the form. */
   /* The Draft Editor is where the patch is issued, so the three commands it carries all
      lead to it. `apply_selection_change` and the removal path are controls on that
      screen rather than screens of their own: they act on the claim the user is looking

@@ -1,25 +1,34 @@
 import { createBrowserRouter } from "react-router-dom";
 
 import { App } from "../App";
+import { ApplicationListPage } from "../pages/ApplicationListPage";
 import { ApplicationPage } from "../pages/ApplicationPage";
 import { DraftEditorPage } from "../pages/DraftEditorPage";
 import { NewApplicationPage } from "../pages/NewApplicationPage";
 import { OperationPage } from "../pages/OperationPage";
 import { ReadyPage } from "../pages/ReadyPage";
-import { ReviewPage } from "../pages/ReviewPage";
 import { RoutePlaceholder } from "../pages/RoutePlaceholder";
 import { SettingsPage } from "../pages/SettingsPage";
 import { RouteErrorBoundary } from "./RouteErrorBoundary";
 
-/* Four screens carry the workflow: intake, the Application context, the draft editor,
-   and Ready.
+/* The root is the Application list, and intake is a screen reached from it. The two were
+   the other way round until the list existed at all: with the form at `/`, the wordmark
+   started a new Application instead of going home, and a saved one was reachable only by
+   its URL or the back button.
+
+   Five screens carry the workflow: the list, intake, the Application context, the draft
+   editor, and Ready.
 
    Validation, approval, and render are not among them. Each was a screen holding a single
    button, and each acted on the draft the editor was already showing, so reaching one
    meant leaving the text it described. They are now states of the editor: a panel, a
-   dialog, and an inline step. Review and Operation keep their own routes because each has
-   something of its own to show - a decision form, and durable progress that outlives the
-   screen that queued it. */
+   dialog, and an inline step. Review joined them: the analysis it decides about is on the
+   Application screen, so deciding on a separate route meant showing the subject in one
+   place and the controls in another.
+
+   Operation keeps its route. It is not on the workflow path any more - queueing reports
+   in place - but an Operation outlives the screen that queued it, so a direct link, a
+   bookmark, or a reload has somewhere to land. */
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -28,6 +37,11 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
+        element: <ApplicationListPage />,
+      },
+      {
+        /* Creating is one action taken from the list, not the thing the root does. */
+        path: "applications/new",
         element: <NewApplicationPage />,
       },
       {
@@ -40,10 +54,6 @@ export const router = createBrowserRouter([
       {
         path: "operations/:operationId",
         element: <OperationPage />,
-      },
-      {
-        path: "applications/:applicationId/review",
-        element: <ReviewPage />,
       },
       {
         /* The draft editor: edit, preview, validate, approve, and render, on the one

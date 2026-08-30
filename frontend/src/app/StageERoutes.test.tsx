@@ -1,7 +1,12 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { isValidElement } from "react";
 import { describe, expect, it } from "vitest";
 
+import { ApplicationListPage } from "../pages/ApplicationListPage";
 import { DraftEditorPage } from "../pages/DraftEditorPage";
+import { NewApplicationPage } from "../pages/NewApplicationPage";
 import { ReadyPage } from "../pages/ReadyPage";
 import { SettingsPage } from "../pages/SettingsPage";
 import { router } from "./router";
@@ -18,6 +23,9 @@ describe("Stage E routes", () => {
      rather than deleting it means a re-added interstitial fails here. */
   it("keeps validation, approval, and render off the route table", () => {
     expect(stageERoute("applications/:applicationId/validation")).toBeUndefined();
+    /* Review joined them: the analysis it decides about is on the Application screen, so
+       a separate route showed the subject in one place and the controls in another. */
+    expect(stageERoute("applications/:applicationId/review")).toBeUndefined();
     expect(stageERoute("applications/:applicationId/approval")).toBeUndefined();
     expect(stageERoute("approved-revisions/:approvedRevisionId/render")).toBeUndefined();
   });
@@ -34,4 +42,45 @@ describe("Stage E routes", () => {
     expect(stageEElementType("settings")).toBe(SettingsPage);
   });
 
+  /* The root is the list and intake is a screen reached from it. Asserted as a pair
+     because swapping them back is exactly the regression that made an existing
+     Application reachable only by its URL. */
+  it("puts the Application list at the root and intake on its own path", () => {
+    const index = router.routes[0]?.children?.find((route) => route.index === true);
+    expect(isValidElement(index?.element) ? index?.element.type : null).toBe(ApplicationListPage);
+    expect(stageEElementType("applications/new")).toBe(NewApplicationPage);
+  });
+});
+
+/* The pages the route table actually mounts, derived from the table rather than listed
+   here. A route added to `router.tsx` joins this set without anyone remembering to
+   register it, which is the point: the check below fails for the new screen rather than
+   passing because a list was not updated. */
+const routeComponentNames = (): string[] => {
+  const names = (router.routes[0]?.children ?? []).map((route) =>
+    isValidElement(route.element) && typeof route.element.type === "function"
+      ? route.element.type.name
+      : null,
+  );
+  /* A route whose element is not a named function component is a hole in the derivation,
+     not something to pass over quietly. */
+  expect(names).not.toContain(null);
+  return [...new Set(names as string[])];
+};
+
+describe("workflow stage publishing", () => {
+  /* `useWorkflowStage` has no unmount reset: resetting there produced a flash of `intake`
+     between two screens that were both mid-workflow. That trade makes publishing
+     mandatory - a screen that publishes nothing inherits whatever stage the previous one
+     left behind, so Settings could sit under a landmark still claiming "אימות".
+
+     Nothing in the types says so, so the guard is derived here. It reads each page's
+     source rather than rendering it, because what is being checked is that the call
+     exists at all, which needs no query client, router context, or server. */
+  it.each(routeComponentNames())("%s publishes a workflow stage", (name) => {
+    /* Resolved from the project root rather than `import.meta.url`, which under Vite is
+       a server path (`/src/...`) and not a location on disk. */
+    const source = readFileSync(join(process.cwd(), "src", "pages", `${name}.tsx`), "utf8");
+    expect(source).toMatch(/useWorkflowStage\(/);
+  });
 });

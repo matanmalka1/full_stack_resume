@@ -1,19 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 
-import { applicationDetailQueryOptions, startDraftGeneration } from "../api/applications";
-import { ApiProblem } from "../api/client";
-import type {
-  Operation,
-  OperationFailureCode,
-  OperationPhase,
-  OperationStatus,
-  OperationType,
-} from "../api/contracts";
+import { applicationDetailQueryOptions } from "../api/applications";
+import type { Operation, OperationPhase, OperationStatus } from "../api/contracts";
 import { isTerminalOperation, operationQueryOptions } from "../api/operations";
-import { operationQueryKey } from "../api/operations";
-import { settingsQueryOptions } from "../api/settings";
+import { ErrorCallout } from "../app/ErrorCallout";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { Callout } from "../ui/Callout";
 import { Card } from "../ui/Card";
@@ -21,57 +13,20 @@ import { LiveRegion } from "../ui/LiveRegion";
 import { LtrText } from "../ui/LtrText";
 import { PageHeading } from "../ui/PageHeading";
 import { StatusBadge } from "../ui/StatusBadge";
-import { type StatusTone } from "../ui/status";
 import { SummaryList, type SummaryItem } from "../ui/SummaryList";
 import { TechnicalDetails } from "../ui/TechnicalDetails";
 import { OperationActions } from "./OperationActions";
 import { preparationStateNextStep } from "./applicationLabels";
-import { autoDraftSources } from "./autoDraft";
-
-/* Keyed by the generated unions, so a status or phase added to the backend lifecycle
-   fails the frontend build instead of reaching the screen untranslated. */
-const statusLabels: Record<OperationStatus, string> = {
-  queued: "ממתינה בתור",
-  running: "מתבצעת",
-  succeeded: "הושלמה",
-  failed: "נכשלה",
-  cancelled: "בוטלה",
-  interrupted: "נקטעה",
-};
-
-/* What the operation is, which the status alone never says. Keyed by the generated
-   union, so a new backend operation type fails the build rather than reaching the
-   heading untranslated. */
-const operationTypeLabels: Record<OperationType, string> = {
-  analyze_job: "ניתוח המשרה",
-  propose_selection_plan: "בחירת העובדות",
-  create_draft: "יצירת הטיוטה",
-  regenerate_section: "יצירה מחדש של פרק",
-  regenerate_claim: "יצירה מחדש של טענה",
-  render_revision: "יצירת קובץ קורות החיים",
-};
-
-const statusTones: Record<OperationStatus, StatusTone> = {
-  queued: "progress",
-  running: "progress",
-  succeeded: "success",
-  failed: "blocker",
-  cancelled: "neutral",
-  interrupted: "warning",
-};
-
-const phaseLabels: Record<OperationPhase, string> = {
-  queued: "ממתינה בתור",
-  waiting_for_application: "ממתינה למועמדות",
-  waiting_for_render_slot: "ממתינה לתור הרינדור",
-  waiting_for_ai_slot: "ממתינה לתור המודל",
-  pre_execution_check: "בדיקה לפני ביצוע",
-  executing: "בביצוע",
-  retry_wait: "המתנה לפני ניסיון חוזר",
-  pre_activation_check: "בדיקה לפני הפעלת התוצר",
-  activating: "מפעילה את התוצר",
-  completed: "הושלמה",
-};
+import {
+  activeOutputLabels,
+  failurePresentations,
+  failureTones,
+  joinHebrewList,
+  operationTypeLabels,
+  phaseLabels,
+  statusLabels,
+  statusTones,
+} from "./operationLabels";
 
 const dateTimeFormat = new Intl.DateTimeFormat("he-IL", {
   dateStyle: "short",
@@ -122,107 +77,6 @@ const technicalItems = (operation: Operation): SummaryItem[] => {
   return items;
 };
 
-/* What an operation produced, named for the reader. Deliberately a partial map over an
-   open string rather than a Record over an enum: `output_type` is `str` in the schema, so
-   a type this map does not know is skipped rather than printed raw - an internal token in
-   a success line teaches nothing and looks like a leak.
-
-   `provider_response` is deliberately absent. It is registered as an output, but it is
-   the provider's own text, and this screen states elsewhere that it shows no provider
-   text. It stays in the record and out of the result line. */
-const outputTypeLabels: Record<string, string> = {
-  job_analysis: "ניתוח המשרה",
-  selection_plan: "תוכנית בחירת העובדות",
-  working_draft: "טיוטה",
-};
-
-/* §11 separates existence from activation: a failed or cancelled Operation can own an
-   output that was recorded as inactive evidence. Only the active ones are results, so
-   only they are named - an inactive output reported as something the operation produced
-   would claim the state changed when it did not. */
-const activeOutputLabels = (operation: Operation): string[] =>
-  operation.outputs
-    .filter((output) => output.active)
-    .map((output) => outputTypeLabels[output.output_type])
-    .filter((label): label is string => label !== undefined);
-
-/* Hebrew joins a list by prefixing the last item with "ו", not by placing a separator
-   between the last two - so this is a prefix on the final label rather than a join
-   string, and a one-item list has no conjunction at all. */
-const joinHebrewList = (labels: string[]): string =>
-  labels.length <= 1
-    ? (labels[0] ?? "")
-    : `${labels.slice(0, -1).join(", ")} ו${labels[labels.length - 1]}`;
-
-const failureTones: Partial<Record<OperationStatus, StatusTone>> = {
-  failed: "blocker",
-  cancelled: "neutral",
-  interrupted: "warning",
-};
-
-interface FailurePresentation {
-  title: string;
-  guidance: string;
-}
-
-const providerRetryGuidance =
-  "לא בוצע מעבר אוטומטי למצב דטרמיניסטי. אפשר ליצור ניסיון חדש, או לחזור למועמדות ולבחור באפשרות המשך אחרת כאשר השרת מציע אותה.";
-const providerOutputGuidance =
-  "התשובה לא הופעלה ולא הוחלפה בשקט בתוצאה דטרמיניסטית. אפשר ליצור ניסיון חדש, או לחזור למועמדות ולבחור באפשרות המשך אחרת כאשר השרת מציע אותה.";
-
-/* Failure codes are decisions a person must be able to distinguish, not technical
-   decoration. This map is exhaustive over the generated union: adding a backend code
-   fails the build until the screen says what it means and what remains safe. The
-   backend-authored safe detail is still shown verbatim; this copy explains the next
-   choice without exposing logs, paths, or provider text. */
-const failurePresentations: Record<OperationFailureCode, FailurePresentation> = {
-  SOURCE_CHANGED: {
-    title: "המקור השתנה בזמן הפעולה",
-    guidance:
-      "התוצאה לא הופעלה והמצב הקיים נשמר. ניסיון חוזר משתמש שוב במקורות שהוקפאו לפעולה הזו ועלול להיכשל מאותה סיבה; חזרה למועמדות מציגה את הפעולות שמותר לבצע מול המקור העדכני.",
-  },
-  PROVIDER_TIMEOUT: {
-    title: "ספק הבינה המלאכותית לא השיב בזמן",
-    guidance: providerRetryGuidance,
-  },
-  PROVIDER_RATE_LIMITED: {
-    title: "ספק הבינה המלאכותית הגביל את הבקשה",
-    guidance: providerRetryGuidance,
-  },
-  PROVIDER_UNAVAILABLE: {
-    title: "ספק הבינה המלאכותית אינו זמין",
-    guidance: providerRetryGuidance,
-  },
-  PROVIDER_REFUSED: {
-    title: "ספק הבינה המלאכותית סירב לבקשה",
-    guidance: providerRetryGuidance,
-  },
-  INVALID_OUTPUT: {
-    title: "הצעת הספק לא הייתה בטוחה לשימוש",
-    guidance: providerOutputGuidance,
-  },
-  SCHEMA_VIOLATION: {
-    title: "תשובת הספק לא הייתה במבנה הנדרש",
-    guidance: providerOutputGuidance,
-  },
-  RENDER_FAILED: {
-    title: "יצירת קובץ קורות החיים נכשלה",
-    guidance: "הגרסה שאושרה נשמרה. אפשר ליצור ניסיון חדש בלי לשנות אותה.",
-  },
-  BROWSER_START_FAILED: {
-    title: "מנוע יצירת הקובץ לא התחיל",
-    guidance: "הגרסה שאושרה נשמרה. אפשר ליצור ניסיון חדש בלי לשנות אותה.",
-  },
-  VALIDATION_EXECUTION_FAILED: {
-    title: "לא ניתן להשלים את בדיקות הפעולה",
-    guidance: "המצב שהיה פעיל לפני הפעולה נשמר. אפשר ליצור ניסיון חדש או לחזור למועמדות.",
-  },
-  CANCELLED_BEFORE_ACTIVATION: {
-    title: "הפעולה בוטלה לפני הפעלת התוצאה",
-    guidance: "תוצאה שהושלמה לאחר בקשת הביטול נשמרת כראיה לא פעילה ואינה מחליפה את המצב הקיים.",
-  },
-};
-
 /* A.5: the live region announces a status, phase, or cancellation-request change, never
    a polling tick. The dependencies are those values themselves, so an identical tick
    re-renders without re-running the effect. */
@@ -261,10 +115,13 @@ const usePhaseAnnouncement = (
   return announcement;
 };
 
-const autoDraftInFlight = new Set<string>();
+/* The automatic draft continuation is not here.
 
-const autoDraftStorageKey = (operationId: string): string => `stage-e:auto-draft:${operationId}`;
-
+   It lives on the Application screen, which is where the flow now stays: queueing work no
+   longer navigates, so this route is reached by a direct link or a reload rather than in
+   the ordinary course of the workflow. Running the chain in both places would let one
+   analyze Operation queue two drafts - the storage key guards a reload of the same screen,
+   not two screens watching the same Operation at once. */
 export const OperationPage = () => {
   const { operationId } = useParams();
 
@@ -276,10 +133,6 @@ export const OperationPage = () => {
 
   const query = useQuery(operationQueryOptions(operationId));
   const operation = query.data;
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const analyzeSucceeded = operation?.operation_type === "analyze_job" && operation.status === "succeeded";
-  const settingsQuery = useQuery({ ...settingsQueryOptions, enabled: analyzeSucceeded });
   /* Enabled for any operation, not only a succeeded analyze: the projection is what
      lets a running Operation publish the stage it belongs to, so the landmark keeps
      showing the workflow position instead of dropping back to the intake step for as
@@ -291,35 +144,6 @@ export const OperationPage = () => {
   useWorkflowStage(
     applicationQuery.data === undefined ? "unknown" : applicationQuery.data.preparation_state,
   );
-  const autoDraft = useMutation({
-    mutationFn: async ({ applicationId, analysisId, planId }: { applicationId: string; analysisId: string; planId: string }) =>
-      startDraftGeneration(
-        applicationId,
-        analysisId,
-        planId,
-        `auto-draft:${operationId}:${analysisId}:${planId}`,
-      ),
-    onSuccess: ({ operation: queued, operationPath }) => {
-      sessionStorage.setItem(autoDraftStorageKey(operationId), "accepted");
-      autoDraftInFlight.delete(operationId);
-      queryClient.setQueryData(operationQueryKey(queued.id), queued);
-      void navigate(operationPath);
-    },
-    onError: () => autoDraftInFlight.delete(operationId),
-  });
-
-  useEffect(() => {
-    const sources = autoDraftSources(
-      operation,
-      settingsQuery.data?.settings,
-      applicationQuery.data,
-      sessionStorage.getItem(autoDraftStorageKey(operationId)) === "accepted",
-      autoDraftInFlight.has(operationId),
-    );
-    if (sources === null) return;
-    autoDraftInFlight.add(operationId);
-    autoDraft.mutate(sources);
-  }, [applicationQuery.data, operation, operationId, settingsQuery.data]);
   const announcement = usePhaseAnnouncement(
     operation?.status,
     operation?.phase,
@@ -381,25 +205,12 @@ export const OperationPage = () => {
       <LiveRegion>{announcement}</LiveRegion>
 
       {query.error === null ? null : (
-        <Callout
+        <ErrorCallout
           className="mt-6"
-          role="alert"
-          title={
-            query.error instanceof ApiProblem
-              ? query.error.problem.title
-              : "לא ניתן לטעון את מצב הפעולה"
-          }
-          tone="blocker"
-        >
-          {query.error instanceof ApiProblem
-            ? query.error.problem.detail
-            : "הפנייה לשרת נכשלה. אם הפעולה עדיין רצה, העמוד ימשיך לנסות."}
-          {query.error instanceof ApiProblem ? (
-            <TechnicalDetails className="mt-3">
-              <LtrText>{query.error.problem.code}</LtrText>
-            </TechnicalDetails>
-          ) : null}
-        </Callout>
+          error={query.error}
+          fallbackDetail="הפנייה לשרת נכשלה. אם הפעולה עדיין רצה, העמוד ימשיך לנסות."
+          fallbackTitle="לא ניתן לטעון את מצב הפעולה"
+        />
       )}
 
       {operation === undefined ? (
@@ -467,13 +278,6 @@ export const OperationPage = () => {
           </TechnicalDetails>
 
           <OperationActions operation={operation} />
-          {autoDraft.error === null ? null : (
-            <Callout role="alert" title="הטיוטה האוטומטית לא הופעלה" tone="blocker">
-              {autoDraft.error instanceof ApiProblem
-                ? autoDraft.error.problem.detail
-                : "אפשר לחזור למועמדות ולהפעיל יצירת טיוטה ידנית."}
-            </Callout>
-          )}
         </div>
       )}
     </Card>

@@ -62,7 +62,7 @@ const queued = (overrides: Partial<Operation> = {}): Operation => ({
 /* An Application whose analysis is on record and active. The base fixture leaves both
    fields absent, which is the pre-analysis state, so only the tests that opt in here
    render the analysis panel. */
-const analyzed = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =>
+const analyzed_detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =>
   detail({
     preparation_state: "ready_to_draft",
     available_actions: ["draft"],
@@ -157,9 +157,139 @@ const clickEnabledButton = async (name: string) => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  /* The auto-draft dispatch record is session-scoped and survives a remount by design,
+     which is the point of the guard - so it is cleared between tests rather than leaking
+     an "already continued" answer into the next one. */
+  sessionStorage.clear();
 });
 
 describe("ApplicationPage", () => {
+  /* The Web automation opt-in, which moved here with the flow: queueing no longer
+     navigates, so the Operation screen that used to run this chain is not on the path.
+     Once per successful analyze, and not again after a remount - the session record is
+     what makes a reload safe. */
+  it("auto-generates the draft once per successful analyze when Settings ask for it", async () => {
+    let projectionReads = 0;
+    const analyzed = queued({ status: "succeeded", is_terminal: true, phase: "completed", available_actions: [] });
+    const drafting = queued({ id: "op-draft", operation_type: "create_draft" });
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") {
+        return Promise.resolve(acceptedResponse(drafting));
+      }
+      if (url.endsWith("/operations/op-draft")) {
+        return Promise.resolve(jsonResponse(drafting));
+      }
+      /* The opt-in is read from the live Settings query, not only from the seeded cache,
+         so this read has to answer with the setting under test. */
+      if (url.includes("/settings")) {
+        return Promise.resolve(
+          jsonResponse({ ...deterministicSettings, auto_generate_when_review_not_required: true }),
+        );
+      }
+      if (url.includes("/operations/")) {
+        return Promise.resolve(jsonResponse(analyzed));
+      }
+      /* The projection reports the analyze while it runs and lets go once it finishes -
+         which is also what the continuation guard waits for, since it refuses to queue a
+         draft while other work is live. The screen keeps watching the succeeded Operation
+         by id, which is what the chain reads. */
+      projectionReads += 1;
+      return Promise.resolve(
+        jsonResponse(
+          analyzed_detail({
+            active_operation: projectionReads === 1 ? queued({ status: "running" }) : null,
+            active_selection_plan_id: "plan-1",
+          }),
+        ),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const first = renderPage({ ...deterministicSettings, auto_generate_when_review_not_required: true });
+
+    await waitFor(() =>
+      expect(sessionStorage.getItem("stage-e:auto-draft:op-1")).toBe("accepted"),
+    );
+    const posts = fetchMock.mock.calls.filter((call) => call[1]?.method === "POST");
+    expect(posts).toHaveLength(1);
+    expect(JSON.parse(String(posts[0]?.[1]?.body))).toEqual({
+      job_analysis_id: "analysis-1",
+      selection_plan_id: "plan-1",
+    });
+
+    first.unmount();
+    renderPage({ ...deterministicSettings, auto_generate_when_review_not_required: true });
+
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1),
+    );
+  });
+  /* Queueing work no longer navigates: the projection carries the Operation and this
+     screen reports it in place. */
+  it("watches a running operation without leaving the screen", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          detail({
+            active_operation: queued({ status: "running", phase: "executing" }),
+          }),
+        ),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "ניתוח המשרה" })).toBeInTheDocument();
+    expect(screen.getByText("מתבצעת")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "מעבר למצב הפעולה" })).not.toBeInTheDocument();
+  });
+
+  /* `active_operation` is only ever queued or running: it goes null the moment work
+     finishes. Read straight, the panel would vanish exactly when the Operation had
+     something to say, so a failed run would leave no trace on the screen that started it.
+     The watch is held by id across that transition. */
+  it("keeps reporting an operation after the projection lets go of it", async () => {
+    const failed = queued({
+      status: "failed",
+      is_terminal: true,
+      phase: "completed",
+      failure_code: "PROVIDER_UNAVAILABLE",
+      safe_failure_detail: "The provider did not answer.",
+      available_actions: ["retry"],
+    });
+
+    /* The projection reports the Operation while it runs and then lets go of it -
+       `active_operation` is only ever queued or running. The watch has to survive that
+       transition, which is the whole point of holding the id. */
+    let projectionReads = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/operations/")) {
+          return Promise.resolve(jsonResponse(failed));
+        }
+        projectionReads += 1;
+        return Promise.resolve(
+          jsonResponse(
+            detail({
+              active_operation: projectionReads === 1 ? queued({ status: "running" }) : null,
+            }),
+          ),
+        );
+      }),
+    );
+
+    renderPage();
+
+    expect(
+      await screen.findByText("ספק הבינה המלאכותית אינו זמין"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("The provider did not answer.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ניסיון חוזר" })).toBeInTheDocument();
+  });
   it("names the page without repeating shell context and reports both projected states", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail())));
 
@@ -230,19 +360,31 @@ describe("ApplicationPage", () => {
     expect(screen.queryByText("אין טיוטה פעילה")).not.toBeInTheDocument();
   });
 
-  it("analyzes the exact snapshot the projection names and follows the accepted Operation", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(detail()))
-      .mockResolvedValueOnce(acceptedResponse(queued()));
+  it("analyzes the exact snapshot the projection names and reports the queued Operation", async () => {
+    /* Routed by URL rather than by call order: once the command is accepted the screen
+       watches the Operation it queued, so a fixed queue of answers would leave that read
+       unanswered and the panel would never settle. */
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        return Promise.resolve(acceptedResponse(queued()));
+      }
+      if (String(input).includes("/operations/")) {
+        return Promise.resolve(jsonResponse(queued()));
+      }
+      return Promise.resolve(jsonResponse(detail()));
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage();
     await clickEnabledButton("ניתוח המשרה");
 
-    expect(await screen.findByRole("heading", { name: "מצב הפעולה" })).toBeInTheDocument();
+    /* The accepted `202` is seeded as the panel's first state, so the queued Operation is
+       reported on this screen rather than on one the user was sent to. */
+    expect(
+      await screen.findByRole("heading", { name: "ניתוח המשרה", level: 2 }),
+    ).toBeInTheDocument();
 
-    const request = fetchMock.mock.calls[1];
+    const request = fetchMock.mock.calls.find((call) => call[0] === ANALYSES_PATH);
     expect(request?.[0]).toBe(ANALYSES_PATH);
     expect(request?.[1]).toEqual(expect.objectContaining({ method: "POST" }));
     /* The source is explicit: an analyze command that picked its own snapshot could
@@ -252,24 +394,40 @@ describe("ApplicationPage", () => {
   });
 
   it("uses the effective manual AI mode without changing the deterministic default", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(detail())).mockResolvedValueOnce(acceptedResponse(queued()));
-    vi.stubGlobal("fetch", fetchMock);
-    renderPage({
+    const aiSettings: Settings = {
       edit_version: 1,
       auto_generate_when_review_not_required: false,
       ai_enabled: true,
       ai_enabled_override: true,
       default_execution_mode: "ai",
-     
       provider_configured: true,
       ui_density: "comfortable",
       ui_text_size: "normal",
       updated_at: null,
+    };
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") {
+        return Promise.resolve(acceptedResponse(queued()));
+      }
+      if (url.includes("/operations/")) {
+        return Promise.resolve(jsonResponse(queued()));
+      }
+      /* Settings is seeded into the cache by `renderPage`, but the screen also subscribes
+         to it: answering that read with a projection body would let the effective AI mode
+         resolve to the deterministic default and lose the `provider` under test. */
+      if (url.includes("/settings")) {
+        return Promise.resolve(jsonResponse(aiSettings));
+      }
+      return Promise.resolve(jsonResponse(detail()));
     });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage(aiSettings);
 
     await clickEnabledButton("ניתוח המשרה");
 
-    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+    const analyzeCall = fetchMock.mock.calls.find((call) => call[0] === ANALYSES_PATH);
+    expect(JSON.parse(String(analyzeCall?.[1]?.body))).toEqual({
       job_snapshot_id: "snap-1",
       provider: "openai",
     });
@@ -288,7 +446,8 @@ describe("ApplicationPage", () => {
     await clickEnabledButton("ניתוח המשרה");
 
     expect(await screen.findByRole("alert")).toHaveTextContent("הפעולה לא בוצעה");
-    expect(screen.queryByRole("heading", { name: "מצב הפעולה" })).not.toBeInTheDocument();
+    /* A refused command queues nothing, so no Operation is reported. */
+    expect(screen.queryByRole("region", { name: /ניתוח המשרה/ })).not.toBeInTheDocument();
   });
 
   /* A.1: the projection decides what comes next. A recommended action whose screen this
@@ -395,9 +554,15 @@ describe("ApplicationPage", () => {
      SelectionPlan together, and both IDs are sent explicitly so the draft cannot be built
      from a plan the user never saw. */
   it("generates the draft from the exact analysis and plan the projection names", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
+    const drafting = queued({ id: "op-2", operation_type: "create_draft" });
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        return Promise.resolve(acceptedResponse(drafting));
+      }
+      if (String(input).includes("/operations/")) {
+        return Promise.resolve(jsonResponse(drafting));
+      }
+      return Promise.resolve(
         jsonResponse(
           detail({
             preparation_state: "ready_to_draft",
@@ -407,18 +572,16 @@ describe("ApplicationPage", () => {
             recommended_action: "create_draft",
           }),
         ),
-      )
-      .mockResolvedValueOnce(
-        acceptedResponse(queued({ id: "op-2", operation_type: "create_draft" })),
       );
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage();
     await clickEnabledButton("יצירת טיוטה");
 
-    expect(await screen.findByRole("heading", { name: "מצב הפעולה" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "יצירת הטיוטה", level: 2 })).toBeInTheDocument();
 
-    const request = fetchMock.mock.calls[1];
+    const request = fetchMock.mock.calls.find((call) => call[0] === GENERATE_PATH);
     expect(request?.[0]).toBe(GENERATE_PATH);
     expect(request?.[1]).toEqual(expect.objectContaining({ method: "POST" }));
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({
@@ -491,13 +654,11 @@ describe("ApplicationPage", () => {
     expect(
       screen.getByText("Low fit requires explicit acceptance before drafting."),
     ).toHaveAttribute("dir", "auto");
-    /* The resolving action has a screen now, so the reason offers it instead of
-       promising one is coming. */
-    expect(screen.getByRole("link", { name: "החלת החלטות הסקירה" })).toHaveAttribute(
-      "href",
-      "/applications/app-1/review",
-    );
+    /* The control that resolves it is the panel on this same screen, so the callout
+       states the requirement and offers no link away from the form that settles it. */
+    expect(screen.queryByRole("link", { name: "החלת החלטות הסקירה" })).not.toBeInTheDocument();
     expect(screen.queryByText(/מגיע בפרוסה הבאה/)).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "ההחלטה שנדרשת" })).toBeInTheDocument();
     expect(screen.getByText("LOW_FIT_REQUIRES_ACCEPTANCE")).toBeInTheDocument();
   });
 
@@ -527,7 +688,11 @@ describe("ApplicationPage", () => {
     expect(screen.queryByRole("link", { name: "בחירת העובדות" })).not.toBeInTheDocument();
   });
 
-  it("links to the Operation the projection reports as already running", async () => {
+  /* The Operation the projection reports as already running is watched in place, which
+     "watches a running operation without leaving the screen" above covers. What remains
+     worth asserting here is the way out for the record itself: the panel still links to
+     the Operation's own route, which is where a bookmark or a reload lands. */
+  it("still offers the Operation's own route from the panel", async () => {
     vi.stubGlobal(
       "fetch",
       vi
@@ -541,8 +706,7 @@ describe("ApplicationPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("פעולה רצה על המועמדות הזו")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "מעבר למצב הפעולה" })).toHaveAttribute(
+    expect(await screen.findByRole("link", { name: "פרטי הפעולה המלאים" })).toHaveAttribute(
       "href",
       "/operations/op-1",
     );
@@ -574,7 +738,7 @@ describe("ApplicationPage", () => {
   /* The analysis is the reasoning behind the stage this screen reports, so it is read
      here rather than on a route of its own. */
   it("shows what the analysis concluded once one is active", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(analyzed())));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(analyzed_detail())));
 
     renderPage();
 
@@ -594,7 +758,7 @@ describe("ApplicationPage", () => {
   /* The projection's review reason says a decision is needed; the panel says what about
      the analysis made it necessary, which is what a person needs in order to decide. */
   it("says what about the classification requires a decision", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(analyzed())));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(analyzed_detail())));
 
     renderPage();
 
@@ -609,7 +773,7 @@ describe("ApplicationPage", () => {
       "fetch",
       vi.fn().mockResolvedValue(
         jsonResponse(
-          analyzed({
+          analyzed_detail({
             preparation_state: "needs_review",
             available_actions: ["apply_analysis_decisions"],
             recommended_action: "apply_analysis_decisions",
@@ -644,7 +808,7 @@ describe("ApplicationPage", () => {
   it("does not present a superseded analysis as the one in force", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(jsonResponse(analyzed({ active_analysis_id: "analysis-9" }))),
+      vi.fn().mockResolvedValue(jsonResponse(analyzed_detail({ active_analysis_id: "analysis-9" }))),
     );
 
     renderPage();

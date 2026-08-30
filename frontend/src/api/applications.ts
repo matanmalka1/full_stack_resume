@@ -4,6 +4,7 @@ import { ApiProblem, type ApiPath, apiRequest } from "./client";
 import type {
   ApplicationDetail,
   ApplicationIntake,
+  ApplicationListResponse,
   CreateAnalysisRequest,
   CreateApplicationRequest,
   CreatedApplication,
@@ -109,6 +110,10 @@ export const acknowledgementApplies = (
 export const applicationDetailQueryKey = (applicationId: string) =>
   ["application", applicationId] as const;
 
+export const applicationListQueryKey = ["applications"] as const;
+
+const applicationsPath: ApiPath = "/api/v1/applications";
+
 const applicationPath = (applicationId: string): ApiPath =>
   `/api/v1/applications/${encodeURIComponent(applicationId)}`;
 
@@ -140,6 +145,22 @@ export const applicationDetailQueryOptions = (applicationId: string) =>
       return active == null || isTerminalOperation(active) ? false : OPERATION_POLL_INTERVAL_MS;
     },
   });
+
+/* Every Application this instance holds, which is what makes an existing one reachable
+   again. Without it the only route to a saved Application was its URL, so the root screen
+   had to be the intake form and "home" meant starting over.
+
+   It carries the same §9 state projection per row as the detail read, so the list reports
+   where each Application actually stands rather than deriving a second opinion from its
+   recruitment status. No search, filter, or sort: the spec lists them under the same
+   query contract, and they are worth adding when the list is long enough to need them. */
+export const applicationListQueryOptions = queryOptions({
+  queryKey: applicationListQueryKey,
+  queryFn: async ({ signal }) => {
+    const response = await apiRequest<ApplicationListResponse>(applicationsPath, { signal });
+    return response.data.items;
+  },
+});
 
 /* §13: the snapshot is named by the caller. An analyze command that picked its own
    source could classify something other than what the user was looking at, so the ID

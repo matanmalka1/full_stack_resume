@@ -72,39 +72,10 @@ afterEach(() => {
 });
 
 describe("OperationPage", () => {
-  it("auto-generates once per successful Analyze and persists acceptance across remounts", async () => {
-    const analyzed = operation({ status: "succeeded", is_terminal: true, phase: "completed", available_actions: [] });
-    const generated = operation({ id: "op-draft", operation_type: "create_draft", status: "queued", phase: "queued" });
-    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input);
-      if (init?.method === "POST") {
-        return Promise.resolve(new Response(JSON.stringify(generated), { status: 202, headers: { "Content-Type": "application/json", Location: "/api/v1/operations/op-draft" } }));
-      }
-      if (url === "/api/v1/settings") {
-        return Promise.resolve(jsonResponse({ auto_generate_when_review_not_required: true }));
-      }
-      if (url === "/api/v1/applications/app-1") {
-        return Promise.resolve(jsonResponse({
-          application: { id: "app-1" }, review_reasons: [], working_draft_state: "none", active_operation: null,
-          active_analysis_id: "analysis-1", active_selection_plan_id: "plan-1",
-        }));
-      }
-      return Promise.resolve(jsonResponse(url.endsWith("op-draft") ? generated : analyzed));
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const first = renderPage(<OperationPage />);
-    await waitFor(() => expect(sessionStorage.getItem("stage-e:auto-draft:op-1")).toBe("accepted"));
-    const firstPosts = fetchMock.mock.calls.filter((call) => call[1]?.method === "POST");
-    expect(firstPosts).toHaveLength(1);
-    expect(JSON.parse(String(firstPosts[0]?.[1]?.body))).toEqual({ job_analysis_id: "analysis-1", selection_plan_id: "plan-1" });
-    first.unmount();
-
-    renderPage(<OperationPage />);
-    await screen.findByRole("heading", { level: 1, name: "ניתוח המשרה" });
-    await waitFor(() => expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1));
-  });
-
+  /* The automatic draft continuation is not asserted here any more: it moved to the
+     Application screen with the flow, and its test moved with it. This route is no longer
+     on the workflow path - queueing reports in place - so running the chain here too
+     would let one analyze Operation queue two drafts. */
   it("names the operation in the heading and reports status and phase separately", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(operation())));
 
@@ -252,14 +223,18 @@ describe("OperationPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("אין פעולה במזהה הזה.");
   });
 
-  /* The regression this file exists for: a transport error is not an ApiProblem, and the
-     screen used to render nothing at all for it. */
-  it("shows a safe fallback when the failure is not a Problem Details", async () => {
+  /* The regression this file exists for: a transport error used to render nothing at all.
+     What it renders is no longer the screen's generic fallback - the client now turns an
+     unreachable server into an ApiProblem of its own, so the alert names the transport
+     failure specifically. The assertion follows that: what is guarded is that a failure
+     with no Problem Details from the server still reaches the user as a safe, readable
+     alert rather than as silence. */
+  it("shows a safe alert when the request never reached the server", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
 
     renderPage(<OperationPage />);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("לא ניתן לטעון את מצב הפעולה");
+    expect(await screen.findByRole("alert")).toHaveTextContent("לא ניתן להגיע לשרת");
   });
 
   it("cancels only when the backend exposes the action and keeps the returned state", async () => {

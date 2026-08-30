@@ -14,8 +14,12 @@ describe("Stage E action destinations", () => {
     expect(actionDestination("approve", "app 1")).toBe("/applications/app%201/draft");
   });
 
-  it("keeps review on its established destination", () => {
-    expect(actionDestination("apply_analysis_decisions", "app-1")).toBe("/applications/app-1/review");
+  /* The review decision has no destination: its control is a panel on the Application
+     screen, so a link would lead from the form back to the form. Asserted rather than
+     dropped, because re-adding a destination is what would send the reader away from the
+     controls again. */
+  it("gives the review decision no destination, since its control is not a screen", () => {
+    expect(actionDestination("apply_analysis_decisions", "app-1")).toBeNull();
   });
 
   it("keeps draft editing on its established destination", () => {
