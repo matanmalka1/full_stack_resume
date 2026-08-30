@@ -87,7 +87,8 @@ Report what passed, what failed, and what remains. Never claim completion with
   conflicting copies.
 - New facts follow `pending -> confirmed -> canonical` unless the user confirms in the
   same message.
-- Unsupported factual claims block approval and `ready_qualified`, including in fast mode.
+- Unsupported factual claims block approval and `ready_qualified`. No chained or
+  no-pause flow may bypass that; a blocker refuses whatever is driving it.
 - AI proposes classification, selection, and wording. Canonical facts and deterministic
   validation stay authoritative.
 - Preserve canonical job titles, dates, metrics, uncertainty, and source provenance.
@@ -107,8 +108,10 @@ Report what passed, what failed, and what remains. Never claim completion with
   product semantics stay the same.
 - Do not silently change workflow, validation behavior, fact semantics, application
   statuses, or artifact lifecycle.
-- React is the product interface and FastAPI is the API. React is the API's only
-  client. A second client for a use-case the API already owns is not added.
+- React is the product interface and FastAPI is the only user-facing adapter; React
+  reaches the system through it and nowhere else. The worker calls the same application
+  layer as an internal execution host, not as a second client. A second user-facing
+  surface for a use-case the API already owns is not added.
 - The system runs as two processes sharing one PostgreSQL database, neither
   supervising the other: `uvicorn cv_engine.runtime.asgi:app` serves HTTP and creates
   Operations; `python -m cv_engine.worker` executes them through the Operation runner.

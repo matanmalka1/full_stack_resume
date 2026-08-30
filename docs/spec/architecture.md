@@ -10,10 +10,18 @@ Baseline: `v1.0.0` / `2cc31c7`
 
 ## 1. Architecture objective
 
-v2.0 is a Web product over one synchronous application layer. FastAPI is its only
-client; the React UI reaches the application layer through the API and nowhere else.
-Existing domain and validation behavior is preserved and separated from orchestration,
-storage, and transport concerns.
+v2.0 is a Web product over one synchronous application layer. Two processes call that
+layer, and the distinction between them is what the rest of this document assumes:
+
+- **FastAPI is the only user-facing adapter.** Every user action arrives through it, and
+  React reaches the application layer through the API and nowhere else.
+- **The worker is an internal execution host.** It calls the same application layer
+  directly, through the Operation runner, and serves no user. It is not a second client
+  for any use-case: it executes Operations the API created.
+
+A second user-facing adapter is what this rule excludes. Existing domain and validation
+behavior is preserved and separated from orchestration, storage, and transport
+concerns.
 
 The primary architecture rule is:
 
@@ -22,8 +30,8 @@ The primary architecture rule is:
 Dependencies point inward. Product semantics live in domain/application code, not in
 routers, React components, SQL triggers, or templates.
 
-There is one client. A second surface for a use-case the API already owns has a second
-contract to keep compatible and no capability the first lacks.
+There is one user-facing adapter. A second surface for a use-case the API already owns
+has a second contract to keep compatible and no capability the first lacks.
 
 ## 2. Required technology baseline
 
@@ -107,10 +115,15 @@ Services are synchronous. The layer has no dependency on FastAPI or an event loo
 Focused services are:
 
 - `ApplicationService`
+- `ApplicationQueryService`
 - `AnalysisService`
 - `DraftService`
 - `RenderingService`
 - `TrackingService`
+- `KnowledgeService`
+- `OperationService`
+- `SettingsService`
+- `MaintenanceService`
 
 A small façade may compose them for convenience but contains no business logic.
 
@@ -465,8 +478,8 @@ Calls are stateless. Default model and per-task overrides are backend configurat
 Exact model/provider, semantic task-contract version, prompt version/hash, input/output
 schema versions, usage, latency, response ID, and output hashes are stored.
 
-Sanitized raw response is an immutable filesystem artifact. Sanitization removes
-secrets and excludes hidden chain-of-thought. Provider failure is explicit; deterministic
+Sanitized raw response is an immutable payload in the object store, registered like
+any other. Sanitization removes secrets and excludes hidden chain-of-thought. Provider failure is explicit; deterministic
 continuation requires another user-selected command.
 
 ## 12. HTTP API
@@ -497,9 +510,12 @@ operation type + key. Reuse with another payload hash is
 Problems follow RFC-style Problem Details with stable code and safe context. Internal
 technical details remain in structured rotating logs.
 
-Artifact endpoints accept IDs only, verify path root containment and symlink safety,
-and stream/download registered content with a friendly filename. Body size is bounded;
-oversize is `413`.
+Artifact endpoints accept IDs only. They resolve a registered reference, verify the
+stored content hash, and stream it with a friendly filename. Containment is the
+backend's: `LocalObjectStore` keeps every key below `artifacts_root` and refuses
+traversal and symlink escape; `S3ObjectStore` has neither paths nor symlinks and
+validates the key. Nothing above the store handles a filesystem path. Body size is
+bounded; oversize is `413`.
 
 ## 13. Frontend architecture
 
@@ -532,8 +548,9 @@ configured boolean. Logs and Operation payloads are redacted and never contain k
 authorization headers, or secrets.
 
 Job/user text is untrusted. Prompt contracts isolate it from policy. Artifact access
-prevents traversal and symlink escape. No endpoint accepts arbitrary local paths or
-arbitrary file uploads.
+resolves registered references only -- never a caller-supplied location -- and the
+local backend additionally prevents traversal and symlink escape. No endpoint accepts
+arbitrary local paths or arbitrary file uploads.
 
 ## 15. Runtime behavior
 
@@ -542,13 +559,13 @@ also be told it, through `CV_API_PORT`: the origin policy allows the origin the 
 believes it answers on, so a port given only to uvicorn refuses every state-changing
 request from the app's own UI.
 
-Production supports current Chrome/Chromium and Safari. Full E2E uses Chromium;
-central-flow smoke tests use WebKit. Resume PDF rendering always uses the managed
-Chromium configured by Playwright. Local Chrome is diagnostic only.
+Production supports current Chrome/Chromium, and full E2E runs there. Resume PDF
+rendering always uses the Chromium managed by Playwright. Local Chrome is diagnostic
+only.
 
 Structured rotating logs under `logs_root` include timestamp, level, Operation ID,
-Application ID, phase, error code, and log reference. v2.0 offers an Open Logs Folder
-action rather than a logs screen.
+Application ID, phase, error code, and log reference. v2.0 has no logs screen: a log
+reference identifies the entry, and the files are read directly on the host.
 
 ### 15.1 Runtime configuration and secrets
 

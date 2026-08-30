@@ -243,7 +243,7 @@ Create
 - assert `newer_draft_in_progress=false` until a later draft is explicitly created
 - run analyze/generate/render through the Operation runner and assert it uses
   leases/heartbeat/idempotency and completes the Operations
-- assert fast mode records explicit user approval and cannot bypass a validation
+- assert an approval records explicit user approval and cannot bypass a validation
   blocker
 
 ## 6. AI tests
@@ -362,8 +362,7 @@ variants, and redaction fields should normally be grouped:
 - sanitized raw provider artifact
 - prompt-injection fixtures
 - no runtime root selector or v1 data reader
-- foreign process on default port
-- same-instance health/identity detection
+- health reports product, API, and schema versions without secrets
 
 The final job-text limit is set during implementation in the approved 1-2 MB order of
 magnitude and recorded in API/config contracts.
@@ -386,9 +385,8 @@ preview direction.
 
 Browser coverage:
 
-- latest Chrome/Chromium: full E2E
-- latest Safari: official support with WebKit smoke for central journeys
-- Playwright Chromium: only PDF rendering engine
+- latest Chrome/Chromium: full E2E, and the only browser support is claimed for
+- Playwright-managed Chromium: the PDF rendering engine, never a UI target
 
 Linux/Chromium CI is normal automation. Before release, run the relevant suite and
 runtime checks on macOS.
@@ -461,7 +459,6 @@ CI must include:
 Release additionally requires:
 
 - macOS runtime and browser verification
-- WebKit smoke
 - manual live OpenAI smoke
 - environment-level PostgreSQL/object-store data-protection verification when configured
 - performance review

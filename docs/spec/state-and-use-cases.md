@@ -9,7 +9,7 @@ Product authority: `docs/spec/product-spec.md`
 ## 1. Purpose
 
 This document defines the detailed lifecycle, state projections, commands, queries,
-outcomes, and permission policy shared by every client. It is normative for behavior but
+outcomes, and action policy exposed through the API. It is normative for behavior but
 must not override the product specification.
 
 Commands always name the immutable sources they act on. Query/UI conveniences may
@@ -283,10 +283,8 @@ terminal outcome are updated transactionally while the original event remains.
 `closed` is archival. The last accepted/rejected/withdrawn outcome remains in
 `terminal_outcome` and history.
 
-Audit actors use `actor_type=user|system`. A new record names `client=web|worker`;
-stored records may carry a wider set, because they are immutable and a reader that
-refused an existing value would fail on real data. There is no authenticated username
-in v2.0; the UI may label the local user as `You`.
+Audit actors use `actor_type=user|system` and `client=web|worker`. There is no
+authenticated username in v2.0; the UI may label the local user as `You`.
 
 Preparation commands never alter RecruitmentStatus. Drafting after `applied` leaves the
 Application applied.
@@ -576,8 +574,8 @@ required and records explicit provenance.
 
 ### `transition_recruitment_status`
 
-Applies only an allowed forward transition. Actor, timestamp, from/to and source
-Actor and client are mandatory; reason is optional for a normal transition.
+Applies only an allowed forward transition. Actor, client, timestamp, from/to, and
+source are mandatory; reason is optional for a normal transition.
 
 ### `correct_recruitment_status`
 
@@ -602,6 +600,31 @@ activated.
 
 Creates a new Operation with `retry_of_operation_id` and a new idempotency key. The old
 Operation remains immutable. Reusing the old key returns the old result.
+
+## 19a. Settings commands
+
+### `update_settings(expected_edit_version, settings)`
+
+Applies the safe UI settings named in `docs/spec/product-spec.md` section 15. The write
+is optimistic: `expected_edit_version` must match the stored one, and a mismatch is a
+conflict that changes nothing. Each successful write increments `edit_version`, which the
+transport carries as an ETag.
+
+Model and task overrides, timezone, and secrets are not settings. They are backend
+configuration and are never writable through this command.
+
+## 19b. Maintenance commands
+
+### `reconcile()`
+
+Checks database references and stored artifact hashes against the payload store, and the
+fact lifecycle against its audit trail. Both halves always run: a failing artifact check
+must not hide a broken lifecycle.
+
+It reports and never repairs. The records it checks are immutable, so a repair would
+destroy the evidence of the mismatch. `passed` is the conjunction of both halves; a
+failed reconciliation is a successful answer to the question asked, not a command
+failure.
 
 ## 20. Queries
 
@@ -702,10 +725,10 @@ Create
 -> Ready
 ```
 
-Auto-generation is enabled by default when review is not required and the application
-setting allows it. Successful Analyze already returns the explicit initial
-SelectionPlan ID used by Draft. The UI may chain commands, but each remains an
-independent application use-case.
+Auto-generation is opt-in: the setting is off by default, and drafting continues
+automatically only when review is not required *and* the setting has been turned on.
+Successful Analyze already returns the explicit initial SelectionPlan ID used by Draft.
+The UI may chain commands, but each remains an independent application use-case.
 
 Dashboard and recruitment management may not begin until this path and its central
 failure modes pass through both the Application API and the Web UI.

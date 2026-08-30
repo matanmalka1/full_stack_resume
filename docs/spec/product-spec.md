@@ -86,15 +86,18 @@ views and diagnostic interfaces.
   filesystem storage is the default; an S3-compatible bucket is optional.
 - Facts, Profiles, selection policies, prompts, task contracts, and rendering rules
   remain version-controlled files and independent sources of truth.
-- The Web UI is the product interface and the API is its only client. Maintenance is an
-  API concern like any other. A second client for a use-case the API owns has a second
+- The Web UI is the product interface and reaches the system only through the API,
+  which is the only user-facing adapter. The Operation worker calls the same application
+  layer as an internal execution host; it serves no user. Maintenance is an API concern
+  like any other. A second user-facing surface for a use-case the API owns has a second
   contract to keep compatible and no capability the first lacks.
 - The API calls the same application services directly; the deterministic workflow
   reaches Ready with no AI key.
 - v2.0 officially targets macOS. Portable code is preferred, but Windows and Linux do
   not block release.
-- The UI supports current Chrome/Chromium with full E2E coverage and current Safari
-  with WebKit smoke coverage. PDF rendering always uses Playwright-managed Chromium.
+- The UI supports current Chrome/Chromium, with full E2E coverage. No other browser is
+  claimed, because none is verified. PDF rendering always uses Playwright-managed
+  Chromium.
 
 ## 4. v2.0 scope
 
@@ -276,7 +279,8 @@ change only to which facts will address an already understood requirement create
 SelectionPlan.
 
 Analysis review is exception-based. When no material decision is required and the
-global auto-generation setting is enabled, the workflow may continue to drafting.
+global auto-generation setting has been turned on -- it is off by default -- the
+workflow may continue to drafting.
 Review is required only for active-context reasons such as material ambiguity, low fit,
 a hard gap requiring an explicit decision, unresolved fact selection, or a pending fact
 on which the active plan or claim depends.
@@ -479,12 +483,8 @@ Audit actor identity is intentionally local and non-authenticated:
 
 ```text
 actor_type: user | system
-client:     web | worker      (what a new record may name)
+client:     web | worker
 ```
-
-Stored records may carry a client outside that set. They are immutable, so the read set
-stays wider than the write set; widening what may be written is a decision, not a side
-effect of reading.
 
 The primary UI may display `You` for `actor_type=user`; technical client identity
 belongs to provenance rather than the normal timeline label.
@@ -650,12 +650,13 @@ NeedsReview and `ValidationRun(passed=false)` are successful domain outcomes, no
 errors. The API enforces an explicit body-size limit; oversized job text returns
 `413 Payload Too Large`.
 
-Artifacts are accessed only by artifact ID. Download resolves and contains the local
-path, verifies integrity/root containment, and supplies a friendly Content-Disposition
-filename. No general path endpoint exists.
+Artifacts are accessed only by artifact ID. Download resolves the registered reference,
+verifies the stored content hash, and supplies a friendly Content-Disposition filename.
+Containment is the backend's: the local store keeps every key below `artifacts_root`;
+the S3 store validates the key against its bucket and prefix. No general path endpoint
+exists.
 
-The existing data export is reviewed for actual consumers during M1. A retained
-export uses a versioned v2 schema by default. `--legacy-format` is added only when a
+Data export uses a versioned v2 schema. A compatibility format is added only when a
 real existing consumer is identified; v2 does not create speculative compatibility.
 
 ## 20. Rollout and release states
@@ -683,7 +684,8 @@ worktree of the frozen commit. There is no v2 database downgrade.
 v2.0 is Release Ready only when all of the following are demonstrably true:
 
 - [ ] The API and worker processes start the local application without manual Node steps.
-- [ ] The API and worker use the same application layer and permission policy.
+- [ ] The API enforces the action policy, and the worker executes only persisted
+      Operations through the shared Operation runner.
 - [ ] One Application completes the full Web vertical slice through Ready PDF.
 - [ ] The central failure paths are exercised through the same slice.
 - [ ] Review is exception-based and every review reason is explicit and resolvable.
@@ -702,7 +704,7 @@ v2.0 is Release Ready only when all of the following are demonstrably true:
       tested crash window.
 - [ ] Dashboard, timeline, tracking, internal/external submissions, corrections, and
       next actions work after the vertical-slice gate.
-- [ ] Hebrew UI, Hebrew/English CV preview, RTL/LTR behavior, Chrome, and Safari checks
+- [ ] Hebrew UI, Hebrew/English CV preview, RTL/LTR behavior, and Chrome checks
       pass at their defined coverage levels.
 - [ ] Alembic topology and empty-database upgrade pass, and the configured environment's
       PostgreSQL/object-store backup policy is verified outside the application.
