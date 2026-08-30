@@ -21,7 +21,6 @@ from .operations import (
 )
 from .ports import OperationRepository, UnitOfWork
 
-
 logger = logging.getLogger("cv_engine.worker")
 
 

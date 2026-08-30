@@ -9,7 +9,6 @@ from typing import Protocol
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-
 logger = logging.getLogger("cv_engine.server")
 
 

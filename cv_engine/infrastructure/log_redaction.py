@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 
-
 _SECRET_PATTERNS = (
     re.compile(r"(?i)\bBearer\s+[^\s,;]+"),
     re.compile(r"\bsk-[A-Za-z0-9_-]+"),

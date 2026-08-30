@@ -17,7 +17,6 @@ from ..application.operation_runner import OperationRunner
 from ..application.operations import OperationStatus, PersistedOperation
 from ..application.ports import OperationRepository
 
-
 logger = logging.getLogger("cv_engine.worker")
 
 
