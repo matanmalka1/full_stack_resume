@@ -3,9 +3,9 @@ import { useMemo } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { applicationDetailQueryOptions, startDraftGeneration } from "../api/applications";
-import { ApiProblem } from "../api/client";
 import { operationQueryKey } from "../api/operations";
 import { approvedPreviewSrc, approvedRevisionQueryOptions, recruiterPdfHref } from "../api/revisions";
+import { ErrorCallout } from "../app/ErrorCallout";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { Button, buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
@@ -73,11 +73,11 @@ export const ReadyPage = () => {
       </PageHeading>
       <div className="mt-6 flex flex-col gap-6">
         {revisionQuery.error === null && applicationQuery.error === null ? null : (
-          <Callout role="alert" title="לא ניתן לטעון את הגרסה המוכנה" tone="blocker">
-            {(revisionQuery.error ?? applicationQuery.error) instanceof ApiProblem
-              ? ((revisionQuery.error ?? applicationQuery.error) as ApiProblem).problem.detail
-              : "הפנייה לשרת נכשלה."}
-          </Callout>
+          <ErrorCallout
+            error={revisionQuery.error ?? applicationQuery.error}
+            fallbackDetail="הפנייה לשרת נכשלה."
+            fallbackTitle="לא ניתן לטעון את הגרסה המוכנה"
+          />
         )}
         {historicalContext === null ? null : (
           <Callout title="הגרסה היסטורית בהקשר הפעיל" tone="warning">
@@ -134,9 +134,11 @@ export const ReadyPage = () => {
           </>
         )}
         {newDraft.error === null ? null : (
-          <Callout role="alert" title="לא ניתן ליצור טיוטה חדשה" tone="blocker">
-            {newDraft.error instanceof ApiProblem ? newDraft.error.problem.detail : "הפנייה לשרת נכשלה."}
-          </Callout>
+          <ErrorCallout
+            error={newDraft.error}
+            fallbackDetail="הפנייה לשרת נכשלה."
+            fallbackTitle="לא ניתן ליצור טיוטה חדשה"
+          />
         )}
         {revision === undefined ? null : (
           <div className="flex flex-wrap gap-3">
