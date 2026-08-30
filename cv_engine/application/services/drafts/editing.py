@@ -72,11 +72,6 @@ class DraftEditing(DraftServiceBase):
             validation=report,
         )
 
-    def link_claim(
-        self, application_id: str, claim_id: str, text: str, fact_ids: list[str]
-    ) -> EditResult:
-        return self.edit_claim(application_id, claim_id, fact_ids, text=text)
-
     def update_working_draft(self, command: UpdateWorkingDraftCommand) -> WorkingDraftUpdateResult:
         """§14 autosave: apply one structured patch to one exact draft version.
 

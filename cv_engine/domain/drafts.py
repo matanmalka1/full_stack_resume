@@ -570,22 +570,3 @@ def register_linked_claim(
     facts: FactStore,
 ) -> DraftDocument:
     return apply_claim_edit(draft, claim_id, fact_ids, facts, text=new_text)
-
-
-def register_composite_claim(
-    draft: DraftDocument,
-    claim_id: str,
-    fact_ids: list[str],
-    facts: FactStore,
-    *,
-    template_id: str = CANONICAL_JOIN_TEMPLATE[0],
-    template_version: str = CANONICAL_JOIN_TEMPLATE[1],
-) -> DraftDocument:
-    return apply_claim_edit(
-        draft,
-        claim_id,
-        fact_ids,
-        facts,
-        template_id=template_id,
-        template_version=template_version,
-    )

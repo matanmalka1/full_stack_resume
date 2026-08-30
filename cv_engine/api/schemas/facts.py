@@ -228,10 +228,6 @@ class ConfirmAndUseFactRequest(HttpSchema):
     reason: str = ""
 
 
-class FactStatusQuery(HttpSchema):
-    status: FactStatus | None = None
-
-
 def fact_event_response(event: FactEventView) -> FactEventResponse:
     """Project one audit row onto the wire, naming its source not its path."""
     return FactEventResponse.model_validate(

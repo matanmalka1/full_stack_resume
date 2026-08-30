@@ -411,21 +411,6 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown artifact version: {artifact_version_id}") from exc
 
-    def revision_ready_qualification(self, approved_revision_id: str) -> ReadyQualification:
-        """§20: Ready qualification for one exact revision, by its own ID.
-
-        The Application is read from the revision rather than taken from the
-        caller: a revision names exactly one, so a second argument could only
-        ever agree or be wrong.
-        """
-        try:
-            revision = self.repo.approved_revision(approved_revision_id)
-        except UnknownRecord as exc:
-            raise UnknownRecord(f"unknown approved revision: {approved_revision_id}") from exc
-        return qualify_ready_revision(
-            self.revision_payloads, self.repo, revision.application_id, revision.id
-        )
-
     def ready_qualification(
         self,
         application_id: str,

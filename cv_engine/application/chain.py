@@ -74,22 +74,6 @@ class DraftChain:
         return "; ".join(f"{code}: {message}" for code, message in self.problems)
 
 
-def decision_record_analysis_id(repo: DraftRepository, application_id: str) -> str | None:
-    """The analysis the latest approved version recorded in its decision record.
-
-    Only meaningful for pre-binding "1.0" manifests, whose own file does not name
-    an analysis. The decision record is immutable and application-scoped, so it
-    is a real binding rather than a guess at which analysis was current.
-    """
-    try:
-        markdown_version = repo.latest_artifact_version(
-            application_id, "resume_markdown", "approved"
-        )
-        return repo.decision_for_artifact_version(markdown_version["id"])["job_analysis_id"]
-    except UnknownRecord:
-        return None
-
-
 def check_draft_chain(
     repo: DraftRepository,
     application_id: str,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ..util import canonical_json, sha256_text
 from .facts import FactStore
-from .models import Profile, ProfileName, Track
+from .models import Profile, ProfileName
 
 
 class ProfileStoreError(ValueError):
@@ -63,9 +63,6 @@ class ProfileStore:
             return self.sources[key]
         except KeyError as exc:
             raise ProfileStoreError(f"profile {key.value} has no source file") from exc
-
-    def for_track(self, track: Track) -> list[Profile]:
-        return [profile for profile in self.profiles.values() if profile.track is track]
 
 
 def attach_fact_to_section(
