@@ -242,11 +242,12 @@ environment and `.env` surfaces), not by a local database path. One process-wide
 `Engine` per URL owns pooling and connection health. UnitOfWork and multi-query projection
 reads use explicit transactions; stable projections use `REPEATABLE READ`.
 
-Foreign keys and CHECK/UNIQUE constraints enforce relational invariants. The 36 row
-triggers comprise 28 UPDATE/DELETE guards over 14 immutable tables, four DELETE-only
-guards over deliberately mutable tables, and four exact transition guards. Application
-`current_status` validity is one CHECK constraint, which covers both INSERT and UPDATE.
-Business workflows remain in domain/application code.
+Foreign keys and CHECK/UNIQUE constraints enforce relational invariants. Every
+immutable table carries an UPDATE guard and a DELETE guard, and which tables those are
+is derived rather than listed: a table is immutable unless it is named in the mutable
+exception set, so adding a table without its guards fails the check instead of passing
+unnoticed. Application `current_status` validity is one CHECK constraint, which covers
+both INSERT and UPDATE. Business workflows remain in domain/application code.
 
 Alembic owns explicit numbered revisions, schema version metadata, and schema upgrades.
 The revision graph has one head, `alembic upgrade head` applies it explicitly, and normal
