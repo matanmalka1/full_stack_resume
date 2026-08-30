@@ -66,6 +66,7 @@ def _create_application(repository, *, company: str, target_role: str, text: str
         payload_path=f"artifacts/snapshots/{company}/snapshot.txt",
         source_hash=digest,
         normalized_hash=sha256_text(normalized_text(text)),
+        client="web",
     )
 
 
@@ -102,7 +103,6 @@ def test_app_settings_schema_rejects_non_singleton_and_invalid_values(
         "auto_generate_when_review_not_required": False,
         "ai_enabled_override": None,
         "default_execution_mode": "deterministic",
-        "open_browser_on_launch": True,
         "ui_density": "comfortable",
         "ui_text_size": "normal",
         "updated_at": "2026",
@@ -126,7 +126,6 @@ def test_app_settings_default_read_is_pure(application_repo) -> None:
         "auto_generate_when_review_not_required": False,
         "ai_enabled_override": None,
         "default_execution_mode": "deterministic",
-        "open_browser_on_launch": True,
         "ui_density": "comfortable",
         "ui_text_size": "normal",
         "updated_at": None,
@@ -142,7 +141,6 @@ def test_app_settings_updates_are_optimistic_and_atomic(application_repo, monkey
             auto_generate_when_review_not_required=True,
             ai_enabled_override=False,
             default_execution_mode="deterministic",
-            open_browser_on_launch=False,
             ui_density="compact",
             ui_text_size="large",
         ),
@@ -157,7 +155,6 @@ def test_app_settings_updates_are_optimistic_and_atomic(application_repo, monkey
                 auto_generate_when_review_not_required=False,
                 ai_enabled_override=None,
                 default_execution_mode="deterministic",
-                open_browser_on_launch=True,
                 ui_density="comfortable",
                 ui_text_size="normal",
             ),
@@ -174,7 +171,6 @@ def test_app_settings_updates_are_optimistic_and_atomic(application_repo, monkey
             auto_generate_when_review_not_required=False,
             ai_enabled_override=None,
             default_execution_mode="deterministic",
-            open_browser_on_launch=True,
             ui_density="comfortable",
             ui_text_size="normal",
         ),
@@ -436,6 +432,7 @@ def test_immutability_triggers_refuse_real_repository_writes(application_repo) -
         payload_path="artifacts/snapshots/app/snapshot.txt",
         source_hash="s" * 64,
         normalized_hash="n" * 64,
+        client="web",
     )
     application_id = repository.list_applications()[0]["id"]
     repository.insert_submission(
@@ -455,7 +452,7 @@ def test_immutability_triggers_refuse_real_repository_writes(application_repo) -
             entity_type="submission",
             entity_id="external-submission",
             actor_type="user",
-            client="cli",
+            client="web",
             occurred_at="2026-08-19T10:00:00+00:00",
         )
     )

@@ -24,6 +24,7 @@ def _create(repo, *, company: str, target_role: str, text: str):
         payload_path=f"artifacts/snapshots/{company}/snapshot.txt",
         source_hash=digest,
         normalized_hash=sha256_text(normalized_text(text)),
+        client="web",
     )
 
 
@@ -59,7 +60,7 @@ def test_recruitment_event_and_transition_contract(application_repo) -> None:
                 .where(applications.c.id == app_id)
                 .values(current_status="ready")
             )
-    assert history == [(None, "saved", "user", "cli")]
+    assert history == [(None, "saved", "user", "web")]
 
 
 def test_immutable_job_snapshot_trigger(application_repo) -> None:
@@ -84,7 +85,7 @@ def test_next_action_is_not_a_status(application_repo) -> None:
         next_action="Follow up",
         next_action_date="2026-08-20",
         actor_type="user",
-        client="cli",
+        client="web",
         occurred_at="2026-08-19T10:00:00+00:00",
     )
     row = repo.get_application(app_id)
@@ -138,7 +139,7 @@ def test_ready_is_not_persisted_and_submission_storage_commits_atomically(
             event_type="status_transition",
             reason="submitted",
             actor_type="user",
-            client="cli",
+            client="web",
             occurred_at="2026-08-18T10:00:00+00:00",
             terminal_outcome=None,
         )
@@ -209,13 +210,16 @@ def test_ready_is_not_persisted_and_submission_storage_commits_atomically(
 
 def test_tracking_service_sets_next_action_without_changing_status(services) -> None:
     ingested = services.applications.ingest(
-        IngestCommand(company="Service Action", target_role="Sales", job_text="Sales role")
+        IngestCommand(
+            company="Service Action", target_role="Sales", job_text="Sales role", client="web"
+        )
     )
     result = services.tracking.set_next_action(
         NextActionCommand(
             application_id=ingested.application_id,
             next_action="Follow up",
             next_action_date="2026-08-20",
+            client="web",
         )
     )
     assert result.current_status == "saved"

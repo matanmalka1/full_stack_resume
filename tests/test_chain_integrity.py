@@ -263,7 +263,7 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
     assert revision.validator_versions == lineage.validator_versions
     assert revision.decision_provenance == {
         "actor_type": "user",
-        "client": "cli",
+        "client": "web",
         "command": "approve_draft",
     }
     assert revision.resume_json_reference == (
@@ -407,6 +407,7 @@ def test_foreign_working_projection_cannot_replace_the_database_source(
                 working_draft_id=validated.working_draft_id,
                 expected_edit_version=validated.edit_version,
                 validation_run_id=validated.validation_run_id,
+                client="web",
             )
         )
 
@@ -489,6 +490,7 @@ def test_invalid_classifications_are_rejected_before_any_persistence(services: S
                 target_role="Account Manager",
                 job_text=ACCOUNT_MANAGER_JOB,
                 acknowledged_duplicates=True,
+                client="web",
             )
         )
         app_id = ingested.application_id

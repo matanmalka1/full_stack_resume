@@ -244,6 +244,10 @@ recruitment_events = Table(
         name="to_status",
     ),
     CheckConstraint("actor_type IN ('user', 'system')", name="actor_type"),
+    # The stored set, wider than what may be written. Some existing rows name a
+    # client outside the write set and cannot be rewritten - these tables have
+    # no-update triggers. `WriteClient` in `application/commands.py` is the
+    # narrower set new writes are held to.
     CheckConstraint("client IN ('web', 'cli', 'worker')", name="client"),
     CheckConstraint(
         "event_type != 'status_correction' OR "
@@ -433,6 +437,10 @@ audit_records = Table(
     Column("occurred_at", Text, nullable=False),
     Column("details_json", JSONB, nullable=False, server_default=text("'{}'::jsonb")),
     CheckConstraint("actor_type IN ('user', 'system')", name="actor_type"),
+    # The stored set, wider than what may be written. Some existing rows name a
+    # client outside the write set and cannot be rewritten - these tables have
+    # no-update triggers. `WriteClient` in `application/commands.py` is the
+    # narrower set new writes are held to.
     CheckConstraint("client IN ('web', 'cli', 'worker')", name="client"),
 )
 Index(
@@ -669,7 +677,6 @@ app_settings = Table(
     Column("auto_generate_when_review_not_required", Boolean, nullable=False),
     Column("ai_enabled_override", Boolean),
     Column("default_execution_mode", Text, nullable=False),
-    Column("open_browser_on_launch", Boolean, nullable=False),
     Column("ui_density", Text, nullable=False),
     Column("ui_text_size", Text, nullable=False),
     Column("updated_at", Text, nullable=False),
