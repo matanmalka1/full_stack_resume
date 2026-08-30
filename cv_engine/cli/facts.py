@@ -1,13 +1,11 @@
-"""Fact lifecycle command dispatch and the reconcile command that checks it."""
+"""Fact lifecycle command dispatch and the reconcile maintenance command."""
 
 from __future__ import annotations
 
 import argparse
 from typing import Any
 
-from ..application.ports import ApplicationRepository
-from ..runtime.paths import AppPaths
-from ..util import verify_payload
+from ..application.maintenance import reconcile_artifacts
 from .context import CommandContext, _command
 from .output import _print
 
@@ -92,24 +90,10 @@ def fact_command(knowledge: Any, args: argparse.Namespace) -> int:
     return 0
 
 
-def generic_reconcile(paths: AppPaths, repository: ApplicationRepository) -> dict[str, Any]:
-    problems = repository.integrity_check()
-    checked = 0
-    for row in repository.artifact_inventory():
-        checked += 1
-        path = paths.root / row["path"]
-        verification = verify_payload(path, row["content_hash"])
-        if verification == "missing":
-            problems.append(f"missing artifact: {row['path']}")
-        elif verification == "tampered":
-            problems.append(f"artifact hash mismatch: {row['path']}")
-    return {"passed": not problems, "artifact_versions_checked": checked, "problems": problems}
-
-
 @_command("reconcile")
 def _reconcile(context: CommandContext) -> int:
     services = context.built_services
-    report = generic_reconcile(context.opened_paths, context.repository)
+    report = reconcile_artifacts(services.payloads, context.repository)
     fact_lifecycle = services.knowledge_lifecycle.reconcile_facts()
     report["fact_lifecycle"] = fact_lifecycle.model_dump(mode="json")
     report["passed"] = report["passed"] and fact_lifecycle.passed

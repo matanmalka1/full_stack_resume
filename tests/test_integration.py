@@ -1,19 +1,15 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
-import pytest
 from helpers import ACCOUNT_MANAGER_JOB, validate_active_draft
 from helpers import working_claim as _working_claim
 
-import cv_engine.application.services.drafts.generation as draft_generation_module
 from cv_engine.application.commands import (
     IngestCommand,
 )
 from cv_engine.application.errors import WorkflowError
 from cv_engine.domain.draft_markdown import parse_draft, serialize_markdown
-from cv_engine.domain.models import ValidationIssue, ValidationReport
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.runtime.paths import AppPaths
 
@@ -152,74 +148,3 @@ def test_render_revalidates_approved_markdown_before_browser(approved_applicatio
         assert "approved Markdown" in str(exc)
     else:
         raise AssertionError("modified approved source reached rendering")
-
-
-def test_cli_fast_mode_refuses_pre_render_validation_failure(
-    project_root: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    from cv_engine.cli import main
-
-    real_validate = draft_generation_module.run_draft_validation
-
-    def fail_validation(*args, **kwargs) -> ValidationReport:
-        report = real_validate(*args, **kwargs)
-        return ValidationReport.from_findings(
-            groups={**report.groups, "content": False},
-            issues=[
-                *report.issues,
-                ValidationIssue(
-                    group="content",
-                    code="injected-cli-fast-failure",
-                    message="controlled CLI fast validation failure",
-                ),
-            ],
-            evidence=report.evidence,
-        )
-
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    # The service imports the domain validator under its own name, because
-    # `validate_draft` is now the §15 application command as well. Patching the
-    # name the module actually binds is what keeps this test honest - and the
-    # module that binds it for the run fast mode reads is `generation`, where
-    # the draft Operation records its pre-render ValidationRun.
-    monkeypatch.setattr(draft_generation_module, "run_draft_validation", fail_validation)
-
-    result = main(
-        [
-            "fast",
-            "--company",
-            "CLI Refusal",
-            "--role",
-            "Account Manager",
-            "--job-text",
-            ACCOUNT_MANAGER_JOB,
-        ]
-    )
-    captured = capsys.readouterr()
-
-    assert result == 2
-    assert captured.out == ""
-    assert "ERROR: fast mode blocked by pre-render validation" in captured.err
-
-
-@pytest.mark.browser
-def test_cli_fast_mode_completes_definition_of_done(cli_runner, project_root: Path) -> None:
-    result = cli_runner(
-        "fast",
-        "--company",
-        "CLI Example",
-        "--role",
-        "Account Manager",
-        "--job-text",
-        ACCOUNT_MANAGER_JOB,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
-    payload = json.loads(result.stdout)
-    assert payload["ready"] is True
-    # The CLI reports the stored reference, which is what artifact_versions
-    # carries and what resolves under either storage backend. On the local
-    # store it is project-relative, so the payload is still checkable here.
-    assert payload["pdf"].startswith("artifacts/outputs/")
-    assert (project_root / payload["pdf"]).is_file()

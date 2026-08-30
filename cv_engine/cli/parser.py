@@ -9,28 +9,6 @@ from ..domain.facts import FACT_SOURCE_NAMES
 from ..domain.models import ApplicationStatus, FactStatus
 
 
-def _add_job_input(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--company", required=True)
-    parser.add_argument("--role", required=True)
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--job-file")
-    group.add_argument("--job-text")
-    parser.add_argument("--url")
-    parser.add_argument(
-        "--acknowledge-duplicates",
-        action="store_true",
-        help="create even when duplicate warnings match an existing application",
-    )
-
-
-def _add_overrides(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--track", choices=["development", "sales", "tech-sales"])
-    parser.add_argument("--profile")
-    parser.add_argument("--emphasis")
-    parser.add_argument("--language", choices=["en", "he"])
-    parser.add_argument("--accept-low-fit", action="store_true")
-
-
 def _add_fact_content(parser: argparse.ArgumentParser, *, from_claim: bool = False) -> None:
     """Arguments that describe a fact's content on creation.
 
@@ -69,54 +47,6 @@ def build_parser() -> argparse.ArgumentParser:
     web.add_argument("--no-open", action="store_true", help="do not open the default browser")
     web.add_argument("--port", type=int, help="preferred loopback port; defaults to 8765")
 
-    ingest = sub.add_parser("ingest", help="create an application and immutable job snapshot")
-    _add_job_input(ingest)
-
-    analyze = sub.add_parser("analyze", help="classify Track/Profile/Emphasis and fit")
-    analyze.add_argument("application_id")
-    _add_overrides(analyze)
-    analyze.add_argument("--provider", choices=["deterministic", "openai"], default="deterministic")
-    analyze.add_argument("--model", default="gpt-5.6")
-    analyze.add_argument("--idempotency-key")
-    # Use-cases take an explicit source ID. This flag is optional, so the
-    # CLI-boundary resolver fills it in when the flag is absent.
-    analyze.add_argument("--job-snapshot", dest="job_snapshot", default=None)
-
-    draft = sub.add_parser("draft", help="create or update the active working draft")
-    draft.add_argument("application_id")
-    draft.add_argument("--job-analysis", dest="job_analysis", default=None)
-    draft.add_argument("--selection-plan", dest="selection_plan", default=None)
-    draft.add_argument("--idempotency-key")
-
-    for name, help_text in [
-        ("validate", "run pre-render validation"),
-        ("approve", "approve and version the working draft"),
-        ("render", "render the latest approved version and run ready checks"),
-        ("ready", "inspect the complete ready validation result"),
-        ("show", "inspect one application"),
-        ("versions", "inspect artifact versions"),
-        ("decision", "inspect the latest decision record"),
-    ]:
-        command = sub.add_parser(name, help=help_text)
-        command.add_argument("application_id")
-        if name in {"approve", "render"}:
-            command.add_argument("--idempotency-key")
-
-    fast = sub.add_parser("fast", help="explicit no-pause flow; validation remains mandatory")
-    _add_job_input(fast)
-    _add_overrides(fast)
-
-    operation = sub.add_parser("operation", help="inspect, cancel, or retry durable work")
-    operation_sub = operation.add_subparsers(dest="operation_command", required=True)
-    operation_show = operation_sub.add_parser("show")
-    operation_show.add_argument("operation_id")
-    operation_cancel = operation_sub.add_parser("cancel")
-    operation_cancel.add_argument("operation_id")
-    operation_retry = operation_sub.add_parser("retry")
-    operation_retry.add_argument("operation_id")
-    operation_retry.add_argument("--idempotency-key", required=True)
-
-    sub.add_parser("list", help="list applications")
     status = sub.add_parser("status", help="transition application status with immutable history")
     status.add_argument("application_id")
     status.add_argument(
@@ -173,11 +103,6 @@ def build_parser() -> argparse.ArgumentParser:
         "sync-draft", help="extract marked manual Markdown edits and classify their claims"
     )
     sync.add_argument("application_id")
-    link = sub.add_parser("link-claim", help="compatibility alias for a text-based claim edit")
-    link.add_argument("application_id")
-    link.add_argument("claim_id")
-    link.add_argument("--text", required=True)
-    link.add_argument("--fact-id", action="append", required=True)
     export = sub.add_parser("export", help="export application data to CSV")
     export.add_argument("output", type=Path)
     sub.add_parser(

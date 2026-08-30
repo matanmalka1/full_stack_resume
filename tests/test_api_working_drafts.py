@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 
 from api_harness import MUTATION_HEADERS
-from helpers import ACCOUNT_MANAGER_JOB, run_cli, working_claim
+from helpers import ACCOUNT_MANAGER_JOB, working_claim
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import IngestCommand
@@ -232,25 +232,29 @@ def test_a_second_save_with_the_same_etag_is_a_conflict_that_changes_nothing(api
     assert after["content_hash"] == first.json()["content_hash"]
 
 
-def test_cli_edit_wins_before_a_web_autosave_with_the_stale_etag(api_worker) -> None:
-    """The two clients share the same optimistic draft version, not two stores."""
-    application_id, working_draft_id, _sources = _drafted(api_worker, "CLI Web Race Co")
+def test_an_out_of_band_edit_wins_before_a_web_autosave_with_the_stale_etag(
+    api_worker,
+) -> None:
+    """Every writer shares one optimistic draft version, not a store of its own.
+
+    The edit here goes through the draft service directly, the way a
+    maintenance path or a second Web session reaches it. What the test pins is
+    that the Web autosave holding the now-stale ETag is refused rather than
+    silently overwriting the newer version.
+    """
+    application_id, working_draft_id, _sources = _drafted(api_worker, "Draft Race Co")
     read = _read(api_worker, working_draft_id)
     claim = working_claim(api_worker.services, application_id, "sales.metric.performance")
     before = read.json()
 
-    edited = run_cli(
-        "edit-claim",
+    api_worker.services.drafts.edit_claim(
         application_id,
         claim.claim_id,
-        "--text",
-        claim.text,
-        "--fact-id",
-        claim.fact_ids[0],
+        [claim.fact_ids[0]],
+        text=claim.text,
     )
-    assert edited.returncode == 0, edited.stderr
-    cli_version = _read(api_worker, working_draft_id).json()
-    assert cli_version["edit_version"] == before["edit_version"] + 1
+    out_of_band = _read(api_worker, working_draft_id).json()
+    assert out_of_band["edit_version"] == before["edit_version"] + 1
 
     stale_web = _patch(
         api_worker,
@@ -262,8 +266,8 @@ def test_cli_edit_wins_before_a_web_autosave_with_the_stale_etag(api_worker) -> 
     assert stale_web.json()["code"] == "STATE_CONFLICT"
     after = _read(api_worker, working_draft_id).json()
     assert (after["edit_version"], after["content_hash"]) == (
-        cli_version["edit_version"],
-        cli_version["content_hash"],
+        out_of_band["edit_version"],
+        out_of_band["content_hash"],
     )
 
 
@@ -856,57 +860,3 @@ def test_the_same_key_returns_the_same_revision_and_a_changed_payload_is_reuse(
 
     assert reused.status_code == 409, reused.text
     assert reused.json()["code"] == "IDEMPOTENCY_KEY_REUSED"
-
-
-# --- E6: CLI compatibility ---------------------------------------------------
-
-
-def test_cv_validate_prints_the_run_id_and_cv_approve_consumes_it(
-    drafted_application, cli_runner
-) -> None:
-    """The CLI resolves the run at its own boundary and approval verifies it."""
-    setup = drafted_application("CLI Validate Co")
-
-    validated = cli_runner("validate", setup.application_id)
-    approved = cli_runner("approve", setup.application_id)
-
-    assert validated.returncode == 0, validated.stderr
-    run_id = json.loads(validated.stdout)["validation_run_id"]
-    assert json.loads(validated.stdout)["passed"] is True
-    assert approved.returncode == 0, approved.stderr
-    revision = setup.services.repository.approved_revision(
-        json.loads(approved.stdout)["revision_id"]
-    )
-    assert revision.validation_run_id == run_id
-    # The other half of the provenance contract: the CLI still records `cli`.
-    # Asserted here rather than in a case of its own, because this is the test
-    # that already approves through the CLI.
-    assert revision.decision_provenance["client"] == "cli"
-
-
-def test_cv_approve_refuses_when_no_run_describes_the_current_draft(
-    drafted_application, cli_runner
-) -> None:
-    """The observable CLI change, stated as a refusal that names the next step."""
-    setup = drafted_application("CLI Approve Refusal Co")
-    services, application_id = setup.services, setup.application_id
-    working = services.repository.active_working_draft(application_id)
-    claim = working_claim(services, application_id, "sales.metric.performance")
-    from cv_engine.application.commands import ClaimPatch, UpdateWorkingDraftCommand
-
-    services.drafts.update_working_draft(
-        UpdateWorkingDraftCommand(
-            working_draft_id=working.id,
-            expected_edit_version=working.edit_version,
-            expected_content_hash=working.content_hash,
-            claim_edits=[
-                ClaimPatch(claim_id=claim.claim_id, fact_ids=claim.fact_ids, text=claim.text)
-            ],
-        )
-    )
-
-    approved = cli_runner("approve", application_id)
-
-    assert approved.returncode == 2
-    assert "cv validate" in approved.stderr
-    assert services.repository.approved_revisions(application_id) == []

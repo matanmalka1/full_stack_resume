@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import json
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Event, Lock, Thread
 
 import pytest
-from helpers import ACCOUNT_MANAGER_JOB, run_cli, validate_active_draft
+from helpers import ACCOUNT_MANAGER_JOB, validate_active_draft
 from pydantic import ValidationError
 from sqlalchemy import delete, update
 from sqlalchemy.exc import ProgrammingError
@@ -616,7 +615,7 @@ def test_an_unclassified_infrastructure_failure_is_terminal_and_not_retried(
     assert attempts == 1
 
 
-def test_cli_analyze_uses_foreground_operation_and_reuses_explicit_key(services) -> None:
+def test_foreground_analysis_reuses_an_explicit_idempotency_key(services) -> None:
     ingested = services.applications.ingest(
         IngestCommand(
             company="CLI Operation Co",
@@ -624,25 +623,24 @@ def test_cli_analyze_uses_foreground_operation_and_reuses_explicit_key(services)
             job_text=ACCOUNT_MANAGER_JOB,
         )
     )
-    arguments = (
-        "analyze",
-        ingested.application_id,
-        "--job-snapshot",
-        ingested.job_snapshot_id,
-        "--idempotency-key",
-        "cli-analysis-key",
+    command = AnalyzeCommand(
+        application_id=ingested.application_id,
+        job_snapshot_id=ingested.job_snapshot_id,
     )
 
-    first = run_cli(*arguments)
-    second = run_cli(*arguments)
+    def submit_and_run() -> str:
+        operation = services.operations.submit_analysis(
+            command,
+            idempotency_key="analysis-idempotency-key",
+            analysis_service=services.analysis,
+        )
+        return services.foreground_operations.execute(operation.id).id
 
-    assert first.returncode == second.returncode == 0
-    first_payload = json.loads(first.stdout)
-    second_payload = json.loads(second.stdout)
-    assert first_payload == second_payload
-    assert services.repository.operation(first_payload["operation_id"]).status is (
-        OperationStatus.SUCCEEDED
-    )
+    first = submit_and_run()
+    second = submit_and_run()
+
+    assert first == second
+    assert services.repository.operation(first).status is OperationStatus.SUCCEEDED
 
 
 def test_draft_operation_activates_one_validated_working_draft(services) -> None:
@@ -722,41 +720,37 @@ def test_draft_operation_refuses_a_replaced_selection_plan(services) -> None:
         services.repository.active_working_draft(ingested.application_id)
 
 
-def test_cli_draft_uses_foreground_operation(services) -> None:
+def test_foreground_draft_runs_through_one_operation(services) -> None:
     ingested = services.applications.ingest(
         IngestCommand(
-            company="CLI Draft Co",
+            company="Foreground Draft Co",
             target_role="Account Manager",
             job_text=ACCOUNT_MANAGER_JOB,
         )
     )
-    analysis_run = run_cli(
-        "analyze",
-        ingested.application_id,
-        "--job-snapshot",
-        ingested.job_snapshot_id,
-        "--idempotency-key",
-        "cli-draft-analysis",
-    )
-    analysis_payload = json.loads(analysis_run.stdout)
-
-    drafted = run_cli(
-        "draft",
-        ingested.application_id,
-        "--job-analysis",
-        analysis_payload["analysis_id"],
-        "--selection-plan",
-        analysis_payload["selection_plan_id"],
-        "--idempotency-key",
-        "cli-draft-key",
+    analysed = services.analysis.analyze(
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+        )
     )
 
-    assert drafted.returncode == 0, drafted.stderr
-    payload = json.loads(drafted.stdout)
-    assert payload["validation"]["passed"] is True
-    assert services.repository.operation(payload["operation_id"]).status is (
-        OperationStatus.SUCCEEDED
+    operation = services.operations.submit_draft(
+        DraftCommand(
+            application_id=ingested.application_id,
+            job_analysis_id=analysed.analysis_id,
+            selection_plan_id=analysed.selection_plan_id,
+        ),
+        idempotency_key="foreground-draft-key",
+        draft_service=services.drafts,
     )
+    completed = services.foreground_operations.execute(operation.id)
+
+    assert completed.status is OperationStatus.SUCCEEDED
+    outputs = {output.output_type: output.output_id for output in completed.outputs}
+    validation = services.repository.latest_validation_for_working_draft(outputs["working_draft"])
+    assert validation is not None
+    assert validation["report"].passed
 
 
 def test_failed_render_operation_preserves_registered_outputs_as_inactive(

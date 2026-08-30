@@ -40,11 +40,3 @@ def _sync_draft(context: CommandContext) -> int:
     services = context.built_services
     edited = services.drafts.sync_working_claims(context.args.application_id)
     return _print_claim_edit(services, context.args.application_id, edited)
-
-
-@_command("link-claim")
-def _link_claim(context: CommandContext) -> int:
-    args = context.args
-    services = context.built_services
-    edited = services.drafts.link_claim(args.application_id, args.claim_id, args.text, args.fact_id)
-    return _print_claim_edit(services, args.application_id, edited)

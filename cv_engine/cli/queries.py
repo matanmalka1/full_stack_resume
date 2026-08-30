@@ -15,30 +15,6 @@ from .context import CommandContext, _command
 from .output import _print
 
 
-@_command("list")
-def _list(context: CommandContext) -> int:
-    _print(context.built_services.queries.list_applications())
-    return 0
-
-
-@_command("show")
-def _show(context: CommandContext) -> int:
-    _print(context.built_services.queries.application_detail(context.args.application_id))
-    return 0
-
-
-@_command("versions")
-def _versions(context: CommandContext) -> int:
-    _print(context.built_services.queries.artifact_versions(context.args.application_id))
-    return 0
-
-
-@_command("decision")
-def _decision(context: CommandContext) -> int:
-    _print(context.built_services.queries.latest_decision(context.args.application_id))
-    return 0
-
-
 @_command("status")
 def _status(context: CommandContext) -> int:
     args = context.args

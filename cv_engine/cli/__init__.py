@@ -1,10 +1,13 @@
 """The `cv` CLI entry point.
 
-Assembles the command surface out of the package's modules and re-exports
-the names other code and tests import from `cv_engine.cli` as if it were
-still one module. Importing the handler modules is what populates
-`_HANDLERS`: each one registers its commands as a side effect of import,
-through the `@_command` decorator defined in `.context`.
+The CLI is a runtime and maintenance surface: it starts the Web UI, and it
+runs the maintenance operations that have no place in a product interface.
+Every product use-case belongs to the API and the Web UI, which call the same
+application services this module does.
+
+Importing the handler modules is what populates `_HANDLERS`: each one
+registers its commands as a side effect of import, through the `@_command`
+decorator defined in `.context`.
 """
 
 from __future__ import annotations
@@ -12,6 +15,7 @@ from __future__ import annotations
 import sys
 
 from ..application.errors import WorkflowError
+from ..application.maintenance import EXPORT_SCHEMA_VERSION
 from ..runtime.config import ConfigError
 from ..runtime.paths import PathConfigurationError
 from ..runtime.web import WebRuntimeError
@@ -20,12 +24,11 @@ from ..runtime.web import WebRuntimeError
 # handlers add themselves to _HANDLERS when the module is imported.
 from . import claims as _claims  # noqa: F401
 from . import facts as _facts  # noqa: F401
-from . import pipeline as _pipeline  # noqa: F401
+from . import output as _output  # noqa: F401
 from . import queries as _queries  # noqa: F401
 from . import web as _web_module  # noqa: F401
 from .context import _HANDLERS, CommandContext, Handler, _build_context, _resolve_root
-from .fast import _fast, _latest_job_analysis_id, _latest_job_snapshot_id
-from .output import EXPORT_SCHEMA_VERSION, export_csv
+from .output import export_csv
 from .parser import build_parser
 
 __all__ = [
@@ -33,9 +36,6 @@ __all__ = [
     "Handler",
     "EXPORT_SCHEMA_VERSION",
     "_HANDLERS",
-    "_fast",
-    "_latest_job_analysis_id",
-    "_latest_job_snapshot_id",
     "build_parser",
     "export_csv",
     "main",

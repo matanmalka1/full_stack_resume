@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -293,37 +291,3 @@ def test_application_http_duplicate_precheck_and_acknowledgement_contract(servic
         assert controlled.status_code == 412
         assert controlled.json()["code"] == "PRECONDITION_FAILED"
         assert too_long.status_code == 422
-
-
-def test_cli_ingest_requires_and_records_explicit_duplicate_acknowledgement(
-    services, cli_subprocess
-) -> None:
-    arguments = (
-        "ingest",
-        "--company",
-        "CLI Duplicate Co",
-        "--role",
-        "Developer",
-        "--job-text",
-        "CLI duplicate text",
-        "--url",
-        "https://jobs.example/cli-duplicate",
-    )
-    first = cli_subprocess(*arguments)
-    assert first.returncode == 0, first.stderr
-
-    refused = cli_subprocess(*arguments)
-    assert refused.returncode == 2
-    assert "require explicit acknowledgement" in refused.stderr
-
-    accepted = cli_subprocess(*arguments, "--acknowledge-duplicates")
-    assert accepted.returncode == 0, accepted.stderr
-    body = json.loads(accepted.stdout)
-    assert body["warnings"] == [
-        "DUPLICATE_SOURCE_URL",
-        "DUPLICATE_NORMALIZED_TEXT",
-        "DUPLICATE_COMPANY_TITLE",
-    ]
-    events = services.repository.recruitment_events(body["application_id"])
-    assert events[0]["actor_type"] == "user"
-    assert events[0]["client"] == "cli"
