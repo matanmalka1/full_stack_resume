@@ -149,9 +149,18 @@ export const ReadyPage = () => {
               <Button disabled={newDraft.isPending || detail?.working_draft_state !== "none"} onClick={() => newDraft.mutate()} variant="secondary">
                 {newDraft.isPending ? "יוצר טיוטה…" : "יצירת טיוטה חדשה"}
               </Button>
-            ) : (
-              <Link className={buttonClasses("secondary")} to={`/applications/${encodeURIComponent(revision.application_id)}`}>חזרה למועמדות ליצירת מקורות עדכניים</Link>
-            )}
+            ) : null}
+            {/* The way back, offered whether or not a new draft can be started here.
+
+                It used to appear only when the sources were stale - as the fallback for a
+                missing "new draft" button rather than as an exit - which left the ordinary
+                case, a Ready revision with current sources, with no link off the screen at
+                all. Ready is the end of the workflow, not the end of the Application: the
+                approved files stay downloadable while work on the Application continues,
+                so the screen that says so has to be leaveable. */}
+            <Link className={buttonClasses("secondary")} to={`/applications/${encodeURIComponent(revision.application_id)}`}>
+              {hasSources ? "חזרה למועמדות" : "חזרה למועמדות ליצירת מקורות עדכניים"}
+            </Link>
           </div>
         )}
       </div>

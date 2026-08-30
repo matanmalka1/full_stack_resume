@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
 import { isValidElement } from "react";
 import { describe, expect, it } from "vitest";
 
@@ -76,11 +73,21 @@ describe("workflow stage publishing", () => {
 
      Nothing in the types says so, so the guard is derived here. It reads each page's
      source rather than rendering it, because what is being checked is that the call
-     exists at all, which needs no query client, router context, or server. */
+     exists at all, which needs no query client, router context, or server.
+
+     The sources come through Vite rather than `node:fs`: the app's TypeScript project
+     deliberately carries no Node types, and this check needs none. */
+  const pageSources = import.meta.glob("../pages/*.tsx", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  }) as Record<string, string>;
+
   it.each(routeComponentNames())("%s publishes a workflow stage", (name) => {
-    /* Resolved from the project root rather than `import.meta.url`, which under Vite is
-       a server path (`/src/...`) and not a location on disk. */
-    const source = readFileSync(join(process.cwd(), "src", "pages", `${name}.tsx`), "utf8");
+    const source = pageSources[`../pages/${name}.tsx`];
+    /* A route component with no file of that name means the derivation stopped matching
+       the pages, which is a failure here rather than a silently skipped check. */
+    expect(source).toBeDefined();
     expect(source).toMatch(/useWorkflowStage\(/);
   });
 });

@@ -283,7 +283,14 @@ describe("DraftRenderPanel and ReadyPage", () => {
       : Promise.resolve(json(String(input).includes("applications") ? detail({ preparation_state: "ready", working_draft_state: "none" }) : revision())));
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/approved-revisions/revision-1/ready", "/approved-revisions/:approvedRevisionId/ready", <ReadyPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "יצירת טיוטה חדשה" }));
+    const newDraft = await screen.findByRole("button", { name: "יצירת טיוטה חדשה" });
+    /* The way back is offered alongside the draft button, not instead of it. It used to
+       appear only when the sources were stale - as the fallback for a missing button
+       rather than as an exit - which left this case, a Ready revision with current
+       sources, with no link off the screen at all. Asserted before the click, which
+       navigates away from Ready. */
+    expect(screen.getByRole("link", { name: "חזרה למועמדות" })).toHaveAttribute("href", "/applications/app-1");
+    fireEvent.click(newDraft);
     await waitFor(() =>
       expect(fetchMock.mock.calls.some((call) => call[1]?.method === "POST")).toBe(true),
     );
