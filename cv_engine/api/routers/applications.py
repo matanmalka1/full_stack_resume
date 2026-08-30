@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Response, status
+from typing import Annotated
+
+from fastapi import APIRouter, Query, Response, status
 
 from ...application.commands import (
     AnalyzeCommand,
@@ -10,6 +12,12 @@ from ...application.commands import (
     DuplicateCheckCommand,
     IngestCommand,
     ReplaceWorkingDraftCommand,
+)
+from ...application.queries import (
+    ActivityFilter,
+    ApplicationListQuery,
+    ApplicationSort,
+    PreparationState,
 )
 from ...util import new_id
 from ..dependencies import Services
@@ -67,8 +75,35 @@ def create_application(
 
 
 @router.get("", response_model=ApplicationListResponse, summary="List applications")
-def list_applications(services: Services) -> ApplicationListResponse:
-    result = services.queries.list_applications()
+def list_applications(
+    services: Services,
+    activity: ActivityFilter = ActivityFilter.ALL,
+    stage: Annotated[list[PreparationState] | None, Query()] = None,
+    search: str = "",
+    sort: ApplicationSort = ApplicationSort.UPDATED,
+    limit: Annotated[int | None, Query(ge=1, le=200)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> ApplicationListResponse:
+    """One page of the list, narrowed by the query the application layer answers.
+
+    The router maps HTTP to that query and back and decides nothing about it:
+    the closed sets arrive as their application-layer enums, so an unknown value
+    is a 422 from the boundary rather than a filter that silently matches
+    nothing. `stage` repeats for more than one stage. The paging bounds are
+    restated here so an out-of-range page is refused at the boundary with a 422
+    naming the parameter, rather than reaching the query and failing as a
+    validation error the client cannot attribute.
+    """
+    result = services.queries.list_applications(
+        ApplicationListQuery(
+            activity=activity,
+            stages=frozenset(stage or ()),
+            search=search,
+            sort=sort,
+            limit=limit,
+            offset=offset,
+        )
+    )
     return ApplicationListResponse.model_validate(result.model_dump(mode="json"))
 
 

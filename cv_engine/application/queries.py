@@ -6,6 +6,8 @@ import json
 from enum import StrEnum
 from typing import Any
 
+from pydantic import Field
+
 from ..domain.drafts import draft_claims
 from ..domain.facts import FactStore
 from ..domain.models import (
@@ -137,7 +139,205 @@ class ApplicationListItemView(ApplicationView, ApplicationStateView):
 
 
 class ApplicationListView(BoundaryDTO):
+    """One page of the list, and the two counts that place it.
+
+    `matched` is how many rows the query selected and `total` how many exist
+    before it narrowed anything, so a client can say both "3 of 12 shown" and
+    "12 applications" without asking for the list again to count it. Neither is
+    `len(items)`, which is only what this page holds.
+    """
+
     items: list[ApplicationListItemView]
+    matched: int = 0
+    total: int = 0
+    limit: int | None = None
+    offset: int = 0
+
+    """How many Applications stand at each preparation state, before this query
+    narrowed anything.
+
+    A client offering a stage filter has to know which stages exist, and it cannot
+    derive that from one narrowed page: the stage it is filtering by is the only
+    one that page contains. Counted here from the projection that was computed
+    anyway, so no second read answers it. States with no Applications are absent
+    rather than present as zero - the map says what is there.
+    """
+
+    stage_counts: dict[PreparationState, int] = {}
+
+
+class ActivityFilter(StrEnum):
+    """Which side of the recruitment axis the caller is asking about.
+
+    OPEN is the default the list screen uses: a finished process stays stored and
+    reachable, but it is not what a board of live work is asking about.
+    """
+
+    OPEN = "open"
+    CLOSED = "closed"
+    ALL = "all"
+
+
+class ApplicationSort(StrEnum):
+    UPDATED = "updated"
+    CREATED = "created"
+    COMPANY = "company"
+    STAGE = "stage"
+
+
+class ApplicationListQuery(BoundaryDTO):
+    """How a caller narrows and orders the Application list.
+
+    It is a query the application layer answers rather than a view the client
+    assembles, because `preparation_state` - the axis this list is mostly read
+    by - is computed by the §9 projection and is not a stored column. A client
+    that filtered on it would be re-deriving state the projection already owns,
+    and a repository that filtered on it would have to compute the projection
+    inside SQL. The one layer that holds both the records and the projection is
+    this one, so the narrowing lives here.
+
+    Every field has a default, so `list_applications()` with no query is the
+    whole list, most recently updated first.
+    """
+
+    activity: ActivityFilter = ActivityFilter.ALL
+    """An empty set means every stage, not no stage."""
+
+    stages: frozenset[PreparationState] = frozenset()
+    search: str = ""
+    sort: ApplicationSort = ApplicationSort.UPDATED
+
+    """A page is a window on an ordering, so it means nothing until `sort` has fixed
+    one; `None` is the whole matched list. The ceiling is here rather than at the
+    HTTP boundary because it is a property of what this query will answer, not of
+    one way of asking it."""
+
+    limit: int | None = Field(default=None, ge=1, le=200)
+    offset: int = Field(default=0, ge=0)
+
+
+"""Which recruitment statuses mean the Application is no longer live.
+
+`terminal_outcome` is the record's own answer and is preferred wherever it is set.
+This set is the fallback for a record that reached a closing status without one:
+the status is what a reader sees, so a row reading `rejected` must not count as
+open because a nullable column beside it was never written.
+"""
+CLOSED_RECRUITMENT_STATUSES = frozenset({"rejected", "withdrawn", "closed"})
+
+
+def _is_closed(item: ApplicationListItemView) -> bool:
+    return (
+        item.terminal_outcome is not None
+        or item.recruitment_status in CLOSED_RECRUITMENT_STATUSES
+    )
+
+
+def _matches_search(item: ApplicationListItemView, search: str) -> bool:
+    """Free text over what the row identifies itself by.
+
+    The two lifecycle codes are searched alongside company and role because they
+    are what the caller filters by everywhere else; the Hebrew a client prints for
+    them is the client's vocabulary and is not known here.
+    """
+    needle = search.strip().casefold()
+    if not needle:
+        return True
+
+    haystack = "\n".join(
+        (
+            item.company,
+            item.target_role,
+            item.preparation_state.value,
+            item.recruitment_status,
+        )
+    ).casefold()
+    return needle in haystack
+
+
+"""Declaration order of `PreparationState` is the workflow order, so the position of
+each member is how far the CV has got. Derived rather than restated, so a state added
+to the enum orders itself instead of sorting as an unknown."""
+_STAGE_ORDER = {state: index for index, state in enumerate(PreparationState)}
+
+
+def _sort_key(sort: ApplicationSort) -> Any:
+    if sort is ApplicationSort.COMPANY:
+        return lambda item: (item.company.casefold(), item.target_role.casefold())
+    if sort is ApplicationSort.CREATED:
+        return lambda item: _descending(item.created_at)
+    if sort is ApplicationSort.STAGE:
+        # Furthest along first, then most recently touched inside a stage.
+        return lambda item: (-_STAGE_ORDER[item.preparation_state], _descending(item.updated_at))
+    return lambda item: _descending(item.updated_at)
+
+
+class _Descending:
+    """A sort key that reverses one field without reversing the whole tuple.
+
+    `sorted(reverse=True)` would flip the tie-breakers too, and the stage sort needs
+    stage ascending-by-negation with its timestamp tie-break descending.
+    """
+
+    __slots__ = ("value",)
+
+    def __init__(self, value: str) -> None:
+        self.value = value
+
+    def __lt__(self, other: _Descending) -> bool:
+        return self.value > other.value
+
+
+def _descending(value: str) -> _Descending:
+    return _Descending(value)
+
+
+def narrow_application_list(
+    items: list[ApplicationListItemView], query: ApplicationListQuery
+) -> ApplicationListView:
+    """Apply one `ApplicationListQuery` to a fully projected list.
+
+    Filter, then order, then window: the page is a slice of the ordering, so the
+    sort has to be settled before `offset` names a position in it. An `offset`
+    past the end is an empty page rather than a refusal - it is what a client
+    holding a stale page number asks for, and the counts it comes back with are
+    what tell it so.
+    """
+    matched = sorted(
+        (
+            item
+            for item in items
+            if _matches_activity(item, query.activity)
+            and (not query.stages or item.preparation_state in query.stages)
+            and _matches_search(item, query.search)
+        ),
+        key=_sort_key(query.sort),
+    )
+    window = (
+        matched[query.offset :]
+        if query.limit is None
+        else matched[query.offset : query.offset + query.limit]
+    )
+    stage_counts: dict[PreparationState, int] = {}
+    for item in items:
+        stage_counts[item.preparation_state] = stage_counts.get(item.preparation_state, 0) + 1
+
+    return ApplicationListView(
+        items=window,
+        matched=len(matched),
+        total=len(items),
+        limit=query.limit,
+        offset=query.offset,
+        # Over every Application, not the page: a filter's own options must not
+        # disappear the moment it is applied.
+        stage_counts=stage_counts,
+    )
+
+
+def _matches_activity(item: ApplicationListItemView, activity: ActivityFilter) -> bool:
+    if activity is ActivityFilter.ALL:
+        return True
+    return _is_closed(item) is (activity is ActivityFilter.CLOSED)
 
 
 class DraftClaimView(BoundaryDTO):

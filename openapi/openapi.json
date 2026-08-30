@@ -1,6 +1,16 @@
 {
   "components": {
     "schemas": {
+      "ActivityFilter": {
+        "description": "Which side of the recruitment axis the caller is asking about.\n\nOPEN is the default the list screen uses: a finished process stays stored and\nreachable, but it is not what a board of live work is asking about.",
+        "enum": [
+          "open",
+          "closed",
+          "all"
+        ],
+        "title": "ActivityFilter",
+        "type": "string"
+      },
       "AnalysisDecisionsResponse": {
         "additionalProperties": false,
         "description": "Which analysis is in force after the decision, and whether it is a new one.\n\n`job_analysis_id` names the analysis the client should work from now: the\nnew one when the decision changed meaning, the original when only the fact\noverlay moved. `created_analysis` is what tells the two apart.",
@@ -562,6 +572,7 @@
       },
       "ApplicationListResponse": {
         "additionalProperties": false,
+        "description": "One page of the list, and the counts that place it.\n\n`matched` is how many rows the query selected, `total` how many exist before\nit narrowed anything. Neither is `len(items)`, which is only what this page\nholds: a client showing \"10 of 43 matched, 61 in all\" cannot derive either\ncount from the page, and reading the list again to count it would compute the\nwhole projection a second time. `limit` and `offset` are echoed so a client\ncan tell which page it is holding without keeping its own request.",
         "properties": {
           "items": {
             "items": {
@@ -569,10 +580,47 @@
             },
             "title": "Items",
             "type": "array"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "matched": {
+            "title": "Matched",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "stage_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "default": {},
+            "propertyNames": {
+              "$ref": "#/components/schemas/PreparationState"
+            },
+            "title": "Stage Counts",
+            "type": "object"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
           }
         },
         "required": [
-          "items"
+          "items",
+          "matched",
+          "total"
         ],
         "title": "ApplicationListResponse",
         "type": "object"
@@ -821,6 +869,16 @@
         ],
         "title": "ApplicationResponse",
         "type": "object"
+      },
+      "ApplicationSort": {
+        "enum": [
+          "updated",
+          "created",
+          "company",
+          "stage"
+        ],
+        "title": "ApplicationSort",
+        "type": "string"
       },
       "ApplyAnalysisDecisionsRequest": {
         "additionalProperties": false,
@@ -5097,7 +5155,86 @@
     },
     "/api/v1/applications": {
       "get": {
+        "description": "One page of the list, narrowed by the query the application layer answers.\n\nThe router maps HTTP to that query and back and decides nothing about it:\nthe closed sets arrive as their application-layer enums, so an unknown value\nis a 422 from the boundary rather than a filter that silently matches\nnothing. `stage` repeats for more than one stage. The paging bounds are\nrestated here so an out-of-range page is refused at the boundary with a 422\nnaming the parameter, rather than reaching the query and failing as a\nvalidation error the client cannot attribute.",
         "operationId": "list_applications_api_v1_applications_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "activity",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ActivityFilter",
+              "default": "all"
+            }
+          },
+          {
+            "in": "query",
+            "name": "stage",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/PreparationState"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Stage"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Search",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ApplicationSort",
+              "default": "updated"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 200,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {

@@ -70,7 +70,18 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List applications */
+        /**
+         * List applications
+         * @description One page of the list, narrowed by the query the application layer answers.
+         *
+         *     The router maps HTTP to that query and back and decides nothing about it:
+         *     the closed sets arrive as their application-layer enums, so an unknown value
+         *     is a 422 from the boundary rather than a filter that silently matches
+         *     nothing. `stage` repeats for more than one stage. The paging bounds are
+         *     restated here so an out-of-range page is refused at the boundary with a 422
+         *     naming the parameter, rather than reaching the query and failing as a
+         *     validation error the client cannot attribute.
+         */
         get: operations["list_applications_api_v1_applications_get"];
         put?: never;
         /** Create an application and its first immutable job snapshot */
@@ -1107,6 +1118,15 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * ActivityFilter
+         * @description Which side of the recruitment axis the caller is asking about.
+         *
+         *     OPEN is the default the list screen uses: a finished process stays stored and
+         *     reachable, but it is not what a board of live work is asking about.
+         * @enum {string}
+         */
+        ActivityFilter: "open" | "closed" | "all";
+        /**
          * AnalysisDecisionsResponse
          * @description Which analysis is in force after the decision, and whether it is a new one.
          *
@@ -1246,10 +1266,38 @@ export interface components {
             warnings: components["schemas"]["WarningResponse"][];
             working_draft_state: components["schemas"]["WorkingDraftState"];
         };
-        /** ApplicationListResponse */
+        /**
+         * ApplicationListResponse
+         * @description One page of the list, and the counts that place it.
+         *
+         *     `matched` is how many rows the query selected, `total` how many exist before
+         *     it narrowed anything. Neither is `len(items)`, which is only what this page
+         *     holds: a client showing "10 of 43 matched, 61 in all" cannot derive either
+         *     count from the page, and reading the list again to count it would compute the
+         *     whole projection a second time. `limit` and `offset` are echoed so a client
+         *     can tell which page it is holding without keeping its own request.
+         */
         ApplicationListResponse: {
             /** Items */
             items: components["schemas"]["ApplicationListItemResponse"][];
+            /** Limit */
+            limit?: number | null;
+            /** Matched */
+            matched: number;
+            /**
+             * Offset
+             * @default 0
+             */
+            offset: number;
+            /**
+             * Stage Counts
+             * @default {}
+             */
+            stage_counts: {
+                [key: string]: number;
+            };
+            /** Total */
+            total: number;
         };
         /**
          * ApplicationMutationResponse
@@ -1312,6 +1360,11 @@ export interface components {
             /** Updated At */
             updated_at: string;
         };
+        /**
+         * ApplicationSort
+         * @enum {string}
+         */
+        ApplicationSort: "updated" | "created" | "company" | "stage";
         /**
          * ApplyAnalysisDecisionsRequest
          * @description One review-form submission (§13).
@@ -3146,7 +3199,14 @@ export interface operations {
     };
     list_applications_api_v1_applications_get: {
         parameters: {
-            query?: never;
+            query?: {
+                activity?: components["schemas"]["ActivityFilter"];
+                stage?: components["schemas"]["PreparationState"][] | null;
+                search?: string;
+                sort?: components["schemas"]["ApplicationSort"];
+                limit?: number | null;
+                offset?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;

@@ -2,17 +2,21 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { ApiProblem, type ApiPath, apiRequest } from "./client";
 import type {
+  ActivityFilter,
   ApplicationDetail,
   ApplicationIntake,
   ApplicationListResponse,
+  ApplicationSort,
   CreateAnalysisRequest,
   CreateApplicationRequest,
+  ClosedApplication,
   CreatedApplication,
   DuplicateCheckResult,
   DuplicateMatch,
   DuplicateMatchReason,
   GenerateWorkingDraftRequest,
   Operation,
+  PreparationState,
 } from "./contracts";
 import {
   OPERATION_POLL_INTERVAL_MS,
@@ -110,9 +114,61 @@ export const acknowledgementApplies = (
 export const applicationDetailQueryKey = (applicationId: string) =>
   ["application", applicationId] as const;
 
-export const applicationListQueryKey = ["applications"] as const;
+/* The list query, exactly as the backend defines it.
+
+   `stages` is a list because the endpoint repeats `stage`, and `limit`/`offset` name a
+   window on the ordering rather than a slice this client cuts afterwards. Every field is
+   optional: an omitted one is the server's default, so the empty query is the whole
+   list. */
+export interface ApplicationListQuery {
+  activity?: ActivityFilter;
+  stages?: readonly PreparationState[];
+  search?: string;
+  sort?: ApplicationSort;
+  limit?: number;
+  offset?: number;
+}
+
+/* The query is part of the key, so two different questions are two cache entries rather
+   than one that overwrites the other. Serialized through the same builder that forms the
+   request, so a key can never describe a request that was not sent. */
+export const applicationListQueryKey = (query: ApplicationListQuery = {}) =>
+  ["applications", applicationListSearch(query)] as const;
 
 const applicationsPath: ApiPath = "/api/v1/applications";
+
+const applicationListSearch = (query: ApplicationListQuery): string => {
+  const params = new URLSearchParams();
+
+  if (query.activity !== undefined) {
+    params.set("activity", query.activity);
+  }
+  /* Repeated rather than joined: the endpoint takes `stage` once per stage. */
+  for (const stage of query.stages ?? []) {
+    params.append("stage", stage);
+  }
+  if (query.search !== undefined && query.search !== "") {
+    params.set("search", query.search);
+  }
+  if (query.sort !== undefined) {
+    params.set("sort", query.sort);
+  }
+  if (query.limit !== undefined) {
+    params.set("limit", String(query.limit));
+  }
+  if (query.offset !== undefined && query.offset !== 0) {
+    params.set("offset", String(query.offset));
+  }
+
+  /* Sorted so two equivalent queries produce one cache key rather than two. */
+  params.sort();
+  return params.toString();
+};
+
+const applicationListPath = (query: ApplicationListQuery): ApiPath => {
+  const search = applicationListSearch(query);
+  return search === "" ? applicationsPath : `${applicationsPath}?${search}`;
+};
 
 const applicationPath = (applicationId: string): ApiPath =>
   `/api/v1/applications/${encodeURIComponent(applicationId)}`;
@@ -152,15 +208,40 @@ export const applicationDetailQueryOptions = (applicationId: string) =>
 
    It carries the same §9 state projection per row as the detail read, so the list reports
    where each Application actually stands rather than deriving a second opinion from its
-   recruitment status. No search, filter, or sort: the spec lists them under the same
-   query contract, and they are worth adding when the list is long enough to need them. */
-export const applicationListQueryOptions = queryOptions({
-  queryKey: applicationListQueryKey,
-  queryFn: async ({ signal }) => {
-    const response = await apiRequest<ApplicationListResponse>(applicationsPath, { signal });
-    return response.data.items;
-  },
-});
+   recruitment status.
+
+   Search, filter, and sort are the server's answer, not this client's. They narrow by
+   `preparation_state`, which §9 computes from a record's snapshots, drafts, validations,
+   and revisions rather than storing on it - a client that filtered or ordered by it would
+   be re-deriving state the projection already owns. The query goes out as query
+   parameters and the narrowed rows come back with `total`, the count before narrowing,
+   so the screen can say how much it is not showing without asking twice.
+
+   It polls on the Operation interval while any row reports live work, on the same
+   condition and for the same reason as the detail read: the board shows a running
+   Operation per row, and a badge that only moves when the tab is reopened is a worse
+   answer than no badge. With every Operation terminal, or none present, nothing polls. */
+export const applicationListQueryOptions = (query: ApplicationListQuery = {}) =>
+  queryOptions({
+    queryKey: applicationListQueryKey(query),
+    queryFn: async ({ signal }) => {
+      const response = await apiRequest<ApplicationListResponse>(
+        applicationListPath(query),
+        { signal },
+      );
+      return response.data;
+    },
+    refetchInterval: (state) =>
+      state.state.data?.items.some(
+        (item) => item.active_operation != null && !isTerminalOperation(item.active_operation),
+      ) === true
+        ? OPERATION_POLL_INTERVAL_MS
+        : false,
+    /* The board is re-read on every change to the controls. Without this the rows blank
+       to a loading line between two answers to nearly the same question, so typing in
+       the search field flickered the table once per keystroke. */
+    placeholderData: (previous) => previous,
+  });
 
 /* §13: the snapshot is named by the caller. An analyze command that picked its own
    source could classify something other than what the user was looking at, so the ID
@@ -226,4 +307,22 @@ export const startDraftGeneration = async (
       idempotencyKey,
     }),
   );
+};
+
+/* §Tracking: archive one Application without deleting anything.
+
+   It is an append-only status transition, not a delete: the record, its snapshots, and
+   every approved revision stay exactly as they are, and the Application keeps its row.
+   What changes is which board it appears on - a closed Application is not what a board
+   of live work is asking about, so the default list filter stops returning it.
+
+   Not in `available_actions`. That projection answers the preparation workflow, and this
+   is the recruitment axis beside it; the one rule this client applies is that an
+   Application already closed is not offered closing again. */
+export const closeApplication = async (applicationId: string): Promise<ClosedApplication> => {
+  const response = await apiRequest<ClosedApplication>(
+    `/api/v1/applications/${encodeURIComponent(applicationId)}/close`,
+    { method: "POST" },
+  );
+  return response.data;
 };

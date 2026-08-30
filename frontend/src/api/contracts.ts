@@ -6,6 +6,11 @@ export type ApiSchemas = components["schemas"];
 
 export type ApplicationDetail = ApiSchemas["ApplicationDetailResponse"];
 export type ApplicationListResponse = ApiSchemas["ApplicationListResponse"];
+/* The list query the backend answers. Filtering and ordering are its decision, not
+   this client's: `preparation_state` is a computed projection rather than a stored
+   column, so a client that narrowed by it would be deriving state a second time. */
+export type ActivityFilter = ApiSchemas["ActivityFilter"];
+export type ApplicationSort = ApiSchemas["ApplicationSort"];
 export type ApplicationListItem = ApiSchemas["ApplicationListItemResponse"];
 export type Operation = ApiSchemas["OperationResponse"];
 export type OperationStatus = ApiSchemas["OperationStatus"];
@@ -26,6 +31,7 @@ export type ExecutionMode = Settings["default_execution_mode"];
 export type ApplicationIntake = ApiSchemas["DuplicateCheckRequest"];
 export type CreateApplicationRequest = ApiSchemas["CreateApplicationRequest"];
 export type CreatedApplication = ApiSchemas["CreateApplicationResponse"];
+export type ClosedApplication = ApiSchemas["CloseApplicationResponse"];
 export type DuplicateCheckResult = ApiSchemas["DuplicateCheckResponse"];
 export type DuplicateMatch = ApiSchemas["DuplicateMatchResponse"];
 export type DuplicateMatchReason = DuplicateMatch["matched_on"][number];

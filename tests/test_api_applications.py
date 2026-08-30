@@ -300,3 +300,87 @@ def test_application_http_duplicate_precheck_and_acknowledgement_contract(servic
         assert controlled.status_code == 412
         assert controlled.json()["code"] == "PRECONDITION_FAILED"
         assert too_long.status_code == 422
+
+
+def test_application_list_query_narrows_orders_and_pages_at_the_boundary(services) -> None:
+    """The list query is answered by the application layer; the router only maps it.
+
+    What is under test here is that mapping: the parameters reach the query, the
+    counts come back beside the page, and a value outside the closed sets or the
+    paging bounds is refused at the boundary rather than silently matching nothing.
+    """
+    with TestClient(create_app(build_api_services(services))) as api:
+        for company in ("Alpha", "Binat", "Cegal"):
+            created = api.post(
+                f"{API_PREFIX}/applications",
+                headers=MUTATION_HEADERS,
+                json={
+                    "company": company,
+                    "target_role": "Developer",
+                    "job_text": f"A posting from {company}",
+                },
+            )
+            assert created.status_code == 201
+            if company == "Cegal":
+                closed_id = created.json()["application_id"]
+
+        closed = api.post(
+            f"{API_PREFIX}/applications/{closed_id}/close", headers=MUTATION_HEADERS
+        )
+        assert closed.status_code == 200
+
+        whole = api.get(f"{API_PREFIX}/applications").json()
+        assert (whole["matched"], whole["total"]) == (3, 3)
+        assert whole["limit"] is None and whole["offset"] == 0
+        # Every row is at the first stage, and a state nothing reached is absent
+        # rather than reported as zero.
+        assert whole["stage_counts"] == {"needs_analysis": 3}
+
+        # A closed Application stays stored and reachable, and is not what a board
+        # of live work is asking about.
+        live = api.get(f"{API_PREFIX}/applications", params={"activity": "open"}).json()
+        assert sorted(item["company"] for item in live["items"]) == ["Alpha", "Binat"]
+        assert (live["matched"], live["total"]) == (2, 3)
+
+        found = api.get(f"{API_PREFIX}/applications", params={"search": "binat"}).json()
+        assert [item["company"] for item in found["items"]] == ["Binat"]
+
+        # Every row is at the first stage here, so the filter that names it keeps
+        # them and one that names another stage keeps none - both from the computed
+        # projection rather than a stored column.
+        staged = api.get(
+            f"{API_PREFIX}/applications", params={"stage": ["needs_analysis"]}
+        ).json()
+        assert staged["matched"] == 3
+        # Counted before narrowing: a stage filter must not erase its own options.
+        assert staged["stage_counts"] == {"needs_analysis": 3}
+        assert api.get(f"{API_PREFIX}/applications", params={"stage": ["ready"]}).json()[
+            "matched"
+        ] == 0
+
+        ordered = api.get(f"{API_PREFIX}/applications", params={"sort": "company"}).json()
+        assert [item["company"] for item in ordered["items"]] == ["Alpha", "Binat", "Cegal"]
+
+        page = api.get(
+            f"{API_PREFIX}/applications",
+            params={"sort": "company", "limit": 2, "offset": 1},
+        ).json()
+        assert [item["company"] for item in page["items"]] == ["Binat", "Cegal"]
+        # The page is what it holds; the counts are what place it.
+        assert (page["matched"], page["total"]) == (3, 3)
+        assert (page["limit"], page["offset"]) == (2, 1)
+
+        # A stale page number is an empty page, not a refusal.
+        past_end = api.get(f"{API_PREFIX}/applications", params={"offset": 50}).json()
+        assert past_end["items"] == [] and past_end["matched"] == 3
+
+        for params in (
+            {"activity": "archived"},
+            {"stage": ["not_a_stage"]},
+            {"sort": "whatever"},
+            {"limit": 0},
+            {"limit": 201},
+            {"offset": -1},
+        ):
+            refused = api.get(f"{API_PREFIX}/applications", params=params)
+            assert refused.status_code == 422, params

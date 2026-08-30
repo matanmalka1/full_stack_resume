@@ -17,6 +17,7 @@ from ..ports import (
 )
 from ..queries import (
     ApplicationDetailView,
+    ApplicationListQuery,
     ApplicationListView,
     ApprovedRevisionView,
     ArtifactVersionDetailView,
@@ -34,6 +35,7 @@ from ..queries import (
     decision_view,
     draft_facts_view,
     draft_outline_view,
+    narrow_application_list,
     snapshot_view,
 )
 from ..ready import qualify_ready_revision
@@ -115,7 +117,19 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
         )
         return state, snapshot_record, analyses
 
-    def list_applications(self) -> ApplicationListView:
+    def list_applications(
+        self, query: ApplicationListQuery | None = None
+    ) -> ApplicationListView:
+        """One page of the Application list, narrowed and ordered by `query`.
+
+        The projection is computed for every record before the query is applied.
+        It has to be: `preparation_state` is derived from a record's snapshots,
+        drafts, validations, and revisions rather than stored on it, so there is
+        nothing to filter, order, or page by until it exists. That makes paging a
+        window on the answer rather than a way to read less of the database - it
+        bounds what crosses the boundary and what a client renders, which is what
+        the list screen needs from it.
+        """
         knowledge = self.load_knowledge()
         try:
             with self.repo.read_transaction() as transaction:
@@ -123,7 +137,7 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
                 for row in transaction.list_applications():
                     state, _, _ = self._state_inputs(transaction, row, knowledge)
                     items.append(application_list_item_view(row, state))
-                return ApplicationListView(items=items)
+                return narrow_application_list(items, query or ApplicationListQuery())
         except (TypeError, ValueError) as exc:
             raise InfrastructureFailure(f"stored application projection is invalid: {exc}") from exc
 

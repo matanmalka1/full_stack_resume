@@ -166,7 +166,29 @@ class ApplicationListItemResponse(ApplicationResponse, ApplicationStateResponse)
 
 
 class ApplicationListResponse(HttpSchema):
+    """One page of the list, and the counts that place it.
+
+    `matched` is how many rows the query selected, `total` how many exist before
+    it narrowed anything. Neither is `len(items)`, which is only what this page
+    holds: a client showing "10 of 43 matched, 61 in all" cannot derive either
+    count from the page, and reading the list again to count it would compute the
+    whole projection a second time. `limit` and `offset` are echoed so a client
+    can tell which page it is holding without keeping its own request.
+    """
+
     items: list[ApplicationListItemResponse]
+    matched: int
+    total: int
+    limit: int | None = None
+    offset: int = 0
+    """How many Applications stand at each preparation state, across all of them.
+
+    A client offering a stage filter cannot learn this from a narrowed page - the
+    stage it filtered by is the only one that page holds - and a state with no
+    Applications is absent rather than zero.
+    """
+
+    stage_counts: dict[PreparationState, int] = {}
 
 
 class ArtifactVersionResponse(HttpSchema):
