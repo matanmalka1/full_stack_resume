@@ -7,6 +7,8 @@ ASGI to the app directly.
 
 from __future__ import annotations
 
+import json
+import logging
 import re
 import sys
 from dataclasses import replace
@@ -30,6 +32,10 @@ from cv_engine.application.errors import (
     StateConflict,
     UnknownRecord,
     ValidationBlocked,
+)
+from cv_engine.infrastructure.runtime_logging import (
+    ConciseExceptionFilter,
+    StructuredRuntimeLogger,
 )
 from cv_engine.runtime.composition import build_api_services
 
@@ -65,6 +71,79 @@ def test_health_reports_this_instance_and_its_version_surfaces(api, services) ->
     assert "workspace_id" not in body
     assert body["api_version"] == "1"
     assert body["knowledge"] == services.knowledge_lifecycle.knowledge_versions().model_dump()
+
+
+def test_server_logs_lifecycle_and_secret_free_request_summary(
+    services, caplog, tmp_path: Path
+) -> None:
+    caplog.set_level("INFO", logger="cv_engine.server")
+    event_sink = StructuredRuntimeLogger(tmp_path, tmp_path / "logs", "server.jsonl")
+    app = create_app(build_api_services(services), event_sink=event_sink)
+
+    with TestClient(app) as client:
+        response = client.get(f"{API_PREFIX}/health?token=must-not-be-logged")
+
+    assert response.status_code == 200
+    assert any("server started host=127.0.0.1" in message for message in caplog.messages)
+    assert any(
+        f"request completed method=GET path={API_PREFIX}/health status=200" in message
+        for message in caplog.messages
+    )
+    assert any("server stopped host=127.0.0.1" in message for message in caplog.messages)
+    assert all("must-not-be-logged" not in message for message in caplog.messages)
+    entries = [
+        json.loads(line)
+        for line in (tmp_path / "logs" / "server.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert [entry["event"] for entry in entries] == [
+        "server.started",
+        "request.completed",
+        "server.stopped",
+    ]
+    request_entry = entries[1]
+    assert request_entry["method"] == "GET"
+    assert request_entry["path"] == f"{API_PREFIX}/health"
+    assert request_entry["status"] == 200
+    assert "must-not-be-logged" not in json.dumps(entries)
+
+
+def test_structured_runtime_log_keeps_full_traceback_but_redacts_credentials(
+    tmp_path: Path,
+) -> None:
+    event_sink = StructuredRuntimeLogger(tmp_path, tmp_path / "logs", "server.jsonl")
+    try:
+        raise RuntimeError(
+            "Authorization: Bearer token-value api_key=plain-value sk-live-secret"
+        )
+    except RuntimeError as error:
+        event_sink.record("request.failed", "ERROR", {"path": "/api/v1/example"}, error)
+
+    raw = (tmp_path / "logs" / "server.jsonl").read_text(encoding="utf-8")
+    entry = json.loads(raw)
+    assert entry["exception_type"] == "RuntimeError"
+    assert "Traceback" in entry["traceback"]
+    assert "[REDACTED]" in raw
+    for secret in ("token-value", "plain-value", "live-secret"):
+        assert secret not in raw
+
+
+def test_console_exception_filter_keeps_message_but_removes_traceback() -> None:
+    try:
+        raise RuntimeError("file-only detail")
+    except RuntimeError:
+        record = logging.LogRecord(
+            "uvicorn.error",
+            logging.ERROR,
+            __file__,
+            1,
+            "Exception in ASGI application",
+            (),
+            sys.exc_info(),
+        )
+
+    assert ConciseExceptionFilter().filter(record)
+    assert record.getMessage() == "Exception in ASGI application"
+    assert record.exc_info is None
 
 
 # --- refusals ---------------------------------------------------------------

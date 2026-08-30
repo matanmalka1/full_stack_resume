@@ -47,6 +47,51 @@ def run_worker(stop: Event | None = None) -> None:
     services = build_services(AppPaths.from_root(root), config=config)
     _install_signal_handlers(stop)
 
-    logger.info("worker started against %s", root)
-    services.operation_worker.serve(stop)
-    logger.info("worker stopped")
+    logger.info(
+        "worker started root=%s concurrency=%s",
+        root,
+        services.operation_worker.concurrency,
+    )
+    services.operation_runner.record_event(
+        "worker.started",
+        "INFO",
+        None,
+        {
+            "root": str(root),
+            "runner_id": services.operation_runner.runner_id,
+            "concurrency": services.operation_worker.concurrency,
+            "poll_interval_seconds": services.operation_worker.poll_interval_seconds,
+        },
+    )
+    try:
+        try:
+            services.operation_worker.serve(stop)
+        except Exception as error:
+            try:
+                reference = services.operation_runner.technical_logger(error)
+            except Exception:
+                reference = None
+            services.operation_runner.record_event(
+                "worker.crashed",
+                "ERROR",
+                None,
+                {
+                    "runner_id": services.operation_runner.runner_id,
+                    "exception_type": type(error).__name__,
+                    "technical_log_reference": reference,
+                },
+            )
+            logger.error(
+                "worker crashed exception_type=%s log=%s",
+                type(error).__name__,
+                reference,
+            )
+            raise SystemExit(1) from None
+    finally:
+        services.operation_runner.record_event(
+            "worker.stopped",
+            "INFO",
+            None,
+            {"runner_id": services.operation_runner.runner_id},
+        )
+        logger.info("worker stopped")

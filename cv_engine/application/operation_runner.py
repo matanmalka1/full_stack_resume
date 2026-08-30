@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -19,6 +20,9 @@ from .operations import (
     allows_automatic_retry,
 )
 from .ports import OperationRepository, UnitOfWork
+
+
+logger = logging.getLogger("cv_engine.worker")
 
 
 class OperationExecutionError(RuntimeError):
@@ -85,6 +89,14 @@ class OperationRunner:
         retry_delay_seconds: float = 0.25,
         sleeper: Callable[[float], None] = sleep,
         technical_logger: Callable[[BaseException], str | None] | None = None,
+        operation_failure_logger: Callable[
+            [BaseException, PersistedOperation, OperationFailureCode], str | None
+        ]
+        | None = None,
+        operation_event_logger: Callable[
+            [str, str, PersistedOperation | None, Mapping[str, object]], str | None
+        ]
+        | None = None,
         lease_seconds: int = 30,
         heartbeat_interval_seconds: float = 10.0,
     ):
@@ -94,11 +106,78 @@ class OperationRunner:
         self.retry_delay_seconds = retry_delay_seconds
         self.sleeper = sleeper
         self.technical_logger = technical_logger or (lambda _error: None)
+        self.operation_failure_logger = operation_failure_logger
+        self.operation_event_logger = operation_event_logger
         self.lease_seconds = lease_seconds
         self.heartbeat_interval_seconds = heartbeat_interval_seconds
 
+    def record_event(
+        self,
+        event: str,
+        level: str,
+        operation: PersistedOperation | None,
+        fields: Mapping[str, object],
+    ) -> None:
+        if self.operation_event_logger is None:
+            return
+        try:
+            self.operation_event_logger(event, level, operation, fields)
+        except Exception as logging_error:
+            logger.warning(
+                "structured worker log unavailable event=%s exception_type=%s",
+                event,
+                type(logging_error).__name__,
+            )
+
+    def record_unexpected_failure(
+        self, error: BaseException, operation: PersistedOperation
+    ) -> str | None:
+        """Persist full crash detail for the host without exposing it on its console."""
+        return self._record_technical_failure(
+            error,
+            operation.id,
+            OperationFailureCode.VALIDATION_EXECUTION_FAILED,
+        )
+
+    def _record_technical_failure(
+        self,
+        error: BaseException,
+        operation_id: str,
+        error_code: OperationFailureCode,
+    ) -> str | None:
+        try:
+            if self.operation_failure_logger is None:
+                return self.technical_logger(error)
+            operation = self.repository.operation(operation_id)
+            return self.operation_failure_logger(error, operation, error_code)
+        except Exception as logging_error:
+            logger.warning(
+                "structured worker failure log unavailable operation_id=%s "
+                "exception_type=%s",
+                operation_id,
+                type(logging_error).__name__,
+            )
+            return None
+
     def _cancelled(self, operation_id: str) -> bool:
         return self.repository.cancellation_requested(operation_id)
+
+    def _set_phase(
+        self, operation_id: str, phase: OperationPhase
+    ) -> PersistedOperation:
+        self.repository.set_operation_phase(
+            operation_id,
+            phase,
+            runner_id=self.runner_id,
+        )
+        operation = self.repository.operation(operation_id)
+        self.record_event(
+            "operation.phase_changed",
+            "INFO",
+            operation,
+            {"runner_id": self.runner_id},
+        )
+        return operation
 
     def _fail(self, operation_id: str, error: OperationExecutionError) -> PersistedOperation:
         return self.repository.fail_operation(
@@ -155,30 +234,33 @@ class OperationRunner:
             raise ValueError("Operation is not claimed by this runner")
         handler = self.handlers.get(operation.operation_type)
         if handler is None:
+            error = OperationExecutionError(
+                OperationFailureCode.SCHEMA_VIOLATION,
+                "No executor is registered for this Operation type.",
+            )
+            error = OperationExecutionError(
+                error.code,
+                error.safe_detail,
+                technical_log_reference=self._record_technical_failure(
+                    error, operation_id, error.code
+                ),
+            )
             return self._fail(
                 operation_id,
-                OperationExecutionError(
-                    OperationFailureCode.SCHEMA_VIOLATION,
-                    "No executor is registered for this Operation type.",
-                ),
+                error,
             )
 
         while True:
             try:
-                self.repository.set_operation_phase(
-                    operation_id,
-                    OperationPhase.PRE_EXECUTION_CHECK,
-                    runner_id=self.runner_id,
+                operation = self._set_phase(
+                    operation_id, OperationPhase.PRE_EXECUTION_CHECK
                 )
-                operation = self.repository.operation(operation_id)
                 handler.check_sources(operation, self.repository)
                 if self._cancelled(operation_id):
                     return self.repository.complete_operation(
                         operation_id, runner_id=self.runner_id
                     )
-                self.repository.set_operation_phase(
-                    operation_id, OperationPhase.EXECUTING, runner_id=self.runner_id
-                )
+                self._set_phase(operation_id, OperationPhase.EXECUTING)
                 with self._heartbeat(operation_id):
                     prepared = handler.execute(operation, lambda: self._cancelled(operation_id))
                 break
@@ -187,17 +269,40 @@ class OperationRunner:
                     error = OperationExecutionError(
                         error.code,
                         error.safe_detail,
-                        technical_log_reference=self.technical_logger(error.__cause__ or error),
+                        technical_log_reference=self._record_technical_failure(
+                            error.__cause__ or error, operation_id, error.code
+                        ),
                     )
                 current = self.repository.operation(operation_id)
                 attempts_after_failure = current.attempts_completed + 1
                 if allows_automatic_retry(error.code, attempts_after_failure):
+                    logger.warning(
+                        "operation retrying id=%s code=%s attempt=%s",
+                        operation.id,
+                        error.code.value,
+                        attempts_after_failure,
+                    )
                     self.repository.record_operation_attempt(operation_id, runner_id=self.runner_id)
+                    current = self.repository.operation(operation_id)
+                    self.record_event(
+                        "operation.retrying",
+                        "WARNING",
+                        current,
+                        {
+                            "runner_id": self.runner_id,
+                            "error_code": error.code.value,
+                            "attempt": attempts_after_failure,
+                        },
+                    )
                     self.sleeper(self.retry_delay_seconds)
                     continue
                 return self._fail(operation_id, error)
             except Exception as error:
-                reference = self.technical_logger(error)
+                reference = self._record_technical_failure(
+                    error,
+                    operation_id,
+                    OperationFailureCode.VALIDATION_EXECUTION_FAILED,
+                )
                 return self._fail(
                     operation_id,
                     OperationExecutionError(
@@ -226,6 +331,13 @@ class OperationRunner:
                     OperationPhase.PRE_ACTIVATION_CHECK,
                     runner_id=self.runner_id,
                 )
+                phase_operation = bound.operation(operation_id)
+                self.record_event(
+                    "operation.phase_changed",
+                    "INFO",
+                    phase_operation,
+                    {"runner_id": self.runner_id},
+                )
                 handler.check_sources(operation, bound)
                 if bound.cancellation_requested(operation_id):
                     result = bound.complete_operation(operation_id, runner_id=self.runner_id)
@@ -233,6 +345,13 @@ class OperationRunner:
                     return result
                 bound.set_operation_phase(
                     operation_id, OperationPhase.ACTIVATING, runner_id=self.runner_id
+                )
+                phase_operation = bound.operation(operation_id)
+                self.record_event(
+                    "operation.phase_changed",
+                    "INFO",
+                    phase_operation,
+                    {"runner_id": self.runner_id},
                 )
                 activated = handler.activate(operation, prepared, bound)
                 known = {(item.output_type, item.output_id) for item in prepared.outputs}
@@ -253,8 +372,10 @@ class OperationRunner:
                     terminal_failure = prepared.terminal_failure
                     reference = terminal_failure.technical_log_reference
                     if reference is None:
-                        reference = self.technical_logger(
-                            terminal_failure.__cause__ or terminal_failure
+                        reference = self._record_technical_failure(
+                            terminal_failure.__cause__ or terminal_failure,
+                            operation_id,
+                            terminal_failure.code,
                         )
                     result = bound.fail_operation(
                         operation_id,
@@ -268,9 +389,21 @@ class OperationRunner:
                 uow.commit()
                 return result
         except OperationExecutionError as error:
+            if error.technical_log_reference is None:
+                error = OperationExecutionError(
+                    error.code,
+                    error.safe_detail,
+                    technical_log_reference=self._record_technical_failure(
+                        error.__cause__ or error, operation_id, error.code
+                    ),
+                )
             return self._fail(operation_id, error)
         except Exception as error:
-            reference = self.technical_logger(error)
+            reference = self._record_technical_failure(
+                error,
+                operation_id,
+                OperationFailureCode.VALIDATION_EXECUTION_FAILED,
+            )
             return self._fail(
                 operation_id,
                 OperationExecutionError(

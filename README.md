@@ -62,6 +62,19 @@ The API serves HTTP and starts no background work; the worker claims queued
 Operations under a lease, so neither process supervises the other and a worker that
 dies leaves its work recoverable by the next one.
 
+Both terminals show concise lifecycle summaries. Complete rotating JSONL logs are
+written under `logs/`: `server.jsonl` for API requests and failures, and
+`operations.jsonl` for worker lifecycle, phases, retries, and failures. Follow them
+without adding polling noise to the process terminals:
+
+```bash
+tail -f logs/server.jsonl
+tail -f logs/operations.jsonl
+```
+
+Request bodies, headers, and query strings are excluded; credential-like values in
+exception details and tracebacks are redacted.
+
 Everything below describes what the engine does. The Web UI calls the same application
 services the API exposes.
 

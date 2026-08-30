@@ -568,6 +568,13 @@ Structured rotating logs under `logs_root` include timestamp, level, Operation I
 Application ID, phase, error code, and log reference. There is no logs screen: a log
 reference identifies the entry, and the files are read directly on the host.
 
+The two process consoles provide concise lifecycle visibility. The API logs startup,
+shutdown, and one terminal line per HTTP request with method, path, status, and duration.
+The worker logs claims, retries, terminal outcomes, startup recovery, and shutdown. The
+complete structured streams are rotating `server.jsonl` and `operations.jsonl` files
+under `logs_root`; exception details and tracebacks are file-only. Empty queue polling,
+heartbeat traffic, HTTP query strings, headers, and bodies are not logged.
+
 ### 15.1 Runtime configuration and secrets
 
 `runtime/config.py` is the single resolution contract. Precedence is:

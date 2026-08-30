@@ -10,6 +10,9 @@ make in production.
 
 from __future__ import annotations
 
+import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -21,6 +24,7 @@ from ..application.errors import ApplicationError
 from .dependencies import install_services
 from .frontend import FrontendAssetsMiddleware, validate_frontend_build
 from .problems import application_error_handler, problem
+from .request_logging import RequestLoggingMiddleware, RuntimeEventSink, record_runtime_event
 from .routers import (
     analyses,
     applications,
@@ -43,6 +47,7 @@ __all__ = ["API_PREFIX", "API_VERSION", "DEFAULT_HOST", "DEFAULT_PORT", "create_
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
+logger = logging.getLogger("cv_engine.server")
 
 
 def create_app(
@@ -51,14 +56,42 @@ def create_app(
     host: str = DEFAULT_HOST,
     port: int = DEFAULT_PORT,
     frontend_dist: Path | None = None,
+    event_sink: RuntimeEventSink | None = None,
 ) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        logger.info(
+            "server started host=%s port=%s api_version=%s",
+            host,
+            port,
+            services.identity.api_version,
+        )
+        record_runtime_event(
+            event_sink,
+            "server.started",
+            "INFO",
+            {"host": host, "port": port, "api_version": services.identity.api_version},
+        )
+        try:
+            yield
+        finally:
+            record_runtime_event(
+                event_sink,
+                "server.stopped",
+                "INFO",
+                {"host": host, "port": port},
+            )
+            logger.info("server stopped host=%s port=%s", host, port)
+
     app = FastAPI(
         title="CV Engine local API",
         version=services.identity.api_version,
         docs_url=None,
         redoc_url=None,
         openapi_url=f"{API_PREFIX}/openapi.json",
+        lifespan=lifespan,
     )
+    app.state.event_sink = event_sink
     install_services(app, services)
 
     origins = allowed_origins(host, port, services.limits.dev_origin)
@@ -100,16 +133,28 @@ def create_app(
             FrontendAssetsMiddleware,
             build_dir=validate_frontend_build(frontend_dist),
         )
+    # Installed last so rejected requests and production frontend responses are
+    # observable too. The middleware deliberately excludes query strings,
+    # headers, and bodies from its log fields.
+    app.add_middleware(RequestLoggingMiddleware, event_sink=event_sink)
     return app
 
 
-async def _unexpected_error_handler(request: Request, _exc: Exception) -> JSONResponse:
+async def _unexpected_error_handler(request: Request, exc: Exception) -> JSONResponse:
     """An unexpected failure says so and nothing more.
 
-    Whatever went wrong is in the structured logs with its Operation and
-    Application IDs. The response carries no exception text, because an
-    exception message is exactly where a path or a provider response leaks.
+    Whatever went wrong is in the structured server log with its request
+    context. The response carries no exception text, because an exception
+    message is exactly where a path or a provider response leaks.
     """
+    event_sink: RuntimeEventSink | None = getattr(request.app.state, "event_sink", None)
+    record_runtime_event(
+        event_sink,
+        "request.failed",
+        "ERROR",
+        {"method": request.method, "path": request.url.path, "status": 500},
+        exc,
+    )
     return problem(
         500,
         "INTERNAL_ERROR",

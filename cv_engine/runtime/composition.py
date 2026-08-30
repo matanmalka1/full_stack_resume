@@ -202,6 +202,8 @@ def build_services(
         },
         runner_id=f"local-{new_id()}",
         technical_logger=failure_logger.record,
+        operation_failure_logger=failure_logger.record_operation_failure,
+        operation_event_logger=failure_logger.record_event,
     )
     worker = OperationWorker(resolved_repository, runner)
     knowledge_service = KnowledgeService(**shared)

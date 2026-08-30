@@ -29,6 +29,7 @@ from ..application.errors import (
     UnknownRecord,
     ValidationBlocked,
 )
+from .request_logging import RuntimeEventSink, record_runtime_event
 
 PROBLEM_CONTENT_TYPE = "application/problem+json"
 
@@ -137,6 +138,20 @@ def _safe_detail(error: ApplicationError) -> str:
 async def application_error_handler(request: Request, exc: Exception) -> JSONResponse:
     error = exc if isinstance(exc, ApplicationError) else ApplicationError(str(exc))
     status = status_for(error)
+    event_sink: RuntimeEventSink | None = getattr(request.app.state, "event_sink", None)
+    is_server_failure = status >= 500
+    record_runtime_event(
+        event_sink,
+        "request.failed" if is_server_failure else "request.refused",
+        "ERROR" if is_server_failure else "WARNING",
+        {
+            "method": request.method,
+            "path": request.url.path,
+            "status": status,
+            "error_code": error.code,
+        },
+        error if is_server_failure else None,
+    )
     return problem(
         status,
         error.code,

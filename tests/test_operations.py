@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Event, Lock, Thread
 
@@ -46,6 +47,7 @@ from cv_engine.application.operations import (
     require_operation_transition,
 )
 from cv_engine.domain.models import ValidationIssue, ValidationReport
+from cv_engine.infrastructure.operation_logging import OperationFailureLogger
 from cv_engine.infrastructure.persistence import Repository
 from cv_engine.infrastructure.persistence.tables import operations
 from cv_engine.runtime.execution import OperationWorker
@@ -303,6 +305,67 @@ def test_foreground_executor_and_worker_race_one_operation_without_duplicate_exe
     assert foreground_result.status is OperationStatus.SUCCEEDED
     assert services.repository.operation(operation.id).status is OperationStatus.SUCCEEDED
     assert worker_result is None or worker_result.id == operation.id
+
+
+def test_worker_logs_claim_and_terminal_result_but_not_an_empty_poll(
+    services, caplog, tmp_path
+) -> None:
+    operation = _operation_for_runner(services, "Worker Logging Co")
+    event_logger = OperationFailureLogger(tmp_path, tmp_path / "logs")
+    worker = OperationWorker(
+        services.repository,
+        OperationRunner(
+            services.repository,
+            {OperationType.ANALYZE_JOB: _Handler()},
+            runner_id="logging-worker",
+            technical_logger=event_logger.record,
+            operation_failure_logger=event_logger.record_operation_failure,
+            operation_event_logger=event_logger.record_event,
+        ),
+        concurrency=1,
+    )
+    caplog.set_level("INFO", logger="cv_engine.worker")
+
+    result = worker.run_once()
+    message_count = len(caplog.messages)
+    empty_result = worker.run_once()
+
+    assert result is not None
+    assert result.status is OperationStatus.SUCCEEDED
+    assert empty_result is None
+    assert len(caplog.messages) == message_count
+    assert any(
+        f"operation claimed id={operation.id}" in message
+        for message in caplog.messages
+    )
+    assert any(
+        f"operation completed id={operation.id}" in message
+        for message in caplog.messages
+    )
+    entries = [
+        json.loads(line)
+        for line in (tmp_path / "logs" / "operations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert [entry["event"] for entry in entries] == [
+        "operation.claimed",
+        "operation.phase_changed",
+        "operation.phase_changed",
+        "operation.phase_changed",
+        "operation.phase_changed",
+        "operation.succeeded",
+    ]
+    assert [
+        entry["phase"] for entry in entries if entry["event"] == "operation.phase_changed"
+    ] == [
+        OperationPhase.PRE_EXECUTION_CHECK.value,
+        OperationPhase.EXECUTING.value,
+        OperationPhase.PRE_ACTIVATION_CHECK.value,
+        OperationPhase.ACTIVATING.value,
+    ]
+    assert all(entry["operation_id"] == operation.id for entry in entries)
+    assert entries[-1]["duration_ms"] >= 0
 
 
 def test_application_and_global_render_leases_queue_contending_work(services) -> None:
@@ -809,7 +872,22 @@ def test_failed_render_operation_preserves_registered_outputs_as_inactive(
     assert failed.status is OperationStatus.FAILED
     assert failed.failure_code is OperationFailureCode.RENDER_FAILED
     assert failed.technical_log_reference == "logs/operations.jsonl"
-    assert (setup.services.paths.root / failed.technical_log_reference).is_file()
+    log_path = setup.services.paths.root / failed.technical_log_reference
+    assert log_path.is_file()
+    log_entry = json.loads(log_path.read_text(encoding="utf-8").splitlines()[-1])
+    assert {
+        "occurred_at",
+        "level",
+        "operation_id",
+        "application_id",
+        "phase",
+        "error_code",
+        "log_reference",
+    } <= log_entry.keys()
+    assert log_entry["operation_id"] == failed.id
+    assert log_entry["application_id"] == setup.application_id
+    assert log_entry["error_code"] == OperationFailureCode.RENDER_FAILED.value
+    assert log_entry["log_reference"] == failed.technical_log_reference
     assert len(failed.outputs) == 3
     assert all(not output.active for output in failed.outputs)
     for output in failed.outputs:
