@@ -10,7 +10,7 @@ Baseline: `v1.0.0` / `2cc31c7`
 
 ## 1. Architecture objective
 
-v2.0 is a Web product over one synchronous application layer. Two processes call that
+The product runs over one synchronous application layer. Two processes call that
 layer, and the distinction between them is what the rest of this document assumes:
 
 - **FastAPI is the only user-facing adapter.** Every user action arrives through it, and
@@ -74,7 +74,7 @@ Testing additions:
 - axe checks on the central screens, through `@axe-core/playwright`
 
 Redux, a full component framework, Celery, Redis, WebSockets, SSE, and a DI framework are
-not part of v2.0.
+not part of the product.
 
 ## 3. Source organization
 
@@ -210,7 +210,7 @@ Application rows do not contain `candidate_id`. ApprovedRevision metadata record
 CandidateContext version/hash used. Renderers and filename policy take CandidateContext
 as an explicit dependency, eliminating candidate literals from code.
 
-Existing semantic fact IDs are preserved. New v2 facts use UUIDv4 technical identity;
+Existing semantic fact IDs are preserved. New facts use UUIDv4 technical identity;
 a human slug is optional metadata and never a foreign key.
 
 Knowledge dependencies are re-read or re-hashed before relevant commands. Manual edits
@@ -465,7 +465,7 @@ temporary browser-startup failures.
 
 ## 11. AI adapter
 
-The existing provider-neutral protocol is retained and expanded only for the five v2
+The existing provider-neutral protocol is retained and expanded only for the five
 tasks. The OpenAI adapter uses the Responses API and strict Structured Outputs. It
 returns task-specific Proposal DTOs and provider provenance; it cannot save domain
 state.
@@ -541,7 +541,7 @@ never silently merges.
 
 The production service binds to `127.0.0.1`, serves UI/API same-origin, disables
 wildcard CORS, and validates Origin for mutation. Development allows only the exact Vite
-origin. v2.0 has no authentication and no CSRF token.
+origin. The application has no authentication and no CSRF token.
 
 The OpenAI key remains environment/backend secret configuration. React sees only a
 configured boolean. Logs and Operation payloads are redacted and never contain keys,
@@ -564,7 +564,7 @@ rendering always uses the Chromium managed by Playwright. Local Chrome is diagno
 only.
 
 Structured rotating logs under `logs_root` include timestamp, level, Operation ID,
-Application ID, phase, error code, and log reference. v2.0 has no logs screen: a log
+Application ID, phase, error code, and log reference. There is no logs screen: a log
 reference identifies the entry, and the files are read directly on the host.
 
 ### 15.1 Runtime configuration and secrets
@@ -592,7 +592,7 @@ committed safe inventory of supported variables.
 
 ## 16. Database lifecycle and upgrade
 
-v2.0 has no built-in backup or restore command. PostgreSQL lifecycle and any
+The application has no built-in backup or restore command. PostgreSQL lifecycle and any
 environment-level backup policy remain outside the application; this development-only
 replacement starts from an empty database and does not migrate historical data.
 
@@ -619,4 +619,3 @@ Provenance and compatibility track at least:
 
 Versions may be per artifact/task rather than one global constant. Product version does
 not substitute for these surfaces.
-

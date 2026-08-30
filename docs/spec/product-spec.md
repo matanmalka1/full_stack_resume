@@ -42,7 +42,7 @@ AI מסווג ומציע ניסוח תחת חוזים מובנים. הוא אי�
 
 ## 1. Authority and interpretation
 
-For v2.0, authority is ordered as follows:
+Authority is ordered as follows:
 
 1. This product specification defines binding product semantics, scope, safety, and
    observable behavior after it is approved.
@@ -93,15 +93,15 @@ views and diagnostic interfaces.
   contract to keep compatible and no capability the first lacks.
 - The API calls the same application services directly; the deterministic workflow
   reaches Ready with no AI key.
-- v2.0 officially targets macOS. Portable code is preferred, but Windows and Linux do
-  not block release.
+- The application officially targets macOS. Portable code is preferred, but Windows and
+  Linux do not block release.
 - The UI supports current Chrome/Chromium, with full E2E coverage. No other browser is
   claimed, because none is verified. PDF rendering always uses Playwright-managed
   Chromium.
 
-## 4. v2.0 scope
+## 4. Scope
 
-v2.0 includes:
+The product includes:
 
 - A local application rooted in the project, run as an API process and a worker process.
 - A Hebrew, desktop-first Web UI with basic responsive behavior.
@@ -125,7 +125,7 @@ v2.0 includes:
 - A Ready projection over a qualifying ApprovedRevision.
 - Contextual fact inspection and the pending -> confirmed -> canonical -> attached
   lifecycle without a general Knowledge Manager.
-- OpenAI Responses API integration for the five v2.0 AI tasks through strict structured
+- OpenAI Responses API integration for the five AI tasks through strict structured
   Proposal contracts.
 - A deterministic offline flow through Ready when no OpenAI key is configured.
 - A Dashboard, Application Detail, unified timeline, recruitment tracking, next action,
@@ -137,7 +137,7 @@ v2.0 includes:
 
 ## 5. Explicit non-goals
 
-The following are not part of v2.0:
+The following are not part of the product:
 
 - Multiple candidates or candidate administration.
 - Authentication, multi-user/tenant behavior, sync.
@@ -159,8 +159,8 @@ The following are not part of v2.0:
 - WebSocket or SSE progress transport.
 - Automatic application or schema updates.
 
-No non-goal may enter v2.0 as a supposedly small convenience without an explicit scope
-decision.
+No non-goal may enter the product as a supposedly small convenience without an explicit
+scope decision.
 
 ## 6. Core invariants
 
@@ -299,8 +299,8 @@ must not coexist as independent sources. Markdown and HTML are projections.
 
 The editor primarily works with sections and bullets. Each claim exposes its text,
 linked facts, claim status, warnings, and edit/regenerate/remove controls. Section order
-is policy-controlled. v2.0 may offer simple up/down bullet controls if needed but does
-not include drag-and-drop.
+is policy-controlled. The editor may offer simple up/down bullet controls if needed but
+does not include drag-and-drop.
 
 A deterministic selection change creates a new SelectionPlan and synchronously updates
 the WorkingDraft only when it requires no AI and contains no semantic ambiguity. A
@@ -309,8 +309,8 @@ Operation.
 
 Free-text edits are preserved even when unsupported. They become pending or unlinked,
 are immediately visible as unsafe, and block approval until linked through an allowed
-deterministic path, converted into a canonical fact lifecycle, or removed. v2.0 does
-not use AI to extract and authorize such claims.
+deterministic path, converted into a canonical fact lifecycle, or removed. The application
+does not use AI to extract and authorize such claims.
 
 Autosave uses debounce/blur and optimistic concurrency. A stale save returns a conflict
 and does not overwrite. The UI shows the user's text and the current text for an
@@ -344,7 +344,7 @@ created.
 A no-pause flow that chains validation, approval, rendering, and Ready checks is an
 explicit user approval instruction and is recorded as one, with `actor_type=user` and
 the originating client. It never bypasses blockers or validation and never auto-approves
-merely because an AI Operation completed. No interface offers this flow in v2.0; the
+merely because an AI Operation completed. No interface offers this flow; the
 guarantee binds whichever one does.
 
 A prior Ready projection remains usable while a newer SelectionPlan or WorkingDraft is
@@ -360,7 +360,8 @@ the later tracking milestone, not the first vertical slice.
 
 ## 12. AI behavior
 
-v2.0 implements one OpenAI adapter behind the provider-neutral `AIProvider` protocol.
+The application implements one OpenAI adapter behind the provider-neutral `AIProvider`
+protocol.
 The five AI tasks are:
 
 - `propose_job_analysis`
@@ -448,7 +449,7 @@ The backend owns action policy. React does not implement a second state machine.
 
 ## 14. Recruitment tracking
 
-The first architectural slice ends at Ready. After that gate passes, v2.0 adds a table
+The first architectural slice ends at Ready. After that gate passes, the product adds a table
 Dashboard with search, filters, sorting, preparation/recruitment state, last activity,
 next action/date, active Operation, and warnings. It does not include charts.
 
@@ -474,7 +475,7 @@ audit history rather than event-sourced reconstruction.
 
 One next action and date may be active for an Application. Changes append events.
 Overdue is a computed warning when the date is before today and the Application is not
-terminal. There are no notifications in v2.0.
+terminal. There are no notifications.
 
 There is no hard delete through Web. Applications created by mistake may move from
 `saved` to `closed`.
@@ -503,14 +504,14 @@ or opens a browser.
 
 Production serves the built React application from FastAPI under the same origin. The
 server binds only to loopback, has no wildcard CORS, and validates `Origin` on mutating
-requests. Development allows only the explicit Vite origin. v2.0 does not add user
+requests. Development allows only the explicit Vite origin. The application does not add user
 authentication or a CSRF token.
 
 Node and frontend development details are not runtime requirements for the user.
 Playwright-managed Chromium is the normal renderer. Local Chrome is a diagnostic/manual
 fallback only and is never selected silently.
 
-Safe UI settings in v2.0 are limited to automatic generation when review is not
+Safe UI settings are limited to automatic generation when review is not
 required, `ai_enabled`, default execution mode (`ai` or `deterministic`), and basic UI
 preferences. Model/task overrides, timezone, and secrets remain backend/project
 configuration.
@@ -559,12 +560,12 @@ Knowledge stays file-based and version-controlled. UI writes follow:
 
 The application never performs an automatic Git commit.
 
-v2 facts receive UUIDv4 technical IDs. Semantic fact IDs survive only in the seed
+New facts receive UUIDv4 technical IDs. Semantic fact IDs survive only in the seed
 knowledge carried over from v1, which keeps them; nothing creates new ones.
 The UI does not expose fact-ID creation. A system-generated human slug may exist but is
 not identity.
 
-The contextual v2.0 Web flow supports viewing facts, creating a pending fact, explicit
+The contextual Web flow supports viewing facts, creating a pending fact, explicit
 confirmation/promotion, attachment to a Profile section, and use in a new SelectionPlan.
 The shortcut `Confirm and add to source of truth` still records
 pending -> confirmed -> canonical transitions separately. `Confirm and use` is one
@@ -610,7 +611,7 @@ Failure reason is a separate machine-readable code such as `SOURCE_CHANGED`,
 `PROVIDER_TIMEOUT`, `INVALID_OUTPUT`, or `RENDER_FAILED`; it is never added to the status
 enum.
 
-v2.0 permits one mutating Operation per Application, one global render/browser
+The application permits one mutating Operation per Application, one global render/browser
 Operation, and low AI concurrency with a default ceiling of two. Locks are resource
 specific rather than one global mutex.
 

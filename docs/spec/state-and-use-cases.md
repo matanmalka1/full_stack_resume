@@ -284,7 +284,7 @@ terminal outcome are updated transactionally while the original event remains.
 `terminal_outcome` and history.
 
 Audit actors use `actor_type=user|system` and `client=web|worker`. There is no
-authenticated username in v2.0; the UI may label the local user as `You`.
+authenticated username; the UI may label the local user as `You`.
 
 Preparation commands never alter RecruitmentStatus. Drafting after `applied` leaves the
 Application applied.
@@ -359,7 +359,7 @@ does not mutate or delete them.
 ### `close_application`
 
 Transitions a saved/non-terminal Application through the allowed policy to `closed`.
-There is no hard-delete command in v2.0 Web.
+There is no hard-delete command in the Web UI.
 
 ## 13. Analysis commands
 
@@ -486,7 +486,7 @@ reused key with another payload fails.
 A no-pause flow is an explicit user approval action. It may orchestrate
 validate -> approve -> render -> Ready checks with `actor_type=user` and the
 originating client, but it is subject to every exact-validation, warning confirmation,
-blocker, and idempotency rule above. No interface offers it in v2.0; the rule binds
+blocker, and idempotency rule above. No interface offers it; the rule binds
 whichever one does.
 
 Warnings may require one general confirmation. No warning that actually requires a
