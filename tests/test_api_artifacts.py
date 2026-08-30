@@ -291,9 +291,23 @@ def test_a_traversal_string_is_only_an_id_that_names_nothing(
         for suffix in ("", "/download"):
             response = _get(api_worker, f"/artifacts/{traversal}{suffix}")
             assert response.status_code in {404, 400}, (traversal, suffix, response.text)
-            assert "/" not in response.text or "artifacts" in response.json().get("instance", "")
             assert "Traceback" not in response.text
             assert "workspace" not in response.text.casefold()
+
+            # An unencoded traversal is resolved by the client before it is sent, so
+            # it never reaches this route: it is answered as whatever unrouted path it
+            # collapsed to. That is still a refusal that reveals nothing - `instance`
+            # is the request path and no more, which is what these assertions check -
+            # but it is not a path under `/artifacts`, so the leak check below applies
+            # to the ids that do reach the handler.
+            problem = response.json()
+            if problem.get("code") == "ROUTE_NOT_FOUND":
+                assert problem.get("instance", "").startswith("/api/"), problem
+                # The refusal names no filesystem location the request did not.
+                assert "passwd" not in problem.get("detail", "")
+                continue
+
+            assert "/" not in response.text or "artifacts" in problem.get("instance", "")
 
 
 def test_an_unregistered_id_is_404_and_a_broken_registration_is_412(

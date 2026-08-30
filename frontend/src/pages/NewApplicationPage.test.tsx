@@ -355,7 +355,9 @@ describe("NewApplicationPage", () => {
 
     expect(await screen.findByText("job text is required")).toBeInTheDocument();
     expect(screen.getByText("חסימה")).toBeInTheDocument();
-    expect(screen.getByText("PRECONDITION_FAILED")).toBeInTheDocument();
+    /* The disclosure names the code and the status together, in one element, so the
+       assertion reads its whole text rather than a node holding only the code. */
+    expect(screen.getByText("PRECONDITION_FAILED · HTTP 412")).toBeInTheDocument();
   });
 
   it("refuses to submit an empty form and never calls the API", async () => {
