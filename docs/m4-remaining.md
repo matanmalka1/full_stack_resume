@@ -849,13 +849,42 @@ Focused runtime evidence on 2026-08-24:
       PostgreSQL, the configured object store, and renderer without mocking application
       services or projections.
 - [ ] The journey covers review-required and no-review paths.
-- [ ] The central failure matrix covers unsupported edit, validation block, stale validation,
-      ETag conflict, provider failure, `SOURCE_CHANGED`, render failure/retry, and old Ready
-      with newer draft.
-- [ ] Chromium full E2E and central WebKit smoke pass.
+- [ ] The E2E failure cases cover render failure/retry and old Ready with a newer draft.
+- [ ] Chromium full E2E passes.
 - [ ] axe passes on New Application, Analysis Review, Draft Editor, Validation, and Ready.
 - [ ] The UI explains state, blockers, and safe next actions without requiring technical IDs,
       hashes, paths, logs, or architecture knowledge.
+
+### Two gate items were reduced on 2026-08-30, with reasons
+
+**WebKit smoke — removed.** `docs/spec/product-spec.md` §2 targets macOS for a local,
+single-user product that `cv web` opens in the user's own browser. `playwright.config.ts`
+declares only `chromium`, so the item asked for a browser nothing configured and no user
+runs. It is a guard that never fired and had no one to fire for. **This is the retired
+control M4 names under CLAUDE.md's "Keeping this file small" rule.**
+
+**The central failure matrix — reduced from eight cases to two.** Six were already proven
+where they actually break, against the real client code:
+
+| Case | Already proven by |
+| --- | --- |
+| ETag conflict | `useDraftAutosave.test.ts` — stops the queue, keeps the user's text |
+| unsupported edit | `DraftEditorPage.test.tsx`, `claimRemoval.test.ts` |
+| validation block | `ValidationReportView.test.tsx`, `StageEPages.test.tsx` |
+| stale validation | `stageE.test.ts` — historical run read by exact ID |
+| provider failure | `OperationPage.test.tsx` — every stable failure code presented |
+| `SOURCE_CHANGED` | `OperationPage.test.tsx` — activation refused, prior state kept |
+
+Repeating those through a browser pays roughly ten times the runtime for the same claim.
+The two that remain are the two a mocked client cannot prove: **render failure/retry**
+needs a real worker and a real renderer, and **old Ready with a newer draft** is a
+cross-screen projection state.
+
+This narrows the evidence to what only the E2E can establish. It does not weaken the gate's
+first item, which is the real gap: `playwright.config.ts` runs `vite preview`, a static
+build with no FastAPI, worker, or PostgreSQL, and the two existing specs cover the shell
+and the intake form. Nothing in the tree yet proves the built Web talks to the real
+backend.
 
 ## Current next action
 
