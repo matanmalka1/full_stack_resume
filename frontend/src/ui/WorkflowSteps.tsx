@@ -12,7 +12,9 @@ export interface WorkflowStep {
 const stateClasses: Record<WorkflowStepState, string> = {
   complete: "text-cv-text-muted",
   current: "font-bold text-cv-accent",
-  upcoming: "text-cv-text-muted/70",
+  /* The muted token already carries the hierarchy. Applying opacity on top blended it
+     into the header surface at 3.09:1, below the 4.5:1 required for this 14px label. */
+  upcoming: "text-cv-text-muted",
 };
 
 const nodeClasses: Record<WorkflowStepState, string> = {

@@ -143,7 +143,35 @@ describe("ApplicationPage", () => {
     expect(screen.queryByText("אין טיוטה פעילה")).not.toBeInTheDocument();
   });
 
-  it("reports the draft axis once the stage no longer implies it", async () => {
+  it("reports the draft axis when the stage does not settle it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          /* `ready_to_draft` is reached both with no draft and with a draft whose
+             sources went stale, so the stage alone implies nothing. This is the stale
+             path: the draft exists, and its state is the one thing on the screen that
+             says so. */
+          detail({
+            preparation_state: "ready_to_draft",
+            working_draft_state: "stale",
+            active_analysis_id: "analysis-1",
+            active_selection_plan_id: "plan-1",
+            active_working_draft_id: "draft-1",
+            available_actions: ["create_draft"],
+            recommended_action: "create_draft",
+          }),
+        ),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("מוכן ליצירת טיוטה")).toBeInTheDocument();
+    expect(screen.getByText("הטיוטה אינה מעודכנת מול המקורות")).toBeInTheDocument();
+  });
+
+  it("stays silent about the draft axis when the stage already settles it", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -163,7 +191,7 @@ describe("ApplicationPage", () => {
     renderPage();
 
     expect(await screen.findByText("מוכן ליצירת טיוטה")).toBeInTheDocument();
-    expect(screen.getByText("אין טיוטה פעילה")).toBeInTheDocument();
+    expect(screen.queryByText("אין טיוטה פעילה")).not.toBeInTheDocument();
   });
 
   it("analyzes the exact snapshot the projection names and follows the accepted Operation", async () => {

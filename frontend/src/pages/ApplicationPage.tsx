@@ -74,13 +74,18 @@ const noteworthyBlockedActions = (detail: ApplicationDetail): BlockedAction[] =>
     blocked.reasons.some((reason) => !IMPLIED_BY_STAGE.has(reason)),
   );
 
-/* `working_draft_state === "none"` is news once the workflow has reached a stage where a
-   draft could exist. Before that it restates the preparation stage, and the masthead is
-   the worst place for a restatement: two badges of equal weight read as two independent
-   facts. */
+/* `working_draft_state === "none"` is news only once a draft could exist. At the stages
+   below it restates the preparation stage, and the masthead is the worst place for a
+   restatement: two badges of equal weight read as two independent facts.
+
+   The conjunction with `none` is what keeps this honest, because the stage alone does not
+   settle it. `ready_to_draft` is reached by two paths - no draft at all, and a draft whose
+   sources went stale - so it implies nothing about a draft on its own. The stale path
+   reports `stale` rather than `none` and keeps its badge; only the empty one is silent. */
+const IMPLIES_NO_DRAFT = new Set(["needs_analysis", "needs_review", "ready_to_draft"]);
+
 const draftStateIsImplied = (detail: ApplicationDetail): boolean =>
-  detail.working_draft_state === "none" &&
-  (detail.preparation_state === "needs_analysis" || detail.preparation_state === "needs_review");
+  detail.working_draft_state === "none" && IMPLIES_NO_DRAFT.has(detail.preparation_state);
 
 /* Review reasons and stale reasons carry the same shape, and both frame a backend
    sentence rather than replacing it: the message is the server's plain-language

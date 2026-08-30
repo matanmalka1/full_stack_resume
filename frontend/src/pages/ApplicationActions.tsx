@@ -221,20 +221,29 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
 
       {/* Re-analysis destroys nothing: the existing JobAnalysis and any active draft are
           immutable records that stay exactly as they are. What changes is which analysis
-          is active, so the consequence is stated rather than confirmed away. */}
-      {canAnalyze && !analyzeRecommended ? (
+          is active, so the consequence is stated rather than confirmed away.
+
+          It is stated where the consequence exists. With no draft to mark stale, the
+          sentence was warning about an effect on a record that is not there - one of three
+          paragraphs of caveat standing between the reader and the button they came to
+          press, and the only one of them attached to the secondary action. */}
+      {canAnalyze && !analyzeRecommended && draftWouldReplace ? (
         <p className="text-support leading-6 text-cv-text-muted">
           ניתוח מחדש יוצר ניתוח חדש ונפרד לאותו תצלום משרה. הטיוטה הפעילה נשמרת כפי שהיא, אך תסומן
           כלא מעודכנת מולו.
         </p>
       ) : null}
 
-      {/* The sources are named, not resolved: the draft is built from the analysis and the
-          plan the screen is showing, and neither of them is changed by building from it. */}
+      {/* The sources are named, not resolved: the draft is built from the analysis and
+          the plan the screen is showing, and neither is changed by building from it.
+
+          The clause reassuring the reader that no active draft is being overwritten went
+          with the stage that already says so - `canDraft` requires `working_draft_state`
+          to be `none`, which is the same fact. It returns below, where it stops being
+          true. */}
       {canDraft ? (
         <p className="text-support leading-6 text-cv-text-muted">
-          הטיוטה נוצרת מהניתוח ומתוכנית הבחירה הפעילים של המועמדות. שניהם רשומות שאינן משתנות, ואין
-          כעת טיוטה פעילה שהיצירה כותבת עליה.
+          הטיוטה נוצרת מהניתוח ומתוכנית הבחירה הפעילים של המועמדות. שניהם רשומות שאינן משתנות.
         </p>
       ) : null}
 
@@ -279,17 +288,11 @@ export const ApplicationActions = ({ detail }: ApplicationActionsProps) => {
 
         return (
           <ActionBar
-            /* The offered action continues the next-step sentence above it, so with
-               nothing beside it it starts where that sentence starts rather than at the
-               far edge of the card. */
+            /* The offered actions continue the next-step sentence above them rather than
+               closing the page, so they start where that sentence starts. Whether there
+               is one of them or several, they are the reader's way on from that line and
+               belong beside it, not at the far edge of the card. */
             align="start"
-            /* The bar's own top margin assumes it closes a page. Here it is one item in a
-               gap-spaced column that opens with the next-step sentence, so the gap is the
-               spacing and a margin would double it. `cx` concatenates rather than
-               resolving Tailwind conflicts, so this is `!mt-0` and not `mt-0`: against the
-               grouped bar's own `mt-8` the winner would otherwise be whichever rule the
-               stylesheet emits last, not the one named here. */
-            className="!mt-0"
             primary={emphasized}
             secondary={rest.length === 0 ? undefined : rest}
           />
