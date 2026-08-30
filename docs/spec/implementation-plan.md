@@ -145,7 +145,7 @@ them inside endpoints later.
 ### 4.6 Database lifecycle and storage portability
 
 Superseded on 2026-08-25 with the PostgreSQL/object-storage baseline. The built-in
-The built-in backup/restore command was retired: PostgreSQL and bucket lifecycle belong to
+backup/restore command was retired: PostgreSQL and bucket lifecycle belong to
 the configured environment, while this development baseline always starts from an empty
 database.
 

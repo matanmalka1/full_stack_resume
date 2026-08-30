@@ -8,8 +8,7 @@ describes the *process*; it grants no authorization and overrides no product doc
 state applies to every lane. Only the multi-agent additions are written here.
 
 It was derived from the M1 boundary refactor, which ran seven stages across three parallel
-lanes and one integration wave without a single cross-lane conflict
-Use it whenever
+lanes and one integration wave without a single cross-lane conflict. Use it whenever
 implementation is split across more than one agent. Skip it when one agent working serially
 is the honest answer — see section 7.
 
@@ -29,7 +28,7 @@ are not mandatory phases for every package.
 ## 2. Waves
 
 A wave does not begin until the previous one is green under its own gate. "Green" means
-the focused tests for what changed — not a full-suite run per step. The change class's
+the focused tests for what changed — not a full-suite run per step. The boundary's full
 gate runs once, when the boundary closes, over the merged tree.
 
 | Wave | Who | Content |
@@ -132,8 +131,7 @@ A lane reports done only when all of these hold, with command output quoted:
    all affected importers and updates them directly, its subset includes those importers.
 2. The architecture test passes and its allowlist has **not** grown. This one check is
    per lane rather than per boundary, because it is what enforces exclusive ownership
-   while lanes are still separate; the rest of the change class's gate belongs to the
-   boundary.
+   while lanes are still separate; the rest of the gate belongs to the boundary.
 3. `git diff --stat` lists only files the lane owns.
 4. An explicit statement of what did **not** change — for behaviour-preserving work: no
    threshold, contracted message string, exception type, validation group name, status,
@@ -152,12 +150,13 @@ Reporting follows `AGENTS.md`: passed / failed / remaining, with command evidenc
 2. Delete every temporary shim and repoint the real call sites; where no shim was used,
    reconcile only the cross-lane call sites left to integration.
 3. Prove no module still imports a moved symbol from its old home (grep the old paths).
-4. One verification at boundary close: the gate for the boundary's highest change class
-   under `AGENTS.md`, run over the merged tree, plus the semantic-parity check. For a
-   Class B boundary that is golden hashes, the architecture test, and an offline CLI run
-   on top of the non-browser suite; for Class C it adds the browser suite and a
-   `0001`-only database upgrading cleanly to head. The browser suite is skipped only when
-   the boundary cannot affect a rendering or browser path.
+4. One verification at boundary close: the gate `AGENTS.md` owes this boundary, run over
+   the merged tree, plus the semantic-parity check. That is the non-browser suite, plus
+   whichever of `AGENTS.md`'s three named cases the boundary triggered — golden hashes and
+   the browser suite for a rendering or artifact-path change, the migration checks for a
+   schema change, an offline CLI run for a change to a stored value's meaning, a public
+   signature, or a projection field. The browser suite is skipped only when the boundary
+   cannot affect a rendering or browser path.
    This is not the re-run section 9 warns against — no lane produces a full-suite run, and
    the merged tree is not the tree any lane tested. It is the boundary's only full run, and
    the first one over the code as it will actually ship.
@@ -173,8 +172,8 @@ wrong shape when:
 - the work converges on one shared file (M1's second round converged on
   `tests/conftest.py`, so it ran with a single executor);
 - the packages are sequentially dependent (M2's schema boundary had to land before
-  records, and records before projections — while §4.4 Operations touches different
-  tables and runs alongside §4.3; the current milestone tracker holds the current order);
+  records, and records before projections, while Operations touched different tables and
+  ran alongside; the current milestone tracker holds the current order);
 - the change is small enough that the coordination costs more than the work.
 
 Saying "this does not need three lanes" is a valid and expected outcome of planning.
@@ -215,8 +214,6 @@ The accepting side checks the four things a report cannot establish about itself
    `python3 -m venv .venv`, `./.venv/bin/python -m pip install -e '.[test]'`, and
    `./.venv/bin/playwright install chromium`. Evidence produced under another worktree's
    editable environment is not accepted, even when import-order guards prove that v2 won.
-   (
-   it is frozen at M1 close and is not the live authority.)
 
 Re-run a gate only when one of those checks fails, when the report leaves a gate
 unproduced, or when the environment of the original run is itself in doubt — which is
