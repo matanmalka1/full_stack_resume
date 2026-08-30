@@ -91,13 +91,22 @@ export const DraftClaimCard = ({
         )}
       </Field>
 
-      <p className="mt-2 text-support leading-6 text-cv-text-muted">
-        {claimTypeExplanations[claim.claim_type]}
-      </p>
+      {/* The badge above already names the claim type in a word, and the facts panel
+          below shows what backs it. Printed under all sixty-odd cards, this sentence
+          restated both once per claim - five fixed strings repeated down a page tall
+          enough that nothing on it was findable.
 
-      {claim.claim_type === "pending" && claim.pending_reason !== null ? (
+          It stays where it is not already answered: `pending` has no facts panel, because
+          there are no facts, so its card would otherwise say nothing about why. The
+          blocker callout is that explanation, and it carries the backend's own reason
+          rather than the generic sentence - which is why the generic one is gone even
+          here, and why the callout no longer waits for `pending_reason` to be present
+          before saying that approval is blocked. */}
+      {claim.claim_type === "pending" ? (
         <Callout className="mt-3" title="הטקסט הזה חוסם אישור" tone="blocker">
-          <p dir="auto">{claim.pending_reason}</p>
+          <p dir="auto">
+            {claim.pending_reason ?? claimTypeExplanations.pending}
+          </p>
         </Callout>
       ) : null}
 
