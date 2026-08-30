@@ -70,8 +70,8 @@ Testing additions:
 
 - Vitest, with `jsdom` as its DOM environment
 - React Testing Library, with `@testing-library/jest-dom` matchers
-- Playwright Web E2E
-- axe checks on the central screens, through `@axe-core/playwright`
+- Playwright browser tests over the built frontend
+- axe checks on the screens those tests cover, through `@axe-core/playwright`
 
 Redux, a full component framework, Celery, Redis, WebSockets, SSE, and a DI framework are
 not part of the product.
@@ -560,9 +560,9 @@ also be told it, through `CV_API_PORT`: the origin policy allows the origin the 
 believes it answers on, so a port given only to uvicorn refuses every state-changing
 request from the app's own UI.
 
-Production supports current Chrome/Chromium, and full E2E runs there. Resume PDF
-rendering always uses the Chromium managed by Playwright. Local Chrome is diagnostic
-only.
+Production supports current Chrome/Chromium, and the browser tests run there. Resume
+PDF rendering always uses the Chromium managed by Playwright. Local Chrome is
+diagnostic only.
 
 Structured rotating logs under `logs_root` include timestamp, level, Operation ID,
 Application ID, phase, error code, and log reference. There is no logs screen: a log

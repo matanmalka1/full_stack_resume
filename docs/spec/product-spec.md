@@ -95,9 +95,8 @@ views and diagnostic interfaces.
   reaches Ready with no AI key.
 - The application officially targets macOS. Portable code is preferred, but Windows and
   Linux do not block release.
-- The UI supports current Chrome/Chromium, with full E2E coverage. No other browser is
-  claimed, because none is verified. PDF rendering always uses Playwright-managed
-  Chromium.
+- The UI supports current Chrome/Chromium. No other browser is claimed, because none is
+  verified. PDF rendering always uses Playwright-managed Chromium.
 
 ## 4. Scope
 

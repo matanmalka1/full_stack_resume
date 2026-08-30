@@ -1,8 +1,8 @@
 # M5 — remaining work
 
-Status: **not started.** The screens this milestone adds have no end-to-end browser
-journey behind them — no automated test drives the built Web against a running backend —
-so their own evidence has to carry more weight than it otherwise would.
+Status: **not started.** No browser journey runs against a real backend — that is
+next-wave work, recorded under "Deferred, not in M5" — so the screens this milestone
+adds have to carry more of their own evidence than they otherwise would.
 
 ## Where things are written
 
@@ -126,11 +126,23 @@ can only re-apply the change in the editor, or regenerate and discard it.
 
 ## Deferred, not in M5
 
-Named here so they are not rediscovered as gaps: companion application documents,
-AI-generated decision explanations, AI-assisted semantic claim linkage, a broader
-Knowledge UI, CSV Web export, notifications, calendar integration, analytics, additional
-providers, i18n, and hosted or multi-candidate operation (`docs/spec/product-spec.md`
-§23).
+**Full-stack browser E2E.** Playwright serves a static `vite preview` build, so no
+automated test drives the built Web against real FastAPI, a real worker, and a real
+database. The seam that carries the risk is production static serving, same-origin
+routing, and a real Operation poll against a real worker. The test plan no longer
+states it as a met requirement; it is next-wave work, and building it means a
+Playwright configuration that starts both processes against a temporary project and an
+isolated database, with only the AI provider stubbed.
+
+Two things carry part of that weight today and neither replaces it: the deterministic
+pipeline test proves the engine through the application layer, and `live_api_server`
+drives a real uvicorn process over a real socket. Both stop short of the browser.
+
+Also deferred, named so they are not rediscovered as gaps: companion application
+documents, AI-generated decision explanations, AI-assisted semantic claim linkage, a
+broader Knowledge UI, CSV Web export, notifications, calendar integration, analytics,
+additional providers, i18n, and hosted or multi-candidate operation
+(`docs/spec/product-spec.md` §23).
 
 ## Open engineering questions
 

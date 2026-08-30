@@ -109,15 +109,7 @@ Use Vitest and React Testing Library for stateful components and forms, includin
 
 Avoid blanket DOM snapshots.
 
-### 2.6 Full Web E2E
-
-Playwright E2E runs a built React application, real FastAPI, real worker, real PostgreSQL,
-the configured object store, and real renderer against a temporary project copy and isolated
-database. Only the external AI provider is stubbed in automated CI.
-
-The central E2E must not mock application services or state projections.
-
-### 2.7 Rendering/PDF/ATS tests
+### 2.6 Rendering/PDF/ATS tests
 
 Retain and expand v1 coverage for:
 
@@ -133,7 +125,7 @@ Retain and expand v1 coverage for:
 
 Use focused visual screenshots where useful, not broad pixel-perfect PDF comparisons.
 
-### 2.8 Database lifecycle and object-store tests
+### 2.7 Database lifecycle and object-store tests
 
 The application has no built-in backup/restore command. Test Alembic's
 single-head topology, revision registration, and upgrade of an empty PostgreSQL database.
@@ -158,16 +150,17 @@ non-semantic persistence details may differ.
 Golden comparisons should report semantic differences explicitly rather than hiding
 them behind regenerated hashes.
 
-## 4. Golden and E2E matrix
+## 4. Golden matrix
 
-Full E2E/golden representative cases:
+Golden representative cases, each a fixture whose hashes are compared in the default
+suite:
 
 1. Development English
 2. Sales English
 3. Sales Hebrew/RTL
 4. Tech Sales
 
-Cross-cutting E2E variants:
+Cross-cutting variants, covered through the application layer and the API:
 
 - material ambiguity -> NeedsReview
 - low fit/hard gap -> explicit decision
@@ -177,7 +170,7 @@ Cross-cutting E2E variants:
 - prompt-injection job text
 
 Every Sales subtype remains covered through unit analysis, golden selection, and
-fixture tests rather than a costly full E2E per subtype.
+fixture tests rather than a costly journey per subtype.
 
 ## 5. Vertical-slice journeys
 
@@ -369,15 +362,8 @@ magnitude and recorded in API/config contracts.
 
 ## 11. Accessibility, RTL, and browser coverage
 
-Automated axe checks cover at least:
-
-- New Application
-- Analysis Review
-- Draft Editor
-- Validation
-- Ready
-- Dashboard
-- Application Detail
+Automated axe checks cover every screen the frontend ships, and a new screen is
+expected to arrive with its scan.
 
 Manual/automated assertions include keyboard access, focus management, labels, status
 announcements, contrast, Hebrew RTL shell, explicit LTR islands, and isolated CV
@@ -385,7 +371,7 @@ preview direction.
 
 Browser coverage:
 
-- latest Chrome/Chromium: full E2E, and the only browser support is claimed for
+- latest Chrome/Chromium: the only browser support is claimed for
 - Playwright-managed Chromium: the PDF rendering engine, never a UI target
 
 Linux/Chromium CI is normal automation. Before release, run the relevant suite and
@@ -452,7 +438,6 @@ CI must include:
 - real PostgreSQL plus local-object-store integration
 - Alembic topology and empty-database upgrade checks
 - focused S3-compatible object-store contract tests
-- Chromium Web E2E
 - rendering/PDF/ATS tests
 - security and failure-injection tests
 
