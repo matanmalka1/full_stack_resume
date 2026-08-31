@@ -11,25 +11,31 @@ import {
 import type {
   ActivityFilter,
   ApplicationListItem,
+  ApplicationPreset,
   ApplicationSort,
   PreparationState,
+  RecruitmentStatus,
 } from "../api/contracts";
 import { isTerminalOperation } from "../api/operations";
 import { ErrorCallout } from "../app/ErrorCallout";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { Button, buttonClasses } from "../ui/Button";
+import { cx } from "../ui/cx";
 import { Card } from "../ui/Card";
 import { Dialog } from "../ui/Dialog";
 import { PageHeading } from "../ui/PageHeading";
 import { Select } from "../ui/Select";
 import { StatusBadge } from "../ui/StatusBadge";
+import type { StatusTone } from "../ui/status";
 import { TextInput } from "../ui/TextInput";
 import { actionDestination } from "./actionDestinations";
 import {
   actionLabel,
+  applicationPresetLabels,
   preparationStateLabels,
   preparationStateTones,
   recruitmentStatusLabel,
+  recruitmentStatusOrder,
 } from "./applicationLabels";
 import { PAGE_SIZE, paramsFromQuery, queryFromParams } from "./applicationListParams";
 import { operationTypeLabels, statusLabels } from "./operationLabels";
@@ -41,6 +47,30 @@ const dateFormat = new Intl.DateTimeFormat("he-IL", { dateStyle: "short" });
 const formatDate = (value: string): string => {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : dateFormat.format(parsed);
+};
+
+/* Whether a tracked next action has passed its date.
+
+   Derived here rather than carried by the projection, and deliberately so: the comparison
+   is against the reader's own today, which only the browser knows. A server-computed flag
+   would be stale from the moment it was cached - a board left open past midnight would go
+   on reporting yesterday's answer until something refetched it.
+
+   It invents no fact. `next_action_date` is the stored value, and this only reads it;
+   nothing about which rows arrive changes, which stays the server's answer. Compared
+   date-to-date rather than as timestamps, so an action due today is not overdue at 00:01,
+   and an unparsable date is not overdue rather than being reported as an error. */
+const isOverdue = (value: string | null | undefined, today: Date = new Date()): boolean => {
+  if (value == null) {
+    return false;
+  }
+  const due = new Date(value);
+  if (Number.isNaN(due.getTime())) {
+    return false;
+  }
+  const midnight = new Date(today);
+  midnight.setHours(0, 0, 0, 0);
+  return due < midnight;
 };
 
 /* How long the search field waits before it becomes a request. Long enough that a typed
@@ -60,7 +90,15 @@ const CompanyMark = ({ company }: { company: string }) => (
   </span>
 );
 
-const columns = ["חברה ותפקיד", "מצב קורות החיים", "שלב גיוס", "עודכן", "הפעולה הבאה"];
+const columns = [
+  "חברה ותפקיד",
+  "מצב קורות החיים",
+  "שלב גיוס",
+  "פעילות אחרונה",
+  "הפעולה הבאה",
+  "אזהרות",
+  "פעולה מומלצת",
+];
 
 /* The Hebrew for the two closed sets the backend defines. Keyed by the generated unions,
    so a filter or ordering added to the query fails the build here instead of reaching the
@@ -88,11 +126,24 @@ const sortLabels: Record<ApplicationSort, string> = {
 const attentionSummary = (item: ApplicationListItem): string | null => {
   const parts = [
     item.review_reasons.length === 0 ? null : `${item.review_reasons.length} להכרעה`,
-    item.stale_reasons.length === 0 ? null : `${item.stale_reasons.length} אינו מעודכן`,
-    item.warnings.length === 0 ? null : `${item.warnings.length} לתשומת לב`,
+    item.stale_reasons.length === 0 ? null : `${item.stale_reasons.length} לא מעודכן`,
+    item.warnings.length === 0 ? null : `${item.warnings.length} אזהרות`,
   ].filter((part) => part !== null);
 
   return parts.length === 0 ? null : parts.join(" · ");
+};
+
+/* How loudly the attention cell speaks, by the most severe thing it is counting.
+
+   A decision waiting on the user blocks the workflow, so it outranks a source that has
+   merely drifted, which outranks a warning raised beside an Application that is otherwise
+   fine. Colour is never the signal on its own - `StatusBadge` carries the icon and the
+   counts are words - so this only picks which of them to use. */
+const attentionTone = (item: ApplicationListItem): StatusTone => {
+  if (item.review_reasons.length > 0) {
+    return "blocker";
+  }
+  return item.stale_reasons.length > 0 || item.warnings.length > 0 ? "warning" : "neutral";
 };
 
 /* A closed Application is not offered closing again.
@@ -127,6 +178,7 @@ const ApplicationRow = ({
       ? item.active_operation
       : null;
   const attention = attentionSummary(item);
+  const overdue = isOverdue(item.next_action_date);
   const closed = isClosed(item);
   /* Only where the projection says a Ready record exists. The row is where a finished CV
      is collected from, and until now a Ready Application's next-action cell was an em
@@ -163,14 +215,9 @@ const ApplicationRow = ({
         </div>
       </td>
       <td className="p-3">
-        <div className="flex flex-col items-start gap-1">
-          <StatusBadge tone={preparationStateTones[item.preparation_state]}>
-            {preparationStateLabels[item.preparation_state]}
-          </StatusBadge>
-          {attention === null ? null : (
-            <span className="text-support text-cv-text-muted">{attention}</span>
-          )}
-        </div>
+        <StatusBadge tone={preparationStateTones[item.preparation_state]}>
+          {preparationStateLabels[item.preparation_state]}
+        </StatusBadge>
       </td>
       <td className="p-3">
         <div className="flex flex-col items-start gap-1">
@@ -186,6 +233,49 @@ const ApplicationRow = ({
       <td className="whitespace-nowrap p-3 text-support text-cv-text-muted">
         {formatDate(item.updated_at)}
       </td>
+      {/* The tracked next action, which is the user's own plan for this Application -
+          distinct from the recommended action beside it, which is what the preparation
+          workflow says to do. A row can carry both, and collapsing them into one cell
+          meant a scheduled call hid the fact that a draft was waiting. */}
+      <td className="p-3">
+        {trackedNextAction == null ? (
+          <span className="text-support text-cv-text-muted">טרם נקבעה</span>
+        ) : (
+          <div className="flex flex-col items-start gap-1">
+            <span className="text-support text-cv-text" dir="auto">
+              {trackedNextAction}
+            </span>
+            {item.next_action_date == null ? null : (
+              <span className="flex items-center gap-1 text-support text-cv-text-muted">
+                {formatDate(item.next_action_date)}
+                {/* Overdue is a comparison against the reader's own today, so it is said
+                    here rather than carried by the projection. The word is what marks it;
+                    the tone only repeats what the word already says. */}
+                {overdue ? (
+                  <StatusBadge className="px-2 py-0" tone="warning">
+                    באיחור
+                  </StatusBadge>
+                ) : null}
+              </span>
+            )}
+          </div>
+        )}
+      </td>
+
+      {/* What is waiting on the user, counted. The sentences stay on the Application
+          screen, where the controls that resolve them are; the row says that there is
+          something to read and how much of it. */}
+      <td className="p-3">
+        {attention === null ? (
+          /* Named rather than dashed. An em dash is the mark for a cell with no value;
+             here there is a value and it is "nothing is waiting", which is worth saying
+             on a board whose whole question is what needs the reader. */
+          <span className="text-support text-cv-text-muted">אין</span>
+        ) : (
+          <StatusBadge tone={attentionTone(item)}>{attention}</StatusBadge>
+        )}
+      </td>
+
       <td className="p-3">
         <div className="flex flex-wrap items-center gap-2">
           {running !== null ? (
@@ -195,17 +285,6 @@ const ApplicationRow = ({
             <StatusBadge tone="progress">
               {operationTypeLabels[running.operation_type]} · {statusLabels[running.status]}
             </StatusBadge>
-          ) : trackedNextAction != null ? (
-            <div className="flex flex-col gap-1">
-              <span className="text-support font-semibold text-cv-text" dir="auto">
-                {trackedNextAction}
-              </span>
-              {item.next_action_date == null ? null : (
-                <span className="text-support text-cv-text-muted">
-                  עד {formatDate(item.next_action_date)}
-                </span>
-              )}
-            </div>
           ) : ready != null ? (
             /* The finished file, collected from the board. */
             <Link
@@ -260,6 +339,66 @@ const ApplicationRow = ({
    The stage menu offers the states these Applications are actually in, counted by the
    server over all of them. Read off the page instead, the menu would collapse to the one
    stage the filter had already selected. */
+/* The named questions, as one row of chips above the filters.
+
+   Each chip sets the `preset` parameter and nothing else, so it narrows alongside the
+   controls below rather than replacing them - a preset and a stage filter are one
+   question with two clauses. The predicates are the application layer's: a chip names a
+   question, it does not decide which rows answer it.
+
+   Rendered as a radio group rather than as buttons, because that is what it is: the
+   presets are mutually exclusive and "הכל" is the absence of one. Buttons would leave a
+   keyboard reader tabbing through four controls to express one choice. */
+const PresetChips = ({
+  onChange,
+  query,
+}: {
+  onChange: (query: ApplicationListQuery) => void;
+  query: ApplicationListQuery;
+}) => {
+  const active = query.preset;
+  const select = (preset: ApplicationPreset | undefined) =>
+    onChange({ ...query, preset });
+
+  /* The input is visually hidden but still the real control: it keeps the radio
+     semantics, the arrow-key behaviour, and the label association a screen reader reads.
+
+     The global `:focus-visible` ring would land on that hidden input, where nobody can
+     see it, so the visible text beside it carries the ring instead. `peer` styles a later
+     sibling, which is why the span follows the input rather than wrapping it. */
+  const chip = (key: string, label: string, selected: boolean, onSelect: () => void) => (
+    <label className="cursor-pointer" key={key}>
+      <input
+        checked={selected}
+        className="peer sr-only"
+        name="application-preset"
+        onChange={onSelect}
+        type="radio"
+      />
+      <span
+        className={cx(
+          "inline-flex items-center rounded-pill border px-3 py-1.5 text-support font-semibold transition-colors",
+          "peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-cv-focus",
+          selected
+            ? "border-cv-accent bg-cv-accent-soft text-cv-accent"
+            : "border-cv-border bg-cv-surface text-cv-text-muted hover:bg-cv-surface-muted",
+        )}
+      >
+        {label}
+      </span>
+    </label>
+  );
+
+  return (
+    <div aria-label="סינון מהיר" className="mt-6 flex flex-wrap items-center gap-2" role="radiogroup">
+      {chip("all", "הכל", active === undefined, () => select(undefined))}
+      {(Object.keys(applicationPresetLabels) as ApplicationPreset[]).map((preset) =>
+        chip(preset, applicationPresetLabels[preset], active === preset, () => select(preset)),
+      )}
+    </div>
+  );
+};
+
 const ListToolbar = ({
   onChange,
   onSearch,
@@ -273,7 +412,7 @@ const ListToolbar = ({
   search: string;
   stageCounts: Partial<Record<PreparationState, number>>;
 }) => (
-  <div className="mt-6 flex flex-wrap items-end gap-3">
+  <div className="mt-3 flex flex-wrap items-end gap-3">
     <div className="min-w-[14rem] flex-1">
       <label className="block text-support font-semibold text-cv-text" htmlFor="list-search">
         חיפוש
@@ -286,8 +425,8 @@ const ListToolbar = ({
         {/* The field is uncontrolled by the query on purpose: it holds what is being
             typed, and only the settled value becomes a request. */}
         <TextInput
-          className="ps-10"
-          dir="auto"
+          className="ps-8"
+          dir="rtl"
           id="list-search"
           onChange={(event) => onSearch(event.target.value)}
           placeholder="חברה או תפקיד"
@@ -343,6 +482,40 @@ const ListToolbar = ({
               {preparationStateLabels[stage]} ({stageCounts[stage]})
             </option>
           ))}
+      </Select>
+    </div>
+
+    {/* The recruitment axis, beside the CV-state filter rather than merged into it. The
+        two are independent - where the CV has got to, and where the Application stands
+        with the employer - so one control could not express a question about both. */}
+    <div>
+      <label
+        className="block text-support font-semibold text-cv-text"
+        htmlFor="list-recruitment-status"
+      >
+        שלב גיוס
+      </label>
+      <Select
+        className="mt-1"
+        id="list-recruitment-status"
+        onChange={(event) =>
+          onChange({
+            ...query,
+            /* A list because the endpoint repeats `recruitment_status`. The control
+               offers one at a time; a multi-select can be added over the same parameter
+               without changing what is sent. */
+            recruitmentStatuses:
+              event.target.value === "" ? [] : [event.target.value as RecruitmentStatus],
+          })
+        }
+        value={query.recruitmentStatuses?.[0] ?? ""}
+      >
+        <option value="">כל שלבי הגיוס</option>
+        {recruitmentStatusOrder.map((status) => (
+          <option key={status} value={status}>
+            {recruitmentStatusLabel(status)}
+          </option>
+        ))}
       </Select>
     </div>
 
@@ -506,6 +679,8 @@ export const ApplicationListPage = () => {
         </div>
       ) : (
         <>
+          <PresetChips onChange={narrow} query={query} />
+
           <ListToolbar
             onChange={narrow}
             onSearch={setTyped}
@@ -545,13 +720,16 @@ export const ApplicationListPage = () => {
             /* The table scrolls inside its own container rather than widening the page:
                five columns of Hebrew and dates do not fit a narrow viewport, and a
                horizontally scrolling body would take the header with it. */
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[48rem] border-collapse text-start">
+            <div className="mt-4 overflow-x-auto rounded-surface border border-cv-border bg-cv-surface-raised">
+              <table className="w-full min-w-[64rem] border-collapse text-start">
                 <thead>
-                  <tr className="border-b border-cv-border">
+                  {/* A tinted band rather than a bare rule. The board is a long list of
+                      similar rows, and a header that shares their background stops
+                      reading as a header once the page is scrolled to it. */}
+                  <tr className="border-b border-cv-border bg-cv-surface-muted">
                     {columns.map((column) => (
                       <th
-                        className="p-3 text-start text-support font-semibold text-cv-text-muted"
+                        className="px-3 py-2.5 text-start text-support font-semibold text-cv-text-muted"
                         key={column}
                         scope="col"
                       >

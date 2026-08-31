@@ -167,7 +167,11 @@ describe("ApplicationListPage", () => {
       "href",
       "/applications/app-1",
     );
-    expect(screen.getByText("—")).toBeInTheDocument();
+    /* Scoped to the row it is about. The em dash is the "nothing here" mark in more than
+       one column now, so an unscoped query would match every empty cell on the board and
+       assert nothing about the row with no recommended action. */
+    const withoutAction = screen.getByRole("link", { name: "Binat" }).closest("tr");
+    expect(within(withoutAction as HTMLElement).getByText("—")).toBeInTheDocument();
     /* One with a screen leads straight to it. The button names the action, so stopping at
        the context screen first asked the reader to find it a second time. */
     expect(screen.getByRole("link", { name: actionLabel("update_working_draft") })).toHaveAttribute(
@@ -209,7 +213,9 @@ describe("ApplicationListPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("1 להכרעה · 1 לתשומת לב")).toBeInTheDocument();
+    /* The counts name the same three reason lists the column header does, so a decision
+       waiting on the user reads differently from a warning raised beside it. */
+    expect(await screen.findByText("1 להכרעה · 1 אזהרות")).toBeInTheDocument();
   });
 
   /* While an Operation is running the answer to "what next" is to wait for it, so the
@@ -238,7 +244,11 @@ describe("ApplicationListPage", () => {
     expect(screen.queryByRole("link", { name: actionLabel("analyze") })).not.toBeInTheDocument();
   });
 
-  it("shows the stored recruitment follow-up before a workflow recommendation", async () => {
+  /* The two are different questions and the board asks both: the tracked action is the
+     user's own plan for this Application, the recommended one is what the preparation
+     workflow says to do next. Collapsed into one cell, a scheduled call used to hide the
+     fact that a draft was waiting. */
+  it("shows the stored recruitment follow-up alongside the workflow recommendation", async () => {
     stubList([
       item({
         next_action: "Follow up with recruiter",
@@ -250,8 +260,69 @@ describe("ApplicationListPage", () => {
     renderPage();
 
     expect(await screen.findByText("Follow up with recruiter")).toBeInTheDocument();
-    expect(screen.getByText((_, element) => element?.textContent?.startsWith("עד ") ?? false)).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: actionLabel("analyze") })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: actionLabel("analyze") })).toBeInTheDocument();
+  });
+
+  /* The chips are the board's named questions. Each one sets the `preset` parameter and
+     nothing else, so the server answers which rows match rather than this screen deciding
+     it - the predicates are the §9 projection's. */
+  it("asks the server for a preset when a chip is chosen, and narrows alongside it", async () => {
+    const { fetchMock } = stubList([item()]);
+
+    renderPage();
+    await screen.findByRole("link", { name: "Acme" });
+
+    fireEvent.click(screen.getByRole("radio", { name: "דורש טיפול" }));
+
+    await waitFor(() => expect(requestedQuery(fetchMock).get("preset")).toBe("needs_attention"));
+
+    /* A preset and a stage filter are one question with two clauses, not two questions:
+       choosing a recruitment stage must not drop the chip that is already applied. */
+    fireEvent.change(screen.getByLabelText("שלב גיוס"), { target: { value: "interview" } });
+
+    await waitFor(() => {
+      const query = requestedQuery(fetchMock);
+      expect(query.get("preset")).toBe("needs_attention");
+      expect(query.getAll("recruitment_status")).toEqual(["interview"]);
+    });
+  });
+
+  /* "הכל" is the absence of a preset rather than a fourth one, so it clears the
+     parameter instead of sending a value the server would have to know about. */
+  it("clears the preset when the board returns to הכל", async () => {
+    const { fetchMock } = stubList([item()], {});
+
+    renderPage(["/?preset=ready_to_send"]);
+    await screen.findByRole("link", { name: "Acme" });
+
+    fireEvent.click(screen.getByRole("radio", { name: "הכל" }));
+
+    await waitFor(() => expect(requestedQuery(fetchMock).has("preset")).toBe(false));
+  });
+
+  /* Overdue is a comparison against the reader's own today, so it is derived on the
+     client rather than carried by the projection: a board left open past midnight must
+     not go on reporting yesterday's answer.
+
+     Dated relative to the real clock rather than under fake timers. Freezing time would
+     also freeze the clock React Query and `findBy*` wait on, which is a deadlock rather
+     than a test - and the thing under test is a date comparison, which a fixed offset
+     from today exercises just as exactly. */
+  it("marks a tracked action whose date has passed, and leaves a future one unmarked", async () => {
+    const day = 24 * 60 * 60 * 1000;
+    const isoDate = (offsetDays: number) =>
+      new Date(Date.now() + offsetDays * day).toISOString().slice(0, 10);
+
+    stubList([
+      item({ id: "late", company: "Late", next_action: "Call", next_action_date: isoDate(-5) }),
+      item({ id: "soon", company: "Soon", next_action: "Call", next_action_date: isoDate(5) }),
+    ]);
+
+    renderPage();
+
+    /* One badge, on the row whose date has passed - not on both and not on neither. */
+    await screen.findByRole("link", { name: "Late" });
+    expect(screen.getAllByText("באיחור")).toHaveLength(1);
   });
 
   /* A Ready Application has produced the thing this whole workflow exists for. Its row

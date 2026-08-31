@@ -24,6 +24,11 @@ from ..domain.models import (
 from .commands import BoundaryDTO
 from .operations import OperationView
 
+# Public application-boundary type for recruitment-status query filters.  HTTP
+# adapters depend on this query vocabulary rather than reaching through the
+# application layer to the domain model that implements it.
+RecruitmentStatus = ApplicationStatus
+
 
 class ApplicationView(BoundaryDTO):
     id: str
@@ -208,6 +213,58 @@ class ApplicationSort(StrEnum):
     STAGE = "stage"
 
 
+class ApplicationPreset(StrEnum):
+    """The board's named questions, as filters the application layer answers.
+
+    Each one is a predicate over the §9 projection, which is why it lives here
+    rather than in a client: `preparation_state` and the reason lists are computed
+    by that projection and are not stored columns, so a client deriving these would
+    be forming a second opinion about where an Application stands.
+
+    They are shorthands, not a second vocabulary. Every preset is expressible in
+    the fields this layer already projects, and each narrows the same list the
+    other filters narrow rather than replacing it.
+    """
+
+    NEEDS_ATTENTION = "needs_attention"
+    """Waiting on the user: a review decision to make, a source no longer current,
+    or a warning raised against the Application."""
+
+    READY_TO_SEND = "ready_to_send"
+    """A rendered CV exists and can be collected and submitted."""
+
+    ACTIVE_INTERVIEWS = "active_interviews"
+    """Live conversations with the employer, from first recruiter contact through
+    to an offer. Closed Applications are excluded by the statuses themselves."""
+
+
+"""Which recruitment statuses `ACTIVE_INTERVIEWS` means.
+
+Named here rather than inline so the preset and any client vocabulary describing it
+stay derived from one list. It stops before the terminal statuses: an accepted or
+rejected Application is not an active conversation.
+"""
+_INTERVIEW_STATUSES = frozenset(
+    {
+        ApplicationStatus.RECRUITER_SCREEN,
+        ApplicationStatus.INTERVIEW,
+        ApplicationStatus.ASSIGNMENT,
+        ApplicationStatus.FINAL_STAGE,
+        ApplicationStatus.OFFER,
+    }
+)
+
+
+def _matches_preset(item: ApplicationListItemView, preset: ApplicationPreset | None) -> bool:
+    if preset is None:
+        return True
+    if preset is ApplicationPreset.NEEDS_ATTENTION:
+        return bool(item.review_reasons or item.stale_reasons or item.warnings)
+    if preset is ApplicationPreset.READY_TO_SEND:
+        return item.latest_ready_revision_id is not None
+    return item.recruitment_status in _INTERVIEW_STATUSES
+
+
 class ApplicationListQuery(BoundaryDTO):
     """How a caller narrows and orders the Application list.
 
@@ -227,6 +284,24 @@ class ApplicationListQuery(BoundaryDTO):
     """An empty set means every stage, not no stage."""
 
     stages: frozenset[PreparationState] = frozenset()
+
+    """Which recruitment stages the caller is asking about, on the axis beside
+    `stages`. The two are independent - where the CV has got to and where the
+    Application stands with the employer - so they narrow independently and an
+    empty set here means every recruitment stage.
+
+    `ApplicationStatus` rather than `str`: the status is a closed set the domain
+    owns, so a value outside it is refused at the boundary rather than becoming a
+    filter that silently matches nothing."""
+
+    recruitment_statuses: frozenset[ApplicationStatus] = frozenset()
+
+    """One named question the board asks often, answered here rather than assembled
+    by a client. Each preset is a predicate over fields this layer already projects;
+    `None` is no preset and every other narrowing still applies on top of it."""
+
+    preset: ApplicationPreset | None = None
+
     search: str = ""
     sort: ApplicationSort = ApplicationSort.UPDATED
 
@@ -332,6 +407,11 @@ def narrow_application_list(
             for item in items
             if _matches_activity(item, query.activity)
             and (not query.stages or item.preparation_state in query.stages)
+            and (
+                not query.recruitment_statuses
+                or item.recruitment_status in query.recruitment_statuses
+            )
+            and _matches_preset(item, query.preset)
             and _matches_search(item, query.search)
         ),
         key=_sort_key(query.sort),

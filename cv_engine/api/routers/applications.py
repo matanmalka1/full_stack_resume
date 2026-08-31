@@ -16,8 +16,10 @@ from ...application.commands import (
 from ...application.queries import (
     ActivityFilter,
     ApplicationListQuery,
+    ApplicationPreset,
     ApplicationSort,
     PreparationState,
+    RecruitmentStatus,
 )
 from ...util import new_id
 from ..dependencies import Services
@@ -79,6 +81,8 @@ def list_applications(
     services: Services,
     activity: ActivityFilter = ActivityFilter.ALL,
     stage: Annotated[list[PreparationState] | None, Query()] = None,
+    recruitment_status: Annotated[list[RecruitmentStatus] | None, Query()] = None,
+    preset: ApplicationPreset | None = None,
     search: str = "",
     sort: ApplicationSort = ApplicationSort.UPDATED,
     limit: Annotated[int | None, Query(ge=1, le=200)] = None,
@@ -93,11 +97,17 @@ def list_applications(
     restated here so an out-of-range page is refused at the boundary with a 422
     naming the parameter, rather than reaching the query and failing as a
     validation error the client cannot attribute.
+
+    `stage` and `recruitment_status` are the two independent axes and repeat for
+    more than one value; `preset` is one named question the application layer
+    answers, and it narrows alongside them rather than replacing them.
     """
     result = services.queries.list_applications(
         ApplicationListQuery(
             activity=activity,
             stages=frozenset(stage or ()),
+            recruitment_statuses=frozenset(recruitment_status or ()),
+            preset=preset,
             search=search,
             sort=sort,
             limit=limit,
