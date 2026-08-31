@@ -167,11 +167,13 @@ describe("ApplicationListPage", () => {
       "href",
       "/applications/app-1",
     );
-    /* Scoped to the row it is about. The em dash is the "nothing here" mark in more than
-       one column now, so an unscoped query would match every empty cell on the board and
-       assert nothing about the row with no recommended action. */
+    /* Scoped to the row it is about, and to the cell within it. The em dash is the
+       "nothing here" mark in more than one column, so an unscoped query would match every
+       empty cell on the board and assert nothing about the row with no recommended
+       action. The last cell is the one that carries it. */
     const withoutAction = screen.getByRole("link", { name: "Binat" }).closest("tr");
-    expect(within(withoutAction as HTMLElement).getByText("—")).toBeInTheDocument();
+    const actionCell = within(withoutAction as HTMLElement).getAllByRole("cell").at(-1);
+    expect(within(actionCell as HTMLElement).getByText("—")).toBeInTheDocument();
     /* One with a screen leads straight to it. The button names the action, so stopping at
        the context screen first asked the reader to find it a second time. */
     expect(screen.getByRole("link", { name: actionLabel("update_working_draft") })).toHaveAttribute(

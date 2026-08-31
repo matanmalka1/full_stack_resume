@@ -4,6 +4,25 @@ import type {
   RecruitmentStatus,
   WorkingDraftState,
 } from "../api/contracts";
+import {
+  Archive,
+  BadgeCheck,
+  CircleCheck,
+  CircleSlash,
+  CircleX,
+  ClipboardList,
+  Clock,
+  FileCheck2,
+  FilePen,
+  FilePlus2,
+  FileSearch,
+  PhoneCall,
+  Send,
+  Trophy,
+  UserRound,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+
 import type { StatusTone } from "../ui/status";
 
 /* Keyed by the generated unions, so a state added to the §9 projection fails the
@@ -176,3 +195,67 @@ export const recruitmentStatusOrder: readonly RecruitmentStatus[] = [
   "withdrawn",
   "closed",
 ];
+
+
+/* The recruitment axis as the board draws it: a colour and an icon per status.
+
+   `preparation_state` already has tones, and this is the axis beside it - a row shows
+   both, so the two need to be distinguishable at a glance rather than reading as one
+   long line of identical grey pills. The colour is never the signal on its own: every
+   badge carries the Hebrew status word, and the icon repeats what the word says.
+
+   Keyed by the generated union, so a status added to the domain fails the build here
+   instead of arriving without a face. */
+export const recruitmentStatusTones: Record<RecruitmentStatus, StatusTone> = {
+  saved: "neutral",
+  applied: "progress",
+  recruiter_screen: "progress",
+  interview: "progress",
+  assignment: "progress",
+  final_stage: "warning",
+  offer: "success",
+  accepted: "success",
+  rejected: "blocker",
+  withdrawn: "neutral",
+  closed: "neutral",
+};
+
+export const recruitmentStatusIcons: Record<RecruitmentStatus, LucideIcon> = {
+  saved: Clock,
+  applied: Send,
+  recruiter_screen: PhoneCall,
+  interview: UserRound,
+  assignment: ClipboardList,
+  final_stage: Trophy,
+  offer: BadgeCheck,
+  accepted: CircleCheck,
+  rejected: CircleX,
+  withdrawn: CircleSlash,
+  closed: Archive,
+};
+
+/* Both looked up through the same open-string door `recruitmentStatusLabel` uses:
+   `recruitment_status` is `str` at the HTTP boundary, so a status this build does not
+   know gets the neutral tone and a plain clock rather than crashing the row or being
+   hidden from it. */
+/* A face per preparation state, for the same reason the recruitment axis has one: the
+   two badges sit side by side in every row, and the icon is what separates "where the CV
+   is" from "where the Application is" before the words are read. Exhaustive over the
+   generated union. */
+export const preparationStateIcons: Record<PreparationState, LucideIcon> = {
+  needs_analysis: Clock,
+  needs_review: FileSearch,
+  ready_to_draft: FilePlus2,
+  draft_in_progress: FilePen,
+  ready_for_approval: FileCheck2,
+  approved: CircleCheck,
+  ready: BadgeCheck,
+};
+
+export const recruitmentStatusTone = (status: string): StatusTone =>
+  status in recruitmentStatusTones
+    ? recruitmentStatusTones[status as RecruitmentStatus]
+    : "neutral";
+
+export const recruitmentStatusIcon = (status: string): LucideIcon =>
+  status in recruitmentStatusIcons ? recruitmentStatusIcons[status as RecruitmentStatus] : Clock;

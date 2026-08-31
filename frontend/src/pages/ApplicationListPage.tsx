@@ -1,5 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, ChevronLeft, ChevronRight, FileCheck2, Plus, Search } from "lucide-react";
+import {
+  Archive,
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  FileCheck2,
+  Plus,
+  Search,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
@@ -32,10 +41,13 @@ import { actionDestination } from "./actionDestinations";
 import {
   actionLabel,
   applicationPresetLabels,
+  preparationStateIcons,
   preparationStateLabels,
   preparationStateTones,
+  recruitmentStatusIcon,
   recruitmentStatusLabel,
   recruitmentStatusOrder,
+  recruitmentStatusTone,
 } from "./applicationLabels";
 import { PAGE_SIZE, paramsFromQuery, queryFromParams } from "./applicationListParams";
 import { operationTypeLabels, statusLabels } from "./operationLabels";
@@ -84,7 +96,7 @@ const SEARCH_DEBOUNCE_MS = 300;
 const CompanyMark = ({ company }: { company: string }) => (
   <span
     aria-hidden="true"
-    className="flex size-8 shrink-0 items-center justify-center rounded-pill bg-cv-surface-muted text-support font-bold text-cv-text-muted"
+    className="flex size-9 shrink-0 items-center justify-center rounded-control bg-cv-accent-soft text-support font-bold text-cv-accent"
   >
     {[...company][0] ?? "?"}
   </span>
@@ -156,6 +168,16 @@ const closedStatuses = new Set(["rejected", "withdrawn", "closed"]);
 const isClosed = (item: ApplicationListItem): boolean =>
   item.terminal_outcome != null || closedStatuses.has(item.recruitment_status);
 
+/* The row's action, as a soft pill rather than a bordered button.
+
+   One of these sits in every row, so the bordered secondary button that suits a page
+   footer turned the column into a stack of boxes. The soft accent fill reads as one
+   quiet control repeated down the board, and it still carries the action's name - the
+   arrow only says which way it goes. Height comes down from the 44px page control: a
+   table row is a denser context, and the pill is not the primary target on the screen. */
+const rowActionClasses =
+  "inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-pill bg-cv-accent-soft px-3.5 text-support font-semibold text-cv-accent transition-colors duration-200 hover:bg-cv-accent hover:text-cv-on-accent";
+
 const ApplicationRow = ({
   ambiguous,
   item,
@@ -187,7 +209,7 @@ const ApplicationRow = ({
 
   return (
     <tr className="border-b border-cv-border last:border-b-0 hover:bg-cv-surface-muted">
-      <td className="p-3">
+      <td className="px-4 py-3.5">
         <div className="flex min-w-0 items-center gap-3">
           <CompanyMark company={item.company} />
           <div className="min-w-0">
@@ -214,30 +236,46 @@ const ApplicationRow = ({
           </div>
         </div>
       </td>
-      <td className="p-3">
-        <StatusBadge tone={preparationStateTones[item.preparation_state]}>
+      <td className="px-4 py-3.5">
+        <StatusBadge
+          className="whitespace-nowrap"
+          icon={preparationStateIcons[item.preparation_state]}
+          tone={preparationStateTones[item.preparation_state]}
+        >
           {preparationStateLabels[item.preparation_state]}
         </StatusBadge>
       </td>
-      <td className="p-3">
+      <td className="px-4 py-3.5">
         <div className="flex flex-col items-start gap-1">
-          <span className="whitespace-nowrap rounded-pill border border-cv-border bg-cv-surface-muted px-3 py-1 text-support text-cv-text-muted">
+          {/* The recruitment axis carries a face per status, so a column of rows reads as
+              distinct stages rather than as one long line of identical grey pills. An
+              unknown status still gets a badge, in the neutral tone, rather than being
+              dropped: the vocabulary is the backend's and this build may not know all
+              of it. */}
+          <StatusBadge
+            className="whitespace-nowrap"
+            icon={recruitmentStatusIcon(item.recruitment_status)}
+            tone={recruitmentStatusTone(item.recruitment_status)}
+          >
             {recruitmentStatusLabel(item.recruitment_status)}
-          </span>
+          </StatusBadge>
           {/* A closed Application keeps its row and says so. Hidden by the default
               filter, it is still reachable, and when it is on screen it must not read
               like something still waiting on the user. */}
           {closed ? <span className="text-support text-cv-text-muted">התהליך נסגר</span> : null}
         </div>
       </td>
-      <td className="whitespace-nowrap p-3 text-support text-cv-text-muted">
-        {formatDate(item.updated_at)}
+      <td className="whitespace-nowrap px-4 py-3.5 text-support text-cv-text-muted">
+        <span className="inline-flex items-center gap-1.5">
+          <Clock aria-hidden="true" className="size-3.5 shrink-0" />
+          {formatDate(item.updated_at)}
+        </span>
       </td>
       {/* The tracked next action, which is the user's own plan for this Application -
           distinct from the recommended action beside it, which is what the preparation
           workflow says to do. A row can carry both, and collapsing them into one cell
           meant a scheduled call hid the fact that a draft was waiting. */}
-      <td className="p-3">
+      <td className="px-4 py-3.5">
         {trackedNextAction == null ? (
           <span className="text-support text-cv-text-muted">טרם נקבעה</span>
         ) : (
@@ -246,16 +284,19 @@ const ApplicationRow = ({
               {trackedNextAction}
             </span>
             {item.next_action_date == null ? null : (
-              <span className="flex items-center gap-1 text-support text-cv-text-muted">
-                {formatDate(item.next_action_date)}
+              <span className="flex items-center gap-1.5 text-support text-cv-text-muted">
                 {/* Overdue is a comparison against the reader's own today, so it is said
                     here rather than carried by the projection. The word is what marks it;
                     the tone only repeats what the word already says. */}
                 {overdue ? (
-                  <StatusBadge className="px-2 py-0" tone="warning">
+                  <StatusBadge className="gap-1 px-2 py-0.5" tone="warning">
                     באיחור
                   </StatusBadge>
                 ) : null}
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock aria-hidden="true" className="size-3.5 shrink-0" />
+                  {formatDate(item.next_action_date)}
+                </span>
               </span>
             )}
           </div>
@@ -265,18 +306,18 @@ const ApplicationRow = ({
       {/* What is waiting on the user, counted. The sentences stay on the Application
           screen, where the controls that resolve them are; the row says that there is
           something to read and how much of it. */}
-      <td className="p-3">
+      <td className="px-4 py-3.5">
         {attention === null ? (
-          /* Named rather than dashed. An em dash is the mark for a cell with no value;
-             here there is a value and it is "nothing is waiting", which is worth saying
-             on a board whose whole question is what needs the reader. */
-          <span className="text-support text-cv-text-muted">אין</span>
+          /* An em dash: nothing is waiting on this row. It reads as quiet rather than as
+             a state, which is what an empty warnings column should be - the eye should
+             skip it and land on the rows that do carry a count. */
+          <span className="text-support text-cv-text-muted">—</span>
         ) : (
           <StatusBadge tone={attentionTone(item)}>{attention}</StatusBadge>
         )}
       </td>
 
-      <td className="p-3">
+      <td className="px-4 py-3.5">
         <div className="flex flex-wrap items-center gap-2">
           {running !== null ? (
             /* Work in progress outranks the recommended action: the action is what to do
@@ -287,10 +328,7 @@ const ApplicationRow = ({
             </StatusBadge>
           ) : ready != null ? (
             /* The finished file, collected from the board. */
-            <Link
-              className={buttonClasses("secondary")}
-              to={`/approved-revisions/${encodeURIComponent(ready)}/ready`}
-            >
+            <Link className={rowActionClasses} to={`/approved-revisions/${encodeURIComponent(ready)}/ready`}>
               <FileCheck2 aria-hidden="true" className="size-4" />
               הגרסה המוכנה
             </Link>
@@ -301,10 +339,9 @@ const ApplicationRow = ({
                names the action, so landing on the context screen instead asked the reader
                to find it a second time; `actionDestination` already answers which actions
                have a screen, and an action without one falls back to the Application. */
-            <Link
-              className={buttonClasses("secondary")}
-              to={actionDestination(next, item.id) ?? href}
-            >
+            <Link className={rowActionClasses} to={actionDestination(next, item.id) ?? href}>
+              {/* The board is RTL, so the arrow into the row's destination points left. */}
+              <ArrowLeft aria-hidden="true" className="size-4" />
               {actionLabel(next)}
             </Link>
           )}
@@ -729,7 +766,7 @@ export const ApplicationListPage = () => {
                   <tr className="border-b border-cv-border bg-cv-surface-muted">
                     {columns.map((column) => (
                       <th
-                        className="px-3 py-2.5 text-start text-support font-semibold text-cv-text-muted"
+                        className="px-4 py-3 text-start text-support font-semibold text-cv-text-muted"
                         key={column}
                         scope="col"
                       >

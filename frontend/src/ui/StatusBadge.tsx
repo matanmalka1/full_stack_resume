@@ -1,3 +1,4 @@
+import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { type ClassValue, cx } from "./cx";
@@ -14,11 +15,17 @@ const toneClasses: Record<StatusTone, string> = {
 interface StatusBadgeProps {
   children?: ReactNode;
   className?: ClassValue;
+  /* A more specific mark than the tone's own. The tone says how loud the badge is -
+     four of them across the whole app - while a closed set like the recruitment axis
+     has a face per member. A.2 is unaffected either way: the badge still carries its
+     Hebrew word, and the icon repeats what the word says rather than replacing it. */
+  icon?: LucideIcon;
   tone: StatusTone;
 }
 
-export const StatusBadge = ({ children, className, tone }: StatusBadgeProps) => {
-  const { icon: Icon, label } = statusPresentation[tone];
+export const StatusBadge = ({ children, className, icon, tone }: StatusBadgeProps) => {
+  const { icon: toneIcon, label } = statusPresentation[tone];
+  const Icon = icon ?? toneIcon;
 
   return (
     <span
@@ -28,9 +35,12 @@ export const StatusBadge = ({ children, className, tone }: StatusBadgeProps) => 
         className,
       )}
     >
+      {/* Only the tone's own loader spins. An overridden icon is a static mark for a
+          state that happens to be tinted like live work - a spinning telephone would
+          claim the row was working when it is not. */}
       <Icon
         aria-hidden="true"
-        className={cx("size-4 shrink-0", tone === "progress" && "animate-spin")}
+        className={cx("size-4 shrink-0", icon === undefined && tone === "progress" && "animate-spin")}
       />
       {children ?? label}
     </span>
