@@ -60,6 +60,7 @@ export const ApplicationListPage = () => {
   const offset = query.offset ?? 0;
   const items = page?.items ?? [];
   const matched = page?.matched ?? 0;
+  const resultsAreRefreshing = listQuery.isFetching && !listQuery.isPending;
   const newApplication = (
     <Link className={buttonClasses("primary")} to="/applications/new">
       <Plus aria-hidden="true" className="size-4" />
@@ -94,10 +95,12 @@ export const ApplicationListPage = () => {
         />
       )}
 
-      {page === undefined ? (
+      {listQuery.isPending ? (
         listQuery.error === null ? (
           <p className="mt-6 text-body text-cv-text-muted">טוען את המועמדויות…</p>
         ) : null
+      ) : page === undefined ? (
+        null
       ) : page.total === 0 ? (
         <div className="mt-6 rounded-surface border border-dashed border-cv-border p-8 text-center">
           <p className="text-body text-cv-text">עוד לא נוצרה אף מועמדות.</p>
@@ -131,40 +134,45 @@ export const ApplicationListPage = () => {
             stageCounts={page.stage_counts}
           />
 
-          <p aria-live="polite" className="mt-5 text-support text-cv-text-muted">
-            {matched === page.total
-              ? `${page.total} מועמדויות`
-              : `${matched} מתוך ${page.total} מועמדויות`}
-          </p>
+          <div
+            aria-busy={resultsAreRefreshing || undefined}
+            className={`transition-opacity ${resultsAreRefreshing ? "opacity-60" : ""}`}
+          >
+            <p aria-live="polite" className="mt-5 text-support text-cv-text-muted">
+              {matched === page.total
+                ? `${page.total} מועמדויות`
+                : `${matched} מתוך ${page.total} מועמדויות`}
+            </p>
 
-          {items.length === 0 ? (
-            <div className="mt-3 rounded-surface border border-dashed border-cv-border p-8 text-center">
-              <p className="text-body text-cv-text">אין מועמדות שמתאימה לסינון.</p>
-              <div className="mt-5 flex justify-center">
-                <Button
-                  onClick={() => {
-                    setTypedSearch("");
-                    setParams(new URLSearchParams(), { replace: true });
-                  }}
-                  variant="secondary"
-                >
-                  ניקוי הסינון
-                </Button>
+            {items.length === 0 ? (
+              <div className="mt-3 rounded-surface border border-dashed border-cv-border p-8 text-center">
+                <p className="text-body text-cv-text">אין מועמדות שמתאימה לסינון.</p>
+                <div className="mt-5 flex justify-center">
+                  <Button
+                    onClick={() => {
+                      setTypedSearch("");
+                      setParams(new URLSearchParams(), { replace: true });
+                    }}
+                    variant="secondary"
+                  >
+                    ניקוי הסינון
+                  </Button>
+                </div>
               </div>
-            </div>
-          ) : (
-            <ApplicationListTable items={items} onRequestClose={setClosingApplication} />
-          )}
+            ) : (
+              <ApplicationListTable items={items} onRequestClose={setClosingApplication} />
+            )}
 
-          <ApplicationListPagination
-            matchedCount={matched}
-            offset={offset}
-            onOffsetChange={(nextOffset) =>
-              setParams(paramsFromQuery({ ...query, offset: nextOffset }))
-            }
-            pageSize={PAGE_SIZE}
-            visibleCount={items.length}
-          />
+            <ApplicationListPagination
+              matchedCount={matched}
+              offset={offset}
+              onOffsetChange={(nextOffset) =>
+                setParams(paramsFromQuery({ ...query, offset: nextOffset }))
+              }
+              pageSize={PAGE_SIZE}
+              visibleCount={items.length}
+            />
+          </div>
         </>
       )}
 
