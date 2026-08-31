@@ -18,6 +18,8 @@ const json = (value: unknown, status = 200, headers: Record<string, string> = {}
 
 const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail => ({
   recruitment_status: "saved",
+  allowed_recruitment_transitions: ["withdrawn", "closed"],
+  recruitment_timeline: [],
   preparation_state: "ready_for_approval",
   working_draft_state: "validated",
   review_reasons: [], stale_reasons: [], warnings: [], blocked_actions: [],
@@ -219,6 +221,22 @@ describe("DraftApprovalDialog", () => {
     expect(dialog).toHaveAttribute("open");
   });
 
+  it("gives direct recovery for a preserved out-of-band Markdown edit", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: string | URL | Request, init?: RequestInit) => init?.method === "POST"
+      ? Promise.resolve(json({ type: "about:blank", title: "Conflict", status: 409, code: "WORKING_PROJECTION_DIVERGED", detail: "projection differs" }, 409))
+      : Promise.resolve(json(String(input).includes("validation-runs") ? validation() : String(input).includes("working-drafts") ? draft() : detail()))));
+    renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftFlow />);
+    const openApproval = await screen.findByRole("button", { name: "פתיחת אישור" });
+    await waitFor(() => expect(openApproval).toBeEnabled());
+    fireEvent.click(openApproval);
+    fireEvent.click(await screen.findByRole("button", { name: "אישור הגרסה" }));
+
+    expect(await screen.findByText("נמצא שינוי בקובץ העבודה שלא יובא לטיוטה")).toBeInTheDocument();
+    expect(screen.getByText(/השינוי נשמר ולא נדרס/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "חזרה לעורך" })).toBeInTheDocument();
+    expect(screen.queryByText("projection differs")).not.toBeInTheDocument();
+  });
+
   it("returns VALIDATION_STALE to the validation panel without retrying automatically", async () => {
     const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => init?.method === "POST"
       ? Promise.resolve(json({ type: "about:blank", title: "Stale", status: 412, code: "VALIDATION_STALE", detail: "stale" }, 412))
@@ -257,6 +275,83 @@ describe("DraftRenderPanel and ReadyPage", () => {
     expect(frame).toHaveAttribute("sandbox", "");
     expect(frame).toHaveAttribute("src", "/api/v1/approved-revisions/revision-1/preview?html_artifact_version_id=html-1");
     expect(screen.getByRole("link", { name: "הורדת PDF" })).toHaveAttribute("href", "/api/v1/approved-revisions/revision-1/recruiter-pdf?pdf_artifact_version_id=pdf-1");
+  });
+
+  it("shows the revision decision record and preserves its server-suggested filename", async () => {
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("decision-markdown")) {
+        return Promise.resolve(
+          json(
+            {
+              application_id: "app-1",
+              approved_revision_id: "revision-1",
+              content: "# Why this revision\n\nSelected canonical facts.",
+              content_hash: "decision-hash",
+            },
+            200,
+            { "Content-Disposition": "attachment; filename=\"Acme-decision.md\"" },
+          ),
+        );
+      }
+      return Promise.resolve(
+        json(url.includes("applications") ? detail({ preparation_state: "ready" }) : revision()),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderRoute(
+      "/approved-revisions/revision-1/ready",
+      "/approved-revisions/:approvedRevisionId/ready",
+      <ReadyPage />,
+    );
+
+    expect(await screen.findByText(/# Why this revision/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "הורדת מסמך ההחלטה" })).toBeInTheDocument();
+    expect(screen.getByText("decision-hash")).toBeInTheDocument();
+  });
+
+  it("records submission against the exact displayed revision and PDF", async () => {
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST" && url.endsWith("/submissions")) {
+        return Promise.resolve(
+          json({
+            application_id: "app-1",
+            submission_id: "submission-1",
+            current_status: "applied",
+            approved_revision_id: "revision-1",
+            pdf_artifact_version_id: "pdf-1",
+            warnings: [],
+          }, 201),
+        );
+      }
+      if (url.includes("decision-markdown")) {
+        return Promise.resolve(json({ application_id: "app-1", approved_revision_id: "revision-1", content: "# Decision", content_hash: "decision-hash" }));
+      }
+      return Promise.resolve(
+        json(url.includes("applications") ? detail({ preparation_state: "ready" }) : revision()),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderRoute(
+      "/approved-revisions/revision-1/ready",
+      "/approved-revisions/:approvedRevisionId/ready",
+      <ReadyPage />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "רישום הגשת הגרסה הזו" }));
+    fireEvent.click(screen.getByRole("button", { name: "אישור ורישום ההגשה" }));
+
+    await screen.findByText("ההגשה נרשמה");
+    const request = fetchMock.mock.calls.find(
+      (call) => call[1]?.method === "POST" && String(call[0]).endsWith("/submissions"),
+    );
+    expect(JSON.parse(String(request?.[1]?.body))).toMatchObject({
+      approved_revision_id: "revision-1",
+      pdf_artifact_version_id: "pdf-1",
+      metadata: {},
+    });
   });
 
   it("labels the displayed Ready revision historical even when the latest Ready is current", async () => {

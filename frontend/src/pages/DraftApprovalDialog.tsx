@@ -82,6 +82,9 @@ export const DraftApprovalDialog = ({
       }
     },
   });
+  const projectionDiverged =
+    approval.error instanceof ApiProblem &&
+    approval.error.problem.code === "WORKING_PROJECTION_DIVERGED";
 
   return (
     <Dialog
@@ -120,7 +123,23 @@ export const DraftApprovalDialog = ({
           </TechnicalDetails>
         </div>
       )}
-      {approval.error === null ||
+      {projectionDiverged ? (
+        <Callout
+          action={
+            <Button onClick={onClose} variant="secondary">
+              חזרה לעורך
+            </Button>
+          }
+          className="mt-4"
+          role="alert"
+          title="נמצא שינוי בקובץ העבודה שלא יובא לטיוטה"
+          tone="blocker"
+        >
+          השינוי נשמר ולא נדרס. יש להחיל אותו מחדש דרך שדות העריכה במסך הזה, או להשתמש
+          בפעולת היצירה מחדש של השורה או הפרק אם הכוונה היא לוותר עליו. לאחר מכן יש לבצע
+          אימות חדש ולאשר שוב.
+        </Callout>
+      ) : approval.error === null ||
       (approval.error instanceof ApiProblem &&
         approval.error.problem.code === "VALIDATION_STALE") ? null : (
         <ErrorCallout
