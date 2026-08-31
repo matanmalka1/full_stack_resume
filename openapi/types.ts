@@ -1160,6 +1160,8 @@ export interface components {
             active_selection_plan_id?: string | null;
             /** Active Working Draft Id */
             active_working_draft_id?: string | null;
+            /** Allowed Recruitment Transitions */
+            allowed_recruitment_transitions: ("saved" | "recruiter_screen" | "interview" | "assignment" | "final_stage" | "offer" | "accepted" | "rejected" | "withdrawn" | "closed")[];
             application: components["schemas"]["ApplicationResponse"];
             /** Available Actions */
             available_actions: string[];
@@ -1180,6 +1182,8 @@ export interface components {
             recommended_action?: string | null;
             /** Recruitment Status */
             recruitment_status: string;
+            /** Recruitment Timeline */
+            recruitment_timeline: components["schemas"]["RecruitmentTimelineItemResponse"][];
             /** Review Reasons */
             review_reasons: components["schemas"]["ReasonResponse"][];
             /** Stale Reasons */
@@ -1643,7 +1647,7 @@ export interface components {
             /** Meaning */
             meaning: string;
             /** Provenance */
-            provenance?: string | null;
+            provenance: string;
             /**
              * Reason
              * @default
@@ -2540,6 +2544,53 @@ export interface components {
             passed: boolean;
             /** Problems */
             problems: string[];
+        };
+        /**
+         * RecruitmentTimelineItemResponse
+         * @description One status, correction, next-action, or submission item in time order.
+         */
+        RecruitmentTimelineItemResponse: {
+            /** Actor Type */
+            actor_type?: ("user" | "system") | null;
+            /** Approved Revision Id */
+            approved_revision_id?: string | null;
+            /** Artifact Version Id */
+            artifact_version_id?: string | null;
+            /** Client */
+            client?: ("web" | "worker") | null;
+            /** Corrects Event Id */
+            corrects_event_id?: string | null;
+            /** From Status */
+            from_status?: ("saved" | "applied" | "recruiter_screen" | "interview" | "assignment" | "final_stage" | "offer" | "accepted" | "rejected" | "withdrawn" | "closed") | null;
+            /** Id */
+            id: string;
+            /**
+             * Item Type
+             * @enum {string}
+             */
+            item_type: "status_transition" | "status_correction" | "next_action" | "submission";
+            /**
+             * Metadata
+             * @default {}
+             */
+            metadata: {
+                [key: string]: unknown;
+            };
+            /** Next Action */
+            next_action?: string | null;
+            /** Next Action Date */
+            next_action_date?: string | null;
+            /** Occurred At */
+            occurred_at: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** Submission Type */
+            submission_type?: ("internal" | "external") | null;
+            /** To Status */
+            to_status?: ("saved" | "applied" | "recruiter_screen" | "interview" | "assignment" | "final_stage" | "offer" | "accepted" | "rejected" | "withdrawn" | "closed") | null;
         };
         /**
          * RegenerateClaimRequest

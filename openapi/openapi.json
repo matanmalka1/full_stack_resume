@@ -101,6 +101,25 @@
             ],
             "title": "Active Working Draft Id"
           },
+          "allowed_recruitment_transitions": {
+            "items": {
+              "enum": [
+                "saved",
+                "recruiter_screen",
+                "interview",
+                "assignment",
+                "final_stage",
+                "offer",
+                "accepted",
+                "rejected",
+                "withdrawn",
+                "closed"
+              ],
+              "type": "string"
+            },
+            "title": "Allowed Recruitment Transitions",
+            "type": "array"
+          },
           "application": {
             "$ref": "#/components/schemas/ApplicationResponse"
           },
@@ -186,6 +205,13 @@
             "title": "Recruitment Status",
             "type": "string"
           },
+          "recruitment_timeline": {
+            "items": {
+              "$ref": "#/components/schemas/RecruitmentTimelineItemResponse"
+            },
+            "title": "Recruitment Timeline",
+            "type": "array"
+          },
           "review_reasons": {
             "items": {
               "$ref": "#/components/schemas/ReasonResponse"
@@ -234,7 +260,9 @@
           "available_actions",
           "blocked_actions",
           "application",
-          "latest_snapshot"
+          "latest_snapshot",
+          "allowed_recruitment_transitions",
+          "recruitment_timeline"
         ],
         "title": "ApplicationDetailResponse",
         "type": "object"
@@ -1621,15 +1649,9 @@
             "type": "string"
           },
           "provenance": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provenance"
+            "minLength": 1,
+            "title": "Provenance",
+            "type": "string"
           },
           "reason": {
             "default": "",
@@ -1671,7 +1693,8 @@
           "claim_id",
           "source",
           "meaning",
-          "tags"
+          "tags",
+          "provenance"
         ],
         "title": "CaptureClaimFactRequest",
         "type": "object"
@@ -3798,6 +3821,196 @@
           "fact_lifecycle"
         ],
         "title": "ReconciliationResponse",
+        "type": "object"
+      },
+      "RecruitmentTimelineItemResponse": {
+        "additionalProperties": false,
+        "description": "One status, correction, next-action, or submission item in time order.",
+        "properties": {
+          "actor_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "user",
+                  "system"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Type"
+          },
+          "approved_revision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved Revision Id"
+          },
+          "artifact_version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Version Id"
+          },
+          "client": {
+            "anyOf": [
+              {
+                "enum": [
+                  "web",
+                  "worker"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client"
+          },
+          "corrects_event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corrects Event Id"
+          },
+          "from_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "saved",
+                  "applied",
+                  "recruiter_screen",
+                  "interview",
+                  "assignment",
+                  "final_stage",
+                  "offer",
+                  "accepted",
+                  "rejected",
+                  "withdrawn",
+                  "closed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Status"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "item_type": {
+            "enum": [
+              "status_transition",
+              "status_correction",
+              "next_action",
+              "submission"
+            ],
+            "title": "Item Type",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Metadata",
+            "type": "object"
+          },
+          "next_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action"
+          },
+          "next_action_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action Date"
+          },
+          "occurred_at": {
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "submission_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "internal",
+                  "external"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Type"
+          },
+          "to_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "saved",
+                  "applied",
+                  "recruiter_screen",
+                  "interview",
+                  "assignment",
+                  "final_stage",
+                  "offer",
+                  "accepted",
+                  "rejected",
+                  "withdrawn",
+                  "closed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Status"
+          }
+        },
+        "required": [
+          "id",
+          "item_type",
+          "occurred_at"
+        ],
+        "title": "RecruitmentTimelineItemResponse",
         "type": "object"
       },
       "RegenerateClaimRequest": {
