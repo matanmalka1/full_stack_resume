@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import {
@@ -28,26 +28,26 @@ export const ApplicationListPage = () => {
   const [params, setParams] = useSearchParams();
   const query = queryFromParams(params);
   const queryClient = useQueryClient();
-  const [typedSearch, setTypedSearch] = useState(query.search ?? "");
-  const settledSearch = useDebouncedValue(typedSearch, SEARCH_DEBOUNCE_MS);
+  /* The URL is the search field's single source of truth, so Back, Forward, and shared
+     links update the control without a local mirror. Only the server read is debounced. */
+  const settledSearch = useDebouncedValue(query.search ?? "", SEARCH_DEBOUNCE_MS);
   const [closingApplication, setClosingApplication] = useState<ApplicationListItem | null>(null);
 
-  const listQuery = useQuery(applicationListQueryOptions(query));
+  const listQuery = useQuery(
+    applicationListQueryOptions({
+      ...query,
+      search: settledSearch === "" ? undefined : settledSearch,
+    }),
+  );
   const page = listQuery.data;
 
   useWorkflowStage("none");
 
-  const narrow = (next: ApplicationListQuery) =>
-    setParams(paramsFromQuery({ ...next, offset: 0 }), { replace: true });
-
-  useEffect(() => {
-    if (settledSearch !== (query.search ?? "")) {
-      narrow({ ...query, search: settledSearch });
-    }
-    // The settled value alone drives this synchronization; other query changes must not
-    // rewrite the URL with an unchanged search value.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settledSearch]);
+  const updateQuery = (
+    next: ApplicationListQuery,
+    { resetOffset = true, replace = true }: { resetOffset?: boolean; replace?: boolean } = {},
+  ) =>
+    setParams(paramsFromQuery(resetOffset ? { ...next, offset: 0 } : next), { replace });
 
   const close = useMutation({
     mutationFn: (applicationId: string) => closeApplication(applicationId),
@@ -104,23 +104,23 @@ export const ApplicationListPage = () => {
           <>
             <ApplicationListFilters
               activity={query.activity ?? "open"}
-              onActivityChange={(activity) => narrow({ ...query, activity })}
+              onActivityChange={(activity) => updateQuery({ ...query, activity })}
               onPreparationStateChange={(stage) =>
-                narrow({ ...query, stages: stage === undefined ? [] : [stage] })
+                updateQuery({ ...query, stages: stage === undefined ? [] : [stage] })
               }
-              onPresetChange={(preset) => narrow({ ...query, preset })}
+              onPresetChange={(preset) => updateQuery({ ...query, preset })}
               onRecruitmentStatusChange={(status) =>
-                narrow({
+                updateQuery({
                   ...query,
                   recruitmentStatuses: status === undefined ? [] : [status],
                 })
               }
-              onSearchChange={setTypedSearch}
-              onSortChange={(sort) => narrow({ ...query, sort })}
+              onSearchChange={(search) => updateQuery({ ...query, search })}
+              onSortChange={(sort) => updateQuery({ ...query, sort })}
               preparationState={query.stages?.[0]}
               preset={query.preset}
               recruitmentStatus={query.recruitmentStatuses?.[0]}
-              search={typedSearch}
+              search={query.search ?? ""}
               sort={query.sort ?? "updated"}
               stageCounts={page.stage_counts}
             />
@@ -140,10 +140,7 @@ export const ApplicationListPage = () => {
                 <p className="text-body text-cv-text">אין מועמדות שמתאימה לסינון.</p>
                 <div className="mt-5 flex justify-center">
                   <Button
-                    onClick={() => {
-                      setTypedSearch("");
-                      setParams(new URLSearchParams(), { replace: true });
-                    }}
+                    onClick={() => updateQuery({})}
                     variant="secondary"
                   >
                     ניקוי הסינון
@@ -158,7 +155,7 @@ export const ApplicationListPage = () => {
               matchedCount={matched}
               offset={offset}
               onOffsetChange={(nextOffset) =>
-                setParams(paramsFromQuery({ ...query, offset: nextOffset }))
+                updateQuery({ ...query, offset: nextOffset }, { replace: false, resetOffset: false })
               }
               pageSize={PAGE_SIZE}
               visibleCount={items.length}
