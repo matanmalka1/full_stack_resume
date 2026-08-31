@@ -75,13 +75,13 @@ export const App = () => {
         <header className="sticky top-0 z-30 border-b border-cv-border bg-cv-surface/85 backdrop-blur-xl">
           <div className="mx-auto flex min-h-16 max-w-[90rem] flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2 sm:px-6 lg:px-8">
             {/* A wordmark rather than a logo tile: this is a local document tool, and
-                the brass rule under the name does more to place it than a gradient
+                the accent rule under the name does more to place it than a gradient
                 square with a spark in it. */}
             <Link className="group shrink-0 rounded-control" to="/">
               <span className="block text-heading-sm font-extrabold tracking-tight text-cv-text">
                 קורות חיים
               </span>
-              <span className="block h-0.5 w-8 bg-cv-brass transition-all duration-200 group-hover:w-full" />
+              <span className="block h-0.5 w-8 bg-cv-accent transition-all duration-200 group-hover:w-full" />
             </Link>
 
             <div className="order-3 w-full min-w-0 md:order-none md:w-auto">

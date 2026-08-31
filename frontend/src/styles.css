@@ -6,37 +6,45 @@
    offline DraftFlow still renders Hebrew in a face designed for it. */
 
 @theme {
-  /* Warm archival ink. The canvas is a toned paper, the surfaces sit above it in
-     warm parchment, and the accent is a deep archival teal with a brass
-     companion. Canvas and surface are two clearly different values, so a card
-     reads as a card without needing a heavy border. */
-  --color-cv-canvas: #ebe6dc;
-  --color-cv-canvas-strong: #ded7c9;
-  --color-cv-surface: #fbf9f5;
-  --color-cv-surface-muted: #f2eee5;
+  /* Cool document white. The canvas is a light neutral the app sits on, surfaces
+     are plain white above it, and the accent is a clear blue. Canvas and surface
+     are two clearly different values, so a card reads as a card without needing a
+     heavy border.
+
+     Every pairing a component can produce was checked against WCAG AA before
+     these values were set: body and muted text on all five surfaces, each status
+     colour on its own soft chip and on plain surfaces, white on every filled
+     button, and the focus ring against both canvas and surface. The status
+     colours are deliberately darker than their mid-palette equivalents - a
+     lighter blue or green reads well as a fill but fails as 14px text on its own
+     soft chip, which is exactly how `StatusBadge` uses it. */
+  --color-cv-canvas: #f1f3f7;
+  --color-cv-canvas-strong: #e3e7ee;
+  --color-cv-surface: #ffffff;
+  --color-cv-surface-muted: #f5f7fa;
   --color-cv-surface-raised: #ffffff;
-  --color-cv-surface-sunken: #e4ddd0;
-  --color-cv-border: #d5ccba;
+  --color-cv-surface-sunken: #eceff4;
+  --color-cv-border: #e2e6ee;
   /* Control edges use the strong token; the lighter border stays decorative and is
      reserved for cards and separators rather than being a control's only boundary. */
-  --color-cv-border-strong: #7d7461;
-  --color-cv-text: #1e2a2b;
-  --color-cv-text-muted: #59635e;
-  --color-cv-accent: #0f5c5b;
-  --color-cv-accent-hover: #0b4746;
-  --color-cv-accent-soft: #dbeceb;
-  --color-cv-brand-deep: #072e2e;
-  --color-cv-brass: #8a6a1f;
-  --color-cv-brass-soft: #f5ead1;
-  --color-cv-success: #1f6b45;
-  --color-cv-success-soft: #e2f0e6;
-  --color-cv-warning: #8a5a12;
-  --color-cv-warning-soft: #f9eed8;
-  --color-cv-blocker: #9c2f24;
-  --color-cv-blocker-hover: #7e251c;
-  --color-cv-blocker-soft: #f8e5e1;
-  --color-cv-focus: #0f5c5b;
-  --color-cv-on-accent: #fbf9f5;
+  --color-cv-border-strong: #5b6577;
+  --color-cv-text: #111827;
+  --color-cv-text-muted: #5b6577;
+  --color-cv-accent: #1d4ed8;
+  --color-cv-accent-hover: #1739a8;
+  --color-cv-accent-soft: #e6edfd;
+  --color-cv-brand-deep: #132a5e;
+  --color-cv-brass: #9c4a07;
+  --color-cv-brass-soft: #fdf0dc;
+  --color-cv-success: #136c34;
+  --color-cv-success-soft: #e4f5ea;
+  --color-cv-warning: #8a4f08;
+  --color-cv-warning-soft: #fdf0d9;
+  --color-cv-blocker: #c02617;
+  --color-cv-blocker-hover: #9a1e12;
+  --color-cv-blocker-soft: #fce8e5;
+  --color-cv-focus: #1d4ed8;
+  --color-cv-on-accent: #ffffff;
   --font-sans: "Heebo", "Assistant", "Rubik", "Arial Hebrew", "Noto Sans Hebrew",
     system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -60,15 +68,15 @@
   --spacing: 0.25rem;
 
   /* A.2 surfaces: harmonious radii and restrained elevation. The shadows are
-     warm-toned rather than blue-grey, so they read as paper depth on the toned
-     canvas instead of a floating glass panel. */
+     cast in the same cool neutral as the canvas rather than in black, so a card
+     reads as lifted off the page instead of smudged onto it. */
   --radius-control: 0.5rem;
   --radius-surface: 0.875rem;
   --radius-pill: 9999px;
-  --shadow-surface: 0 1px 2px rgb(40 30 12 / 0.06), 0 8px 20px -16px rgb(40 30 12 / 0.35);
-  --shadow-floating: 0 2px 4px rgb(40 30 12 / 0.07), 0 18px 40px -24px rgb(40 30 12 / 0.45);
-  --shadow-overlay: 0 28px 70px -24px rgb(23 18 8 / 0.5);
-  --shadow-document: 0 1px 3px rgb(40 30 12 / 0.1), 0 24px 56px -32px rgb(40 30 12 / 0.5);
+  --shadow-surface: 0 1px 2px rgb(17 24 39 / 0.05), 0 8px 20px -16px rgb(17 24 39 / 0.3);
+  --shadow-floating: 0 2px 4px rgb(17 24 39 / 0.06), 0 18px 40px -24px rgb(17 24 39 / 0.4);
+  --shadow-overlay: 0 28px 70px -24px rgb(17 24 39 / 0.45);
+  --shadow-document: 0 1px 3px rgb(17 24 39 / 0.09), 0 24px 56px -32px rgb(17 24 39 / 0.45);
 }
 :root {
   color: var(--color-cv-text);
@@ -91,13 +99,10 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background:
-    /* A faint paper grain, drawn from the tokens rather than an asset, so the
-       canvas has a surface instead of reading as flat fill. */
-    radial-gradient(circle at 18% 12%, rgb(255 255 255 / 0.55), transparent 42%),
-    radial-gradient(circle at 82% 0%, rgb(138 106 31 / 0.07), transparent 38%),
-    var(--color-cv-canvas);
-  background-attachment: fixed;
+  /* A flat canvas. The warm paper grain that used to sit here was drawn in brass
+     and read as a stain against the cool neutral, and a document-white app wants
+     an even ground rather than a textured one. */
+  background: var(--color-cv-canvas);
 }
 
 button,
@@ -164,7 +169,9 @@ pre {
 
 /* A.5: the modal dialog is the only overlay surface. */
 dialog::backdrop {
-  background: rgb(23 18 8 / 0.45);
+  /* The same cool neutral the shadows are cast in, so the scrim dims the page
+     rather than tinting it. */
+  background: rgb(17 24 39 / 0.45);
   backdrop-filter: blur(2px);
 }
 
