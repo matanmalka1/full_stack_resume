@@ -143,15 +143,10 @@ def create_app(
         )
     install_problem_details_openapi(app)
     if frontend_dist is not None:
-        # Added last, so it runs first. It handles only safe static GET/HEAD
-        # requests and passes every API path through to the existing transport
-        # security and routers unchanged.
         app.add_middleware(
             FrontendAssetsMiddleware,
             build_dir=validate_frontend_build(frontend_dist),
         )
-    # Installed last so rejected requests and production frontend responses are
-    # observable too. The middleware deliberately excludes query strings,
-    # headers, and bodies from its log fields.
+
     app.add_middleware(RequestLoggingMiddleware, event_sink=event_sink)
     return app
