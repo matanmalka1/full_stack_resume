@@ -22,6 +22,7 @@ export interface AutosaveState {
 interface UseDraftAutosaveOptions {
   workingDraftId: string | null;
   etag: string | null;
+  onConflict: () => Promise<string | null>;
   onSaved: (update: WorkingDraftUpdate, etag: string | null) => void;
 }
 
@@ -39,7 +40,12 @@ const emptyPatch = (patch: DraftPatch): boolean =>
    Everything that must not race is a ref. Component state here would be read at the value
    it had when the callback was created, which is exactly the stale token this is
    preventing. */
-export const useDraftAutosave = ({ workingDraftId, etag, onSaved }: UseDraftAutosaveOptions) => {
+export const useDraftAutosave = ({
+  workingDraftId,
+  etag,
+  onConflict,
+  onSaved,
+}: UseDraftAutosaveOptions) => {
   const edits = useRef(new Map<string, ClaimPatch>());
   const removals = useRef(new Set<string>());
   const inFlight = useRef(false);
@@ -113,8 +119,17 @@ export const useDraftAutosave = ({ workingDraftId, etag, onSaved }: UseDraftAuto
       if (error instanceof ApiProblem && error.problem.status === 409) {
         /* The queue stops here. Nothing is resent automatically and nothing is merged:
            the dialog owns what happens next, and the user's text is still in the
-           buffer. */
+           buffer. Its comparison and the token must come from the same fresh read. */
         halted.current = true;
+        try {
+          const currentToken = await onConflict();
+          if (currentToken !== null) {
+            token.current = currentToken;
+          }
+        } catch {
+          /* The conflict remains an explicit choice even if its refresh failed. Reapply
+             performs another fresh read, so it can recover without losing local text. */
+        }
         publish("conflict", error.problem.detail);
         return;
       }
@@ -133,7 +148,7 @@ export const useDraftAutosave = ({ workingDraftId, etag, onSaved }: UseDraftAuto
     /* Whatever arrived while that request was open goes now, against the token it just
        returned. */
     void send();
-  }, [onSaved, publish, restore, workingDraftId]);
+  }, [onConflict, onSaved, publish, restore, workingDraftId]);
 
   const schedule = useCallback(() => {
     if (timer.current !== null) {
@@ -187,10 +202,26 @@ export const useDraftAutosave = ({ workingDraftId, etag, onSaved }: UseDraftAuto
      came from a fresh read, so this is a new save against what the server actually holds,
      not a retry of the one that lost. */
   const reapplyLocal = useCallback(() => {
-    halted.current = false;
-    publish("idle");
-    void send();
-  }, [publish, send]);
+    void (async () => {
+      try {
+        /* The other tab may have saved again while the dialog was open. Read once more
+           at the decision boundary and bind the user's patch to that exact version. */
+        const currentToken = await onConflict();
+        if (currentToken === null) {
+          publish("conflict", "לא ניתן לקרוא את הגרסה הנוכחית. אפשר לנסות שוב.");
+          return;
+        }
+        token.current = currentToken;
+      } catch {
+        publish("conflict", "לא ניתן לקרוא את הגרסה הנוכחית. אפשר לנסות שוב.");
+        return;
+      }
+
+      halted.current = false;
+      publish("idle");
+      void send();
+    })();
+  }, [onConflict, publish, send]);
 
   useEffect(
     () => () => {

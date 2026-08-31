@@ -128,6 +128,18 @@ export const DraftEditorPage = () => {
     [applicationId, queryClient, workingDraftId],
   );
 
+  /* A 409 says the read behind both the editor and its ETag is obsolete. Refresh them as
+     one DraftRead so the conflict comparison and the next If-Match name the same server
+     version. `fetchQuery` is deliberate here: invalidation alone would not wait for or
+     return the replacement token. */
+  const refreshConflictedDraft = useCallback(async () => {
+    if (workingDraftId === null) {
+      return null;
+    }
+    const current = await queryClient.fetchQuery(workingDraftQueryOptions(workingDraftId));
+    return current.etag;
+  }, [queryClient, workingDraftId]);
+
   /* Stable, because the panel reports through it from an effect: a fresh function each
      render would make that effect re-run on every render of this screen. */
   const onExactPassingRun = useCallback((runId: string | null) => {
@@ -140,6 +152,7 @@ export const DraftEditorPage = () => {
 
   const autosave = useDraftAutosave({
     etag: draftQuery.data?.etag ?? null,
+    onConflict: refreshConflictedDraft,
     onSaved,
     workingDraftId,
   });

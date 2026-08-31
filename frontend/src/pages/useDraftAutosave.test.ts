@@ -46,8 +46,13 @@ const deferred = () => {
   return { promise, resolve };
 };
 
-const setup = (onSaved = vi.fn()) =>
-  renderHook(() => useDraftAutosave({ etag: '"4-hash-4"', onSaved, workingDraftId: "wd-1" }));
+const setup = (
+  onSaved = vi.fn(),
+  onConflict = vi.fn().mockResolvedValue('"9-hash-9"'),
+) =>
+  renderHook(() =>
+    useDraftAutosave({ etag: '"4-hash-4"', onConflict, onSaved, workingDraftId: "wd-1" }),
+  );
 
 const bodyOf = (call: unknown[] | undefined) =>
   JSON.parse(String((call?.[1] as RequestInit)?.body));
@@ -122,8 +127,9 @@ describe("useDraftAutosave", () => {
 
   it("stops the queue on a conflict and keeps the user's text for the choice", async () => {
     const fetchMock = vi.fn().mockResolvedValue(conflictResponse());
+    const onConflict = vi.fn().mockResolvedValue('"9-hash-9"');
     vi.stubGlobal("fetch", fetchMock);
-    const { result } = setup();
+    const { result } = setup(vi.fn(), onConflict);
 
     act(() => {
       result.current.queueEdit(patch("c-1", "mine"));
@@ -133,6 +139,7 @@ describe("useDraftAutosave", () => {
     await waitFor(() => expect(result.current.status).toBe("conflict"));
     expect(result.current.pending).toEqual([patch("c-1", "mine")]);
     expect(result.current.message).toContain("hash-9");
+    expect(onConflict).toHaveBeenCalledTimes(1);
 
     /* Nothing is resent while the dialog is open: a retry would be an answer the user
        has not given. */
@@ -140,6 +147,37 @@ describe("useDraftAutosave", () => {
       result.current.flush();
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes again before reapplying and saves against the current token", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(conflictResponse())
+      .mockResolvedValueOnce(updateResponse(11));
+    const onConflict = vi
+      .fn()
+      .mockResolvedValueOnce('"9-hash-9"')
+      .mockResolvedValueOnce('"10-hash-10"');
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = setup(vi.fn(), onConflict);
+
+    act(() => {
+      result.current.queueEdit(patch("c-1", "mine"));
+      result.current.flush();
+    });
+    await waitFor(() => expect(result.current.status).toBe("conflict"));
+
+    act(() => {
+      result.current.reapplyLocal();
+    });
+
+    await waitFor(() => expect(result.current.status).toBe("saved"));
+    expect(onConflict).toHaveBeenCalledTimes(2);
+    expect(headerOf(fetchMock.mock.calls[1], "If-Match")).toBe('"10-hash-10"');
+    expect(bodyOf(fetchMock.mock.calls[1])).toEqual({
+      claim_edits: [patch("c-1", "mine")],
+      claim_removals: [],
+    });
   });
 
   it("discards the local text only when the user chooses the current version", async () => {

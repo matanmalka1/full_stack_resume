@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -121,6 +121,34 @@ const jsonResponse = (body: unknown, status = 200): Response =>
     status,
     headers: { "Content-Type": "application/json", ETag: '"4-hash-4"' },
   });
+
+const conflictResponse = (): Response =>
+  new Response(
+    JSON.stringify({
+      type: "about:blank#state_conflict",
+      title: "Conflict",
+      status: 409,
+      code: "STATE_CONFLICT",
+      detail: "working draft wd-1 has content hash hash-9, not hash-4",
+    }),
+    { status: 409, headers: { "Content-Type": "application/problem+json" } },
+  );
+
+const updateResponse = (editVersion: number): Response =>
+  new Response(
+    JSON.stringify({
+      application_id: "app-1",
+      working_draft_id: "wd-1",
+      edit_version: editVersion,
+      content_hash: `hash-${editVersion}`,
+      selection_plan_id: "sp-1",
+      pending_claim_ids: [],
+    }),
+    {
+      status: 200,
+      headers: { "Content-Type": "application/json", ETag: `"${editVersion}-hash-${editVersion}"` },
+    },
+  );
 
 /* One route per read, so a test states which answer it is giving rather than depending on
    the order the screen happens to request them in. */
@@ -273,6 +301,80 @@ describe("DraftEditorPage", () => {
     expect(await screen.findByRole("heading", { name: "מחזור חיי העובדות" })).toBeInTheDocument();
     expect(screen.getByText(/יצירה וקידום כאן משנים את מקור הידע הקבוע/)).toBeInTheDocument();
     expect(screen.getByText("יצירת עובדה ממתינה חדשה")).toBeInTheDocument();
+  });
+
+  it("refreshes the conflict comparison and reapplies against the current ETag", async () => {
+    let draftReads = 0;
+    let patchWrites = 0;
+    const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith(`${DRAFT_PATH}/facts`)) {
+        return Promise.resolve(jsonResponse(facts()));
+      }
+      if (url === "/api/v1/facts" || url === "/api/v1/facts/history") {
+        return Promise.resolve(
+          jsonResponse(url.endsWith("/history") ? { events: [] } : { items: [] }),
+        );
+      }
+      if (url === DRAFT_PATH && init?.method === "PATCH") {
+        patchWrites += 1;
+        return Promise.resolve(patchWrites === 1 ? conflictResponse() : updateResponse(10));
+      }
+      if (url === DRAFT_PATH) {
+        draftReads += 1;
+        const current =
+          draftReads === 1
+            ? draft()
+            : draft({
+                sections: [
+                  {
+                    name: "Core Skills",
+                    claims: [
+                      {
+                        ...draft().outline.sections[0]!.claims[0]!,
+                        text: "Saved in the other tab.",
+                      },
+                    ],
+                  },
+                ],
+              });
+        return Promise.resolve(
+          new Response(JSON.stringify(current), {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              ETag: draftReads === 1 ? '"4-hash-4"' : '"9-hash-9"',
+            },
+          }),
+        );
+      }
+      return Promise.resolve(jsonResponse(detail()));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+    const editor = await screen.findByDisplayValue("Owned the CRM migration.");
+    fireEvent.change(editor, { target: { value: "My local wording." } });
+    fireEvent.blur(editor);
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "הטיוטה השתנתה בזמן העריכה",
+    });
+    expect(within(dialog).getByText("My local wording.")).toBeInTheDocument();
+    expect(within(dialog).getByText("Saved in the other tab.")).toBeInTheDocument();
+
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "החלת הטקסט שלי על הגרסה הנוכחית" }),
+    );
+    await waitFor(() => expect(dialog).not.toHaveAttribute("open"));
+
+    const patchCalls = fetchMock.mock.calls.filter(
+      (call) => String(call[0]) === DRAFT_PATH && (call[1] as RequestInit)?.method === "PATCH",
+    );
+    expect(patchCalls).toHaveLength(2);
+    expect(((patchCalls[1]![1] as RequestInit).headers as Headers).get("If-Match")).toBe(
+      '"9-hash-9"',
+    );
   });
 
   it("presents the projection's own review reason rather than inventing an approval rule", async () => {
