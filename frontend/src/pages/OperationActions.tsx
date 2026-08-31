@@ -29,12 +29,31 @@ interface OperationActionsProps {
   /* Where a retry's new Operation goes when the panel is inline. The host screen watches
      one Application's work, so it takes the id and keeps reporting in place. */
   onQueued?: (operationId: string) => void;
+  /* Where the return link leads, when the caller knows somewhere better than the
+     Application screen.
+
+     The Application screen is the safe answer and stays the default: it owns the
+     projection, so it can always say what comes next. But a caller that already holds
+     that projection can name the screen the projection's own recommended action lives on,
+     which saves the reader a hop through a screen whose only job was to point at it.
+
+     It is not a rule invented here about which Operation leads where - that would be the
+     second workflow state machine A.1 forbids. The caller derives it from
+     `recommended_action` through `actionDestination`, the same table the Application
+     screen and the board already link through. */
+  returnPath?: string;
+  /* What the return link is called. It defaults to the Application, and a caller that
+     supplies a destination supplies its name too: a link that says "back to the
+     application" and leads to the draft editor is a worse exit than no name at all. */
+  returnLabel?: string;
 }
 
 export const OperationActions = ({
   inline = false,
   onQueued,
   operation,
+  returnLabel,
+  returnPath,
 }: OperationActionsProps) => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -83,9 +102,11 @@ export const OperationActions = ({
     operation.failure_code === "SOURCE_CHANGED" || operation.status === "succeeded";
   /* A finished Operation used to be a dead end: it reported that the work was over and
      offered nowhere to go. The way on is not this screen's to invent - which action
-     follows depends on the application projection (A.1) - so it hands the user back to
-     the screen that owns that projection and lets it say what comes next. */
-  const returnPath = `/applications/${encodeURIComponent(operation.application_id)}`;
+     follows depends on the application projection (A.1) - so without a caller-supplied
+     destination it hands the user back to the screen that owns that projection and lets
+     it say what comes next. */
+  const destination =
+    returnPath ?? `/applications/${encodeURIComponent(operation.application_id)}`;
 
   const showReturn = operation.is_terminal && !inline;
 
@@ -129,9 +150,9 @@ export const OperationActions = ({
         {showReturn ? (
           <Link
             className={buttonClasses(canRetry && !returnRecommended ? "secondary" : "primary")}
-            to={returnPath}
+            to={destination}
           >
-            חזרה למועמדות
+            {returnLabel ?? "חזרה למועמדות"}
           </Link>
         ) : null}
       </div>

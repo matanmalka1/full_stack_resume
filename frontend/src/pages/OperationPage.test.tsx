@@ -91,6 +91,71 @@ describe("OperationPage", () => {
     expect(screen.getByText("בביצוע")).toBeInTheDocument();
   });
 
+  /* The return link is the reader's only way on from this route, which is reached by a
+     direct link, a bookmark, or a reload rather than in the ordinary course of the
+     workflow. Where it leads is the projection's answer through `actionDestination`, not
+     a rule this screen invents: with a recommended action that has a screen, the link
+     leads to that screen and is named for the action, so a finished regeneration is not
+     routed through the Application screen whose only job would be to point back at the
+     editor. */
+  it("leads a finished Operation to the screen the projection recommends", async () => {
+    const terminal = operation({
+      status: "succeeded",
+      is_terminal: true,
+      phase: "completed",
+      available_actions: [],
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string | URL | Request) =>
+        Promise.resolve(
+          jsonResponse(
+            String(input) === projectionUrl
+              ? { ...projection, preparation_state: "draft_in_progress", recommended_action: "update_working_draft" }
+              : terminal,
+          ),
+        ),
+      ),
+    );
+
+    renderPage(<OperationPage />);
+
+    const link = await screen.findByRole("link", { name: "עריכת הטיוטה" });
+    expect(link).toHaveAttribute("href", "/applications/app-1/draft");
+    expect(screen.queryByRole("link", { name: "חזרה למועמדות" })).not.toBeInTheDocument();
+  });
+
+  /* An action with no screen of its own, and a projection carrying no recommendation at
+     all, both fall back to the Application: it owns the projection and can always say
+     what comes next. */
+  it("falls back to the Application when the recommendation has no screen", async () => {
+    const terminal = operation({
+      status: "succeeded",
+      is_terminal: true,
+      phase: "completed",
+      available_actions: [],
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string | URL | Request) =>
+        Promise.resolve(
+          jsonResponse(
+            String(input) === projectionUrl
+              ? { ...projection, preparation_state: "needs_analysis", recommended_action: "analyze_job" }
+              : terminal,
+          ),
+        ),
+      ),
+    );
+
+    renderPage(<OperationPage />);
+
+    expect(await screen.findByRole("link", { name: "חזרה למועמדות" })).toHaveAttribute(
+      "href",
+      "/applications/app-1",
+    );
+  });
+
   it("follows a retry to the new Operation named by the accepted response", async () => {
     const terminal = operation({
       status: "failed",

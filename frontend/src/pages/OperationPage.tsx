@@ -16,7 +16,8 @@ import { StatusBadge } from "../ui/StatusBadge";
 import { SummaryList, type SummaryItem } from "../ui/SummaryList";
 import { TechnicalDetails } from "../ui/TechnicalDetails";
 import { OperationActions } from "./OperationActions";
-import { preparationStateNextStep } from "./applicationLabels";
+import { actionDestination } from "./actionDestinations";
+import { actionLabel, preparationStateNextStep } from "./applicationLabels";
 import {
   activeOutputLabels,
   failurePresentations,
@@ -177,6 +178,13 @@ export const OperationPage = () => {
   const nextStep = applicationQuery.data
     ? (preparationStateNextStep[applicationQuery.data.preparation_state] ?? null)
     : null;
+  
+  const recommended = applicationQuery.data?.recommended_action ?? null;
+  const recommendedHref =
+    recommended === null || operation === undefined
+      ? null
+      : actionDestination(recommended, operation.application_id);
+
   const completion =
     produced.length === 0 ? "הפעולה הושלמה." : `הפעולה הושלמה ויצרה ${joinHebrewList(produced)}.`;
   const description = !terminal
@@ -277,7 +285,15 @@ export const OperationPage = () => {
             </div>
           </TechnicalDetails>
 
-          <OperationActions operation={operation} />
+          <OperationActions
+            operation={operation}
+            returnLabel={
+              recommendedHref === null || recommended === null
+                ? undefined
+                : actionLabel(recommended)
+            }
+            returnPath={recommendedHref ?? undefined}
+          />
         </div>
       )}
     </Card>
