@@ -49,7 +49,6 @@ const ApplicationContext = ({
 export const App = () => {
   const settings = useQuery(settingsQueryOptions).data?.settings;
   const isApplicationList = useMatch("/") !== null;
-  const isNewApplication = useMatch("/applications/new") !== null;
   const isDraftEditor = useMatch("/applications/:applicationId/draft") !== null;
   /* On the Application screen itself the context link would point at the page showing it.
      A link back to where you already are is not a way out, so the header states the
@@ -108,13 +107,13 @@ export const App = () => {
 
         <main
           className={cx(
-            "mx-auto w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
+            "mx-auto w-full px-4 py-5 sm:px-6 sm:py-6 lg:px-8",
             /* The list gets the widest measure: its comparison table benefits directly
-               from every extra column of space. The intake screen shares that measure so
-               its primary card stays aligned with the home screen that opens it. The draft
-               editor remains broad without stretching as far, while document-shaped
-               screens keep the reading measure. */
-            isApplicationList || isNewApplication
+               from every extra column of space. The draft editor remains broad without
+               stretching as far, while document-shaped screens - the intake form
+               included - keep the reading measure. A form field stretched past a
+               readable line is harder to fill, not easier. */
+            isApplicationList
               ? "max-w-[110rem]"
               : isDraftEditor
                 ? "max-w-[90rem]"
@@ -123,7 +122,7 @@ export const App = () => {
         >
           {/* `empty:hidden` removes the spacing on routes outside the CV workflow, where
               the landmark deliberately renders no steps. */}
-          <div className="mb-4 empty:hidden sm:mb-6">
+          <div className="mb-3 empty:hidden sm:mb-4">
             <WorkflowLandmarkSteps />
           </div>
           <Outlet />

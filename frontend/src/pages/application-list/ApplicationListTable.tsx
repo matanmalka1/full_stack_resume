@@ -5,32 +5,22 @@ import { ApplicationListRow } from "./ApplicationListRow";
 const ARCHIVE_COLUMN = "";
 
 const columns = [
-  "חברה ותפקיד",
-  "נוצר",
-  "מצב קורות החיים",
-  "שלב גיוס",
-  "פעילות אחרונה",
-  "הפעולה הבאה",
-  "אזהרות",
-  "פעולה מומלצת",
-  ARCHIVE_COLUMN,
-];
-
-const columnWidths: Record<string, string> = {
-  "חברה ותפקיד": "w-[19%]",
-  נוצר: "w-[8%]",
-  "מצב קורות החיים": "w-[18%]",
-  "שלב גיוס": "w-[11%]",
-  "פעילות אחרונה": "w-[9%]",
-  "הפעולה הבאה": "w-[11%]",
-  אזהרות: "w-[7%]",
-  "פעולה מומלצת": "w-[16%]",
-  [ARCHIVE_COLUMN]: "w-[4%]",
-};
+  { label: "חברה ותפקיד", width: "w-[19%]" },
+  { label: "נוצר", width: "w-[8%]" },
+  { label: "מצב קורות החיים", width: "w-[17%]" },
+  { label: "שלב גיוס", width: "w-[11%]" },
+  { label: "פעילות אחרונה", width: "w-[9%]" },
+  { label: "הפעולה הבאה", width: "w-[11%]" },
+  { label: "אזהרות", width: "w-[9%]" },
+  { label: "פעולה מומלצת", width: "w-[15%]" },
+  { label: "", width: "w-[4%]" },
+] as const;
 
 /* A visual hint only: rows with the same company and role emphasize their dates so the
    reader can distinguish them. It does not represent domain duplicate detection. */
-const duplicatedIdentities = (items: readonly ApplicationListItem[]): ReadonlySet<string> => {
+const duplicatedIdentities = (
+  items: readonly ApplicationListItem[],
+): ReadonlySet<string> => {
   const byIdentity = new Map<string, string[]>();
 
   for (const item of items) {
@@ -38,7 +28,9 @@ const duplicatedIdentities = (items: readonly ApplicationListItem[]): ReadonlySe
     byIdentity.set(key, [...(byIdentity.get(key) ?? []), item.id]);
   }
 
-  return new Set([...byIdentity.values()].filter((ids) => ids.length > 1).flat());
+  return new Set(
+    [...byIdentity.values()].filter((ids) => ids.length > 1).flat(),
+  );
 };
 
 interface ApplicationListTableProps {
@@ -46,7 +38,10 @@ interface ApplicationListTableProps {
   onRequestClose: (item: ApplicationListItem) => void;
 }
 
-export const ApplicationListTable = ({ items, onRequestClose }: ApplicationListTableProps) => {
+export const ApplicationListTable = ({
+  items,
+  onRequestClose,
+}: ApplicationListTableProps) => {
   const ambiguous = duplicatedIdentities(items);
 
   return (
@@ -54,16 +49,16 @@ export const ApplicationListTable = ({ items, onRequestClose }: ApplicationListT
       <table className="w-full min-w-[64rem] table-fixed border-collapse text-start">
         <thead>
           <tr className="border-b border-cv-border bg-cv-surface-muted">
-            {columns.map((column) => (
+            {columns.map(({ label, width }, index) => (
               <th
                 className={cx(
                   "px-4 py-3 text-start text-support font-semibold text-cv-text-muted",
-                  columnWidths[column],
+                  width,
                 )}
-                key={column}
+                key={`${label}-${index}`}
                 scope="col"
               >
-                {column}
+                {label}
               </th>
             ))}
           </tr>

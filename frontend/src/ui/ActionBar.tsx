@@ -50,12 +50,12 @@ export const ActionBar = ({
       className={cx(
         "flex flex-wrap items-center gap-3",
         split
-          ? "mt-8 justify-between rounded-surface border border-cv-border bg-cv-surface-muted p-4 shadow-inner"
+          ? "mt-6 justify-between rounded-surface border border-cv-border bg-cv-surface-muted p-4 shadow-inner"
           : align === "start"
             ? "justify-start"
             : "justify-end",
         sticky && !split
-          ? "sticky bottom-0 z-20 -mx-5 mt-2 border-t border-cv-border bg-cv-surface/90 px-5 py-4 backdrop-blur-xl sm:-mx-8 sm:px-8"
+          ? "sticky bottom-0 z-20 -mx-4 mt-1 border-t border-cv-border bg-cv-surface/90 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6"
           : undefined,
         className,
       )}

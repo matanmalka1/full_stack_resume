@@ -25,7 +25,7 @@ export const Field = ({ children, className, error, hint, label }: FieldProps) =
   const describedBy = cx(hint === undefined ? undefined : hintId, error === undefined ? undefined : errorId);
 
   return (
-    <div className={cx("flex flex-col gap-2", className)}>
+    <div className={cx("flex flex-col gap-1.5", className)}>
       <label className="text-support font-medium text-cv-text" htmlFor={id}>
         {label}
       </label>

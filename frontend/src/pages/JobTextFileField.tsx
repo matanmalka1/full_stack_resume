@@ -61,7 +61,7 @@ export const JobTextFileField = ({ onText }: JobTextFileFieldProps) => {
        the shared surface is what says this button and that text area are two ways into
        one value. It sits on the sunken tone so it reads as an inlet to the field below
        instead of a second card. */
-    <div className="flex flex-col gap-3 rounded-control border border-dashed border-cv-border bg-cv-surface-muted p-4 sm:flex-row sm:items-center">
+    <div className="flex flex-col gap-3 rounded-control border border-dashed border-cv-border bg-cv-surface-muted p-3 sm:flex-row sm:items-center">
       {/* The visible control is the label, so the native file input can stay off screen
           without losing its accessible name or keyboard reachability. */}
       <label

@@ -54,7 +54,7 @@ export const PageHeading = ({
         {children}
       </h1>
       {description === undefined ? null : (
-        <p className="mt-3 max-w-2xl text-body leading-7 text-cv-text-muted" dir="auto">
+        <p className="mt-2 max-w-2xl text-body leading-7 text-cv-text-muted" dir="auto">
           {description}
         </p>
       )}

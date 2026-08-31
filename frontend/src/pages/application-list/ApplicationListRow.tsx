@@ -179,11 +179,13 @@ export const ApplicationListRow = ({
         </span>
       </td>
       <NextActionCell item={item} />
-      <td className="px-4 py-3.5">
+      <td className="px-4 py-3.5 text-center">
         {attention === null ? (
           <span className="text-support text-cv-text-muted">—</span>
         ) : (
-          <StatusBadge tone={attention.tone}>{attention.label}</StatusBadge>
+          <StatusBadge className="whitespace-nowrap" tone={attention.tone}>
+            {attention.label}
+          </StatusBadge>
         )}
       </td>
       <RecommendedActionCell item={item} />

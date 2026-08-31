@@ -12,7 +12,7 @@ export const Card = ({ children, className, ...rest }: CardProps) => {
   return (
     <section
       className={cx(
-        "rounded-surface border border-cv-border bg-cv-surface p-5 shadow-surface sm:p-8",
+        "rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface sm:p-6",
         className,
       )}
       {...rest}

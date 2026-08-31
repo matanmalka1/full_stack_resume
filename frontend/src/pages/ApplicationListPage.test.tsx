@@ -3,7 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { ApplicationListItem } from "../api/contracts";
+import type { ApplicationListItem, Reason } from "../api/contracts";
 import { ApplicationListPage } from "./ApplicationListPage";
 import { actionLabel } from "./applicationLabels";
 
@@ -30,6 +30,13 @@ const item = (overrides: Partial<ApplicationListItem> = {}): ApplicationListItem
     recommended_action: "analyze",
     ...overrides,
   }) as ApplicationListItem;
+
+const reason = (code: string): Reason => ({
+  code,
+  message: `plain sentence for ${code}`,
+  entity_references: {},
+  allowed_resolution_actions: [],
+});
 
 const jsonResponse = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
@@ -154,5 +161,16 @@ describe("ApplicationListPage", () => {
 
     expect(await screen.findByText("Follow up with recruiter")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: actionLabel("analyze") })).toBeInTheDocument();
+  });
+
+  it("keeps a pending-decision count centered on one line", async () => {
+    stubList([item({ review_reasons: [reason("HARD_GAP_REQUIRES_DECISION")] })]);
+
+    renderPage();
+
+    expect(screen.getByRole("columnheader", { name: "אזהרות" })).toHaveClass("w-[9%]");
+    const attention = await screen.findByText("1 להכרעה");
+    expect(attention).toHaveClass("whitespace-nowrap");
+    expect(attention.closest("td")).toHaveClass("text-center");
   });
 });

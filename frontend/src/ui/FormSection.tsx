@@ -28,7 +28,7 @@ export const FormSection = ({
   return (
     <fieldset className={cx("min-w-0 border-0 p-0", className)}>
       <legend className="sr-only">{title}</legend>
-      <div className="border-b border-cv-border pb-3">
+      <div className="border-b border-cv-border pb-2">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <p aria-hidden="true" className="text-heading-sm font-bold tracking-tight text-cv-text">
             {title}
@@ -38,12 +38,12 @@ export const FormSection = ({
           )}
         </div>
         {description === undefined ? null : (
-          <p className="mt-1.5 text-support leading-6 text-cv-text-muted" id={`${id}-description`}>
+          <p className="mt-1 text-support leading-6 text-cv-text-muted" id={`${id}-description`}>
             {description}
           </p>
         )}
       </div>
-      <div className="mt-5 flex flex-col gap-5">{children}</div>
+      <div className="mt-4 flex flex-col gap-4">{children}</div>
     </fieldset>
   );
 };

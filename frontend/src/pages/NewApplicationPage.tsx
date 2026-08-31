@@ -194,12 +194,12 @@ export const NewApplicationPage = () => {
         משרה חדשה
       </PageHeading>
 
-      <form className="mt-8 flex flex-col gap-8" noValidate onSubmit={runSubmit(undefined)}>
+      <form className="mt-6 flex flex-col gap-6" noValidate onSubmit={runSubmit(undefined)}>
         <FormSection
           description="שלושת אלה מזהים את המועמדות ברשימות ובכל מסכי ההמשך."
           title="פרטי המשרה"
         >
-          <div className="grid gap-5 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
             <Field error={errors.company?.message} label="שם החברה">
               {(control) => (
                 <TextInput
@@ -269,7 +269,7 @@ export const NewApplicationPage = () => {
               </span>
             )
           }
-          className="rounded-surface border border-cv-border bg-cv-surface-muted/60 p-5"
+          className="rounded-surface border border-cv-border bg-cv-surface-muted/60 p-4"
           description="הטקסט נשמר כתצלום משרה קבוע ואינו משתנה אחרי היצירה. הוא נשמר בדיוק כפי שהוזן."
           title="תצלום המשרה"
         >
@@ -290,7 +290,7 @@ export const NewApplicationPage = () => {
                 /* The payload of the whole screen. It opens tall enough to read a
                    posting in, grows with a paste rather than hiding it behind a
                    scrollbar, and stops at the viewport so the submit stays reachable. */
-                className="min-h-96 max-h-[70vh] [field-sizing:content]"
+                className="min-h-64 max-h-[60vh] [field-sizing:content]"
                 dir="auto"
               />
             )}
