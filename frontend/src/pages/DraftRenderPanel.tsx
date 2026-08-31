@@ -76,10 +76,12 @@ export const DraftRenderPanel = ({ approvedRevisionId, onQueued }: DraftRenderPa
           </Link>
         ) : (
           <Button
-            disabled={revision === undefined || render.isPending}
+            disabled={revision === undefined}
             onClick={() => render.mutate()}
+            pending={render.isPending}
+            pendingLabel="מתחיל רינדור…"
           >
-            {render.isPending ? "מתחיל רינדור…" : "יצירת HTML ו־PDF"}
+            יצירת HTML ו־PDF
           </Button>
         )}
       </div>

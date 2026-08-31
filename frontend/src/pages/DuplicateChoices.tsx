@@ -25,7 +25,7 @@ export const DuplicateChoices = ({ matches, onCreateAnyway, pending }: Duplicate
   return (
     <Callout
       action={
-        <Button disabled={pending} onClick={onCreateAnyway} variant="secondary">
+        <Button onClick={onCreateAnyway} pending={pending} variant="secondary">
           יצירה בכל זאת
         </Button>
       }

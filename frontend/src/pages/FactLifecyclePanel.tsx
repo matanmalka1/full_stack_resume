@@ -206,8 +206,9 @@ export const FactLifecyclePanel = ({
                 בדקתי את תוכן העובדה והמקור ואני מאשר את שינוי המעמד
               </Checkbox>
               <Button
-                disabled={!explicitlyConfirmed || transition.isPending}
+                disabled={!explicitlyConfirmed}
                 onClick={() => transition.mutate(selected.status === "pending" ? "confirm" : "promote")}
+                pending={transition.isPending}
               >
                 {selected.status === "pending" ? "אישור העובדה" : "קידום למקור אמת"}
               </Button>
@@ -229,7 +230,7 @@ export const FactLifecyclePanel = ({
               <Checkbox checked={pin} onChange={(event) => setPin(event.currentTarget.checked)}>
                 קיבוע העובדה בתוכנית הבחירה הבאה
               </Checkbox>
-              <Button disabled={attachment.isPending} onClick={() => attachment.mutate()}>
+              <Button onClick={() => attachment.mutate()} pending={attachment.isPending}>
                 צירוף העובדה לסעיף
               </Button>
               {attachment.isSuccess ? (
@@ -284,8 +285,8 @@ export const FactLifecyclePanel = ({
           <Field label="מקור ואימות העובדה">
             {(control) => <TextArea {...control} dir="auto" onChange={(event) => setProvenance(event.target.value)} required value={provenance} />}
           </Field>
-          <Button className="lg:col-span-2" disabled={!canCreate || create.isPending} type="submit">
-            {create.isPending ? "יוצר…" : "יצירת עובדה ממתינה"}
+          <Button className="lg:col-span-2" disabled={!canCreate} pending={create.isPending} pendingLabel="יוצר…" type="submit">
+            יצירת עובדה ממתינה
           </Button>
         </form>
       </details>

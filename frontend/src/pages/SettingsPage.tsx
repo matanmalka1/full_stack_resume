@@ -3,14 +3,14 @@ import { useEffect, useState } from "react";
 
 import type { UpdateSettingsRequest } from "../api/contracts";
 import { settingsQueryKey, settingsQueryOptions, updateSettings } from "../api/settings";
-import { ErrorCallout } from "../app/ErrorCallout";
+import { briefServerFailureDetail, ErrorCallout } from "../app/ErrorCallout";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { Button } from "../ui/Button";
 import { Callout } from "../ui/Callout";
-import { Card } from "../ui/Card";
 import { Checkbox } from "../ui/Checkbox";
 import { Field } from "../ui/Field";
-import { PageHeading } from "../ui/PageHeading";
+import { PageShell } from "../ui/PageShell";
+import { QueryState } from "../ui/QueryState";
 import { Select } from "../ui/Select";
 import { ReconciliationPanel } from "./ReconciliationPanel";
 
@@ -44,10 +44,14 @@ export const SettingsPage = () => {
   const aiAvailable = settings?.provider_configured === true && (form?.ai_enabled_override ?? settings.ai_enabled);
 
   return (
-    <Card aria-labelledby="route-heading">
-      <PageHeading id="route-heading" description="השינויים נשמרים באפליקציה ומשפיעים מיד על מסכי ה־Web.">הגדרות</PageHeading>
-      <div className="mt-6 flex flex-col gap-6">
-        {form === null ? <p className="text-body text-cv-text-muted">טוען הגדרות…</p> : (
+    <PageShell description="השינויים נשמרים באפליקציה ומשפיעים מיד על מסכי ה־Web." title="הגדרות">
+      <QueryState
+        error={query.error}
+        fallbackTitle="ההגדרות לא נשמרו"
+        loading={form === null}
+        loadingLabel="טוען הגדרות…"
+      >
+        {form === null ? null : (
           <form className="flex flex-col gap-6" onSubmit={(event) => { event.preventDefault(); save.mutate(); }}>
             <Checkbox checked={form.auto_generate_when_review_not_required} onChange={(event) => setForm({ ...form, auto_generate_when_review_not_required: event.currentTarget.checked })}>
               יצירת טיוטה אוטומטית כשלא נדרשת סקירה
@@ -74,19 +78,19 @@ export const SettingsPage = () => {
                 <option value="normal">רגיל</option><option value="large">גדול</option>
               </Select>
             )}</Field>
-            <Button disabled={save.isPending} type="submit">{save.isPending ? "שומר…" : "שמירת הגדרות"}</Button>
+            <Button pending={save.isPending} pendingLabel="שומר…" type="submit">שמירת הגדרות</Button>
           </form>
         )}
-        {save.isSuccess ? <Callout role="status" title="ההגדרות נשמרו" tone="success" /> : null}
-        {query.error === null && save.error === null ? null : (
-          <ErrorCallout
-            error={save.error ?? query.error}
-            fallbackDetail="הפנייה לשרת נכשלה."
-            fallbackTitle="ההגדרות לא נשמרו"
-          />
-        )}
-        <ReconciliationPanel />
-      </div>
-    </Card>
+      </QueryState>
+      {save.isSuccess ? <Callout role="status" title="ההגדרות נשמרו" tone="success" /> : null}
+      {save.error === null ? null : (
+        <ErrorCallout
+          error={save.error}
+          fallbackDetail={briefServerFailureDetail}
+          fallbackTitle="ההגדרות לא נשמרו"
+        />
+      )}
+      <ReconciliationPanel />
+    </PageShell>
   );
 };

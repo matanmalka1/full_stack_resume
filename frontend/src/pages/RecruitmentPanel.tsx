@@ -227,8 +227,8 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
                   />
                 )}
               </Field>
-              <Button disabled={transition.isPending} type="submit">
-                {transition.isPending ? "שומר…" : "שמירת השלב"}
+              <Button pending={transition.isPending} pendingLabel="שומר…" type="submit">
+                שמירת השלב
               </Button>
             </>
           )}
@@ -262,7 +262,7 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
             )}
           </Field>
           <div className="flex flex-wrap gap-2">
-            <Button disabled={nextActionMutation.isPending} type="submit">
+            <Button pending={nextActionMutation.isPending} type="submit">
               שמירת הפעולה
             </Button>
             <Button
@@ -381,7 +381,8 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
                 ביטול
               </Button>
               <Button
-                disabled={correction.isPending || correctionReason.trim() === ""}
+                disabled={correctionReason.trim() === ""}
+                pending={correction.isPending}
                 type="submit"
               >
                 הוספת אירוע תיקון
@@ -431,8 +432,8 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
             <Button onClick={() => setExternalOpen(false)} variant="secondary">
               ביטול
             </Button>
-            <Button disabled={externalSubmission.isPending} type="submit">
-              {externalSubmission.isPending ? "רושם…" : "רישום ההגשה החיצונית"}
+            <Button pending={externalSubmission.isPending} pendingLabel="רושם…" type="submit">
+              רישום ההגשה החיצונית
             </Button>
           </div>
         </form>

@@ -94,28 +94,28 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
   const analyzeButton =
     plan.analyze === null ? null : (
       <Button
-        disabled={settings === undefined || analyze.isPending}
+        disabled={settings === undefined}
         key="analyze"
         onClick={() => analyze.mutate()}
+        pending={analyze.isPending}
+        pendingLabel="מפעיל ניתוח…"
         variant={plan.analyze.emphasized ? "primary" : "secondary"}
       >
-        {analyze.isPending
-          ? "מפעיל ניתוח…"
-          : plan.analyze.reanalysis
-            ? "ניתוח מחדש של המשרה"
-            : "ניתוח המשרה"}
+        {plan.analyze.reanalysis ? "ניתוח מחדש של המשרה" : "ניתוח המשרה"}
       </Button>
     );
 
   const draftButton =
     plan.createDraft === null ? null : (
       <Button
-        disabled={settings === undefined || draft.isPending}
+        disabled={settings === undefined}
         key="draft"
         onClick={() => draft.mutate()}
+        pending={draft.isPending}
+        pendingLabel="יוצר טיוטה…"
         variant={plan.createDraft.emphasized ? "primary" : "secondary"}
       >
-        {draft.isPending ? "יוצר טיוטה…" : "יצירת טיוטה"}
+        יצירת טיוטה
       </Button>
     );
 

@@ -20,6 +20,7 @@ import { Checkbox } from "../ui/Checkbox";
 import { Field } from "../ui/Field";
 import { Select } from "../ui/Select";
 import { TextArea, TextInput } from "../ui/TextInput";
+import { QueryState } from "../ui/QueryState";
 
 type FactSource = CaptureClaimFactRequest["source"];
 
@@ -219,12 +220,12 @@ export const ClaimFactResolution = ({
               />
             )}
           </Field>
-          <Button disabled={capture.isPending || !canCapture} type="submit">
-            {capture.isPending ? "יוצר עובדה…" : "יצירת עובדה ממתינה"}
+          <Button disabled={!canCapture} pending={capture.isPending} pendingLabel="יוצר עובדה…" type="submit">
+            יצירת עובדה ממתינה
           </Button>
         </form>
       ) : detailQuery.data === undefined ? (
-        <p className="mt-4 text-support text-cv-text-muted">טוען את העובדה…</p>
+        <QueryState className="mt-4 text-support" loading loadingLabel="טוען את העובדה…" />
       ) : useFact.isSuccess ? (
         <Callout className="mt-4" role="status" title="העובדה אושרה ונבחרה" tone="success">
           נוצרה תוכנית בחירה חדשה. הטיוטה הנוכחית נשמרה, ומסך המועמדות יציע לבנות אותה
@@ -258,8 +259,8 @@ export const ClaimFactResolution = ({
               <Checkbox checked={confirmed} onChange={(event) => setConfirmed(event.currentTarget.checked)}>
                 בדקתי את הניסוח, המשמעות, התגיות והמקור ואני מאשר לקדם, לצרף ולבחור את העובדה
               </Checkbox>
-              <Button disabled={!confirmed || useFact.isPending} onClick={() => useFact.mutate()}>
-                {useFact.isPending ? "מאשר ומשתמש…" : "אישור העובדה ושימוש בה"}
+              <Button disabled={!confirmed} onClick={() => useFact.mutate()} pending={useFact.isPending} pendingLabel="מאשר ומשתמש…">
+                אישור העובדה ושימוש בה
               </Button>
             </>
           )}

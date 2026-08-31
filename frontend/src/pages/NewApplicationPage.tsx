@@ -18,11 +18,10 @@ import { useAppForm } from "../forms/useAppForm";
 import { ActionBar } from "../ui/ActionBar";
 import { Button } from "../ui/Button";
 import { Callout } from "../ui/Callout";
-import { Card } from "../ui/Card";
 import { Field } from "../ui/Field";
 import { FormSection } from "../ui/FormSection";
 import { LtrText } from "../ui/LtrText";
-import { PageHeading } from "../ui/PageHeading";
+import { PageShell } from "../ui/PageShell";
 import { TextArea, TextInput } from "../ui/TextInput";
 import { cx } from "../ui/cx";
 import { DuplicateChoices } from "./DuplicateChoices";
@@ -215,15 +214,11 @@ export const NewApplicationPage = () => {
   const failure = acknowledgementRequired === null ? submit.error : null;
 
   return (
-    <Card aria-labelledby="route-heading">
-      <PageHeading
-        description="הזנת פרטי המשרה יוצרת מועמדות ותצלום משרה קבוע, ולאחר השמירה מפעילה את ניתוח המשרה."
-        id="route-heading"
-      >
-        משרה חדשה
-      </PageHeading>
-
-      <form className="mt-6 flex flex-col gap-6" noValidate onSubmit={runSubmit(undefined)}>
+    <PageShell
+      description="הזנת פרטי המשרה יוצרת מועמדות ותצלום משרה קבוע, ולאחר השמירה מפעילה את ניתוח המשרה."
+      title="משרה חדשה"
+    >
+      <form className="flex flex-col gap-6" noValidate onSubmit={runSubmit(undefined)}>
         <FormSection
           description="שלושת אלה מזהים את המועמדות ברשימות ובכל מסכי ההמשך."
           title="פרטי המשרה"
@@ -353,15 +348,18 @@ export const NewApplicationPage = () => {
 
         <ActionBar
           primary={
-            <Button disabled={submit.isPending} type="submit">
-              {submit.isPending && submit.variables?.acknowledged !== true
-                ? "בודק כפילויות…"
-                : "יצירת מועמדות"}
+            <Button
+              disabled={submit.isPending && submit.variables?.acknowledged === true}
+              pending={submit.isPending && submit.variables?.acknowledged !== true}
+              pendingLabel="בודק כפילויות…"
+              type="submit"
+            >
+              יצירת מועמדות
             </Button>
           }
           sticky
         />
       </form>
-    </Card>
+    </PageShell>
   );
 };

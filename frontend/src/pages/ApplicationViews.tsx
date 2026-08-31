@@ -38,7 +38,7 @@ export const ApplicationViews = ({
 }) => (
   <div
     aria-label="תצוגות המועמדות"
-    className="mt-4 flex gap-1 border-b border-cv-border"
+    className="flex gap-1 border-b border-cv-border"
     role="tablist"
   >
     {views.map((view) => {

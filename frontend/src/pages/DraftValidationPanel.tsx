@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { applicationDetailQueryKey } from "../api/applications";
 import type { WorkingDraft } from "../api/contracts";
 import { validateWorkingDraft, validationRunQueryOptions } from "../api/validation";
-import { ErrorCallout } from "../app/ErrorCallout";
+import { briefServerFailureDetail, ErrorCallout } from "../app/ErrorCallout";
 import { Button } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { LiveRegion } from "../ui/LiveRegion";
@@ -91,11 +91,13 @@ export const DraftValidationPanel = ({
               : "הטיוטה לא עברה אימות"}
         </h2>
         <Button
-          disabled={draft === undefined || validation.isPending}
+          disabled={draft === undefined}
           onClick={() => validation.mutate()}
+          pending={validation.isPending}
+          pendingLabel="מאמת…"
           variant="secondary"
         >
-          {validation.isPending ? "מאמת…" : run === undefined ? "אימות הטיוטה" : "אימות מחדש"}
+          {run === undefined ? "אימות הטיוטה" : "אימות מחדש"}
         </Button>
       </div>
 
@@ -108,7 +110,7 @@ export const DraftValidationPanel = ({
       {error === null ? null : (
         <ErrorCallout
           error={error}
-          fallbackDetail="הפנייה לשרת נכשלה."
+          fallbackDetail={briefServerFailureDetail}
           fallbackTitle="לא ניתן להשלים את האימות"
         />
       )}

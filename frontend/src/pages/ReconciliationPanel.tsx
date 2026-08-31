@@ -171,11 +171,12 @@ export const ReconciliationPanel = () => {
       </p>
       <div className="mt-4 flex flex-col items-start gap-6">
         <Button
-          disabled={reconciliation.isPending}
           onClick={() => reconciliation.mutate()}
+          pending={reconciliation.isPending}
+          pendingLabel="בודק התאמה…"
           type="button"
         >
-          {reconciliation.isPending ? "בודק התאמה…" : "הפעלת בדיקת התאמה"}
+          הפעלת בדיקת התאמה
         </Button>
         {reconciliation.data === undefined ? null : <Report report={reconciliation.data} />}
         {reconciliation.error === null ? null : (

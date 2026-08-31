@@ -4,9 +4,12 @@ import { Callout } from "../ui/Callout";
 interface ErrorCalloutProps {
   className?: string;
   error: unknown;
-  fallbackDetail: string;
+  fallbackDetail?: string;
   fallbackTitle: string;
 }
+
+const defaultFallbackDetail = "הפנייה לשרת נכשלה. אפשר לרענן את העמוד ולנסות שוב.";
+export const briefServerFailureDetail = "הפנייה לשרת נכשלה.";
 
 /** One presentation boundary for failed API queries and mutations.
  *
@@ -21,7 +24,7 @@ interface ErrorCalloutProps {
 export const ErrorCallout = ({
   className,
   error,
-  fallbackDetail,
+  fallbackDetail = defaultFallbackDetail,
   fallbackTitle,
 }: ErrorCalloutProps) => {
   const problem = error instanceof ApiProblem ? error.problem : null;

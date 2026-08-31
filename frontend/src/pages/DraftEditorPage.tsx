@@ -20,15 +20,15 @@ import {
 import { aiRegenerationAvailable, settingsQueryOptions } from "../api/settings";
 import { ErrorCallout } from "../app/ErrorCallout";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
+import { useWatchedOperation } from "../hooks/useWatchedOperation";
 import { Button, buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { cx } from "../ui/cx";
-import { Card } from "../ui/Card";
 import { LtrText } from "../ui/LtrText";
-import { PageHeading } from "../ui/PageHeading";
+import { PageShell } from "../ui/PageShell";
+import { QueryState } from "../ui/QueryState";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ViewSwitch } from "../ui/ViewSwitch";
-import { ActiveOperationPanel } from "./ActiveOperationPanel";
 import { DraftApprovalDialog } from "./DraftApprovalDialog";
 import { ClaimFactResolution } from "./ClaimFactResolution";
 import { DraftClaimCard } from "./DraftClaimCard";
@@ -41,7 +41,6 @@ import { DraftSaveState } from "./DraftSaveState";
 import { DraftValidationPanel } from "./DraftValidationPanel";
 import { removability } from "./claimRemoval";
 import { useDraftAutosave } from "./useDraftAutosave";
-import { useWatchedOperation } from "./useWatchedOperation";
 import { reasonTitle, workingDraftStateLabels, workingDraftStateTones } from "./applicationLabels";
 
 /* A.4 frame 3: the editor pane. It reads the §9 projection for which draft is active and
@@ -63,7 +62,7 @@ export const DraftEditorPage = () => {
   /* The same watch the Application screen keeps, on the other screen that queues durable
      work against one Application. Regeneration is reported here, beside the draft it is
      rewriting. */
-  const { operation: watched, watch } = useWatchedOperation(applicationId, detail);
+  const { panel: operationPanel, watch } = useWatchedOperation(applicationId, detail);
 
   const workingDraftId = detail?.active_working_draft_id ?? null;
   const draftQuery = useQuery({
@@ -253,34 +252,21 @@ export const DraftEditorPage = () => {
     autosave.pendingRemovals.length > 0;
 
   return (
-    <Card aria-labelledby="route-heading">
-      <PageHeading
-        description={
-          detail === undefined
-            ? "טוען את מצב המועמדות…"
-            : `תפקיד היעד: ${detail.application.target_role}`
-        }
-        eyebrow="סביבת עריכה"
-        id="route-heading"
-      >
-        עריכה, אימות ואישור
-      </PageHeading>
-
-      <div className="mt-6 flex flex-col gap-6">
-        {applicationQuery.error === null ? null : (
-          <ErrorCallout
-            error={applicationQuery.error}
-            fallbackDetail="הפנייה לשרת נכשלה. אפשר לרענן את העמוד ולנסות שוב."
-            fallbackTitle="לא ניתן לטעון את מצב המועמדות"
-          />
-        )}
-        {draftQuery.error === null ? null : (
-          <ErrorCallout
-            error={draftQuery.error}
-            fallbackDetail="הפנייה לשרת נכשלה. אפשר לרענן את העמוד ולנסות שוב."
-            fallbackTitle="לא ניתן לטעון את הטיוטה"
-          />
-        )}
+    <PageShell
+      description={detail === undefined ? undefined : `תפקיד היעד: ${detail.application.target_role}`}
+      eyebrow="סביבת עריכה"
+      title="עריכה, אימות ואישור"
+      width="editor"
+    >
+      <QueryState
+        error={applicationQuery.error}
+        fallbackTitle="לא ניתן לטעון את מצב המועמדות"
+        loading={detail === undefined}
+        loadingLabel="טוען את מצב המועמדות…"
+      />
+      {draftQuery.error === null ? null : (
+        <QueryState error={draftQuery.error} fallbackTitle="לא ניתן לטעון את הטיוטה" />
+      )}
 
         {detail !== undefined && workingDraftId === null && renderRevisionId === null ? (
           <Callout
@@ -307,7 +293,7 @@ export const DraftEditorPage = () => {
 
         {/* Live work, reported beside the draft it is rewriting rather than on a screen
             the user has to leave the text for. */}
-        {watched === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={watched} />}
+        {operationPanel}
 
         {/* The projection's own blockers. A claim with no fact behind it raises
             PENDING_FACT_REQUIRES_RESOLUTION there, and it is shown here as the reason it
@@ -332,7 +318,7 @@ export const DraftEditorPage = () => {
           <DraftRenderPanel approvedRevisionId={renderRevisionId} onQueued={watch} />
         ) : draft === undefined ? (
           workingDraftId === null || draftQuery.error !== null ? null : (
-            <p className="text-body text-cv-text-muted">טוען את הטיוטה…</p>
+            <QueryState loading loadingLabel="טוען את הטיוטה…" />
           )
         ) : (
           <div className="flex flex-col gap-6">
@@ -559,7 +545,6 @@ export const DraftEditorPage = () => {
             />
           </div>
         )}
-      </div>
-    </Card>
+    </PageShell>
   );
 };

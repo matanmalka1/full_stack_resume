@@ -13,12 +13,12 @@ import { settingsQueryOptions } from "../api/settings";
 import type { ApplicationDetail, Reason } from "../api/contracts";
 import { ErrorCallout } from "../app/ErrorCallout";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
+import { useWatchedOperation } from "../hooks/useWatchedOperation";
 import { buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
-import { Card } from "../ui/Card";
-import { PageHeading } from "../ui/PageHeading";
+import { PageShell } from "../ui/PageShell";
+import { QueryState } from "../ui/QueryState";
 import { StatusBadge } from "../ui/StatusBadge";
-import { ActiveOperationPanel } from "./ActiveOperationPanel";
 import { type AutoDraftSources, autoDraftSources } from "./autoDraft";
 import { AnalysisPanel, SupersededAnalysisNote } from "./AnalysisPanel";
 import { JobSnapshotPanel } from "./JobSnapshotPanel";
@@ -27,7 +27,6 @@ import { ApplicationActions } from "./ApplicationActions";
 import { RecruitmentPanel } from "./RecruitmentPanel";
 import { ApplicationViews, applicationViewFromParam } from "./ApplicationViews";
 import { actionDestination } from "./actionDestinations";
-import { useWatchedOperation } from "./useWatchedOperation";
 import {
   actionLabel,
   recruitmentStatusIcon,
@@ -131,10 +130,12 @@ export const ApplicationPage = () => {
   const view = applicationViewFromParam(searchParams.get("view"));
   const query = useQuery(applicationDetailQueryOptions(applicationId));
   const detail = query.data;
-  const { operation: watched, operationId: watchedId, watch } = useWatchedOperation(
-    applicationId,
-    detail,
-  );
+  const {
+    operation: watched,
+    operationId: watchedId,
+    panel: operationPanel,
+    watch,
+  } = useWatchedOperation(applicationId, detail);
   /* The same narrow read the review screen uses, and the same guard: it answers `null`
      unless the analysis on record is the active one, so a superseded analysis is named
      as superseded rather than shown as the classification in force. */
@@ -192,23 +193,15 @@ export const ApplicationPage = () => {
     view === "tracking" ? "none" : detail === undefined ? "unknown" : detail.preparation_state,
   );
 
+  /* The persistent shell already names the company and role. This masthead names
+     the view and reports the axis that view is about - never both at once: the two
+     are independent, and a card showing them together made every visit start by
+     working out which of the two states in front of the reader it was reporting
+     (product-spec §399). */
   return (
-    <Card aria-labelledby="route-heading">
-      {/* The persistent shell already names the company and role. This masthead names
-          the view and reports the axis that view is about - never both at once: the two
-          are independent, and a card showing them together made every visit start by
-          working out which of the two states in front of the reader it was reporting
-          (product-spec §399). */}
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-cv-border pb-4">
-        <div className="min-w-0">
-          <PageHeading
-            description={detail === undefined ? "טוען…" : undefined}
-            id="route-heading"
-          >
-            {view === "tracking" ? "מעקב גיוס" : "הכנת קורות החיים"}
-          </PageHeading>
-        </div>
-        {detail === undefined ? null : view === "tracking" ? (
+    <PageShell
+      actions={
+        detail === undefined ? null : view === "tracking" ? (
           <StatusBadge
             icon={recruitmentStatusIcon(detail.recruitment_status)}
             tone={recruitmentStatusTone(detail.recruitment_status)}
@@ -231,9 +224,10 @@ export const ApplicationPage = () => {
               </StatusBadge>
             )}
           </div>
-        )}
-      </div>
-
+        )
+      }
+      title={view === "tracking" ? "מעקב גיוס" : "הכנת קורות החיים"}
+    >
       <ApplicationViews
         current={view}
         /* `replace` so switching axis does not stack history entries: the two views are
@@ -243,45 +237,37 @@ export const ApplicationPage = () => {
         }
       />
 
-      {query.error === null ? null : (
-        <ErrorCallout
-          className="mt-6"
-          error={query.error}
-          fallbackDetail="הפנייה לשרת נכשלה. אפשר לרענן את העמוד ולנסות שוב."
-          fallbackTitle="לא ניתן לטעון את המועמדות"
-        />
-      )}
+      <QueryState
+        error={query.error}
+        fallbackTitle="לא ניתן לטעון את המועמדות"
+        loading={detail === undefined}
+        loadingLabel="טוען…"
+      >
+        {detail === undefined ? null : view === "tracking" ? (
+          <div
+            aria-labelledby="application-view-tab-tracking"
+            id="application-view-tracking"
+            role="tabpanel"
+          >
+            <RecruitmentPanel detail={detail} />
+          </div>
+        ) : (
+          <div
+            aria-labelledby="application-view-tab-preparation"
+            className="flex flex-col gap-5"
+            id="application-view-preparation"
+            role="tabpanel"
+          >
+            {automaticAnalysisStartFailed &&
+            detail.preparation_state === "needs_analysis" &&
+            detail.active_operation == null ? (
+              <Callout title="המועמדות נוצרה, אך הניתוח לא הופעל" tone="warning">
+                ניתן להפעיל את ניתוח המשרה מהפעולה שלמטה. יצירת המועמדות לא תבוצע שוב.
+              </Callout>
+            ) : null}
 
-      {detail === undefined ? (
-        query.error === null ? (
-          <p className="mt-6 text-body text-cv-text-muted">טוען…</p>
-        ) : null
-      ) : view === "tracking" ? (
-        <div
-          aria-labelledby="application-view-tab-tracking"
-          className="mt-5"
-          id="application-view-tracking"
-          role="tabpanel"
-        >
-          <RecruitmentPanel detail={detail} />
-        </div>
-      ) : (
-        <div
-          aria-labelledby="application-view-tab-preparation"
-          className="mt-5 flex flex-col gap-5"
-          id="application-view-preparation"
-          role="tabpanel"
-        >
-          {automaticAnalysisStartFailed &&
-          detail.preparation_state === "needs_analysis" &&
-          detail.active_operation == null ? (
-            <Callout title="המועמדות נוצרה, אך הניתוח לא הופעל" tone="warning">
-              ניתן להפעיל את ניתוח המשרה מהפעולה שלמטה. יצירת המועמדות לא תבוצע שוב.
-            </Callout>
-          ) : null}
-
-          {/* The work itself, not a link to it. */}
-          {watched === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={watched} />}
+            {/* The work itself, not a link to it. */}
+            {operationPanel}
 
           {/* A review reason whose control is the panel below states the requirement and
               stops there: offering a link beside a form that resolves it on this very
@@ -341,10 +327,11 @@ export const ApplicationPage = () => {
           <ReviewDecisionPanel detail={detail} />
 
 
-          <ApplicationActions detail={detail} onQueued={watch} />
+            <ApplicationActions detail={detail} onQueued={watch} />
 
-        </div>
-      )}
-    </Card>
+          </div>
+        )}
+      </QueryState>
+    </PageShell>
   );
 };

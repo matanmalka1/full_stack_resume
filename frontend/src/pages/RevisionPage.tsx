@@ -11,19 +11,18 @@ import {
   recruiterPdfHref,
 } from "../api/revisions";
 import { recordInternalSubmission } from "../api/tracking";
-import { ErrorCallout } from "../app/ErrorCallout";
+import { briefServerFailureDetail, ErrorCallout } from "../app/ErrorCallout";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
+import { useWatchedOperation } from "../hooks/useWatchedOperation";
 import { Button, buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
-import { Card } from "../ui/Card";
-import { PageHeading } from "../ui/PageHeading";
+import { PageShell } from "../ui/PageShell";
+import { QueryState } from "../ui/QueryState";
 import { SummaryList } from "../ui/SummaryList";
 import { Dialog } from "../ui/Dialog";
 import { Field } from "../ui/Field";
 import { TextInput } from "../ui/TextInput";
-import { ActiveOperationPanel } from "./ActiveOperationPanel";
 import { ValidationReportView } from "./ValidationReportView";
-import { useWatchedOperation } from "./useWatchedOperation";
 
 /* One approved revision: its document, its files, and the record of its submission.
 
@@ -60,7 +59,7 @@ export const RevisionPage = () => {
   /* The same watch the Application screen and the editor keep. This screen queues one
      command - a new draft from the approved revision - and reports it beside the files
      rather than sending the reader to a screen that holds neither. */
-  const { operation: watched, watch } = useWatchedOperation(
+  const { panel: operationPanel, watch } = useWatchedOperation(
     revision?.application_id ?? "",
     detail,
   );
@@ -143,49 +142,49 @@ export const RevisionPage = () => {
     URL.revokeObjectURL(href);
   };
 
+  /* The heading follows the revision, not the route. It read "קורות החיים מוכנים"
+     unconditionally, directly above the blocker this screen shows for a revision
+     that is not `ready_qualified` - the masthead asserting the one thing the body
+     was there to deny. */
   return (
-    <Card aria-labelledby="route-heading">
-      {/* The heading follows the revision, not the route. It read "קורות החיים מוכנים"
-          unconditionally, directly above the blocker this screen shows for a revision
-          that is not `ready_qualified` - the masthead asserting the one thing the body
-          was there to deny. */}
-      <PageHeading
-        description="הגרסה המאושרת נשארת זמינה גם כאשר העבודה על המועמדות ממשיכה."
-        id="route-heading"
+    <PageShell
+      description="הגרסה המאושרת נשארת זמינה גם כאשר העבודה על המועמדות ממשיכה."
+      title={revision?.ready_qualified === false ? "גרסה מאושרת" : "קורות החיים מוכנים"}
+    >
+      <QueryState
+        error={revisionQuery.error ?? applicationQuery.error}
+        fallbackDetail={briefServerFailureDetail}
+        fallbackTitle="לא ניתן לטעון את הגרסה המוכנה"
+        loading={revision === undefined}
+        loadingLabel="טוען את הגרסה…"
       >
-        {revision?.ready_qualified === false ? "גרסה מאושרת" : "קורות החיים מוכנים"}
-      </PageHeading>
-      <div className="mt-6 flex flex-col gap-6">
-        {revisionQuery.error === null && applicationQuery.error === null ? null : (
-          <ErrorCallout
-            error={revisionQuery.error ?? applicationQuery.error}
-            fallbackDetail="הפנייה לשרת נכשלה."
-            fallbackTitle="לא ניתן לטעון את הגרסה המוכנה"
-          />
-        )}
-        {decisionQuery.error === null ? null : (
-          <ErrorCallout
-            error={decisionQuery.error}
-            fallbackDetail="הגרסה עצמה נשארה זמינה; רק מסמך הסבר ההחלטה לא נטען."
-            fallbackTitle="לא ניתן לטעון את הסבר ההחלטה"
-          />
-        )}
-        {historicalContext === null ? null : (
-          <Callout title="הגרסה היסטורית בהקשר הפעיל" tone="warning">
-            {historicalContext}
-          </Callout>
-        )}
-        {otherWarnings?.map((warning) => (
-          <Callout key={warning.code} title={warning.message} tone="warning" />
-        ))}
-        {detail?.newer_draft_in_progress ? (
-          <Callout title="קיימת טיוטה חדשה יותר" tone="warning">היא אינה משנה את הגרסה המוכנה המוצגת כאן.</Callout>
-        ) : null}
-        {revision !== undefined && !revision.ready_qualified ? (
-          <Callout title="הגרסה עדיין אינה מוכנה למסירה" tone="blocker">דוח האימות שמתחת מפרט את החסימות.</Callout>
-        ) : null}
-        {revision === undefined ? <p className="text-body text-cv-text-muted">טוען את הגרסה…</p> : (
+        {revision === undefined ? null : (
           <>
+            {decisionQuery.error === null ? null : (
+              <ErrorCallout
+                error={decisionQuery.error}
+                fallbackDetail="הגרסה עצמה נשארה זמינה; רק מסמך הסבר ההחלטה לא נטען."
+                fallbackTitle="לא ניתן לטעון את הסבר ההחלטה"
+              />
+            )}
+            {historicalContext === null ? null : (
+              <Callout title="הגרסה היסטורית בהקשר הפעיל" tone="warning">
+                {historicalContext}
+              </Callout>
+            )}
+            {otherWarnings?.map((warning) => (
+              <Callout key={warning.code} title={warning.message} tone="warning" />
+            ))}
+            {detail?.newer_draft_in_progress ? (
+              <Callout title="קיימת טיוטה חדשה יותר" tone="warning">
+                היא אינה משנה את הגרסה המוכנה המוצגת כאן.
+              </Callout>
+            ) : null}
+            {!revision.ready_qualified ? (
+              <Callout title="הגרסה עדיין אינה מוכנה למסירה" tone="blocker">
+                דוח האימות שמתחת מפרט את החסימות.
+              </Callout>
+            ) : null}
             {/* The document is the point of this screen. It is presented as a page on the
                 canvas - full width, paper elevation, nothing competing beside it - rather
                 than as one item in a list of identifiers. */}
@@ -229,11 +228,12 @@ export const RevisionPage = () => {
 
           </>
         )}
-        {watched === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={watched} />}
+      </QueryState>
+      {operationPanel}
         {newDraft.error === null ? null : (
           <ErrorCallout
             error={newDraft.error}
-            fallbackDetail="הפנייה לשרת נכשלה."
+            fallbackDetail={briefServerFailureDetail}
             fallbackTitle="לא ניתן ליצור טיוטה חדשה"
           />
         )}
@@ -260,8 +260,8 @@ export const RevisionPage = () => {
               </Button>
             ) : null}
             {hasSources ? (
-              <Button disabled={newDraft.isPending || detail?.working_draft_state !== "none"} onClick={() => newDraft.mutate()} variant="secondary">
-                {newDraft.isPending ? "יוצר טיוטה…" : "יצירת טיוטה חדשה"}
+              <Button disabled={detail?.working_draft_state !== "none"} onClick={() => newDraft.mutate()} pending={newDraft.isPending} pendingLabel="יוצר טיוטה…" variant="secondary">
+                יצירת טיוטה חדשה
               </Button>
             ) : null}
             {/* The way back, offered whether or not a new draft can be started here.
@@ -277,7 +277,6 @@ export const RevisionPage = () => {
             </Link>
           </div>
         )}
-      </div>
       <Dialog
         dismissible={false}
         footer={
@@ -286,10 +285,12 @@ export const RevisionPage = () => {
               חזרה
             </Button>
             <Button
-              disabled={submission.isPending || !submittedAtValid}
+              disabled={!submittedAtValid}
               onClick={() => submission.mutate()}
+              pending={submission.isPending}
+              pendingLabel="רושם…"
             >
-              {submission.isPending ? "רושם…" : "אישור ורישום ההגשה"}
+              אישור ורישום ההגשה
             </Button>
           </>
         }
@@ -314,6 +315,6 @@ export const RevisionPage = () => {
           )}
         </Field>
       </Dialog>
-    </Card>
+    </PageShell>
   );
 };

@@ -105,10 +105,12 @@ export const ReviewDecisionPanel = ({ detail }: { detail: ApplicationDetail }) =
           align="start"
           primary={
             <Button
-              disabled={apply.isPending || !hasDecision(decisions) || analysisId === null}
+              disabled={!hasDecision(decisions) || analysisId === null}
               onClick={() => apply.mutate()}
+              pending={apply.isPending}
+              pendingLabel="מחיל את ההחלטות…"
             >
-              {apply.isPending ? "מחיל את ההחלטות…" : "החלת כל ההחלטות"}
+              החלת כל ההחלטות
             </Button>
           }
         />

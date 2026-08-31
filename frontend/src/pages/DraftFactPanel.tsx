@@ -2,6 +2,7 @@ import { Database, Plus } from "lucide-react";
 
 import type { DraftFact, WorkingDraftFacts } from "../api/contracts";
 import { Button } from "../ui/Button";
+import { QueryState } from "../ui/QueryState";
 import { omissionReasonLabels, selectionOutcomeLabels } from "./draftLabels";
 
 interface DraftFactPanelProps {
@@ -26,7 +27,13 @@ export const DraftFactPanel = ({ busy, facts, onInclude }: DraftFactPanelProps) 
   );
 
   if (facts === undefined) {
-    return <p className="text-support leading-6 text-cv-text-muted">טוען את חשבונאות העובדות…</p>;
+    return (
+      <QueryState
+        className="text-support leading-6"
+        loading
+        loadingLabel="טוען את חשבונאות העובדות…"
+      />
+    );
   }
 
   return (

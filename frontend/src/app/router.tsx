@@ -78,6 +78,7 @@ export const router = createBrowserRouter([
            stage: analysis is an action on it, not a screen of its own. */
         path: "applications/:applicationId",
         element: <ApplicationPage />,
+        handle: { applicationContext: "self" },
       },
       {
         /* The recruitment axis used to be a route. Bookmarks and links to it are older

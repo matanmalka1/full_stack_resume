@@ -6,7 +6,7 @@ import { ApiProblem } from "../api/client";
 import type { ApplicationDetail, WorkingDraft } from "../api/contracts";
 import { workingDraftQueryKey } from "../api/drafts";
 import { approveWorkingDraft, validationRunQueryOptions } from "../api/validation";
-import { ErrorCallout } from "../app/ErrorCallout";
+import { briefServerFailureDetail, ErrorCallout } from "../app/ErrorCallout";
 import { Button } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { Checkbox } from "../ui/Checkbox";
@@ -94,10 +94,12 @@ export const DraftApprovalDialog = ({
             חזרה
           </Button>
           <Button
-            disabled={approval.isPending || (warnings.length > 0 && !acknowledged)}
+            disabled={warnings.length > 0 && !acknowledged}
             onClick={() => approval.mutate()}
+            pending={approval.isPending}
+            pendingLabel="מאשר…"
           >
-            {approval.isPending ? "מאשר…" : "אישור הגרסה"}
+            אישור הגרסה
           </Button>
         </>
       }
@@ -141,7 +143,7 @@ export const DraftApprovalDialog = ({
         <ErrorCallout
           className="mt-4"
           error={approval.error}
-          fallbackDetail="הפנייה לשרת נכשלה."
+          fallbackDetail={briefServerFailureDetail}
           fallbackTitle="האישור לא בוצע"
         />
       )}

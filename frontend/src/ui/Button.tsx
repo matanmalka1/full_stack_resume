@@ -28,13 +28,30 @@ export const buttonClasses = (variant: ButtonVariant = "primary", className?: Cl
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
+  pending?: boolean;
+  pendingLabel?: ReactNode;
   variant?: ButtonVariant;
 }
 
-export const Button = ({ children, className, type, variant = "primary", ...rest }: ButtonProps) => {
+export const Button = ({
+  children,
+  className,
+  disabled,
+  pending = false,
+  pendingLabel,
+  type,
+  variant = "primary",
+  ...rest
+}: ButtonProps) => {
   return (
-    <button className={buttonClasses(variant, className)} type={type ?? "button"} {...rest}>
-      {children}
+    <button
+      aria-busy={pending || undefined}
+      className={buttonClasses(variant, className)}
+      disabled={disabled || pending}
+      type={type ?? "button"}
+      {...rest}
+    >
+      {pending && pendingLabel !== undefined ? pendingLabel : children}
     </button>
   );
 };

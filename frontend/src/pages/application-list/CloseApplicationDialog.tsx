@@ -21,8 +21,8 @@ export const CloseApplicationDialog = ({
         <Button onClick={onCancel} variant="secondary">
           ביטול
         </Button>
-        <Button disabled={pending} onClick={onConfirm}>
-          {pending ? "סוגר…" : "סגירת המועמדות"}
+        <Button onClick={onConfirm} pending={pending} pendingLabel="סוגר…">
+          סגירת המועמדות
         </Button>
       </>
     }

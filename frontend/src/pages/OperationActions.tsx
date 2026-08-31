@@ -81,14 +81,15 @@ export const OperationActions = ({
           />
         )}
         {canRetry ? (
-          <button
-            className="rounded-control underline underline-offset-4 hover:text-cv-text disabled:no-underline disabled:opacity-60"
-            disabled={retry.isPending}
+          <Button
+            className="min-h-0 px-0 font-normal underline underline-offset-4 hover:bg-transparent hover:text-cv-text disabled:no-underline"
             onClick={() => retry.mutate()}
-            type="button"
+            pending={retry.isPending}
+            pendingLabel="יוצר ניסיון חדש…"
+            variant="ghost"
           >
-            {retry.isPending ? "יוצר ניסיון חדש…" : "הרצה מחדש"}
-          </button>
+            הרצה מחדש
+          </Button>
         ) : null}
       </>
     );
@@ -107,28 +108,28 @@ export const OperationActions = ({
       <div className="flex flex-wrap gap-3">
         {canCancel ? (
           <Button
-            disabled={cancel.isPending || retry.isPending}
+            disabled={retry.isPending}
             onClick={() => cancel.mutate()}
+            pending={cancel.isPending}
+            pendingLabel="מבטל…"
             variant="destructive"
           >
-            {cancel.isPending ? "מבטל…" : "ביטול הפעולה"}
+            ביטול הפעולה
           </Button>
         ) : null}
         {canRetry ? (
           <Button
-            disabled={cancel.isPending || retry.isPending}
+            disabled={cancel.isPending}
             onClick={() => retry.mutate()}
+            pending={retry.isPending}
+            pendingLabel="יוצר ניסיון חדש…"
             variant={operation.status === "succeeded" ? "secondary" : "primary"}
           >
-            {retry.isPending
-              ? "יוצר ניסיון חדש…"
-              : /* On a run that failed, a retry is plainly another attempt at work that
-                   produced nothing. On one that succeeded it re-runs work that has a
-                   result on record and supersedes it, so the button says so rather than
-                   leaving "ניסיון חוזר" to imply a repeat of nothing. */
-                operation.status === "succeeded"
-                ? "הרצה מחדש"
-                : "ניסיון חוזר"}
+            {/* On a run that failed, a retry is plainly another attempt at work that
+                produced nothing. On one that succeeded it re-runs work that has a
+                result on record and supersedes it, so the button says so rather than
+                leaving "ניסיון חוזר" to imply a repeat of nothing. */}
+            {operation.status === "succeeded" ? "הרצה מחדש" : "ניסיון חוזר"}
           </Button>
         ) : null}
       </div>
