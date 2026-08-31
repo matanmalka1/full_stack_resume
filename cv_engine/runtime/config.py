@@ -48,8 +48,10 @@ class Setting:
 # 2 MiB sits inside the approved 1-2 MB order of magnitude.
 API_MAX_BODY_BYTES_DEFAULT = 2 * 1024 * 1024
 
-#: Where the API answers by default. Declared here rather than imported from
-#: `api.app` so the configuration layer stays free of an API import.
+#: Where the application expects the API to answer by default. These values drive
+#: same-origin policy; Uvicorn's CLI does not read them, so its explicit --host and
+#: --port bind flags must match. Declared here rather than imported from `api.app` so
+#: the configuration layer stays free of an API import.
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 

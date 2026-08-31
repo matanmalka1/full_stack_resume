@@ -54,8 +54,8 @@ The Web UI is the product interface. The system runs as two processes - the API 
 the Operation worker - over one database:
 
 ```bash
-./.venv/bin/python -m uvicorn cv_engine.runtime.asgi:app   # the API on 127.0.0.1:8765
-./.venv/bin/python -m cv_engine.worker                 # queued work
+./.venv/bin/python -m uvicorn cv_engine.runtime.asgi:app --host 127.0.0.1 --port 8765  # API
+./.venv/bin/python -m cv_engine.worker                                           # queued work
 ```
 
 The API serves HTTP and starts no background work; the worker claims queued
@@ -189,9 +189,9 @@ Two ways to run it, for two different jobs.
 **Developing the frontend** — no build step:
 
 ```bash
-./.venv/bin/python -m uvicorn cv_engine.runtime.asgi:app --reload  # 127.0.0.1:8765
-./.venv/bin/python -m cv_engine.worker                         # queued work
-cd frontend && npm run dev                                     # localhost:5173
+./.venv/bin/python -m uvicorn cv_engine.runtime.asgi:app --host 127.0.0.1 --port 8765 --reload
+./.venv/bin/python -m cv_engine.worker  # queued work
+cd frontend && npm run dev              # localhost:5173
 ```
 
 Vite compiles on demand and reloads on save. It proxies `/api` to the backend, so the
@@ -202,7 +202,7 @@ here needs `npm run build`.
 
 ```bash
 cd frontend && npm run build   # once, and after changing the frontend
-./.venv/bin/python -m uvicorn cv_engine.runtime.asgi:app
+./.venv/bin/python -m uvicorn cv_engine.runtime.asgi:app --host 127.0.0.1 --port 8765
 ./.venv/bin/python -m cv_engine.worker
 ```
 
@@ -211,9 +211,11 @@ still starts and serves the API alone - that is the dev loop above, where the UI
 from Vite. `npm run build` also runs `tsc -b` and the design-token check, so it is
 slower than `npm run dev` by design.
 
-Serving on a port other than the default needs `CV_API_PORT` as well as uvicorn's
-`--port`: the origin policy allows the origin the app believes it answers on, so
-telling only uvicorn refuses every state-changing request from the app's own UI.
+The explicit Uvicorn bind flags above must match `CV_API_HOST` and `CV_API_PORT`, whose
+application defaults are `127.0.0.1` and `8765`. Serving on another address needs both
+the corresponding environment setting and Uvicorn flag: the origin policy allows the
+origin the app believes it answers on, so changing only Uvicorn refuses every
+state-changing request from the app's own UI.
 
 ## Tests
 
