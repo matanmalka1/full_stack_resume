@@ -118,6 +118,7 @@ const ApplicationRow = ({
   /* What the workflow is waiting for, named by the projection rather than derived here.
      With nothing recommended the Application is not waiting on anything. */
   const next = item.recommended_action;
+  const trackedNextAction = item.next_action;
   /* Live work, from the field the projection already carries. An Operation that has
      reached a terminal status is not work in progress any more, and the row says nothing
      about it: the stage badge beside it is the result. */
@@ -194,6 +195,17 @@ const ApplicationRow = ({
             <StatusBadge tone="progress">
               {operationTypeLabels[running.operation_type]} · {statusLabels[running.status]}
             </StatusBadge>
+          ) : trackedNextAction != null ? (
+            <div className="flex flex-col gap-1">
+              <span className="text-support font-semibold text-cv-text" dir="auto">
+                {trackedNextAction}
+              </span>
+              {item.next_action_date == null ? null : (
+                <span className="text-support text-cv-text-muted">
+                  עד {formatDate(item.next_action_date)}
+                </span>
+              )}
+            </div>
           ) : ready != null ? (
             /* The finished file, collected from the board. */
             <Link

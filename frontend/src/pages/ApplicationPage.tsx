@@ -30,6 +30,7 @@ import { type AutoDraftSources, autoDraftSources } from "./autoDraft";
 import { AnalysisPanel, SupersededAnalysisNote } from "./AnalysisPanel";
 import { ReviewDecisionPanel, resolvedByDecisionForm } from "./ReviewDecisionPanel";
 import { ApplicationActions } from "./ApplicationActions";
+import { RecruitmentPanel } from "./RecruitmentPanel";
 import { actionDestination } from "./actionDestinations";
 import {
   actionLabel,
@@ -334,6 +335,8 @@ export const ApplicationPage = () => {
         <div className="mt-5 flex flex-col gap-5">
           {/* The work itself, not a link to it. */}
           {watched === undefined ? null : <ActiveOperationPanel operation={watched} />}
+
+          <RecruitmentPanel detail={detail} />
 
           {/* A review reason whose control is the panel below states the requirement and
               stops there: offering a link beside a form that resolves it on this very

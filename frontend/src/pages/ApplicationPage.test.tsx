@@ -13,6 +13,8 @@ const GENERATE_PATH = "/api/v1/applications/app-1/working-draft/generate";
 
 const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail => ({
   recruitment_status: "saved",
+  allowed_recruitment_transitions: ["withdrawn", "closed"],
+  recruitment_timeline: [],
   preparation_state: "needs_analysis",
   working_draft_state: "none",
   review_reasons: [],
@@ -307,6 +309,52 @@ describe("ApplicationPage", () => {
        `needs_analysis` a draft cannot exist, so "there is no active draft" beside
        "waiting for the job analysis" is a restatement, not a second state. */
     expect(screen.queryByText("אין טיוטה פעילה")).not.toBeInTheDocument();
+  });
+
+  it("renders recruitment choices and correction history from the backend projection", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          detail({
+            allowed_recruitment_transitions: ["withdrawn", "closed"],
+            recruitment_timeline: [
+              {
+                id: "event-1",
+                item_type: "status_transition",
+                occurred_at: "2026-08-30T09:00:00Z",
+                actor_type: "user",
+                client: "web",
+                from_status: "saved",
+                to_status: "withdrawn",
+                reason: "role changed",
+                metadata: {},
+              },
+              {
+                id: "event-2",
+                item_type: "status_correction",
+                occurred_at: "2026-08-30T10:00:00Z",
+                actor_type: "user",
+                client: "web",
+                from_status: "withdrawn",
+                to_status: "closed",
+                corrects_event_id: "event-1",
+                reason: "wrong application",
+                metadata: {},
+              },
+            ],
+          }),
+        ),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "מעקב גיוס" })).toBeInTheDocument();
+    expect(screen.getAllByRole("option", { name: "בוטל" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("option", { name: "סגור" }).length).toBeGreaterThan(0);
+    expect(screen.getByText(/תוקן ל־סגור/)).toBeInTheDocument();
+    expect(screen.getByText("wrong application")).toBeInTheDocument();
   });
 
   it("reports the draft axis when the stage does not settle it", async () => {

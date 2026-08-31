@@ -238,6 +238,22 @@ describe("ApplicationListPage", () => {
     expect(screen.queryByRole("link", { name: actionLabel("analyze") })).not.toBeInTheDocument();
   });
 
+  it("shows the stored recruitment follow-up before a workflow recommendation", async () => {
+    stubList([
+      item({
+        next_action: "Follow up with recruiter",
+        next_action_date: "2026-09-05",
+        recommended_action: "analyze",
+      }),
+    ]);
+
+    renderPage();
+
+    expect(await screen.findByText("Follow up with recruiter")).toBeInTheDocument();
+    expect(screen.getByText((_, element) => element?.textContent?.startsWith("עד ") ?? false)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: actionLabel("analyze") })).not.toBeInTheDocument();
+  });
+
   /* A Ready Application has produced the thing this whole workflow exists for. Its row
      used to be the one that said the least: an em dash where the file should be. */
   it("links a Ready Application straight to its finished revision", async () => {

@@ -1,4 +1,4 @@
-import type { PreparationState, WorkingDraftState } from "../api/contracts";
+import type { PreparationState, RecruitmentStatus, WorkingDraftState } from "../api/contracts";
 import type { StatusTone } from "../ui/status";
 
 /* Keyed by the generated unions, so a state added to the §9 projection fails the
@@ -121,7 +121,7 @@ const blockedReasonLabels: Record<string, string> = {
    An open string map rather than a Record over a union: `recruitment_status` is `str` at
    the HTTP boundary, and a status this build does not know is shown as its raw value
    rather than hidden. */
-export const recruitmentStatusLabels: Record<string, string> = {
+export const recruitmentStatusLabels: Record<RecruitmentStatus, string> = {
   saved: "נשמר",
   applied: "הוגש",
   recruiter_screen: "שיחת מגייס",
@@ -136,7 +136,9 @@ export const recruitmentStatusLabels: Record<string, string> = {
 };
 
 export const recruitmentStatusLabel = (status: string): string =>
-  recruitmentStatusLabels[status] ?? status;
+  status in recruitmentStatusLabels
+    ? recruitmentStatusLabels[status as RecruitmentStatus]
+    : status;
 
 export const blockedReasonLabel = (reason: string): string =>
   blockedReasonLabels[reason] ?? reason;
