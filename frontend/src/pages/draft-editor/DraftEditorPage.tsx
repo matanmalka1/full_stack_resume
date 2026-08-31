@@ -23,16 +23,15 @@ import { useWorkflowStage } from "../../app/WorkflowLandmark";
 import { useWatchedOperation } from "../../hooks/useWatchedOperation";
 import { Button, buttonClasses } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
-import { cx } from "../../ui/cx";
 import { LtrText } from "../../ui/LtrText";
 import { PageShell } from "../../ui/PageShell";
 import { QueryState } from "../../ui/QueryState";
 import { StatusBadge } from "../../ui/StatusBadge";
-import { ViewSwitch } from "../../ui/ViewSwitch";
 import { DraftApprovalDialog } from "./DraftApprovalDialog";
 import { ClaimFactResolution } from "./ClaimFactResolution";
 import { DraftClaimCard } from "./DraftClaimCard";
 import { DraftConflictDialog } from "./DraftConflictDialog";
+import { EditorLayout } from "./EditorLayout";
 import { DraftFactPanel } from "./DraftFactPanel";
 import { FactLifecyclePanel } from "../FactLifecyclePanel";
 import { DraftPreview } from "./DraftPreview";
@@ -82,10 +81,6 @@ export const DraftEditorPage = () => {
   const facts = factsQuery.data;
   const applicationHref = `/applications/${encodeURIComponent(applicationId)}`;
   const queryClient = useQueryClient();
-  /* A.4's responsive fallback. Both panes stay mounted and one is hidden, rather than one
-     being unmounted: switching views must not discard text the user has typed, and an
-     unmounted editor would take its visible text with it. */
-  const [view, setView] = useState<"editor" | "preview">("editor");
   /* The three screens that used to follow the editor are states of this one editor.
      None of them changes what is sent: the validation panel runs the same command, the
      dialog is A.4 frame 5's own approval dialog, and the render panel keeps rendering an
@@ -254,6 +249,8 @@ export const DraftEditorPage = () => {
     autosave.status === "conflict" ||
     autosave.pending.length > 0 ||
     autosave.pendingRemovals.length > 0;
+  const regenerationDisabled =
+    unsaved || regeneration.isPending || !regenerationAvailable;
 
   return (
     <PageShell
@@ -320,36 +317,22 @@ export const DraftEditorPage = () => {
 
         {renderRevisionId !== null ? (
           <DraftRenderPanel approvedRevisionId={renderRevisionId} onQueued={watch} />
-        ) : draft === undefined ? (
-          workingDraftId === null || draftQuery.error !== null ? null : (
-            <QueryState loading loadingLabel="טוען את הטיוטה…" />
-          )
-        ) : (
-          <div className="flex flex-col gap-6">
-            <div className="lg:hidden">
-              <ViewSwitch
-                label="מעבר בין העריכה לתצוגה ולאישור"
-                onChange={setView}
-                /* The second pane is no longer only a preview: it carries the validation
-                   result and the approval too, so at narrow widths it is named for what
-                   it holds rather than leaving those controls behind a label that does
-                   not mention them. */
-                options={[
-                  { label: "עריכה", value: "editor" },
-                  { label: "תצוגה ואישור", value: "preview" },
-                ]}
-                value={view}
-              />
-            </div>
-
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8 xl:gap-10">
-              <div
-                className={cx(
-                  "flex min-w-0 flex-col gap-6 lg:flex-1 lg:basis-7/12",
-                  view === "editor" ? undefined : "hidden lg:flex",
-                )}
-              >
-                <section aria-labelledby="draft-structure-heading" className="flex flex-col gap-4">
+        ) : null}
+        {renderRevisionId === null &&
+        draft === undefined &&
+        workingDraftId !== null &&
+        draftQuery.error === null ? (
+          <QueryState loading loadingLabel="טוען את הטיוטה…" />
+        ) : null}
+        {renderRevisionId === null && draft !== undefined ? (
+          <>
+            <EditorLayout
+              editor={
+                <>
+                  <section
+                    aria-labelledby="draft-structure-heading"
+                    className="flex flex-col gap-4"
+                  >
                   <h2
                     className="text-heading-sm font-bold text-cv-text"
                     id="draft-structure-heading"
@@ -366,7 +349,7 @@ export const DraftEditorPage = () => {
                       onEdit={editClaim}
                       onRegenerate={(claim) => regeneration.mutate({ claimId: claim.claim_id })}
                       onRemove={removeClaim}
-                      unsaved={unsaved || regeneration.isPending || !regenerationAvailable}
+                      unsaved={regenerationDisabled}
                     />
                     {draft.outline.contacts.map((contact) => (
                       <DraftClaimCard
@@ -378,7 +361,7 @@ export const DraftEditorPage = () => {
                         onEdit={editClaim}
                         onRegenerate={(claim) => regeneration.mutate({ claimId: claim.claim_id })}
                         onRemove={removeClaim}
-                        unsaved={unsaved || regeneration.isPending || !regenerationAvailable}
+                        unsaved={regenerationDisabled}
                       />
                     ))}
                   </ul>
@@ -393,7 +376,7 @@ export const DraftEditorPage = () => {
                           {section.name}
                         </h3>
                         <Button
-                          disabled={unsaved || regeneration.isPending || !regenerationAvailable}
+                          disabled={regenerationDisabled}
                           onClick={() => regeneration.mutate({ section: section.name })}
                           variant="secondary"
                         >
@@ -430,96 +413,95 @@ export const DraftEditorPage = () => {
                                 regeneration.mutate({ claimId: claim.claim_id })
                               }
                               onRemove={removeClaim}
-                              unsaved={unsaved || regeneration.isPending || !regenerationAvailable}
+                              unsaved={regenerationDisabled}
                             />
                           ))}
                         </ul>
                       )}
                     </div>
                   ))}
-                </section>
+                  </section>
 
-                {regenerationAvailable ? null : (
-                  <Callout title="יצירה מחדש באמצעות AI אינה זמינה" tone="neutral">
-                    יש להגדיר ספק ולהפעיל AI במסך ההגדרות. לא יתבצע מעבר דטרמיניסטי שקט.
-                    <div className="mt-3">
-                      <Link className={buttonClasses("secondary")} to="/settings">מעבר להגדרות</Link>
-                    </div>
-                  </Callout>
-                )}
+                  {regenerationAvailable ? null : (
+                    <Callout title="יצירה מחדש באמצעות AI אינה זמינה" tone="neutral">
+                      יש להגדיר ספק ולהפעיל AI במסך ההגדרות. לא יתבצע מעבר דטרמיניסטי שקט.
+                      <div className="mt-3">
+                        <Link className={buttonClasses("secondary")} to="/settings">
+                          מעבר להגדרות
+                        </Link>
+                      </div>
+                    </Callout>
+                  )}
 
-                {regeneration.error === null ? null : (
-                  <ErrorCallout
-                    error={regeneration.error}
-                    fallbackDetail="לא ניתן היה להפעיל יצירה מחדש. הטיוטה נשמרה כפי שהיא."
-                    fallbackTitle="היצירה מחדש לא הופעלה"
+                  {regeneration.error === null ? null : (
+                    <ErrorCallout
+                      error={regeneration.error}
+                      fallbackDetail="לא ניתן היה להפעיל יצירה מחדש. הטיוטה נשמרה כפי שהיא."
+                      fallbackTitle="היצירה מחדש לא הופעלה"
+                    />
+                  )}
+
+                  {unsaved ? (
+                    <p className="text-support leading-6 text-cv-text-muted">
+                      יצירה מחדש מוקפאת על הגרסה השמורה של הטיוטה, ולכן היא זמינה רק אחרי שהשמירה
+                      הסתיימה.
+                    </p>
+                  ) : null}
+
+                  {selection.error === null ? null : (
+                    <ErrorCallout
+                      error={selection.error}
+                      fallbackDetail="לא ניתן היה לשנות את בחירת העובדות. הטיוטה נשמרה כפי שהיא."
+                      fallbackTitle="שינוי הבחירה לא בוצע"
+                    />
+                  )}
+
+                  <DraftFactPanel busy={selection.isPending} facts={facts} onInclude={includeFact} />
+
+                  <FactLifecyclePanel
+                    profile={detail?.application.profile ?? null}
+                    sections={draft.outline.sections.map((section) => section.name)}
                   />
-                )}
 
-                {unsaved ? (
-                  <p className="text-support leading-6 text-cv-text-muted">
-                    יצירה מחדש מוקפאת על הגרסה השמורה של הטיוטה, ולכן היא זמינה רק אחרי שהשמירה
-                    הסתיימה.
-                  </p>
-                ) : null}
+                  <div>
+                    <Link className={buttonClasses("secondary")} to={applicationHref}>
+                      <ArrowRight aria-hidden="true" className="size-4" />
+                      חזרה למועמדות
+                    </Link>
+                  </div>
+                </>
+              }
+              preview={
+                <>
+                  {/* The right pane is the document and everything said about it: the live
+                      preview, the validation result for the exact version shown, and the
+                      approval that follows from it. Those last two were screens; reaching
+                      them meant leaving the text they describe. */}
+                  <DraftPreview draft={draft} />
 
-                {selection.error === null ? null : (
-                  <ErrorCallout
-                    error={selection.error}
-                    fallbackDetail="לא ניתן היה לשנות את בחירת העובדות. הטיוטה נשמרה כפי שהיא."
-                    fallbackTitle="שינוי הבחירה לא בוצע"
+                  <DraftValidationPanel
+                    applicationId={applicationId}
+                    draft={draft}
+                    onExactPassingRun={onExactPassingRun}
+                    stale={validationStale}
                   />
-                )}
 
-                <DraftFactPanel busy={selection.isPending} facts={facts} onInclude={includeFact} />
-
-                <FactLifecyclePanel
-                  profile={detail?.application.profile ?? null}
-                  sections={draft.outline.sections.map((section) => section.name)}
-                />
-
-                <div>
-                  <Link className={buttonClasses("secondary")} to={applicationHref}>
-                    <ArrowRight aria-hidden="true" className="size-4" />
-                    חזרה למועמדות
-                  </Link>
-                </div>
-              </div>
-
-              {/* The right pane is the document and everything said about it: the live
-                  preview, the validation result for the exact version shown, and the
-                  approval that follows from it. Those last two were screens; reaching
-                  them meant leaving the text they describe. */}
-              <div
-                className={cx(
-                  "flex min-w-0 flex-col gap-5 lg:sticky lg:top-20 lg:flex-1 lg:basis-5/12",
-                  view === "preview" ? undefined : "hidden lg:flex",
-                )}
-              >
-                <DraftPreview draft={draft} />
-
-                <DraftValidationPanel
-                  applicationId={applicationId}
-                  draft={draft}
-                  onExactPassingRun={onExactPassingRun}
-                  stale={validationStale}
-                />
-
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface">
-                  <p className="text-support leading-6 text-cv-text-muted">
-                    {exactPassingRunId === null
-                      ? "האישור נפתח אחרי אימות שעבר על הגרסה המוצגת."
-                      : "האימות עבר על הגרסה המוצגת."}
-                  </p>
-                  <Button
-                    disabled={exactPassingRunId === null}
-                    onClick={() => setApprovalOpen(true)}
-                  >
-                    אישור הגרסה
-                  </Button>
-                </div>
-              </div>
-            </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface">
+                    <p className="text-support leading-6 text-cv-text-muted">
+                      {exactPassingRunId === null
+                        ? "האישור נפתח אחרי אימות שעבר על הגרסה המוצגת."
+                        : "האימות עבר על הגרסה המוצגת."}
+                    </p>
+                    <Button
+                      disabled={exactPassingRunId === null}
+                      onClick={() => setApprovalOpen(true)}
+                    >
+                      אישור הגרסה
+                    </Button>
+                  </div>
+                </>
+              }
+            />
 
 
             <DraftApprovalDialog
@@ -547,8 +529,8 @@ export const DraftEditorPage = () => {
               pending={autosave.pending}
               pendingRemovals={autosave.pendingRemovals}
             />
-          </div>
-        )}
+          </>
+        ) : null}
     </PageShell>
   );
 };

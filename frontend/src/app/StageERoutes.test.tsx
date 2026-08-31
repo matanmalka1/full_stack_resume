@@ -83,7 +83,7 @@ describe("workflow stage publishing", () => {
 
      The sources come through Vite rather than `node:fs`: the app's TypeScript project
      deliberately carries no Node types, and this check needs none. */
-  const pageSources = import.meta.glob("../pages/*.tsx", {
+  const pageSources = import.meta.glob("../pages/**/*.tsx", {
     query: "?raw",
     import: "default",
     eager: true,
@@ -91,9 +91,15 @@ describe("workflow stage publishing", () => {
 
   it("requires every routed screen to publish a workflow stage", () => {
     for (const name of routeComponentNames()) {
-      const source = pageSources[`../pages/${name}.tsx`];
+      const matches = Object.entries(pageSources).filter(([path]) =>
+        path.endsWith(`/${name}.tsx`),
+      );
       /* A route component with no file of that name means the derivation stopped matching
-         the pages, which is a failure here rather than a silently skipped check. */
+         the pages, which is a failure here rather than a silently skipped check. More
+         than one match is equally ambiguous, so nested page folders do not weaken the
+         one routed component -> one source contract. */
+      expect(matches).toHaveLength(1);
+      const source = matches[0]?.[1];
       expect(source).toBeDefined();
       expect(source).toMatch(/useWorkflowStage\(/);
     }
