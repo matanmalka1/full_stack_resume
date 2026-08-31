@@ -1,4 +1,4 @@
-# M5 — closure record - 31.09.2026
+# M5 — closure record - 31.08.2026
 
 Status: **closed.** The M5 Web capabilities are implemented and the configured frontend
 and non-browser backend gates pass. A browser journey against a real backend remains
