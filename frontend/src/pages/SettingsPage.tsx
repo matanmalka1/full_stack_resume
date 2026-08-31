@@ -12,7 +12,7 @@ import { Field } from "../ui/Field";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
 import { Select } from "../ui/Select";
-import { ReconciliationPanel } from "./ReconciliationPanel";
+import { ReconciliationPanel } from "./settings/ReconciliationPanel";
 
 export const SettingsPage = () => {
   /* Settings stands outside the workflow, so it reports no stage rather than leaving the

@@ -1,7 +1,7 @@
-import type { ApplicationDetail } from "../api/contracts";
-import { LtrText } from "../ui/LtrText";
-import { SummaryList } from "../ui/SummaryList";
-import { Disclosure } from "../ui/Disclosure";
+import type { ApplicationDetail } from "../../api/contracts";
+import { LtrText } from "../../ui/LtrText";
+import { SummaryList } from "../../ui/SummaryList";
+import { Disclosure } from "../../ui/Disclosure";
 
 /* The posting the analysis was run against, on the screen that reports the analysis.
 

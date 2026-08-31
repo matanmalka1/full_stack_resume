@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationListItem, Reason } from "../api/contracts";
 import { ApplicationListPage } from "./ApplicationListPage";
-import { actionLabel } from "./applicationLabels";
+import { actionLabel } from "./application/applicationLabels";
 
 const item = (overrides: Partial<ApplicationListItem> = {}): ApplicationListItem =>
   ({

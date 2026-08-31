@@ -1,5 +1,5 @@
-import { outlineClaims } from "../api/drafts";
-import type { DraftClaim, WorkingDraft, WorkingDraftFacts } from "../api/contracts";
+import { outlineClaims } from "../../api/drafts";
+import type { DraftClaim, WorkingDraft, WorkingDraftFacts } from "../../api/contracts";
 import { type Removability, isStructuralStyle } from "./draftLabels";
 
 const SHARED_LIMIT = 60;

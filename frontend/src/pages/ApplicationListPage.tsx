@@ -20,7 +20,7 @@ import { ApplicationListPagination } from "./application-list/ApplicationListPag
 import { ApplicationListTable } from "./application-list/ApplicationListTable";
 import { CloseApplicationDialog } from "./application-list/CloseApplicationDialog";
 import { PAGE_SIZE, paramsFromQuery, queryFromParams } from "./applicationListParams";
-import { useDebouncedValue } from "./useDebouncedValue";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
 
 const SEARCH_DEBOUNCE_MS = 300;
 

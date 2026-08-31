@@ -1,7 +1,7 @@
-import type { Classification } from "../api/analyses";
-import type { Emphasis, Language, ProfileName, Track } from "../api/contracts";
-import type { StatusTone } from "../ui/status";
-import type { SummaryItem } from "../ui/SummaryList";
+import type { Classification } from "../../api/analyses";
+import type { Emphasis, Language, ProfileName, Track } from "../../api/contracts";
+import type { StatusTone } from "../../ui/status";
+import type { SummaryItem } from "../../ui/SummaryList";
 
 /* Keyed by the generated unions, so a classification value added to the backend fails
    the frontend build instead of reaching the review form untranslated. The runtime

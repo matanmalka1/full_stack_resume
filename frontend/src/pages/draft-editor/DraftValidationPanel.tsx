@@ -1,14 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
-import { applicationDetailQueryKey } from "../api/applications";
-import type { WorkingDraft } from "../api/contracts";
-import { validateWorkingDraft, validationRunQueryOptions } from "../api/validation";
-import { briefServerFailureDetail, ErrorCallout } from "../app/ErrorCallout";
-import { Button } from "../ui/Button";
-import { Callout } from "../ui/Callout";
-import { LiveRegion } from "../ui/LiveRegion";
-import { ValidationReportView } from "./ValidationReportView";
+import { applicationDetailQueryKey } from "../../api/applications";
+import type { WorkingDraft } from "../../api/contracts";
+import { validateWorkingDraft, validationRunQueryOptions } from "../../api/validation";
+import { briefServerFailureDetail, ErrorCallout } from "../../app/ErrorCallout";
+import { Button } from "../../ui/Button";
+import { Callout } from "../../ui/Callout";
+import { LiveRegion } from "../../ui/LiveRegion";
+import { ValidationReportView } from "../revision/ValidationReportView";
 
 interface DraftValidationPanelProps {
   applicationId: string;

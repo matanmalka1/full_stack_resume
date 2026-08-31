@@ -22,7 +22,7 @@ import { SummaryList } from "../ui/SummaryList";
 import { Dialog } from "../ui/Dialog";
 import { Field } from "../ui/Field";
 import { TextInput } from "../ui/TextInput";
-import { ValidationReportView } from "./ValidationReportView";
+import { ValidationReportView } from "./revision/ValidationReportView";
 
 /* One approved revision: its document, its files, and the record of its submission.
 

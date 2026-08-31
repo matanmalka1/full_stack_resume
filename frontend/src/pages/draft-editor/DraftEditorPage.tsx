@@ -3,9 +3,9 @@ import { ArrowRight, RefreshCw } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import { applicationDetailQueryKey, applicationDetailQueryOptions } from "../api/applications";
-import { type QueuedOperation, operationQueryKey } from "../api/operations";
-import type { DraftClaim, DraftFact, WorkingDraftUpdate } from "../api/contracts";
+import { applicationDetailQueryKey, applicationDetailQueryOptions } from "../../api/applications";
+import { type QueuedOperation, operationQueryKey } from "../../api/operations";
+import type { DraftClaim, DraftFact, WorkingDraftUpdate } from "../../api/contracts";
 import {
   type DraftRead,
   applySelectionChange,
@@ -16,32 +16,36 @@ import {
   workingDraftFactsQueryOptions,
   workingDraftQueryKey,
   workingDraftQueryOptions,
-} from "../api/drafts";
-import { aiRegenerationAvailable, settingsQueryOptions } from "../api/settings";
-import { ErrorCallout } from "../app/ErrorCallout";
-import { useWorkflowStage } from "../app/WorkflowLandmark";
-import { useWatchedOperation } from "../hooks/useWatchedOperation";
-import { Button, buttonClasses } from "../ui/Button";
-import { Callout } from "../ui/Callout";
-import { cx } from "../ui/cx";
-import { LtrText } from "../ui/LtrText";
-import { PageShell } from "../ui/PageShell";
-import { QueryState } from "../ui/QueryState";
-import { StatusBadge } from "../ui/StatusBadge";
-import { ViewSwitch } from "../ui/ViewSwitch";
+} from "../../api/drafts";
+import { aiRegenerationAvailable, settingsQueryOptions } from "../../api/settings";
+import { ErrorCallout } from "../../app/ErrorCallout";
+import { useWorkflowStage } from "../../app/WorkflowLandmark";
+import { useWatchedOperation } from "../../hooks/useWatchedOperation";
+import { Button, buttonClasses } from "../../ui/Button";
+import { Callout } from "../../ui/Callout";
+import { cx } from "../../ui/cx";
+import { LtrText } from "../../ui/LtrText";
+import { PageShell } from "../../ui/PageShell";
+import { QueryState } from "../../ui/QueryState";
+import { StatusBadge } from "../../ui/StatusBadge";
+import { ViewSwitch } from "../../ui/ViewSwitch";
 import { DraftApprovalDialog } from "./DraftApprovalDialog";
 import { ClaimFactResolution } from "./ClaimFactResolution";
 import { DraftClaimCard } from "./DraftClaimCard";
 import { DraftConflictDialog } from "./DraftConflictDialog";
 import { DraftFactPanel } from "./DraftFactPanel";
-import { FactLifecyclePanel } from "./FactLifecyclePanel";
+import { FactLifecyclePanel } from "../FactLifecyclePanel";
 import { DraftPreview } from "./DraftPreview";
 import { DraftRenderPanel } from "./DraftRenderPanel";
 import { DraftSaveState } from "./DraftSaveState";
 import { DraftValidationPanel } from "./DraftValidationPanel";
 import { removability } from "./claimRemoval";
 import { useDraftAutosave } from "./useDraftAutosave";
-import { reasonTitle, workingDraftStateLabels, workingDraftStateTones } from "./applicationLabels";
+import {
+  reasonTitle,
+  workingDraftStateLabels,
+  workingDraftStateTones,
+} from "../application/applicationLabels";
 
 /* A.4 frame 3: the editor pane. It reads the §9 projection for which draft is active and
    what is blocking, and the draft itself for the structure it edits. It derives no second

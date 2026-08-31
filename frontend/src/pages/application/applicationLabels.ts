@@ -3,7 +3,7 @@ import type {
   PreparationState,
   RecruitmentStatus,
   WorkingDraftState,
-} from "../api/contracts";
+} from "../../api/contracts";
 import {
   Archive,
   BadgeCheck,
@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import type { StatusTone } from "../ui/status";
+import type { StatusTone } from "../../ui/status";
 
 /* Keyed by the generated unions, so a state added to the §9 projection fails the
    frontend build instead of reaching the screen untranslated. */

@@ -1,10 +1,10 @@
 import { useMutation } from "@tanstack/react-query";
 
-import type { ReconciliationReport } from "../api/contracts";
-import { reconcile } from "../api/maintenance";
-import { ErrorCallout } from "../app/ErrorCallout";
-import { Button } from "../ui/Button";
-import { Callout } from "../ui/Callout";
+import type { ReconciliationReport } from "../../api/contracts";
+import { reconcile } from "../../api/maintenance";
+import { ErrorCallout } from "../../app/ErrorCallout";
+import { Button } from "../../ui/Button";
+import { Callout } from "../../ui/Callout";
 
 const MISSING_ARTIFACT_PREFIX = "missing artifact:";
 

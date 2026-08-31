@@ -6,7 +6,7 @@ import { isTerminalOperation } from "../../api/operations";
 import { Button } from "../../ui/Button";
 import { StatusBadge } from "../../ui/StatusBadge";
 import { cx } from "../../ui/cx";
-import { actionDestination } from "../actionDestinations";
+import { actionDestination } from "../application/actionDestinations";
 import {
   actionLabel,
   preparationStateIcons,
@@ -15,7 +15,7 @@ import {
   recruitmentStatusIcon,
   recruitmentStatusLabel,
   recruitmentStatusTone,
-} from "../applicationLabels";
+} from "../application/applicationLabels";
 import { operationTypeLabels, statusLabels } from "../operationLabels";
 import {
   applicationAttention,

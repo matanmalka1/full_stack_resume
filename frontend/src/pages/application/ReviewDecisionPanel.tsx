@@ -1,12 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { applyAnalysisDecisions } from "../api/analyses";
-import { applicationDetailQueryKey } from "../api/applications";
-import type { ApplicationDetail, Reason } from "../api/contracts";
-import { ErrorCallout } from "../app/ErrorCallout";
-import { ActionBar } from "../ui/ActionBar";
-import { Button } from "../ui/Button";
+import { applyAnalysisDecisions } from "../../api/analyses";
+import { applicationDetailQueryKey } from "../../api/applications";
+import type { ApplicationDetail, Reason } from "../../api/contracts";
+import { ErrorCallout } from "../../app/ErrorCallout";
+import { ActionBar } from "../../ui/ActionBar";
+import { Button } from "../../ui/Button";
 import {
   CLASSIFICATION_REASON,
   FIT_REASONS,

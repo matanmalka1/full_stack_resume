@@ -1,5 +1,5 @@
-import type { ClaimType, OmissionReason, SelectionOutcome } from "../api/contracts";
-import type { StatusTone } from "../ui/status";
+import type { ClaimType, OmissionReason, SelectionOutcome } from "../../api/contracts";
+import type { StatusTone } from "../../ui/status";
 
 /* Exhaustive over the generated unions. A claim type, outcome, or omission reason added
    to the backend fails this build rather than reaching a screen as an untranslated value.

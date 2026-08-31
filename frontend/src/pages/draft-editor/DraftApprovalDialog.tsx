@@ -1,18 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
-import { applicationDetailQueryKey } from "../api/applications";
-import { ApiProblem } from "../api/client";
-import type { ApplicationDetail, WorkingDraft } from "../api/contracts";
-import { workingDraftQueryKey } from "../api/drafts";
-import { approveWorkingDraft, validationRunQueryOptions } from "../api/validation";
-import { briefServerFailureDetail, ErrorCallout } from "../app/ErrorCallout";
-import { Button } from "../ui/Button";
-import { Callout } from "../ui/Callout";
-import { Checkbox } from "../ui/Checkbox";
-import { Dialog } from "../ui/Dialog";
-import { LtrText } from "../ui/LtrText";
-import { SummaryList } from "../ui/SummaryList";
+import { applicationDetailQueryKey } from "../../api/applications";
+import { ApiProblem } from "../../api/client";
+import type { ApplicationDetail, WorkingDraft } from "../../api/contracts";
+import { workingDraftQueryKey } from "../../api/drafts";
+import { approveWorkingDraft, validationRunQueryOptions } from "../../api/validation";
+import { briefServerFailureDetail, ErrorCallout } from "../../app/ErrorCallout";
+import { Button } from "../../ui/Button";
+import { Callout } from "../../ui/Callout";
+import { Checkbox } from "../../ui/Checkbox";
+import { Dialog } from "../../ui/Dialog";
+import { LtrText } from "../../ui/LtrText";
+import { SummaryList } from "../../ui/SummaryList";
 
 interface DraftApprovalDialogProps {
   applicationId: string;

@@ -15,7 +15,7 @@ import {
   preparationStateLabels,
   recruitmentStatusLabel,
   recruitmentStatusOrder,
-} from "../applicationLabels";
+} from "../application/applicationLabels";
 
 const activityLabels: Record<ActivityFilter, string> = {
   open: "פעילות",

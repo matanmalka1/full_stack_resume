@@ -19,14 +19,14 @@ import { Callout } from "../ui/Callout";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
 import { StatusBadge } from "../ui/StatusBadge";
-import { type AutoDraftSources, autoDraftSources } from "./autoDraft";
-import { AnalysisPanel, SupersededAnalysisNote } from "./AnalysisPanel";
-import { JobSnapshotPanel } from "./JobSnapshotPanel";
-import { ReviewDecisionPanel, resolvedByDecisionForm } from "./ReviewDecisionPanel";
-import { ApplicationActions } from "./ApplicationActions";
-import { RecruitmentPanel } from "./RecruitmentPanel";
+import { type AutoDraftSources, autoDraftSources } from "./application/autoDraft";
+import { AnalysisPanel, SupersededAnalysisNote } from "./application/AnalysisPanel";
+import { JobSnapshotPanel } from "./application/JobSnapshotPanel";
+import { ReviewDecisionPanel, resolvedByDecisionForm } from "./application/ReviewDecisionPanel";
+import { ApplicationActions } from "./application/ApplicationActions";
+import { RecruitmentPanel } from "./recruitment/RecruitmentPanel";
 import { ApplicationViews, applicationViewFromParam } from "./ApplicationViews";
-import { actionDestination } from "./actionDestinations";
+import { actionDestination } from "./application/actionDestinations";
 import {
   actionLabel,
   recruitmentStatusIcon,
@@ -38,7 +38,7 @@ import {
   warningTitle,
   workingDraftStateLabels,
   workingDraftStateTones,
-} from "./applicationLabels";
+} from "./application/applicationLabels";
 
 /* `working_draft_state === "none"` is news only once a draft could exist. At the stages
    below it restates the preparation stage, and the masthead is the worst place for a

@@ -1,27 +1,27 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
-import { applicationDetailQueryKey } from "../api/applications";
+import { applicationDetailQueryKey } from "../../api/applications";
 import type {
   ApplicationDetail,
   RecruitmentStatus,
   RecruitmentTimelineItem,
   TransitionableRecruitmentStatus,
-} from "../api/contracts";
+} from "../../api/contracts";
 import {
   correctRecruitmentStatus,
   recordExternalSubmission,
   setNextAction,
   transitionRecruitmentStatus,
-} from "../api/tracking";
-import { ErrorCallout } from "../app/ErrorCallout";
-import { Button } from "../ui/Button";
-import { Callout } from "../ui/Callout";
-import { Dialog } from "../ui/Dialog";
-import { Field } from "../ui/Field";
-import { Select } from "../ui/Select";
-import { TextArea, TextInput } from "../ui/TextInput";
-import { recruitmentStatusLabel, recruitmentStatusLabels } from "./applicationLabels";
+} from "../../api/tracking";
+import { ErrorCallout } from "../../app/ErrorCallout";
+import { Button } from "../../ui/Button";
+import { Callout } from "../../ui/Callout";
+import { Dialog } from "../../ui/Dialog";
+import { Field } from "../../ui/Field";
+import { Select } from "../../ui/Select";
+import { TextArea, TextInput } from "../../ui/TextInput";
+import { recruitmentStatusLabel, recruitmentStatusLabels } from "../application/applicationLabels";
 
 const dateTimeFormat = new Intl.DateTimeFormat("he-IL", {
   dateStyle: "medium",

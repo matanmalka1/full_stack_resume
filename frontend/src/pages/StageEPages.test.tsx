@@ -7,9 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApplicationDetail, ApprovedRevision, Operation, ReconciliationReport, Settings, ValidationRun, WorkingDraft } from "../api/contracts";
 import { applicationDetailQueryOptions } from "../api/applications";
 import { workingDraftQueryOptions } from "../api/drafts";
-import { DraftApprovalDialog } from "./DraftApprovalDialog";
-import { DraftRenderPanel } from "./DraftRenderPanel";
-import { DraftValidationPanel } from "./DraftValidationPanel";
+import { DraftApprovalDialog } from "./draft-editor/DraftApprovalDialog";
+import { DraftRenderPanel } from "./draft-editor/DraftRenderPanel";
+import { DraftValidationPanel } from "./draft-editor/DraftValidationPanel";
 import { RevisionPage } from "./RevisionPage";
 import { SettingsPage } from "./SettingsPage";
 

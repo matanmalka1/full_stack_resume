@@ -1,7 +1,7 @@
 import { Check, CloudAlert, CloudUpload } from "lucide-react";
 
-import { LiveRegion } from "../ui/LiveRegion";
-import { cx } from "../ui/cx";
+import { LiveRegion } from "../../ui/LiveRegion";
+import { cx } from "../../ui/cx";
 import type { AutosaveState } from "./useDraftAutosave";
 
 const labels: Record<AutosaveState["status"], string> = {

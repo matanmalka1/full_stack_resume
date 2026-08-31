@@ -15,7 +15,7 @@ import {
   languageLabels,
   profileLabels,
   trackLabels,
-} from "../pages/analysisLabels";
+} from "../pages/application/analysisLabels";
 
 /* The four classification decisions this screen may submit. The fact overlay is
    deliberately absent: no endpoint exposes the candidate fact pool to the browser, and

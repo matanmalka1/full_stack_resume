@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 
-import type { Classification } from "../api/analyses";
-import type { ApplicationDetail } from "../api/contracts";
-import { Callout } from "../ui/Callout";
-import { LtrText } from "../ui/LtrText";
-import { StatusBadge } from "../ui/StatusBadge";
-import { SummaryList } from "../ui/SummaryList";
+import type { Classification } from "../../api/analyses";
+import type { ApplicationDetail } from "../../api/contracts";
+import { Callout } from "../../ui/Callout";
+import { LtrText } from "../../ui/LtrText";
+import { StatusBadge } from "../../ui/StatusBadge";
+import { SummaryList } from "../../ui/SummaryList";
 import {
   approvalReasonLabel,
   classificationItems,

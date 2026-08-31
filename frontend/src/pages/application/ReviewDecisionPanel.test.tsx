@@ -3,8 +3,8 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { ApplicationDetail, Reason } from "../api/contracts";
-import { ApplicationPage } from "./ApplicationPage";
+import type { ApplicationDetail, Reason } from "../../api/contracts";
+import { ApplicationPage } from "../ApplicationPage";
 
 const APPLY_PATH = "/api/v1/analyses/analysis-1/apply-decisions";
 

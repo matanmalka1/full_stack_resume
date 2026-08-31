@@ -1,7 +1,7 @@
 import { CircleCheck, ShieldAlert, TriangleAlert } from "lucide-react";
 
-import type { ValidationReport } from "../api/contracts";
-import { Callout } from "../ui/Callout";
+import type { ValidationReport } from "../../api/contracts";
+import { Callout } from "../../ui/Callout";
 
 const blockerResolution = (code: string): string => {
   if (code === "unlinked-claim" || code === "pending-claim") {

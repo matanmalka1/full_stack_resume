@@ -1,4 +1,4 @@
-import type { ApplicationDetail } from "../api/contracts";
+import type { ApplicationDetail } from "../../api/contracts";
 import { actionDestination } from "./actionDestinations";
 
 /* What the preparation screen may offer, derived from the §9 projection alone.

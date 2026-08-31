@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
-import { applicationDetailQueryKey } from "../api/applications";
-import type { CaptureClaimFactRequest, DraftClaim, WorkingDraft } from "../api/contracts";
+import { applicationDetailQueryKey } from "../../api/applications";
+import type { CaptureClaimFactRequest, DraftClaim, WorkingDraft } from "../../api/contracts";
 import {
   captureClaimFact,
   confirmAndUseFact,
@@ -11,16 +11,16 @@ import {
   factHistoryQueryKey,
   factHistoryQueryOptions,
   factsQueryKey,
-} from "../api/facts";
-import { workingDraftFactsQueryKey } from "../api/drafts";
-import { ErrorCallout } from "../app/ErrorCallout";
-import { Button } from "../ui/Button";
-import { Callout } from "../ui/Callout";
-import { Checkbox } from "../ui/Checkbox";
-import { Field } from "../ui/Field";
-import { Select } from "../ui/Select";
-import { TextArea, TextInput } from "../ui/TextInput";
-import { QueryState } from "../ui/QueryState";
+} from "../../api/facts";
+import { workingDraftFactsQueryKey } from "../../api/drafts";
+import { ErrorCallout } from "../../app/ErrorCallout";
+import { Button } from "../../ui/Button";
+import { Callout } from "../../ui/Callout";
+import { Checkbox } from "../../ui/Checkbox";
+import { Field } from "../../ui/Field";
+import { Select } from "../../ui/Select";
+import { TextArea, TextInput } from "../../ui/TextInput";
+import { QueryState } from "../../ui/QueryState";
 
 type FactSource = CaptureClaimFactRequest["source"];
 

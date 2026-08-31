@@ -6,14 +6,14 @@ import {
   applicationDetailQueryKey,
   startAnalysis,
   startDraftGeneration,
-} from "../api/applications";
-import type { ApplicationDetail } from "../api/contracts";
-import { executionProvider, settingsQueryOptions } from "../api/settings";
-import { type QueuedOperation, operationQueryKey } from "../api/operations";
-import { ErrorCallout } from "../app/ErrorCallout";
-import { ActionBar } from "../ui/ActionBar";
-import { Button, buttonClasses } from "../ui/Button";
-import { Callout } from "../ui/Callout";
+} from "../../api/applications";
+import type { ApplicationDetail } from "../../api/contracts";
+import { executionProvider, settingsQueryOptions } from "../../api/settings";
+import { type QueuedOperation, operationQueryKey } from "../../api/operations";
+import { ErrorCallout } from "../../app/ErrorCallout";
+import { ActionBar } from "../../ui/ActionBar";
+import { Button, buttonClasses } from "../../ui/Button";
+import { Callout } from "../../ui/Callout";
 import { applicationActionPlan } from "./applicationActionPlan";
 import { actionLabel } from "./applicationLabels";
 

@@ -3,8 +3,8 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { ApplicationDetail, WorkingDraft, WorkingDraftFacts } from "../api/contracts";
-import { settingsQueryKey } from "../api/settings";
+import type { ApplicationDetail, WorkingDraft, WorkingDraftFacts } from "../../api/contracts";
+import { settingsQueryKey } from "../../api/settings";
 import { DraftEditorPage } from "./DraftEditorPage";
 
 const DETAIL_PATH = "/api/v1/applications/app-1";

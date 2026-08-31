@@ -3,7 +3,7 @@ import { Navigate, createBrowserRouter, useParams } from "react-router-dom";
 import { App } from "../App";
 import { ApplicationListPage } from "../pages/ApplicationListPage";
 import { ApplicationPage } from "../pages/ApplicationPage";
-import { DraftEditorPage } from "../pages/DraftEditorPage";
+import { DraftEditorPage } from "../pages/draft-editor/DraftEditorPage";
 import { NewApplicationPage } from "../pages/NewApplicationPage";
 import { RevisionPage } from "../pages/RevisionPage";
 import { RoutePlaceholder } from "../pages/RoutePlaceholder";

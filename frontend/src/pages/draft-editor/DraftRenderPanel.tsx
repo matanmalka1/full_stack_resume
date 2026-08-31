@@ -2,10 +2,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
-import { operationQueryKey } from "../api/operations";
-import { approvedRevisionQueryOptions, renderApprovedRevision } from "../api/revisions";
-import { ErrorCallout } from "../app/ErrorCallout";
-import { Button, buttonClasses } from "../ui/Button";
+import { operationQueryKey } from "../../api/operations";
+import { approvedRevisionQueryOptions, renderApprovedRevision } from "../../api/revisions";
+import { ErrorCallout } from "../../app/ErrorCallout";
+import { Button, buttonClasses } from "../../ui/Button";
 
 interface DraftRenderPanelProps {
   approvedRevisionId: string;

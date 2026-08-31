@@ -1,12 +1,12 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { Database, RefreshCw, Trash2 } from "lucide-react";
 
-import type { DraftClaim, DraftFact, WorkingDraft, WorkingDraftFacts } from "../api/contracts";
-import { Button } from "../ui/Button";
-import { Callout } from "../ui/Callout";
-import { Field } from "../ui/Field";
-import { StatusBadge } from "../ui/StatusBadge";
-import { TextArea } from "../ui/TextInput";
+import type { DraftClaim, DraftFact, WorkingDraft, WorkingDraftFacts } from "../../api/contracts";
+import { Button } from "../../ui/Button";
+import { Callout } from "../../ui/Callout";
+import { Field } from "../../ui/Field";
+import { StatusBadge } from "../../ui/StatusBadge";
+import { TextArea } from "../../ui/TextInput";
 import { removability } from "./claimRemoval";
 import { claimTypeExplanations, claimTypeLabels, claimTypeTones } from "./draftLabels";
 

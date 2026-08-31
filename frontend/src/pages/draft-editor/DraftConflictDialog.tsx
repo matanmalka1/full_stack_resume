@@ -1,7 +1,7 @@
-import type { ClaimPatch, WorkingDraft } from "../api/contracts";
-import { outlineClaims } from "../api/drafts";
-import { Button } from "../ui/Button";
-import { Dialog } from "../ui/Dialog";
+import type { ClaimPatch, WorkingDraft } from "../../api/contracts";
+import { outlineClaims } from "../../api/drafts";
+import { Button } from "../../ui/Button";
+import { Dialog } from "../../ui/Dialog";
 
 interface DraftConflictDialogProps {
   current: WorkingDraft | undefined;

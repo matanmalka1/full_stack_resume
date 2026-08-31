@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ApiProblem } from "../api/client";
-import { type DraftPatch, updateWorkingDraft } from "../api/drafts";
-import type { ClaimPatch, WorkingDraftUpdate } from "../api/contracts";
+import { ApiProblem } from "../../api/client";
+import { type DraftPatch, updateWorkingDraft } from "../../api/drafts";
+import type { ClaimPatch, WorkingDraftUpdate } from "../../api/contracts";
 
 export const AUTOSAVE_DEBOUNCE_MS = 700;
 

@@ -1,4 +1,4 @@
-import type { ApplicationDetail, Operation, Settings } from "../api/contracts";
+import type { ApplicationDetail, Operation, Settings } from "../../api/contracts";
 
 export interface AutoDraftSources {
   analysisId: string;

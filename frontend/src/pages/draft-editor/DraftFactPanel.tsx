@@ -1,8 +1,8 @@
 import { Database, Plus } from "lucide-react";
 
-import type { DraftFact, WorkingDraftFacts } from "../api/contracts";
-import { Button } from "../ui/Button";
-import { QueryState } from "../ui/QueryState";
+import type { DraftFact, WorkingDraftFacts } from "../../api/contracts";
+import { Button } from "../../ui/Button";
+import { QueryState } from "../../ui/QueryState";
 import { omissionReasonLabels, selectionOutcomeLabels } from "./draftLabels";
 
 interface DraftFactPanelProps {

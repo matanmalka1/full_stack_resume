@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { FileText, RefreshCw } from "lucide-react";
 
-import type { WorkingDraft } from "../api/contracts";
-import { draftPreviewSrc } from "../api/drafts";
-import { LiveRegion } from "../ui/LiveRegion";
-import { StatusBadge } from "../ui/StatusBadge";
+import type { WorkingDraft } from "../../api/contracts";
+import { draftPreviewSrc } from "../../api/drafts";
+import { LiveRegion } from "../../ui/LiveRegion";
+import { StatusBadge } from "../../ui/StatusBadge";
 
 /* A.4 frame 3's preview pane, and A.3's direction isolation.
 

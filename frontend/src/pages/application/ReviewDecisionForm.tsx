@@ -1,7 +1,7 @@
-import type { ClassificationDecisions } from "../api/analyses";
-import { Checkbox } from "../ui/Checkbox";
-import { Field } from "../ui/Field";
-import { Select } from "../ui/Select";
+import type { ClassificationDecisions } from "../../api/analyses";
+import { Checkbox } from "../../ui/Checkbox";
+import { Field } from "../../ui/Field";
+import { Select } from "../../ui/Select";
 import {
   emphasisLabels,
   languageLabels,
