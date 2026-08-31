@@ -191,7 +191,7 @@ Two ways to run it, for two different jobs.
 ```bash
 ./.venv/bin/python -m uvicorn cv_engine.runtime.asgi:app --reload  # 127.0.0.1:8765
 ./.venv/bin/python -m cv_engine.worker                         # queued work
-cd frontend && npm run dev                                     # 127.0.0.1:5173
+cd frontend && npm run dev                                     # localhost:5173
 ```
 
 Vite compiles on demand and reloads on save. It proxies `/api` to the backend, so the

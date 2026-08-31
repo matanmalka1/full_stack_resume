@@ -5,10 +5,10 @@ The frontend uses the local FastAPI service as its only backend.
 For development, configure the backend process with the exact Vite origin:
 
 ```text
-CV_API_DEV_ORIGIN=http://127.0.0.1:5173
+CV_API_DEV_ORIGIN=http://localhost:5173
 ```
 
-Then run `npm run dev` in this directory. Vite listens on `127.0.0.1:5173` with a strict
+Then run `npm run dev` in this directory. Vite listens on `localhost:5173` with a strict
 port and proxies `/api` to `http://127.0.0.1:8765`. It never falls back to another port,
 because that would silently disagree with the backend Origin allowlist.
 

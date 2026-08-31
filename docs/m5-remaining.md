@@ -42,6 +42,36 @@ Maintenance has no separate surface:
 
 ## M5 scope
 
+### Current implementation batch — verify before checking off
+
+These are intentionally new unchecked tasks. The code exists in the working tree, but
+each item stays open until its focused evidence and the M5 boundary gate pass.
+
+- [ ] Verify the Application-detail recruitment projection: backend-owned direct
+      transition choices plus one chronological timeline merging status transitions,
+      corrections, next-action changes, and internal/external submissions.
+- [ ] Verify the React recruitment flow on the Application and Ready screens: transition,
+      append-only correction, set/clear next action, external submission without invented
+      artifact lineage, and internal submission bound to the displayed revision and PDF.
+- [ ] Verify the Application list prioritizes the stored recruitment next action and date
+      over a preparation-workflow recommendation.
+- [ ] Verify the contextual fact flow in the draft editor: exact claim capture with
+      explicit meaning, tags, and provenance; lifecycle history; explicit confirmation
+      and promotion; Profile attachment; and composite confirm-and-use.
+- [ ] Verify claim capture requires provenance at the HTTP contract and that all fact UI
+      request types continue to come from the generated OpenAPI contract.
+- [ ] Verify Ready shows and downloads the decision Markdown beside its revision, using
+      the `Content-Disposition` filename and exposing the content hash only as technical
+      evidence.
+- [ ] Verify approval returns `WORKING_PROJECTION_DIVERGED` for an out-of-band working
+      Markdown edit, preserves the edit, creates no ApprovedRevision, and gives the user
+      actionable recovery text in the approval dialog.
+- [ ] Verify the documented development origin exactly matches Vite's configured
+      `http://localhost:5173` origin, so intake mutations reach the API while foreign
+      origins remain forbidden.
+- [ ] Close the relevant gates: frontend typecheck and focused unit tests, focused API
+      tests, the deterministic no-AI pipeline, then the full non-browser backend suite.
+
 ### 1 — Recruitment tracking UI
 
 The Application context screen shows `recruitment_status` read-only today. Tracking is
