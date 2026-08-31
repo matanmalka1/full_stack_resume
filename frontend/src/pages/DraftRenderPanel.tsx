@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 import { operationQueryKey } from "../api/operations";
 import { approvedRevisionQueryOptions, renderApprovedRevision } from "../api/revisions";
@@ -9,6 +9,16 @@ import { Button, buttonClasses } from "../ui/Button";
 
 interface DraftRenderPanelProps {
   approvedRevisionId: string;
+  /* What this panel just queued, handed to the editor that holds it. Rendering used to
+     navigate to the Operation's own screen, which took the approved draft off the display
+     at the moment the user was waiting to see what became of it - and the way back from
+     there led to the Application screen rather than to the editor, so the file that had
+     just been produced was never linked from the screen that produced it.
+
+     The editor already watches this Application's work, so the accepted `202` goes to
+     that watch instead. The `202` is the earliest and most certain answer: the projection
+     reports an Operation only on its next read. */
+  onQueued: (operationId: string) => void;
 }
 
 /* A.4 frame 6's render step, inline in the editor that produced the revision.
@@ -16,8 +26,7 @@ interface DraftRenderPanelProps {
    and it can fail on its own, and a render that fired itself on approval would queue
    work the user never asked for and leave a failure with nothing that asked for it.
    Approval is what became one click; rendering is one more, in place. */
-export const DraftRenderPanel = ({ approvedRevisionId }: DraftRenderPanelProps) => {
-  const navigate = useNavigate();
+export const DraftRenderPanel = ({ approvedRevisionId, onQueued }: DraftRenderPanelProps) => {
   const queryClient = useQueryClient();
   const revisionQuery = useQuery(approvedRevisionQueryOptions(approvedRevisionId));
   const revision = revisionQuery.data;
@@ -28,9 +37,9 @@ export const DraftRenderPanel = ({ approvedRevisionId }: DraftRenderPanelProps) 
       if (revision === undefined) throw new Error("Render was offered before the revision loaded");
       return renderApprovedRevision(revision.id, revision.application_id, renderKey);
     },
-    onSuccess: ({ operation, operationPath }) => {
+    onSuccess: ({ operation }) => {
       queryClient.setQueryData(operationQueryKey(operation.id), operation);
-      void navigate(operationPath);
+      onQueued(operation.id);
     },
   });
 

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { classificationFromAnalysis } from "../api/analyses";
@@ -8,11 +8,7 @@ import {
   applicationDetailQueryOptions,
   startDraftGeneration,
 } from "../api/applications";
-import {
-  isTerminalOperation,
-  operationQueryKey,
-  operationQueryOptions,
-} from "../api/operations";
+import { operationQueryKey } from "../api/operations";
 import { settingsQueryOptions } from "../api/settings";
 import type { ApplicationDetail, BlockedAction, Reason } from "../api/contracts";
 import { ErrorCallout } from "../app/ErrorCallout";
@@ -32,6 +28,7 @@ import { ReviewDecisionPanel, resolvedByDecisionForm } from "./ReviewDecisionPan
 import { ApplicationActions } from "./ApplicationActions";
 import { ApplicationViews } from "./ApplicationViews";
 import { actionDestination } from "./actionDestinations";
+import { useWatchedOperation } from "./useWatchedOperation";
 import {
   actionLabel,
   blockedReasonLabel,
@@ -183,57 +180,10 @@ export const ApplicationPage = () => {
   const queryClient = useQueryClient();
   const query = useQuery(applicationDetailQueryOptions(applicationId));
   const detail = query.data;
-  /* Which Operation this screen is watching.
-
-     It cannot simply be the projection's `active_operation`, because that field is only
-     ever a `queued` or `running` record: the moment work finishes it becomes null. Read
-     straight, the panel would vanish at the instant the Operation had something to say -
-     a failure code, its guidance, the retry offer - and a failed run would leave no trace
-     on the screen that started it.
-
-     So the projection opens the watch and a query of the Operation's own closes it. The
-     id is held here across that transition, and the Operation query keeps reporting the
-     record after the projection has let go of it.
-
-     It is also set directly by whatever queued the work, from the accepted `202`: the
-     projection reports an Operation only on its next read, so waiting for it would put
-     the panel on screen a poll after the press that caused it. */
-  const [watchedId, setWatchedId] = useState<string | null>(null);
-  const activeOperationId = detail?.active_operation?.id ?? null;
-
-  useEffect(() => {
-    if (activeOperationId !== null) {
-      setWatchedId(activeOperationId);
-    }
-  }, [activeOperationId]);
-
-  /* Cleared when the user moves to another Application: the previous one's finished work
-     is not this one's. */
-  useEffect(() => setWatchedId(null), [applicationId]);
-
-  const watchedQuery = useQuery({
-    ...operationQueryOptions(watchedId ?? ""),
-    enabled: watchedId !== null,
-  });
-  /* The Operation's own query is authoritative once it has answered: it is the only one of
-     the two that reports a finished record, because `active_operation` is only ever queued
-     or running and the projection lets go the moment work ends.
-
-     The projection's copy is the fallback, and it earns its place at the other end of the
-     Operation's life: it arrives with the page, so a reload mid-run paints the panel from
-     the first render instead of after a second round trip. */
-  const watched =
-    watchedQuery.data?.id === watchedId ? watchedQuery.data : (detail?.active_operation ?? undefined);
-
-  /* The projection is refreshed once the watched Operation reaches a terminal status:
-     what it produced - a new analysis, a draft, the stage that follows - is the
-     projection's to report, and it stopped polling when `active_operation` went null. */
-  const watchedTerminal = watched !== undefined && isTerminalOperation(watched);
-  useEffect(() => {
-    if (watchedTerminal) {
-      void queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
-    }
-  }, [applicationId, queryClient, watchedTerminal, watched?.id]);
+  const { operation: watched, operationId: watchedId, watch } = useWatchedOperation(
+    applicationId,
+    detail,
+  );
   const noteworthy = detail === undefined ? [] : noteworthyBlockedActions(detail);
   /* The same narrow read the review screen uses, and the same guard: it answers `null`
      unless the analysis on record is the active one, so a superseded analysis is named
@@ -260,7 +210,7 @@ export const ApplicationPage = () => {
         autoDraftInFlight.delete(watchedId);
       }
       queryClient.setQueryData(operationQueryKey(operation.id), operation);
-      setWatchedId(operation.id);
+      watch(operation.id);
       void queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
     },
     onError: () => {
@@ -404,7 +354,7 @@ export const ApplicationPage = () => {
             {preparationStateNextStep[detail.preparation_state]}
           </p>
 
-          <ApplicationActions detail={detail} onQueued={setWatchedId} />
+          <ApplicationActions detail={detail} onQueued={watch} />
 
           {/* Only the blockers that are not already implied by the stage. Listing every
               later action of the workflow as "unavailable" said nothing the landmark and
