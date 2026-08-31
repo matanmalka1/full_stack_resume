@@ -84,8 +84,8 @@ export const WorkflowLandmark = ({ children }: { children: ReactNode }) => {
   );
 };
 
-/* Split from the provider so the shell can place the steps inside the header while the
-   stage itself still comes from the page rendered below it. */
+/* Split from the provider so the shell can place the steps above the page surface while
+   the stage itself still comes from the page rendered below it. */
 export const WorkflowLandmarkSteps = () => {
   const stage = useContext(WorkflowStageValueContext);
 

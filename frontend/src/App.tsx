@@ -49,6 +49,7 @@ const ApplicationContext = ({
 export const App = () => {
   const settings = useQuery(settingsQueryOptions).data?.settings;
   const isApplicationList = useMatch("/") !== null;
+  const isNewApplication = useMatch("/applications/new") !== null;
   const isDraftEditor = useMatch("/applications/:applicationId/draft") !== null;
   /* On the Application screen itself the context link would point at the page showing it.
      A link back to where you already are is not a way out, so the header states the
@@ -70,8 +71,6 @@ export const App = () => {
       data-text-size={settings?.ui_text_size ?? "normal"}
     >
       <RouteFocusManager />
-      {/* The landmark wraps the header too, so the stage a page publishes can be shown
-          on the header line rather than in a band of its own. */}
       <WorkflowLandmark>
         <header className="sticky top-0 z-30 border-b border-cv-border bg-cv-surface/85 backdrop-blur-xl">
           <div className="mx-auto flex min-h-16 max-w-[90rem] flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2 sm:px-6 lg:px-8">
@@ -84,10 +83,6 @@ export const App = () => {
               </span>
               <span className="block h-0.5 w-8 bg-cv-accent transition-all duration-200 group-hover:w-full" />
             </Link>
-
-            <div className="order-3 w-full min-w-0 md:order-none md:w-auto">
-              <WorkflowLandmarkSteps />
-            </div>
 
             <div className="ms-auto flex min-w-0 items-center gap-3">
               {/* Shown at every width. Hidden below `sm` it was absent exactly where a
@@ -115,15 +110,22 @@ export const App = () => {
           className={cx(
             "mx-auto w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
             /* The list gets the widest measure: its comparison table benefits directly
-               from every extra column of space. The draft editor remains broad without
-               stretching as far, while document-shaped screens keep the reading measure. */
-            isApplicationList
+               from every extra column of space. The intake screen shares that measure so
+               its primary card stays aligned with the home screen that opens it. The draft
+               editor remains broad without stretching as far, while document-shaped
+               screens keep the reading measure. */
+            isApplicationList || isNewApplication
               ? "max-w-[110rem]"
               : isDraftEditor
                 ? "max-w-[90rem]"
                 : "max-w-5xl",
           )}
         >
+          {/* `empty:hidden` removes the spacing on routes outside the CV workflow, where
+              the landmark deliberately renders no steps. */}
+          <div className="mb-4 empty:hidden sm:mb-6">
+            <WorkflowLandmarkSteps />
+          </div>
           <Outlet />
         </main>
       </WorkflowLandmark>
