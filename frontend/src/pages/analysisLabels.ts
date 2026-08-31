@@ -53,6 +53,15 @@ export const fitLabels: Record<FitLevel, string> = {
   low: "התאמה נמוכה",
 };
 
+/* The verdict alone is a word with no scale behind it: "high" reads as praise rather
+   than as one of three values. Each level says what it means for the workflow, which is
+   the part that decides whether the reader should press on or look again. */
+export const fitDescriptions: Record<FitLevel, string> = {
+  high: "המשרה תואמת את פרופיל המועמד. אין חסם התאמה ליצירת טיוטה.",
+  medium: "התאמה חלקית. אפשר להמשיך, אך כדאי לעבור על הפערים לפני יצירת טיוטה.",
+  low: "התאמה נמוכה מחייבת אישור מפורש לפני יצירת טיוטה.",
+};
+
 export const fitTones: Record<FitLevel, StatusTone> = {
   high: "success",
   medium: "neutral",

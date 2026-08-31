@@ -24,6 +24,7 @@ import { TechnicalDetails } from "../ui/TechnicalDetails";
 import { ActiveOperationPanel } from "./ActiveOperationPanel";
 import { type AutoDraftSources, autoDraftSources } from "./autoDraft";
 import { AnalysisPanel, SupersededAnalysisNote } from "./AnalysisPanel";
+import { JobSnapshotPanel } from "./JobSnapshotPanel";
 import { ReviewDecisionPanel, resolvedByDecisionForm } from "./ReviewDecisionPanel";
 import { ApplicationActions } from "./ApplicationActions";
 import { ApplicationViews } from "./ApplicationViews";
@@ -332,6 +333,13 @@ export const ApplicationPage = () => {
               אותה.
             </Callout>
           ) : null}
+
+          {/* The posting the analysis was run against, above the analysis itself: input
+              before conclusion. Without it the screen asserted a fit and a confidence
+              about a document the reader could not see, and named it only by UUID in the
+              provenance block. It is rendered beside the analysis and under the same
+              condition, since on its own it is not what this screen is for. */}
+          {classification === null ? null : <JobSnapshotPanel detail={detail} />}
 
           {/* What the analysis concluded, above the control that acts on it. It is the
               reasoning behind the stage the masthead reports, so it belongs on this

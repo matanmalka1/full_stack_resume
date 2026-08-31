@@ -214,6 +214,30 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
         </p>
       )}
 
+      {/* What pressing it actually costs. The button looks instantaneous and is not: the
+          command queues durable work an Operation reports on, and under an AI provider it
+          is a paid model call. Which of the two is stated from the same `provider` value
+          the command is sent with, so the sentence cannot describe a run different from
+          the one the press would start. */}
+      {plan.createDraft === null || settings === undefined ? null : (
+        <p className="text-support leading-6 text-cv-text-muted">
+          {provider === undefined
+            ? "היצירה רצה במסלול הדטרמיניסטי, ללא קריאת AI. העבודה מתבצעת ברקע וההתקדמות מדווחת במסך."
+            : "היצירה כוללת קריאת AI בתשלום. העבודה מתבצעת ברקע וההתקדמות מדווחת במסך."}
+        </p>
+      )}
+
+      {/* Why a second analysis is on offer at all. The button sat beside "create draft" at
+          equal weight with nothing saying what it is for, and the one sentence that did
+          explain it appeared only when there was an active draft to mark stale - so at the
+          stage where re-analysis is most freely available it was least explained. */}
+      {plan.analyze?.reanalysis === true && !plan.draftWouldReplace ? (
+        <p className="text-support leading-6 text-cv-text-muted">
+          ניתוח מחדש כדאי רק אם הסיווג שלמעלה נראה שגוי. הוא יוצר ניתוח חדש ונפרד לאותו תצלום
+          משרה, ואינו מושך נוסח משרה מעודכן.
+        </p>
+      ) : null}
+
       {inWorkflowOrder.length === 0 ? null : (
         <ActionBar
           /* The offered actions continue the next-step sentence above them rather than

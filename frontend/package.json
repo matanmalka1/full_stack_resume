@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run typecheck && npm run lint:tokens && vite build",
+    "knip": "knip",
     "lint:tokens": "node scripts/check-design-tokens.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -35,6 +36,7 @@
     "@types/react-dom": "^19.2.5",
     "@vitejs/plugin-react": "^6.1.0",
     "jsdom": "^30.0.1",
+    "knip": "^6.33.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~7.0.2",
     "vite": "^8.2.2",

@@ -10,6 +10,7 @@ import { TechnicalDetails } from "../ui/TechnicalDetails";
 import {
   approvalReasonLabel,
   classificationItems,
+  fitDescriptions,
   fitLabels,
   fitTones,
   gapSeverityLabels,
@@ -103,6 +104,16 @@ export const AnalysisPanel = ({
         )}
       </div>
 
+      {/* The badge names one of three levels; without the scale behind it "high" reads as
+          praise rather than as a value, and the reader cannot tell what a different
+          verdict would have meant for the same button. The sentence says what this level
+          means for the workflow, which is the part that decides whether to press on. */}
+      {classification.fit === null ? null : (
+        <p className="mt-4 text-support leading-6 text-cv-text-muted" dir="auto">
+          {fitDescriptions[classification.fit]}
+        </p>
+      )}
+
       <div className="mt-4 flex flex-col gap-5">
         <SummaryList items={classificationItems(classification)} />
 
@@ -128,10 +139,18 @@ export const AnalysisPanel = ({
           </Section>
         )}
 
+        {/* Backend-authored and not translated: the deterministic classifier builds this
+            sentence itself, so a Hebrew rendering here would be this client paraphrasing
+            a string it does not own - and would drift the moment the rule behind it
+            changes. It is labelled as the engine's own wording instead, and picks its own
+            direction so an English sentence is not reordered into a Hebrew shell. */}
         {classification.rationale === null ? null : (
           <Section title="הנימוק">
             <p className="text-body leading-7 text-cv-text" dir="auto">
               {classification.rationale}
+            </p>
+            <p className="mt-2 text-support text-cv-text-muted">
+              נוסח אוטומטית על ידי מנוע הסיווג, בשפת המקור.
             </p>
           </Section>
         )}
@@ -154,10 +173,20 @@ export const AnalysisPanel = ({
           </Section>
         )}
 
-        {/* A gap is what the analysis could not match against the candidate facts. It is
-            reported rather than resolved here: a hard gap is what blocks approval, and
-            the projection's own review reason is what offers the decision. */}
-        {classification.gaps.length === 0 ? null : (
+        {/* Absence of gaps is a finding, not an empty screen. Rendering nothing left the
+            reader unable to tell "the analysis matched every requirement" from "the
+            analysis never checked" - and the requirement lists above are derived from
+            this same gap list (hard becomes mandatory, warning becomes preferred), so
+            when it is empty all three sections vanish at once and the page says nothing
+            about the candidate's coverage at all. */}
+        {classification.gaps.length === 0 ? (
+          <Section title="פערים מול העובדות">
+            <p className="text-support leading-6 text-cv-text-muted" dir="auto">
+              הניתוח לא מצא דרישה שאין לה כיסוי בעובדות המועמד. לכן גם רשימות דרישות החובה
+              והדרישות המועדפות ריקות — הן נגזרות מאותם פערים.
+            </p>
+          </Section>
+        ) : (
           <Section title="פערים מול העובדות">
             <ul className="flex flex-col gap-3">
               {classification.gaps.map((gap) => (
