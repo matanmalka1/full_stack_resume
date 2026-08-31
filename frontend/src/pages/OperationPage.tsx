@@ -16,7 +16,7 @@ import { StatusBadge } from "../ui/StatusBadge";
 import { SummaryList, type SummaryItem } from "../ui/SummaryList";
 import { OperationActions } from "./OperationActions";
 import { actionDestination } from "./actionDestinations";
-import { actionLabel, preparationStateNextStep } from "./applicationLabels";
+import { actionLabel } from "./applicationLabels";
 import {
   activeOutputLabels,
   failurePresentations,
@@ -161,22 +161,10 @@ export const OperationPage = () => {
      finished operation describes its outcome instead, and a successful one names what it
      produced when the outputs say.
 
-     What comes next is the projection's answer, not this screen's: the sentence is the
-     same `preparationStateNextStep` the Application screen shows, read from the same
-     projection, so this reports the workflow position rather than deciding one (A.1). The
-     detail query polls while an Operation is live and stops at a terminal status, so by
-     the time this renders the stage it names is the post-operation stage.
-
-     Pointing at the other screen instead - "go back and it will tell you" - was the same
-     deferral the finished Operation used to make with its buttons, on a screen that
-     already holds the answer. */
-  /* The lookup is guarded rather than indexed straight: `preparation_state` is a union
-     the backend owns, and a projection carrying a stage this build does not know would
-     otherwise stringify `undefined` into the sentence. Missing copy falls back to the
-     deferral, which is always true. */
-  const nextStep = applicationQuery.data
-    ? (preparationStateNextStep[applicationQuery.data.preparation_state] ?? null)
-    : null;
+     What comes next is not restated here. This screen used to end with the same
+     paragraph the Application screen carried under its badges; that paragraph is gone
+     from both, because the action the reader takes next is a button on the Application
+     screen and the link below already goes there. */
   
   const recommended = applicationQuery.data?.recommended_action ?? null;
   const recommendedHref =
@@ -189,9 +177,7 @@ export const OperationPage = () => {
   const description = !terminal
     ? "העמוד מתעדכן מעצמו עד לסיום הפעולה."
     : succeeded
-      ? nextStep === null
-        ? `${completion} חזרה למועמדות מציגה מה הפעולה הבאה.`
-        : `${completion} ${nextStep}`
+      ? `${completion} חזרה למועמדות מציגה מה הפעולה הבאה.`
       : "הפעולה הסתיימה והעדכון האוטומטי נעצר.";
 
   return (

@@ -1,7 +1,5 @@
 import { ApiProblem } from "../api/client";
 import { Callout } from "../ui/Callout";
-import { LtrText } from "../ui/LtrText";
-import { TechnicalDetails } from "../ui/TechnicalDetails";
 
 interface ErrorCalloutProps {
   className?: string;
@@ -15,6 +13,10 @@ interface ErrorCalloutProps {
  * API Problem Details remain authoritative when available. Local programming
  * errors get only the safe, contextual fallback supplied by the owning screen;
  * their exception text is never rendered into the page.
+ *
+ * The failure code is not shown. `problem.detail` is the server's own sentence about
+ * what went wrong, and it is already the body of this callout; the code beside it named
+ * the same failure in a vocabulary the reader has no use for.
  */
 export const ErrorCallout = ({
   className,
@@ -32,14 +34,6 @@ export const ErrorCallout = ({
       tone="blocker"
     >
       {problem?.detail ?? fallbackDetail}
-      {problem === null ? null : (
-        <TechnicalDetails className="mt-3">
-          <LtrText>
-            {problem.code}
-            {problem.status > 0 ? ` · HTTP ${problem.status}` : ""}
-          </LtrText>
-        </TechnicalDetails>
-      )}
     </Callout>
   );
 };

@@ -7,8 +7,6 @@ interface RoutePlaceholderProps {
   description?: string;
 }
 
-const defaultDescription = "תוכן המסך יתווסף בשלב היישום הייעודי שלו.";
-
 export const RoutePlaceholder = ({ title, description }: RoutePlaceholderProps) => {
   /* A not-found or not-yet-built route is on no stage of the workflow, and saying so is
      what keeps the landmark from carrying the previous screen's stage into it. */
@@ -16,11 +14,10 @@ export const RoutePlaceholder = ({ title, description }: RoutePlaceholderProps) 
 
   return (
     <Card aria-labelledby="route-heading">
-      <PageHeading
-        description={description ?? defaultDescription}
-        eyebrow="M4 · תשתית הממשק"
-        id="route-heading"
-      >
+      {/* No eyebrow and no default description. Both were development scaffolding -
+          a milestone code and a promise that the screen was still being built - shown
+          to someone who had simply followed a broken link. */}
+      <PageHeading description={description} id="route-heading">
         {title}
       </PageHeading>
     </Card>

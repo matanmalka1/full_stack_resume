@@ -49,29 +49,6 @@ export const preparationStateTones: Record<PreparationState, StatusTone> = {
   ready: "success",
 };
 
-/* What the stage means for the reader, in one sentence, keyed by the same generated
-   union as the labels above.
-
-   This is the sentence the screen used to make them open a disclosure and read fourteen
-   rows of blocked actions to infer. It says what the workflow is waiting on and what
-   comes after it - not what is unavailable, which is the whole rest of the workflow and
-   says nothing. It decides nothing (A.1): the offered controls stay the projection's. */
-export const preparationStateNextStep: Record<PreparationState, string> = {
-  needs_analysis:
-    "ניתוח המשרה קורא את תצלום המשרה ומסיק מה נדרש בה. אחריו ייפתחו בחירת העובדות ויצירת הטיוטה.",
-  needs_review:
-    "הניתוח מוכן והוא ממתין להחלטה שלך. אחרי החלטות הסקירה אפשר יהיה ליצור טיוטה.",
-  ready_to_draft:
-    "הניתוח ותוכנית הבחירה מוכנים. יצירת הטיוטה מרכיבה מהם קורות חיים לעריכה, ובמסך הטיוטה אפשר יהיה לראות בדיוק אילו עובדות נבחרו ואילו הושמטו.",
-  draft_in_progress:
-    "יש טיוטה פעילה לעבוד עליה. כשהיא מוכנה, אימות בודק אותה מול העובדות הקנוניות.",
-  ready_for_approval:
-    "הטיוטה עברה אימות. אישור הגרסה יוצר רשומה קבועה שאינה משתנה עוד.",
-  approved:
-    "הגרסה אושרה ונשמרה כפי שהיא. נותר ליצור ממנה את קובץ קורות החיים.",
-  ready: "קורות החיים מוכנים. אפשר לצפות בגרסה המוכנה ולהגיש אותה.",
-};
-
 export const workingDraftStateLabels: Record<WorkingDraftState, string> = {
   none: "אין טיוטה פעילה",
   editing: "טיוטה בעריכה",
@@ -112,30 +89,29 @@ const actionLabels: Record<string, string> = {
 
 export const actionLabel = (action: string): string => actionLabels[action] ?? action;
 
-/* Hebrew reasons for a blocked action, in the same partial-map shape and for the same
-   reason as `actionLabels`: `BlockedActionResponse.reasons` is `list[str]`, and it
-   carries review and staleness codes alongside the action-policy ones. A code with no
-   name here is reported as itself rather than guessed at, so an unnamed reason reads as
-   a missing translation instead of a wrong explanation.
+/* Why a control is disabled, as the one short sentence its tooltip carries.
 
-   These sentences say what is missing, not what the code is called. The disclosure they
-   sit in is what the F gate means by explaining a blocker without requiring the reader
-   to know an identifier. */
+   This replaced a disclosure that listed every blocked action with its reasons. Most of
+   those rows said only that the workflow had not reached the action yet - true of every
+   action downstream of the current stage, and already what the stage badge says - so the
+   codes that mean "not there yet" are deliberately absent here: an action the workflow
+   has not reached is not offered at all rather than offered and explained.
+
+   What is left is the blocker that does not follow from the stage: a draft that exists
+   but failed validation, an approval waiting on a validation run. A code with no sentence
+   here disables the control without a tooltip rather than showing the reader a
+   `SCREAMING_SNAKE` identifier. */
 const blockedReasonLabels: Record<string, string> = {
-  NO_REVIEW_DECISION_REQUIRED: "אין החלטת סקירה שממתינה להכרעה.",
-  ANALYSIS_OR_SELECTION_PLAN_REQUIRED: "נדרשים ניתוח משרה ותוכנית בחירת עובדות פעילים.",
-  WORKING_DRAFT_REQUIRED: "אין טיוטה פעילה לעבוד עליה.",
-  VALIDATED_DRAFT_REQUIRED: "נדרשת טיוטה שעברה אימות.",
-  VALIDATION_REQUIRED: "יש להריץ אימות על הטיוטה לפני האישור.",
-  VALIDATION_FAILED: "האימות נכשל. יש לתקן את החסימות ולאמת מחדש.",
-  APPROVED_REVISION_REQUIRED: "נדרשת גרסה מאושרת.",
-  ACTION_NOT_AVAILABLE: "הפעולה אינה זמינה במצב הנוכחי.",
-  /* The review reasons block later actions too, so they reach this list as blockers and
-     not only as their own callouts. Without a sentence here the raw code was printed
-     twice on the Application screen, under two actions, saying nothing. */
-  MATERIAL_CLASSIFICATION_AMBIGUITY: "סיווג המשרה ממתין להחלטה מפורשת.",
-  LOW_FIT_REQUIRES_ACCEPTANCE: "התאמה נמוכה מחייבת אישור מפורש לפני יצירת טיוטה.",
-  HARD_GAP_REQUIRES_DECISION: "פער חוסם מול הדרישות מחייב החלטה מפורשת.",
+  VALIDATION_REQUIRED: "צריך להריץ אימות קודם.",
+  VALIDATION_FAILED: "האימות נכשל. צריך לתקן ולאמת מחדש.",
+  VALIDATION_STALE: "הטיוטה השתנתה מאז האימות.",
+  DRAFT_EDITED_AFTER_VALIDATION: "הטיוטה השתנתה מאז האימות.",
+  MATERIAL_CLASSIFICATION_AMBIGUITY: "צריך להכריע את סיווג המשרה.",
+  LOW_FIT_REQUIRES_ACCEPTANCE: "צריך לאשר התאמה נמוכה.",
+  HARD_GAP_REQUIRES_DECISION: "צריך להכריע פער חוסם.",
+  PENDING_FACT_REQUIRES_RESOLUTION: "יש טענה בלי עובדה מאושרת מאחוריה.",
+  KNOWLEDGE_RECONCILIATION_REQUIRED: "צריך להשלים התאמת עובדות.",
+  DUPLICATE_ACKNOWLEDGEMENT_REQUIRED: "צריך לאשר שזו מועמדות כפולה.",
 };
 
 /* The recruitment axis, which is where the Application stands with the employer - as
@@ -164,8 +140,51 @@ export const recruitmentStatusLabel = (status: string): string =>
     ? recruitmentStatusLabels[status as RecruitmentStatus]
     : status;
 
-export const blockedReasonLabel = (reason: string): string =>
-  blockedReasonLabels[reason] ?? reason;
+export const blockedReasonLabel = (reason: string): string | null =>
+  blockedReasonLabels[reason] ?? null;
+
+/* The title a review or staleness reason is shown under, replacing the backend's own
+   `message` paragraph.
+
+   The server's sentence stays in the payload - it is still what telemetry and a bug
+   report need - but it is not what the screen renders: it is written to be complete
+   rather than short, and five of them at once was the wall this map exists to remove.
+
+   Unmapped falls back to a general title rather than to the code, for the same reason
+   `blockedReasonLabel` answers null: a `SCREAMING_SNAKE` identifier on screen is a
+   missing translation shown to the wrong audience. */
+const reasonTitles: Record<string, string> = {
+  MATERIAL_CLASSIFICATION_AMBIGUITY: "סיווג המשרה לא חד־משמעי",
+  LOW_FIT_REQUIRES_ACCEPTANCE: "ההתאמה למשרה נמוכה",
+  HARD_GAP_REQUIRES_DECISION: "יש פער חוסם מול הדרישות",
+  PENDING_FACT_REQUIRES_RESOLUTION: "טענה בלי עובדה מאושרת",
+  KNOWLEDGE_RECONCILIATION_REQUIRED: "נדרשת התאמת עובדות",
+  DUPLICATE_ACKNOWLEDGEMENT_REQUIRED: "מועמדות כפולה",
+  FACT_SELECTION_UNRESOLVED: "בחירת העובדות לא הוכרעה",
+  JOB_SNAPSHOT_CHANGED: "נוסח המשרה השתנה",
+  ANALYSIS_REPLACED: "הניתוח הוחלף",
+  SELECTION_PLAN_REPLACED: "בחירת העובדות הוחלפה",
+  FACT_CHANGED: "עובדה שמאחורי הטיוטה השתנתה",
+  PROFILE_CHANGED: "הפרופיל השתנה",
+  POLICY_CHANGED: "כללי הבדיקה השתנו",
+  SOURCE_CHANGED: "המקור השתנה",
+  DRAFT_EDITED_AFTER_VALIDATION: "הטיוטה השתנתה מאז האימות",
+  VALIDATION_STALE: "האימות אינו מעודכן",
+};
+
+export const reasonTitle = (code: string, fallback: string): string =>
+  reasonTitles[code] ?? fallback;
+
+/* Warnings carry the same problem and the same answer. */
+const warningTitles: Record<string, string> = {
+  NEXT_ACTION_OVERDUE: "הפעולה הבאה באיחור",
+  FACT_SUPERSEDED: "עובדה בטיוטה הוחלפה בגרסה חדשה יותר",
+  READY_REVISION_FOR_OLDER_SNAPSHOT: "הגרסה המוכנה שייכת לנוסח משרה ישן",
+  READY_REVISION_FOR_OLDER_ANALYSIS: "הגרסה המוכנה שייכת לניתוח ישן",
+};
+
+export const warningTitle = (code: string): string =>
+  warningTitles[code] ?? "כדאי לשים לב";
 
 
 /* The board's named questions, in the order the chips offer them. Keyed by the generated

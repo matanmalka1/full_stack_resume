@@ -6,7 +6,6 @@ import { Callout } from "../ui/Callout";
 import { LtrText } from "../ui/LtrText";
 import { StatusBadge } from "../ui/StatusBadge";
 import { SummaryList } from "../ui/SummaryList";
-import { TechnicalDetails } from "../ui/TechnicalDetails";
 import {
   approvalReasonLabel,
   classificationItems,
@@ -213,20 +212,6 @@ export const AnalysisPanel = ({
           </Section>
         )}
 
-        {analysis == null ? null : (
-          <TechnicalDetails summary="מקור הניתוח ומזהיו">
-            <SummaryList
-              items={[
-                { term: "מזהה הניתוח", value: analysis.id, ltr: true },
-                { term: "גרסת הניתוח", value: String(analysis.version_number), ltr: true },
-                { term: "תצלום המשרה", value: analysis.job_snapshot_id, ltr: true },
-                { term: "ספק", value: analysis.provider, ltr: true },
-                { term: "מודל", value: analysis.model, ltr: true },
-                { term: "נוצר", value: analysis.created_at, ltr: true },
-              ]}
-            />
-          </TechnicalDetails>
-        )}
       </div>
     </section>
   );

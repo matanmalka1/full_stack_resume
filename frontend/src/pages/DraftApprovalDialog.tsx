@@ -13,7 +13,6 @@ import { Checkbox } from "../ui/Checkbox";
 import { Dialog } from "../ui/Dialog";
 import { LtrText } from "../ui/LtrText";
 import { SummaryList } from "../ui/SummaryList";
-import { TechnicalDetails } from "../ui/TechnicalDetails";
 
 interface DraftApprovalDialogProps {
   applicationId: string;
@@ -118,9 +117,6 @@ export const DraftApprovalDialog = ({
               { term: "תוצאת אימות", value: run.passed ? "עברה" : "נכשלה" },
             ]}
           />
-          <TechnicalDetails summary="פרטי ריצת האימות">
-            <LtrText>{run.validation_run_id}</LtrText>
-          </TechnicalDetails>
         </div>
       )}
       {projectionDiverged ? (

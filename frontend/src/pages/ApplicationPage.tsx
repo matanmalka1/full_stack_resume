@@ -10,17 +10,14 @@ import {
 } from "../api/applications";
 import { operationQueryKey } from "../api/operations";
 import { settingsQueryOptions } from "../api/settings";
-import type { ApplicationDetail, BlockedAction, Reason } from "../api/contracts";
+import type { ApplicationDetail, Reason } from "../api/contracts";
 import { ErrorCallout } from "../app/ErrorCallout";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { Card } from "../ui/Card";
-import { LtrText } from "../ui/LtrText";
 import { PageHeading } from "../ui/PageHeading";
 import { StatusBadge } from "../ui/StatusBadge";
-import { SummaryList, type SummaryItem } from "../ui/SummaryList";
-import { TechnicalDetails } from "../ui/TechnicalDetails";
 import { ActiveOperationPanel } from "./ActiveOperationPanel";
 import { type AutoDraftSources, autoDraftSources } from "./autoDraft";
 import { AnalysisPanel, SupersededAnalysisNote } from "./AnalysisPanel";
@@ -32,62 +29,13 @@ import { actionDestination } from "./actionDestinations";
 import { useWatchedOperation } from "./useWatchedOperation";
 import {
   actionLabel,
-  blockedReasonLabel,
   preparationStateLabels,
-  preparationStateNextStep,
   preparationStateTones,
+  reasonTitle,
+  warningTitle,
   workingDraftStateLabels,
   workingDraftStateTones,
 } from "./applicationLabels";
-
-const identifiers = (detail: ApplicationDetail): SummaryItem[] => {
-  const items: SummaryItem[] = [
-    { term: "מזהה המועמדות", value: detail.application.id, ltr: true },
-    { term: "תצלום המשרה הפעיל", value: detail.active_job_snapshot_id, ltr: true },
-    { term: "מצב הגיוס", value: detail.recruitment_status, ltr: true },
-  ];
-  const optional: [string, string | null | undefined][] = [
-    ["הניתוח הפעיל", detail.active_analysis_id],
-    ["תוכנית הבחירה הפעילה", detail.active_selection_plan_id],
-    ["הטיוטה הפעילה", detail.active_working_draft_id],
-    ["הגרסה המאושרת האחרונה", detail.latest_approved_revision_id],
-    ["הגרסה המוכנה האחרונה", detail.latest_ready_revision_id],
-  ];
-
-  for (const [term, value] of optional) {
-    if (value != null) {
-      items.push({ term, value, ltr: true });
-    }
-  }
-
-  return items;
-};
-
-/* A blocked action is worth reporting only when its blocker is not already the plain
-   reading of the stage the screen is showing.
-
-   Every action downstream of where the workflow has got to is blocked, by definition, and
-   listing all of them restated the landmark once per row: fourteen sentences of "there is
-   no active draft" on a screen whose own badge says there is no active draft. What is
-   worth a row is the blocker that does not follow from the stage - a draft that exists
-   but failed validation, an approval waiting on a validation run - because that one names
-   something the user has to act on rather than something they have simply not reached.
-
-   The codes are the projection's, so an unrecognised one is kept rather than filtered:
-   silence about a blocker nobody anticipated is the failure this list exists to avoid. */
-const IMPLIED_BY_STAGE = new Set([
-  "NO_REVIEW_DECISION_REQUIRED",
-  "ANALYSIS_OR_SELECTION_PLAN_REQUIRED",
-  "WORKING_DRAFT_REQUIRED",
-  "VALIDATED_DRAFT_REQUIRED",
-  "APPROVED_REVISION_REQUIRED",
-  "ACTION_NOT_AVAILABLE",
-]);
-
-const noteworthyBlockedActions = (detail: ApplicationDetail): BlockedAction[] =>
-  detail.blocked_actions.filter((blocked) =>
-    blocked.reasons.some((reason) => !IMPLIED_BY_STAGE.has(reason)),
-  );
 
 /* `working_draft_state === "none"` is news only once a draft could exist. At the stages
    below it restates the preparation stage, and the masthead is the worst place for a
@@ -109,25 +57,30 @@ const autoDraftStorageKey = (operationId: string): string => `stage-e:auto-draft
 const draftStateIsImplied = (detail: ApplicationDetail): boolean =>
   detail.working_draft_state === "none" && IMPLIES_NO_DRAFT.has(detail.preparation_state);
 
-/* Review reasons and stale reasons carry the same shape, and both frame a backend
-   sentence rather than replacing it: the message is the server's plain-language
-   explanation and the code stays collapsed (A.2).
+/* Review reasons and stale reasons carry the same shape, and both are now reported as a
+   short title plus the control that resolves them.
+
+   The backend's `message` is no longer rendered. It is a complete explanatory sentence,
+   and up to five of them stacked on this screen at once - each with its own heading, its
+   own list of resolving actions, and its own collapsed code - was the wall this screen
+   opened with. The code maps to a title instead, and the action that clears it is a
+   button rather than a sentence naming a button.
 
    Whether the resolving action has a screen is asked of `actionDestination` rather than
    asserted here, so a reason cannot go on promising a screen that now exists. */
 const ReasonCallout = ({
   applicationId,
+  fallbackTitle,
   reason,
   resolvedHere = false,
-  title,
   tone,
 }: {
   applicationId: string;
+  fallbackTitle: string;
   reason: Reason;
   /* The control that resolves this reason is on this screen, so the callout states the
      requirement and offers no destination. */
   resolvedHere?: boolean;
-  title: string;
   tone: "blocker" | "warning";
 }) => {
   const resolution = resolvedHere
@@ -145,22 +98,9 @@ const ReasonCallout = ({
           </Link>
         )
       }
-      title={title}
+      title={reasonTitle(reason.code, fallbackTitle)}
       tone={tone}
-    >
-      <p dir="auto">{reason.message}</p>
-      {resolvedHere ||
-      reason.allowed_resolution_actions.length === 0 ||
-      resolution !== undefined ? null : (
-        <p className="mt-2">
-          הפעולה שפותרת אותה: {reason.allowed_resolution_actions.map(actionLabel).join(" · ")}.
-          המסך שלה מגיע בפרוסה הבאה.
-        </p>
-      )}
-      <TechnicalDetails className="mt-3" summary="קוד הסיבה">
-        <LtrText>{reason.code}</LtrText>
-      </TechnicalDetails>
-    </Callout>
+    />
   );
 };
 
@@ -185,7 +125,6 @@ export const ApplicationPage = () => {
     applicationId,
     detail,
   );
-  const noteworthy = detail === undefined ? [] : noteworthyBlockedActions(detail);
   /* The same narrow read the review screen uses, and the same guard: it answers `null`
      unless the analysis on record is the active one, so a superseded analysis is named
      as superseded rather than shown as the classification in force. */
@@ -260,10 +199,9 @@ export const ApplicationPage = () => {
             </StatusBadge>
             {/* The draft axis is reported only where it says something the preparation
                 stage does not. Before the analysis exists a draft cannot, so "there is no
-                active draft" beside "waiting for the job analysis" is the same
-                redundancy `IMPLIED_BY_STAGE` removes from the blocked-action list - and
-                it costs a badge in the masthead, which is where the screen's two states
-                are supposed to be distinguishable at a glance. */}
+                active draft" beside "waiting for the job analysis" is one fact wearing
+                two badges - and it costs a badge in the masthead, which is where the
+                screen's two states are supposed to be distinguishable at a glance. */}
             {draftStateIsImplied(detail) ? null : (
               <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
                 {workingDraftStateLabels[detail.working_draft_state]}
@@ -302,8 +240,8 @@ export const ApplicationPage = () => {
               applicationId={detail.application.id}
               key={reason.code}
               reason={reason}
+              fallbackTitle="נדרשת החלטה לפני המשך"
               resolvedHere={resolvedByDecisionForm(reason)}
-              title="נדרשת החלטה לפני המשך"
               tone="blocker"
             />
           ))}
@@ -312,19 +250,14 @@ export const ApplicationPage = () => {
             <ReasonCallout
               applicationId={detail.application.id}
               key={reason.code}
+              fallbackTitle="הטיוטה אינה מעודכנת מול המקורות שלה"
               reason={reason}
-              title="הטיוטה אינה מעודכנת מול המקורות שלה"
               tone="warning"
             />
           ))}
 
           {detail.warnings.map((warning) => (
-            <Callout key={warning.code} title="אפשר להמשיך, אך יש לשים לב" tone="warning">
-              <p dir="auto">{warning.message}</p>
-              <TechnicalDetails className="mt-3" summary="קוד האזהרה">
-                <LtrText>{warning.code}</LtrText>
-              </TechnicalDetails>
-            </Callout>
+            <Callout key={warning.code} title={warningTitle(warning.code)} tone="warning" />
           ))}
 
           {detail.newer_draft_in_progress ? (
@@ -355,38 +288,9 @@ export const ApplicationPage = () => {
               have meant deciding on one screen about something shown on another. */}
           <ReviewDecisionPanel detail={detail} />
 
-          {/* What the workflow is waiting on, in front of the control rather than behind a
-              disclosure. Without it the card body was a single button in an empty box,
-              and the only text explaining it was fourteen collapsed rows of blockers. */}
-          <p className="text-body leading-7 text-cv-text-muted" dir="auto">
-            {preparationStateNextStep[detail.preparation_state]}
-          </p>
 
           <ApplicationActions detail={detail} onQueued={watch} />
 
-          {/* Only the blockers that are not already implied by the stage. Listing every
-              later action of the workflow as "unavailable" said nothing the landmark and
-              the offered action did not already say, and it buried the identifiers - the
-              one thing in here that is genuinely technical - under fourteen rows of it. */}
-          <TechnicalDetails summary="מזהי הרשומות ופעולות שאינן זמינות">
-            <div className="flex flex-col gap-4">
-              {noteworthy.length === 0 ? null : (
-                <div>
-                  <p className="mb-2 font-semibold text-cv-text">פעולות שאינן זמינות כעת</p>
-                  <SummaryList
-                    items={noteworthy.map((blocked) => ({
-                      term: actionLabel(blocked.action),
-                      value: blocked.reasons.map(blockedReasonLabel).join(" "),
-                    }))}
-                  />
-                </div>
-              )}
-              <div>
-                <p className="mb-2 font-semibold text-cv-text">מזהי הרשומות</p>
-                <SummaryList items={identifiers(detail)} />
-              </div>
-            </div>
-          </TechnicalDetails>
         </div>
       )}
     </Card>

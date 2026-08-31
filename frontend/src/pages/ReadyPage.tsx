@@ -18,7 +18,6 @@ import { Callout } from "../ui/Callout";
 import { Card } from "../ui/Card";
 import { PageHeading } from "../ui/PageHeading";
 import { SummaryList } from "../ui/SummaryList";
-import { TechnicalDetails } from "../ui/TechnicalDetails";
 import { Dialog } from "../ui/Dialog";
 import { Field } from "../ui/Field";
 import { TextInput } from "../ui/TextInput";
@@ -168,7 +167,7 @@ export const ReadyPage = () => {
           <Callout title="קיימת טיוטה חדשה יותר" tone="warning">היא אינה משנה את הגרסה המוכנה המוצגת כאן.</Callout>
         ) : null}
         {revision !== undefined && !revision.ready_qualified ? (
-          <Callout title="הגרסה עדיין אינה מוכנה למסירה" tone="blocker">פרטי בדיקת ה־Ready מוצגים בהמשך.</Callout>
+          <Callout title="הגרסה עדיין אינה מוכנה למסירה" tone="blocker">דוח האימות שמתחת מפרט את החסימות.</Callout>
         ) : null}
         {revision === undefined ? <p className="text-body text-cv-text-muted">טוען את הגרסה…</p> : (
           <>
@@ -184,8 +183,7 @@ export const ReadyPage = () => {
               />
             )}
 
-            {/* What a person needs about the version, in words. The identifiers behind
-                them stay in the collapsed block below. */}
+            {/* What a person needs about the version, in words. */}
             <SummaryList items={[
               { term: "מספר גרסה", value: revision.version_number, ltr: true },
               { term: "קובץ HTML", value: revision.html_artifact_version_id == null ? "חסר" : "קיים" },
@@ -214,21 +212,6 @@ export const ReadyPage = () => {
               </details>
             )}
 
-            <TechnicalDetails summary="מזהי הגרסה והתוצרים">
-              <div className="flex flex-col gap-4">
-                <SummaryList items={[
-                  { term: "גרסה מאושרת", value: revision.id, ltr: true },
-                  { term: "ValidationRun", value: revision.validation_run_id, ltr: true },
-                  { term: "HTML", value: revision.html_artifact_version_id ?? "חסר", ltr: true },
-                  { term: "PDF", value: revision.pdf_artifact_version_id ?? "חסר", ltr: true },
-                  { term: "Decision Markdown", value: decisionQuery.data?.content_hash ?? "לא נטען", ltr: true },
-                ]} />
-                <div>
-                  <p className="mb-2 font-semibold text-cv-text">מקור האישור</p>
-                  <pre className="overflow-auto text-support">{JSON.stringify(revision.decision_provenance, null, 2)}</pre>
-                </div>
-              </div>
-            </TechnicalDetails>
           </>
         )}
         {watched === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={watched} />}

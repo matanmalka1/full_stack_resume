@@ -200,10 +200,10 @@ describe("DraftApprovalDialog", () => {
     expect(dialog).toHaveTextContent("Acme");
     expect(dialog).toHaveTextContent("Engineer");
     expect(dialog).toHaveTextContent("4");
-    const validationRunId = screen.getByText("run-1");
-    expect(validationRunId).not.toBeVisible();
-    fireEvent.click(screen.getByText("פרטי ריצת האימות"));
-    expect(validationRunId).toBeVisible();
+    /* The validation run id is no longer shown. What matters about it is that approval
+       is bound to that exact run, and the request assertion at the end of this test is
+       what proves it - the collapsed identifier only proved it had been printed. */
+    expect(screen.queryByText("run-1")).toBeNull();
     const approve = await screen.findByRole("button", { name: "אישור הגרסה" });
     expect(approve).toBeDisabled();
     fireEvent.click(screen.getByRole("checkbox")); fireEvent.click(approve);

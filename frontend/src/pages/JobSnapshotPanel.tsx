@@ -1,7 +1,7 @@
 import type { ApplicationDetail } from "../api/contracts";
 import { LtrText } from "../ui/LtrText";
 import { SummaryList } from "../ui/SummaryList";
-import { TechnicalDetails } from "../ui/TechnicalDetails";
+import { Disclosure } from "../ui/Disclosure";
 
 /* The posting the analysis was run against, on the screen that reports the analysis.
 
@@ -18,6 +18,14 @@ import { TechnicalDetails } from "../ui/TechnicalDetails";
    `latest_snapshot` is the newest snapshot of the Application, which is the one the
    active analysis was run against whenever the analysis is the active one - the condition
    `classificationFromAnalysis` already requires before this panel is rendered at all. */
+const dateFormat = new Intl.DateTimeFormat("he-IL", { dateStyle: "short", timeStyle: "short" });
+
+/* An unparsable value is shown as it arrived rather than as "Invalid Date". */
+const formatSnapshotDate = (value: string): string => {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : dateFormat.format(parsed);
+};
+
 export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
   const snapshot = detail.latest_snapshot;
   const jobText = typeof snapshot.job_text === "string" ? snapshot.job_text.trim() : "";
@@ -59,7 +67,7 @@ export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
                     ),
                   },
                 ]),
-            { term: "נלכד", value: snapshot.captured_at, ltr: true },
+            { term: "נלכד", value: formatSnapshotDate(snapshot.captured_at) },
           ]}
         />
 
@@ -68,7 +76,7 @@ export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
             תצלום המשרה לא כולל טקסט שמור.
           </p>
         ) : (
-          <TechnicalDetails summary="הצגת נוסח המשרה שנותח">
+          <Disclosure summary="הצגת נוסח המשרה שנותח">
             {/* Backend-stored source text, in whatever language the posting was written
                 in: it picks its own direction, and `whitespace-pre-wrap` keeps the
                 posting's own line breaks rather than reflowing it into one block.
@@ -82,17 +90,9 @@ export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
             >
               {jobText}
             </p>
-          </TechnicalDetails>
+          </Disclosure>
         )}
 
-        <TechnicalDetails summary="מזהי התצלום">
-          <SummaryList
-            items={[
-              { term: "מזהה התצלום", value: snapshot.id, ltr: true },
-              { term: "טביעת תוכן", value: snapshot.content_hash, ltr: true },
-            ]}
-          />
-        </TechnicalDetails>
       </div>
     </section>
   );

@@ -27,7 +27,6 @@ import { Card } from "../ui/Card";
 import { LtrText } from "../ui/LtrText";
 import { PageHeading } from "../ui/PageHeading";
 import { StatusBadge } from "../ui/StatusBadge";
-import { TechnicalDetails } from "../ui/TechnicalDetails";
 import { ViewSwitch } from "../ui/ViewSwitch";
 import { ActiveOperationPanel } from "./ActiveOperationPanel";
 import { DraftApprovalDialog } from "./DraftApprovalDialog";
@@ -43,7 +42,7 @@ import { DraftValidationPanel } from "./DraftValidationPanel";
 import { removability } from "./claimRemoval";
 import { useDraftAutosave } from "./useDraftAutosave";
 import { useWatchedOperation } from "./useWatchedOperation";
-import { actionLabel, workingDraftStateLabels, workingDraftStateTones } from "./applicationLabels";
+import { reasonTitle, workingDraftStateLabels, workingDraftStateTones } from "./applicationLabels";
 
 /* A.4 frame 3: the editor pane. It reads the §9 projection for which draft is active and
    what is blocking, and the draft itself for the structure it edits. It derives no second
@@ -301,24 +300,19 @@ export const DraftEditorPage = () => {
             PENDING_FACT_REQUIRES_RESOLUTION there, and it is shown here as the reason it
             already is rather than as an approval rule this screen invented. */}
         {(detail?.review_reasons ?? []).map((reason) => (
-          <Callout key={reason.code} title="נדרשת החלטה לפני אישור הגרסה" tone="blocker">
-            <p dir="auto">{reason.message}</p>
-            {reason.allowed_resolution_actions.length === 0 ? null : (
-              <p className="mt-2">
-                הפעולות שפותרות אותה:{" "}
-                {reason.allowed_resolution_actions.map(actionLabel).join(" · ")}.
-              </p>
-            )}
-            <TechnicalDetails className="mt-3" summary="קוד הסיבה">
-              <LtrText>{reason.code}</LtrText>
-            </TechnicalDetails>
-          </Callout>
+          <Callout
+            key={reason.code}
+            title={reasonTitle(reason.code, "נדרשת החלטה לפני אישור הגרסה")}
+            tone="blocker"
+          />
         ))}
 
         {(detail?.stale_reasons ?? []).map((reason) => (
-          <Callout key={reason.code} title="הטיוטה אינה מעודכנת מול המקורות שלה" tone="warning">
-            <p dir="auto">{reason.message}</p>
-          </Callout>
+          <Callout
+            key={reason.code}
+            title={reasonTitle(reason.code, "הטיוטה אינה מעודכנת מול המקורות שלה")}
+            tone="warning"
+          />
         ))}
 
         {renderRevisionId !== null ? (
@@ -524,9 +518,6 @@ export const DraftEditorPage = () => {
               </div>
             </div>
 
-            <TechnicalDetails summary="מזהה הטיוטה וגרסתה">
-              <LtrText>{`${draft.id} · v${draft.edit_version}`}</LtrText>
-            </TechnicalDetails>
 
             <DraftApprovalDialog
               applicationId={applicationId}
