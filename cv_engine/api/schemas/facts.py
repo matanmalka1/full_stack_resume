@@ -192,7 +192,7 @@ class CaptureClaimFactRequest(HttpSchema):
     tags: list[str] = Field(min_length=1)
     english: str | None = None
     hebrew: str | None = None
-    provenance: str | None = None
+    provenance: str = Field(min_length=1)
     effective_dates: str | None = None
     replaces: str | None = None
     reason: str = ""

@@ -8,9 +8,13 @@ those previously lacked an API surface.
 
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from api_harness import MUTATION_HEADERS
 
 from cv_engine.api.app import API_PREFIX
+from cv_engine.api.schemas.facts import CaptureClaimFactRequest
 
 
 def _content(**overrides) -> dict:
@@ -102,3 +106,16 @@ def test_fact_http_refusals_preserve_the_pending_fact(api_worker) -> None:
     for response, expected_status in refusals:
         assert response.status_code == expected_status, response.text
     assert api_worker.services.knowledge_lifecycle.show_fact(fact_id).fact.status.value == "pending"
+
+
+def test_claim_capture_requires_explicit_provenance() -> None:
+    with pytest.raises(ValidationError):
+        CaptureClaimFactRequest.model_validate(
+            {
+                "application_id": "application",
+                "claim_id": "claim",
+                "source": "sales.md",
+                "meaning": "candidate introduced a weekly pipeline review",
+                "tags": ["sales", "pipeline"],
+            }
+        )

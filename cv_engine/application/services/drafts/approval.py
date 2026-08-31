@@ -12,6 +12,7 @@ from ...errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     VALIDATION_STALE,
+    WORKING_PROJECTION_DIVERGED,
     InfrastructureFailure,
     PreconditionFailed,
     StateConflict,
@@ -47,7 +48,8 @@ class DraftApproval(DraftServiceBase):
             raise StateConflict(
                 "the working Markdown projection differs from the stored draft; "
                 "re-apply the change through the draft editor, or regenerate the "
-                "draft to discard it"
+                "draft to discard it",
+                code=WORKING_PROJECTION_DIVERGED,
             )
 
     def _require_binding_validation(

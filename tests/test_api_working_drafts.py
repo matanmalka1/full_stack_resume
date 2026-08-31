@@ -789,6 +789,33 @@ def test_an_edit_after_validation_makes_that_run_unusable_for_approval(api_worke
     assert api_worker.services.repository.approved_revisions(application_id) == []
 
 
+def test_approval_preserves_a_diverged_working_projection_and_returns_a_specific_code(
+    api_worker,
+) -> None:
+    """An edit outside the Web editor is evidence to preserve, not output to overwrite."""
+    application_id, working_draft_id, _sources = _drafted(
+        api_worker, "Diverged Projection Co"
+    )
+    validated = _validated(api_worker, working_draft_id)
+    markdown_path = api_worker.services.artifacts.working_paths(application_id).markdown
+    edited_projection = markdown_path.read_text(encoding="utf-8") + "\nmanual edit\n"
+    markdown_path.write_text(edited_projection, encoding="utf-8")
+
+    response = _post(
+        api_worker,
+        f"/working-drafts/{working_draft_id}/approve",
+        {
+            "expected_edit_version": validated["edit_version"],
+            "validation_run_id": validated["validation_run_id"],
+        },
+    )
+
+    assert response.status_code == 409, response.text
+    assert response.json()["code"] == "WORKING_PROJECTION_DIVERGED"
+    assert markdown_path.read_text(encoding="utf-8") == edited_projection
+    assert api_worker.services.repository.approved_revisions(application_id) == []
+
+
 def test_a_failing_run_blocks_approval_and_says_which_groups_failed(api_worker) -> None:
     application_id, working_draft_id, _sources = _drafted(api_worker, "Blocked Approval Co")
     read = _read(api_worker, working_draft_id)
