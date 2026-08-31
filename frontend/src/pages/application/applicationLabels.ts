@@ -1,4 +1,5 @@
 import type {
+  ApplicationDetail,
   ApplicationPreset,
   PreparationState,
   RecruitmentStatus,
@@ -64,6 +65,20 @@ export const workingDraftStateTones: Record<WorkingDraftState, StatusTone> = {
   validated: "success",
   stale: "warning",
 };
+
+/* `working_draft_state === "none"` is news only once a draft could exist. At the stages
+   below it restates the preparation stage, so the masthead suppresses the duplicate
+   badge. `ready_to_draft` is reached both with no draft and with a stale draft; checking
+   `none` as well is what distinguishes those paths. */
+const preparationStatesImplyingNoDraft = new Set<PreparationState>([
+  "needs_analysis",
+  "needs_review",
+  "ready_to_draft",
+]);
+
+export const draftStateIsImplied = (detail: ApplicationDetail): boolean =>
+  detail.working_draft_state === "none" &&
+  preparationStatesImplyingNoDraft.has(detail.preparation_state);
 
 /* Hebrew names for the actions the projection reports. Deliberately a partial map over
    an open set of strings rather than a Record over an enum this layer invented: the

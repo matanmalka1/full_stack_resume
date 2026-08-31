@@ -13,8 +13,6 @@ export const autoDraftSources = (
   operation: Operation | undefined,
   settings: Settings | undefined,
   detail: ApplicationDetail | undefined,
-  dispatched: boolean,
-  inFlight: boolean,
 ): AutoDraftSources | null => {
   if (
     operation?.operation_type !== "analyze_job" ||
@@ -25,9 +23,7 @@ export const autoDraftSources = (
     detail.working_draft_state !== "none" ||
     detail.active_operation != null ||
     detail.active_analysis_id == null ||
-    detail.active_selection_plan_id == null ||
-    dispatched ||
-    inFlight
+    detail.active_selection_plan_id == null
   ) {
     return null;
   }
