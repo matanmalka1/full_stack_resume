@@ -111,6 +111,9 @@ const DraftFlow = () => {
   const [open, setOpen] = useState(false);
   const [stale, setStale] = useState(false);
   const [approved, setApproved] = useState<string | null>(null);
+  /* The editor watches the work its panels queue rather than navigating to it, so the
+     harness records the queued id the same way. */
+  const [queued, setQueued] = useState<string | null>(null);
   const detailQuery = useQuery(applicationDetailQueryOptions("app-1"));
   const draftQuery = useQuery(workingDraftQueryOptions("draft-1"));
   const onExactPassingRun = useCallback((next: string | null) => {
@@ -139,7 +142,10 @@ const DraftFlow = () => {
         open={open}
         validationRunId={runId}
       />
-      {approved === null ? null : <DraftRenderPanel approvedRevisionId={approved} />}
+      {approved === null ? null : (
+        <DraftRenderPanel approvedRevisionId={approved} onQueued={setQueued} />
+      )}
+      {queued === null ? null : <p>{`בעבודה: ${queued}`}</p>}
     </>
   );
 };
@@ -254,16 +260,21 @@ describe("DraftApprovalDialog", () => {
 });
 
 describe("DraftRenderPanel and ReadyPage", () => {
-  it("renders with the explicit application ID and follows the accepted Operation", async () => {
+  /* Rendering reports the Operation it queued to the screen holding the panel rather
+     than navigating to the Operation's own route: the approved draft stays on screen
+     while the file is produced. What the panel owes its host is the queued id, so that
+     is what this asserts, alongside the exact payload it sent. */
+  it("renders with the explicit application ID and hands the accepted Operation to its host", async () => {
     const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => init?.method === "POST"
       ? Promise.resolve(json(operation(), 202, { Location: "/api/v1/operations/op-render" }))
       : Promise.resolve(json(revision({ ready_qualified: false, html_artifact_version_id: null, pdf_artifact_version_id: null }))));
     vi.stubGlobal("fetch", fetchMock);
-    renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftRenderPanel approvedRevisionId="revision-1" />);
+    const onQueued = vi.fn();
+    renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftRenderPanel approvedRevisionId="revision-1" onQueued={onQueued} />);
     const renderButton = await screen.findByRole("button", { name: "יצירת HTML ו־PDF" });
     await waitFor(() => expect(renderButton).toBeEnabled());
     fireEvent.click(renderButton);
-    expect(await screen.findByRole("heading", { name: "פעולה" })).toBeInTheDocument();
+    await waitFor(() => expect(onQueued).toHaveBeenCalledWith(operation().id));
     const request = fetchMock.mock.calls.find((call) => call[1]?.method === "POST");
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({ application_id: "app-1" });
   });
@@ -382,8 +393,7 @@ describe("DraftRenderPanel and ReadyPage", () => {
     /* The way back is offered alongside the draft button, not instead of it. It used to
        appear only when the sources were stale - as the fallback for a missing button
        rather than as an exit - which left this case, a Ready revision with current
-       sources, with no link off the screen at all. Asserted before the click, which
-       navigates away from Ready. */
+       sources, with no link off the screen at all. */
     expect(screen.getByRole("link", { name: "חזרה למועמדות" })).toHaveAttribute("href", "/applications/app-1");
     fireEvent.click(newDraft);
     await waitFor(() =>

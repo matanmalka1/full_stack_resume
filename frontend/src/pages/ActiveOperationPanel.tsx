@@ -32,7 +32,15 @@ import {
    `/operations/:id` stays a route. It is where a direct link, a bookmark, or a reload of
    a queued operation lands, and it lays out the whole record; this panel is the same
    Operation reported in place, which is why both read from one vocabulary module. */
-export const ActiveOperationPanel = ({ operation }: { operation: Operation }) => {
+export const ActiveOperationPanel = ({
+  onQueued,
+  operation,
+}: {
+  /* Handed down to the retry inside: a re-queued Operation belongs to the same watch the
+     host screen is already keeping, so it is reported here rather than followed. */
+  onQueued?: (operationId: string) => void;
+  operation: Operation;
+}) => {
   const terminal = isTerminalOperation(operation);
   const failure =
     operation.failure_code == null ? null : failurePresentations[operation.failure_code];
@@ -111,7 +119,7 @@ export const ActiveOperationPanel = ({ operation }: { operation: Operation }) =>
         {/* Cancel and retry, which are the Operation's own actions and belong wherever it
             is shown. The panel passes no return link: this is the screen the user is
             already on. */}
-        <OperationActions inline operation={operation} />
+        <OperationActions inline onQueued={onQueued} operation={operation} />
 
         <p className="text-support text-cv-text-muted">
           <Link

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 
 import { applicationDetailQueryOptions, startDraftGeneration } from "../api/applications";
 import { operationQueryKey } from "../api/operations";
@@ -22,11 +22,12 @@ import { TechnicalDetails } from "../ui/TechnicalDetails";
 import { Dialog } from "../ui/Dialog";
 import { Field } from "../ui/Field";
 import { TextInput } from "../ui/TextInput";
+import { ActiveOperationPanel } from "./ActiveOperationPanel";
 import { ValidationReportView } from "./ValidationReportView";
+import { useWatchedOperation } from "./useWatchedOperation";
 
 export const ReadyPage = () => {
   const { approvedRevisionId } = useParams();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [submissionOpen, setSubmissionOpen] = useState(false);
   const [submittedAt, setSubmittedAt] = useState(() => {
@@ -49,6 +50,13 @@ export const ReadyPage = () => {
   });
   const detail = applicationQuery.data;
   useWorkflowStage(detail === undefined ? "unknown" : detail.preparation_state);
+  /* The same watch the Application screen and the editor keep. This screen queues one
+     command - a new draft from the approved revision - and reports it beside the files
+     rather than sending the reader to a screen that holds neither. */
+  const { operation: watched, watch } = useWatchedOperation(
+    revision?.application_id ?? "",
+    detail,
+  );
   const newDraftKey = useMemo(
     () =>
       `revision-draft:${approvedRevisionId}:${detail?.active_analysis_id ?? "none"}:${detail?.active_selection_plan_id ?? "none"}`,
@@ -67,9 +75,15 @@ export const ReadyPage = () => {
         { parentRevisionId: revision.id },
       );
     },
-    onSuccess: ({ operation, operationPath }) => {
+    /* Reported in place rather than followed. Generating a new draft from a Ready
+       revision used to navigate to the Operation's own screen, which handed the user a
+       progress line and then a link back to the Application - so the approved files they
+       were looking at went off screen, and the draft the work produced was reached by a
+       third step. The watch below reports the run here and the projection names the draft
+       when it exists. */
+    onSuccess: ({ operation }) => {
       queryClient.setQueryData(operationQueryKey(operation.id), operation);
-      void navigate(operationPath);
+      watch(operation.id);
     },
   });
   const submission = useMutation({
@@ -217,6 +231,7 @@ export const ReadyPage = () => {
             </TechnicalDetails>
           </>
         )}
+        {watched === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={watched} />}
         {newDraft.error === null ? null : (
           <ErrorCallout
             error={newDraft.error}

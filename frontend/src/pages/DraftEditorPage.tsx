@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, RefreshCw } from "lucide-react";
 import { useCallback, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 
 import { applicationDetailQueryKey, applicationDetailQueryOptions } from "../api/applications";
 import { type QueuedOperation, operationQueryKey } from "../api/operations";
@@ -29,6 +29,7 @@ import { PageHeading } from "../ui/PageHeading";
 import { StatusBadge } from "../ui/StatusBadge";
 import { TechnicalDetails } from "../ui/TechnicalDetails";
 import { ViewSwitch } from "../ui/ViewSwitch";
+import { ActiveOperationPanel } from "./ActiveOperationPanel";
 import { DraftApprovalDialog } from "./DraftApprovalDialog";
 import { ClaimFactResolution } from "./ClaimFactResolution";
 import { DraftClaimCard } from "./DraftClaimCard";
@@ -41,6 +42,7 @@ import { DraftSaveState } from "./DraftSaveState";
 import { DraftValidationPanel } from "./DraftValidationPanel";
 import { removability } from "./claimRemoval";
 import { useDraftAutosave } from "./useDraftAutosave";
+import { useWatchedOperation } from "./useWatchedOperation";
 import { actionLabel, workingDraftStateLabels, workingDraftStateTones } from "./applicationLabels";
 
 /* A.4 frame 3: the editor pane. It reads the §9 projection for which draft is active and
@@ -59,6 +61,10 @@ export const DraftEditorPage = () => {
   const regenerationAvailable = aiRegenerationAvailable(settingsQuery.data?.settings);
   const detail = applicationQuery.data;
   useWorkflowStage(detail === undefined ? "unknown" : detail.preparation_state);
+  /* The same watch the Application screen keeps, on the other screen that queues durable
+     work against one Application. Regeneration is reported here, beside the draft it is
+     rewriting. */
+  const { operation: watched, watch } = useWatchedOperation(applicationId, detail);
 
   const workingDraftId = detail?.active_working_draft_id ?? null;
   const draftQuery = useQuery({
@@ -74,7 +80,6 @@ export const DraftEditorPage = () => {
   const facts = factsQuery.data;
   const applicationHref = `/applications/${encodeURIComponent(applicationId)}`;
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   /* A.4's responsive fallback. Both panes stay mounted and one is hidden, rather than one
      being unmounted: switching views must not discard text the user has typed, and an
      unmounted editor would take its visible text with it. */
@@ -192,12 +197,22 @@ export const DraftEditorPage = () => {
      is the only way to say "keep this one". */
   const includeFact = (fact: DraftFact) => selection.mutate({ pinned: [fact.fact_id] });
 
-  /* §14 regeneration is an Operation, so it leaves this screen for the one that owns
-     Operation progress, failure, and retry. The accepted representation is seeded there
-     rather than fetched again, exactly as analyze and generate do. */
-  const followQueued = ({ operation, operationPath }: QueuedOperation) => {
+  /* §14 regeneration is an Operation, and it is reported in place rather than followed to
+     a screen of its own.
+
+     It used to navigate. That made the one action that acts on a single line of the draft
+     the only action that took the draft off the screen: the user regenerated a claim, was
+     handed a progress line with no text beside it, and came back through a link that led
+     to the Application screen rather than to the editor they had left. The Application
+     screen already reports its own work this way, and this is the same watch - the
+     projection opens it, the Operation's own query closes it, and the accepted `202`
+     seeds the first state so the panel appears with the press rather than a poll later.
+
+     `/operations/:id` stays reachable: the panel links to it, and it is where a direct
+     link or a reload of a queued Operation lands. */
+  const followQueued = ({ operation }: QueuedOperation) => {
     queryClient.setQueryData(operationQueryKey(operation.id), operation);
-    void navigate(operationPath);
+    watch(operation.id);
   };
 
   const regeneration = useMutation({
@@ -278,6 +293,10 @@ export const DraftEditorPage = () => {
           </div>
         )}
 
+        {/* Live work, reported beside the draft it is rewriting rather than on a screen
+            the user has to leave the text for. */}
+        {watched === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={watched} />}
+
         {/* The projection's own blockers. A claim with no fact behind it raises
             PENDING_FACT_REQUIRES_RESOLUTION there, and it is shown here as the reason it
             already is rather than as an approval rule this screen invented. */}
@@ -303,7 +322,7 @@ export const DraftEditorPage = () => {
         ))}
 
         {renderRevisionId !== null ? (
-          <DraftRenderPanel approvedRevisionId={renderRevisionId} />
+          <DraftRenderPanel approvedRevisionId={renderRevisionId} onQueued={watch} />
         ) : draft === undefined ? (
           workingDraftId === null || draftQuery.error !== null ? null : (
             <p className="text-body text-cv-text-muted">טוען את הטיוטה…</p>

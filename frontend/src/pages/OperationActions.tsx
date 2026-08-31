@@ -13,16 +13,29 @@ import { Button, buttonClasses } from "../ui/Button";
 import { cx } from "../ui/cx";
 
 interface OperationActionsProps {
-  /* Rendered inside the Application screen rather than on the Operation's own route.
-     The two differ in one thing: the return link. On the Operation screen a finished
-     Operation is a dead end without it, since the way on depends on the application
-     projection this screen does not hold. Inline, that projection is the page around the
-     panel - a link back to the screen the reader is already looking at is not an exit. */
+  /* Rendered inside a screen that already holds this Application rather than on the
+     Operation's own route. Two things differ.
+
+     The return link: on the Operation screen a finished Operation is a dead end without
+     it, since the way on depends on the application projection that screen does not hold.
+     Inline, that projection is the page around the panel - a link back to the screen the
+     reader is already looking at is not an exit.
+
+     And retry: inline it re-queues into the watch the host screen is already keeping, so
+     the panel simply starts reporting the new run. On the Operation route there is no
+     such watch, so retry navigates to the Operation it queued. */
   inline?: boolean;
   operation: Operation;
+  /* Where a retry's new Operation goes when the panel is inline. The host screen watches
+     one Application's work, so it takes the id and keeps reporting in place. */
+  onQueued?: (operationId: string) => void;
 }
 
-export const OperationActions = ({ inline = false, operation }: OperationActionsProps) => {
+export const OperationActions = ({
+  inline = false,
+  onQueued,
+  operation,
+}: OperationActionsProps) => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   /* One key per original Operation: an uncertain response can be retried safely, while
@@ -39,7 +52,14 @@ export const OperationActions = ({ inline = false, operation }: OperationActions
     mutationFn: () => retryOperation(operation.id, retryKey),
     onSuccess: ({ operation: queued, operationPath }) => {
       queryClient.setQueryData(operationQueryKey(queued.id), queued);
-      void navigate(operationPath);
+      /* Inline, the host screen's watch takes the new run and the panel keeps reporting
+         without the reader going anywhere. On the Operation route there is nothing
+         watching, so the retry is followed to the Operation it queued. */
+      if (onQueued === undefined) {
+        void navigate(operationPath);
+      } else {
+        onQueued(queued.id);
+      }
     },
   });
 
