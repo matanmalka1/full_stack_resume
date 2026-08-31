@@ -30,9 +30,11 @@ import { StatusBadge } from "../ui/StatusBadge";
 import { TechnicalDetails } from "../ui/TechnicalDetails";
 import { ViewSwitch } from "../ui/ViewSwitch";
 import { DraftApprovalDialog } from "./DraftApprovalDialog";
+import { ClaimFactResolution } from "./ClaimFactResolution";
 import { DraftClaimCard } from "./DraftClaimCard";
 import { DraftConflictDialog } from "./DraftConflictDialog";
 import { DraftFactPanel } from "./DraftFactPanel";
+import { FactLifecyclePanel } from "./FactLifecyclePanel";
 import { DraftPreview } from "./DraftPreview";
 import { DraftRenderPanel } from "./DraftRenderPanel";
 import { DraftSaveState } from "./DraftSaveState";
@@ -393,6 +395,17 @@ export const DraftEditorPage = () => {
                             <DraftClaimCard
                               claim={claim}
                               draft={draft}
+                              factResolution={
+                                <ClaimFactResolution
+                                  analysisId={detail?.active_analysis_id ?? null}
+                                  applicationId={applicationId}
+                                  claim={claim}
+                                  draft={draft}
+                                  language={facts?.language ?? detail?.application.language ?? "en"}
+                                  profile={detail?.application.profile ?? null}
+                                  section={section.name}
+                                />
+                              }
                               facts={facts}
                               key={claim.claim_id}
                               onBlur={autosave.flush}
@@ -443,6 +456,11 @@ export const DraftEditorPage = () => {
                 )}
 
                 <DraftFactPanel busy={selection.isPending} facts={facts} onInclude={includeFact} />
+
+                <FactLifecyclePanel
+                  profile={detail?.application.profile ?? null}
+                  sections={draft.outline.sections.map((section) => section.name)}
+                />
 
                 <div>
                   <Link className={buttonClasses("secondary")} to={applicationHref}>

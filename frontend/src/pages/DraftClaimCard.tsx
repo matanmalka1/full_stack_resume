@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Database, RefreshCw, Trash2 } from "lucide-react";
 
 import type { DraftClaim, DraftFact, WorkingDraft, WorkingDraftFacts } from "../api/contracts";
@@ -18,6 +18,7 @@ interface DraftClaimCardProps {
   onEdit: (claim: DraftClaim, text: string) => void;
   onRegenerate: (claim: DraftClaim) => void;
   onRemove: (claim: DraftClaim) => void;
+  factResolution?: ReactNode;
   /* True while an unsaved edit is in the autosave buffer. A regeneration freezes the
      saved version, so offering one now would regenerate away from what the user is
      looking at. */
@@ -38,6 +39,7 @@ export const DraftClaimCard = ({
   claim,
   draft,
   facts,
+  factResolution,
   onBlur,
   onEdit,
   onRegenerate,
@@ -103,11 +105,12 @@ export const DraftClaimCard = ({
           here, and why the callout no longer waits for `pending_reason` to be present
           before saying that approval is blocked. */}
       {claim.claim_type === "pending" ? (
-        <Callout className="mt-3" title="הטקסט הזה חוסם אישור" tone="blocker">
-          <p dir="auto">
-            {claim.pending_reason ?? claimTypeExplanations.pending}
-          </p>
-        </Callout>
+        <>
+          <Callout className="mt-3" title="הטקסט הזה חוסם אישור" tone="blocker">
+            <p dir="auto">{claim.pending_reason ?? claimTypeExplanations.pending}</p>
+          </Callout>
+          {factResolution}
+        </>
       ) : null}
 
       {linked.length === 0 ? null : (

@@ -13,6 +13,8 @@ const DRAFT_PATH = "/api/v1/working-drafts/wd-1";
 const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =>
   ({
     recruitment_status: "saved",
+    allowed_recruitment_transitions: ["withdrawn", "closed"],
+    recruitment_timeline: [],
     preparation_state: "draft_in_progress",
     working_draft_state: "editing",
     review_reasons: [],
@@ -149,6 +151,9 @@ const stubReads = (
     if (url.startsWith(`${DRAFT_PATH}/facts`)) {
       return Promise.resolve(answers.facts?.() ?? jsonResponse(facts()));
     }
+    if (url === "/api/v1/facts" || url === "/api/v1/facts/history") {
+      return Promise.resolve(jsonResponse(url.endsWith("/history") ? { events: [] } : { items: [] }));
+    }
     if (url.startsWith(DRAFT_PATH)) {
       return Promise.resolve(answers.draft?.() ?? jsonResponse(draft()));
     }
@@ -255,9 +260,20 @@ describe("DraftEditorPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("Delivered 30% growth.")).toBeInTheDocument();
+    expect(await screen.findAllByText("Delivered 30% growth.")).toHaveLength(2);
     expect(screen.getByText("ללא ביסוס")).toBeInTheDocument();
     expect(screen.getByText("no canonical fact authorizes this wording")).toBeInTheDocument();
+    expect(screen.getByText("הפיכת הטקסט לעובדה מאושרת")).toBeInTheDocument();
+  });
+
+  it("keeps fact creation and lifecycle management inside the draft context", async () => {
+    stubReads({});
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "מחזור חיי העובדות" })).toBeInTheDocument();
+    expect(screen.getByText(/יצירה וקידום כאן משנים את מקור הידע הקבוע/)).toBeInTheDocument();
+    expect(screen.getByText("יצירת עובדה ממתינה חדשה")).toBeInTheDocument();
   });
 
   it("presents the projection's own review reason rather than inventing an approval rule", async () => {

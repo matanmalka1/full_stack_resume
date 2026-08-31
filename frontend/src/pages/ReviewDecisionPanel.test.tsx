@@ -19,6 +19,8 @@ const reason = (code: string, actions: string[] = ["apply_analysis_decisions"]):
 const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =>
   ({
     recruitment_status: "saved",
+    allowed_recruitment_transitions: ["withdrawn", "closed"],
+    recruitment_timeline: [],
     preparation_state: "needs_review",
     working_draft_state: "none",
     review_reasons: [reason("MATERIAL_CLASSIFICATION_AMBIGUITY")],
