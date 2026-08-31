@@ -12,6 +12,7 @@ import { Checkbox } from "../ui/Checkbox";
 import { Field } from "../ui/Field";
 import { PageHeading } from "../ui/PageHeading";
 import { Select } from "../ui/Select";
+import { ReconciliationPanel } from "./ReconciliationPanel";
 
 export const SettingsPage = () => {
   /* Settings stands outside the workflow, so it reports no stage rather than leaving the
@@ -84,6 +85,7 @@ export const SettingsPage = () => {
             fallbackTitle="ההגדרות לא נשמרו"
           />
         )}
+        <ReconciliationPanel />
       </div>
     </Card>
   );

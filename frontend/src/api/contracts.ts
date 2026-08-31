@@ -43,6 +43,7 @@ export type DecisionMarkdown = ApiSchemas["DecisionMarkdownResponse"];
 export type Settings = ApiSchemas["SettingsResponse"];
 export type UpdateSettingsRequest = ApiSchemas["UpdateSettingsRequest"];
 export type ExecutionMode = Settings["default_execution_mode"];
+export type ReconciliationReport = ApiSchemas["ReconciliationResponse"];
 
 export type ApplicationIntake = ApiSchemas["DuplicateCheckRequest"];
 export type CreateApplicationRequest = ApiSchemas["CreateApplicationRequest"];

@@ -4,7 +4,7 @@ import { type ReactElement, useCallback, useState } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ApplicationDetail, ApprovedRevision, Operation, Settings, ValidationRun, WorkingDraft } from "../api/contracts";
+import type { ApplicationDetail, ApprovedRevision, Operation, ReconciliationReport, Settings, ValidationRun, WorkingDraft } from "../api/contracts";
 import { applicationDetailQueryOptions } from "../api/applications";
 import { workingDraftQueryOptions } from "../api/drafts";
 import { DraftApprovalDialog } from "./DraftApprovalDialog";
@@ -67,6 +67,25 @@ const settings = (overrides: Partial<Settings> = {}): Settings => ({
   edit_version: 0, auto_generate_when_review_not_required: false, ai_enabled: false, ai_enabled_override: null,
   default_execution_mode: "deterministic", provider_configured: false,
   ui_density: "comfortable", ui_text_size: "normal", updated_at: null, ...overrides,
+});
+
+const reconciliationReport = (
+  overrides: Partial<ReconciliationReport> = {},
+): ReconciliationReport => ({
+  passed: true,
+  artifact_versions_checked: 4,
+  problems: [],
+  fact_lifecycle: {
+    passed: true,
+    fact_counts: { canonical: 3, pending: 1 },
+    tracked_facts: 4,
+    facts_version: "facts-version-1",
+    lifecycle_version: "lifecycle-version-1",
+    problems: [],
+    journal_prepared: 0,
+    journal_quarantined: 0,
+  },
+  ...overrides,
 });
 
 const renderRoute = (entry: string, path: string, element: ReactElement) => {
@@ -410,6 +429,7 @@ describe("SettingsPage", () => {
     renderRoute("/settings", "/settings", <SettingsPage />);
     expect(await screen.findByText("לא הוגדר ספק AI בסביבת הריצה.")).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "AI" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "הפעלת בדיקת התאמה" })).toBeInTheDocument();
   });
 
   it("saves all product settings under the read ETag", async () => {
@@ -423,5 +443,45 @@ describe("SettingsPage", () => {
     const request = fetchMock.mock.calls.find((call) => call[1]?.method === "PATCH");
     expect((request?.[1]?.headers as Headers).get("If-Match")).toBe('"settings-1"');
     expect(Object.keys(JSON.parse(String(request?.[1]?.body))).sort()).toEqual(["ai_enabled_override", "auto_generate_when_review_not_required", "default_execution_mode", "ui_density", "ui_text_size"].sort());
+  });
+});
+
+describe("Settings reconciliation", () => {
+  it("runs reconciliation in place and presents the complete report", async () => {
+    const report = reconciliationReport({
+      passed: false,
+      problems: ["missing artifact: artifacts/outputs/revision-1/resume.pdf"],
+      fact_lifecycle: {
+        ...reconciliationReport().fact_lifecycle,
+        passed: false,
+        problems: ["fact audit mismatch"],
+        journal_quarantined: 1,
+      },
+    });
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) =>
+      String(input).includes("/maintenance/reconciliations") && init?.method === "POST"
+        ? Promise.resolve(json(report))
+        : Promise.resolve(json(settings(), 200, { ETag: '"settings-0"' })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    renderRoute("/settings", "/settings", <SettingsPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "הפעלת בדיקת התאמה" }));
+
+    expect(await screen.findByText("נמצאה בעיית תקינות", { selector: "span" })).toBeInTheDocument();
+    expect(screen.getByText("קבצים חסרים: 1")).toBeInTheDocument();
+    expect(screen.getByText("מה צריך לעשות")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("פרטים טכניים"));
+    expect(
+      screen.getByText("missing artifact: artifacts/outputs/revision-1/resume.pdf"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("fact audit mismatch")).toBeInTheDocument();
+    expect(screen.getByText("4 גרסאות תוצר", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("facts-version-1")).toBeInTheDocument();
+    const request = fetchMock.mock.calls.find(
+      (call) => String(call[0]).includes("/maintenance/reconciliations"),
+    );
+    expect(request?.[0]).toBe("/api/v1/maintenance/reconciliations");
+    expect(request?.[1]?.method).toBe("POST");
   });
 });
