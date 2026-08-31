@@ -101,7 +101,11 @@ const queuedAnalysisResponse = (): Response =>
 const renderPage = () => {
   const client = new QueryClient({
     defaultOptions: {
-      queries: { retry: false, refetchInterval: false, gcTime: 0 },
+      /* The screen deliberately reads the Settings value already held by the shell.
+         Keep that fixture alive for the test's duplicate-confirmation round trip; a
+         zero-time cache can disappear between the two clicks and turn this into an
+         unrelated Settings-fetch test. The client itself is discarded after each test. */
+      queries: { retry: false, refetchInterval: false, gcTime: Infinity },
       mutations: { retry: false },
     },
   });

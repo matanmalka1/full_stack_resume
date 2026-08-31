@@ -7,7 +7,7 @@ import { expect, test } from "@playwright/test";
    central E2E that the F gate owns, not here. */
 test.describe("the New Application screen", () => {
   test("is the Hebrew intake form and never presents the URL as an import", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/applications/new");
 
     await expect(page.getByRole("heading", { level: 1, name: "משרה חדשה" })).toBeVisible();
     await expect(page.getByLabel("שם החברה")).toBeVisible();
@@ -34,7 +34,7 @@ test.describe("the New Application screen", () => {
       }
     });
 
-    await page.goto("/");
+    await page.goto("/applications/new");
     await page.getByLabel("קריאת קובץ טקסט מהמחשב (לא חובה)").setInputFiles({
       name: "job.txt",
       mimeType: "text/plain",
@@ -47,7 +47,7 @@ test.describe("the New Application screen", () => {
   });
 
   test("has no automatically detectable accessibility violations", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/applications/new");
 
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])

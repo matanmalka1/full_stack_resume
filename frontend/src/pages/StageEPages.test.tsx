@@ -476,7 +476,7 @@ describe("Settings reconciliation", () => {
       screen.getByText("missing artifact: artifacts/outputs/revision-1/resume.pdf"),
     ).toBeInTheDocument();
     expect(screen.getByText("fact audit mismatch")).toBeInTheDocument();
-    expect(screen.getByText("4 גרסאות תוצר", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("תוצרים — 4 גרסאות נבדקו")).toBeInTheDocument();
     expect(screen.getByText("facts-version-1")).toBeInTheDocument();
     const request = fetchMock.mock.calls.find(
       (call) => String(call[0]).includes("/maintenance/reconciliations"),

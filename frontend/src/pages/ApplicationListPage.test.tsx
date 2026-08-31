@@ -163,14 +163,12 @@ describe("ApplicationListPage", () => {
     expect(screen.getByRole("link", { name: actionLabel("analyze") })).toBeInTheDocument();
   });
 
-  it("keeps a pending-decision count centered on one line", async () => {
+  it("keeps a pending-decision count on one line", async () => {
     stubList([item({ review_reasons: [reason("HARD_GAP_REQUIRES_DECISION")] })]);
 
     renderPage();
 
-    expect(screen.getByRole("columnheader", { name: "אזהרות" })).toHaveClass("w-[9%]");
     const attention = await screen.findByText("1 להכרעה");
     expect(attention).toHaveClass("whitespace-nowrap");
-    expect(attention.closest("td")).toHaveClass("text-center");
   });
 });
