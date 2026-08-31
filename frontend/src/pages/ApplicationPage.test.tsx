@@ -125,7 +125,10 @@ const deterministicSettings: Settings = {
 
 /* Retries and the projection poll are off inside the test client: the interval is
    covered by its own unit test, and a live timer here would make every assertion racy. */
-const renderPage = (settings: Settings = deterministicSettings) => {
+const renderPage = (
+  settings: Settings = deterministicSettings,
+  navigationState?: { automaticAnalysisStartFailed: true },
+) => {
   const client = new QueryClient({
     defaultOptions: {
       /* Settings is shell-owned in production and deliberately seeded here. Keep that
@@ -139,7 +142,9 @@ const renderPage = (settings: Settings = deterministicSettings) => {
 
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/applications/app-1"]}>
+      <MemoryRouter
+        initialEntries={[{ pathname: "/applications/app-1", state: navigationState }]}
+      >
         <Routes>
           <Route element={<ApplicationPage />} path="/applications/:applicationId" />
         </Routes>
@@ -163,6 +168,17 @@ afterEach(() => {
 });
 
 describe("ApplicationPage", () => {
+  it("keeps the created application usable when its automatic analysis was not queued", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail())));
+
+    renderPage(deterministicSettings, { automaticAnalysisStartFailed: true });
+
+    expect(
+      await screen.findByText("המועמדות נוצרה, אך הניתוח לא הופעל"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ניתוח המשרה" })).toBeInTheDocument();
+  });
+
   /* The Web automation opt-in, which moved here with the flow: queueing no longer
      navigates, so the Operation screen that used to run this chain is not on the path.
      Once per successful analyze, and not again after a remount - the session record is

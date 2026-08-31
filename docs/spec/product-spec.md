@@ -243,9 +243,12 @@ The initial form requires company, target role, and full job text. Source URL is
 optional. Source label and notes belong to Application Detail and do not burden the
 creation form.
 
-Creating an Application is deterministic and fast. It creates the Application and its
-first immutable JobSnapshot; it does not call AI or automatically analyze. Analysis is
-a separate action.
+The `create_application` command is deterministic and fast. It creates the Application
+and its first immutable JobSnapshot and does not call AI. In the Web intake flow, a
+successful creation is immediately followed by a separate `analyze_job` Operation for
+the returned snapshot. If queueing that Operation fails, the created Application remains
+the destination and the explicit Analyze action remains available; creation is never
+retried as part of that fallback.
 
 The backend stores the exact text string it received without line-ending normalization.
 It stores a source hash over that received representation and a separate normalized

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 
 import { classificationFromAnalysis } from "../api/analyses";
 import {
@@ -115,6 +115,7 @@ const ReasonCallout = ({
    projection reports. */
 export const ApplicationPage = () => {
   const { applicationId } = useParams();
+  const location = useLocation();
 
   /* The route is applications/:applicationId, so a missing id is a router invariant
      violation rather than a state this screen supports. */
@@ -123,6 +124,9 @@ export const ApplicationPage = () => {
   }
 
   const queryClient = useQueryClient();
+  const automaticAnalysisStartFailed =
+    (location.state as { automaticAnalysisStartFailed?: unknown } | null)
+      ?.automaticAnalysisStartFailed === true;
   const [searchParams, setSearchParams] = useSearchParams();
   const view = applicationViewFromParam(searchParams.get("view"));
   const query = useQuery(applicationDetailQueryOptions(applicationId));
@@ -268,6 +272,14 @@ export const ApplicationPage = () => {
           id="application-view-preparation"
           role="tabpanel"
         >
+          {automaticAnalysisStartFailed &&
+          detail.preparation_state === "needs_analysis" &&
+          detail.active_operation == null ? (
+            <Callout title="המועמדות נוצרה, אך הניתוח לא הופעל" tone="warning">
+              ניתן להפעיל את ניתוח המשרה מהפעולה שלמטה. יצירת המועמדות לא תבוצע שוב.
+            </Callout>
+          ) : null}
+
           {/* The work itself, not a link to it. */}
           {watched === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={watched} />}
 

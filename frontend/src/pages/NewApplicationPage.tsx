@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -8,8 +8,10 @@ import {
   createApplication,
   duplicateCheck,
   duplicateMatchesFromProblem,
+  startAnalysis,
 } from "../api/applications";
 import type { ApplicationIntake, DuplicateMatch } from "../api/contracts";
+import { executionProvider, settingsQueryOptions } from "../api/settings";
 import { ErrorCallout } from "../app/ErrorCallout";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { useAppForm } from "../forms/useAppForm";
@@ -74,10 +76,11 @@ interface SubmitInput {
 
 type SubmitResult =
   | { kind: "duplicates"; matches: DuplicateMatch[] }
-  | { kind: "created"; applicationId: string };
+  | { kind: "created"; analysisQueued: boolean; applicationId: string };
 
 export const NewApplicationPage = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   /* The intake screen is the one place `intake` is the projection's own answer, so it
      states it rather than relying on the landmark's initial value. */
   useWorkflowStage("intake");
@@ -105,14 +108,40 @@ export const NewApplicationPage = () => {
 
       const created = await createApplication(intake, acknowledged);
 
-      return { kind: "created", applicationId: created.application_id };
+      /* Creation and analysis remain separate server commands: the snapshot must exist
+         before an analyze Operation can name it. The intake action chains them for the
+         user, with a source-derived key so an ambiguous accepted response can be retried
+         without queueing a second analysis for this newly-created snapshot. */
+      try {
+        const { settings } = await queryClient.ensureQueryData(settingsQueryOptions);
+        await startAnalysis(
+          created.application_id,
+          created.job_snapshot_id,
+          `create:${created.application_id}:${created.job_snapshot_id}`,
+          executionProvider(settings),
+        );
+
+        return {
+          kind: "created",
+          analysisQueued: true,
+          applicationId: created.application_id,
+        };
+      } catch {
+        /* The Application and its immutable snapshot already exist. Treating this as a
+           failed creation would invite a retry that creates a duplicate; navigate to the
+           record and let its normal Analyze action remain available instead. */
+        return {
+          kind: "created",
+          analysisQueued: false,
+          applicationId: created.application_id,
+        };
+      }
     },
     onSuccess: (result) => {
       if (result.kind === "created") {
-        /* Creation never implies an AI call. The application context screen is where the
-           explicit `ניתוח המשרה` action lives, and it reads the projection itself, so a
-           newly created Application and one opened from a duplicate reach the same place. */
-        void navigate(`/applications/${encodeURIComponent(result.applicationId)}`);
+        void navigate(`/applications/${encodeURIComponent(result.applicationId)}`, {
+          state: result.analysisQueued ? undefined : { automaticAnalysisStartFailed: true },
+        });
       }
     },
   });
@@ -188,7 +217,7 @@ export const NewApplicationPage = () => {
   return (
     <Card aria-labelledby="route-heading">
       <PageHeading
-        description="הזנת פרטי המשרה יוצרת מועמדות ותצלום משרה קבוע. ניתוח המשרה הוא פעולה נפרדת ואינו מופעל מעצמו."
+        description="הזנת פרטי המשרה יוצרת מועמדות ותצלום משרה קבוע, ולאחר השמירה מפעילה את ניתוח המשרה."
         id="route-heading"
       >
         משרה חדשה

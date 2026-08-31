@@ -4,12 +4,17 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DuplicateMatch } from "../api/contracts";
+import { settingsQueryKey } from "../api/settings";
 import { NewApplicationPage } from "./NewApplicationPage";
 
-const jsonResponse = (body: unknown, status = 200): Response =>
+const jsonResponse = (
+  body: unknown,
+  status = 200,
+  extraHeaders: Record<string, string> = {},
+): Response =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...extraHeaders },
   });
 
 const problemResponse = (
@@ -35,8 +40,9 @@ interface Call {
   body: unknown;
 }
 
-/* One stub for both intake endpoints, recording what each one was actually sent: the
-   acknowledgement and the exact job text are the contract this screen has to keep. */
+/* One stub for the intake and analysis endpoints, recording what each one was actually
+   sent: the acknowledgement, exact job text, and analyzed snapshot are the contracts
+   this screen has to keep. */
 const stubFetch = (responses: Record<string, Response[]>) => {
   const calls: Call[] = [];
   const remaining = new Map(Object.entries(responses).map(([path, list]) => [path, [...list]]));
@@ -72,6 +78,25 @@ const match = (overrides: Partial<DuplicateMatch> = {}): DuplicateMatch => ({
 
 const DUPLICATE_CHECK_PATH = "/api/v1/applications/duplicate-check";
 const CREATE_PATH = "/api/v1/applications";
+const ANALYSES_PATH = "/api/v1/applications/app-new/analyses";
+
+const queuedAnalysisResponse = (): Response =>
+  jsonResponse(
+    {
+      id: "op-analyze",
+      application_id: "app-new",
+      operation_type: "analyze_job",
+      status: "queued",
+      is_terminal: false,
+      phase: "queued",
+      message: "",
+      created_at: "2026-08-31T07:00:00Z",
+      outputs: [],
+      available_actions: ["cancel"],
+    },
+    202,
+    { Location: "/api/v1/operations/op-analyze" },
+  );
 
 const renderPage = () => {
   const client = new QueryClient({
@@ -79,6 +104,14 @@ const renderPage = () => {
       queries: { retry: false, refetchInterval: false, gcTime: 0 },
       mutations: { retry: false },
     },
+  });
+  client.setQueryData(settingsQueryKey, {
+    settings: {
+      default_execution_mode: "deterministic",
+      provider_configured: false,
+      ai_enabled: false,
+    },
+    etag: null,
   });
 
   return render(
@@ -158,7 +191,7 @@ describe("NewApplicationPage", () => {
     expect(screen.getByLabelText("טקסט המשרה")).toHaveValue("");
   });
 
-  it("creates the application directly when the precheck finds nothing", async () => {
+  it("creates the application and queues its analysis when the precheck finds nothing", async () => {
     const calls = stubFetch({
       [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [] })],
       [CREATE_PATH]: [
@@ -172,6 +205,7 @@ describe("NewApplicationPage", () => {
           201,
         ),
       ],
+      [ANALYSES_PATH]: [queuedAnalysisResponse()],
     });
     renderPage();
 
@@ -198,6 +232,10 @@ describe("NewApplicationPage", () => {
           source_url: null,
           acknowledged_duplicates: false,
         },
+      },
+      {
+        path: ANALYSES_PATH,
+        body: { job_snapshot_id: "snap-1" },
       },
     ]);
   });
@@ -237,6 +275,7 @@ describe("NewApplicationPage", () => {
           201,
         ),
       ],
+      [ANALYSES_PATH]: [queuedAnalysisResponse()],
     });
     renderPage();
 
@@ -246,8 +285,43 @@ describe("NewApplicationPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "יצירה בכל זאת" }));
 
     expect(await screen.findByRole("heading", { name: "מועמדות קיימת" })).toBeInTheDocument();
-    expect(calls.map((call) => call.path)).toEqual([DUPLICATE_CHECK_PATH, CREATE_PATH]);
+    expect(calls.map((call) => call.path)).toEqual([
+      DUPLICATE_CHECK_PATH,
+      CREATE_PATH,
+      ANALYSES_PATH,
+    ]);
     expect(calls[1].body).toMatchObject({ acknowledged_duplicates: true });
+  });
+
+  it("opens the created application when automatic analysis could not be queued", async () => {
+    const calls = stubFetch({
+      [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [] })],
+      [CREATE_PATH]: [
+        jsonResponse(
+          {
+            application_id: "app-new",
+            job_snapshot_id: "snap-1",
+            warnings: [],
+            duplicate_matches: [],
+          },
+          201,
+        ),
+      ],
+      [ANALYSES_PATH]: [
+        problemResponse(503, "SERVICE_UNAVAILABLE", "analysis could not be queued"),
+      ],
+    });
+    renderPage();
+
+    fillIntake();
+    submitForm();
+
+    expect(await screen.findByRole("heading", { name: "מועמדות קיימת" })).toBeInTheDocument();
+    expect(calls.map((call) => call.path)).toEqual([
+      DUPLICATE_CHECK_PATH,
+      CREATE_PATH,
+      ANALYSES_PATH,
+    ]);
   });
 
   it("presents the create command's own duplicate refusal as the same choice", async () => {
