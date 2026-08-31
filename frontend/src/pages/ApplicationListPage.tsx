@@ -236,9 +236,9 @@ const ApplicationRow = ({
   return (
     <tr className="border-b border-cv-border last:border-b-0 hover:bg-cv-surface-muted">
       <td className="px-4 py-3.5">
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="flex min-w-0 items-center gap-2">
           <CompanyMark company={item.company} />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1 text-left">
             {/* One link per row, on the name: the row is a table row, and making every
                 cell a link would be five tab stops to one destination. */}
             <Link
