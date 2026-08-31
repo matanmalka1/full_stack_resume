@@ -5,6 +5,17 @@ export type ApiOperations = operations;
 export type ApiSchemas = components["schemas"];
 
 export type ApplicationDetail = ApiSchemas["ApplicationDetailResponse"];
+export type RecruitmentTimelineItem = ApiSchemas["RecruitmentTimelineItemResponse"];
+export type RecruitmentStatus = NonNullable<RecruitmentTimelineItem["to_status"]>;
+export type TransitionableRecruitmentStatus =
+  ApiSchemas["TransitionStatusRequest"]["target_status"];
+export type ApplicationMutation = ApiSchemas["ApplicationMutationResponse"];
+export type TransitionStatusRequest = ApiSchemas["TransitionStatusRequest"];
+export type CorrectStatusRequest = ApiSchemas["CorrectStatusRequest"];
+export type ExternalSubmissionRequest = ApiSchemas["ExternalSubmissionRequest"];
+export type SubmitApplicationRequest = ApiSchemas["SubmitApplicationRequest"];
+export type Submission = ApiSchemas["SubmissionResponse"];
+export type NextActionRequest = ApiSchemas["NextActionRequest"];
 export type ApplicationListResponse = ApiSchemas["ApplicationListResponse"];
 /* The list query the backend answers. Filtering and ordering are its decision, not
    this client's: `preparation_state` is a computed projection rather than a stored
@@ -24,6 +35,7 @@ export type ValidationReport = ApiSchemas["ValidationReportResponse"];
 export type ValidationIssue = ApiSchemas["ValidationIssueResponse"];
 export type Approval = ApiSchemas["ApprovalResponse"];
 export type ApprovedRevision = ApiSchemas["ApprovedRevisionResponse"];
+export type DecisionMarkdown = ApiSchemas["DecisionMarkdownResponse"];
 export type Settings = ApiSchemas["SettingsResponse"];
 export type UpdateSettingsRequest = ApiSchemas["UpdateSettingsRequest"];
 export type ExecutionMode = Settings["default_execution_mode"];
@@ -80,6 +92,21 @@ export type OmissionReason = NonNullable<DraftFact["reason"]>;
 export type UpdateWorkingDraftRequest = ApiSchemas["UpdateWorkingDraftRequest"];
 export type ClaimPatch = ApiSchemas["ClaimPatchRequest"];
 export type WorkingDraftUpdate = ApiSchemas["WorkingDraftUpdateResponse"];
+
+export type Fact = ApiSchemas["FactResponse"];
+export type FactStatus = ApiSchemas["FactStatus"];
+export type FactList = ApiSchemas["FactListResponse"];
+export type FactDetail = ApiSchemas["FactDetailResponse"];
+export type FactEvent = ApiSchemas["FactEventResponse"];
+export type FactHistory = ApiSchemas["FactHistoryResponse"];
+export type FactMutation = ApiSchemas["FactMutationResponse"];
+export type FactAttachment = ApiSchemas["FactAttachmentResponse"];
+export type CreateFactRequest = ApiSchemas["FactContentRequest"];
+export type CaptureClaimFactRequest = ApiSchemas["CaptureClaimFactRequest"];
+export type FactTransitionRequest = ApiSchemas["FactTransitionRequest"];
+export type AttachFactRequest = ApiSchemas["AttachFactRequest"];
+export type ConfirmAndUseFactRequest = ApiSchemas["ConfirmAndUseFactRequest"];
+export type ConfirmAndUseFact = ApiSchemas["ConfirmAndUseFactResponse"];
 
 export type ApplySelectionChangeRequest = ApiSchemas["ApplySelectionChangeRequest"];
 export type SelectionChange = ApiSchemas["SelectionChangeResponse"];
