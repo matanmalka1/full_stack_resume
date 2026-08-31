@@ -53,12 +53,12 @@
 **מצב: הבריא ביותר.** היחיד עם תת-תיקייה, חלוקה נכונה
 (Filters / Table / Row / Pagination / Dialog / presentation). זה הדגם.
 
-- [ ] שלושת מצבי הריק (`isPending`, `total===0`, `items.length===0`) → `EmptyState`.
-- [ ] `useEffect` עם `eslint-disable react-hooks/exhaustive-deps` לסנכרון
+- [x] שלושת מצבי הריק (`isPending`, `total===0`, `items.length===0`) → `EmptyState`.
+- [x] `useEffect` עם `eslint-disable react-hooks/exhaustive-deps` לסנכרון
       חיפוש→URL. שביר; להעביר לדפוס שלא דורש השתקה.
-- [ ] שני מסלולים ל־`setParams`: `narrow()` שכופה `offset:0`, ובנפרד ה־pagination
+- [x] שני מסלולים ל־`setParams`: `narrow()` שכופה `offset:0`, ובנפרד ה־pagination
       שקורא `setParams` ישירות. לאחד.
-- [ ] הטרנרי המקונן של גוף העמוד (`isPending → undefined → total===0 → …`) יפורק
+- [x] הטרנרי המקונן של גוף העמוד (`isPending → undefined → total===0 → …`) יפורק
       ע"י `QueryState`.
 
 ## 2. `/applications/:id` — ApplicationPage (350 שורות)
@@ -66,33 +66,33 @@
 **מצב: הכי בעייתי מבחינת אחריות.** מחזיק שני מסכים בקובץ אחד דרך
 `?view=tracking`, כשענף ה־tracking הוא בפועל `RecruitmentPanel` בן 442 שורות.
 
-- [ ] **להכריע על ציר ה־tracking.** ה־router מתעד בכוונה למה זה view ולא route
+- [x] **להכריע על ציר ה־tracking.** ה־router מתעד בכוונה למה זה view ולא route
       (מאסטהד משותף, אותה קריאת projection, אותו טיפול שגיאות) — ההחלטה סבירה,
       אבל **המימוש** לא חולק בהתאם: העמוד מחזיק את שני העצים במלואם.
       לפצל ל־`PreparationView` / `TrackingView` תחת `pages/application/`,
       כשהעמוד רק בוחר ביניהם. **החלטת מוצר — לאשר לפני ביצוע.**
-- [ ] **auto-draft ב־module scope** — `const autoDraftInFlight = new Set<string>()`
+- [x] **auto-draft ב־module scope** — `const autoDraftInFlight = new Set<string>()`
       + מפתחות `localStorage`, כלוגיקת side-effect בתוך קובץ עמוד. להוציא ל־hook
       ייעודי עם בעלות ברורה על המצב.
-- [ ] 11 בלוקים אחים של `Callout`/`map` ברצף שטוח (review_reasons, stale_reasons,
+- [x] 11 בלוקים אחים של `Callout`/`map` ברצף שטוח (review_reasons, stale_reasons,
       warnings, newer_draft, automaticAnalysisStartFailed). לקבץ לרכיב התראות אחד
       עם סדר מוגדר.
-- [ ] `ReasonCallout` מוגדר inline בקובץ — להוציא.
-- [ ] `IMPLIES_NO_DRAFT` + `draftStateIsImplied` — לוגיקת תצוגה שמקומה ב־labels/presentation.
+- [x] `ReasonCallout` מוגדר inline בקובץ — להוציא.
+- [x] `IMPLIES_NO_DRAFT` + `draftStateIsImplied` — לוגיקת תצוגה שמקומה ב־labels/presentation.
 
 ## 3. `/applications/:id/draft` — DraftEditorPage (565 שורות — הגדול ביותר)
 
 **מצב: הצפוף ביותר.** מחזיק 5 מצבים (עריכה/תצוגה/אימות/אישור/רינדור).
 לפי ה־router זו החלטה מכוונת ומנומקת — הבעיה היא שהקובץ לא חולק בהתאם.
 
-- [ ] `unsaved || regeneration.isPending || !regenerationAvailable` — **חוזר 4 פעמים
+- [x] `unsaved || regeneration.isPending || !regenerationAvailable` — **חוזר 4 פעמים
       copy-paste**. משתנה נגזר אחד.
-- [ ] הטרנרי המקונן התלת-שכבתי ששומר על כל הגוף
+- [x] הטרנרי המקונן התלת-שכבתי ששומר על כל הגוף
       (`renderRevisionId → draft===undefined → workingDraftId===null`).
-- [ ] ה־layout ה־responsive (`ViewSwitch` + `lg:hidden` + `hidden lg:flex` + חלוקת
+- [x] ה־layout ה־responsive (`ViewSwitch` + `lg:hidden` + `hidden lg:flex` + חלוקת
       `basis-7/12`) כתוב inline בעמוד. להוציא ל־`SplitPane`/`EditorLayout`.
-- [ ] כל `Draft*.tsx` ל־`pages/draft-editor/`.
-- [ ] 5 מופעי `ErrorCallout` בקובץ אחד — יצטמצמו אחרי חלק 0.
+- [x] כל `Draft*.tsx` ל־`pages/draft-editor/`.
+- [x] 5 מופעי `ErrorCallout` בקובץ אחד — יצטמצמו אחרי חלק 0.
 
 ## 4. `/revisions/:id` — RevisionPage (319 שורות)
 
@@ -298,7 +298,7 @@ total=len(items),       # לפני כל סינון
 
 הערת ה־`eslint-disable` מסבירה למה ה־deps מצומצמים, אבל לא מטפלת בכיוון השני.
 
-- [ ] סנכרון דו־כיווני, או הכרה מפורשת ש־`typedSearch` נגזר מ־URL כשה־URL משתנה
+- [x] סנכרון דו־כיווני, או הכרה מפורשת ש־`typedSearch` נגזר מ־URL כשה־URL משתנה
       ממקור חיצוני. זה הדפוס שסעיף 1 כבר מבקש להחליף — **הבאג הזה הוא הסיבה**.
 
 ### 9.3 `RecruitmentPanel` — polling דורס קלט של המשתמש — **הוכרע: הטופס הפתוח מנצח**
@@ -333,7 +333,7 @@ unimported manual edits."* שכבה אחרת, אותו כשל — איבוד ע�
 הוא `Set` ברמת המודול — **הוא לא מתאפס בין mount ל־mount ולא נראה ל־React**.
 `sessionStorage` הוא מקור אמת שלישי לצד ה־projection וה־watch.
 
-- [ ] אותה משימה כמו בסעיף 2. מוסיף כאן רק את הסיבה: שלושה מקורות אמת לשאלה אחת
+- [x] אותה משימה כמו בסעיף 2. מוסיף כאן רק את הסיבה: שלושה מקורות אמת לשאלה אחת
       ("האם כבר יצרנו טיוטה אוטומטית לניתוח הזה").
 
 ---
@@ -807,7 +807,7 @@ command is withheld and this says why."*
 **ההשלכה על החוויה חמורה יותר ממה שהניסוח שם מרמז**: זו לא רק בעיית קוד, זה מסך
 שלא עונה על "מה עלי לעשות עכשיו".
 
-- [ ] כשמבצעים את סעיף 2 — הקיבוץ צריך גם **סדר עדיפות ויזואלי**, לא רק רכיב
+- [x] כשמבצעים את סעיף 2 — הקיבוץ צריך גם **סדר עדיפות ויזואלי**, לא רק רכיב
       משותף. הפעולה המומלצת צריכה להיות מובחנת מהרקע של ההתראות.
 
 ### 21.3 שני עולמות מוסווים כהחלפת תצוגה
