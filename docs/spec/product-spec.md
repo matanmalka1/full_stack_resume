@@ -662,27 +662,10 @@ exists.
 Data export uses a versioned v2 schema. A compatibility format is added only when a
 real existing consumer is identified; v2 does not create speculative compatibility.
 
-## 20. Rollout and release states
 
-Rescoped on 2026-08-19. v1 is a frozen archive in Git; v2 starts with an empty database
-and never reads, migrates, or replaces it. There is no dual-write, no bidirectional
-synchronization, and no cutover event.
 
-Rollout stages are:
 
-1. Alpha against an isolated test database and project copy.
-2. Beta against the candidate's project Knowledge, used for real work.
-3. Release Ready after full engineering, environment-level data-protection verification,
-   and acceptance evidence.
-
-`Engineering Complete` and `Release Ready` are distinct; `Cutover Complete` and `Live`
-no longer exist as states, because nothing is cut over. Going live means starting to use
-v2 for the next application.
-
-Rollback is running v1 from the archive, which needs no preparation: it is a Git
-worktree of the frozen commit. There is no v2 database downgrade.
-
-## 21. v2.0 Definition of Done
+## 20. v2.0 Definition of Done
 
 v2.0 is Release Ready only when all of the following are demonstrably true:
 
@@ -719,25 +702,10 @@ v2.0 is Release Ready only when all of the following are demonstrably true:
       execution metadata.
 - [ ] An acceptance report records pass, fail, and remaining evidence for every item.
 
-## 22. Change and stop conditions
+## 21. Change and stop conditions
 
 Implementation proceeds without approval pauses for naming, folder structure, or other
 internal details that preserve contracts. Work stops for an unresolved semantic
 conflict, scope expansion, migration/data-loss risk, a path that could allow unsupported
 claims through approval, a required deployment-model change, or any proposed dual-write
 behavior.
-
-## 23. Deferred v2.x candidates
-
-Deferred work may include companion application documents, AI-generated decision
-explanations, AI-assisted semantic claim linkage, a broader Knowledge UI, CSV Web
-export, notifications, calendar integration, analytics, richer editing interactions,
-additional providers, i18n, and later hosted or multi-candidate operation. These are
-candidates, not commitments.
-
-## 24. Decision log
-
-2026-08-25: Removed the selectable, marked root model. The application now runs from
-the project root; marker files, root-selection flags/environment variables, lifecycle
-commands, runtime root identity, and root-scoped terminology are removed. Safe settings
-now use `app_settings`; migration `0004` performs the schema rename.
