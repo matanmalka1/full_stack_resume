@@ -1,3 +1,4 @@
+import { Check } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { Operation } from "../api/contracts";
@@ -46,22 +47,79 @@ export const ActiveOperationPanel = ({
     operation.failure_code == null ? null : failurePresentations[operation.failure_code];
   const produced = activeOutputLabels(operation);
 
+  /* A run that succeeded has nothing left to watch. Reported at full panel weight it
+     took the top of the screen - heading, badge, progress sentence, actions, link - to
+     say that finished work had finished, and pushed the thing it produced below the
+     fold. Failure keeps the full panel: there the status, the safe detail, and the way
+     on are the screen's most important content. */
+  const settled = terminal && operation.status === "succeeded" && failure === null;
+
+  if (settled) {
+    return (
+      /* One settled fact, so it is set as one line rather than as five. The full panel
+         earns a heading, a badge, a sentence and two controls because each is doing
+         separate work while the run is live; collapsed, the same five treatments in a
+         single 40px row read as five competing things to look at. Everything here is
+         muted body text on one baseline, and the only marks that survive are the
+         status word, which carries the outcome, and the two controls. */
+      <section
+        aria-labelledby="active-operation-heading"
+        className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-surface border border-cv-border bg-cv-surface-muted px-4 py-2.5 text-support text-cv-text-muted"
+      >
+        <Check aria-hidden="true" className="size-4 shrink-0 text-cv-success" />
+        <h2 className="font-medium text-cv-text" id="active-operation-heading">
+          הרצת {operationTypeLabels[operation.operation_type]}
+        </h2>
+        <p dir="auto">
+          {produced.length === 0
+            ? statusLabels[operation.status]
+            : `${statusLabels[operation.status]} · יצרה ${joinHebrewList(produced)}`}
+        </p>
+
+        {/* A.5: the row a watched run collapses into is the moment worth announcing, so
+            the live region survives the change of shape. Without it the panel went quiet
+            exactly as it reached the status the reader was waiting for. */}
+        <LiveRegion>{statusLabels[operation.status]}</LiveRegion>
+        <div className="ms-auto flex flex-wrap items-center gap-x-3 gap-y-2">
+          {/* Retry stays reachable - it is the Operation's own action - but at the weight
+              of a link rather than a button, because re-running work that succeeded
+              supersedes the result the screen is showing. */}
+          <OperationActions collapsed inline onQueued={onQueued} operation={operation} />
+          <Link
+            className="underline underline-offset-4 hover:text-cv-text"
+            to={`/operations/${encodeURIComponent(operation.id)}`}
+          >
+            פרטי הפעולה המלאים
+          </Link>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section
       aria-labelledby="active-operation-heading"
       className="rounded-surface border border-cv-border p-5"
     >
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        {/* The run, not its subject. `operationTypeLabels` names the work ("ניתוח
+            המשרה"), which is also what the panel reporting the resulting analysis calls
+            itself - two adjacent regions carrying one accessible name, which reads as a
+            duplicated section rather than as a run and its conclusion. Naming the event
+            here keeps the noun for the panel that owns the result. */}
         <h2 className="text-body font-semibold text-cv-text" id="active-operation-heading">
-          {operationTypeLabels[operation.operation_type]}
+          הרצת {operationTypeLabels[operation.operation_type]}
         </h2>
         <div className="flex flex-wrap items-center gap-3">
           <StatusBadge tone={statusTones[operation.status]}>
             {statusLabels[operation.status]}
           </StatusBadge>
-          {/* At a terminal status the phase collapses onto the status word - `succeeded`
-              and `completed` are both "הושלמה" - so it is dropped rather than said twice. */}
-          {terminal ? null : (
+          {/* The phase is the progress axis and earns its place only when it says
+              something the status has not. The two share vocabulary at both ends -
+              `queued`/`queued` are both "ממתינה בתור", `succeeded`/`completed` both
+              "הושלמה" - so the test is whether the words differ, not whether the run has
+              finished. Keyed on `terminal` alone, a queued run printed one word twice. */}
+          {phaseLabels[operation.phase] === statusLabels[operation.status] ? null : (
             <span className="text-support text-cv-text-muted">{phaseLabels[operation.phase]}</span>
           )}
         </div>

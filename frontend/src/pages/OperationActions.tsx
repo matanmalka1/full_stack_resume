@@ -25,6 +25,11 @@ interface OperationActionsProps {
      the panel simply starts reporting the new run. On the Operation route there is no
      such watch, so retry navigates to the Operation it queued. */
   inline?: boolean;
+  /* Rendered beside a one-line summary of a run that already succeeded, where the row
+     is the report and not the screen's main content. The controls drop the separator and
+     the button chrome and read as links, so a settled run does not carry a call to action
+     louder than the result it produced. */
+  collapsed?: boolean;
   operation: Operation;
   /* Where a retry's new Operation goes when the panel is inline. The host screen watches
      one Application's work, so it takes the id and keeps reporting in place. */
@@ -49,6 +54,7 @@ interface OperationActionsProps {
 }
 
 export const OperationActions = ({
+  collapsed = false,
   inline = false,
   onQueued,
   operation,
@@ -114,6 +120,34 @@ export const OperationActions = ({
     return null;
   }
 
+  if (collapsed) {
+    if (!canRetry && error === null) {
+      return null;
+    }
+
+    return (
+      <>
+        {error === null ? null : (
+          <ErrorCallout
+            error={error}
+            fallbackDetail="לא ניתן להשלים את הפעולה. המצב הבטוח האחרון נשמר ואפשר לנסות שוב."
+            fallbackTitle="הפעולה לא בוצעה"
+          />
+        )}
+        {canRetry ? (
+          <button
+            className="rounded-control underline underline-offset-4 hover:text-cv-text disabled:no-underline disabled:opacity-60"
+            disabled={retry.isPending}
+            onClick={() => retry.mutate()}
+            type="button"
+          >
+            {retry.isPending ? "יוצר ניסיון חדש…" : "הרצה מחדש"}
+          </button>
+        ) : null}
+      </>
+    );
+  }
+
   return (
     <div className="mt-2 flex flex-col gap-4 border-t border-cv-border pt-5">
       {error === null ? null : (
@@ -144,7 +178,15 @@ export const OperationActions = ({
             onClick={() => retry.mutate()}
             variant={returnRecommended ? "secondary" : "primary"}
           >
-            {retry.isPending ? "יוצר ניסיון חדש…" : "ניסיון חוזר"}
+            {retry.isPending
+              ? "יוצר ניסיון חדש…"
+              : /* On a run that failed, a retry is plainly another attempt at work that
+                   produced nothing. On one that succeeded it re-runs work that has a
+                   result on record and supersedes it, so the button says so rather than
+                   leaving "ניסיון חוזר" to imply a repeat of nothing. */
+                operation.status === "succeeded"
+                ? "הרצה מחדש"
+                : "ניסיון חוזר"}
           </Button>
         ) : null}
         {showReturn ? (

@@ -156,7 +156,7 @@ const ReasonCallout = ({
           המסך שלה מגיע בפרוסה הבאה.
         </p>
       )}
-      <TechnicalDetails className="mt-3">
+      <TechnicalDetails className="mt-3" summary="קוד הסיבה">
         <LtrText>{reason.code}</LtrText>
       </TechnicalDetails>
     </Callout>
@@ -320,7 +320,7 @@ export const ApplicationPage = () => {
           {detail.warnings.map((warning) => (
             <Callout key={warning.code} title="אפשר להמשיך, אך יש לשים לב" tone="warning">
               <p dir="auto">{warning.message}</p>
-              <TechnicalDetails className="mt-3">
+              <TechnicalDetails className="mt-3" summary="קוד האזהרה">
                 <LtrText>{warning.code}</LtrText>
               </TechnicalDetails>
             </Callout>
@@ -360,7 +360,7 @@ export const ApplicationPage = () => {
               later action of the workflow as "unavailable" said nothing the landmark and
               the offered action did not already say, and it buried the identifiers - the
               one thing in here that is genuinely technical - under fourteen rows of it. */}
-          <TechnicalDetails>
+          <TechnicalDetails summary="מזהי הרשומות ופעולות שאינן זמינות">
             <div className="flex flex-col gap-4">
               {noteworthy.length === 0 ? null : (
                 <div>

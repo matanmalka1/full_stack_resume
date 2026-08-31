@@ -44,7 +44,7 @@ export const ValidationReportView = ({ report }: { report: ValidationReport }) =
         <Callout key={`${issue.code}-${index}`} title="חסימת אימות" tone="blocker">
           <p dir="auto">{issue.message}</p>
           <p className="mt-2">{blockerResolution(issue.code)}</p>
-          <TechnicalDetails className="mt-3">
+          <TechnicalDetails className="mt-3" summary="קוד החסימה">
             <LtrText>{`${issue.group} · ${issue.code}`}</LtrText>
           </TechnicalDetails>
         </Callout>
@@ -52,7 +52,7 @@ export const ValidationReportView = ({ report }: { report: ValidationReport }) =
       {warnings.map((issue, index) => (
         <Callout key={`${issue.code}-${index}`} title="אזהרת אימות לא חוסמת" tone="warning">
           <p dir="auto">{issue.message}</p>
-          <TechnicalDetails className="mt-3">
+          <TechnicalDetails className="mt-3" summary="קוד האזהרה">
             <LtrText>{`${issue.group} · ${issue.code}`}</LtrText>
           </TechnicalDetails>
         </Callout>

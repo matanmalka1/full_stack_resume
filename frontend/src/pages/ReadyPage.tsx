@@ -214,7 +214,7 @@ export const ReadyPage = () => {
               </details>
             )}
 
-            <TechnicalDetails>
+            <TechnicalDetails summary="מזהי הגרסה והתוצרים">
               <div className="flex flex-col gap-4">
                 <SummaryList items={[
                   { term: "גרסה מאושרת", value: revision.id, ltr: true },

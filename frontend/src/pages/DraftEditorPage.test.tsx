@@ -491,7 +491,7 @@ describe("DraftEditorPage regeneration", () => {
 
     /* The panel, not the route: the editor's own heading is still on screen beside it. */
     expect(
-      await screen.findByRole("heading", { name: "יצירה מחדש של טענה" }),
+      await screen.findByRole("heading", { name: "הרצת יצירה מחדש של טענה" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "עריכה, אימות ואישור" })).toBeInTheDocument();
     const call = fetchMock.mock.calls.find((entry) =>

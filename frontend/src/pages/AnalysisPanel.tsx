@@ -38,8 +38,11 @@ const Section = ({ children, title }: { children: ReactNode; title: string }) =>
 const TermList = ({ items }: { items: string[] }) => (
   <ul className="flex flex-wrap gap-2">
     {items.map((item) => (
+      /* Output, not a control. The bordered pill is the shape the list filters use for
+         things you can select, so these carry a flat tinted ground instead: same family,
+         visibly not clickable. */
       <li
-        className="rounded-pill border border-cv-border bg-cv-surface-muted px-3 py-1 text-support text-cv-text-muted"
+        className="rounded-control bg-cv-surface-muted px-2.5 py-1 text-support text-cv-text-muted"
         dir="auto"
         key={item}
       >
@@ -77,10 +80,26 @@ export const AnalysisPanel = ({
         <h2 className="text-body font-semibold text-cv-text" id="analysis-heading">
           ניתוח המשרה
         </h2>
-        {classification.fit === null ? null : (
-          <StatusBadge tone={fitTones[classification.fit]}>
-            {fitLabels[classification.fit]}
-          </StatusBadge>
+        {/* Confidence qualifies the fit, so it is read with it. Below the rationale it
+            was muted support text under a paragraph, which put the number that says how
+            far to trust the verdict further down the page than the verdict itself.
+
+            The two are reported independently: a classification may carry a confidence
+            without a fit, and hanging the number off the badge would have dropped it
+            from the screen in exactly that case. */}
+        {classification.fit === null && classification.confidence === null ? null : (
+          <div className="flex flex-wrap items-center gap-2">
+            {classification.fit === null ? null : (
+              <StatusBadge tone={fitTones[classification.fit]}>
+                {fitLabels[classification.fit]}
+              </StatusBadge>
+            )}
+            {classification.confidence === null ? null : (
+              <span className="text-support text-cv-text-muted">
+                ברמת ביטחון {confidenceText(classification.confidence)}
+              </span>
+            )}
+          </div>
         )}
       </div>
 
@@ -114,11 +133,6 @@ export const AnalysisPanel = ({
             <p className="text-body leading-7 text-cv-text" dir="auto">
               {classification.rationale}
             </p>
-            {classification.confidence === null ? null : (
-              <p className="mt-2 text-support text-cv-text-muted">
-                רמת הביטחון בסיווג: {confidenceText(classification.confidence)}
-              </p>
-            )}
           </Section>
         )}
 
@@ -171,7 +185,7 @@ export const AnalysisPanel = ({
         )}
 
         {analysis == null ? null : (
-          <TechnicalDetails>
+          <TechnicalDetails summary="מקור הניתוח ומזהיו">
             <SummaryList
               items={[
                 { term: "מזהה הניתוח", value: analysis.id, ltr: true },

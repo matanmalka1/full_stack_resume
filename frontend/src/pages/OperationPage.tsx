@@ -14,7 +14,6 @@ import { LtrText } from "../ui/LtrText";
 import { PageHeading } from "../ui/PageHeading";
 import { StatusBadge } from "../ui/StatusBadge";
 import { SummaryList, type SummaryItem } from "../ui/SummaryList";
-import { TechnicalDetails } from "../ui/TechnicalDetails";
 import { OperationActions } from "./OperationActions";
 import { actionDestination } from "./actionDestinations";
 import { actionLabel, preparationStateNextStep } from "./applicationLabels";
@@ -65,7 +64,7 @@ const technicalItems = (operation: Operation): SummaryItem[] => {
     { term: "מזהה הפעולה", value: operation.id, ltr: true },
     { term: "מזהה המועמדות", value: operation.application_id, ltr: true },
     { term: "סוג הפעולה", value: operation.operation_type, ltr: true },
-    { term: "נוצרה", value: operation.created_at, ltr: true },
+    { term: "חותמת הזמן המקורית", value: operation.created_at, ltr: true },
   ];
 
   if (operation.failure_code != null) {
@@ -231,11 +230,13 @@ export const OperationPage = () => {
             <StatusBadge tone={statusTones[operation.status]}>
               {statusLabels[operation.status]}
             </StatusBadge>
-            {/* Phase is the progress axis and only says something the status badge has
-                not already said while work is still moving. At a terminal status the two
-                collapse onto the same word — `succeeded` and `completed` are both
-                "הושלמה" — so the phase is dropped rather than printed twice. */}
-            {terminal ? null : (
+            {/* Phase is the progress axis and earns its place only when it says
+                something the status badge has not. The two share vocabulary at both ends
+                — `queued`/`queued` are both "ממתינה בתור", `succeeded`/`completed` both
+                "הושלמה" — so the test is whether the words differ, not whether the run
+                has finished. Keyed on `terminal` alone, a queued run said one word
+                twice. */}
+            {phaseLabels[operation.phase] === statusLabels[operation.status] ? null : (
               <span className="text-body text-cv-text-muted">{phaseLabels[operation.phase]}</span>
             )}
           </div>
@@ -278,12 +279,21 @@ export const OperationPage = () => {
             </Callout>
           ) : null}
 
-          <TechnicalDetails>
-            <div className="flex flex-col gap-4">
+          {/* Open, not collapsed. Everywhere else the record is a footnote to a screen
+              doing other work, and stays behind a disclosure. This route exists to lay
+              the record out - it is what the panel's "פרטי הפעולה המלאים" link promises -
+              so hiding it here left the screen with nothing but a restatement of the
+              summary the reader already had. Two lists of different kinds, each named. */}
+          <div className="flex flex-col gap-5 rounded-surface border border-cv-border bg-cv-surface-muted p-5">
+            <div>
+              <h2 className="mb-2 text-support font-semibold text-cv-text">מהלך הפעולה</h2>
               <SummaryList items={progressItems(operation)} />
+            </div>
+            <div>
+              <h2 className="mb-2 text-support font-semibold text-cv-text">מזהי הרשומה</h2>
               <SummaryList items={technicalItems(operation)} />
             </div>
-          </TechnicalDetails>
+          </div>
 
           <OperationActions
             operation={operation}

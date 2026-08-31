@@ -309,7 +309,7 @@ export const DraftEditorPage = () => {
                 {reason.allowed_resolution_actions.map(actionLabel).join(" · ")}.
               </p>
             )}
-            <TechnicalDetails className="mt-3">
+            <TechnicalDetails className="mt-3" summary="קוד הסיבה">
               <LtrText>{reason.code}</LtrText>
             </TechnicalDetails>
           </Callout>
@@ -524,7 +524,7 @@ export const DraftEditorPage = () => {
               </div>
             </div>
 
-            <TechnicalDetails>
+            <TechnicalDetails summary="מזהה הטיוטה וגרסתה">
               <LtrText>{`${draft.id} · v${draft.edit_version}`}</LtrText>
             </TechnicalDetails>
 
