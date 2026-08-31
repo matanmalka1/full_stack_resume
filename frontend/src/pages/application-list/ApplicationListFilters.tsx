@@ -62,7 +62,7 @@ const PresetChips = ({ preset: active, onPresetChange }: PresetChipsProps) => {
   );
 
   return (
-    <div aria-label="סינון מהיר" className="mt-6 flex flex-wrap items-center gap-2" role="radiogroup">
+    <div aria-label="סינון מהיר" className="mt-5 flex flex-wrap items-center gap-2" role="radiogroup">
       {chip("all", "הכל", active === undefined, () => onPresetChange(undefined))}
       {(Object.keys(applicationPresetLabels) as ApplicationPreset[]).map((preset) =>
         chip(preset, applicationPresetLabels[preset], active === preset, () =>
@@ -107,7 +107,7 @@ export const ApplicationListFilters = ({
   <>
     <PresetChips onPresetChange={onPresetChange} preset={preset} />
 
-    <div className="mt-3 flex flex-wrap items-end gap-3">
+    <div className="mt-4 flex flex-wrap items-end gap-3">
       <div className="min-w-[14rem] flex-1">
         <label className="block text-support font-semibold text-cv-text" htmlFor="list-search">
           חיפוש

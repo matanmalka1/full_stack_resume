@@ -69,7 +69,7 @@ export const ApplicationListPage = () => {
 
   return (
     <Card aria-labelledby="route-heading">
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-cv-border pb-4">
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-cv-border pb-5">
         <PageHeading description="מעקב אחר תהליכי התאמת קורות החיים למשרות." id="route-heading">
           המועמדויות
         </PageHeading>
@@ -131,14 +131,14 @@ export const ApplicationListPage = () => {
             stageCounts={page.stage_counts}
           />
 
-          <p aria-live="polite" className="mt-3 text-support text-cv-text-muted">
+          <p aria-live="polite" className="mt-5 text-support text-cv-text-muted">
             {matched === page.total
               ? `${page.total} מועמדויות`
               : `${matched} מתוך ${page.total} מועמדויות`}
           </p>
 
           {items.length === 0 ? (
-            <div className="mt-4 rounded-surface border border-dashed border-cv-border p-8 text-center">
+            <div className="mt-3 rounded-surface border border-dashed border-cv-border p-8 text-center">
               <p className="text-body text-cv-text">אין מועמדות שמתאימה לסינון.</p>
               <div className="mt-5 flex justify-center">
                 <Button

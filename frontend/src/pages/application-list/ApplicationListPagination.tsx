@@ -26,7 +26,7 @@ export const ApplicationListPagination = ({
   return (
     <nav
       aria-label="ניווט בין דפי המועמדויות"
-      className="mt-4 flex flex-wrap items-center justify-between gap-3"
+      className="mt-5 flex flex-wrap items-center justify-between gap-3"
     >
       <p className="text-support text-cv-text-muted">
         {`${offset + 1}–${offset + visibleCount} מתוך ${matchedCount}`}
