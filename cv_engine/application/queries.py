@@ -11,6 +11,7 @@ from pydantic import Field
 from ..domain.drafts import draft_claims
 from ..domain.facts import FactStore
 from ..domain.models import (
+    ApplicationStatus,
     ApprovedRevision,
     ClaimStyle,
     ClaimType,
@@ -128,10 +129,32 @@ class ApplicationStateView(BoundaryDTO):
     recommended_action: str | None = None
 
 
+class RecruitmentTimelineItemView(BoundaryDTO):
+    """One visible item in the Application's unified recruitment history."""
+
+    id: str
+    item_type: str
+    occurred_at: str
+    actor_type: str | None = None
+    client: str | None = None
+    from_status: str | None = None
+    to_status: str | None = None
+    corrects_event_id: str | None = None
+    reason: str = ""
+    next_action: str | None = None
+    next_action_date: str | None = None
+    submission_type: str | None = None
+    approved_revision_id: str | None = None
+    artifact_version_id: str | None = None
+    metadata: dict[str, Any] = {}
+
+
 class ApplicationDetailView(ApplicationStateView):
     application: ApplicationView
     latest_snapshot: JobSnapshotView
     latest_analysis: JobAnalysisView | None = None
+    allowed_recruitment_transitions: list[ApplicationStatus] = []
+    recruitment_timeline: list[RecruitmentTimelineItemView] = []
 
 
 class ApplicationListItemView(ApplicationView, ApplicationStateView):
@@ -652,6 +675,64 @@ def application_list_item_view(
     record: dict[str, Any], state: ApplicationStateView
 ) -> ApplicationListItemView:
     return ApplicationListItemView.model_validate({**record, **state.model_dump(mode="python")})
+
+
+def recruitment_timeline_view(
+    events: list[dict[str, Any]],
+    submissions: list[dict[str, Any]],
+    audits: list[dict[str, Any]],
+) -> list[RecruitmentTimelineItemView]:
+    """Merge append-only tracking records into one deterministic presentation trail."""
+
+    submission_audits = {
+        row["entity_id"]: row
+        for row in audits
+        if row.get("entity_type") == "submission"
+    }
+    items: list[RecruitmentTimelineItemView] = []
+    for row in events:
+        payload = json.loads(row.get("payload_json") or "{}")
+        items.append(
+            RecruitmentTimelineItemView(
+                id=row["id"],
+                item_type=row["event_type"],
+                occurred_at=row["occurred_at"],
+                actor_type=row.get("actor_type"),
+                client=row.get("client"),
+                from_status=row.get("from_status"),
+                to_status=row.get("to_status"),
+                corrects_event_id=row.get("corrects_event_id"),
+                reason=row.get("reason") or "",
+                next_action=payload.get("next_action"),
+                next_action_date=payload.get("next_action_date"),
+            )
+        )
+    for row in submissions:
+        audit = submission_audits.get(row["id"], {})
+        items.append(
+            RecruitmentTimelineItemView(
+                id=row["id"],
+                item_type="submission",
+                occurred_at=row["submitted_at"],
+                actor_type=audit.get("actor_type"),
+                client=audit.get("client"),
+                submission_type=row["submission_type"],
+                approved_revision_id=row.get("approved_revision_id"),
+                artifact_version_id=row.get("artifact_version_id"),
+                metadata=json.loads(row.get("metadata_json") or "{}"),
+            )
+        )
+
+    priority = {
+        "submission": 0,
+        "status_transition": 1,
+        "status_correction": 2,
+        "next_action": 3,
+    }
+    return sorted(
+        items,
+        key=lambda item: (item.occurred_at, priority.get(item.item_type, 9), item.id),
+    )
 
 
 def snapshot_view(record: dict[str, Any], job_text: str) -> JobSnapshotView:

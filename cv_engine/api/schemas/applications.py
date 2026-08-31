@@ -7,6 +7,7 @@ from pydantic import Field
 from ...application.queries import PreparationState, WorkingDraftState
 from .health import HttpSchema
 from .operations import OperationResponse
+from .tracking import RecruitmentTimelineItemResponse, TransitionableStatus
 
 
 class ApplicationIntake(HttpSchema):
@@ -159,6 +160,8 @@ class ApplicationDetailResponse(ApplicationStateResponse):
     application: ApplicationResponse
     latest_snapshot: JobSnapshotResponse
     latest_analysis: JobAnalysisResponse | None = None
+    allowed_recruitment_transitions: list[TransitionableStatus]
+    recruitment_timeline: list[RecruitmentTimelineItemResponse]
 
 
 class ApplicationListItemResponse(ApplicationResponse, ApplicationStateResponse):

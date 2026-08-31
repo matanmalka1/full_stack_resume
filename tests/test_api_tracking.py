@@ -122,6 +122,13 @@ def test_a_correction_appends_an_event_and_needs_a_reason_and_a_target(
     # The corrected event is still there: a correction appends, it never edits.
     assert len(events) == before + 1
     assert corrected_event in {event["id"] for event in events}
+    timeline = _detail(api_worker, application_id)["recruitment_timeline"]
+    projected = {item["id"]: item for item in timeline}
+    assert projected[corrected_event]["item_type"] == "status_transition"
+    assert projected[corrected.json()["event_id"]]["corrects_event_id"] == corrected_event
+    assert projected[corrected.json()["event_id"]]["reason"] == (
+        "recorded against the wrong application"
+    )
 
 
 def test_an_internal_submission_records_the_exact_revision_and_pdf(
@@ -149,6 +156,22 @@ def test_an_internal_submission_records_the_exact_revision_and_pdf(
     assert body["pdf_artifact_version_id"] == pdf["id"]
     # Submission is what moves an Application to `applied`.
     assert body["current_status"] == "applied"
+    detail = _detail(api_worker, application_id)
+    assert detail["allowed_recruitment_transitions"] == [
+        "recruiter_screen",
+        "interview",
+        "rejected",
+        "withdrawn",
+        "closed",
+    ]
+    submitted = next(
+        item
+        for item in detail["recruitment_timeline"]
+        if item["id"] == body["submission_id"]
+    )
+    assert submitted["submission_type"] == "internal"
+    assert submitted["approved_revision_id"] == revision_id
+    assert submitted["artifact_version_id"] == pdf["id"]
 
 
 def test_a_submission_naming_the_wrong_pdf_is_refused(api_worker, ready_application) -> None:
@@ -193,11 +216,16 @@ def test_an_external_submission_invents_no_revision_or_artifact(api_worker) -> N
 def test_the_next_action_is_set_and_cleared_as_one_whole_value(api_worker) -> None:
     application_id = _ingested(api_worker, "Next Action Co")
 
+    initial = _detail(api_worker, application_id)
+    # `applied` belongs to submission, so the backend-owned direct choices omit it.
+    assert initial["allowed_recruitment_transitions"] == ["withdrawn", "closed"]
+
     set_action = _patch(
         api_worker,
         f"/applications/{application_id}/next-action",
         {"next_action": "follow up with the recruiter", "next_action_date": "2026-09-05"},
     )
+    projected_set = _detail(api_worker, application_id)
     cleared = _patch(
         api_worker,
         f"/applications/{application_id}/next-action",
@@ -207,6 +235,16 @@ def test_the_next_action_is_set_and_cleared_as_one_whole_value(api_worker) -> No
     assert set_action.status_code == 200, set_action.text
     assert set_action.json()["next_action"] == "follow up with the recruiter"
     assert set_action.json()["next_action_date"] == "2026-09-05"
+    assert projected_set["application"]["next_action"] == "follow up with the recruiter"
+    assert projected_set["recruitment_timeline"][-1]["next_action"] == (
+        "follow up with the recruiter"
+    )
     assert cleared.status_code == 200, cleared.text
     assert cleared.json()["next_action"] is None
     assert cleared.json()["next_action_date"] is None
+
+
+def _detail(harness, application_id: str) -> dict:
+    response = harness.client.get(f"{API_PREFIX}/applications/{application_id}")
+    assert response.status_code == 200, response.text
+    return response.json()

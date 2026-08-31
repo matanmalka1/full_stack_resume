@@ -61,6 +61,18 @@ def transition_allowed(current: ApplicationStatus, target: ApplicationStatus) ->
     return target in ALLOWED_TRANSITIONS[current]
 
 
+def user_transition_targets(current: ApplicationStatus) -> tuple[ApplicationStatus, ...]:
+    """Direct status choices a user may make from ``current``.
+
+    ``applied`` belongs to submission even though it is a valid domain transition from
+    ``saved``. The query projection uses this function so a Web client can render the
+    backend's policy without copying the graph or offering a command the status endpoint
+    will refuse.
+    """
+    allowed = ALLOWED_TRANSITIONS[current] - {ApplicationStatus.APPLIED}
+    return tuple(status for status in ApplicationStatus if status in allowed)
+
+
 def terminal_outcome_after(
     current_outcome: str | None,
     target: ApplicationStatus,

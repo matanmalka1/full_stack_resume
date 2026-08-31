@@ -3,7 +3,8 @@ from __future__ import annotations
 from datetime import date
 from typing import cast
 
-from ...domain.models import WorkingDraft
+from ...domain.models import ApplicationStatus, WorkingDraft
+from ...domain.recruitment import user_transition_targets
 from ..artifacts import verify_artifact
 from ..errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
@@ -36,6 +37,7 @@ from ..queries import (
     draft_facts_view,
     draft_outline_view,
     narrow_application_list,
+    recruitment_timeline_view,
     snapshot_view,
 )
 from ..ready import qualify_ready_revision
@@ -158,6 +160,11 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
                     ),
                 )
                 latest = analysis_view(analyses[-1]) if analyses else None
+                timeline = recruitment_timeline_view(
+                    transaction.recruitment_events(application_id),
+                    transaction.submissions(application_id),
+                    transaction.audit_records(application_id),
+                )
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown application: {application_id}") from exc
         except (TypeError, ValueError) as exc:
@@ -167,6 +174,10 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
             application=application,
             latest_snapshot=snapshot,
             latest_analysis=latest,
+            allowed_recruitment_transitions=list(
+                user_transition_targets(ApplicationStatus(application.current_status))
+            ),
+            recruitment_timeline=timeline,
         )
 
     def artifact_versions(self, application_id: str) -> ArtifactVersionsView:

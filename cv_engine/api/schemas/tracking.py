@@ -96,6 +96,26 @@ class SubmissionResponse(ApplicationMutationResponse):
     warnings: list[str] = []
 
 
+class RecruitmentTimelineItemResponse(HttpSchema):
+    """One status, correction, next-action, or submission item in time order."""
+
+    id: str
+    item_type: Literal["status_transition", "status_correction", "next_action", "submission"]
+    occurred_at: str
+    actor_type: Literal["user", "system"] | None = None
+    client: Literal["web", "worker"] | None = None
+    from_status: CorrectableStatus | None = None
+    to_status: CorrectableStatus | None = None
+    corrects_event_id: str | None = None
+    reason: str = ""
+    next_action: str | None = None
+    next_action_date: str | None = None
+    submission_type: Literal["internal", "external"] | None = None
+    approved_revision_id: str | None = None
+    artifact_version_id: str | None = None
+    metadata: dict[str, Any] = {}
+
+
 class TransitionStatusRequest(HttpSchema):
     """An allowed forward transition. `reason` is optional for a normal move."""
 
