@@ -717,6 +717,16 @@
         "title": "ApplicationMutationResponse",
         "type": "object"
       },
+      "ApplicationPreset": {
+        "description": "The board's named questions, as filters the application layer answers.\n\nEach one is a predicate over the §9 projection, which is why it lives here\nrather than in a client: `preparation_state` and the reason lists are computed\nby that projection and are not stored columns, so a client deriving these would\nbe forming a second opinion about where an Application stands.\n\nThey are shorthands, not a second vocabulary. Every preset is expressible in\nthe fields this layer already projects, and each narrows the same list the\nother filters narrow rather than replacing it.",
+        "enum": [
+          "needs_attention",
+          "ready_to_send",
+          "active_interviews"
+        ],
+        "title": "ApplicationPreset",
+        "type": "string"
+      },
       "ApplicationResponse": {
         "additionalProperties": false,
         "properties": {
@@ -906,6 +916,23 @@
           "stage"
         ],
         "title": "ApplicationSort",
+        "type": "string"
+      },
+      "ApplicationStatus": {
+        "enum": [
+          "saved",
+          "applied",
+          "recruiter_screen",
+          "interview",
+          "assignment",
+          "final_stage",
+          "offer",
+          "accepted",
+          "rejected",
+          "withdrawn",
+          "closed"
+        ],
+        "title": "ApplicationStatus",
         "type": "string"
       },
       "ApplyAnalysisDecisionsRequest": {
@@ -5368,7 +5395,7 @@
     },
     "/api/v1/applications": {
       "get": {
-        "description": "One page of the list, narrowed by the query the application layer answers.\n\nThe router maps HTTP to that query and back and decides nothing about it:\nthe closed sets arrive as their application-layer enums, so an unknown value\nis a 422 from the boundary rather than a filter that silently matches\nnothing. `stage` repeats for more than one stage. The paging bounds are\nrestated here so an out-of-range page is refused at the boundary with a 422\nnaming the parameter, rather than reaching the query and failing as a\nvalidation error the client cannot attribute.",
+        "description": "One page of the list, narrowed by the query the application layer answers.\n\nThe router maps HTTP to that query and back and decides nothing about it:\nthe closed sets arrive as their application-layer enums, so an unknown value\nis a 422 from the boundary rather than a filter that silently matches\nnothing. `stage` repeats for more than one stage. The paging bounds are\nrestated here so an out-of-range page is refused at the boundary with a 422\nnaming the parameter, rather than reaching the query and failing as a\nvalidation error the client cannot attribute.\n\n`stage` and `recruitment_status` are the two independent axes and repeat for\nmore than one value; `preset` is one named question the application layer\nanswers, and it narrows alongside them rather than replacing them.",
         "operationId": "list_applications_api_v1_applications_get",
         "parameters": [
           {
@@ -5397,6 +5424,41 @@
                 }
               ],
               "title": "Stage"
+            }
+          },
+          {
+            "in": "query",
+            "name": "recruitment_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/ApplicationStatus"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Recruitment Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "preset",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ApplicationPreset"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Preset"
             }
           },
           {

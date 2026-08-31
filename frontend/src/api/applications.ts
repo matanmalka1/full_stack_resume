@@ -6,6 +6,7 @@ import type {
   ApplicationDetail,
   ApplicationIntake,
   ApplicationListResponse,
+  ApplicationPreset,
   ApplicationSort,
   CreateAnalysisRequest,
   CreateApplicationRequest,
@@ -17,6 +18,7 @@ import type {
   GenerateWorkingDraftRequest,
   Operation,
   PreparationState,
+  RecruitmentStatus,
 } from "./contracts";
 import {
   OPERATION_POLL_INTERVAL_MS,
@@ -123,6 +125,12 @@ export const applicationDetailQueryKey = (applicationId: string) =>
 export interface ApplicationListQuery {
   activity?: ActivityFilter;
   stages?: readonly PreparationState[];
+  /* The recruitment axis, beside `stages`. A list for the same reason: the endpoint
+     repeats `recruitment_status` once per status. */
+  recruitmentStatuses?: readonly RecruitmentStatus[];
+  /* One named question the server answers, narrowing alongside the other filters
+     rather than replacing them. */
+  preset?: ApplicationPreset;
   search?: string;
   sort?: ApplicationSort;
   limit?: number;
@@ -146,6 +154,12 @@ const applicationListSearch = (query: ApplicationListQuery): string => {
   /* Repeated rather than joined: the endpoint takes `stage` once per stage. */
   for (const stage of query.stages ?? []) {
     params.append("stage", stage);
+  }
+  for (const status of query.recruitmentStatuses ?? []) {
+    params.append("recruitment_status", status);
+  }
+  if (query.preset !== undefined) {
+    params.set("preset", query.preset);
   }
   if (query.search !== undefined && query.search !== "") {
     params.set("search", query.search);

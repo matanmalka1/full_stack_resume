@@ -1,4 +1,9 @@
-import type { PreparationState, RecruitmentStatus, WorkingDraftState } from "../api/contracts";
+import type {
+  ApplicationPreset,
+  PreparationState,
+  RecruitmentStatus,
+  WorkingDraftState,
+} from "../api/contracts";
 import type { StatusTone } from "../ui/status";
 
 /* Keyed by the generated unions, so a state added to the §9 projection fails the
@@ -142,3 +147,32 @@ export const recruitmentStatusLabel = (status: string): string =>
 
 export const blockedReasonLabel = (reason: string): string =>
   blockedReasonLabels[reason] ?? reason;
+
+
+/* The board's named questions, in the order the chips offer them. Keyed by the generated
+   union, so a preset added to the application layer fails the build here instead of
+   reaching the chip row untranslated.
+
+   Each chip is one value of the `preset` parameter, not a filter this client assembles:
+   the predicates are the projection's, and the chip only names them. */
+export const applicationPresetLabels: Record<ApplicationPreset, string> = {
+  needs_attention: "דורש טיפול",
+  ready_to_send: "מסמכים מוכנים לשליחה",
+  active_interviews: "ראיונות פעילים",
+};
+
+/* The recruitment stages the chips and the stage filter name, in the workflow order the
+   domain declares them rather than alphabetically. */
+export const recruitmentStatusOrder: readonly RecruitmentStatus[] = [
+  "saved",
+  "applied",
+  "recruiter_screen",
+  "interview",
+  "assignment",
+  "final_stage",
+  "offer",
+  "accepted",
+  "rejected",
+  "withdrawn",
+  "closed",
+];

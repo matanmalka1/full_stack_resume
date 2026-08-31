@@ -45,6 +45,31 @@ describe("queryFromParams", () => {
     expect(read("offset=10").offset).toBeUndefined();
   });
 
+  /* The two axes are independent, so a question about both is one query with both
+     clauses rather than two questions. */
+  it("reads the recruitment axis and a preset alongside the stage filter", () => {
+    expect(
+      read("stage=ready&recruitment_status=interview&recruitment_status=offer&preset=ready_to_send"),
+    ).toEqual({
+      activity: "open",
+      sort: "updated",
+      limit: PAGE_SIZE,
+      stages: ["ready"],
+      recruitmentStatuses: ["interview", "offer"],
+      preset: "ready_to_send",
+    });
+  });
+
+  it("drops a recruitment status or preset outside the closed sets", () => {
+    const query = read("recruitment_status=not_a_status&recruitment_status=offer&preset=whatever");
+
+    /* The unknown entry is dropped and the known one kept, as with `stage` above. */
+    expect(query.recruitmentStatuses).toEqual(["offer"]);
+    /* A preset is one value rather than a list, so an unrecognised one leaves the board
+       unnarrowed instead of narrowing it by something nobody asked for. */
+    expect(query.preset).toBeUndefined();
+  });
+
   it("ignores an offset that is not a whole number", () => {
     for (const search of ["offset=-25", "offset=abc", "offset=1e9", "offset=25.5"]) {
       expect(read(search).offset, search).toBeUndefined();
@@ -79,8 +104,26 @@ describe("paramsFromQuery", () => {
     expect(write({ limit: 200 })).toBe("");
   });
 
+  it("repeats recruitment status and writes the preset", () => {
+    expect(
+      write({
+        recruitmentStatuses: ["interview", "offer"],
+        preset: "needs_attention",
+        limit: PAGE_SIZE,
+      }),
+    ).toBe("recruitment_status=interview&recruitment_status=offer&preset=needs_attention");
+  });
+
   it("round-trips a narrowed board", () => {
     const search = "activity=closed&stage=ready&search=binat&sort=stage&offset=50";
+
+    expect(write(read(search))).toBe(search);
+  });
+
+  /* Both new axes survive the round trip, so a chip and a stage filter together are a
+     link that reopens the same board. */
+  it("round-trips a board narrowed on both axes", () => {
+    const search = "stage=ready&recruitment_status=offer&preset=ready_to_send&search=binat";
 
     expect(write(read(search))).toBe(search);
   });

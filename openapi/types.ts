@@ -81,6 +81,10 @@ export interface paths {
          *     restated here so an out-of-range page is refused at the boundary with a 422
          *     naming the parameter, rather than reaching the query and failing as a
          *     validation error the client cannot attribute.
+         *
+         *     `stage` and `recruitment_status` are the two independent axes and repeat for
+         *     more than one value; `preset` is one named question the application layer
+         *     answers, and it narrows alongside them rather than replacing them.
          */
         get: operations["list_applications_api_v1_applications_get"];
         put?: never;
@@ -1321,6 +1325,21 @@ export interface components {
             /** Terminal Outcome */
             terminal_outcome?: string | null;
         };
+        /**
+         * ApplicationPreset
+         * @description The board's named questions, as filters the application layer answers.
+         *
+         *     Each one is a predicate over the §9 projection, which is why it lives here
+         *     rather than in a client: `preparation_state` and the reason lists are computed
+         *     by that projection and are not stored columns, so a client deriving these would
+         *     be forming a second opinion about where an Application stands.
+         *
+         *     They are shorthands, not a second vocabulary. Every preset is expressible in
+         *     the fields this layer already projects, and each narrows the same list the
+         *     other filters narrow rather than replacing it.
+         * @enum {string}
+         */
+        ApplicationPreset: "needs_attention" | "ready_to_send" | "active_interviews";
         /** ApplicationResponse */
         ApplicationResponse: {
             /** Classification Confidence */
@@ -1369,6 +1388,11 @@ export interface components {
          * @enum {string}
          */
         ApplicationSort: "updated" | "created" | "company" | "stage";
+        /**
+         * ApplicationStatus
+         * @enum {string}
+         */
+        ApplicationStatus: "saved" | "applied" | "recruiter_screen" | "interview" | "assignment" | "final_stage" | "offer" | "accepted" | "rejected" | "withdrawn" | "closed";
         /**
          * ApplyAnalysisDecisionsRequest
          * @description One review-form submission (§13).
@@ -3253,6 +3277,8 @@ export interface operations {
             query?: {
                 activity?: components["schemas"]["ActivityFilter"];
                 stage?: components["schemas"]["PreparationState"][] | null;
+                recruitment_status?: components["schemas"]["ApplicationStatus"][] | null;
+                preset?: components["schemas"]["ApplicationPreset"] | null;
                 search?: string;
                 sort?: components["schemas"]["ApplicationSort"];
                 limit?: number | null;

@@ -22,6 +22,10 @@ export type ApplicationListResponse = ApiSchemas["ApplicationListResponse"];
    column, so a client that narrowed by it would be deriving state a second time. */
 export type ActivityFilter = ApiSchemas["ActivityFilter"];
 export type ApplicationSort = ApiSchemas["ApplicationSort"];
+/* The board's named questions. Each is a predicate over the §9 projection that the
+   application layer answers, so it arrives as one filter rather than as rows this
+   client re-decides. */
+export type ApplicationPreset = ApiSchemas["ApplicationPreset"];
 export type ApplicationListItem = ApiSchemas["ApplicationListItemResponse"];
 export type Operation = ApiSchemas["OperationResponse"];
 export type OperationStatus = ApiSchemas["OperationStatus"];

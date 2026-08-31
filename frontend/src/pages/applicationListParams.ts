@@ -1,5 +1,11 @@
 import type { ApplicationListQuery } from "../api/applications";
-import type { ActivityFilter, ApplicationSort, PreparationState } from "../api/contracts";
+import type {
+  ActivityFilter,
+  ApplicationPreset,
+  ApplicationSort,
+  PreparationState,
+  RecruitmentStatus,
+} from "../api/contracts";
 
 /* The list query as it lives in the address bar.
 
@@ -37,6 +43,29 @@ const preparationStates: Record<PreparationState, true> = {
   ready: true,
 };
 
+/* The recruitment axis, exhaustive over the generated union for the same reason as the
+   tables above: a status added to the domain fails the build here rather than being
+   silently dropped from a URL it is valid in. */
+const recruitmentStatuses: Record<RecruitmentStatus, true> = {
+  saved: true,
+  applied: true,
+  recruiter_screen: true,
+  interview: true,
+  assignment: true,
+  final_stage: true,
+  offer: true,
+  accepted: true,
+  rejected: true,
+  withdrawn: true,
+  closed: true,
+};
+
+const presets: Record<ApplicationPreset, true> = {
+  needs_attention: true,
+  ready_to_send: true,
+  active_interviews: true,
+};
+
 const known = <T extends string>(table: Record<T, true>, value: string | null): T | undefined =>
   value !== null && Object.hasOwn(table, value) ? (value as T) : undefined;
 
@@ -59,6 +88,11 @@ export const queryFromParams = (params: URLSearchParams): ApplicationListQuery =
     const match = known(preparationStates, stage);
     return match === undefined ? [] : [match];
   });
+  const statuses = params.getAll("recruitment_status").flatMap((status) => {
+    const match = known(recruitmentStatuses, status);
+    return match === undefined ? [] : [match];
+  });
+  const preset = known(presets, params.get("preset"));
   const search = params.get("search") ?? "";
   /* Rounded down to a page boundary. An offset the pager could never have produced would
      leave its "previous" button one partial page from the start. */
@@ -70,6 +104,8 @@ export const queryFromParams = (params: URLSearchParams): ApplicationListQuery =
     sort: known(sorts, params.get("sort")) ?? "updated",
     limit: PAGE_SIZE,
     ...(stages.length === 0 ? {} : { stages }),
+    ...(statuses.length === 0 ? {} : { recruitmentStatuses: statuses }),
+    ...(preset === undefined ? {} : { preset }),
     ...(search === "" ? {} : { search }),
     ...(offset === 0 ? {} : { offset }),
   };
@@ -89,6 +125,12 @@ export const paramsFromQuery = (query: ApplicationListQuery): URLSearchParams =>
   }
   for (const stage of query.stages ?? []) {
     params.append("stage", stage);
+  }
+  for (const status of query.recruitmentStatuses ?? []) {
+    params.append("recruitment_status", status);
+  }
+  if (query.preset !== undefined) {
+    params.set("preset", query.preset);
   }
   if (query.search !== undefined && query.search !== "") {
     params.set("search", query.search);
