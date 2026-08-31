@@ -57,11 +57,15 @@ export const JobTextFileField = ({ onText }: JobTextFileFieldProps) => {
   };
 
   return (
-    <div className="flex flex-col items-start gap-2">
+    /* Bound to the field it fills rather than stacked above it as a separate control:
+       the shared surface is what says this button and that text area are two ways into
+       one value. It sits on the sunken tone so it reads as an inlet to the field below
+       instead of a second card. */
+    <div className="flex flex-col gap-3 rounded-control border border-dashed border-cv-border bg-cv-surface-muted p-4 sm:flex-row sm:items-center">
       {/* The visible control is the label, so the native file input can stay off screen
           without losing its accessible name or keyboard reachability. */}
       <label
-        className={cx(buttonClasses("secondary"), "cursor-pointer font-medium")}
+        className={cx(buttonClasses("secondary"), "shrink-0 cursor-pointer font-medium")}
         htmlFor={inputId}
       >
         <Upload aria-hidden="true" className="size-4" />
@@ -78,19 +82,27 @@ export const JobTextFileField = ({ onText }: JobTextFileFieldProps) => {
         }}
         type="file"
       />
-      <p className="text-support text-cv-text-muted" id={`${inputId}-hint`}>
-        הקובץ נקרא בדפדפן וממלא את שדה טקסט המשרה. שום קובץ אינו נשלח לשרת.
-      </p>
-
-      {error === undefined ? null : (
-        <p className="text-support font-medium text-cv-blocker">{error}</p>
-      )}
-
-      {loadedFileName === null ? null : (
-        <LiveRegion className="text-support text-cv-text-muted" visuallyHidden={false}>
-          הטקסט מהקובץ <LtrText>{loadedFileName}</LtrText> נטען לשדה טקסט המשרה.
-        </LiveRegion>
-      )}
+      {/* One slot for all three states. The hint, the refusal, and the confirmation are
+          mutually exclusive and occupy the same line, so replacing one with another does
+          not move the text area underneath while the user is aiming at it. */}
+      <div className="min-w-0 flex-1">
+        {error !== undefined ? (
+          <p className="text-support font-medium text-cv-blocker">{error}</p>
+        ) : loadedFileName !== null ? (
+          <LiveRegion className="text-support text-cv-text-muted" visuallyHidden={false}>
+            הטקסט מהקובץ <LtrText>{loadedFileName}</LtrText> נטען לשדה טקסט המשרה.
+          </LiveRegion>
+        ) : null}
+        <p
+          className={cx(
+            "text-support text-cv-text-muted",
+            error === undefined && loadedFileName === null ? undefined : "sr-only",
+          )}
+          id={`${inputId}-hint`}
+        >
+          הקובץ נקרא בדפדפן וממלא את שדה טקסט המשרה. שום קובץ אינו נשלח לשרת.
+        </p>
+      </div>
     </div>
   );
 };

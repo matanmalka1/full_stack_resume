@@ -13,6 +13,12 @@ interface ActionBarProps {
   /* A.1: one emphasized primary action per page. */
   primary: ReactNode;
   secondary?: ReactNode;
+  /* Opt-in, for a form long enough that its own submit scrolls out of reach. It pins the
+     row to the bottom of the viewport, so the bar needs the chrome it otherwise only
+     earns by spanning: without a surface behind it the content would run underneath the
+     buttons. Off by default - a short form's actions belong in the flow, and a page that
+     pinned them there would be claiming space it does not need. */
+  sticky?: boolean;
 }
 
 export const ActionBar = ({
@@ -20,6 +26,7 @@ export const ActionBar = ({
   className,
   primary,
   secondary,
+  sticky = false,
 }: ActionBarProps) => {
   /* The panel is the chrome of a bar with two sides: it exists to span the width and hold
      a primary and a way out at opposite edges, and the border is what makes that span read
@@ -47,6 +54,9 @@ export const ActionBar = ({
           : align === "start"
             ? "justify-start"
             : "justify-end",
+        sticky && !split
+          ? "sticky bottom-0 z-20 -mx-5 mt-2 border-t border-cv-border bg-cv-surface/90 px-5 py-4 backdrop-blur-xl sm:-mx-8 sm:px-8"
+          : undefined,
         className,
       )}
     >

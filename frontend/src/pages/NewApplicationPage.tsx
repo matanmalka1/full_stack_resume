@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
+  JOB_TEXT_MAX_BYTES,
   acknowledgementApplies,
   createApplication,
   duplicateCheck,
@@ -21,6 +22,7 @@ import { FormSection } from "../ui/FormSection";
 import { LtrText } from "../ui/LtrText";
 import { PageHeading } from "../ui/PageHeading";
 import { TextArea, TextInput } from "../ui/TextInput";
+import { cx } from "../ui/cx";
 import { DuplicateChoices } from "./DuplicateChoices";
 import { JobTextFileField } from "./JobTextFileField";
 
@@ -28,6 +30,14 @@ import { JobTextFileField } from "./JobTextFileField";
    past a limit the server would refuse anyway. The refusal itself stays the server's. */
 const LABEL_MAX_CHARACTERS = 500;
 const SOURCE_URL_MAX_CHARACTERS = 2048;
+
+/* The snapshot limit the server enforces is a byte budget, not a character count, so the
+   counter measures the same thing the refusal will. It stays a quiet character count
+   until the text is close enough to the ceiling for the budget to be the useful fact. */
+const JOB_TEXT_BUDGET_NOTICE_RATIO = 0.8;
+
+const formatMebibytes = (bytes: number): string =>
+  `${(bytes / (1024 * 1024)).toLocaleString("en-US", { maximumFractionDigits: 2 })} MB`;
 
 interface NewApplicationFields {
   company: string;
@@ -135,7 +145,17 @@ export const NewApplicationPage = () => {
   /* The snapshot is written exactly as entered, so its size is worth showing while it is
      still editable. Subscribing to this one field keeps the counter live without making
      the whole form controlled. */
-  const jobTextLength = watch("job_text").length;
+  const jobText = watch("job_text");
+  const jobTextLength = jobText.length;
+  /* Measured only once the text is long enough to be worth measuring: encoding every
+     keystroke of a short paste to report a fraction of a percent is work for nothing. */
+  const jobTextBytes =
+    jobTextLength * 4 < JOB_TEXT_MAX_BYTES * JOB_TEXT_BUDGET_NOTICE_RATIO
+      ? null
+      : new TextEncoder().encode(jobText).length;
+  const jobTextNearBudget =
+    jobTextBytes !== null && jobTextBytes >= JOB_TEXT_MAX_BYTES * JOB_TEXT_BUDGET_NOTICE_RATIO;
+  const jobTextOverBudget = jobTextBytes !== null && jobTextBytes > JOB_TEXT_MAX_BYTES;
 
   const runSubmit = (acknowledgedIntake: ApplicationIntake | undefined) =>
     handleSubmit((fields) => {
@@ -217,7 +237,7 @@ export const NewApplicationPage = () => {
               <TextInput
                 {...control}
                 {...register("source_url")}
-                className="ltr-island"
+                className="ltr-island max-w-xl"
                 dir="ltr"
                 inputMode="url"
                 maxLength={SOURCE_URL_MAX_CHARACTERS}
@@ -228,12 +248,28 @@ export const NewApplicationPage = () => {
 
         <FormSection
           aside={
-            jobTextLength === 0 ? null : (
+            jobTextLength === 0 ? null : jobTextNearBudget ? (
+              /* Close to the ceiling the byte budget is the fact that matters, so the
+                 counter switches to it and says which side of the limit the text is on
+                 before the server has to. */
+              <span
+                className={cx(
+                  "font-medium",
+                  jobTextOverBudget ? "text-cv-blocker" : "text-cv-warning",
+                )}
+              >
+                <LtrText>
+                  {formatMebibytes(jobTextBytes ?? 0)} / {formatMebibytes(JOB_TEXT_MAX_BYTES)}
+                </LtrText>{" "}
+                {jobTextOverBudget ? "— חורג מגודל התצלום המותר" : "מגודל התצלום המותר"}
+              </span>
+            ) : (
               <span>
                 <LtrText>{jobTextLength.toLocaleString("en-US")}</LtrText> תווים
               </span>
             )
           }
+          className="rounded-surface border border-cv-border bg-cv-surface-muted/60 p-5"
           description="הטקסט נשמר כתצלום משרה קבוע ואינו משתנה אחרי היצירה. הוא נשמר בדיוק כפי שהוזן."
           title="תצלום המשרה"
         >
@@ -251,7 +287,10 @@ export const NewApplicationPage = () => {
                 {...register("job_text", {
                   validate: (value) => value.trim() !== "" || "יש להזין את טקסט המשרה.",
                 })}
-                className="min-h-64"
+                /* The payload of the whole screen. It opens tall enough to read a
+                   posting in, grows with a paste rather than hiding it behind a
+                   scrollbar, and stops at the viewport so the submit stays reachable. */
+                className="min-h-96 max-h-[70vh] [field-sizing:content]"
                 dir="auto"
               />
             )}
@@ -284,7 +323,6 @@ export const NewApplicationPage = () => {
         )}
 
         <ActionBar
-          className="mt-2"
           primary={
             <Button disabled={submit.isPending} type="submit">
               {submit.isPending && submit.variables?.acknowledged !== true
@@ -292,6 +330,7 @@ export const NewApplicationPage = () => {
                 : "יצירת מועמדות"}
             </Button>
           }
+          sticky
         />
       </form>
     </Card>
