@@ -59,7 +59,6 @@ export const cancelOperation = async (operationId: string): Promise<Operation> =
 
 export interface QueuedOperation {
   operation: Operation;
-  operationPath: string;
 }
 
 /* Every command that queues durable work answers `202` and a `Location` naming the
@@ -74,10 +73,10 @@ export const queuedOperation = (response: ApiResponse<Operation>): QueuedOperati
     throw new Error("Accepted response did not identify its queued Operation");
   }
 
-  return {
-    operation: response.data,
-    operationPath: `/operations/${encodeURIComponent(response.data.id)}`,
-  };
+  /* The queued Operation itself, and no route to it: it is reported by the screen that
+     queued it rather than followed. The `202`/`Location` check above stays - it is the
+     §13 contract, not a navigation concern. */
+  return { operation: response.data };
 };
 
 export const retryOperation = async (

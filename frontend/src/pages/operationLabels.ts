@@ -67,7 +67,7 @@ export const phaseLabels: Record<OperationPhase, string> = {
    `provider_response` is deliberately absent. It is registered as an output, but it is
    the provider's own text, and this screen states elsewhere that it shows no provider
    text. It stays in the record and out of the result line. */
-export const outputTypeLabels: Record<string, string> = {
+const outputTypeLabels: Record<string, string> = {
   job_analysis: "ניתוח המשרה",
   selection_plan: "תוכנית בחירת העובדות",
   working_draft: "טיוטה",

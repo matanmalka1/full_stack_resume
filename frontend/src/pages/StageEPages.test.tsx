@@ -73,7 +73,6 @@ const renderRoute = (entry: string, path: string, element: ReactElement) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, refetchInterval: false, gcTime: 0 }, mutations: { retry: false } } });
   return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[entry]}><Routes>
     <Route element={element} path={path} />
-    <Route element={<h1>פעולה</h1>} path="/operations/:operationId" />
     <Route element={<h1>רינדור</h1>} path="/approved-revisions/:approvedRevisionId/render" />
     <Route element={<h1>אימות</h1>} path="/applications/:applicationId/validation" />
   </Routes></MemoryRouter></QueryClientProvider>);
@@ -160,7 +159,10 @@ describe("DraftValidationPanel", () => {
     renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftFlow />);
     expect(await screen.findByText("Hard issue")).toBeInTheDocument();
     expect(screen.getByText("Soft issue")).toBeInTheDocument();
-    expect(screen.getByText(/UNKNOWN_HARD/)).toBeInTheDocument();
+    /* An unknown code is not dropped - its message is rendered above - but the code
+       itself is not shown: `UNKNOWN_HARD` names the failure in a vocabulary the reader
+       has no use for, and the message beside it already says what went wrong. */
+    expect(screen.queryByText(/UNKNOWN_HARD/)).toBeNull();
     expect(screen.getByRole("button", { name: "אימות מחדש" })).toBeInTheDocument();
   });
 
@@ -319,7 +321,6 @@ describe("DraftRenderPanel and ReadyPage", () => {
 
     expect(await screen.findByText(/# Why this revision/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "הורדת מסמך ההחלטה" })).toBeInTheDocument();
-    expect(screen.getByText("decision-hash")).toBeInTheDocument();
   });
 
   it("records submission against the exact displayed revision and PDF", async () => {

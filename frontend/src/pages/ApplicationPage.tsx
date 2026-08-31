@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { classificationFromAnalysis } from "../api/analyses";
 import {
@@ -24,11 +24,15 @@ import { AnalysisPanel, SupersededAnalysisNote } from "./AnalysisPanel";
 import { JobSnapshotPanel } from "./JobSnapshotPanel";
 import { ReviewDecisionPanel, resolvedByDecisionForm } from "./ReviewDecisionPanel";
 import { ApplicationActions } from "./ApplicationActions";
-import { ApplicationViews } from "./ApplicationViews";
+import { RecruitmentPanel } from "./RecruitmentPanel";
+import { ApplicationViews, applicationViewFromParam } from "./ApplicationViews";
 import { actionDestination } from "./actionDestinations";
 import { useWatchedOperation } from "./useWatchedOperation";
 import {
   actionLabel,
+  recruitmentStatusIcon,
+  recruitmentStatusLabel,
+  recruitmentStatusTone,
   preparationStateLabels,
   preparationStateTones,
   reasonTitle,
@@ -119,6 +123,8 @@ export const ApplicationPage = () => {
   }
 
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const view = applicationViewFromParam(searchParams.get("view"));
   const query = useQuery(applicationDetailQueryOptions(applicationId));
   const detail = query.data;
   const { operation: watched, operationId: watchedId, watch } = useWatchedOperation(
@@ -172,27 +178,40 @@ export const ApplicationPage = () => {
     autoDraft.mutate(sources);
   }, [detail, settingsQuery.data, watched, watchedId]);
 
-  /* The landmark follows the projection, and says nothing at all until it arrives. */
-  useWorkflowStage(detail === undefined ? "unknown" : detail.preparation_state);
+  /* The landmark follows the projection, and says nothing at all until it arrives.
+
+     The recruitment view answers `none` instead: it is not on the workflow path, and
+     publishing the preparation stage from it would put the CV's position under a panel
+     about the recruiter. That was TrackingPage's own answer before the two views became
+     one screen, and it stays attached to the view rather than to the route. */
+  useWorkflowStage(
+    view === "tracking" ? "none" : detail === undefined ? "unknown" : detail.preparation_state,
+  );
 
   return (
     <Card aria-labelledby="route-heading">
       {/* The persistent shell already names the company and role. This masthead names
-          the view and reports the two axes of the document itself - how far preparation
-          has got, and what the working draft is - without repeating that context.
-
-          The recruitment axis is not among them any more. It is the other view of this
-          Application, reached by the switch below. */}
+          the view and reports the axis that view is about - never both at once: the two
+          are independent, and a card showing them together made every visit start by
+          working out which of the two states in front of the reader it was reporting
+          (product-spec §399). */}
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-cv-border pb-4">
         <div className="min-w-0">
           <PageHeading
-            description={detail === undefined ? "טוען את מצב ההכנה…" : undefined}
+            description={detail === undefined ? "טוען…" : undefined}
             id="route-heading"
           >
-            הכנת קורות החיים
+            {view === "tracking" ? "מעקב גיוס" : "הכנת קורות החיים"}
           </PageHeading>
         </div>
-        {detail === undefined ? null : (
+        {detail === undefined ? null : view === "tracking" ? (
+          <StatusBadge
+            icon={recruitmentStatusIcon(detail.recruitment_status)}
+            tone={recruitmentStatusTone(detail.recruitment_status)}
+          >
+            {recruitmentStatusLabel(detail.recruitment_status)}
+          </StatusBadge>
+        ) : (
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge tone={preparationStateTones[detail.preparation_state]}>
               {preparationStateLabels[detail.preparation_state]}
@@ -211,23 +230,44 @@ export const ApplicationPage = () => {
         )}
       </div>
 
-      <ApplicationViews applicationId={applicationId} current="preparation" />
+      <ApplicationViews
+        current={view}
+        /* `replace` so switching axis does not stack history entries: the two views are
+           one place, and "back" must still mean the list. */
+        onChange={(next) =>
+          setSearchParams(next === "preparation" ? {} : { view: next }, { replace: true })
+        }
+      />
 
       {query.error === null ? null : (
         <ErrorCallout
           className="mt-6"
           error={query.error}
           fallbackDetail="הפנייה לשרת נכשלה. אפשר לרענן את העמוד ולנסות שוב."
-          fallbackTitle="לא ניתן לטעון את מצב ההכנה"
+          fallbackTitle="לא ניתן לטעון את המועמדות"
         />
       )}
 
       {detail === undefined ? (
         query.error === null ? (
-          <p className="mt-6 text-body text-cv-text-muted">טוען את מצב ההכנה…</p>
+          <p className="mt-6 text-body text-cv-text-muted">טוען…</p>
         ) : null
+      ) : view === "tracking" ? (
+        <div
+          aria-labelledby="application-view-tab-tracking"
+          className="mt-5"
+          id="application-view-tracking"
+          role="tabpanel"
+        >
+          <RecruitmentPanel detail={detail} />
+        </div>
       ) : (
-        <div className="mt-5 flex flex-col gap-5">
+        <div
+          aria-labelledby="application-view-tab-preparation"
+          className="mt-5 flex flex-col gap-5"
+          id="application-view-preparation"
+          role="tabpanel"
+        >
           {/* The work itself, not a link to it. */}
           {watched === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={watched} />}
 

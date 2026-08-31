@@ -192,7 +192,6 @@ const renderPage = (aiEnabled = true) => {
         <Routes>
           <Route element={<DraftEditorPage />} path="/applications/:applicationId/draft" />
           <Route element={<h1>מועמדות</h1>} path="/applications/:applicationId" />
-          <Route element={<h1>מצב הפעולה</h1>} path="/operations/:operationId" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -295,10 +294,15 @@ describe("DraftEditorPage", () => {
 
     renderPage();
 
+    /* The projection's reason reaches the screen as its own code, titled from the code
+       rather than by the backend's sentence: the message is written to be complete, and
+       several of them stacked was what made this screen open with a wall of prose. What
+       the test guards is unchanged - the blocker shown is the projection's, not a rule
+       this screen invented. */
+    expect(await screen.findByText("טענה בלי עובדה מאושרת")).toBeInTheDocument();
     expect(
-      await screen.findByText("A claim in the active draft depends on a pending fact."),
-    ).toBeInTheDocument();
-    expect(screen.getByText("נדרשת החלטה לפני אישור הגרסה")).toBeInTheDocument();
+      screen.queryByText("A claim in the active draft depends on a pending fact."),
+    ).toBeNull();
   });
 
   it("says plainly when there is no active draft instead of reading one that does not exist", async () => {

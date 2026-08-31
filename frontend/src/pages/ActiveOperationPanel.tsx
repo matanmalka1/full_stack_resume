@@ -1,5 +1,4 @@
 import { Check } from "lucide-react";
-import { Link } from "react-router-dom";
 
 import type { Operation } from "../api/contracts";
 import { isTerminalOperation } from "../api/operations";
@@ -30,16 +29,20 @@ import {
    live, so nothing new is fetched to show this: the Application screen was holding the
    Operation all along and only linking to it.
 
-   `/operations/:id` stays a route. It is where a direct link, a bookmark, or a reload of
-   a queued operation lands, and it lays out the whole record; this panel is the same
-   Operation reported in place, which is why both read from one vocabulary module. */
+   There is no Operation screen behind this panel any more. It used to link to one for
+   "the full record", but that record was the type, the status, the phase, the message,
+   the failure and its guidance - every one of which is here - plus timestamps and a
+   column of identifiers, and the identifiers are no longer shown anywhere. A link
+   promising more detail that leads to less is worse than no link. */
 export const ActiveOperationPanel = ({
   onQueued,
   operation,
 }: {
   /* Handed down to the retry inside: a re-queued Operation belongs to the same watch the
-     host screen is already keeping, so it is reported here rather than followed. */
-  onQueued?: (operationId: string) => void;
+     host screen is already keeping, so it is reported here rather than followed. Required,
+     because every screen that shows an Operation holds such a watch - a panel with
+     nowhere to report a retry would queue work that nothing then follows. */
+  onQueued: (operationId: string) => void;
   operation: Operation;
 }) => {
   const terminal = isTerminalOperation(operation);
@@ -84,13 +87,7 @@ export const ActiveOperationPanel = ({
           {/* Retry stays reachable - it is the Operation's own action - but at the weight
               of a link rather than a button, because re-running work that succeeded
               supersedes the result the screen is showing. */}
-          <OperationActions collapsed inline onQueued={onQueued} operation={operation} />
-          <Link
-            className="underline underline-offset-4 hover:text-cv-text"
-            to={`/operations/${encodeURIComponent(operation.id)}`}
-          >
-            פרטי הפעולה המלאים
-          </Link>
+          <OperationActions collapsed onQueued={onQueued} operation={operation} />
         </div>
       </section>
     );
@@ -177,16 +174,7 @@ export const ActiveOperationPanel = ({
         {/* Cancel and retry, which are the Operation's own actions and belong wherever it
             is shown. The panel passes no return link: this is the screen the user is
             already on. */}
-        <OperationActions inline onQueued={onQueued} operation={operation} />
-
-        <p className="text-support text-cv-text-muted">
-          <Link
-            className="underline underline-offset-4 hover:text-cv-text"
-            to={`/operations/${encodeURIComponent(operation.id)}`}
-          >
-            פרטי הפעולה המלאים
-          </Link>
-        </p>
+        <OperationActions onQueued={onQueued} operation={operation} />
       </div>
     </section>
   );

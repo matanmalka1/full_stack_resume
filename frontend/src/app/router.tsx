@@ -1,15 +1,13 @@
-import { createBrowserRouter } from "react-router-dom";
+import { Navigate, createBrowserRouter, useParams } from "react-router-dom";
 
 import { App } from "../App";
 import { ApplicationListPage } from "../pages/ApplicationListPage";
 import { ApplicationPage } from "../pages/ApplicationPage";
 import { DraftEditorPage } from "../pages/DraftEditorPage";
 import { NewApplicationPage } from "../pages/NewApplicationPage";
-import { OperationPage } from "../pages/OperationPage";
 import { ReadyPage } from "../pages/ReadyPage";
 import { RoutePlaceholder } from "../pages/RoutePlaceholder";
 import { SettingsPage } from "../pages/SettingsPage";
-import { TrackingPage } from "../pages/TrackingPage";
 import { RouteErrorBoundary } from "./RouteErrorBoundary";
 
 /* The root is the Application list, and intake is a screen reached from it. The two were
@@ -17,8 +15,11 @@ import { RouteErrorBoundary } from "./RouteErrorBoundary";
    started a new Application instead of going home, and a saved one was reachable only by
    its URL or the back button.
 
-   Recruitment tracking is a sixth screen, off the workflow path: it is the Application's
-   other axis, switched to from the preparation view rather than reached through it.
+   Recruitment tracking is not a screen. It is the Application's other axis, and it is a
+   view of the Application screen rather than a route: the two shared the masthead, the
+   projection read, the error handling, and the switch itself, and differed only in which
+   panel sat beneath. `?view=tracking` keeps it reloadable and bookmarkable without
+   keeping a second screen in step with the first.
 
    Five screens carry the workflow: the list, intake, the Application context, the draft
    editor, and Ready.
@@ -30,9 +31,26 @@ import { RouteErrorBoundary } from "./RouteErrorBoundary";
    Application screen, so deciding on a separate route meant showing the subject in one
    place and the controls in another.
 
-   Operation keeps its route. It is not on the workflow path any more - queueing reports
-   in place - but an Operation outlives the screen that queued it, so a direct link, a
-   bookmark, or a reload has somewhere to land. */
+   Operation has no route. Queueing reports in place, so the screen was already off the
+   workflow path; what kept it was the argument that an Operation outlives the screen that
+   queued it and a direct link needs somewhere to land. It lands on the Application
+   instead. The Operation screen's own content was the run's type, status, phase, message
+   and failure - all of which `ActiveOperationPanel` shows on the screen that queued it -
+   plus timestamps and identifiers, which are not shown anywhere now. */
+
+/* `useParams` rather than a splat rewrite: the id is a path segment, and re-encoding it
+   through the router is what keeps an id with a slash or a space landing where it did. */
+const TrackingRedirect = () => {
+  const { applicationId } = useParams();
+
+  return (
+    <Navigate
+      replace
+      to={`/applications/${encodeURIComponent(applicationId ?? "")}?view=tracking`}
+    />
+  );
+};
+
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -56,17 +74,10 @@ export const router = createBrowserRouter([
         element: <ApplicationPage />,
       },
       {
-        /* The recruitment axis of the same Application. It is a second view rather than a
-           panel on the first because the two axes are independent: preparation is about
-           the document, tracking is about the recruiter, and neither state answers the
-           other. Sharing one card made every visit start by working out which of the two
-           the screen was reporting. */
+        /* The recruitment axis used to be a route. Bookmarks and links to it are older
+           than the merge, so the path stays and answers with the view it named. */
         path: "applications/:applicationId/tracking",
-        element: <TrackingPage />,
-      },
-      {
-        path: "operations/:operationId",
-        element: <OperationPage />,
+        element: <TrackingRedirect />,
       },
       {
         /* The draft editor: edit, preview, validate, approve, and render, on the one

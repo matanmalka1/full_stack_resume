@@ -142,7 +142,6 @@ const renderPage = (settings: Settings = deterministicSettings) => {
       <MemoryRouter initialEntries={["/applications/app-1"]}>
         <Routes>
           <Route element={<ApplicationPage />} path="/applications/:applicationId" />
-          <Route element={<h1>מצב הפעולה</h1>} path="/operations/:operationId" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -268,23 +267,37 @@ describe("ApplicationPage", () => {
   });
 
   /* The recruitment axis is a view of its own. Asserted as absence rather than deleted,
-     because re-composing the panel back into this screen is exactly the regression that
-     put two independent state machines in one card (product-spec §399). */
+     because re-composing the panel into the preparation view is exactly the regression
+     that put two independent state machines in one card (product-spec §399).
+
+     It is now a tab on this screen rather than a route of its own, so the assertion is
+     that the preparation view does not render it - not that the screen cannot. */
   it("leaves the recruitment axis to its own view", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail())));
 
     renderPage();
 
     expect(await screen.findByText("ממתין לניתוח המשרה")).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "מעקב גיוס", level: 2 })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "שמירת השלב" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "שמירת הפעולה" })).not.toBeInTheDocument();
     expect(screen.queryByText("ציר הזמן")).not.toBeInTheDocument();
     /* The way to it, though, is on this screen. */
-    expect(screen.getByRole("link", { name: "מעקב גיוס" })).toHaveAttribute(
-      "href",
-      "/applications/app-1/tracking",
-    );
+    expect(screen.getByRole("tab", { name: "מעקב גיוס" })).toBeInTheDocument();
+  });
+
+  /* Switching axis swaps the panel and the badge together. The masthead reporting one
+     axis while the body reports the other is the confusion the two views exist to
+     prevent, so both are asserted in the same act. */
+  it("switches to the recruitment axis without leaving the screen", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail())));
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("tab", { name: "מעקב גיוס" }));
+
+    expect(await screen.findByText("נשמר")).toBeInTheDocument();
+    /* The preparation axis is gone from the masthead, not merely pushed below. */
+    expect(screen.queryByText("ממתין לניתוח המשרה")).not.toBeInTheDocument();
   });
 
   it("analyzes the exact snapshot the projection names and reports the queued Operation", async () => {

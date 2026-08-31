@@ -343,7 +343,7 @@ describe("NewApplicationPage", () => {
     expect(screen.queryByRole("button", { name: "יצירה בכל זאת" })).not.toBeInTheDocument();
   });
 
-  it("shows a refused creation as a blocker with the safe detail and its code", async () => {
+  it("shows a refused creation as a blocker with the server's safe detail", async () => {
     stubFetch({
       [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [] })],
       [CREATE_PATH]: [problemResponse(412, "PRECONDITION_FAILED", "job text is required")],
@@ -355,9 +355,12 @@ describe("NewApplicationPage", () => {
 
     expect(await screen.findByText("job text is required")).toBeInTheDocument();
     expect(screen.getByText("חסימה")).toBeInTheDocument();
-    /* The disclosure names the code and the status together, in one element, so the
-       assertion reads its whole text rather than a node holding only the code. */
-    expect(screen.getByText("PRECONDITION_FAILED · HTTP 412")).toBeInTheDocument();
+    /* The failure code is no longer shown. `detail` is the server's own sentence about
+       the refusal and it is the body of the callout; the code beside it named the same
+       refusal in a vocabulary the reader cannot act on. What this test guards is that a
+       refusal is reported as a blocker carrying the server's safe detail - never the
+       exception text, and never a message this screen invented. */
+    expect(screen.queryByText(/PRECONDITION_FAILED/)).toBeNull();
   });
 
   it("refuses to submit an empty form and never calls the API", async () => {

@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 
 import { ApplicationListPage } from "../pages/ApplicationListPage";
 import { NewApplicationPage } from "../pages/NewApplicationPage";
-import { TrackingPage } from "../pages/TrackingPage";
 import { router } from "./router";
 
 const stageERoute = (path: string) => router.routes[0]?.children?.find((route) => route.path === path);
@@ -25,8 +24,15 @@ describe("Stage E routes", () => {
     expect(stageERoute("approved-revisions/:approvedRevisionId/render")).toBeUndefined();
   });
 
-  it("mounts the recruitment view on its own path", () => {
-    expect(stageEElementType("applications/:applicationId/tracking")).toBe(TrackingPage);
+  /* The recruitment axis is a view of the Application screen, not a route. Asserted as
+     absence for the same reason as the four above: re-adding a screen for it puts the
+     masthead, the projection read, and the error handling back in two places. */
+  it("keeps the recruitment axis off the route table as a screen", () => {
+    const element = stageERoute("applications/:applicationId/tracking")?.element;
+    const name =
+      isValidElement(element) && typeof element.type === "function" ? element.type.name : null;
+    /* The path itself stays - it answers older bookmarks - but only as the redirect. */
+    expect(name).toBe("TrackingRedirect");
   });
 
   it("puts the Application list at the root and intake on its own path", () => {
@@ -35,6 +41,14 @@ describe("Stage E routes", () => {
     expect(stageEElementType("applications/new")).toBe(NewApplicationPage);
   });
 });
+
+/* Route components that are not screens, and so publish no workflow stage.
+
+   A list of deliberate exceptions rather than a filter on the check: a screen that
+   forgets `useWorkflowStage` must fail below, and it only escapes by being named here on
+   purpose. A redirect renders nothing and unmounts immediately, so publishing a stage
+   from one would announce a landmark for a screen the reader never sees. */
+const NON_SCREEN_ROUTE_COMPONENTS = new Set(["TrackingRedirect"]);
 
 /* The pages the route table actually mounts, derived from the table rather than listed
    here. A route added to `router.tsx` joins this set without anyone remembering to
@@ -49,7 +63,9 @@ const routeComponentNames = (): string[] => {
   /* A route whose element is not a named function component is a hole in the derivation,
      not something to pass over quietly. */
   expect(names).not.toContain(null);
-  return [...new Set(names as string[])];
+  return [...new Set(names as string[])].filter(
+    (name) => !NON_SCREEN_ROUTE_COMPONENTS.has(name),
+  );
 };
 
 describe("workflow stage publishing", () => {
