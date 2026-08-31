@@ -48,6 +48,7 @@ const ApplicationContext = ({
 
 export const App = () => {
   const settings = useQuery(settingsQueryOptions).data?.settings;
+  const isApplicationList = useMatch("/") !== null;
   const isDraftEditor = useMatch("/applications/:applicationId/draft") !== null;
   /* On the Application screen itself the context link would point at the page showing it.
      A link back to where you already are is not a way out, so the header states the
@@ -113,7 +114,11 @@ export const App = () => {
         <main
           className={cx(
             "mx-auto w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
-            isDraftEditor ? "max-w-[90rem]" : "max-w-5xl",
+            isDraftEditor
+              ? "max-w-[90rem]"
+              : isApplicationList
+                ? "max-w-7xl"
+                : "max-w-5xl",
           )}
         >
           <Outlet />
