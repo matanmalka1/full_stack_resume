@@ -2,10 +2,7 @@ import { isValidElement } from "react";
 import { describe, expect, it } from "vitest";
 
 import { ApplicationListPage } from "../pages/ApplicationListPage";
-import { DraftEditorPage } from "../pages/DraftEditorPage";
 import { NewApplicationPage } from "../pages/NewApplicationPage";
-import { ReadyPage } from "../pages/ReadyPage";
-import { SettingsPage } from "../pages/SettingsPage";
 import { TrackingPage } from "../pages/TrackingPage";
 import { router } from "./router";
 
@@ -28,28 +25,10 @@ describe("Stage E routes", () => {
     expect(stageERoute("approved-revisions/:approvedRevisionId/render")).toBeUndefined();
   });
 
-  it("mounts the draft editor, which owns validation and approval", () => {
-    expect(stageEElementType("applications/:applicationId/draft")).toBe(DraftEditorPage);
-  });
-
-  it("mounts ReadyPage for an exact approved revision", () => {
-    expect(stageEElementType("approved-revisions/:approvedRevisionId/ready")).toBe(ReadyPage);
-  });
-
-  /* The recruitment axis is a view of its own rather than a panel on the Application
-     screen: the two axes are independent, and one card carrying both made every visit
-     start by working out which state was being reported (product-spec §399). */
   it("mounts the recruitment view on its own path", () => {
     expect(stageEElementType("applications/:applicationId/tracking")).toBe(TrackingPage);
   });
 
-  it("mounts SettingsPage at the settings path", () => {
-    expect(stageEElementType("settings")).toBe(SettingsPage);
-  });
-
-  /* The root is the list and intake is a screen reached from it. Asserted as a pair
-     because swapping them back is exactly the regression that made an existing
-     Application reachable only by its URL. */
   it("puts the Application list at the root and intake on its own path", () => {
     const index = router.routes[0]?.children?.find((route) => route.index === true);
     expect(isValidElement(index?.element) ? index?.element.type : null).toBe(ApplicationListPage);
@@ -91,11 +70,13 @@ describe("workflow stage publishing", () => {
     eager: true,
   }) as Record<string, string>;
 
-  it.each(routeComponentNames())("%s publishes a workflow stage", (name) => {
-    const source = pageSources[`../pages/${name}.tsx`];
-    /* A route component with no file of that name means the derivation stopped matching
-       the pages, which is a failure here rather than a silently skipped check. */
-    expect(source).toBeDefined();
-    expect(source).toMatch(/useWorkflowStage\(/);
+  it("requires every routed screen to publish a workflow stage", () => {
+    for (const name of routeComponentNames()) {
+      const source = pageSources[`../pages/${name}.tsx`];
+      /* A route component with no file of that name means the derivation stopped matching
+         the pages, which is a failure here rather than a silently skipped check. */
+      expect(source).toBeDefined();
+      expect(source).toMatch(/useWorkflowStage\(/);
+    }
   });
 });

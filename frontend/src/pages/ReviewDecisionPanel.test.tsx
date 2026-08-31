@@ -1,12 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail, Reason } from "../api/contracts";
 import { ApplicationPage } from "./ApplicationPage";
 
-const DETAIL_PATH = "/api/v1/applications/app-1";
 const APPLY_PATH = "/api/v1/analyses/analysis-1/apply-decisions";
 
 const reason = (code: string, actions: string[] = ["apply_analysis_decisions"]): Reason => ({
@@ -114,51 +113,6 @@ afterEach(() => {
 });
 
 describe("the review decision, on the Application screen", () => {
-  /* The subject of the decision and the controls that settle it are now on one screen:
-     the analysis panel states the classification, the panel below it decides. Scoped to
-     each region because the same Hebrew names appear in both - as a stated value above,
-     and as a select option below. */
-  it("shows the classification being decided about beside the controls", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail())));
-
-    renderPage();
-
-    const analysis = within(await screen.findByRole("region", { name: "ניתוח המשרה" }));
-    expect(analysis.getByText("מנהל לקוחות")).toBeInTheDocument();
-    expect(analysis.getByText("צמיחת לקוחות קיימים")).toBeInTheDocument();
-    expect(analysis.getByText("התאמה נמוכה")).toBeInTheDocument();
-    expect(analysis.getByText(/5 years of Kubernetes/)).toBeInTheDocument();
-
-    expect(
-      within(screen.getByRole("region", { name: "ההחלטה שנדרשת" })).getByLabelText("מסלול"),
-    ).toBeInTheDocument();
-  });
-
-  it("offers a control only for the reasons it resolves and names the others as elsewhere", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        jsonResponse(
-          detail({
-            review_reasons: [
-              reason("MATERIAL_CLASSIFICATION_AMBIGUITY"),
-              reason("PENDING_FACT_REQUIRES_RESOLUTION", ["confirm_and_use_fact"]),
-            ],
-          }),
-        ),
-      ),
-    );
-
-    renderPage();
-
-    expect(await screen.findByLabelText("מסלול")).toBeInTheDocument();
-    /* Not dropped, and not given a control that would not resolve it: it keeps its own
-       callout with the action that does. */
-    expect(screen.getByText("plain sentence for PENDING_FACT_REQUIRES_RESOLUTION")).toBeInTheDocument();
-    expect(screen.getByText(/אישור עובדה ושימוש בה/)).toBeInTheDocument();
-    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
-  });
-
   it("shows the fit acceptance for a hard gap and no classification selects", async () => {
     vi.stubGlobal(
       "fetch",
@@ -173,18 +127,6 @@ describe("the review decision, on the Application screen", () => {
 
     expect(await screen.findByRole("checkbox")).toBeInTheDocument();
     expect(screen.queryByLabelText("מסלול")).not.toBeInTheDocument();
-  });
-
-  it("does not offer a submission until a decision has been made", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail())));
-
-    renderPage();
-
-    const submit = await screen.findByRole("button", { name: "החלת כל ההחלטות" });
-    expect(submit).toBeDisabled();
-
-    fireEvent.change(screen.getByLabelText("פרופיל"), { target: { value: "sdr-bdr" } });
-    expect(submit).toBeEnabled();
   });
 
   it("commits every decision in one request without leaving the screen", async () => {

@@ -102,15 +102,41 @@ const CompanyMark = ({ company }: { company: string }) => (
   </span>
 );
 
+/* The last column has no heading: it carries one icon control per row, and a word above
+   it would be a label for a button that already states itself through `aria-label`. It is
+   still a column rather than a control tucked into the one beside it, because that is what
+   puts it in the same place on every row. */
+const ARCHIVE_COLUMN = "";
+
 const columns = [
   "חברה ותפקיד",
+  "נוצר",
   "מצב קורות החיים",
   "שלב גיוס",
   "פעילות אחרונה",
   "הפעולה הבאה",
   "אזהרות",
   "פעולה מומלצת",
+  ARCHIVE_COLUMN,
 ];
+
+/* What each column is worth under `table-fixed`, keyed by the header it sits under.
+
+   The two that carry sentences - the company with its role, and the recommended action
+   with its archive control beside it - take the most. The dates and the warnings count are
+   short, fixed-shape values and take the least; giving them an equal share was what left
+   the headings floating over columns far wider than anything in them. */
+const columnWidths: Record<string, string> = {
+  "חברה ותפקיד": "w-[19%]",
+  נוצר: "w-[8%]",
+  "מצב קורות החיים": "w-[18%]",
+  "שלב גיוס": "w-[11%]",
+  "פעילות אחרונה": "w-[9%]",
+  "הפעולה הבאה": "w-[11%]",
+  אזהרות: "w-[7%]",
+  "פעולה מומלצת": "w-[16%]",
+  [ARCHIVE_COLUMN]: "w-[4%]",
+};
 
 /* The Hebrew for the two closed sets the backend defines. Keyed by the generated unions,
    so a filter or ordering added to the query fails the build here instead of reaching the
@@ -225,16 +251,24 @@ const ApplicationRow = ({
             <p className="truncate text-support text-cv-text-muted" dir="auto">
               {item.target_role}
             </p>
-            {/* Shown on exactly the rows that need it. Two Applications for the same
-                opening are identical everywhere else on this screen, and the day each was
-                created is the one thing that tells the reader which is which. */}
-            {ambiguous ? (
-              <p className="truncate text-support text-cv-text-muted">
-                נוצר {formatDate(item.created_at)}
-              </p>
-            ) : null}
           </div>
         </div>
+      </td>
+      {/* The creation date, on every row rather than only the ambiguous ones.
+
+          It used to be a third line inside the company cell, shown just for the rows where
+          two Applications share an opening - which meant the one column already carrying
+          the most text grew taller on exactly the rows that were hardest to tell apart,
+          and the date was absent everywhere the reader might have wanted to sort by it.
+          As a column it is one short value per row, aligned down the board.
+
+          `ambiguous` still marks its rows, but now by emphasis rather than by presence:
+          the date is what distinguishes them, so on those rows it is the row's own text
+          colour instead of the muted one every other row uses. */}
+      <td className="whitespace-nowrap px-4 py-3.5 text-support">
+        <span className={ambiguous ? "font-medium text-cv-text" : "text-cv-text-muted"}>
+          {formatDate(item.created_at)}
+        </span>
       </td>
       <td className="px-4 py-3.5">
         <StatusBadge
@@ -317,8 +351,12 @@ const ApplicationRow = ({
         )}
       </td>
 
-      <td className="px-4 py-3.5">
-        <div className="flex flex-wrap items-center gap-2">
+      {/* The recommended action, alone in its cell and starting at the column's edge like
+          every other value on the board. The labels differ in length - "ניתוח המשרה"
+          against "יצירת קובץ קורות החיים" - so anything but start-alignment gives the
+          column a ragged left edge. */}
+      <td className="whitespace-nowrap px-4 py-3.5">
+        <div className="flex items-center">
           {running !== null ? (
             /* Work in progress outranks the recommended action: the action is what to do
                next, and while an Operation is running the answer is to wait for it. The
@@ -346,21 +384,28 @@ const ApplicationRow = ({
             </Link>
           )}
 
-          {/* Archiving, offered where the reader is deciding which Applications still
-              matter. It is not a delete - the record and every approved revision stay
-              exactly as they are - but it does move the Application off the live board,
-              so it asks first. An already-closed row is not offered it again. */}
-          {closed ? null : (
-            <Button
-              aria-label={`סגירת המועמדות ${item.company}`}
-              className="px-2"
-              onClick={() => onClose(item)}
-              variant="ghost"
-            >
-              <Archive aria-hidden="true" className="size-4" />
-            </Button>
-          )}
         </div>
+      </td>
+
+      {/* Archiving, offered where the reader is deciding which Applications still matter.
+          It is not a delete - the record and every approved revision stay exactly as they
+          are - but it does move the Application off the live board, so it asks first. An
+          already-closed row is not offered it again.
+
+          Its own column, because sharing the action's cell made its position depend on how
+          long that row's action label happened to be, and a control that moves between
+          rows is one the reader has to find again on each of them. */}
+      <td className="px-4 py-3.5">
+        {closed ? null : (
+          <Button
+            aria-label={`סגירת המועמדות ${item.company}`}
+            className="px-2"
+            onClick={() => onClose(item)}
+            variant="ghost"
+          >
+            <Archive aria-hidden="true" className="size-4" />
+          </Button>
+        )}
       </td>
     </tr>
   );
@@ -759,10 +804,28 @@ export const ApplicationListPage = () => {
             </div>
           ) : (
             /* The table scrolls inside its own container rather than widening the page:
-               five columns of Hebrew and dates do not fit a narrow viewport, and a
-               horizontally scrolling body would take the header with it. */
-            <div className="mt-4 overflow-x-auto rounded-surface border border-cv-border bg-cv-surface-raised">
-              <table className="w-full min-w-[64rem] border-collapse text-start">
+               nine columns of Hebrew, dates, and status pills do not fit a narrow
+               viewport, and a horizontally scrolling body would take the header with it.
+
+               The floor is the width below which the columns genuinely stop working, not
+               the width they would like: set above it, the board scrolled sideways on
+               displays that had room for it and truncated the role text while doing so.
+
+               The container is pulled out to the Card's edge. Nested inside the padding it
+               was a bordered surface inset within a bordered surface - two rules and two
+               gutters around one table - and the inset came straight off the width the
+               columns had to share, which is what made them wrap on a display with room
+               to spare. The negative margin is matched to the Card's own padding at each
+               breakpoint, so the board meets the card edge rather than overhanging it. */
+            <div className="-mx-5 mt-4 overflow-x-auto border-y border-cv-border bg-cv-surface-raised sm:-mx-8">
+              {/* `table-fixed` so the columns are laid out by the header row rather than
+                  by whichever row happens to hold the longest company name. With automatic
+                  layout every cell's content bid for width, so a header sat at the start
+                  of a column whose width had been decided by a value three rows down - the
+                  heading and the values under it visibly disagreed about where the column
+                  began. Fixed layout gives each column the share below and keeps the
+                  header over its own values. */}
+              <table className="w-full min-w-[64rem] table-fixed border-collapse text-start">
                 <thead>
                   {/* A tinted band rather than a bare rule. The board is a long list of
                       similar rows, and a header that shares their background stops
@@ -770,7 +833,10 @@ export const ApplicationListPage = () => {
                   <tr className="border-b border-cv-border bg-cv-surface-muted">
                     {columns.map((column) => (
                       <th
-                        className="px-4 py-3 text-start text-support font-semibold text-cv-text-muted"
+                        className={cx(
+                          "px-4 py-3 text-start text-support font-semibold text-cv-text-muted",
+                          columnWidths[column],
+                        )}
                         key={column}
                         scope="col"
                       >

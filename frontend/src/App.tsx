@@ -114,11 +114,11 @@ export const App = () => {
         <main
           className={cx(
             "mx-auto w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
-            isDraftEditor
-              ? "max-w-[90rem]"
-              : isApplicationList
-                ? "max-w-7xl"
-                : "max-w-5xl",
+            /* The two board-shaped screens get the wide measure. The list is eight columns
+               of Hebrew, dates, and status pills - at the document width it was a wide
+               table squeezed into a reading column, scrolling sideways on a display with
+               room to spare. Everything else is a document and keeps the reading measure. */
+            isDraftEditor || isApplicationList ? "max-w-[90rem]" : "max-w-5xl",
           )}
         >
           <Outlet />
