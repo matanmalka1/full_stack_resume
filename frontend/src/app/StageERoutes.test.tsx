@@ -6,6 +6,7 @@ import { DraftEditorPage } from "../pages/DraftEditorPage";
 import { NewApplicationPage } from "../pages/NewApplicationPage";
 import { ReadyPage } from "../pages/ReadyPage";
 import { SettingsPage } from "../pages/SettingsPage";
+import { TrackingPage } from "../pages/TrackingPage";
 import { router } from "./router";
 
 const stageERoute = (path: string) => router.routes[0]?.children?.find((route) => route.path === path);
@@ -33,6 +34,13 @@ describe("Stage E routes", () => {
 
   it("mounts ReadyPage for an exact approved revision", () => {
     expect(stageEElementType("approved-revisions/:approvedRevisionId/ready")).toBe(ReadyPage);
+  });
+
+  /* The recruitment axis is a view of its own rather than a panel on the Application
+     screen: the two axes are independent, and one card carrying both made every visit
+     start by working out which state was being reported (product-spec §399). */
+  it("mounts the recruitment view on its own path", () => {
+    expect(stageEElementType("applications/:applicationId/tracking")).toBe(TrackingPage);
   });
 
   it("mounts SettingsPage at the settings path", () => {

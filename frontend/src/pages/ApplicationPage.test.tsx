@@ -298,7 +298,7 @@ describe("ApplicationPage", () => {
     renderPage();
 
     expect(
-      screen.getByRole("heading", { level: 1, name: "מצב המועמדות" }),
+      screen.getByRole("heading", { level: 1, name: "הכנת קורות החיים" }),
     ).toBeInTheDocument();
     /* The heading is static and appears during loading, so the projected state—not the
        h1—is the synchronization point for assertions about the loaded application. */
@@ -311,50 +311,24 @@ describe("ApplicationPage", () => {
     expect(screen.queryByText("אין טיוטה פעילה")).not.toBeInTheDocument();
   });
 
-  it("renders recruitment choices and correction history from the backend projection", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        jsonResponse(
-          detail({
-            allowed_recruitment_transitions: ["withdrawn", "closed"],
-            recruitment_timeline: [
-              {
-                id: "event-1",
-                item_type: "status_transition",
-                occurred_at: "2026-08-30T09:00:00Z",
-                actor_type: "user",
-                client: "web",
-                from_status: "saved",
-                to_status: "withdrawn",
-                reason: "role changed",
-                metadata: {},
-              },
-              {
-                id: "event-2",
-                item_type: "status_correction",
-                occurred_at: "2026-08-30T10:00:00Z",
-                actor_type: "user",
-                client: "web",
-                from_status: "withdrawn",
-                to_status: "closed",
-                corrects_event_id: "event-1",
-                reason: "wrong application",
-                metadata: {},
-              },
-            ],
-          }),
-        ),
-      ),
-    );
+  /* The recruitment axis is a view of its own. Asserted as absence rather than deleted,
+     because re-composing the panel back into this screen is exactly the regression that
+     put two independent state machines in one card (product-spec §399). */
+  it("leaves the recruitment axis to its own view", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail())));
 
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: "מעקב גיוס" })).toBeInTheDocument();
-    expect(screen.getAllByRole("option", { name: "בוטל" }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("option", { name: "סגור" }).length).toBeGreaterThan(0);
-    expect(screen.getByText(/תוקן ל־סגור/)).toBeInTheDocument();
-    expect(screen.getByText("wrong application")).toBeInTheDocument();
+    expect(await screen.findByText("ממתין לניתוח המשרה")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "מעקב גיוס", level: 2 })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "שמירת השלב" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "שמירת הפעולה" })).not.toBeInTheDocument();
+    expect(screen.queryByText("ציר הזמן")).not.toBeInTheDocument();
+    /* The way to it, though, is on this screen. */
+    expect(screen.getByRole("link", { name: "מעקב גיוס" })).toHaveAttribute(
+      "href",
+      "/applications/app-1/tracking",
+    );
   });
 
   it("reports the draft axis when the stage does not settle it", async () => {

@@ -259,7 +259,7 @@ describe("the review decision, on the Application screen", () => {
 
     expect(await screen.findByText("the submitted decisions change nothing")).toBeInTheDocument();
     /* Still on the screen, with the decision still selected: nothing safe was lost. */
-    expect(screen.getByRole("heading", { level: 1, name: "מצב המועמדות" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "הכנת קורות החיים" })).toBeInTheDocument();
     expect(screen.getByLabelText("מסלול")).toHaveValue("tech-sales");
   });
 

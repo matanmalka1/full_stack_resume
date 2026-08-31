@@ -9,12 +9,16 @@ import { OperationPage } from "../pages/OperationPage";
 import { ReadyPage } from "../pages/ReadyPage";
 import { RoutePlaceholder } from "../pages/RoutePlaceholder";
 import { SettingsPage } from "../pages/SettingsPage";
+import { TrackingPage } from "../pages/TrackingPage";
 import { RouteErrorBoundary } from "./RouteErrorBoundary";
 
 /* The root is the Application list, and intake is a screen reached from it. The two were
    the other way round until the list existed at all: with the form at `/`, the wordmark
    started a new Application instead of going home, and a saved one was reachable only by
    its URL or the back button.
+
+   Recruitment tracking is a sixth screen, off the workflow path: it is the Application's
+   other axis, switched to from the preparation view rather than reached through it.
 
    Five screens carry the workflow: the list, intake, the Application context, the draft
    editor, and Ready.
@@ -50,6 +54,15 @@ export const router = createBrowserRouter([
            stage: analysis is an action on it, not a screen of its own. */
         path: "applications/:applicationId",
         element: <ApplicationPage />,
+      },
+      {
+        /* The recruitment axis of the same Application. It is a second view rather than a
+           panel on the first because the two axes are independent: preparation is about
+           the document, tracking is about the recruiter, and neither state answers the
+           other. Sharing one card made every visit start by working out which of the two
+           the screen was reporting. */
+        path: "applications/:applicationId/tracking",
+        element: <TrackingPage />,
       },
       {
         path: "operations/:operationId",

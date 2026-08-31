@@ -30,7 +30,7 @@ import { type AutoDraftSources, autoDraftSources } from "./autoDraft";
 import { AnalysisPanel, SupersededAnalysisNote } from "./AnalysisPanel";
 import { ReviewDecisionPanel, resolvedByDecisionForm } from "./ReviewDecisionPanel";
 import { ApplicationActions } from "./ApplicationActions";
-import { RecruitmentPanel } from "./RecruitmentPanel";
+import { ApplicationViews } from "./ApplicationViews";
 import { actionDestination } from "./actionDestinations";
 import {
   actionLabel,
@@ -288,14 +288,18 @@ export const ApplicationPage = () => {
   return (
     <Card aria-labelledby="route-heading">
       {/* The persistent shell already names the company and role. This masthead names
-          the page and reports its two state axes without repeating that context. */}
+          the view and reports the two axes of the document itself - how far preparation
+          has got, and what the working draft is - without repeating that context.
+
+          The recruitment axis is not among them any more. It is the other view of this
+          Application, reached by the switch below. */}
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-cv-border pb-4">
         <div className="min-w-0">
           <PageHeading
-            description={detail === undefined ? "טוען את מצב המועמדות…" : undefined}
+            description={detail === undefined ? "טוען את מצב ההכנה…" : undefined}
             id="route-heading"
           >
-            מצב המועמדות
+            הכנת קורות החיים
           </PageHeading>
         </div>
         {detail === undefined ? null : (
@@ -318,25 +322,25 @@ export const ApplicationPage = () => {
         )}
       </div>
 
+      <ApplicationViews applicationId={applicationId} current="preparation" />
+
       {query.error === null ? null : (
         <ErrorCallout
           className="mt-6"
           error={query.error}
           fallbackDetail="הפנייה לשרת נכשלה. אפשר לרענן את העמוד ולנסות שוב."
-          fallbackTitle="לא ניתן לטעון את מצב המועמדות"
+          fallbackTitle="לא ניתן לטעון את מצב ההכנה"
         />
       )}
 
       {detail === undefined ? (
         query.error === null ? (
-          <p className="mt-6 text-body text-cv-text-muted">טוען את מצב המועמדות…</p>
+          <p className="mt-6 text-body text-cv-text-muted">טוען את מצב ההכנה…</p>
         ) : null
       ) : (
         <div className="mt-5 flex flex-col gap-5">
           {/* The work itself, not a link to it. */}
           {watched === undefined ? null : <ActiveOperationPanel operation={watched} />}
-
-          <RecruitmentPanel detail={detail} />
 
           {/* A review reason whose control is the panel below states the requirement and
               stops there: offering a link beside a form that resolves it on this very
