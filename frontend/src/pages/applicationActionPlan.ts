@@ -84,7 +84,7 @@ export const applicationActionPlan = (detail: ApplicationDetail): ApplicationAct
       ? null
       : {
           emphasized: detail.preparation_state === "ready",
-          href: `/approved-revisions/${encodeURIComponent(detail.latest_ready_revision_id)}/ready`,
+          href: `/revisions/${encodeURIComponent(detail.latest_ready_revision_id)}`,
         };
 
   const reviewHandledHere = available("apply_analysis_decisions");

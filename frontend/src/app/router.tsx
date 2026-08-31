@@ -5,7 +5,7 @@ import { ApplicationListPage } from "../pages/ApplicationListPage";
 import { ApplicationPage } from "../pages/ApplicationPage";
 import { DraftEditorPage } from "../pages/DraftEditorPage";
 import { NewApplicationPage } from "../pages/NewApplicationPage";
-import { ReadyPage } from "../pages/ReadyPage";
+import { RevisionPage } from "../pages/RevisionPage";
 import { RoutePlaceholder } from "../pages/RoutePlaceholder";
 import { SettingsPage } from "../pages/SettingsPage";
 import { RouteErrorBoundary } from "./RouteErrorBoundary";
@@ -51,6 +51,12 @@ const TrackingRedirect = () => {
   );
 };
 
+const ReadyRedirect = () => {
+  const { revisionId } = useParams();
+
+  return <Navigate replace to={`/revisions/${encodeURIComponent(revisionId ?? "")}`} />;
+};
+
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -86,8 +92,19 @@ export const router = createBrowserRouter([
         element: <DraftEditorPage />,
       },
       {
-        path: "approved-revisions/:approvedRevisionId/ready",
-        element: <ReadyPage />,
+        /* One approved revision, addressed by the revision itself. It stays a screen of
+           its own rather than a state of the editor because the links that reach it -
+           from the board and from the Application's action plan - name a specific
+           immutable record, and an Application-keyed screen would answer them with
+           whatever revision is current instead of the one named. */
+        path: "revisions/:revisionId",
+        element: <RevisionPage />,
+      },
+      {
+        /* The address this screen had while it was named for the state rather than for
+           the record it shows. */
+        path: "approved-revisions/:revisionId/ready",
+        element: <ReadyRedirect />,
       },
       {
         path: "settings",

@@ -111,7 +111,7 @@ const RecommendedActionCell = ({ item }: { item: ApplicationListItem }) => {
         ) : item.latest_ready_revision_id != null ? (
           <Link
             className={rowActionClasses}
-            to={`/approved-revisions/${encodeURIComponent(item.latest_ready_revision_id)}/ready`}
+            to={`/revisions/${encodeURIComponent(item.latest_ready_revision_id)}`}
           >
             <FileCheck2 aria-hidden="true" className="size-4" />
             הגרסה המוכנה

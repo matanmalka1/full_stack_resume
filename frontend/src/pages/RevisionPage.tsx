@@ -25,15 +25,23 @@ import { ActiveOperationPanel } from "./ActiveOperationPanel";
 import { ValidationReportView } from "./ValidationReportView";
 import { useWatchedOperation } from "./useWatchedOperation";
 
-export const ReadyPage = () => {
-  const { approvedRevisionId } = useParams();
+/* One approved revision: its document, its files, and the record of its submission.
+
+   It is addressed by the revision rather than by the Application, and that is the whole
+   reason it stays a screen of its own rather than becoming a state of the editor. An
+   approved revision is immutable, the list and the action plan both link to a specific
+   one, and `latest_ready_revision_id` can name a revision while a newer draft is already
+   in progress - so a screen keyed by the Application would answer those links with a
+   different record than the one they named. */
+export const RevisionPage = () => {
+  const { revisionId: approvedRevisionId } = useParams();
   const queryClient = useQueryClient();
   const [submissionOpen, setSubmissionOpen] = useState(false);
   const [submittedAt, setSubmittedAt] = useState(() => {
     const now = new Date();
     return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
   });
-  if (approvedRevisionId === undefined) throw new Error("ReadyPage requires approvedRevisionId");
+  if (approvedRevisionId === undefined) throw new Error("RevisionPage requires a revisionId route parameter");
   const revisionQuery = useQuery(approvedRevisionQueryOptions(approvedRevisionId));
   const revision = revisionQuery.data;
   const decisionQuery = useQuery({
@@ -137,8 +145,15 @@ export const ReadyPage = () => {
 
   return (
     <Card aria-labelledby="route-heading">
-      <PageHeading id="route-heading" description="הגרסה המאושרת נשארת זמינה גם כאשר העבודה על המועמדות ממשיכה.">
-        קורות החיים מוכנים
+      {/* The heading follows the revision, not the route. It read "קורות החיים מוכנים"
+          unconditionally, directly above the blocker this screen shows for a revision
+          that is not `ready_qualified` - the masthead asserting the one thing the body
+          was there to deny. */}
+      <PageHeading
+        description="הגרסה המאושרת נשארת זמינה גם כאשר העבודה על המועמדות ממשיכה."
+        id="route-heading"
+      >
+        {revision?.ready_qualified === false ? "גרסה מאושרת" : "קורות החיים מוכנים"}
       </PageHeading>
       <div className="mt-6 flex flex-col gap-6">
         {revisionQuery.error === null && applicationQuery.error === null ? null : (

@@ -10,7 +10,7 @@ import { workingDraftQueryOptions } from "../api/drafts";
 import { DraftApprovalDialog } from "./DraftApprovalDialog";
 import { DraftRenderPanel } from "./DraftRenderPanel";
 import { DraftValidationPanel } from "./DraftValidationPanel";
-import { ReadyPage } from "./ReadyPage";
+import { RevisionPage } from "./RevisionPage";
 import { SettingsPage } from "./SettingsPage";
 
 const json = (value: unknown, status = 200, headers: Record<string, string> = {}) =>
@@ -73,7 +73,6 @@ const renderRoute = (entry: string, path: string, element: ReactElement) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, refetchInterval: false, gcTime: 0 }, mutations: { retry: false } } });
   return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[entry]}><Routes>
     <Route element={element} path={path} />
-    <Route element={<h1>רינדור</h1>} path="/approved-revisions/:approvedRevisionId/render" />
     <Route element={<h1>אימות</h1>} path="/applications/:applicationId/validation" />
   </Routes></MemoryRouter></QueryClientProvider>);
 };
@@ -261,7 +260,7 @@ describe("DraftApprovalDialog", () => {
   });
 });
 
-describe("DraftRenderPanel and ReadyPage", () => {
+describe("DraftRenderPanel and RevisionPage", () => {
   /* Rendering reports the Operation it queued to the screen holding the panel rather
      than navigating to the Operation's own route: the approved draft stays on screen
      while the file is produced. What the panel owes its host is the queued id, so that
@@ -283,7 +282,7 @@ describe("DraftRenderPanel and ReadyPage", () => {
 
   it("frames and downloads the exact Ready artifacts", async () => {
     vi.stubGlobal("fetch", vi.fn((input: string | URL | Request) => Promise.resolve(json(String(input).includes("applications") ? detail({ preparation_state: "ready", latest_ready_revision_id: "revision-1" }) : revision()))));
-    renderRoute("/approved-revisions/revision-1/ready", "/approved-revisions/:approvedRevisionId/ready", <ReadyPage />);
+    renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
     const frame = await screen.findByTitle("תצוגה מאושרת של קורות החיים");
     expect(frame).toHaveAttribute("sandbox", "");
     expect(frame).toHaveAttribute("src", "/api/v1/approved-revisions/revision-1/preview?html_artifact_version_id=html-1");
@@ -314,9 +313,9 @@ describe("DraftRenderPanel and ReadyPage", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     renderRoute(
-      "/approved-revisions/revision-1/ready",
-      "/approved-revisions/:approvedRevisionId/ready",
-      <ReadyPage />,
+      "/revisions/revision-1",
+      "/revisions/:revisionId",
+      <RevisionPage />,
     );
 
     expect(await screen.findByText(/# Why this revision/)).toBeInTheDocument();
@@ -347,9 +346,9 @@ describe("DraftRenderPanel and ReadyPage", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     renderRoute(
-      "/approved-revisions/revision-1/ready",
-      "/approved-revisions/:approvedRevisionId/ready",
-      <ReadyPage />,
+      "/revisions/revision-1",
+      "/revisions/:revisionId",
+      <RevisionPage />,
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "רישום הגשת הגרסה הזו" }));
@@ -378,7 +377,7 @@ describe("DraftRenderPanel and ReadyPage", () => {
           })
         : revision({ job_snapshot_id: "snapshot-1", job_analysis_id: "analysis-1" }),
     ))));
-    renderRoute("/approved-revisions/revision-1/ready", "/approved-revisions/:approvedRevisionId/ready", <ReadyPage />);
+    renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
     expect(await screen.findByText("הגרסה היסטורית בהקשר הפעיל")).toBeInTheDocument();
     expect(screen.getByText(/תצלום משרה ישן יותר/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "הורדת PDF" })).toBeInTheDocument();
@@ -389,7 +388,7 @@ describe("DraftRenderPanel and ReadyPage", () => {
       ? Promise.resolve(json({ ...operation(), id: "op-draft", operation_type: "create_draft" }, 202, { Location: "/api/v1/operations/op-draft" }))
       : Promise.resolve(json(String(input).includes("applications") ? detail({ preparation_state: "ready", working_draft_state: "none" }) : revision())));
     vi.stubGlobal("fetch", fetchMock);
-    renderRoute("/approved-revisions/revision-1/ready", "/approved-revisions/:approvedRevisionId/ready", <ReadyPage />);
+    renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
     const newDraft = await screen.findByRole("button", { name: "יצירת טיוטה חדשה" });
     /* The way back is offered alongside the draft button, not instead of it. It used to
        appear only when the sources were stale - as the fallback for a missing button

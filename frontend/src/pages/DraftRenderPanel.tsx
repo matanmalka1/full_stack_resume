@@ -70,7 +70,7 @@ export const DraftRenderPanel = ({ approvedRevisionId, onQueued }: DraftRenderPa
         {revision?.ready_qualified === true ? (
           <Link
             className={buttonClasses("primary")}
-            to={`/approved-revisions/${encodeURIComponent(revision.id)}/ready`}
+            to={`/revisions/${encodeURIComponent(revision.id)}`}
           >
             צפייה בגרסה המוכנה
           </Link>

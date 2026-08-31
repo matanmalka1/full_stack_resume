@@ -22,6 +22,9 @@ describe("Stage E routes", () => {
     expect(stageERoute("applications/:applicationId/review")).toBeUndefined();
     expect(stageERoute("applications/:applicationId/approval")).toBeUndefined();
     expect(stageERoute("approved-revisions/:approvedRevisionId/render")).toBeUndefined();
+    /* Render is a step of the editor, and the revision it produced is addressed by the
+       revision rather than by a state name. */
+    expect(stageERoute("revisions/:revisionId/render")).toBeUndefined();
   });
 
   /* The recruitment axis is a view of the Application screen, not a route. Asserted as
@@ -48,7 +51,7 @@ describe("Stage E routes", () => {
    forgets `useWorkflowStage` must fail below, and it only escapes by being named here on
    purpose. A redirect renders nothing and unmounts immediately, so publishing a stage
    from one would announce a landmark for a screen the reader never sees. */
-const NON_SCREEN_ROUTE_COMPONENTS = new Set(["TrackingRedirect"]);
+const NON_SCREEN_ROUTE_COMPONENTS = new Set(["TrackingRedirect", "ReadyRedirect"]);
 
 /* The pages the route table actually mounts, derived from the table rather than listed
    here. A route added to `router.tsx` joins this set without anyone remembering to
