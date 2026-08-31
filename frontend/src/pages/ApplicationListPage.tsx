@@ -436,6 +436,10 @@ const PresetChips = ({
   );
 };
 
+/* The toolbar controls are filters, not form fields: shorter and fully rounded so the
+   row reads as a strip of controls above the board rather than as a form to fill in. */
+const toolbarControlClasses = "mt-1 min-h-9 rounded-xl py-1.5";
+
 const ListToolbar = ({
   onChange,
   onSearch,
@@ -462,7 +466,7 @@ const ListToolbar = ({
         {/* The field is uncontrolled by the query on purpose: it holds what is being
             typed, and only the settled value becomes a request. */}
         <TextInput
-          className="ps-8"
+          className={cx(toolbarControlClasses, "ps-8")}
           dir="rtl"
           id="list-search"
           onChange={(event) => onSearch(event.target.value)}
@@ -478,7 +482,7 @@ const ListToolbar = ({
         מועמדויות
       </label>
       <Select
-        className="mt-1"
+        className={toolbarControlClasses}
         id="list-activity"
         onChange={(event) => onChange({ ...query, activity: event.target.value as ActivityFilter })}
         value={query.activity ?? "open"}
@@ -496,7 +500,7 @@ const ListToolbar = ({
         מצב קורות החיים
       </label>
       <Select
-        className="mt-1"
+        className={toolbarControlClasses}
         id="list-stage"
         onChange={(event) =>
           onChange({
@@ -533,7 +537,7 @@ const ListToolbar = ({
         שלב גיוס
       </label>
       <Select
-        className="mt-1"
+        className={toolbarControlClasses}
         id="list-recruitment-status"
         onChange={(event) =>
           onChange({
@@ -561,7 +565,7 @@ const ListToolbar = ({
         סדר
       </label>
       <Select
-        className="mt-1"
+        className={toolbarControlClasses}
         id="list-sort"
         onChange={(event) => onChange({ ...query, sort: event.target.value as ApplicationSort })}
         value={query.sort ?? "updated"}
