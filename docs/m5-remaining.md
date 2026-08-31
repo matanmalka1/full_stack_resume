@@ -1,8 +1,8 @@
-# M5 — remaining work
+# M5 — closure record
 
-Status: **not started.** No browser journey runs against a real backend — that is
-next-wave work, recorded under "Deferred, not in M5" — so the screens this milestone
-adds have to carry more of their own evidence than they otherwise would.
+Status: **closed.** The M5 Web capabilities are implemented and the configured frontend
+and non-browser backend gates pass. A browser journey against a real backend remains
+next-wave work, recorded under "Deferred, not in M5"; it is not part of this closure.
 
 ## Where things are written
 
@@ -10,25 +10,26 @@ One fact, one place.
 
 | Question | Answer lives in |
 | --- | --- |
-| What M5 must still do | **this file** |
+| What M5 delivered and deferred | **this file** |
 | Product semantics and UI scope | `docs/spec/product-spec.md` |
 | State, action, command, and query contracts | `docs/spec/state-and-use-cases.md` |
 | Layer boundaries | `docs/spec/architecture.md` |
 | Required evidence | `docs/spec/test-and-acceptance-plan.md` |
 
-## What already landed
+## What landed
 
 The system is a FastAPI backend and a React frontend, run as two processes over one
 database: `uvicorn cv_engine.runtime.asgi:app` and `python -m cv_engine.worker`. The API
 starts no background work; the worker claims queued Operations under a lease.
 
-What remains is the Web UI for three capabilities the API already serves.
+M5 completed the Web UI for the three capabilities the API already served and added the
+projection fields needed to present recruitment history safely.
 
 | Capability | API | Web |
 | --- | --- | --- |
-| Fact lifecycle | done (`/api/v1/facts`, 10 routes) | **missing** |
-| Recruitment tracking | done (5 routes under `/applications/{id}`) | **missing** |
-| Provenance export | done (`GET /approved-revisions/{id}/decision-markdown`) | **missing** |
+| Fact lifecycle | done (`/api/v1/facts`, 10 routes) | done |
+| Recruitment tracking | done (5 routes under `/applications/{id}`) | done |
+| Provenance export | done (`GET /approved-revisions/{id}/decision-markdown`) | done |
 | Claim editing | done (`PATCH /working-drafts/{id}`) | done |
 
 Maintenance has no separate surface:
@@ -42,53 +43,62 @@ Maintenance has no separate surface:
 
 ## M5 scope
 
-### Current implementation batch — verify before checking off
+### Closure verification
 
-These are intentionally new unchecked tasks. The code exists in the working tree, but
-each item stays open until its focused evidence and the M5 boundary gate pass.
+The implementation and its boundary evidence are complete.
 
-- [ ] Verify the Application-detail recruitment projection: backend-owned direct
+- [x] Verify the Application-detail recruitment projection: backend-owned direct
       transition choices plus one chronological timeline merging status transitions,
       corrections, next-action changes, and internal/external submissions.
-- [ ] Verify the React recruitment flow on the Application and Ready screens: transition,
+- [x] Verify the React recruitment flow on the Application and Ready screens: transition,
       append-only correction, set/clear next action, external submission without invented
       artifact lineage, and internal submission bound to the displayed revision and PDF.
-- [ ] Verify the Application list prioritizes the stored recruitment next action and date
+- [x] Verify the Application list prioritizes the stored recruitment next action and date
       over a preparation-workflow recommendation.
-- [ ] Verify the contextual fact flow in the draft editor: exact claim capture with
+- [x] Verify the contextual fact flow in the draft editor: exact claim capture with
       explicit meaning, tags, and provenance; lifecycle history; explicit confirmation
       and promotion; Profile attachment; and composite confirm-and-use.
-- [ ] Verify claim capture requires provenance at the HTTP contract and that all fact UI
+- [x] Verify claim capture requires provenance at the HTTP contract and that all fact UI
       request types continue to come from the generated OpenAPI contract.
-- [ ] Verify Ready shows and downloads the decision Markdown beside its revision, using
+- [x] Verify Ready shows and downloads the decision Markdown beside its revision, using
       the `Content-Disposition` filename and exposing the content hash only as technical
       evidence.
-- [ ] Verify approval returns `WORKING_PROJECTION_DIVERGED` for an out-of-band working
+- [x] Verify approval returns `WORKING_PROJECTION_DIVERGED` for an out-of-band working
       Markdown edit, preserves the edit, creates no ApprovedRevision, and gives the user
       actionable recovery text in the approval dialog.
-- [ ] Verify the documented development origin exactly matches Vite's configured
+- [x] Verify the documented development origin exactly matches Vite's configured
       `http://localhost:5173` origin, so intake mutations reach the API while foreign
       origins remain forbidden.
-- [ ] Close the relevant gates: frontend typecheck and focused unit tests, focused API
+- [x] Close the relevant gates: frontend typecheck and focused unit tests, focused API
       tests, the deterministic no-AI pipeline, then the full non-browser backend suite.
+
+Gate evidence at closure:
+
+- `npm run typecheck` — passed.
+- `npm run test` — passed.
+- `pytest -q` — **333 passed, 2 deselected** in the configured `not browser` suite. This
+  includes `tests/test_pipeline_end_to_end.py`; the two browser-marked tests are the
+  explicitly deferred browser boundary below.
+- Live origin smoke — the configured Vite origin reached route validation while a foreign
+  origin remained `403 ORIGIN_NOT_ALLOWED`.
 
 ### 1 — Recruitment tracking UI
 
-The Application context screen shows `recruitment_status` read-only today. Tracking is
-five actions, all already served by the API:
+Before M5, the Application context screen showed `recruitment_status` read-only. It now
+supports the five tracking actions already served by the API:
 
-- [ ] Transition status. `applied` is submission-owned and is not offerable: the request
+- [x] Transition status. `applied` is submission-owned and is not offerable: the request
       schema excludes it and the application layer refuses it. Only transitions the
       backend allows may be offered — the graph is narrow, and from `saved` only
       `withdrawn` and `closed` are reachable without a submission.
-- [ ] Correct a recorded status. Requires the corrected event and a reason; a correction
+- [x] Correct a recorded status. Requires the corrected event and a reason; a correction
       appends an event and never edits the one it corrects, so the trail must show both.
-- [ ] Record an internal submission. Requires the exact ApprovedRevision and PDF artifact
+- [x] Record an internal submission. Requires the exact ApprovedRevision and PDF artifact
       IDs. Ready qualification is re-derived at submission time, so a stale or tampered
       revision is refused rather than recorded.
-- [ ] Record an external submission. Invents neither a revision nor an artifact; a field
+- [x] Record an external submission. Invents neither a revision nor an artifact; a field
       that cannot be derived stays null in the UI as well as in the record.
-- [ ] Set and clear the one active next action. Clearing is a real request, distinct from
+- [x] Set and clear the one active next action. Clearing is a real request, distinct from
       not asking about it.
 
 Surfacing the recruitment timeline is part of this: corrections and submissions are only
@@ -99,20 +109,20 @@ meaningful beside the history they amend.
 `docs/spec/product-spec.md` §17 scopes this as a **contextual** flow reached from a draft
 claim, not a general Knowledge Manager — the broader Knowledge UI is deferred (§23).
 
-- [ ] View facts and one fact's lifecycle trail.
-- [ ] Create a pending fact. Identity is generated; the UI must not offer a fact ID.
-- [ ] Capture a fact from an unsupported claim. The claim's exact text becomes the
+- [x] View facts and one fact's lifecycle trail.
+- [x] Create a pending fact. Identity is generated; the UI must not offer a fact ID.
+- [x] Capture a fact from an unsupported claim. The claim's exact text becomes the
       rendering, with no AI rewriting; meaning, tags, and provenance are explicit input.
-- [ ] Confirm, then promote. Explicit confirmation is required for each, and
+- [x] Confirm, then promote. Explicit confirmation is required for each, and
       `pending -> canonical` in one step is refused.
-- [ ] Attach a canonical fact to a Profile section.
-- [ ] `Confirm and use` — one logical command that promotes, attaches, and creates the
-      replacement SelectionPlan, or reports a complete failure. The API composite exists
-      and has no caller yet.
+- [x] Attach a canonical fact to a Profile section.
+- [x] `Confirm and use` — one logical command that promotes, attaches, and creates the
+      replacement SelectionPlan, or reports a complete failure. The contextual draft UI
+      now calls the existing API composite.
 
 ### 3 — Provenance export UI
 
-- [ ] Offer the decision Markdown beside the revision it explains. The response carries
+- [x] Offer the decision Markdown beside the revision it explains. The response carries
       `content` and `content_hash`; the suggested save name arrives in
       `Content-Disposition`, not as a body field.
 
@@ -150,9 +160,28 @@ storage has not imported, because approval rebuilds the projection from the data
 would otherwise destroy that edit without a word. A user who edits `resume.md` by hand
 can only re-apply the change in the editor, or regenerate and discard it.
 
-- [ ] Decide whether the draft editor should surface that refusal as something a user can
-      act on, or whether the projection file should stop being writable in a way that
-      invites hand editing at all.
+- [x] Surface the refusal in the approval dialog with actionable recovery guidance. The
+      projection remains writable, but approval preserves the edit and refuses to create
+      an ApprovedRevision until the user resolves it through the editor and revalidates.
+
+## Implementation commits
+
+- `c00276f` — recruitment history and backend-owned transition projection.
+- `89a1ed2` — fact provenance and diverged-working-draft protection.
+- `bdf65e5` — generated M5 API contract and exposed download header.
+- `e8d593c` — typed fact, tracking, and decision-Markdown transports.
+- `b21c6ce` — recruitment tracking screens and next-action list priority.
+- `58d9b3c` — contextual fact lifecycle and confirm-and-use UI.
+- `c54d32d` — Ready submission, decision Markdown, and approval recovery.
+- `7bd61f3` — local-origin setup and the milestone checklist.
+
+## Control review
+
+No control was retired. The generated OpenAPI guard, exact Origin allowlist, immutable
+payload and approval protections, and deterministic pipeline each protect a distinct
+failure mode; the M5 work exercised the Origin and working-projection guards directly,
+so removing or weakening one at closure would discard active evidence rather than reduce
+redundant process.
 
 ## Deferred, not in M5
 
