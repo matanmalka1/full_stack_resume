@@ -64,7 +64,7 @@ class ApplicationStore(Protocol):
         application_id: str | None = None,
         snapshot_id: str | None = None,
         actor_type: str = ...,
-        client: str = ...,
+        client: str,
     ) -> tuple[str, str]: ...
 
     def get_application(self, application_id: str) -> dict[str, Any]: ...
