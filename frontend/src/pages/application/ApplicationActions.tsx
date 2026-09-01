@@ -344,80 +344,30 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
         <Callout title={`הפעולה המומלצת כעת היא ${actionLabel(plan.unbuiltRecommendation)}`} tone="neutral">
           {plan.unbuiltRecommendation === "create_draft" && plan.draftWouldReplace
             ? "הטיוטה הפעילה נשמרת כפי שהיא. החלפתה דורשת החלטה מפורשת."
-            : "הפעולה אינה זמינה מכאן כרגע."}
+            : "אין לה כרגע מסך שמבצע אותה, ולכן אין לאן להפנות. הפעולות שכן מוצעות למטה הן הדרך להמשיך מכאן."}
         </Callout>
       )}
 
-      {/* Re-analysis destroys nothing: the existing JobAnalysis and any active draft are
-          immutable records that stay exactly as they are. What changes is which analysis
-          is active, so the consequence is stated rather than confirmed away.
+      {/* One line above the bar, and only about the action the bar leads with.
 
-          It is stated where the consequence exists. With no draft to mark stale, the
-          sentence was warning about an effect on a record that is not there - one of three
-          paragraphs of caveat standing between the reader and the button they came to
-          press, and the only one of them attached to the secondary action. */}
-      {plan.analyze?.reanalysis === true && plan.draftWouldReplace ? (
-        <p className="text-support leading-6 text-cv-text-muted">
-          ניתוח מחדש יוצר ניתוח חדש ונפרד לאותו תצלום משרה. הטיוטה הפעילה נשמרת כפי שהיא, אך תסומן כלא מעודכנת מולו.
-        </p>
-      ) : null}
+          What stood here was up to three stacked paragraphs of caveat between the reader
+          and the button they came to press. Every sentence in them is still on the screen;
+          what changed is that only the cost of the offered command is stated before the
+          control, and the explanations of the secondary actions moved below it - they
+          answer "why is that other button here", which is a question asked after the row
+          is seen, not before.
 
-      {/* The sources are named, not resolved: the draft is built from the analysis and
-          the plan the screen is showing, and neither is changed by building from it.
-
-          The clause reassuring the reader that no active draft is being overwritten went
-          with the stage that already says so - an offered `create_draft` requires
-          `working_draft_state` to be `none`, which is the same fact. It returns above,
-          where it stops being true. */}
-      {plan.createDraft === null ? null : (
-        <p className="text-support leading-6 text-cv-text-muted">
-          הטיוטה נוצרת מהניתוח ומתוכנית הבחירה הפעילים של המועמדות. שניהם רשומות שאינן משתנות.
-        </p>
-      )}
-
-      {/* What pressing it actually costs. The button looks instantaneous and is not: the
-          command queues durable work an Operation reports on, and under an AI provider it
-          is a paid model call. Which of the two is stated from the same `provider` value
-          the command is sent with, so the sentence cannot describe a run different from
-          the one the press would start. */}
+          The generate note names its sources and its cost in one sentence. Which cost is
+          read from the same `provider` value the command is sent with, so the sentence
+          cannot describe a run different from the one the press would start. */}
       {plan.createDraft === null || settings === undefined ? null : (
         <p className="text-support leading-6 text-cv-text-muted">
+          הטיוטה נוצרת מהניתוח ומתוכנית הבחירה הפעילים — שתי רשומות שאינן משתנות.{" "}
           {provider === undefined
-            ? "היצירה רצה במסלול הדטרמיניסטי, ללא קריאת AI. העבודה מתבצעת ברקע וההתקדמות מדווחת במסך."
-            : "היצירה כוללת קריאת AI בתשלום. העבודה מתבצעת ברקע וההתקדמות מדווחת במסך."}
+            ? "היצירה רצה במסלול הדטרמיניסטי, ללא קריאת AI, והעבודה מתבצעת ברקע."
+            : "היצירה כוללת קריאת AI בתשלום, והעבודה מתבצעת ברקע."}
         </p>
       )}
-
-      {/* Why a second analysis is on offer at all. The button sat beside "create draft" at
-          equal weight with nothing saying what it is for, and the one sentence that did
-          explain it appeared only when there was an active draft to mark stale - so at the
-          stage where re-analysis is most freely available it was least explained. */}
-      {plan.analyze?.reanalysis === true && !plan.draftWouldReplace ? (
-        <p className="text-support leading-6 text-cv-text-muted">
-          ניתוח מחדש כדאי רק אם הסיווג שלמעלה נראה שגוי. הוא יוצר ניתוח חדש ונפרד לאותו תצלום משרה, ואינו מושך נוסח משרה
-          מעודכן.
-        </p>
-      ) : null}
-
-      {/* Why the two commands are here at all, and what separates them. They appear only
-          beside a stale-draft alert, so the reader has already been told the draft is out
-          of date; what they have not been told is that the two buttons are not variants of
-          one another. */}
-      {plan.replaceDraft === null && plan.archiveDraft === null ? null : (
-        <p className="text-support leading-6 text-cv-text-muted">
-          הטיוטה אינה מעודכנת מול המקורות שלה. אפשר להחליף אותה בטיוטה חדשה שנבנית מהניתוח ומתוכנית הבחירה הפעילים, או
-          להעביר אותה לארכיון — פעולה ששומרת עותק היסטורי ומשאירה את המועמדות בלי טיוטה פעילה.
-        </p>
-      )}
-
-      {/* Why the controls are inert rather than missing. A button that vanishes while work
-          runs reads as a command that is no longer offered; one that is disabled with the
-          reason beside it reads as the same command, later. */}
-      {workInFlight && (plan.replaceDraft !== null || plan.archiveDraft !== null) ? (
-        <p className="text-support leading-6 text-cv-text-muted">
-          פעולה על הטיוטה מתבצעת כעת. החלפה והעברה לארכיון יהיו זמינות שוב כשהיא תסתיים.
-        </p>
-      ) : null}
 
       {inWorkflowOrder.length === 0 ? null : (
         <ActionBar
@@ -430,6 +380,40 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
           secondary={restButtons.length === 0 ? undefined : restButtons}
         />
       )}
+
+      {/* Why the secondary actions are on offer at all, below the row that offers them.
+
+          Re-analysis destroys nothing: the existing JobAnalysis and any active draft are
+          immutable records that stay exactly as they are. What changes is which analysis
+          is active - stated, not confirmed away, and stated differently depending on
+          whether there is a draft for it to mark stale. */}
+      {plan.analyze?.reanalysis !== true ? null : (
+        <p className="text-support leading-6 text-cv-text-muted">
+          {plan.draftWouldReplace
+            ? "ניתוח מחדש יוצר ניתוח חדש ונפרד לאותו תצלום משרה. הטיוטה הפעילה נשמרת כפי שהיא, אך תסומן כלא מעודכנת מולו."
+            : "ניתוח מחדש כדאי רק אם הסיווג שלמעלה נראה שגוי. הוא יוצר ניתוח חדש ונפרד לאותו תצלום משרה, ואינו מושך נוסח משרה מעודכן."}
+        </p>
+      )}
+
+      {/* What separates the two stale-draft commands. They appear only beside a stale-draft
+          alert, so the reader has already been told the draft is out of date; what they
+          have not been told is that the two buttons are not variants of one another. */}
+      {plan.replaceDraft === null && plan.archiveDraft === null ? null : (
+        <p className="text-support leading-6 text-cv-text-muted">
+          החלפה בונה טיוטה חדשה מהניתוח ומתוכנית הבחירה הפעילים. העברה לארכיון שומרת עותק היסטורי ומשאירה את המועמדות
+          בלי טיוטה פעילה.
+        </p>
+      )}
+
+      {/* Why the controls are inert rather than missing. A button that vanishes while work
+          runs reads as a command that is no longer offered; one that is disabled with the
+          reason beside it reads as the same command, later. */}
+      {workInFlight && (plan.replaceDraft !== null || plan.archiveDraft !== null) ? (
+        <p className="text-support leading-6 text-cv-text-muted">
+          פעולה על הטיוטה מתבצעת כעת. החלפה והעברה לארכיון יהיו זמינות שוב כשהיא תסתיים.
+        </p>
+      ) : null}
+
       {/* The Keep decision is asked, not assumed, because it is the only choice here whose
           wrong answer cannot be undone: a replacement without it leaves manual wording with
           no historical copy, and nothing regenerates that. Not dismissible for the same
