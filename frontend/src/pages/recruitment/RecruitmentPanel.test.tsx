@@ -201,7 +201,7 @@ describe("RecruitmentPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "שמירת הפעולה" }));
 
-    expect(await screen.findByText("לא ניתן לעדכן את מעקב הגיוס")).toBeInTheDocument();
+    expect(await screen.findByText("Invalid next action")).toBeInTheDocument();
     expect(screen.getByText("הפעולה השתנתה בשרת. יש לרענן ולנסות שוב.")).toBeInTheDocument();
   });
 
