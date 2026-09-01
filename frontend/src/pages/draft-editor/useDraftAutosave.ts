@@ -4,7 +4,7 @@ import { ApiProblem } from "../../api/client";
 import { type DraftPatch, updateWorkingDraft } from "../../api/drafts";
 import type { ClaimPatch, WorkingDraftUpdate } from "../../api/contracts";
 
-export const AUTOSAVE_DEBOUNCE_MS = 700;
+const AUTOSAVE_DEBOUNCE_MS = 700;
 
 export type AutosaveStatus = "idle" | "saving" | "saved" | "failed" | "conflict";
 

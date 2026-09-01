@@ -33,7 +33,7 @@ import {
    server can refuse it freezes the browser, so the size is checked before the read. */
 export const JOB_TEXT_MAX_BYTES = 1024 * 1024;
 
-export const DUPLICATE_ACKNOWLEDGEMENT_REQUIRED = "DUPLICATE_ACKNOWLEDGEMENT_REQUIRED";
+const DUPLICATE_ACKNOWLEDGEMENT_REQUIRED = "DUPLICATE_ACKNOWLEDGEMENT_REQUIRED";
 
 export const duplicateCheck = async (intake: ApplicationIntake): Promise<DuplicateMatch[]> => {
   const response = await apiRequest<DuplicateCheckResult>("/api/v1/applications/duplicate-check", {
@@ -140,7 +140,7 @@ export interface ApplicationListQuery {
 /* The query is part of the key, so two different questions are two cache entries rather
    than one that overwrites the other. Serialized through the same builder that forms the
    request, so a key can never describe a request that was not sent. */
-export const applicationListQueryKey = (query: ApplicationListQuery = {}) =>
+const applicationListQueryKey = (query: ApplicationListQuery = {}) =>
   ["applications", applicationListSearch(query)] as const;
 
 const applicationsPath: ApiPath = "/api/v1/applications";

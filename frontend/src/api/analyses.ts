@@ -82,7 +82,7 @@ const isEmphasis = memberOf<Emphasis>(emphasisLabels);
 const isLanguage = memberOf<Language>(languageLabels);
 const isFitLevel = memberOf<FitLevel>(fitLabels);
 
-export interface AnalysisGap {
+interface AnalysisGap {
   requirement: string;
   severity: "hard" | "warning";
   reason: string;

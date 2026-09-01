@@ -47,7 +47,7 @@ export type WorkflowStage = PreparationState | "intake" | "none" | "unknown";
 /* `none` never reaches here: the landmark renders no steps at all for it, rather than a
    row of five in which every one is `upcoming`. Every other stage keeps its exact
    behavior. */
-export const workflowStepsFor = (stage: Exclude<WorkflowStage, "none">): WorkflowStep[] => {
+const workflowStepsFor = (stage: Exclude<WorkflowStage, "none">): WorkflowStep[] => {
   const current =
     stage === "intake"
       ? 0

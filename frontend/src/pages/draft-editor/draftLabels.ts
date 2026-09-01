@@ -50,7 +50,7 @@ export const omissionReasonLabels: Record<OmissionReason, string> = {
 /* A.4 frame 3 offers edit / regenerate / remove, and removal is two different commands.
    Which one - or neither - is decided per claim, so the reason a line cannot be removed
    is stated in place instead of a button being offered that would be refused. */
-export type RemovalRoute = "patch" | "selection" | "none";
+type RemovalRoute = "patch" | "selection" | "none";
 
 export interface Removability {
   route: RemovalRoute;

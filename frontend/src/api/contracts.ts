@@ -1,7 +1,5 @@
-import type { components, operations, paths } from "../../../openapi/types";
+import type { components } from "../../../openapi/types";
 
-export type ApiPaths = paths;
-export type ApiOperations = operations;
 export type ApiSchemas = components["schemas"];
 
 export type ApplicationDetail = ApiSchemas["ApplicationDetailResponse"];
@@ -36,13 +34,11 @@ export type WorkingDraft = ApiSchemas["WorkingDraftResponse"];
 export type ValidationRun = ApiSchemas["ValidationRunResponse"];
 export type ValidationRunDetail = ApiSchemas["ValidationRunDetailResponse"];
 export type ValidationReport = ApiSchemas["ValidationReportResponse"];
-export type ValidationIssue = ApiSchemas["ValidationIssueResponse"];
 export type Approval = ApiSchemas["ApprovalResponse"];
 export type ApprovedRevision = ApiSchemas["ApprovedRevisionResponse"];
 export type DecisionMarkdown = ApiSchemas["DecisionMarkdownResponse"];
 export type Settings = ApiSchemas["SettingsResponse"];
 export type UpdateSettingsRequest = ApiSchemas["UpdateSettingsRequest"];
-export type ExecutionMode = Settings["default_execution_mode"];
 export type ReconciliationReport = ApiSchemas["ReconciliationResponse"];
 
 export type ApplicationIntake = ApiSchemas["DuplicateCheckRequest"];
@@ -59,8 +55,6 @@ export type DuplicateMatchReason = DuplicateMatch["matched_on"][number];
 export type PreparationState = ApiSchemas["PreparationState"];
 export type WorkingDraftState = ApiSchemas["WorkingDraftState"];
 export type Reason = ApiSchemas["ReasonResponse"];
-export type Warning = ApiSchemas["WarningResponse"];
-export type BlockedAction = ApiSchemas["BlockedActionResponse"];
 
 export type CreateAnalysisRequest = ApiSchemas["CreateAnalysisRequest"];
 export type GenerateWorkingDraftRequest = ApiSchemas["GenerateWorkingDraftRequest"];
@@ -73,7 +67,6 @@ export type RenderRevisionRequest = ApiSchemas["RenderRevisionRequest"];
    maps keyed by them stay exhaustive and an added Track fails the build. */
 export type ApplyAnalysisDecisionsRequest = ApiSchemas["ApplyAnalysisDecisionsRequest"];
 export type AnalysisDecisions = ApiSchemas["AnalysisDecisionsResponse"];
-export type JobAnalysisRecord = ApiSchemas["JobAnalysisResponse"];
 export type Track = ApiSchemas["Track"];
 export type ProfileName = ApiSchemas["ProfileName"];
 export type Emphasis = ApiSchemas["Emphasis"];
@@ -81,20 +74,16 @@ export type Language = NonNullable<ApplyAnalysisDecisionsRequest["language_overr
 
 /* §14/§20 the WorkingDraft the editor holds. `outline` is the editable structure derived
    from `source` on each read; `source` stays the opaque versioned document, on the same
-   reasoning `JobAnalysisResponse.analysis` does. `ClaimType` and `ClaimStyle` are real
-   unions, so the Hebrew status labels keyed by them stay exhaustive. */
-export type DraftOutline = ApiSchemas["DraftOutlineResponse"];
-export type DraftSection = ApiSchemas["DraftSectionResponse"];
+   reasoning `JobAnalysisResponse.analysis` does. `ClaimType` is a real union,
+   so the Hebrew status labels keyed by it stay exhaustive. */
 export type DraftClaim = ApiSchemas["DraftClaimResponse"];
 export type ClaimType = DraftClaim["claim_type"];
-export type ClaimStyle = DraftClaim["style"];
 
 export type WorkingDraftFacts = ApiSchemas["WorkingDraftFactsResponse"];
 export type DraftFact = ApiSchemas["DraftFactResponse"];
 export type SelectionOutcome = NonNullable<DraftFact["outcome"]>;
 export type OmissionReason = NonNullable<DraftFact["reason"]>;
 
-export type UpdateWorkingDraftRequest = ApiSchemas["UpdateWorkingDraftRequest"];
 export type ClaimPatch = ApiSchemas["ClaimPatchRequest"];
 export type WorkingDraftUpdate = ApiSchemas["WorkingDraftUpdateResponse"];
 
@@ -102,7 +91,6 @@ export type Fact = ApiSchemas["FactResponse"];
 export type FactStatus = ApiSchemas["FactStatus"];
 export type FactList = ApiSchemas["FactListResponse"];
 export type FactDetail = ApiSchemas["FactDetailResponse"];
-export type FactEvent = ApiSchemas["FactEventResponse"];
 export type FactHistory = ApiSchemas["FactHistoryResponse"];
 export type FactMutation = ApiSchemas["FactMutationResponse"];
 export type FactAttachment = ApiSchemas["FactAttachmentResponse"];

@@ -155,7 +155,7 @@ export const recruitmentStatusLabel = (status: string): string =>
     ? recruitmentStatusLabels[status as RecruitmentStatus]
     : status;
 
-export const blockedReasonLabel = (reason: string): string | null =>
+const blockedReasonLabel = (reason: string): string | null =>
   blockedReasonLabels[reason] ?? null;
 
 /* The title a review or staleness reason is shown under, replacing the backend's own
@@ -240,7 +240,7 @@ export const recruitmentStatusOrder: readonly RecruitmentStatus[] = [
 
    Keyed by the generated union, so a status added to the domain fails the build here
    instead of arriving without a face. */
-export const recruitmentStatusTones: Record<RecruitmentStatus, StatusTone> = {
+const recruitmentStatusTones: Record<RecruitmentStatus, StatusTone> = {
   saved: "neutral",
   applied: "progress",
   recruiter_screen: "progress",
@@ -254,7 +254,7 @@ export const recruitmentStatusTones: Record<RecruitmentStatus, StatusTone> = {
   closed: "neutral",
 };
 
-export const recruitmentStatusIcons: Record<RecruitmentStatus, LucideIcon> = {
+const recruitmentStatusIcons: Record<RecruitmentStatus, LucideIcon> = {
   saved: Clock,
   applied: Send,
   recruiter_screen: PhoneCall,

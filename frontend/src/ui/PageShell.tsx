@@ -4,7 +4,7 @@ import { Card } from "./Card";
 import { PageHeading } from "./PageHeading";
 import { cx } from "./cx";
 
-export type PageWidth = "reading" | "editor" | "list";
+type PageWidth = "reading" | "editor" | "list";
 
 const widthClasses: Record<PageWidth, string> = {
   reading: "max-w-5xl",

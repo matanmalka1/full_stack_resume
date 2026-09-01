@@ -81,7 +81,7 @@ const wholeNumber = (value: string | null): number | undefined => {
 
 /* The board opens on live work: a finished process stays stored and reachable through the
    filter, but it is not what the screen is asking about. */
-export const defaultActivity: ActivityFilter = "open";
+const defaultActivity: ActivityFilter = "open";
 
 export const queryFromParams = (params: URLSearchParams): ApplicationListQuery => {
   const stages = params.getAll("stage").flatMap((stage) => {

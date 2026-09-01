@@ -2,7 +2,7 @@ import { type ReactNode, useId } from "react";
 
 import { cx } from "./cx";
 
-export interface FieldControl {
+interface FieldControl {
   "aria-describedby": string | undefined;
   "aria-invalid": boolean | undefined;
   id: string;

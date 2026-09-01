@@ -20,7 +20,7 @@ export const operationQueryKey = (operationId: string) => ["operation", operatio
    far as this screen can tell, so they keep polling. */
 const RETRYABLE_CLIENT_STATUSES = new Set([408, 429]);
 
-export const isPermanentFailure = (error: unknown): boolean => {
+const isPermanentFailure = (error: unknown): boolean => {
   if (!(error instanceof ApiProblem)) {
     return false;
   }

@@ -1,6 +1,6 @@
 import { cx } from "./cx";
 
-export interface ViewSwitchOption<TValue extends string> {
+interface ViewSwitchOption<TValue extends string> {
   label: string;
   value: TValue;
 }

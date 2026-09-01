@@ -12,7 +12,7 @@ import type {
 const draftPath = (workingDraftId: string): ApiPath =>
   `/api/v1/working-drafts/${encodeURIComponent(workingDraftId)}`;
 
-export const validationRunQueryKey = (validationRunId: string) =>
+const validationRunQueryKey = (validationRunId: string) =>
   ["validation-run", validationRunId] as const;
 
 export const validationRunQueryOptions = (validationRunId: string) =>

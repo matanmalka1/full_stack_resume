@@ -1,6 +1,6 @@
 import { cx } from "./cx";
 
-export type WorkflowStepState = "complete" | "current" | "upcoming";
+type WorkflowStepState = "complete" | "current" | "upcoming";
 
 export interface WorkflowStep {
   label: string;

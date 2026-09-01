@@ -12,7 +12,7 @@ import { type QueuedOperation, queuedOperation } from "./operations";
 const revisionPath = (approvedRevisionId: string): ApiPath =>
   `/api/v1/approved-revisions/${encodeURIComponent(approvedRevisionId)}`;
 
-export const approvedRevisionQueryKey = (approvedRevisionId: string) =>
+const approvedRevisionQueryKey = (approvedRevisionId: string) =>
   ["approved-revision", approvedRevisionId] as const;
 
 export const approvedRevisionQueryOptions = (approvedRevisionId: string) =>
@@ -44,7 +44,7 @@ const safeFilename = (contentDisposition: string | null): string => {
   return (candidate ?? "decision.md").split(/[\\/]/).at(-1) || "decision.md";
 };
 
-export const decisionMarkdownQueryKey = (approvedRevisionId: string) =>
+const decisionMarkdownQueryKey = (approvedRevisionId: string) =>
   ["decision-markdown", approvedRevisionId] as const;
 
 export const decisionMarkdownQueryOptions = (

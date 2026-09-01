@@ -86,7 +86,7 @@ export const overrideKeyLabels: Record<string, string> = {
    purpose. A reason this build does not recognise is therefore shown as its raw code
    rather than hidden - the reader learning an unfamiliar token beats being told nothing
    about a gate that is holding their work. */
-export const approvalReasonLabels: Record<string, string> = {
+const approvalReasonLabels: Record<string, string> = {
   "ambiguous-signals": "המשרה נושאת סימנים של יותר ממסלול אחד.",
   "low-confidence": "רמת הביטחון בסיווג נמוכה מהסף.",
   "track-disagreement": "המודל הציע מסלול אחר מזה שהחוקים קבעו.",
