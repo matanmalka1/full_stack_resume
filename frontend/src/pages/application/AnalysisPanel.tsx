@@ -6,6 +6,7 @@ import { Callout } from "../../ui/Callout";
 import { LtrText } from "../../ui/LtrText";
 import { StatusBadge } from "../../ui/StatusBadge";
 import { SummaryList } from "../../ui/SummaryList";
+import { JobTextDisclosure } from "./JobTextDisclosure";
 import {
   approvalReasonLabel,
   classificationItems,
@@ -207,6 +208,13 @@ export const AnalysisPanel = ({
             </ul>
           </Section>
         )}
+
+        {/* The text the classification was drawn from, under the classification itself.
+            Everything above is conclusion; without the posting on the same screen the
+            only way to check a verdict against its source was to leave the screen the
+            decision is taken on. Collapsed, because it is the source and not the
+            finding. */}
+        <JobTextDisclosure detail={detail} summary="הצגת נוסח המשרה שנותח" />
       </div>
     </section>
   );

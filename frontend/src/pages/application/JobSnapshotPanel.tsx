@@ -2,16 +2,16 @@ import { ExternalLink } from "lucide-react";
 
 import type { ApplicationDetail } from "../../api/contracts";
 import { LtrText } from "../../ui/LtrText";
-import { Disclosure } from "../../ui/Disclosure";
 import { SummaryList } from "../../ui/SummaryList";
 import { formatDateTime } from "../../ui/formatDateTime";
 import { JobPostingUpdate } from "./JobPostingUpdate";
+import { JobTextDisclosure } from "./JobTextDisclosure";
 
 /* The active posting on Job Detail. The projection already carries `latest_snapshot`, so
    the source remains readable before analysis and after the preparation workflow ends.
 
-   It stays collapsed. A posting is long, it is input rather than conclusion, and the
-   analysis above is what the reader came for; opening it is a deliberate act of checking.
+   The posting text itself is `JobTextDisclosure`, shared with the preparation screen so
+   the same source reads the same way under both conclusions.
 
    `latest_snapshot` is the newest immutable snapshot of the Application. */
 const sourceHostname = (value: string): string => {
@@ -24,7 +24,6 @@ const sourceHostname = (value: string): string => {
 
 export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
   const snapshot = detail.latest_snapshot;
-  const jobText = typeof snapshot.job_text === "string" ? snapshot.job_text.trim() : "";
 
   return (
     <section aria-labelledby="job-snapshot-heading">
@@ -65,25 +64,7 @@ export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
           ]}
         />
 
-        {jobText === "" ? (
-          <p className="text-support leading-6 text-cv-text-muted">תצלום המשרה לא כולל טקסט שמור.</p>
-        ) : (
-          <Disclosure summary="הצגת נוסח המשרה שנותח">
-            {/* Backend-stored source text, in whatever language the posting was written
-                in: it picks its own direction, and `whitespace-pre-wrap` keeps the
-                posting's own line breaks rather than reflowing it into one block.
-
-                Capped and scrollable - a full posting is longer than the analysis above
-                it, and left unbounded it would push every action on this screen off the
-                fold the moment the section is opened. */}
-            <p
-              className="max-h-96 overflow-y-auto whitespace-pre-wrap rounded-control bg-cv-surface-muted p-3 leading-6 text-cv-text"
-              dir="auto"
-            >
-              {jobText}
-            </p>
-          </Disclosure>
-        )}
+        <JobTextDisclosure detail={detail} summary="הצגת נוסח המשרה השמור" />
 
         <JobPostingUpdate detail={detail} />
       </div>
