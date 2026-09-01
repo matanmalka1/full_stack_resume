@@ -27,7 +27,8 @@ from helpers import (
 )
 from seed import V2_IDENTITY_FACT, write_canonical_sources
 from sqlalchemy import text
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Engine, make_url
+from sqlalchemy.exc import OperationalError
 
 import cv_engine
 from cv_engine.api.app import API_PREFIX, create_app
@@ -217,9 +218,50 @@ def app_paths(project_root: Path) -> AppPaths:
     return AppPaths.from_root(project_root)
 
 
+#: The suffix that marks a database as the suite's own. Test-plan 2.3 requires an
+#: isolated database, and every fixture here TRUNCATEs the whole schema, so a URL
+#: that is not marked is refused rather than emptied.
+TEST_DATABASE_SUFFIX = "_test"
+
+
+def _isolated_database_url(configured: str) -> str:
+    """Derive the suite's database from the configured one, never reusing it.
+
+    The suite used to read `database_url` straight from the config contract, so
+    with nothing set it ran against the runtime default (`.../cv`) - the
+    developer's own database - and `isolated_database` TRUNCATEs at setup while
+    leaving the last test's rows behind. That is how ten `artifact_versions`
+    rows pointing into a deleted pytest tmp root ended up in a running system,
+    where reconcile correctly reported ten missing payloads.
+
+    Deriving the name means the default is safe with nothing configured;
+    `CV_TEST_DATABASE_URL` overrides it, and an override that names the
+    configured runtime database is refused instead of honoured.
+    """
+    url = make_url(configured)
+    override = os.environ.get("CV_TEST_DATABASE_URL")
+    if override:
+        candidate = make_url(override)
+        if (candidate.host, candidate.port, candidate.database) == (
+            url.host,
+            url.port,
+            url.database,
+        ):
+            raise RuntimeError(
+                "CV_TEST_DATABASE_URL names the configured runtime database "
+                f"({url.database!r}); the suite truncates every table, so it "
+                "must point at a separate database"
+            )
+        return candidate.render_as_string(hide_password=False)
+    name = url.database or ""
+    if not name.endswith(TEST_DATABASE_SUFFIX):
+        name = f"{name}{TEST_DATABASE_SUFFIX}"
+    return url.set(database=name).render_as_string(hide_password=False)
+
+
 @pytest.fixture(scope="session")
 def database_url() -> str:
-    return str(resolve_config(env=os.environ).get("database_url"))
+    return _isolated_database_url(str(resolve_config(env=os.environ).get("database_url")))
 
 
 def alembic_head() -> str:
@@ -242,11 +284,24 @@ def alembic_head() -> str:
 def database_engine(database_url: str) -> Iterator[Engine]:
     engine = create_database_engine(database_url)
     head = alembic_head()
-    if current_database_revision(engine) != head:
+    try:
+        revision = current_database_revision(engine)
+    except OperationalError as error:
         engine.dispose()
         raise RuntimeError(
-            f"test database is not at Alembic revision {head}; run "
-            "'./.venv/bin/alembic upgrade head' first"
+            f"the isolated test database {engine.url.database!r} is unreachable; "
+            "create it once with "
+            f"'docker compose exec postgres createdb -U cv {engine.url.database}' "
+            "and migrate it with "
+            f"'CV_DATABASE_URL={engine.url.render_as_string(hide_password=False)} "
+            "./.venv/bin/alembic upgrade head'"
+        ) from error
+    if revision != head:
+        engine.dispose()
+        raise RuntimeError(
+            f"test database {engine.url.database!r} is not at Alembic revision {head}; run "
+            f"'CV_DATABASE_URL={engine.url.render_as_string(hide_password=False)} "
+            "./.venv/bin/alembic upgrade head' first"
         )
     yield engine
     engine.dispose()

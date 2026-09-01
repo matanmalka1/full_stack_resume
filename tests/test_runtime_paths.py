@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+from conftest import _isolated_database_url
 
 from cv_engine.runtime.config import CONFIG_NAME, ConfigError, parse_env_file, resolve_config
 from cv_engine.runtime.paths import AppPaths, PathConfigurationError
@@ -75,3 +76,26 @@ def test_env_file_precedence_secrets_and_parsing(tmp_path: Path) -> None:
         "A": "1",
         "B": "two",
     }
+
+
+def test_the_suite_never_runs_against_the_configured_runtime_database(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The guard that keeps a test run out of the developer's own database.
+
+    Every fixture TRUNCATEs the whole schema, so reading the configured URL
+    directly meant a run emptied the running system and left its last test's
+    rows behind - orphan `artifact_versions` pointing into a deleted tmp root.
+    """
+    configured = "postgresql+psycopg://cv:cv@127.0.0.1:5433/cv"
+
+    monkeypatch.delenv("CV_TEST_DATABASE_URL", raising=False)
+    assert _isolated_database_url(configured).endswith("/cv_test")
+    assert _isolated_database_url(configured + "_test").endswith("/cv_test")
+
+    monkeypatch.setenv("CV_TEST_DATABASE_URL", "postgresql+psycopg://cv:cv@127.0.0.1:5433/other")
+    assert _isolated_database_url(configured).endswith("/other")
+
+    monkeypatch.setenv("CV_TEST_DATABASE_URL", configured)
+    with pytest.raises(RuntimeError, match="configured runtime database"):
+        _isolated_database_url(configured)

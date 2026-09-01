@@ -219,6 +219,16 @@ state-changing request from the app's own UI.
 
 ## Tests
 
+The suite truncates every table on each test, so it never runs against the configured
+runtime database. It derives its own by appending `_test` to that database's name
+(`cv` becomes `cv_test`); `CV_TEST_DATABASE_URL` overrides the derived URL and is
+refused if it names the runtime database. Create and migrate it once:
+
+```bash
+docker compose exec postgres createdb -U cv cv_test
+CV_DATABASE_URL=postgresql+psycopg://cv:cv@127.0.0.1:5433/cv_test ./.venv/bin/alembic upgrade head
+```
+
 The default run is the fast, non-browser suite:
 
 ```bash
