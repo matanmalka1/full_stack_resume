@@ -64,8 +64,8 @@ migration risk, or weakened factual boundary requires an explicit decision.
 > A single candidate can create a job application, analyze the job, resolve only the
 > decisions that require human judgment, produce and edit a fact-linked CV, validate and
 > explicitly approve one exact revision, render a valid and ATS-readable PDF, understand
-> every blocker and available action, and track the recruitment process through either
-> Web clients backed by one application layer.
+> every blocker and available action, and track the recruitment process through the
+> Web client backed by one application layer.
 
 The Web UI makes the v1 engine accessible; it does not replace its safety model. A
 normal Web workflow must not require the user to know entity IDs, hashes, filesystem
@@ -529,12 +529,15 @@ The configured object store holds immutable payloads under the same storage-neut
 snapshots/{application_id}/{snapshot_id}.txt
 revisions/{application_id}/{revision_id}/resume.json
 revisions/{application_id}/{revision_id}/resume.md
+drafts/{application_id}/{working_draft_id}-v{edit_version}.json
 outputs/{application_id}/{revision_id}/{artifact_id}.html
 outputs/{application_id}/{revision_id}/{artifact_id}.pdf
+outputs/{application_id}/{revision_id}/{artifact_id}.png
+provider/{application_id}/{operation_id}/{artifact_id}.json
+manifests/{manifest_id}.json
 ```
 
-Screenshots, manifests, sanitized provider responses, and other immutable payloads use
-the same ID-based policy. `LocalObjectStore` maps keys below `artifacts_root`;
+`LocalObjectStore` maps keys below `artifacts_root`;
 `S3ObjectStore` maps the same keys below the configured bucket/prefix. Database rows keep
 the same project-relative references under either backend. Friendly filenames exist
 only at export/download. Storage keys and local paths are never API inputs and are

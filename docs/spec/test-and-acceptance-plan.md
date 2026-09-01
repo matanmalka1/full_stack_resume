@@ -371,8 +371,9 @@ preview direction.
 
 Browser coverage:
 
-- latest Chrome/Chromium: the only browser support is claimed for
-- Playwright-managed Chromium: the PDF rendering engine, never a UI target
+- Playwright's Chromium project: automated frontend browser checks
+- Playwright-managed Chromium: the PDF rendering engine
+- current Chrome/Chromium: the only browser family claimed for normal use
 
 Linux/Chromium CI is normal automation. Before release, run the relevant suite and
 runtime checks on macOS.

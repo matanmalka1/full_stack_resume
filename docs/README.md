@@ -14,7 +14,7 @@ Binding on what the product does. Changes by an approved decision.
 ## State and process
 
 - `screen-flow.md` — הסבר פשוט בעברית על זרימת כל המסכים והמקרים בממשק.
-- `m5-remaining.md` — what is done, what remains, what is blocked.
+- `m5-remaining.md` — M5 closure status and only the work explicitly carried forward.
 - `process/execution-protocol.md` — how work is split across parallel agents.
 
 ## Baseline

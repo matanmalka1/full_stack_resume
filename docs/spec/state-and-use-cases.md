@@ -364,7 +364,7 @@ There is no hard-delete command in the Web UI.
 
 ## 13. Analysis commands
 
-### `analyze_job(application_id, job_snapshot_id, mode, ...)`
+### `analyze_job(application_id, job_snapshot_id, provider, ...)`
 
 Asynchronous and idempotent. It runs deterministic analysis and, in AI mode, a
 `propose_job_analysis` task. It validates and merges the Proposal without allowing it to
@@ -402,7 +402,7 @@ plan. No provider call occurs inside a synchronous HTTP request.
 
 ## 14. Draft commands
 
-### `create_draft(application_id, analysis_id, selection_plan_id, mode)`
+### `create_draft(application_id, job_analysis_id, selection_plan_id, provider)`
 
 Asynchronous and idempotent for generation. The deterministic path constructs the v1
 compatible DraftDocument. AI mode uses `draft_resume` Proposal and semantic validation.
@@ -447,7 +447,7 @@ before the replacement is successful.
 
 ## 15. Validation and approval commands
 
-### `validate_draft(working_draft_id, expected_version)`
+### `validate_draft(working_draft_id, expected_edit_version)`
 
 Synchronous for deterministic pre-approval validation. It always creates immutable
 ValidationRun when validation executed, including `passed=false`. Validator execution
@@ -463,7 +463,7 @@ Validation records:
 - validator versions
 - issues/groups/evidence
 
-### `approve_draft(working_draft_id, expected_version, validation_run_id)`
+### `approve_draft(working_draft_id, expected_edit_version, validation_run_id)`
 
 Synchronous and idempotent. It requires:
 
@@ -508,7 +508,7 @@ needed for the ApprovedRevision to project `ready_qualified`; it projects active
 only when its JobSnapshot + JobAnalysis are compatible. It does not create a
 ReadyRevision row.
 
-### `export_recruiter_pdf(approved_revision_id, pdf_artifact_id)`
+### `export_recruiter_pdf(approved_revision_id, pdf_artifact_version_id)`
 
 Synchronous read/export. It verifies registration, hash, `ready_qualified`, and path
 containment before returning a friendly Content-Disposition filename. Active-context
@@ -655,23 +655,39 @@ rows or local paths.
 
 ## 21. HTTP mapping baseline
 
-Representative endpoints:
+Implemented endpoints relevant to the documented use-cases:
 
 ```text
+GET    /api/v1/health
 POST   /api/v1/applications
+GET    /api/v1/applications
 POST   /api/v1/applications/duplicate-check
+GET    /api/v1/applications/{id}
 POST   /api/v1/applications/{id}/job-snapshots
 POST   /api/v1/applications/{id}/analyses
+GET    /api/v1/applications/{id}/artifacts
+GET    /api/v1/applications/{id}/decision
+POST   /api/v1/applications/{id}/close
 POST   /api/v1/analyses/{id}/apply-decisions
 POST   /api/v1/analyses/{id}/selection-plans
 POST   /api/v1/applications/{id}/working-draft/generate
+POST   /api/v1/applications/{id}/working-draft/replace
 GET    /api/v1/working-drafts/{id}
+GET    /api/v1/working-drafts/{id}/facts
+GET    /api/v1/working-drafts/{id}/preview
 PATCH  /api/v1/working-drafts/{id}
+POST   /api/v1/working-drafts/{id}/apply-selection-change
 POST   /api/v1/working-drafts/{id}/validate
 POST   /api/v1/working-drafts/{id}/approve
 POST   /api/v1/working-drafts/{id}/regenerate-section
 POST   /api/v1/working-drafts/{id}/regenerate-claim
+POST   /api/v1/working-drafts/{id}/archive
+GET    /api/v1/validation-runs/{id}
+GET    /api/v1/approved-revisions/{id}
+GET    /api/v1/approved-revisions/{id}/preview
 POST   /api/v1/approved-revisions/{id}/render
+GET    /api/v1/approved-revisions/{id}/recruiter-pdf
+GET    /api/v1/approved-revisions/{id}/decision-markdown
 GET    /api/v1/artifacts/{id}
 GET    /api/v1/artifacts/{id}/download
 GET    /api/v1/operations/{id}
@@ -679,12 +695,23 @@ POST   /api/v1/operations/{id}/cancel
 POST   /api/v1/operations/{id}/retry
 POST   /api/v1/applications/{id}/submissions
 POST   /api/v1/applications/{id}/external-submissions
-POST   /api/v1/applications/{id}/recruitment-transitions
-POST   /api/v1/applications/{id}/recruitment-corrections
+POST   /api/v1/applications/{id}/status
+POST   /api/v1/applications/{id}/status-corrections
+PATCH  /api/v1/applications/{id}/next-action
+GET    /api/v1/facts
+POST   /api/v1/facts
+POST   /api/v1/facts/from-claim
+GET    /api/v1/facts/history
+GET    /api/v1/facts/{id}
+GET    /api/v1/facts/{id}/history
+POST   /api/v1/facts/{id}/confirm
+POST   /api/v1/facts/{id}/promote
+POST   /api/v1/facts/{id}/attachments
+POST   /api/v1/facts/{id}/confirm-and-use
+GET    /api/v1/settings
+PATCH  /api/v1/settings
+POST   /api/v1/maintenance/reconciliations
 ```
-
-Final path names remain an internal design choice if resource identity, explicit source
-IDs, and use-case semantics do not change.
 
 `POST /analyses/{id}/selection-plans` returns `201` for deterministic mode and `202`
 plus `Location` for AI proposal mode.

@@ -7,19 +7,16 @@ How coding agents work in this repository. This is the whole rule set.
 A single-candidate CV tailoring tool. One user, no auth, one candidate. The database
 starts empty. `base/` and `profiles/` hold the live source facts.
 
-Persistence is PostgreSQL via SQLAlchemy, with Alembic migrations. Immutable payloads sit
-behind an object-storage abstraction: local by default, optionally an S3-compatible
-bucket. The deterministic workflow reaches Ready with nothing configured, no cloud SDK,
-and no AI key.
-
 Almost everything the engine produces is regenerable in seconds — drafts, selections,
 renders, projections. Getting one wrong costs a re-run. Calibrate effort to that.
 
 One thing is not regenerable, and that is where care belongs:
 
-**Immutable records already written** — approved revisions, submitted artifacts, job
-snapshots of postings that later vanish from the web. Overwriting one destroys evidence
-nothing else can reproduce.
+**Immutable records already written** — approved and submitted CV, HTML, PDF, job
+snapshot, and application records. A job snapshot preserves a posting that later vanishes
+from the web. Never overwrite or relocate one; overwriting destroys evidence nothing else
+can reproduce. Never invent a value a record never carried — a field that cannot be
+derived stays NULL.
 
 ## Specifications
 
@@ -51,29 +48,22 @@ Three things earn more than that, and only these:
   browser suite.
 - **A change to a stored value's meaning, a public signature, or a projection field**
   also needs the deterministic no-AI pipeline test against a fresh PostgreSQL database
-  (`tests/test_pipeline_end_to_end.py`).
+  (`tests/test_pipeline_end_to_end.py`) — `ingest → analyze → draft → validate → approve
+  → render → ready → reconcile`, `OPENAI_API_KEY` unset. It drives the application
+  services directly, so it proves the engine works rather than that one client knows how
+  to call it.
 
 While iterating, hand over only the focused commands. Hand over the boundary's full gate
 once, when the work closes, ordered, with what each command proves. A gate that already
 passed under the same conditions is not fresh evidence — check the diff and the test count
 against its baseline before asking for a re-run.
 
-## What actually catches defects
+Golden hashes must not move unless output was meant to change. Records that must never
+be rewritten are protected by immutability triggers, not by convention.
 
-Cheap, and each has caught a real bug here. Prefer these over process:
-
-- **Run the deterministic pipeline end to end** — `ingest → analyze → draft → validate
-  → approve → render → ready → reconcile`, `OPENAI_API_KEY` unset, fresh database. It
-  drives the application services directly, so it proves the engine works rather than
-  that one client knows how to call it. This found approval silently destroying
-  unimported manual edits.
-- **Golden hashes** — they must not move unless output was meant to change.
-- **Immutability triggers** on records that must never be rewritten.
-- **Derived guards.** Derive a check from the code or schema rather than maintaining a
-  list by hand. Where a guard needs a list, make it a list of deliberate exceptions, so
-  forgetting to register something fails instead of passing.
-- **Asking what a passing test actually proves.** A golden test was proving parity for a
-  code path production no longer took.
+**Derived guards.** Derive a check from the code or schema rather than maintaining a list
+by hand. Where a guard needs a list, make it a list of deliberate exceptions, so
+forgetting to register something fails instead of passing.
 
 Add regression coverage for a material bug only when existing coverage would miss it.
 Extend the closest test rather than adding another.
@@ -94,17 +84,10 @@ Report what passed, what failed, and what remains. Never claim completion with
   validation stay authoritative.
 - Preserve canonical job titles, dates, metrics, uncertainty, and source provenance.
 
-## Immutable records
-
-- Approved and submitted CV, HTML, PDF, job snapshot, and application records are
-  immutable. Never overwrite or relocate one.
-- Never invent a value a record never carried. A field that cannot be derived stays NULL.
-
 ## Working rules
 
-- Proceed by default. Stop only for a blocker, an unresolved specification conflict, a
-  required semantic deviation, or material data-loss risk. Explain the issue and its
-  consequences before asking.
+- Stop for a blocker, an unresolved specification conflict, a required semantic
+  deviation, or material data-loss risk. Explain the issue and its consequences first.
 - Internal implementation details may change freely when observable behavior, safety, and
   product semantics stay the same.
 - Do not silently change workflow, validation behavior, fact semantics, application
@@ -125,16 +108,11 @@ Report what passed, what failed, and what remains. Never claim completion with
 - Do not edit generated HTML by hand; fix the source, template, renderer, or rules.
 - Add a dependency only when it enforces a contract, reduces rendering risk, or gives a
   concrete portability benefit. The baseline is `docs/spec/architecture.md` section 2.
-- Preserve unrelated user changes in a dirty worktree. One agent at a time per worktree.
-- Small, intentional commits. Decisions and their reasoning go in the commit message.
-- Never use destructive Git or filesystem operations to simplify cleanup.
+- One agent at a time per worktree.
 
 ## Keeping this file small
 
-Every rule here was added because something went wrong once. Nothing removes them, so
-without a counterweight this file only grows and the process drifts toward treating every
-change as a release.
-
-The counterweight: when closing a milestone, name one control that was retired, or state
-that none was retirable and why. A guard that has never fired since it was added is a
-candidate for merging into a derived check.
+Every rule here was added because something went wrong once, so without a counterweight
+this file only grows. The counterweight: when closing a milestone, name one control that
+was retired, or state that none was retirable and why. A guard that has never fired since
+it was added is a candidate for merging into a derived check.

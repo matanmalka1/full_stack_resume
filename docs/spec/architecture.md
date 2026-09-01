@@ -78,7 +78,7 @@ not part of the product.
 
 ## 3. Source organization
 
-The target top-level organization is:
+The top-level package organization is:
 
 ```text
 cv_engine/
@@ -168,7 +168,7 @@ refers to it.
 
 ### 3.5 Runtime and composition
 
-`runtime/composition.py` is the manual composition root. It builds fixed application paths,
+`cv_engine/runtime/composition.py` is the manual composition root. It builds fixed application paths,
 configuration, repositories, UnitOfWork factory, services, provider, renderer,
 operation worker, and API dependencies. No DI framework is used.
 
@@ -268,23 +268,27 @@ The key layout is the same either way:
   snapshots/{application_id}/{snapshot_id}.txt
   revisions/{application_id}/{revision_id}/resume.json
   revisions/{application_id}/{revision_id}/resume.md
+  drafts/{application_id}/{working_draft_id}-v{edit_version}.json
   outputs/{application_id}/{revision_id}/{artifact_id}.html
   outputs/{application_id}/{revision_id}/{artifact_id}.pdf
   outputs/{application_id}/{revision_id}/{artifact_id}.png
   provider/{application_id}/{operation_id}/{artifact_id}.json
+  manifests/{manifest_id}.json
 ```
 
-**References are storage-neutral and their format is frozen.** `artifact_versions`
-stores a project-relative string (`artifacts/snapshots/{app}/{id}.txt`); an object key
-is the same string without the `artifacts/` prefix. A row is identical under either
-backend, so storage can change without rewriting database rows.
+**References are storage-neutral and their format is frozen.** PostgreSQL path fields,
+including `job_snapshots.payload_path`, the ApprovedRevision resume paths, and
+`artifact_versions.path`, store project-relative strings such as
+`artifacts/snapshots/{app}/{id}.txt`; an object key is the same string without the
+`artifacts/` prefix. A row is identical under either backend, so storage can change
+without rewriting database rows.
 
 Key validation is shared by both implementations rather than delegated to each. A
 crafted key - traversal, absolute, empty segment, backslash, drive prefix - is refused
 identically, because a payload's address must not depend on which backend is
 configured. "S3 has no `..`" is not a reason to skip the check.
 
-Three things stay on the local filesystem by decision: the mutable `working/` draft,
+Three things stay on the local filesystem by decision: the mutable `artifacts/working/` draft,
 which is rewritten on every autosave and is not an immutable record; `RenderTargets`,
 because Chromium writes real files to real paths and cannot write to a bucket; and
 Knowledge sources, which are version-controlled inputs rather than artifacts.
@@ -378,10 +382,10 @@ Commands always receive explicit source IDs. `latest` belongs to query/UI conven
 not command semantics:
 
 ```python
-analyze_job(application_id, job_snapshot_id)
-create_draft(application_id, analysis_id, selection_plan_id)
-approve_draft(working_draft_id, expected_version, validation_run_id)
-render_revision(approved_revision_id)
+analyze_job(application_id, job_snapshot_id, provider)
+create_draft(application_id, job_analysis_id, selection_plan_id, provider)
+approve_draft(working_draft_id, expected_edit_version, validation_run_id)
+render_revision(application_id, approved_revision_id)
 ```
 
 WorkingDraft records source analysis and SelectionPlan. An edit from an approved
@@ -499,8 +503,8 @@ and `202` with a Location when AI proposal mode is requested. NeedsReview and fa
 validation are successful domain outcomes.
 
 API schemas are separate from domain and persistence types. OpenAPI is generated and
-validated; TypeScript types are generated and checked for drift. A small handwritten
-`apiClient.ts` owns HTTP mechanics.
+validated; TypeScript types are generated and checked for drift. The small handwritten
+`frontend/src/api/client.ts` module owns HTTP mechanics.
 
 WorkingDraft responses emit ETags. PATCH requires If-Match and maps to the application's
 expected version. Version mismatch is `409`; stale/missing domain prerequisites are
@@ -533,7 +537,8 @@ technical identifiers, and code-like values use explicit LTR direction. HTML pre
 is rendered by the backend and shown in an isolated iframe.
 
 Operation progress is polled every one to two seconds while active and shows status,
-phase, safe message, and timestamps. No synthetic percentages are displayed.
+phase, safe message, failure guidance, and the actions returned by the backend. No
+synthetic percentages are displayed, and there is no separate Operation route.
 
 Autosave uses debounce and blur. A 409 opens an explicit local/current comparison and
 never silently merges.
@@ -577,7 +582,7 @@ heartbeat traffic, HTTP query strings, headers, and bodies are not logged.
 
 ### 15.1 Runtime configuration and secrets
 
-`runtime/config.py` is the single resolution contract. Precedence is:
+`cv_engine/runtime/config.py` is the single resolution contract. Precedence is:
 
 `process environment > project .env file > project config > default`
 
