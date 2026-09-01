@@ -124,9 +124,9 @@
 
 ## 7. Shell — `App.tsx` (133 שורות)
 
-- [ ] `useMatch("/")` + `useMatch("/applications/:applicationId/draft")` כדי לבחור
+- [x] `useMatch("/")` + `useMatch("/applications/:applicationId/draft")` כדי לבחור
       `max-w`. ה־shell מכיר עמודים בשם — להפוך לאחריות העמוד (חלק 0).
-- [ ] `isApplicationScreen` — עוד `useMatch` באותה סיבה, כדי להחליט אם ה־breadcrumb
+- [x] `isApplicationScreen` — עוד `useMatch` באותה סיבה, כדי להחליט אם ה־breadcrumb
       הוא קישור. אותו תיקון.
 
 ---
