@@ -262,13 +262,13 @@ describe("NewApplicationPage", () => {
     fillIntake();
     submitForm();
 
-    expect(await screen.findByText("נמצאו מועמדויות דומות")).toBeInTheDocument();
+    expect(await screen.findByText("נמצאה מועמדות דומה")).toBeInTheDocument();
     expect(screen.getByText("אותה כתובת מקור · אותה חברה ואותו תפקיד")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "פתיחת המועמדות הקיימת" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "פתיחת המועמדות הקיימת: Acme — Backend Engineer" })).toHaveAttribute(
       "href",
       "/applications/app-existing",
     );
-    expect(screen.getByRole("button", { name: "יצירה בכל זאת" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "יצירת מועמדות נוספת" })).toBeInTheDocument();
     expect(calls.map((call) => call.path)).toEqual([DUPLICATE_CHECK_PATH]);
   });
 
@@ -293,7 +293,7 @@ describe("NewApplicationPage", () => {
     fillIntake();
     submitForm();
 
-    fireEvent.click(await screen.findByRole("button", { name: "יצירה בכל זאת" }));
+    fireEvent.click(await screen.findByRole("button", { name: "יצירת מועמדות נוספת" }));
 
     expect(await screen.findByRole("heading", { name: "פרטי משרה" })).toBeInTheDocument();
     expect(calls.map((call) => call.path)).toEqual([DUPLICATE_CHECK_PATH, CREATE_PATH, ANALYSES_PATH]);
@@ -343,8 +343,8 @@ describe("NewApplicationPage", () => {
     fillIntake();
     submitForm();
 
-    expect(await screen.findByText("נמצאו מועמדויות דומות")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "פתיחת המועמדות הקיימת" })).toHaveAttribute(
+    expect(await screen.findByText("נמצאה מועמדות דומה")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "פתיחת המועמדות הקיימת: Acme — Backend Engineer" })).toHaveAttribute(
       "href",
       "/applications/app-raced",
     );
@@ -374,8 +374,8 @@ describe("NewApplicationPage", () => {
     answer(jsonResponse({ matches: [match()] }));
 
     expect(await screen.findByText("הקלט השתנה מאז הבדיקה")).toBeInTheDocument();
-    expect(screen.queryByText("נמצאו מועמדויות דומות")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "יצירה בכל זאת" })).not.toBeInTheDocument();
+    expect(screen.queryByText("נמצאה מועמדות דומה")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "יצירת מועמדות נוספת" })).not.toBeInTheDocument();
   });
 
   it("clears the stale-answer notice once the intake is edited again", async () => {
@@ -413,16 +413,16 @@ describe("NewApplicationPage", () => {
     fillIntake();
     submitForm();
 
-    expect(await screen.findByText("נמצאו מועמדויות דומות")).toBeInTheDocument();
+    expect(await screen.findByText("נמצאה מועמדות דומה")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("טקסט המשרה — חובה"), {
       target: { value: "A different posting" },
     });
 
     await waitFor(() => {
-      expect(screen.queryByText("נמצאו מועמדויות דומות")).not.toBeInTheDocument();
+      expect(screen.queryByText("נמצאה מועמדות דומה")).not.toBeInTheDocument();
     });
-    expect(screen.queryByRole("button", { name: "יצירה בכל זאת" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "יצירת מועמדות נוספת" })).not.toBeInTheDocument();
   });
 
   it("shows a refused creation as a blocker with the server's safe detail", async () => {
