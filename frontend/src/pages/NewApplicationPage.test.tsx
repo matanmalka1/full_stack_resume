@@ -159,7 +159,7 @@ describe("NewApplicationPage", () => {
     expect(screen.getByLabelText("טקסט המשרה")).toHaveAttribute("dir", "auto");
     expect(screen.getByLabelText("כתובת המשרה — אופציונלי")).toHaveAttribute("dir", "ltr");
     expect(
-      screen.getByText("נשמרת כתיעוד מקור בלבד; המערכת אינה פותחת את הכתובת או מייבאת ממנה טקסט."),
+      screen.getByText("נשמרת כתיעוד מקור בלבד, המערכת אינה פותחת את הכתובת או מייבאת ממנה טקסט."),
     ).toBeInTheDocument();
   });
 

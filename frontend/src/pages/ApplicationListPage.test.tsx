@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { applicationDetailQueryOptions, applicationListQueryOptions } from "../api/applications";
 import type { ApplicationListItem, Reason } from "../api/contracts";
 import { ApplicationListPage } from "./ApplicationListPage";
 import { actionLabel } from "./application/applicationLabels";
@@ -44,11 +45,11 @@ const jsonResponse = (body: unknown, status = 200): Response =>
     headers: { "Content-Type": "application/json" },
   });
 
-/* The list endpoint answers one page plus the two counts that place it. The stub fills
-   `matched` from the rows it was handed, because a page whose count disagreed with its
-   own rows would be testing against a server that cannot exist; `total` - the count
-   before the query narrowed anything - is separate, and is what tells an empty database
-   apart from a filter that matched nothing.
+/* The list endpoint answers one page plus the two counts that place it. The stub defaults
+   `matched` to the rows it was handed for the common one-page case; pagination tests
+   override it with the count across every matching page. `total` - the count before the
+   query narrowed anything - is separate, and is what tells an empty database apart from
+   a filter that matched nothing.
 
    The mock builds a `Response` per call rather than resolving to one: a body can only
    be read once, so a stub answering every call with the same object fails the second
@@ -85,22 +86,47 @@ const listBody = (items: ApplicationListItem[], counts: Counts = {}) => {
 };
 
 const stubList = (items: ApplicationListItem[], counts: Counts = {}) => {
-  const body = { current: listBody(items, counts) };
-  const fetchMock = vi.fn(async (_url: unknown, _options?: unknown) => jsonResponse(body.current));
+  const body = listBody(items, counts);
+  const fetchMock = vi.fn(async (_url: unknown, options?: RequestInit) =>
+    options?.method === "POST"
+      ? jsonResponse({
+          application_id: "app-1",
+          current_status: "closed",
+          event_id: "event-1",
+          next_action: null,
+          next_action_date: null,
+          terminal_outcome: null,
+        })
+      : jsonResponse(body),
+  );
   vi.stubGlobal("fetch", fetchMock);
   return {
     fetchMock,
-    /* What the server answers next, for a test that changes the question mid-flight. */
-    answer: (nextItems: ApplicationListItem[], nextCounts: Counts = {}) => {
-      body.current = listBody(nextItems, nextCounts);
-    },
   };
 };
 
-const renderPage = (entries: string[] = ["/"]) =>
-  render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <MemoryRouter initialEntries={entries}>
+const HistoryBack = () => {
+  const navigate = useNavigate();
+  return <button onClick={() => navigate(-1)}>בדיקת חזרה</button>;
+};
+
+interface RenderPageOptions {
+  entries?: string[];
+  initialIndex?: number;
+  queryClient?: QueryClient;
+  withHistoryBack?: boolean;
+}
+
+const renderPage = ({
+  entries = ["/"],
+  initialIndex,
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+  withHistoryBack = false,
+}: RenderPageOptions = {}) => {
+  const view = render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={entries} initialIndex={initialIndex}>
+        {withHistoryBack ? <HistoryBack /> : null}
         <Routes>
           <Route element={<ApplicationListPage />} path="/" />
           <Route element={<h1>משרה חדשה</h1>} path="/applications/new" />
@@ -108,6 +134,9 @@ const renderPage = (entries: string[] = ["/"]) =>
       </MemoryRouter>
     </QueryClientProvider>,
   );
+
+  return { ...view, queryClient };
+};
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -157,5 +186,105 @@ describe("ApplicationListPage", () => {
 
     const attention = await screen.findByText("1 להכרעה");
     expect(attention).toHaveClass("whitespace-nowrap");
+  });
+
+  it("keeps the filters visible when a narrowed board matches none of the stored Applications", async () => {
+    stubList([], { matched: 0, total: 4, stageCounts: { ready: 4 } });
+
+    renderPage({ entries: ["/?activity=closed"] });
+
+    expect(await screen.findByText("אין מועמדות שמתאימה לסינון.")).toBeInTheDocument();
+    expect(screen.getByLabelText("חיפוש")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ניקוי הסינון" })).toBeInTheDocument();
+    expect(screen.queryByText("עוד לא נוצרה אף מועמדות.")).not.toBeInTheDocument();
+  });
+
+  it("uses the first-use empty state only when no Application exists before filtering", async () => {
+    stubList([], { matched: 0, total: 0 });
+
+    renderPage();
+
+    expect(await screen.findByText("עוד לא נוצרה אף מועמדות.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("חיפוש")).not.toBeInTheDocument();
+    expect(screen.queryByText("אין מועמדות שמתאימה לסינון.")).not.toBeInTheDocument();
+  });
+
+  it("moves through server pages and writes page-boundary offsets to the URL query", async () => {
+    const firstPage = Array.from({ length: 25 }, (_, index) =>
+      item({ id: `app-${index + 1}`, company: `Company ${index + 1}` }),
+    );
+    const firstPageBody = listBody(firstPage, { matched: 26, total: 26 });
+    const lastPageBody = listBody([item({ id: "app-26", company: "Last Company" })], {
+      matched: 26,
+      total: 26,
+    });
+    const fetchMock = vi.fn(async (url: unknown) =>
+      jsonResponse(String(url).includes("offset=25") ? lastPageBody : firstPageBody),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+
+    expect(await screen.findByRole("navigation", { name: "ניווט בין דפי המועמדויות" })).toBeInTheDocument();
+    expect(screen.getByText("1–25 מתוך 26")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "הבא" }));
+
+    expect(await screen.findByRole("link", { name: "Last Company" })).toBeInTheDocument();
+    expect(screen.getByText("26–26 מתוך 26")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining("offset=25"),
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(screen.getByRole("button", { name: "הבא" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "הקודם" })).toBeEnabled();
+  });
+
+  it("updates the field from browser history immediately and delays only the server read", async () => {
+    const { fetchMock } = stubList([item()]);
+
+    renderPage({
+      entries: ["/?search=first", "/?search=second"],
+      initialIndex: 1,
+      withHistoryBack: true,
+    });
+
+    expect(await screen.findByDisplayValue("second")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "בדיקת חזרה" }));
+
+    expect(screen.getByDisplayValue("first")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining("search=first"),
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("invalidates every cached list and detail after closing an Application", async () => {
+    const { fetchMock } = stubList([item()]);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const closedListKey = applicationListQueryOptions({ activity: "closed" }).queryKey;
+    const detailKey = applicationDetailQueryOptions("app-1").queryKey;
+    queryClient.setQueryData(closedListKey, listBody([], { total: 1 }));
+    queryClient.setQueryData(detailKey, { application: { id: "app-1" } });
+
+    renderPage({ queryClient });
+
+    fireEvent.click(await screen.findByRole("button", { name: "סגירת המועמדות Acme" }));
+    fireEvent.click(screen.getByRole("button", { name: "סגירת המועמדות" }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/v1/applications/app-1/close",
+        expect.objectContaining({ method: "POST" }),
+      ),
+    );
+    await waitFor(() => {
+      expect(queryClient.getQueryState(closedListKey)?.isInvalidated).toBe(true);
+      expect(queryClient.getQueryState(detailKey)?.isInvalidated).toBe(true);
+    });
   });
 });

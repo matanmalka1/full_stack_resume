@@ -35,6 +35,27 @@ describe("query cache policy", () => {
     expect(factsQueryKey("pending")).toEqual([...factsQueryPrefix, "pending"]);
   });
 
+  it("uses one list key for equivalent requests and distinct keys for distinct filters", () => {
+    const filtersFirst = applicationListQueryOptions({
+      activity: "closed",
+      search: "platform",
+      sort: "company",
+    }).queryKey;
+    const searchFirst = applicationListQueryOptions({
+      sort: "company",
+      search: "platform",
+      activity: "closed",
+    }).queryKey;
+    const differentFilter = applicationListQueryOptions({
+      activity: "open",
+      search: "platform",
+      sort: "company",
+    }).queryKey;
+
+    expect(filtersFirst).toEqual(searchFirst);
+    expect(differentFilter).not.toEqual(filtersFirst);
+  });
+
   it("keys decision markdown by every request argument", () => {
     expect(decisionMarkdownQueryOptions("revision-1", "application-1").queryKey).toEqual([
       "decision-markdown",
