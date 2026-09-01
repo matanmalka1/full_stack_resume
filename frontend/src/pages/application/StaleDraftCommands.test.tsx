@@ -293,6 +293,92 @@ describe("the stale-draft commands (§14)", () => {
     expect(await screen.findByRole("heading", { name: "הרצת יצירת הטיוטה" })).toBeInTheDocument();
   });
 
+  /* The window the engine's own guard exists for, closed here as a courtesy so the reader
+     is not offered a command that would be refused.
+
+     `isPending` ends at the accepted `202`, which is when the work starts rather than when
+     it ends, and the projection reports the Operation only on its next read. Between them
+     both buttons were live over a running replacement - long enough to archive the draft
+     that replacement was about to write to. */
+  it("offers no competing command while the replacement it queued is still running", async () => {
+    const fetchMock = routedFetch({});
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+
+    fireEvent.click(await enabledButton("החלפת הטיוטה"));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "החלפת הטיוטה" }));
+
+    /* The queued Operation is on screen, so the `202` has landed and the mutation is no
+       longer pending - which is exactly the moment the two buttons used to come back. */
+    expect(await screen.findByRole("heading", { name: "הרצת יצירת הטיוטה" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "העברת הטיוטה לארכיון" })).toBeDisabled());
+    expect(screen.getByRole("button", { name: "החלפת הטיוטה" })).toBeDisabled();
+    expect(screen.getByText(/פעולה על הטיוטה מתבצעת כעת/)).toBeInTheDocument();
+
+    /* And no second command reached the server. */
+    const commands = fetchMock.mock.calls.filter(
+      ([input, init]) =>
+        init?.method === "POST" && (String(input).includes(REPLACE_PATH) || String(input).includes(ARCHIVE_PATH)),
+    );
+    expect(commands).toHaveLength(1);
+  });
+
+  /* Archiving is synchronous, so it queues no Operation and neither the local watch nor
+     the projection ever sees it. Its own in-flight state is the only thing that closes the
+     window between its press and its answer. */
+  it("offers no replacement while an archive is still in flight", async () => {
+    let releaseArchive: (value: Response) => void = () => {};
+    const pendingArchive = new Promise<Response>((resolve) => {
+      releaseArchive = resolve;
+    });
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes(ARCHIVE_PATH) && init?.method === "POST") {
+        return pendingArchive;
+      }
+      return Promise.resolve(String(input).includes(DRAFT_PATH) ? json(draftRead()) : json(detail()));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+
+    fireEvent.click(await enabledButton("העברת הטיוטה לארכיון"));
+
+    /* Replacement is the one that must be unreachable: the archive it would race is the
+       command already in flight. The archive button reports itself by its pending label
+       while it runs, which is how the reader knows which of the two is the live one. */
+    await waitFor(() => expect(screen.getByRole("button", { name: "החלפת הטיוטה" })).toBeDisabled());
+    expect(screen.getByRole("button", { name: "מעביר לארכיון…" })).toBeDisabled();
+
+    releaseArchive(json({ working_draft_id: "draft-1" }));
+
+    /* Exactly one command left the screen. */
+    const commands = fetchMock.mock.calls.filter(
+      ([input, init]) =>
+        init?.method === "POST" && (String(input).includes(REPLACE_PATH) || String(input).includes(ARCHIVE_PATH)),
+    );
+    expect(commands).toHaveLength(1);
+  });
+
+  /* The projection covers the far end of the same window: a run this screen did not start
+     - one queued in another tab, or still going when the page was reloaded - is reported
+     by `active_operation`, and holds the commands just the same. */
+  it("offers no command while the projection reports work this screen did not queue", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) =>
+        Promise.resolve(
+          String(input).includes(DRAFT_PATH) ? json(draftRead()) : json(detail({ active_operation: operation() })),
+        ),
+      ),
+    );
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "החלפת הטיוטה" })).toBeDisabled());
+    expect(screen.getByRole("button", { name: "העברת הטיוטה לארכיון" })).toBeDisabled();
+  });
+
   /* The guard doing its job is a thing the reader must see. A draft edited elsewhere since
      this screen read it is refused, and the refusal is reported rather than swallowed into
      a button that simply did nothing. */

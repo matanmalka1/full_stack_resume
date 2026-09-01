@@ -11,7 +11,12 @@ import {
 import type { ApplicationDetail } from "../../api/contracts";
 import { archiveWorkingDraft, workingDraftQueryKey, workingDraftQueryOptions } from "../../api/drafts";
 import { executionProvider, settingsQueryOptions } from "../../api/settings";
-import { type QueuedOperation, operationQueryKey } from "../../api/operations";
+import {
+  type QueuedOperation,
+  isTerminalOperation,
+  operationQueryKey,
+  operationQueryOptions,
+} from "../../api/operations";
 import { ErrorCallout } from "../../app/ErrorCallout";
 import { ActionBar } from "../../ui/ActionBar";
 import { Button, buttonClasses } from "../../ui/Button";
@@ -64,6 +69,7 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
      next poll, and the Operation screen a direct link reaches is already warm. */
   const followQueued = ({ operation }: QueuedOperation) => {
     queryClient.setQueryData(operationQueryKey(operation.id), operation);
+    setQueuedId(operation.id);
     onQueued(operation.id);
     void queryClient.invalidateQueries({
       queryKey: applicationDetailQueryKey(detail.application.id),
@@ -91,6 +97,31 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
     enabled: staleDraftId !== null,
   });
   const editVersion = staleDraftQuery.data?.draft.edit_version ?? null;
+
+  /* Whether durable work is in flight for this Application, and therefore whether the two
+     stale-draft commands may be sent at all.
+
+     Neither `isPending` nor the projection answers this alone. `isPending` ends at the
+     accepted `202`, which is the moment the work *starts*; the projection reports the
+     Operation only on its next read. Between them sits a window in which the screen showed
+     two live buttons over a running replacement - long enough to archive the draft that
+     replacement was about to write to, or to queue a second one.
+
+     So the locally queued id closes the near end and the projection covers the rest. The
+     seeded Operation is read from the cache `followQueued` populates, so the id stops
+     counting as in-flight once that record reaches a terminal status rather than staying
+     latched until the projection catches up.
+
+     This is a courtesy, not the safety mechanism. Another tab, a reload, or any other
+     client can still send a competing command, which is why the engine refuses a
+     replacement whose draft moved rather than trusting a disabled button. */
+  const [queuedId, setQueuedId] = useState<string | null>(null);
+  const queuedOperationQuery = useQuery({
+    ...operationQueryOptions(queuedId ?? ""),
+    enabled: queuedId !== null,
+  });
+  const queuedStillRunning = queuedId !== null && !isTerminalOperation(queuedOperationQuery.data);
+  const workInFlight = queuedStillRunning || detail.active_operation != null;
 
   /* The Keep decision is made in the dialog, not assumed by the button. Default on: a
      draft carries manual wording that nothing regenerates, so the reader opts out of
@@ -185,6 +216,16 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
      so a failure to obtain it is the reason the two buttons are disabled and has to be
      said. Silently disabled controls beside an alert about the draft would leave the
      reader with the problem reported and no account of why nothing can act on it. */
+  /* What actually holds the two stale-draft commands.
+
+     `workInFlight` covers durable work - an Operation queued here or reported by the
+     projection. Archiving is neither: it is synchronous, so it creates no Operation and
+     nothing above would notice it was running. Between its press and its answer both
+     buttons stayed live, which is the same competing-command window in miniature: long
+     enough to send a replacement addressed to a draft that is being archived. The two
+     in-flight mutations close it. */
+  const commandsBlocked = workInFlight || archive.isPending || replace.isPending;
+
   const error =
     settingsQuery.error ?? staleDraftQuery.error ?? analyze.error ?? draft.error ?? replace.error ?? archive.error;
 
@@ -224,7 +265,7 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
   const replaceButton =
     plan.replaceDraft === null ? null : (
       <Button
-        disabled={settings === undefined || editVersion === null}
+        disabled={settings === undefined || editVersion === null || commandsBlocked}
         key="replace"
         onClick={() => setReplaceOpen(true)}
         pending={replace.isPending}
@@ -238,7 +279,7 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
   const archiveButton =
     plan.archiveDraft === null ? null : (
       <Button
-        disabled={editVersion === null}
+        disabled={editVersion === null || commandsBlocked}
         key="archive"
         onClick={() => archive.mutate()}
         pending={archive.isPending}
@@ -364,6 +405,15 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
         </p>
       )}
 
+      {/* Why the controls are inert rather than missing. A button that vanishes while work
+          runs reads as a command that is no longer offered; one that is disabled with the
+          reason beside it reads as the same command, later. */}
+      {workInFlight && (plan.replaceDraft !== null || plan.archiveDraft !== null) ? (
+        <p className="text-support leading-6 text-cv-text-muted">
+          פעולה על הטיוטה מתבצעת כעת. החלפה והעברה לארכיון יהיו זמינות שוב כשהיא תסתיים.
+        </p>
+      ) : null}
+
       {inWorkflowOrder.length === 0 ? null : (
         <ActionBar
           /* The offered actions continue the next-step sentence above them rather than
@@ -387,6 +437,7 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
               ביטול
             </Button>
             <Button
+              disabled={commandsBlocked}
               onClick={() => replace.mutate()}
               pending={replace.isPending}
               pendingLabel="מחליף טיוטה…"
@@ -404,7 +455,15 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
         <div className="flex flex-col gap-3">
           <p>
             טיוטה חדשה תיבנה מהניתוח ומתוכנית הבחירה הפעילים. הטיוטה הנוכחית נשמרת כפי שהיא עד שההחלפה מצליחה, ואם היא
-            נכשלת — דבר לא משתנה.
+            נכשלת — היא נשארת בדיוק כפי שהייתה.
+          </p>
+          {/* What "nothing changes on failure" leaves out, and why it was not accurate.
+              Keep writes its historical snapshot before the replacement starts, and the
+              snapshot is an immutable record: it stays whether or not the run that
+              followed it succeeded. That is the point of taking it first, but it means the
+              reader is told what survives a failure rather than told nothing survives. */}
+          <p className="text-support leading-6 text-cv-text-muted">
+            עותק היסטורי, אם נבחר, נרשם לפני שההחלפה מתחילה — והוא נשמר גם אם ההחלפה נכשלת.
           </p>
           <Checkbox
             checked={keepPrevious}
