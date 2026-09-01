@@ -3,21 +3,13 @@ import { LtrText } from "../../ui/LtrText";
 import { SummaryList } from "../../ui/SummaryList";
 import { Disclosure } from "../../ui/Disclosure";
 
-/* The posting the analysis was run against, on the screen that reports the analysis.
-
-   The verdict and its confidence were readable here long before the text they were drawn
-   from was: "high fit, 98%" is a claim about a document the reader could not see, and the
-   provenance block underneath named that document only by UUID. Judging whether the
-   classification is right means reading what was classified, so the snapshot text is
-   offered here rather than behind a route that does not exist - the projection already
-   carries it as `latest_snapshot`, so this needs no request of its own.
+/* The active posting on Job Detail. The projection already carries `latest_snapshot`, so
+   the source remains readable before analysis and after the preparation workflow ends.
 
    It stays collapsed. A posting is long, it is input rather than conclusion, and the
    analysis above is what the reader came for; opening it is a deliberate act of checking.
 
-   `latest_snapshot` is the newest snapshot of the Application, which is the one the
-   active analysis was run against whenever the analysis is the active one - the condition
-   `classificationFromAnalysis` already requires before this panel is rendered at all. */
+   `latest_snapshot` is the newest immutable snapshot of the Application. */
 const dateFormat = new Intl.DateTimeFormat("he-IL", { dateStyle: "short", timeStyle: "short" });
 
 /* An unparsable value is shown as it arrived rather than as "Invalid Date". */
@@ -34,7 +26,7 @@ export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
     <section aria-labelledby="job-snapshot-heading" className="rounded-surface border border-cv-border p-5">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-cv-border pb-4">
         <h2 className="text-body font-semibold text-cv-text" id="job-snapshot-heading">
-          המשרה שנותחה
+          מודעת המשרה
         </h2>
         <span className="text-support text-cv-text-muted">גרסה {snapshot.version_number}</span>
       </div>

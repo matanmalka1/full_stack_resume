@@ -8,11 +8,13 @@
 
    An action absent from the table has no screen yet, which is the honest default. */
 const destinations: Record<string, (applicationId: string) => string> = {
-  /* `apply_analysis_decisions` is deliberately absent. Its control is a panel on the
-     Application screen rather than a screen of its own, so it has no destination to link
-     to - the reader is already where the decision is taken. Everything that used to
-     resolve it through this table now finds nothing here, which is correct: a link would
-     lead from the form back to the form. */
+  /* Job Detail summarizes preparation but does not execute it. Board recommendations and
+     alerts therefore address the preparation screen that owns these controls. */
+  analyze: (applicationId) => `/applications/${encodeURIComponent(applicationId)}/preparation`,
+  apply_analysis_decisions: (applicationId) => `/applications/${encodeURIComponent(applicationId)}/preparation`,
+  create_draft: (applicationId) => `/applications/${encodeURIComponent(applicationId)}/preparation`,
+  archive_working_draft: (applicationId) => `/applications/${encodeURIComponent(applicationId)}/preparation`,
+  replace_working_draft: (applicationId) => `/applications/${encodeURIComponent(applicationId)}/preparation`,
   /* The Draft Editor is where the patch is issued, so the three commands it carries all
      lead to it. `apply_selection_change` and the removal path are controls on that
      screen rather than screens of their own: they act on the claim the user is looking
@@ -31,3 +33,6 @@ const destinations: Record<string, (applicationId: string) => string> = {
 
 export const actionDestination = (action: string, applicationId: string): string | null =>
   destinations[action]?.(applicationId) ?? null;
+
+export const actionIsOnPreparationScreen = (action: string, applicationId: string): boolean =>
+  actionDestination(action, applicationId) === `/applications/${encodeURIComponent(applicationId)}/preparation`;

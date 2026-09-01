@@ -3,6 +3,7 @@ import { Navigate, createBrowserRouter, useParams } from "react-router-dom";
 import { App } from "../App";
 import { ApplicationListPage } from "../pages/ApplicationListPage";
 import { ApplicationPage } from "../pages/ApplicationPage";
+import { JobDetailsPage } from "../pages/JobDetailsPage";
 import { DraftEditorPage } from "../pages/draft-editor/DraftEditorPage";
 import { NewApplicationPage } from "../pages/NewApplicationPage";
 import { RevisionPage } from "../pages/RevisionPage";
@@ -15,14 +16,11 @@ import { RouteErrorBoundary } from "./RouteErrorBoundary";
    started a new Application instead of going home, and a saved one was reachable only by
    its URL or the back button.
 
-   Recruitment tracking is not a screen. It is the Application's other axis, and it is a
-   view of the Application screen rather than a route: the two shared the masthead, the
-   projection read, the error handling, and the switch itself, and differed only in which
-   panel sat beneath. `?view=tracking` keeps it reloadable and bookmarkable without
-   keeping a second screen in step with the first.
+   Job Detail owns recruitment tracking and the posting. CV preparation is a separate
+   destination under the same Application and continues to own the document workflow.
 
-   Five screens carry the workflow: the list, intake, the Application context, the draft
-   editor, and Ready.
+   Six screens carry the workflow: the list, intake, Job Detail, CV preparation, the
+   draft editor, and Ready.
 
    Validation, approval, and render are not among them. Each was a screen holding a single
    button, and each acted on the draft the editor was already showing, so reaching one
@@ -43,7 +41,7 @@ import { RouteErrorBoundary } from "./RouteErrorBoundary";
 const TrackingRedirect = () => {
   const { applicationId } = useParams();
 
-  return <Navigate replace to={`/applications/${encodeURIComponent(applicationId ?? "")}?view=tracking`} />;
+  return <Navigate replace to={`/applications/${encodeURIComponent(applicationId ?? "")}`} />;
 };
 
 const ReadyRedirect = () => {
@@ -68,16 +66,21 @@ export const router = createBrowserRouter([
         element: <NewApplicationPage />,
       },
       {
-        /* The one destination for an existing Application, whether it was just created or
-           opened from a duplicate. It is a fixed context screen rather than a redirect by
-           stage: analysis is an action on it, not a screen of its own. */
+        /* The stable destination for an existing Application: its job facts, recruitment
+           history, preparation summary, and immutable outputs. */
         path: "applications/:applicationId",
-        element: <ApplicationPage />,
+        element: <JobDetailsPage />,
         handle: { applicationContext: "self" },
       },
       {
-        /* The recruitment axis used to be a route. Bookmarks and links to it are older
-           than the merge, so the path stays and answers with the view it named. */
+        /* The document workflow is addressed separately from the job record. A newly
+           created Application lands here so its queued analysis remains visible and the
+           configured automatic continuation can run. */
+        path: "applications/:applicationId/preparation",
+        element: <ApplicationPage />,
+      },
+      {
+        /* Recruitment now lives on Job Detail. The path remains for old bookmarks. */
         path: "applications/:applicationId/tracking",
         element: <TrackingRedirect />,
       },

@@ -75,7 +75,7 @@ export const DraftEditorPage = () => {
 
   const draft = draftQuery.data?.draft;
   const facts = factsQuery.data;
-  const applicationHref = `/applications/${encodeURIComponent(applicationId)}`;
+  const preparationHref = `/applications/${encodeURIComponent(applicationId)}/preparation`;
   const queryClient = useQueryClient();
   /* The three screens that used to follow the editor are states of this one editor.
      None of them changes what is sent: the validation panel runs the same command, the
@@ -267,8 +267,8 @@ export const DraftEditorPage = () => {
       {detail !== undefined && workingDraftId === null && renderRevisionId === null ? (
         <Callout
           action={
-            <Link className={buttonClasses("primary")} to={applicationHref}>
-              חזרה למועמדות
+            <Link className={buttonClasses("primary")} to={preparationHref}>
+              חזרה להכנת קורות החיים
             </Link>
           }
           title="אין כרגע טיוטה פעילה למועמדות הזו"
@@ -436,9 +436,9 @@ export const DraftEditorPage = () => {
                 />
 
                 <div>
-                  <Link className={buttonClasses("secondary")} to={applicationHref}>
+                  <Link className={buttonClasses("secondary")} to={preparationHref}>
                     <ArrowRight aria-hidden="true" className="size-4" />
-                    חזרה למועמדות
+                    חזרה להכנת קורות החיים
                   </Link>
                 </div>
               </>

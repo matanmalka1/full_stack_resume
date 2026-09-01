@@ -7,7 +7,6 @@ import type { ApplicationDetail, Reason } from "../../api/contracts";
 import { ApplicationPage } from "../ApplicationPage";
 
 const APPLY_PATH = "/api/v1/analyses/analysis-1/apply-decisions";
-const ARTIFACTS_PATH = "/api/v1/applications/app-1/artifacts";
 
 const reason = (code: string, actions: string[] = ["apply_analysis_decisions"]): Reason => ({
   code,
@@ -100,9 +99,9 @@ const renderPage = () => {
 
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/applications/app-1"]}>
+      <MemoryRouter initialEntries={["/applications/app-1/preparation"]}>
         <Routes>
-          <Route element={<ApplicationPage />} path="/applications/:applicationId" />
+          <Route element={<ApplicationPage />} path="/applications/:applicationId/preparation" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -185,9 +184,6 @@ describe("the review decision, on the Application screen", () => {
       const url = String(input);
       if (url === APPLY_PATH) {
         return Promise.resolve(problemResponse("PRECONDITION_FAILED", "the submitted decisions change nothing"));
-      }
-      if (url === ARTIFACTS_PATH) {
-        return Promise.resolve(jsonResponse({ items: [] }));
       }
       return Promise.resolve(jsonResponse(detail()));
     });

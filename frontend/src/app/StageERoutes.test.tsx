@@ -2,6 +2,8 @@ import { isValidElement } from "react";
 import { describe, expect, it } from "vitest";
 
 import { ApplicationListPage } from "../pages/ApplicationListPage";
+import { ApplicationPage } from "../pages/ApplicationPage";
+import { JobDetailsPage } from "../pages/JobDetailsPage";
 import { NewApplicationPage } from "../pages/NewApplicationPage";
 import { router } from "./router";
 
@@ -27,10 +29,7 @@ describe("Stage E routes", () => {
     expect(stageERoute("revisions/:revisionId/render")).toBeUndefined();
   });
 
-  /* The recruitment axis is a view of the Application screen, not a route. Asserted as
-     absence for the same reason as the four above: re-adding a screen for it puts the
-     masthead, the projection read, and the error handling back in two places. */
-  it("keeps the recruitment axis off the route table as a screen", () => {
+  it("keeps old recruitment bookmarks as a redirect to Job Detail", () => {
     const element = stageERoute("applications/:applicationId/tracking")?.element;
     const name = isValidElement(element) && typeof element.type === "function" ? element.type.name : null;
     /* The path itself stays - it answers older bookmarks - but only as the redirect. */
@@ -41,6 +40,8 @@ describe("Stage E routes", () => {
     const index = router.routes[0]?.children?.find((route) => route.index === true);
     expect(isValidElement(index?.element) ? index?.element.type : null).toBe(ApplicationListPage);
     expect(stageEElementType("applications/new")).toBe(NewApplicationPage);
+    expect(stageEElementType("applications/:applicationId")).toBe(JobDetailsPage);
+    expect(stageEElementType("applications/:applicationId/preparation")).toBe(ApplicationPage);
   });
 });
 

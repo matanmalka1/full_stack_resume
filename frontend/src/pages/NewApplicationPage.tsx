@@ -141,7 +141,7 @@ export const NewApplicationPage = () => {
     },
     onSuccess: (result) => {
       if (result.kind === "created") {
-        void navigate(`/applications/${encodeURIComponent(result.applicationId)}`, {
+        void navigate(`/applications/${encodeURIComponent(result.applicationId)}/preparation`, {
           state: result.analysisQueued ? undefined : { automaticAnalysisStartFailed: true },
         });
       }

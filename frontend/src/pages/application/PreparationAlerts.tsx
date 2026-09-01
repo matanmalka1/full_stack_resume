@@ -3,6 +3,7 @@ import { Callout } from "../../ui/Callout";
 import { resolvedByDecisionForm } from "./ReviewDecisionPanel";
 import { warningTitle } from "./applicationLabels";
 import { ReasonCallout } from "./ReasonCallout";
+import { actionIsOnPreparationScreen } from "./actionDestinations";
 
 /* One alert backdrop with a fixed severity/order: failed automatic start, review
    blockers, stale sources, general warnings, then the informational newer-draft note.
@@ -58,6 +59,9 @@ export const PreparationAlerts = ({
           fallbackTitle="הטיוטה אינה מעודכנת מול המקורות שלה"
           key={reason.code}
           reason={reason}
+          resolvedHere={reason.allowed_resolution_actions.some((action) =>
+            actionIsOnPreparationScreen(action, detail.application.id),
+          )}
           tone="warning"
         />
       ))}

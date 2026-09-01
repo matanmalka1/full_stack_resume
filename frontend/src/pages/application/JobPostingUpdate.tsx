@@ -28,7 +28,7 @@ interface PostingFields {
    the duplicate check exists to discourage - and it would have left the recruitment
    timeline, the analyses, and the approved revisions of the original behind.
 
-   What it creates is a new immutable JobSnapshot, never an edit of the existing one. The
+   What it creates from Job Detail is a new immutable JobSnapshot, never an edit of the existing one. The
    snapshot on record is evidence of what the posting said when it was captured, and a
    posting that later vanishes from the web is exactly what that evidence is for. So the
    old snapshot stays, the new one becomes the active one, and the engine's own projection

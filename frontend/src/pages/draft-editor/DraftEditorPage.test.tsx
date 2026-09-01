@@ -217,7 +217,7 @@ const renderPage = (aiEnabled = true) => {
       <MemoryRouter initialEntries={["/applications/app-1/draft"]}>
         <Routes>
           <Route element={<DraftEditorPage />} path="/applications/:applicationId/draft" />
-          <Route element={<h1>מועמדות</h1>} path="/applications/:applicationId" />
+          <Route element={<h1>הכנת קורות החיים</h1>} path="/applications/:applicationId/preparation" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useLocation, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 
 import { classificationFromAnalysis } from "../api/analyses";
 import { applicationDetailQueryOptions } from "../api/applications";
@@ -8,15 +8,10 @@ import { useWatchedOperation } from "../hooks/useWatchedOperation";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
 import { StatusBadge } from "../ui/StatusBadge";
-import { applicationViewFromParam } from "./ApplicationViews";
 import { ApplicationSectionNav } from "./ApplicationSectionNav";
 import { PreparationView } from "./application/PreparationView";
-import { TrackingView } from "./application/TrackingView";
 import {
   draftStateIsImplied,
-  recruitmentStatusIcon,
-  recruitmentStatusLabel,
-  recruitmentStatusTone,
   preparationStateLabels,
   preparationStateTones,
   workingDraftStateLabels,
@@ -24,16 +19,13 @@ import {
 } from "./application/applicationLabels";
 import { useAutomaticDraft } from "./application/useAutomaticDraft";
 
-/* A.1: the fixed context screen for one Application. It is not a redirect that routes by
-   stage - an existing Application can be anywhere in its lifecycle, and choosing a
-   destination for it here would be the second workflow state machine the information
-   architecture forbids. It renders the §9 projection and offers the actions the
-   projection reports. */
+/* The CV preparation screen for one Application. It renders the §9 projection and offers
+   only the document-workflow actions the backend reports. */
 export const ApplicationPage = () => {
   const { applicationId } = useParams();
   const location = useLocation();
 
-  /* The route is applications/:applicationId, so a missing id is a router invariant
+  /* The route is applications/:applicationId/preparation, so a missing id is a router invariant
      violation rather than a state this screen supports. */
   if (applicationId === undefined) {
     throw new Error("ApplicationPage rendered without an applicationId route parameter");
@@ -41,8 +33,6 @@ export const ApplicationPage = () => {
 
   const automaticAnalysisStartFailed =
     (location.state as { automaticAnalysisStartFailed?: unknown } | null)?.automaticAnalysisStartFailed === true;
-  const [searchParams] = useSearchParams();
-  const view = applicationViewFromParam(searchParams.get("view"));
   const query = useQuery(applicationDetailQueryOptions(applicationId));
   const detail = query.data;
   const {
@@ -66,13 +56,7 @@ export const ApplicationPage = () => {
     watch,
   });
 
-  /* The landmark follows the projection, and says nothing at all until it arrives.
-
-     The recruitment view answers `none` instead: it is not on the workflow path, and
-     publishing the preparation stage from it would put the CV's position under a panel
-     about the recruiter. That was TrackingPage's own answer before the two views became
-     one screen, and it stays attached to the view rather than to the route. */
-  useWorkflowStage(view === "tracking" ? "none" : detail === undefined ? "unknown" : detail.preparation_state);
+  useWorkflowStage(detail === undefined ? "unknown" : detail.preparation_state);
 
   /* The persistent shell already names the company and role. This masthead names
      the view and reports the axis that view is about - never both at once: the two
@@ -82,14 +66,7 @@ export const ApplicationPage = () => {
   return (
     <PageShell
       actions={
-        detail === undefined ? null : view === "tracking" ? (
-          <StatusBadge
-            icon={recruitmentStatusIcon(detail.recruitment_status)}
-            tone={recruitmentStatusTone(detail.recruitment_status)}
-          >
-            {recruitmentStatusLabel(detail.recruitment_status)}
-          </StatusBadge>
-        ) : (
+        detail === undefined ? null : (
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge tone={preparationStateTones[detail.preparation_state]}>
               {preparationStateLabels[detail.preparation_state]}
@@ -107,8 +84,8 @@ export const ApplicationPage = () => {
           </div>
         )
       }
-      navigation={<ApplicationSectionNav value={view} />}
-      title={view === "tracking" ? "מעקב גיוס" : "הכנת קורות החיים"}
+      navigation={<ApplicationSectionNav applicationId={applicationId} value="preparation" />}
+      title="הכנת קורות החיים"
     >
       <QueryState
         error={query.error}
@@ -116,9 +93,7 @@ export const ApplicationPage = () => {
         loading={detail === undefined}
         loadingLabel="טוען…"
       >
-        {detail === undefined ? null : view === "tracking" ? (
-          <TrackingView detail={detail} />
-        ) : (
+        {detail === undefined ? null : (
           <PreparationView
             automaticAnalysisStartFailed={automaticAnalysisStartFailed}
             classification={classification}

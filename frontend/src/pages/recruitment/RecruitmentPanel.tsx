@@ -227,7 +227,7 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
 
   return (
     <section aria-labelledby="recruitment-heading" className="flex flex-col gap-6">
-      <h2 className="sr-only" id="recruitment-heading">
+      <h2 className="text-heading-sm font-semibold text-cv-text" id="recruitment-heading">
         מעקב גיוס
       </h2>
 

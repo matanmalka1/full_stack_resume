@@ -102,8 +102,7 @@ const RecommendedActionCell = ({ item }: { item: ApplicationListItem }) => {
      supersedes it. Interrupted work has the same property. Successful and deliberately
      cancelled work yield the column back to the projection's normal recommendation. */
   const reported =
-    latest != null &&
-    (!isTerminalOperation(latest) || latest.status === "failed" || latest.status === "interrupted")
+    latest != null && (!isTerminalOperation(latest) || latest.status === "failed" || latest.status === "interrupted")
       ? latest
       : null;
 
@@ -140,6 +139,7 @@ interface ApplicationListRowProps {
 
 export const ApplicationListRow = ({ ambiguous, item, onRequestClose }: ApplicationListRowProps) => {
   const href = `/applications/${encodeURIComponent(item.id)}`;
+  const preparationHref = `${href}/preparation`;
   const attention = applicationAttention(item);
   const closed = isApplicationClosed(item);
 
@@ -185,7 +185,7 @@ export const ApplicationListRow = ({ ambiguous, item, onRequestClose }: Applicat
           <span className="text-support text-cv-text-muted">—</span>
         ) : (
           /* The badge names what is waiting rather than counting it, and links to the
-             Application, where the alert region states each item with the control that
+             preparation screen, where the alert region states each item with the control that
              resolves it. `title` and `aria-label` sit on the link because StatusBadge
              carries neither, and they hold every title - the badge itself shows at most
              two, then the most severe one and how many it stands in front of. */
@@ -193,7 +193,7 @@ export const ApplicationListRow = ({ ambiguous, item, onRequestClose }: Applicat
             aria-label={`${item.company}: ${attention.items.map((entry) => entry.title).join(" · ")}`}
             className="inline-flex max-w-full rounded-pill focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cv-focus"
             title={attention.items.map((entry) => entry.title).join(" · ")}
-            to={href}
+            to={preparationHref}
           >
             <StatusBadge
               className={cx(rowBadgeClasses, "max-w-full items-start [overflow-wrap:break-word]")}

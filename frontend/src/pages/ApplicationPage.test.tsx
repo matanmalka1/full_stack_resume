@@ -8,7 +8,6 @@ import { settingsQueryKey } from "../api/settings";
 import { ApplicationPage } from "./ApplicationPage";
 
 const ANALYSES_PATH = "/api/v1/applications/app-1/analyses";
-const SNAPSHOTS_PATH = "/api/v1/applications/app-1/job-snapshots";
 
 const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail => ({
   recruitment_status: "saved",
@@ -152,15 +151,16 @@ const renderPage = (
       <MemoryRouter
         initialEntries={
           withHistory
-            ? ["/", { pathname: "/applications/app-1", state: navigationState }]
-            : [{ pathname: "/applications/app-1", state: navigationState }]
+            ? ["/", { pathname: "/applications/app-1/preparation", state: navigationState }]
+            : [{ pathname: "/applications/app-1/preparation", state: navigationState }]
         }
         initialIndex={withHistory ? 1 : 0}
       >
         {withHistory ? <HistoryBack /> : null}
         <Routes>
           <Route element={<h1>לוח המועמדויות</h1>} path="/" />
-          <Route element={<ApplicationPage />} path="/applications/:applicationId" />
+          <Route element={<h1>פרטי משרה</h1>} path="/applications/:applicationId" />
+          <Route element={<ApplicationPage />} path="/applications/:applicationId/preparation" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -294,13 +294,9 @@ describe("ApplicationPage", () => {
     expect(screen.queryByText("אין טיוטה פעילה")).not.toBeInTheDocument();
   });
 
-  /* The recruitment axis is a view of its own. Asserted as absence rather than deleted,
-     because re-composing the panel into the preparation view is exactly the regression
-     that put two independent state machines in one card (product-spec §399).
-
-     It is now a view of this screen rather than a route of its own, so the assertion is
-     that the preparation view does not render it - not that the screen cannot. */
-  it("leaves the recruitment axis to its own view", async () => {
+  /* Recruitment belongs to Job Detail. Preparation links there without composing its
+     controls into the document workflow. */
+  it("leaves recruitment management to Job Detail", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail())));
 
     renderPage();
@@ -309,37 +305,33 @@ describe("ApplicationPage", () => {
     expect(screen.queryByRole("button", { name: "שמירת השלב" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "שמירת הפעולה" })).not.toBeInTheDocument();
     expect(screen.queryByText("ציר הזמן")).not.toBeInTheDocument();
-    /* The way to it, though, is on this screen. */
-    expect(screen.getByRole("link", { name: "מעקב גיוס" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "מודעת המשרה" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "עדכון נוסח המשרה" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "גרסאות וקבצים" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "פרטי משרה" })).toBeInTheDocument();
   });
 
-  /* Section navigation swaps the panel and the badge together. The masthead reporting one
-     axis while the body reports the other is the confusion the two views exist to
-     prevent, so both are asserted in the same act. */
-  it("navigates between application sections before the masthead and preserves list history", async () => {
+  it("navigates to Job Detail before the masthead and preserves list history", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail())));
 
     renderPage(deterministicSettings, undefined, true);
 
     const navigation = screen.getByRole("navigation", { name: "תחומי המועמדות" });
+    const details = within(navigation).getByRole("link", { name: "פרטי משרה" });
     const preparation = within(navigation).getByRole("link", { name: "הכנת קורות החיים" });
-    const tracking = within(navigation).getByRole("link", { name: "מעקב גיוס" });
     const preparationHeading = screen.getByRole("heading", { level: 1, name: "הכנת קורות החיים" });
     const preparationStatus = await screen.findByText("ממתין לניתוח המשרה");
 
     expect(preparation).toHaveAttribute("aria-current", "page");
-    expect(tracking).not.toHaveAttribute("aria-current");
-    expect(preparation).toHaveAttribute("href", "/applications/app-1");
-    expect(tracking).toHaveAttribute("href", "/applications/app-1?view=tracking");
+    expect(details).not.toHaveAttribute("aria-current");
+    expect(details).toHaveAttribute("href", "/applications/app-1");
+    expect(preparation).toHaveAttribute("href", "/applications/app-1/preparation");
     expect(navigation.compareDocumentPosition(preparationHeading) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
     expect(navigation.compareDocumentPosition(preparationStatus) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
 
-    fireEvent.click(tracking);
+    fireEvent.click(details);
 
-    expect(tracking).toHaveAttribute("aria-current", "page");
-    expect(await screen.findByText("נשמר")).toBeInTheDocument();
-    /* The preparation axis is gone from the masthead, not merely pushed below. */
-    expect(screen.queryByText("ממתין לניתוח המשרה")).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "פרטי משרה" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "בדיקת חזרה" }));
     expect(await screen.findByRole("heading", { name: "לוח המועמדויות" })).toBeInTheDocument();
@@ -399,35 +391,6 @@ describe("ApplicationPage", () => {
        classify something other than what the screen was showing. */
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({ job_snapshot_id: "snap-1" });
     expect((request?.[1]?.headers as Headers).get("Idempotency-Key")).not.toBeNull();
-  });
-
-  /* The posting is amended on the Application that already holds it: one more immutable
-     snapshot beside the one on record, rather than a second Application for the same job. */
-  it("captures an amended posting as a new snapshot of the same application", async () => {
-    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === "POST") {
-        return Promise.resolve(jsonResponse({ application_id: "app-1", job_snapshot_id: "snap-2" }, 201));
-      }
-      return Promise.resolve(jsonResponse(detail()));
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    renderPage();
-    await clickEnabledButton("עדכון נוסח המשרה");
-    fireEvent.change(await screen.findByLabelText("טקסט המשרה"), {
-      target: { value: "Senior Backend Engineer, now remote" },
-    });
-    await clickEnabledButton("שמירת נוסח המשרה");
-
-    expect(await screen.findByText("נשמר תצלום משרה חדש")).toBeInTheDocument();
-    const request = fetchMock.mock.calls.find((call) => call[0] === SNAPSHOTS_PATH);
-    expect(request?.[1]).toEqual(expect.objectContaining({ method: "POST" }));
-    /* The posting is stored exactly as entered, and an absent source URL is `null`
-       rather than an empty string the server would have to interpret. */
-    expect(JSON.parse(String(request?.[1]?.body))).toEqual({
-      job_text: "Senior Backend Engineer, now remote",
-      source_url: null,
-    });
   });
 
   it("does not present a superseded analysis as the one in force", async () => {

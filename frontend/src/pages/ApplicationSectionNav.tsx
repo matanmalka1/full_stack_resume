@@ -4,6 +4,7 @@ import { cx } from "../ui/cx";
 import { type ApplicationView, applicationViews } from "./ApplicationViews";
 
 interface ApplicationSectionNavProps {
+  applicationId: string;
   value: ApplicationView;
 }
 
@@ -11,7 +12,7 @@ interface ApplicationSectionNavProps {
    native keyboard, open-in-new-tab, and middle-click behavior; `replace` preserves the
    existing history contract, where Back returns to the Application list rather than to
    the other section. */
-export const ApplicationSectionNav = ({ value }: ApplicationSectionNavProps) => (
+export const ApplicationSectionNav = ({ applicationId, value }: ApplicationSectionNavProps) => (
   <nav aria-label="תחומי המועמדות">
     <div className="inline-flex gap-1 rounded-surface border border-cv-border bg-cv-surface-muted p-1 shadow-inner">
       {applicationViews.map((option) => (
@@ -25,7 +26,11 @@ export const ApplicationSectionNav = ({ value }: ApplicationSectionNavProps) => 
           )}
           key={option.value}
           replace
-          to={{ search: option.value === "preparation" ? "" : "?view=tracking" }}
+          to={
+            option.value === "details"
+              ? `/applications/${encodeURIComponent(applicationId)}`
+              : `/applications/${encodeURIComponent(applicationId)}/preparation`
+          }
         >
           {option.label}
         </Link>

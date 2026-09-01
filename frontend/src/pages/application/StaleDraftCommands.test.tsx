@@ -168,9 +168,9 @@ const renderPage = () => {
 
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/applications/app-1"]}>
+      <MemoryRouter initialEntries={["/applications/app-1/preparation"]}>
         <Routes>
-          <Route element={<ApplicationPage />} path="/applications/:applicationId" />
+          <Route element={<ApplicationPage />} path="/applications/:applicationId/preparation" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,

@@ -238,7 +238,10 @@ describe("ApplicationListPage", () => {
     renderPage();
 
     expect(await screen.findByText("Follow up with recruiter")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: actionLabel("analyze") })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: actionLabel("analyze") })).toHaveAttribute(
+      "href",
+      "/applications/app-1/preparation",
+    );
   });
 
   it("keeps the latest failed Operation visible after active work ends", async () => {
@@ -258,13 +261,13 @@ describe("ApplicationListPage", () => {
   /* The column is read to decide which row to open next, so it names what is waiting
      rather than counting it, and the badge is the way into the Application that states
      each item beside the control that resolves it. */
-  it("names a blocking reason and links it to the Application", async () => {
+  it("names a blocking reason and links it to preparation", async () => {
     stubList([item({ review_reasons: [reason("HARD_GAP_REQUIRES_DECISION")] })]);
 
     renderPage();
 
     const attention = await screen.findByRole("link", { name: "Acme: יש פער חוסם מול הדרישות" });
-    expect(attention).toHaveAttribute("href", "/applications/app-1");
+    expect(attention).toHaveAttribute("href", "/applications/app-1/preparation");
     expect(within(attention).getByText("יש פער חוסם מול הדרישות")).toBeInTheDocument();
   });
 

@@ -8,20 +8,8 @@ import { applicationDetailQueryOptions } from "./api/applications";
 import { settingsQueryOptions } from "./api/settings";
 import { buttonClasses } from "./ui/Button";
 
-/* The Application named on the header line, and the way back to it.
-
-   `href` is null on the Application screen itself, where a link would point at the page
-   already showing it. Everywhere else it is the return path: the inner screens are three
-   deep, and this is the only ancestor between them and the list. */
-const ApplicationContext = ({
-  company,
-  href,
-  targetRole,
-}: {
-  company: string;
-  href: string | null;
-  targetRole: string;
-}) => {
+/* The Application named on an inner screen's header line, and the way back to Job Detail. */
+const ApplicationContext = ({ company, href, targetRole }: { company: string; href: string; targetRole: string }) => {
   const body = (
     <>
       <span className="block truncate text-support font-bold text-cv-text" dir="auto">
@@ -33,9 +21,7 @@ const ApplicationContext = ({
     </>
   );
 
-  return href === null ? (
-    <div className="min-w-0 border-e border-cv-border pe-3 text-end">{body}</div>
-  ) : (
+  return (
     <Link className="min-w-0 rounded-control border-e border-cv-border pe-3 text-end hover:underline" to={href}>
       {body}
     </Link>
@@ -45,10 +31,9 @@ const ApplicationContext = ({
 export const App = () => {
   const settings = useQuery(settingsQueryOptions).data?.settings;
   const matches = useMatches();
-  /* On the Application screen itself the context link would point at the page showing it.
-     A link back to where you already are is not a way out, so the header states the
-     Application without offering to navigate to it. The route declares that relationship
-     in its handle; this shell does not match a named path to infer it. */
+  /* Job Detail names the company and role in its own content, so repeating the same pair
+     in the shell would make the new owner look duplicated. Inner screens keep the pair as
+     their link back to Job Detail. The route declares that relationship in its handle. */
   const isApplicationScreen = matches.some(
     (match) => (match.handle as { applicationContext?: string } | undefined)?.applicationContext === "self",
   );
@@ -79,10 +64,10 @@ export const App = () => {
             <div className="ms-auto flex min-w-0 items-center gap-3">
               {/* Shown at every width. Hidden below `sm` it was absent exactly where a
                   back gesture is hardest to reach. */}
-              {applicationContext === undefined || applicationId === null ? null : (
+              {applicationContext === undefined || applicationId === null || isApplicationScreen ? null : (
                 <ApplicationContext
                   company={applicationContext.company}
-                  href={isApplicationScreen ? null : `/applications/${encodeURIComponent(applicationId)}`}
+                  href={`/applications/${encodeURIComponent(applicationId)}`}
                   targetRole={applicationContext.target_role}
                 />
               )}
