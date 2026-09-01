@@ -62,6 +62,12 @@ const jsonResponse = (body: unknown, status = 200, contentType = "application/js
     headers: { "Content-Type": contentType },
   });
 
+/* A fresh Response is required for every request because a response body can only be
+   consumed once. Keeping the fetch parameters in the signature also preserves Vitest's
+   call-tuple types for the request assertions below. */
+const emptyJsonFetch = (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> =>
+  Promise.resolve(jsonResponse({}));
+
 const renderPanel = (value: ApplicationDetail = detail()) => {
   const client = new QueryClient({
     defaultOptions: {
@@ -92,7 +98,7 @@ afterEach(() => {
 
 describe("RecruitmentPanel", () => {
   it("sends the exact forward transition and next-action choices, including a clear", async () => {
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({})));
+    const fetchMock = vi.fn(emptyJsonFetch);
     vi.stubGlobal("fetch", fetchMock);
     renderPanel();
 
@@ -140,7 +146,7 @@ describe("RecruitmentPanel", () => {
   });
 
   it("appends the correction and external submission exactly as entered", async () => {
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({})));
+    const fetchMock = vi.fn(emptyJsonFetch);
     vi.stubGlobal("fetch", fetchMock);
     renderPanel();
 
@@ -206,7 +212,7 @@ describe("RecruitmentPanel", () => {
   });
 
   it("syncs untouched next-action fields from a refreshed projection", async () => {
-    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(jsonResponse({}))));
+    vi.stubGlobal("fetch", vi.fn(emptyJsonFetch));
     const { rerenderPanel } = renderPanel();
 
     rerenderPanel(
@@ -225,7 +231,7 @@ describe("RecruitmentPanel", () => {
   });
 
   it("keeps each dirty next-action field and warns when the server changes underneath it", async () => {
-    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(jsonResponse({}))));
+    vi.stubGlobal("fetch", vi.fn(emptyJsonFetch));
     const { rerenderPanel } = renderPanel();
 
     fireEvent.change(screen.getByLabelText("מה לעשות"), {
@@ -247,7 +253,7 @@ describe("RecruitmentPanel", () => {
   });
 
   it("preserves dirty transition and correction choices across projection refreshes", async () => {
-    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(jsonResponse({}))));
+    vi.stubGlobal("fetch", vi.fn(emptyJsonFetch));
     const olderEvent = statusEvent({ id: "status-older", to_status: "applied" });
     const currentEvent = statusEvent({ id: "status-current", to_status: "recruiter_screen" });
     const { rerenderPanel } = renderPanel(detail({ recruitment_timeline: [olderEvent, currentEvent] }));
