@@ -4,7 +4,7 @@ from typing import Any
 
 from sqlalchemy import insert, select, update
 
-from ...application.errors import UnknownRecord
+from ...application.errors import StateConflict, UnknownRecord
 from ...domain.models import ApplicationStatus
 from ...util import new_id, utc_now
 from .base import SqlAlchemyRepositoryBase
@@ -96,3 +96,29 @@ class SqlAlchemyApplicationRepository(SqlAlchemyRepositoryBase):
             )
             if result.rowcount != 1:
                 raise UnknownRecord(application_id)
+
+    def update_application_notes(
+        self, application_id: str, notes: str, expected_notes: str, *, updated_at: str
+    ) -> dict[str, Any]:
+        with self.transaction() as connection:
+            result = connection.execute(
+                update(applications)
+                .where(
+                    applications.c.id == application_id,
+                    applications.c.notes == expected_notes,
+                )
+                .values(notes=notes, updated_at=updated_at)
+            )
+            if result.rowcount != 1:
+                exists = connection.execute(
+                    select(applications.c.id).where(applications.c.id == application_id)
+                ).scalar_one_or_none()
+                if exists is None:
+                    raise UnknownRecord(application_id)
+                raise StateConflict("application notes changed before commit")
+            row = (
+                connection.execute(select(applications).where(applications.c.id == application_id))
+                .mappings()
+                .one()
+            )
+            return dict(row)

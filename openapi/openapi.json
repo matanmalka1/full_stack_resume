@@ -4798,6 +4798,49 @@
         "title": "TransitionStatusRequest",
         "type": "object"
       },
+      "UpdateApplicationNotesRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_notes": {
+            "title": "Expected Notes",
+            "type": "string"
+          },
+          "notes": {
+            "title": "Notes",
+            "type": "string"
+          }
+        },
+        "required": [
+          "notes",
+          "expected_notes"
+        ],
+        "title": "UpdateApplicationNotesRequest",
+        "type": "object"
+      },
+      "UpdateApplicationNotesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "notes": {
+            "title": "Notes",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "application_id",
+          "notes",
+          "updated_at"
+        ],
+        "title": "UpdateApplicationNotesResponse",
+        "type": "object"
+      },
       "UpdateSettingsRequest": {
         "additionalProperties": false,
         "properties": {
@@ -6033,6 +6076,58 @@
         "summary": "Set or clear the one active next action",
         "tags": [
           "tracking"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/notes": {
+      "patch": {
+        "operationId": "update_application_notes_api_v1_applications__application_id__notes_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateApplicationNotesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateApplicationNotesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "Update safe mutable notes for an application",
+        "tags": [
+          "applications"
         ]
       }
     },

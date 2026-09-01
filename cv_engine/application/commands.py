@@ -52,6 +52,14 @@ class CreateJobSnapshotCommand(BoundaryDTO):
     client: WriteClient
 
 
+class UpdateApplicationNotesCommand(BoundaryDTO):
+    application_id: str
+    notes: str
+    expected_notes: str
+    actor_type: Literal["user", "system"] = "user"
+    client: WriteClient
+
+
 class CloseApplicationCommand(BoundaryDTO):
     application_id: str
     actor_type: Literal["user", "system"] = "user"
@@ -567,6 +575,12 @@ class ApplicationMutationResult(BoundaryDTO):
     next_action: str | None = None
     next_action_date: str | None = None
     event_id: str | None = None
+
+
+class UpdatedApplicationNotes(BoundaryDTO):
+    application_id: str
+    notes: str
+    updated_at: str
 
 
 class SubmissionResult(ApplicationMutationResult):

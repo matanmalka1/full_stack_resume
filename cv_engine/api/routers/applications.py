@@ -12,6 +12,7 @@ from ...application.commands import (
     DuplicateCheckCommand,
     IngestCommand,
     ReplaceWorkingDraftCommand,
+    UpdateApplicationNotesCommand,
 )
 from ...application.queries import (
     ActivityFilter,
@@ -38,6 +39,8 @@ from ..schemas.applications import (
     DecisionRecordResponse,
     DuplicateCheckRequest,
     DuplicateCheckResponse,
+    UpdateApplicationNotesRequest,
+    UpdateApplicationNotesResponse,
 )
 from ..schemas.drafts import GenerateWorkingDraftRequest, ReplaceWorkingDraftRequest
 from ..schemas.operations import OperationResponse
@@ -125,6 +128,27 @@ def list_applications(
 def application_detail(application_id: str, services: Services) -> ApplicationDetailResponse:
     result = services.queries.application_detail(application_id)
     return ApplicationDetailResponse.model_validate(result.model_dump(mode="json"))
+
+
+@router.patch(
+    "/{application_id}/notes",
+    response_model=UpdateApplicationNotesResponse,
+    summary="Update safe mutable notes for an application",
+)
+def update_application_notes(
+    application_id: str,
+    request: UpdateApplicationNotesRequest,
+    services: Services,
+) -> UpdateApplicationNotesResponse:
+    result = services.applications.update_notes(
+        UpdateApplicationNotesCommand(
+            application_id=application_id,
+            **request.model_dump(mode="python"),
+            actor_type="user",
+            client="web",
+        )
+    )
+    return UpdateApplicationNotesResponse.model_validate(result.model_dump(mode="json"))
 
 
 @router.get(

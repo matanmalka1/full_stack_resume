@@ -203,6 +203,26 @@ def test_application_http_create_read_snapshot_and_close_sequence(services) -> N
         assert detail.json()["latest_snapshot"]["id"] == snapshot_id
         assert detail.json()["latest_snapshot"]["job_text"] == "HTTP initial text\r\n"
 
+        notes = api.patch(
+            f"{API_PREFIX}/applications/{application_id}/notes",
+            headers=MUTATION_HEADERS,
+            json={"notes": "Recruiter referred me", "expected_notes": ""},
+        )
+        assert notes.status_code == 200
+        assert notes.json()["notes"] == "Recruiter referred me"
+        stale_notes = api.patch(
+            f"{API_PREFIX}/applications/{application_id}/notes",
+            headers=MUTATION_HEADERS,
+            json={"notes": "Overwrite", "expected_notes": ""},
+        )
+        assert stale_notes.status_code == 409
+        assert api.get(f"{API_PREFIX}/applications/{application_id}").json()["application"][
+            "notes"
+        ] == ("Recruiter referred me")
+        notes_audit = services.repository.audit_records(application_id)[-1]
+        assert notes_audit["action"] == "update_application_notes"
+        assert notes_audit["details_json"] == '{"field":"notes"}'
+
         replacement = api.post(
             f"{API_PREFIX}/applications/{application_id}/job-snapshots",
             headers=MUTATION_HEADERS,

@@ -54,6 +54,17 @@ class CreateJobSnapshotResponse(HttpSchema):
     job_snapshot_id: str
 
 
+class UpdateApplicationNotesRequest(HttpSchema):
+    notes: str
+    expected_notes: str
+
+
+class UpdateApplicationNotesResponse(HttpSchema):
+    application_id: str
+    notes: str
+    updated_at: str
+
+
 class ApplicationResponse(HttpSchema):
     id: str
     company: str

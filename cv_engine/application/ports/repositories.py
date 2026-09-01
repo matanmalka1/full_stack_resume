@@ -73,6 +73,10 @@ class ApplicationStore(Protocol):
 
     def set_normalized_role(self, application_id: str, normalized_role: str) -> None: ...
 
+    def update_application_notes(
+        self, application_id: str, notes: str, expected_notes: str, *, updated_at: str
+    ) -> dict[str, Any]: ...
+
     def record_event(
         self, application_id: str, event_type: str, payload: dict[str, Any]
     ) -> str: ...

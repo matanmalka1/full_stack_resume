@@ -14,6 +14,8 @@ import type {
   ClosedApplication,
   CreatedApplication,
   CreatedJobSnapshot,
+  UpdatedApplicationNotes,
+  UpdateApplicationNotesRequest,
   DuplicateCheckResult,
   DuplicateMatch,
   DuplicateMatchReason,
@@ -185,6 +187,9 @@ const applicationListPath = (query: ApplicationListQuery): ApiPath => {
 
 const applicationPath = (applicationId: string): ApiPath => `/api/v1/applications/${encodeURIComponent(applicationId)}`;
 
+const applicationNotesPath = (applicationId: string): ApiPath =>
+  `/api/v1/applications/${encodeURIComponent(applicationId)}/notes`;
+
 const jobSnapshotsPath = (applicationId: string): ApiPath =>
   `/api/v1/applications/${encodeURIComponent(applicationId)}/job-snapshots`;
 
@@ -283,6 +288,17 @@ export const createJobSnapshot = async (
 
   const response = await apiRequest<CreatedJobSnapshot>(jobSnapshotsPath(applicationId), {
     method: "POST",
+    body,
+  });
+  return response.data;
+};
+
+export const updateApplicationNotes = async (
+  applicationId: string,
+  body: UpdateApplicationNotesRequest,
+): Promise<UpdatedApplicationNotes> => {
+  const response = await apiRequest<UpdatedApplicationNotes>(applicationNotesPath(applicationId), {
+    method: "PATCH",
     body,
   });
   return response.data;

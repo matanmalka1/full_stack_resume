@@ -275,6 +275,23 @@ export interface paths {
         patch: operations["set_next_action_api_v1_applications__application_id__next_action_patch"];
         trace?: never;
     };
+    "/api/v1/applications/{application_id}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update safe mutable notes for an application */
+        patch: operations["update_application_notes_api_v1_applications__application_id__notes_patch"];
+        trace?: never;
+    };
     "/api/v1/applications/{application_id}/status": {
         parameters: {
             query?: never;
@@ -2981,6 +2998,22 @@ export interface components {
              */
             target_status: "saved" | "recruiter_screen" | "interview" | "assignment" | "final_stage" | "offer" | "accepted" | "rejected" | "withdrawn" | "closed";
         };
+        /** UpdateApplicationNotesRequest */
+        UpdateApplicationNotesRequest: {
+            /** Expected Notes */
+            expected_notes: string;
+            /** Notes */
+            notes: string;
+        };
+        /** UpdateApplicationNotesResponse */
+        UpdateApplicationNotesResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Notes */
+            notes: string;
+            /** Updated At */
+            updated_at: string;
+        };
         /** UpdateSettingsRequest */
         UpdateSettingsRequest: {
             /** Ai Enabled Override */
@@ -3632,6 +3665,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApplicationMutationResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_application_notes_api_v1_applications__application_id__notes_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateApplicationNotesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateApplicationNotesResponse"];
                 };
             };
             /** @description The request did not match the API contract. */

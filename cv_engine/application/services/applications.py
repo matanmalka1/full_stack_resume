@@ -13,6 +13,8 @@ from ..commands import (
     DuplicateMatchReason,
     IngestCommand,
     IngestedApplication,
+    UpdatedApplicationNotes,
+    UpdateApplicationNotesCommand,
 )
 from ..errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
@@ -190,6 +192,36 @@ class ApplicationService(ServiceBase[PreparationRepository]):
         return CreatedJobSnapshot(
             application_id=command.application_id,
             job_snapshot_id=created_id,
+        )
+
+    def update_notes(self, command: UpdateApplicationNotesCommand) -> UpdatedApplicationNotes:
+        now = utc_now()
+        with self.repo.unit_of_work() as uow:
+            transaction = self.repo.bind(uow)
+            updated = transaction.update_application_notes(
+                command.application_id,
+                command.notes,
+                command.expected_notes,
+                updated_at=now,
+            )
+            transaction.insert_audit(
+                AuditRecord(
+                    id=new_id(),
+                    application_id=command.application_id,
+                    action="update_application_notes",
+                    entity_type="application",
+                    entity_id=command.application_id,
+                    actor_type=command.actor_type,
+                    client=command.client,
+                    occurred_at=now,
+                    details={"field": "notes"},
+                )
+            )
+            uow.commit()
+        return UpdatedApplicationNotes(
+            application_id=command.application_id,
+            notes=updated["notes"],
+            updated_at=updated["updated_at"],
         )
 
 

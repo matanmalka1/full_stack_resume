@@ -56,6 +56,8 @@ export type ClosedApplication = ApiSchemas["CloseApplicationResponse"];
    snapshot and nothing else. */
 export type CreateJobSnapshotRequest = ApiSchemas["CreateJobSnapshotRequest"];
 export type CreatedJobSnapshot = ApiSchemas["CreateJobSnapshotResponse"];
+export type UpdateApplicationNotesRequest = ApiSchemas["UpdateApplicationNotesRequest"];
+export type UpdatedApplicationNotes = ApiSchemas["UpdateApplicationNotesResponse"];
 export type DuplicateCheckResult = ApiSchemas["DuplicateCheckResponse"];
 export type DuplicateMatch = ApiSchemas["DuplicateMatchResponse"];
 export type DuplicateMatchReason = DuplicateMatch["matched_on"][number];
