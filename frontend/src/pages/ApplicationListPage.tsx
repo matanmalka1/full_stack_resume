@@ -74,7 +74,6 @@ export const ApplicationListPage = () => {
     <PageShell
       actions={newApplication}
       description="מעקב אחר תהליכי התאמת קורות החיים למשרות."
-      surface="plain"
       title="המועמדויות"
     >
       {close.error === null ? null : (

@@ -124,7 +124,6 @@ export const JobDetailsPage = () => {
       }
       navigation={<ApplicationSectionNav applicationId={applicationId} value="details" />}
       eyebrow={detail === undefined ? undefined : <span dir="auto">{detail.application.company}</span>}
-      surface="plain"
       title={detail?.application.target_role ?? "פרטי משרה"}
     >
       <QueryState
