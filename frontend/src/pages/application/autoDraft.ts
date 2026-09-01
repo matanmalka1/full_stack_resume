@@ -33,3 +33,18 @@ export const autoDraftSources = (
     planId: detail.active_selection_plan_id,
   };
 };
+
+/* The same opt-in guard, asked one step earlier: not "may the continuation be sent now"
+   but "is one expected the moment this analysis lands". It is the announcement condition
+   only - `autoDraftSources` above stays the sole authority on dispatch - so it reads the
+   two facts that are already true while the analysis runs and leaves the projection to
+   decide the rest. A draft appearing without a press is otherwise the reader's first news
+   that the setting is on, and the setting lives on another screen. */
+export const autoDraftIsAnticipated = (
+  settings: Settings | undefined,
+  detail: ApplicationDetail | undefined,
+): boolean =>
+  settings?.auto_generate_when_review_not_required === true &&
+  detail !== undefined &&
+  detail.working_draft_state === "none" &&
+  detail.active_operation?.operation_type === "analyze_job";
