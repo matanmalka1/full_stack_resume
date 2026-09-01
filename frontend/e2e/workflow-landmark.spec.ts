@@ -84,7 +84,7 @@ test.describe("the workflow landmark", () => {
 
     await workflow.getByRole("link", { name: "חזרה לשלב משרה חדשה" }).click();
 
-    await expect(page.getByRole("heading", { level: 1, name: "פרטי משרה" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Backend Engineer" })).toBeVisible();
     await expect(page).toHaveURL(/\/applications\/app-1$/);
   });
 

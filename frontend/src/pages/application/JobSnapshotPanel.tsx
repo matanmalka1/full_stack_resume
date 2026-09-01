@@ -1,7 +1,11 @@
+import { ExternalLink } from "lucide-react";
+
 import type { ApplicationDetail } from "../../api/contracts";
 import { LtrText } from "../../ui/LtrText";
-import { SummaryList } from "../../ui/SummaryList";
 import { Disclosure } from "../../ui/Disclosure";
+import { SummaryList } from "../../ui/SummaryList";
+import { formatDateTime } from "../../ui/formatDateTime";
+import { JobPostingUpdate } from "./JobPostingUpdate";
 
 /* The active posting on Job Detail. The projection already carries `latest_snapshot`, so
    the source remains readable before analysis and after the preparation workflow ends.
@@ -10,12 +14,12 @@ import { Disclosure } from "../../ui/Disclosure";
    analysis above is what the reader came for; opening it is a deliberate act of checking.
 
    `latest_snapshot` is the newest immutable snapshot of the Application. */
-const dateFormat = new Intl.DateTimeFormat("he-IL", { dateStyle: "short", timeStyle: "short" });
-
-/* An unparsable value is shown as it arrived rather than as "Invalid Date". */
-const formatSnapshotDate = (value: string): string => {
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : dateFormat.format(parsed);
+const sourceHostname = (value: string): string => {
+  try {
+    return new URL(value).hostname.replace(/^www\./, "");
+  } catch {
+    return "המקור השמור";
+  }
 };
 
 export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
@@ -23,7 +27,7 @@ export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
   const jobText = typeof snapshot.job_text === "string" ? snapshot.job_text.trim() : "";
 
   return (
-    <section aria-labelledby="job-snapshot-heading" className="rounded-surface border border-cv-border p-5">
+    <section aria-labelledby="job-snapshot-heading">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-cv-border pb-4">
         <h2 className="text-body font-semibold text-cv-text" id="job-snapshot-heading">
           מודעת המשרה
@@ -44,17 +48,20 @@ export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
                        a source mid-decision, not leaving the workflow. */
                     value: (
                       <a
-                        className="text-cv-accent underline underline-offset-2"
+                        className="inline-flex max-w-full items-center gap-1.5 text-cv-accent hover:underline"
                         href={snapshot.source_url}
                         rel="noreferrer noopener"
                         target="_blank"
+                        title={snapshot.source_url}
                       >
-                        <LtrText>{snapshot.source_url}</LtrText>
+                        פתיחת מודעת המקור
+                        <LtrText>({sourceHostname(snapshot.source_url)})</LtrText>
+                        <ExternalLink aria-hidden="true" className="size-3.5 shrink-0" />
                       </a>
                     ),
                   },
                 ]),
-            { term: "נלכד", value: formatSnapshotDate(snapshot.captured_at) },
+            { term: "נלכד", value: formatDateTime(snapshot.captured_at, "short") },
           ]}
         />
 
@@ -77,6 +84,8 @@ export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
             </p>
           </Disclosure>
         )}
+
+        <JobPostingUpdate detail={detail} />
       </div>
     </section>
   );

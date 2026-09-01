@@ -13,15 +13,8 @@ import { Button, buttonClasses } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 import { LtrText } from "../../ui/LtrText";
 import { SummaryList } from "../../ui/SummaryList";
+import { formatDateTime } from "../../ui/formatDateTime";
 import { artifactTypeLabel, isDeliverableArtifact, lifecycleLabel, unavailableReasonLabel } from "./artifactLabels";
-
-const dateFormat = new Intl.DateTimeFormat("he-IL", { dateStyle: "short", timeStyle: "short" });
-
-/* An unparsable value is shown as it arrived rather than as "Invalid Date". */
-const formatDate = (value: string): string => {
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : dateFormat.format(parsed);
-};
 
 const formatBytes = (size: number): string =>
   size < 1024
@@ -50,7 +43,7 @@ const ArtifactRow = ({ artifact }: { artifact: ArtifactVersion }) => {
   const metadataEntries = Object.entries(artifact.metadata);
 
   return (
-    <li className="rounded-control border border-cv-border bg-cv-surface p-4">
+    <li className="py-3 first:pt-0 last:pb-0">
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
         <div className="min-w-0">
           <p className="font-medium text-cv-text" dir="auto">
@@ -58,19 +51,11 @@ const ArtifactRow = ({ artifact }: { artifact: ArtifactVersion }) => {
           </p>
           <p className="mt-1 text-support text-cv-text-muted">
             גרסה <LtrText>{artifact.version_number}</LtrText> · {lifecycleLabel(artifact.lifecycle_status)} ·{" "}
-            {formatDate(artifact.created_at)}
+            {formatDateTime(artifact.created_at, "short")}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {/* The exact record this artifact belongs to, never the Application's latest:
-              an approved revision is immutable and a link that resolved `latest` would
-              answer with a different one. */}
-          {artifact.revision_id == null ? null : (
-            <Link className={buttonClasses("ghost")} to={`/revisions/${encodeURIComponent(artifact.revision_id)}`}>
-              מעבר לגרסה
-            </Link>
-          )}
-          <Button aria-expanded={open} onClick={() => setOpen(!open)} variant="secondary">
+          <Button aria-expanded={open} onClick={() => setOpen(!open)} variant="ghost">
             {open ? "סגירת הפרטים" : "פרטים ושלמות"}
           </Button>
         </div>
@@ -92,8 +77,12 @@ const ArtifactRow = ({ artifact }: { artifact: ArtifactVersion }) => {
               { term: "מזהה גרסת ארטיפקט", value: artifact.id, ltr: true },
               { term: "שם לוגי", value: artifact.logical_name, ltr: true },
               { term: "חתימת תוכן", value: artifact.content_hash, ltr: true },
-              ...(artifact.approved_at == null ? [] : [{ term: "אושר", value: formatDate(artifact.approved_at) }]),
-              ...(artifact.submitted_at == null ? [] : [{ term: "הוגש", value: formatDate(artifact.submitted_at) }]),
+              ...(artifact.approved_at == null
+                ? []
+                : [{ term: "אושר", value: formatDateTime(artifact.approved_at, "short") }]),
+              ...(artifact.submitted_at == null
+                ? []
+                : [{ term: "הוגש", value: formatDateTime(artifact.submitted_at, "short") }]),
               ...(artifact.profile == null ? [] : [{ term: "פרופיל", value: artifact.profile }]),
               ...(artifact.track == null ? [] : [{ term: "מסלול", value: artifact.track }]),
               ...(artifact.emphasis == null ? [] : [{ term: "דגש", value: artifact.emphasis }]),
@@ -141,6 +130,58 @@ const ArtifactRow = ({ artifact }: { artifact: ArtifactVersion }) => {
   );
 };
 
+interface ArtifactGroup {
+  artifacts: ArtifactVersion[];
+  key: string;
+  revisionId: string | null;
+}
+
+const groupArtifacts = (artifacts: ArtifactVersion[]): ArtifactGroup[] => {
+  const groups = new Map<string, ArtifactGroup>();
+
+  for (const artifact of artifacts) {
+    const revisionId = artifact.revision_id ?? null;
+    const key = revisionId === null ? `artifact:${artifact.id}` : `revision:${revisionId}`;
+    const group = groups.get(key);
+
+    if (group === undefined) {
+      groups.set(key, { artifacts: [artifact], key, revisionId });
+    } else {
+      group.artifacts.push(artifact);
+    }
+  }
+
+  return [...groups.values()];
+};
+
+const ArtifactGroupList = ({ artifacts }: { artifacts: ArtifactVersion[] }) => (
+  <ul className="mt-4 flex flex-col gap-3">
+    {groupArtifacts(artifacts).map((group) => (
+      <li className="rounded-control border border-cv-border bg-cv-surface px-4" key={group.key}>
+        {group.revisionId === null ? null : (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cv-border py-3">
+            <div>
+              <p className="text-support font-semibold text-cv-text">גרסת קורות חיים</p>
+              <p className="text-support text-cv-text-muted">
+                {formatDateTime(group.artifacts[0]?.created_at ?? "", "short")} ·{" "}
+                {group.artifacts.length === 1 ? "קובץ אחד" : `${group.artifacts.length} קבצים`}
+              </p>
+            </div>
+            <Link className={buttonClasses("ghost")} to={`/revisions/${encodeURIComponent(group.revisionId)}`}>
+              מעבר לגרסה
+            </Link>
+          </div>
+        )}
+        <ul className="divide-y divide-cv-border">
+          {group.artifacts.map((artifact) => (
+            <ArtifactRow artifact={artifact} key={artifact.id} />
+          ))}
+        </ul>
+      </li>
+    ))}
+  </ul>
+);
+
 /* §14 of the product spec: the Application's own revisions-and-artifacts section, not a
    separate artifact manager.
 
@@ -169,7 +210,7 @@ export const ArtifactsPanel = ({ applicationId }: { applicationId: string }) => 
   }
 
   return (
-    <section aria-labelledby="artifacts-heading" className="rounded-surface border border-cv-border p-5">
+    <section aria-labelledby="artifacts-heading">
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 border-b border-cv-border pb-4">
         <div className="min-w-0">
           <h2 className="text-body font-semibold text-cv-text" id="artifacts-heading">
@@ -190,13 +231,7 @@ export const ArtifactsPanel = ({ applicationId }: { applicationId: string }) => 
         />
       )}
 
-      {deliverables.length === 0 ? null : (
-        <ul className="mt-4 flex flex-col gap-3">
-          {deliverables.map((artifact) => (
-            <ArtifactRow artifact={artifact} key={artifact.id} />
-          ))}
-        </ul>
-      )}
+      {deliverables.length === 0 ? null : <ArtifactGroupList artifacts={deliverables} />}
 
       {internal.length === 0 ? null : (
         <div className="mt-4 flex flex-col gap-3">
@@ -205,13 +240,7 @@ export const ArtifactsPanel = ({ applicationId }: { applicationId: string }) => 
               {showInternal ? "הסתרת תוצרי המנוע" : `הצגת תוצרי המנוע (${internal.length})`}
             </Button>
           </div>
-          {showInternal ? (
-            <ul className="flex flex-col gap-3">
-              {internal.map((artifact) => (
-                <ArtifactRow artifact={artifact} key={artifact.id} />
-              ))}
-            </ul>
-          ) : null}
+          {showInternal ? <ArtifactGroupList artifacts={internal} /> : null}
         </div>
       )}
     </section>

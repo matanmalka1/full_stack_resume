@@ -375,7 +375,11 @@ describe("ApplicationListPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "הבא" }));
 
-    expect(await screen.findByRole("link", { name: "Last Company" })).toBeInTheDocument();
+    /* A page-boundary navigation starts a fresh server query. Under the full parallel
+       suite, scheduling that query can exceed Testing Library's one-second default even
+       though the mocked response is immediate. Keep the longer budget local to this
+       multi-render transition rather than weakening every assertion. */
+    expect(await screen.findByRole("link", { name: "Last Company" }, { timeout: 5_000 })).toBeInTheDocument();
     expect(screen.getByText("26–26 מתוך 26")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenLastCalledWith(
       expect.stringContaining("offset=25"),

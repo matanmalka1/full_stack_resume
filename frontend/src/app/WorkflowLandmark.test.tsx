@@ -105,4 +105,11 @@ describe("workflow landmark navigation", () => {
     expect(screen.queryAllByRole("link")).toHaveLength(0);
     expect(screen.getByRole("img")).toHaveAccessibleName(/שלב 1 מתוך 5/);
   });
+
+  it("announces a completed workflow when Ready has no current step", () => {
+    landmark("ready", workflowDestinations("app-1", detail({ latest_ready_revision_id: "rev-1" })));
+
+    expect(screen.getByRole("navigation")).toHaveAccessibleName("שלבי הכנת קורות החיים: הושלם, 5 מתוך 5");
+    expect(screen.getByRole("link", { name: "פתיחת שלב מוכן" })).toHaveAttribute("href", "/revisions/rev-1");
+  });
 });

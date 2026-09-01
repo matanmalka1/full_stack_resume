@@ -306,7 +306,7 @@ describe("ApplicationPage", () => {
     expect(screen.queryByRole("button", { name: "שמירת הפעולה" })).not.toBeInTheDocument();
     expect(screen.queryByText("ציר הזמן")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "מודעת המשרה" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "עדכון נוסח המשרה" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "שמירת נוסח חדש" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "גרסאות וקבצים" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "פרטי משרה" })).toBeInTheDocument();
   });

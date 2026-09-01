@@ -46,12 +46,12 @@ interface WorkflowStepsProps {
 const visibilityClasses = (step: WorkflowStep) =>
   step.state === "current" || step.href !== undefined ? "flex" : "hidden md:flex";
 
-const StepBody = ({ step }: { step: WorkflowStep }) => (
+const StepBody = ({ finalCompletion, step }: { finalCompletion: boolean; step: WorkflowStep }) => (
   <>
     <span
       className={cx(
         "whitespace-nowrap text-support",
-        stateClasses[step.state],
+        finalCompletion ? "font-bold text-cv-success" : stateClasses[step.state],
         step.href === undefined ? "" : "group-hover:text-cv-text group-hover:underline",
       )}
     >
@@ -74,33 +74,42 @@ const StepBody = ({ step }: { step: WorkflowStep }) => (
 export const WorkflowSteps = ({ label, steps }: WorkflowStepsProps) => {
   const current = steps.find((step) => step.state === "current");
   const position = current === undefined ? null : steps.indexOf(current) + 1;
+  const completed = current === undefined && steps.length > 0 && steps.every((step) => step.state === "complete");
   /* One sentence for anyone not reading the bar, which is also the whole of what the bar
      says: where the work is, and out of how many stages. */
-  const description = position === null ? label : `${label}: שלב ${position} מתוך ${steps.length}, ${current?.label}`;
+  const description = completed
+    ? `${label}: הושלם, ${steps.length} מתוך ${steps.length}`
+    : position === null
+      ? label
+      : `${label}: שלב ${position} מתוך ${steps.length}, ${current?.label}`;
   const navigable = steps.some((step) => step.href !== undefined);
 
   const row = (
     <div className="flex items-end gap-1.5 md:gap-2">
-      {steps.map((step) =>
+      {steps.map((step, index) =>
         step.href === undefined ? (
           <div
             aria-hidden="true"
             className={cx("min-w-0 flex-1 flex-col gap-1.5", visibilityClasses(step))}
             key={step.label}
           >
-            <StepBody step={step} />
+            <StepBody finalCompletion={completed && index === steps.length - 1} step={step} />
           </div>
         ) : (
           <Link
             /* "חזרה" only where it is true. The current stage is a link when its screen is
                not the one open, and calling that a way back would misname it. */
             aria-current={step.state === "current" ? "step" : undefined}
-            aria-label={`${step.state === "complete" ? "חזרה" : "מעבר"} לשלב ${step.label}`}
+            aria-label={
+              completed && index === steps.length - 1
+                ? `פתיחת שלב ${step.label}`
+                : `${step.state === "complete" ? "חזרה" : "מעבר"} לשלב ${step.label}`
+            }
             className={cx("group min-w-0 flex-1 flex-col gap-1.5 rounded-control", visibilityClasses(step))}
             key={step.label}
             to={step.href}
           >
-            <StepBody step={step} />
+            <StepBody finalCompletion={completed && index === steps.length - 1} step={step} />
           </Link>
         ),
       )}

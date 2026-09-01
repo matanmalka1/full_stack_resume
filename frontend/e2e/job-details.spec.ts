@@ -69,7 +69,7 @@ test.describe("the Job Detail screen", () => {
   }) => {
     await page.goto("/applications/app-1");
 
-    await expect(page.getByRole("heading", { level: 1, name: "פרטי משרה" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Backend Engineer" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "מודעת המשרה" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "מעקב גיוס" })).toBeVisible();
     await expect(page.getByRole("link", { name: "הכנת קורות החיים" })).toHaveAttribute(

@@ -11,7 +11,7 @@ import { Button } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 import { Field } from "../../ui/Field";
 import { TextArea, TextInput } from "../../ui/TextInput";
-import { JobTextFileField } from "../new-application/JobTextFileField";
+import { JobTextFileField } from "./JobTextFileField";
 
 /* Native input affordance, not a second validation policy - the server stays the
    authority on the URL, exactly as it is on the intake screen. */
@@ -80,18 +80,16 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
   });
 
   return (
-    <section aria-labelledby="job-posting-update-heading" className="rounded-surface border border-cv-border p-5">
+    <div className="border-t border-cv-border pt-4">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <div className="min-w-0">
-          <h2 className="text-body font-semibold text-cv-text" id="job-posting-update-heading">
-            עדכון נוסח המשרה
-          </h2>
+          <h3 className="text-support font-semibold text-cv-text">המודעה השתנתה?</h3>
           <p className="mt-1 text-support leading-6 text-cv-text-muted">
-            אם המודעה עודכנה, אפשר לשמור את הנוסח החדש כאן במקום לפתוח מועמדות נוספת.
+            שמירת נוסח חדש יוצרת תצלום נוסף ושומרת את הגרסה הקודמת ללא שינוי.
           </p>
         </div>
         <Button aria-expanded={open} onClick={() => setOpen(!open)} variant="secondary">
-          {open ? "ביטול העדכון" : "עדכון נוסח המשרה"}
+          {open ? "ביטול" : "שמירת נוסח חדש"}
         </Button>
       </div>
 
@@ -178,6 +176,6 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
           />
         </form>
       ) : null}
-    </section>
+    </div>
   );
 };

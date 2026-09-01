@@ -9,9 +9,9 @@ import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
 import { StatusBadge } from "../ui/StatusBadge";
 import { SummaryList } from "../ui/SummaryList";
+import { dateTimesMatch, formatDateTime } from "../ui/formatDateTime";
 import { ApplicationSectionNav } from "./ApplicationSectionNav";
 import { ArtifactsPanel } from "./application/ArtifactsPanel";
-import { JobPostingUpdate } from "./application/JobPostingUpdate";
 import { JobSnapshotPanel } from "./application/JobSnapshotPanel";
 import {
   draftStateIsImplied,
@@ -25,16 +25,6 @@ import {
 } from "./application/applicationLabels";
 import { RecruitmentPanel } from "./recruitment/RecruitmentPanel";
 
-const dateTimeFormat = new Intl.DateTimeFormat("he-IL", {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
-
-const formatDateTime = (value: string): string => {
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : dateTimeFormat.format(parsed);
-};
-
 const sourceLabel = (source: string): string => (source === "manual" ? "הזנה ידנית" : source);
 
 /* Job Detail owns the job and recruitment facts. Preparation is represented here only
@@ -43,15 +33,13 @@ const JobOverview = ({ detail }: { detail: ApplicationDetail }) => {
   const application = detail.application;
 
   return (
-    <section aria-labelledby="job-overview-heading" className="rounded-surface border border-cv-border p-5">
+    <section aria-labelledby="job-overview-heading">
       <h2 className="text-body font-semibold text-cv-text" id="job-overview-heading">
-        פרטים כלליים
+        פרטי המועמדות
       </h2>
       <div className="mt-4">
         <SummaryList
           items={[
-            { term: "חברה", value: application.company },
-            { term: "תפקיד", value: application.target_role },
             { term: "מקור המועמדות", value: sourceLabel(application.source) },
             ...(detail.terminal_outcome == null
               ? []
@@ -60,7 +48,9 @@ const JobOverview = ({ detail }: { detail: ApplicationDetail }) => {
               ? []
               : [{ term: "קשר אחרון", value: formatDateTime(application.last_contact_date) }]),
             { term: "נוצרה", value: formatDateTime(application.created_at) },
-            { term: "עודכנה לאחרונה", value: formatDateTime(application.updated_at) },
+            ...(dateTimesMatch(application.created_at, application.updated_at)
+              ? []
+              : [{ term: "עודכנה לאחרונה", value: formatDateTime(application.updated_at) }]),
           ]}
         />
       </div>
@@ -77,7 +67,7 @@ const JobOverview = ({ detail }: { detail: ApplicationDetail }) => {
 };
 
 const PreparationSummary = ({ detail }: { detail: ApplicationDetail }) => (
-  <section aria-labelledby="preparation-summary-heading" className="rounded-surface border border-cv-border p-5">
+  <section aria-labelledby="preparation-summary-heading">
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div>
         <h2 className="text-body font-semibold text-cv-text" id="preparation-summary-heading">
@@ -150,7 +140,9 @@ export const JobDetailsPage = () => {
         )
       }
       navigation={<ApplicationSectionNav applicationId={applicationId} value="details" />}
-      title="פרטי משרה"
+      eyebrow={detail === undefined ? undefined : <span dir="auto">{detail.application.company}</span>}
+      title={detail?.application.target_role ?? "פרטי משרה"}
+      width="detail"
     >
       <QueryState
         error={query.error}
@@ -159,10 +151,9 @@ export const JobDetailsPage = () => {
         loadingLabel="טוען את פרטי המשרה…"
       >
         {detail === undefined ? null : (
-          <div className="flex flex-col gap-5">
+          <div className="flex flex-col divide-y divide-cv-border [&>section]:py-6 [&>section:first-child]:pt-0 [&>section:last-child]:pb-0">
             <JobOverview detail={detail} />
             <JobSnapshotPanel detail={detail} />
-            <JobPostingUpdate detail={detail} />
             <PreparationSummary detail={detail} />
             <RecruitmentPanel detail={detail} />
             <ArtifactsPanel applicationId={applicationId} />

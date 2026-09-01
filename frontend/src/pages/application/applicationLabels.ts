@@ -66,14 +66,15 @@ export const workingDraftStateTones: Record<WorkingDraftState, StatusTone> = {
   stale: "warning",
 };
 
-/* `working_draft_state === "none"` is news only once a draft could exist. At the stages
-   below it restates the preparation stage, so the masthead suppresses the duplicate
-   badge. `ready_to_draft` is reached both with no draft and with a stale draft; checking
-   `none` as well is what distinguishes those paths. */
+/* `working_draft_state === "none"` is news only while a draft is expected but absent.
+   Before drafting it merely restates the preparation stage; after approval it is the
+   normal result of deactivating the draft behind an immutable milestone. */
 const preparationStatesImplyingNoDraft = new Set<PreparationState>([
   "needs_analysis",
   "needs_review",
   "ready_to_draft",
+  "approved",
+  "ready",
 ]);
 
 export const draftStateIsImplied = (detail: ApplicationDetail): boolean =>

@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { ApplicationDetail } from "../api/contracts";
+import type { ApplicationDetail, ArtifactVersion } from "../api/contracts";
 import { JobDetailsPage } from "./JobDetailsPage";
 
 const detail = (): ApplicationDetail =>
@@ -51,6 +51,19 @@ const jsonResponse = (body: unknown): Response =>
     headers: { "Content-Type": "application/json" },
   });
 
+const artifact = (id: string, artifactType: string): ArtifactVersion => ({
+  artifact_id: `artifact-${id}`,
+  artifact_type: artifactType,
+  content_hash: `hash-${id}`,
+  created_at: "2026-08-25T08:00:00Z",
+  id,
+  lifecycle_status: "rendered",
+  logical_name: `${id}.html`,
+  metadata: {},
+  revision_id: "revision-1",
+  version_number: 1,
+});
+
 const renderPage = (fetchImplementation?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) => {
   const client = new QueryClient({
     defaultOptions: {
@@ -88,13 +101,13 @@ describe("JobDetailsPage", () => {
   it("owns the job posting and recruitment controls before analysis exists", async () => {
     renderPage();
 
-    expect(screen.getByRole("heading", { level: 1, name: "פרטי משרה" })).toBeInTheDocument();
-    expect(await screen.findByText("Acme")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Backend Engineer" })).toBeInTheDocument();
+    expect(screen.getByText("Acme")).toBeInTheDocument();
     expect(screen.getByText("Backend Engineer")).toBeInTheDocument();
     expect(screen.getByText("Referral from a former colleague")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "https://example.com/jobs/1" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /פתיחת מודעת המקור.*example\.com/ })).toBeInTheDocument();
     expect(screen.getByText("Senior Backend Engineer")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "עדכון נוסח המשרה" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "שמירת נוסח חדש" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "מעקב גיוס" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "שמירת השלב" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "שמירת הפעולה" })).toBeInTheDocument();
@@ -113,6 +126,39 @@ describe("JobDetailsPage", () => {
     );
   });
 
+  it("suppresses milestone-implied draft absence and an unchanged update timestamp", async () => {
+    const readyDetail: ApplicationDetail = {
+      ...detail(),
+      preparation_state: "ready",
+      working_draft_state: "none",
+      latest_ready_revision_id: "revision-1",
+      application: {
+        ...detail().application,
+        updated_at: detail().application.created_at,
+      },
+    };
+    renderPage((input) =>
+      Promise.resolve(String(input).endsWith("/artifacts") ? jsonResponse({ items: [] }) : jsonResponse(readyDetail)),
+    );
+
+    expect(await screen.findByText("קורות החיים מוכנים")).toBeInTheDocument();
+    expect(screen.queryByText("אין טיוטה פעילה")).not.toBeInTheDocument();
+    expect(screen.queryByText("עודכנה לאחרונה")).not.toBeInTheDocument();
+  });
+
+  it("groups deliverable files by immutable revision and offers one revision link", async () => {
+    renderPage((input) =>
+      Promise.resolve(
+        String(input).includes("/artifacts")
+          ? jsonResponse({ items: [artifact("pdf-1", "resume_pdf"), artifact("html-1", "resume_html")] })
+          : jsonResponse(detail()),
+      ),
+    );
+
+    expect(await screen.findByText(/2 קבצים/)).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "מעבר לגרסה" })).toHaveLength(1);
+  });
+
   it("captures an amended posting as a new immutable snapshot from Job Detail", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input).endsWith("/job-snapshots") && init?.method === "POST") {
@@ -124,7 +170,7 @@ describe("JobDetailsPage", () => {
     });
     renderPage(fetchMock);
 
-    fireEvent.click(await screen.findByRole("button", { name: "עדכון נוסח המשרה" }));
+    fireEvent.click(await screen.findByRole("button", { name: "שמירת נוסח חדש" }));
     fireEvent.change(screen.getByLabelText("טקסט המשרה"), {
       target: { value: "Senior Backend Engineer, now remote" },
     });

@@ -296,7 +296,10 @@ describe("DraftValidationPanel", () => {
       ),
     );
     renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftFlow />);
-    expect(await screen.findByText("Hard issue")).toBeInTheDocument();
+    /* The report waits for detail, draft, and validation-run queries. Parallel execution
+       of the full frontend suite can schedule that chain beyond the one-second default;
+       the focused timeout still fails promptly if the report never arrives. */
+    expect(await screen.findByText("Hard issue", {}, { timeout: 5_000 })).toBeInTheDocument();
     expect(screen.getByText("Soft issue")).toBeInTheDocument();
     /* An unknown code is not dropped - its message is rendered above - but the code
        itself is not shown: `UNKNOWN_HARD` names the failure in a vocabulary the reader

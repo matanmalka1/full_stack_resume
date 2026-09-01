@@ -2,9 +2,9 @@ import { type ChangeEvent, useId, useState } from "react";
 import { Upload } from "lucide-react";
 
 import { JOB_TEXT_MAX_BYTES } from "../../api/applications";
+import { buttonClasses } from "../../ui/Button";
 import { LiveRegion } from "../../ui/LiveRegion";
 import { LtrText } from "../../ui/LtrText";
-import { buttonClasses } from "../../ui/Button";
 import { cx } from "../../ui/cx";
 
 interface JobTextFileFieldProps {
@@ -13,13 +13,8 @@ interface JobTextFileFieldProps {
 
 const isLocalTextFile = (file: File): boolean => file.type === "text/plain" || /\.txt$/i.test(file.name);
 
-/* A.4 frame 1: choosing a `.txt` file reads it locally into the text area. Nothing is
-   uploaded, and the component owns the whole local-read outcome - the refusals, the
-   announcement, and the file name - so the form only ever receives text.
-
-   It is an optional convenience for filling the job text, so it is presented as one
-   compact control beside that field rather than as a form field of its own competing
-   with the text it fills. */
+/* Shared by initial intake and later snapshot capture. The browser reads the local file;
+   only the resulting text reaches the owning form. */
 export const JobTextFileField = ({ onText }: JobTextFileFieldProps) => {
   const inputId = useId();
   const [loadedFileName, setLoadedFileName] = useState<string | null>(null);
@@ -28,9 +23,7 @@ export const JobTextFileField = ({ onText }: JobTextFileFieldProps) => {
   const readLocalFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
 
-    if (file === undefined) {
-      return;
-    }
+    if (file === undefined) return;
 
     setLoadedFileName(null);
 
@@ -46,7 +39,6 @@ export const JobTextFileField = ({ onText }: JobTextFileFieldProps) => {
 
     try {
       const text = await file.text();
-
       setError(undefined);
       onText(text);
       setLoadedFileName(file.name);
@@ -56,11 +48,7 @@ export const JobTextFileField = ({ onText }: JobTextFileFieldProps) => {
   };
 
   return (
-    /* A compact local-file choice rather than another bordered card. The quiet surface
-       separates the browser-only helper from the editable text it fills below. */
     <div className="flex flex-col gap-3 rounded-control bg-cv-surface-muted p-4 sm:flex-row sm:items-center">
-      {/* The visible control is the label, so the native file input can stay off screen
-          without losing its accessible name or keyboard reachability. */}
       <label className={cx(buttonClasses("secondary"), "shrink-0 cursor-pointer font-medium")} htmlFor={inputId}>
         <Upload aria-hidden="true" className="size-4" />
         בחירת קובץ טקסט
@@ -76,9 +64,6 @@ export const JobTextFileField = ({ onText }: JobTextFileFieldProps) => {
         }}
         type="file"
       />
-      {/* One slot for all three states. The hint, the refusal, and the confirmation are
-          mutually exclusive and occupy the same line, so replacing one with another does
-          not move the text area underneath while the user is aiming at it. */}
       <div className="min-w-0 flex-1">
         {error !== undefined ? (
           <p className="text-support font-medium text-cv-blocker">{error}</p>

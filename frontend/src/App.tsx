@@ -7,6 +7,7 @@ import { WorkflowLandmark, WorkflowLandmarkSteps } from "./app/WorkflowLandmark"
 import { applicationDetailQueryOptions } from "./api/applications";
 import { settingsQueryOptions } from "./api/settings";
 import { buttonClasses } from "./ui/Button";
+import { cx } from "./ui/cx";
 
 /* The Application named on an inner screen's header line, and the way back to Job Detail. */
 const ApplicationContext = ({ company, href, targetRole }: { company: string; href: string; targetRole: string }) => {
@@ -82,7 +83,7 @@ export const App = () => {
         <main className="w-full px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
           {/* `empty:hidden` removes the spacing on routes outside the CV workflow, where
               the landmark deliberately renders no steps. */}
-          <div className="mx-auto mb-3 max-w-5xl empty:hidden sm:mb-4">
+          <div className={cx("mx-auto mb-3 empty:hidden sm:mb-4", isApplicationScreen ? "max-w-6xl" : "max-w-5xl")}>
             <WorkflowLandmarkSteps />
           </div>
           <Outlet />

@@ -104,6 +104,9 @@ describe("RecruitmentPanel", () => {
 
     expect(screen.getByText("המועמדות נוצרה")).toBeInTheDocument();
     expect(screen.queryByText("application created")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("השלב הבא")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "שמירת השלב" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "שמירת הפעולה" })).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText("השלב הבא"), { target: { value: "closed" } });
     fireEvent.change(screen.getByLabelText("סיבה (רשות)"), {
@@ -208,6 +211,7 @@ describe("RecruitmentPanel", () => {
     );
     renderPanel();
 
+    fireEvent.change(screen.getByLabelText("מה לעשות"), { target: { value: "Try again tomorrow" } });
     fireEvent.click(screen.getByRole("button", { name: "שמירת הפעולה" }));
 
     expect(await screen.findByText("Invalid next action")).toBeInTheDocument();
