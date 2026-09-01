@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, type ReactNode, useContext, useLayoutEffect, useMemo, useState } from "react";
 
 import type { ApplicationDetail, PreparationState } from "../api/contracts";
 import { useLocation } from "react-router-dom";
@@ -108,7 +108,11 @@ interface WorkflowPosition {
 }
 
 const WorkflowStageContext = createContext<((position: WorkflowPosition) => void) | undefined>(undefined);
-const WorkflowStageValueContext = createContext<WorkflowPosition>({ destinations: {}, stage: "intake" });
+/* `none` before any screen has spoken, not `intake`. The claim belongs to the page, and
+   until one makes it the honest answer is that no stage is known - a default of `intake`
+   made the shell assert stage 1 of 5 on whatever screen loaded first, including the
+   Application list. */
+const WorkflowStageValueContext = createContext<WorkflowPosition>({ destinations: {}, stage: "none" });
 
 /* The landmark is a shell region (A.1) but the projection belongs to the page, so the
    page states the stage rather than the shell inferring it from the URL.
@@ -118,7 +122,7 @@ const WorkflowStageValueContext = createContext<WorkflowPosition>({ destinations
    says its own - an Application route its `PreparationState`, the intake screen `intake`,
    and a screen outside the workflow `none`. */
 export const WorkflowLandmark = ({ children }: { children: ReactNode }) => {
-  const [position, setPosition] = useState<WorkflowPosition>({ destinations: {}, stage: "intake" });
+  const [position, setPosition] = useState<WorkflowPosition>({ destinations: {}, stage: "none" });
 
   return (
     <WorkflowStageValueContext.Provider value={position}>
@@ -158,7 +162,11 @@ export const useWorkflowStage = (stage: WorkflowStage, destinations?: StageDesti
   const key = JSON.stringify(destinations ?? {});
   const published = useMemo(() => JSON.parse(key) as StageDestinations, [key]);
 
-  useEffect(() => {
+  /* Layout, not effect: the landmark renders above the page that publishes to it, so a
+     passive effect let the browser paint one frame of the previous screen's stage on the
+     new one - the five steps flashing over the Application list on the way back to it.
+     Committing the claim before paint removes that frame. */
+  useLayoutEffect(() => {
     publish?.({ destinations: published, stage });
     /* No reset on unmount. Resetting here produced a flash of `intake` between two
        screens that were both mid-workflow - the landmark appearing to restart while the

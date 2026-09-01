@@ -106,6 +106,22 @@ describe("workflow landmark navigation", () => {
     expect(screen.getByRole("img")).toHaveAccessibleName(/שלב 1 מתוך 5/);
   });
 
+  /* The provider default is what the shell shows in the frame before the mounted screen
+     publishes. `intake` there put five steps over the Application list on the way back to
+     it - a stage the list never claimed. */
+  it("shows nothing until a screen publishes its stage", () => {
+    render(
+      <MemoryRouter>
+        <WorkflowLandmark>
+          <WorkflowLandmarkSteps />
+        </WorkflowLandmark>
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByRole("img")).toBeNull();
+    expect(screen.queryByRole("navigation")).toBeNull();
+  });
+
   it("announces a completed workflow when Ready has no current step", () => {
     landmark("ready", workflowDestinations("app-1", detail({ latest_ready_revision_id: "rev-1" })));
 
