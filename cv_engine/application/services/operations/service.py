@@ -326,22 +326,58 @@ class OperationService(ServiceBase[OperationRepository]):
             replaces_expected_edit_version=command.expected_edit_version,
             replaces_keep_previous=command.keep_previous,
         )
-        # The Operation is created first, and Keep runs only if this call is what created
-        # it. `create_operation` settles the idempotency question atomically: it hands back
-        # the existing Operation when the key and payload match, and raises
-        # `IDEMPOTENCY_KEY_REUSED` when the key is reused with a different payload. The id
-        # is generated here so that answer is legible - a replay comes back wearing an id
-        # this call did not mint.
-        intended_id = new_id()
+        # A receipt is claimed before anything happens, and it reserves the Operation's id.
+        #
+        # Two orderings were tried and both were wrong. Keep first ran its snapshot ahead
+        # of the idempotency check, so a resend did the work again before being recognized
+        # as a replay. The Operation first was worse: it enters the queue `queued` and the
+        # worker is a separate process, so it could be claimed and could replace the draft
+        # *before* the Keep snapshot this call had not written yet - losing the historical
+        # copy the user asked for, and then failing the caller for a replacement that had
+        # already happened.
+        #
+        # So neither goes first. `claim_idempotency_receipt` settles the replay question
+        # atomically and hands back a reserved id, exactly as approval does. Keep runs
+        # under that reservation, and only once it has succeeded does the Operation become
+        # visible to the worker. A crash between them leaves a pending receipt and no
+        # runnable Operation: the snapshot is a true record of content that existed, and
+        # nothing has replaced anything.
+        command_type = "replace_working_draft"
+        receipt = self.repo.claim_idempotency_receipt(
+            command_type,
+            idempotency_key,
+            draft_command.model_dump(mode="json"),
+            reserved_entity_id=new_id(),
+        )
+        reserved_id = receipt["reserved_entity_id"]
+        if receipt["status"] == "completed":
+            # The replacement this key names already reached the queue. Its Operation is
+            # the answer, and Keep is not run a second time.
+            #
+            # Answered from the reservation rather than by re-deriving the command: the
+            # draft has usually moved by now - this replacement is what moved it - so a
+            # replay that re-read the draft and re-checked its version would fail on the
+            # very state its own first attempt produced. A replay is settled by the key,
+            # not by re-litigating the preconditions.
+            return as_operation_view(self.repo.operation(reserved_id))
+        # A pending receipt is a first attempt that did not finish. Its Operation may
+        # already exist - the crash could have landed after `submit_draft` and before the
+        # receipt was completed - and in that case Keep has already run.
+        try:
+            existing = self.repo.operation(reserved_id)
+        except UnknownRecord:
+            existing = None
+        if existing is not None:
+            self.repo.complete_idempotency_receipt(receipt["id"], {"operation_id": existing.id})
+            return as_operation_view(existing)
+        draft_service.prepare_replacement(command)
         queued = self.submit_draft(
             draft_command,
             idempotency_key=idempotency_key,
             draft_service=draft_service,
-            operation_id=intended_id,
+            operation_id=reserved_id,
         )
-        if queued.id != intended_id:
-            return queued
-        draft_service.prepare_replacement(command)
+        self.repo.complete_idempotency_receipt(receipt["id"], {"operation_id": queued.id})
         return queued
 
     def submit_render(

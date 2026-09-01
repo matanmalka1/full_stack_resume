@@ -172,6 +172,27 @@ class DraftCommand(BoundaryDTO):
     #: commands - and without this field they hashed identically and the second was served
     #: back as a replay of the first, silently ignoring the changed decision.
     replaces_keep_previous: bool = False
+
+    @model_validator(mode="after")
+    def complete_replacement_identity(self) -> DraftCommand:
+        """A replacement is all three fields or none of them.
+
+        Mirrors the rule `OperationSources` already applies to the frozen identity, and
+        for the same reason: a half-stated replacement is not a weaker command, it is an
+        unanswerable one. An id without a version cannot be guarded, a version without an
+        id names nothing, and Keep without a replacement asks for a historical snapshot of
+        a draft this command is not replacing.
+        """
+        if (self.replaces_working_draft_id is None) != (
+            self.replaces_expected_edit_version is None
+        ):
+            raise ValueError(
+                "draft replacement requires both a working draft id and its edit version"
+            )
+        if self.replaces_keep_previous and self.replaces_working_draft_id is None:
+            raise ValueError("keep_previous is a decision about a draft being replaced")
+        return self
+
     provider: Literal["deterministic", "openai"] = "deterministic"
 
 

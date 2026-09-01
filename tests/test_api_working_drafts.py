@@ -25,6 +25,7 @@ from helpers import ACCOUNT_MANAGER_JOB, working_claim
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import IngestCommand
+from cv_engine.application.errors import InfrastructureFailure
 from cv_engine.domain.models import ValidationIssue, ValidationReport
 
 UNSUPPORTED_WORDING = "Delivered 30% improvement in direct SaaS Sales."
@@ -112,6 +113,15 @@ def _state(harness, application_id: str) -> dict:
     response = harness.client.get(f"{API_PREFIX}/applications/{application_id}")
     assert response.status_code == 200, response.text
     return response.json()
+
+
+def _snapshots(harness, application_id: str) -> list[dict]:
+    """Every historical draft snapshot registered for this Application."""
+    response = harness.client.get(f"{API_PREFIX}/applications/{application_id}/artifacts")
+    assert response.status_code == 200, response.text
+    return [
+        item for item in response.json()["items"] if item["artifact_type"] == "working_draft_snapshot"
+    ]
 
 
 def _audit(harness, application_id: str, action: str) -> dict:
@@ -720,11 +730,13 @@ def test_an_archive_after_the_replacement_was_accepted_does_not_create_a_new_dra
 def test_a_replayed_replacement_returns_the_same_operation_and_keeps_one_snapshot(
     api_paused,
 ) -> None:
-    """§14 Keep is a side effect, so a replay must not run it twice.
+    """§14 Keep is a side effect, so a replay must not reach it at all.
 
-    Keep materialized its immutable snapshot before the Operation existed, which put it
-    ahead of the idempotency check that would have recognized the replay - so the same
-    request sent twice registered two historical records for one replacement.
+    Keep ran ahead of the idempotency check, so a resend did the work again before being
+    recognized as a replay. What that produced depends on the store rather than on the
+    command - against the local one the second attempt usually failed on the immutable
+    path it had already written - which is exactly why the assertion is that the replay
+    is settled first, not that some particular second failure occurs.
     """
     application_id, working_draft_id, sources = _drafted(api_paused, "Replace Replay Co")
     before = _read(api_paused, working_draft_id).json()
@@ -744,20 +756,155 @@ def test_a_replayed_replacement_returns_the_same_operation_and_keeps_one_snapsho
     assert first.status_code == 202, first.text
     assert second.status_code == 202, second.text
     assert second.json()["id"] == first.json()["id"]
-    snapshots = [
-        item
-        for item in api_paused.client.get(
-            f"{API_PREFIX}/applications/{application_id}/artifacts"
-        ).json()["items"]
-        if item["artifact_type"] == "working_draft_snapshot"
+    assert [item["metadata"]["edit_version"] for item in _snapshots(api_paused, application_id)] == [
+        before["edit_version"]
     ]
-    assert [item["metadata"]["edit_version"] for item in snapshots] == [before["edit_version"]]
     # `_audit` asserts there is exactly one record for the action, which is the assertion
     # that matters here: a second Keep would write a second audit record beside the second
     # snapshot. `details_json` is canonical JSON text rather than a mapping.
     kept = json.loads(_audit(api_paused, application_id, "replace_working_draft")["details_json"])
     assert kept["kept"] is True
     assert kept["edit_version"] == before["edit_version"]
+
+
+def test_a_replay_is_settled_by_the_key_even_after_the_draft_moved(api_paused) -> None:
+    """§14: a replay is answered from the reservation, not by re-checking preconditions.
+
+    The natural case, not a contrived one: the first replacement is what moves the draft,
+    so by the time a client resends - a dropped response, a retried request - the version
+    it names is no longer current. Re-deriving the command would fail that resend on the
+    state its own first attempt produced, which is precisely what an idempotency key
+    exists to prevent.
+    """
+    application_id, working_draft_id, sources = _drafted(api_paused, "Replace Replay Moved Co")
+    before = _read(api_paused, working_draft_id).json()
+    body = {
+        "working_draft_id": working_draft_id,
+        "expected_edit_version": before["edit_version"],
+        "job_analysis_id": sources["job_analysis"],
+        "selection_plan_id": sources["selection_plan"],
+        "keep_previous": True,
+    }
+    path = f"/applications/{application_id}/working-draft/replace"
+    key = {"Idempotency-Key": "replace-replay-moved-1"}
+
+    first = _post(api_paused, path, body, **key)
+    assert first.status_code == 202, first.text
+    operation_id = first.json()["id"]
+    assert api_paused.run_operation(operation_id)["status"] == "succeeded"
+    after = _read(api_paused, working_draft_id).json()
+    assert after["edit_version"] == before["edit_version"] + 1
+
+    replayed = _post(api_paused, path, body, **key)
+
+    assert replayed.status_code == 202, replayed.text
+    assert replayed.json()["id"] == operation_id
+    # And the replacement ran once: one snapshot, and the draft is not replaced again.
+    assert _read(api_paused, working_draft_id).json()["edit_version"] == after["edit_version"]
+
+
+def test_a_replacement_interrupted_after_keep_resumes_without_a_second_snapshot(
+    api_paused,
+) -> None:
+    """§14: the crash window between Keep and the Operation is recoverable.
+
+    Keep runs under a claimed receipt and before the Operation exists, which is what keeps
+    a worker from replacing the draft ahead of its own historical copy. The cost is a gap:
+    a crash there leaves a pending receipt, a written snapshot, and no Operation. Re-taking
+    Keep would fail on the immutable path already written and stick the command forever,
+    so it is an ensure - the existing snapshot for this exact draft, version, and hash is
+    recognized as the success it is, and the resend goes on to create the Operation.
+
+    The interruption is simulated at the service boundary rather than by killing a process:
+    the first call is driven through the application layer with Operation creation made to
+    fail, which leaves exactly the state a crash would.
+    """
+    application_id, working_draft_id, sources = _drafted(api_paused, "Replace Interrupted Co")
+    before = _read(api_paused, working_draft_id).json()
+    body = {
+        "working_draft_id": working_draft_id,
+        "expected_edit_version": before["edit_version"],
+        "job_analysis_id": sources["job_analysis"],
+        "selection_plan_id": sources["selection_plan"],
+        "keep_previous": True,
+    }
+    path = f"/applications/{application_id}/working-draft/replace"
+    key = {"Idempotency-Key": "replace-interrupted-1"}
+
+    operations = api_paused.services.operations
+    original = operations.submit_draft
+
+    def fail_after_keep(*_args, **_kwargs):
+        raise InfrastructureFailure("interrupted before the Operation was created")
+
+    operations.submit_draft = fail_after_keep
+    try:
+        interrupted = _post(api_paused, path, body, **key)
+    finally:
+        operations.submit_draft = original
+    assert interrupted.status_code == 500, interrupted.text
+
+    # The state a crash would leave: the snapshot is written, and nothing is queued.
+    snapshots = _snapshots(api_paused, application_id)
+    assert [item["metadata"]["edit_version"] for item in snapshots] == [before["edit_version"]]
+
+    resumed = _post(api_paused, path, body, **key)
+
+    assert resumed.status_code == 202, resumed.text
+    assert api_paused.run_operation(resumed.json()["id"])["status"] == "succeeded"
+    # One snapshot, and one audit record: Keep was ensured, not repeated.
+    assert [item["metadata"]["edit_version"] for item in _snapshots(api_paused, application_id)] == [
+        before["edit_version"]
+    ]
+    _audit(api_paused, application_id, "replace_working_draft")
+    assert _read(api_paused, working_draft_id).json()["edit_version"] == before["edit_version"] + 1
+
+
+def test_a_registered_snapshot_whose_payload_is_gone_refuses_the_replacement(api_paused) -> None:
+    """§14: a registration is not evidence that the historical copy still exists.
+
+    The ensure that makes a crash recoverable reads a row, and a row says a snapshot was
+    written once - not that its payload is still there or still says what it said. Taken as
+    proof, a snapshot that has been moved, deleted, or altered would let the replacement
+    overwrite the active draft against a copy that cannot be trusted, which is precisely
+    the wording the Keep decision existed to preserve. So the payload is verified, and
+    anything but `ok` refuses.
+    """
+    application_id, working_draft_id, sources = _drafted(api_paused, "Replace Lost Snapshot Co")
+    before = _read(api_paused, working_draft_id).json()
+    body = {
+        "working_draft_id": working_draft_id,
+        "expected_edit_version": before["edit_version"],
+        "job_analysis_id": sources["job_analysis"],
+        "selection_plan_id": sources["selection_plan"],
+        "keep_previous": True,
+    }
+    path = f"/applications/{application_id}/working-draft/replace"
+    key = {"Idempotency-Key": "replace-lost-snapshot-1"}
+
+    operations = api_paused.services.operations
+    original = operations.submit_draft
+
+    def fail_after_keep(*_args, **_kwargs):
+        raise InfrastructureFailure("interrupted before the Operation was created")
+
+    operations.submit_draft = fail_after_keep
+    try:
+        assert _post(api_paused, path, body, **key).status_code == 500
+    finally:
+        operations.submit_draft = original
+
+    # The snapshot is registered, and then its payload is corrupted underneath the row.
+    snapshot = _snapshots(api_paused, application_id)[0]
+    stored = api_paused.services.repository.artifact_version(snapshot["id"])
+    api_paused.services.artifacts.resolve(stored["path"]).write_text("tampered", encoding="utf-8")
+
+    refused = _post(api_paused, path, body, **key)
+
+    assert refused.status_code == 409, refused.text
+    # And the draft is untouched: no Operation was queued to replace it.
+    assert _read(api_paused, working_draft_id).json() == before
+    assert _state(api_paused, application_id)["active_working_draft_id"] == working_draft_id
 
 
 def test_the_same_key_with_a_different_replacement_is_refused(api_paused) -> None:
@@ -945,7 +1092,9 @@ def test_approval_preserves_a_diverged_working_projection_and_returns_a_specific
     api_worker,
 ) -> None:
     """An edit outside the Web editor is evidence to preserve, not output to overwrite."""
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Diverged Projection Co")
+    application_id, working_draft_id, _sources = _drafted(
+        api_worker, "Diverged Projection Co"
+    )
     validated = _validated(api_worker, working_draft_id)
     markdown_path = api_worker.services.artifacts.working_paths(application_id).markdown
     edited_projection = markdown_path.read_text(encoding="utf-8") + "\nmanual edit\n"

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from typing import Any
+
 from ....domain.drafts import seal_draft
 from ....domain.models import AuditRecord, WorkingDraft
 from ....util import new_id, utc_now
@@ -127,6 +130,43 @@ class DraftArchival(DraftServiceBase):
             artifact_version_id=artifact_version_id,
         )
 
+    def _kept_snapshot(self, working: WorkingDraft) -> dict[str, Any] | None:
+        """The historical snapshot already registered *and still intact* for this version.
+
+        Identity is the draft, its edit version, and its content hash together - the same
+        trio the Operation freezes. Two of them would not be enough: an edit version is
+        only unique within one draft, and a content hash can repeat across drafts.
+
+        The registration alone is not the answer. A row says a snapshot was written once,
+        not that its payload is still there or still says what it said, and treating the
+        row as proof would let a replacement overwrite the active draft against a
+        historical copy that has been moved, deleted, or altered - losing the wording the
+        Keep decision existed to preserve. So the payload is verified, and only `ok`
+        counts as a Keep already taken. Anything else is a refusal rather than a silent
+        continue: this engine already distinguishes missing from tampered everywhere else
+        it re-derives itself from stored evidence, and a replacement is exactly the moment
+        that distinction is load-bearing.
+        """
+        for record in self.repo.artifact_versions(working.application_id):
+            if record["artifact_type"] != "working_draft_snapshot":
+                continue
+            metadata = json.loads(record["metadata_json"] or "{}")
+            if not (
+                metadata.get("working_draft_id") == working.id
+                and metadata.get("edit_version") == working.edit_version
+                and metadata.get("content_hash") == working.content_hash
+            ):
+                continue
+            state = self.revision_payloads.verify_payload(record["path"], record["content_hash"])
+            if state == "ok":
+                return record
+            raise StateConflict(
+                f"the historical snapshot of working draft {working.id} version "
+                f"{working.edit_version} is {state}; the replacement is refused rather "
+                "than run against a copy that cannot be trusted"
+            )
+        return None
+
     def prepare_replacement(self, command: ReplaceWorkingDraftCommand) -> WorkingDraft:
         """§14: take the Keep decision before anything is replaced.
 
@@ -136,6 +176,15 @@ class DraftArchival(DraftServiceBase):
         the existing draft exactly as it was. What has to happen first is Keep:
         the historical snapshot is materialized here, and it stays true whether
         or not the replacement that follows it succeeds.
+
+        Keep is an ensure, not a do. It sits between an idempotency receipt being
+        claimed and the Operation being created, so a crash in that gap leaves a
+        pending receipt with the snapshot already written - and re-materializing
+        it would fail on the immutable path that now exists, sticking the command
+        permanently for a step that had in fact succeeded. A snapshot already
+        registered for this exact draft, version, and content hash is that
+        success, and is recognized rather than repeated: the record is immutable,
+        so an existing one cannot be a different answer to the same question.
         """
         working = self._working(command.working_draft_id, command.expected_edit_version)
         if working.application_id != command.application_id:
@@ -144,6 +193,8 @@ class DraftArchival(DraftServiceBase):
                 f"{command.application_id}"
             )
         if not command.keep_previous:
+            return working
+        if self._kept_snapshot(working) is not None:
             return working
         payload = self.materialize_draft_snapshot(working)
         with self.repo.unit_of_work() as uow:
