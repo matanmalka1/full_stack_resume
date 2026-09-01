@@ -27,7 +27,13 @@ const editableSettings = (settings: Settings): UpdateSettingsRequest => ({
 export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
   const queryClient = useQueryClient();
   const values = editableSettings(settings);
-  const { handleSubmit, register, setValue, watch } = useAppForm<UpdateSettingsRequest>({
+  const {
+    handleSubmit,
+    register,
+    reset,
+    setValue,
+    watch,
+  } = useAppForm<UpdateSettingsRequest>({
     defaultValues: values,
     values,
   });
@@ -41,7 +47,10 @@ export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
 
       return updateSettings(fields, etag);
     },
-    onSuccess: (result) => queryClient.setQueryData(settingsQueryKey, result),
+    onSuccess: (result) => {
+      reset(editableSettings(result.settings));
+      queryClient.setQueryData(settingsQueryKey, result);
+    },
   });
   const aiAvailable =
     settings.provider_configured && (form.ai_enabled_override ?? settings.ai_enabled);
