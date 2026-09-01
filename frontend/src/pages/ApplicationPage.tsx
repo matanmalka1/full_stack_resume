@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 
 import { classificationFromAnalysis } from "../api/analyses";
 import { applicationDetailQueryOptions } from "../api/applications";
-import { useWorkflowStage, workflowDestinations } from "../app/WorkflowLandmark";
+import { preparationStateIsImpliedByStage, useWorkflowStage, workflowDestinations } from "../app/WorkflowLandmark";
 import { useWatchedOperation } from "../hooks/useWatchedOperation";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
@@ -68,9 +68,16 @@ export const ApplicationPage = () => {
       actions={
         detail === undefined ? null : (
           <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge tone={preparationStateTones[detail.preparation_state]}>
-              {preparationStateLabels[detail.preparation_state]}
-            </StatusBadge>
+            {/* The stage landmark above already names where the workflow stands. The
+                badge earns its place only where the stage is ambiguous - two preparation
+                states sharing one stage - and repeats it in a third wording where it is
+                not, so "אימות" was on screen as a stage, as a badge, and as an alert at
+                once. Which case this is comes from the landmark's own map. */}
+            {preparationStateIsImpliedByStage(detail.preparation_state) ? null : (
+              <StatusBadge tone={preparationStateTones[detail.preparation_state]}>
+                {preparationStateLabels[detail.preparation_state]}
+              </StatusBadge>
+            )}
             {/* The draft axis is reported only where it says something the preparation
                 stage does not. Before the analysis exists a draft cannot, so "there is no
                 active draft" beside "waiting for the job analysis" is one fact wearing

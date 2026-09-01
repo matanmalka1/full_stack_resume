@@ -38,6 +38,17 @@ const stageForPreparationState: Record<PreparationState, Stage> = {
   ready: "ready",
 };
 
+/* Whether the landmark's stage already says everything the preparation badge would.
+
+   Derived from the map above rather than listed: a state sharing its stage with another
+   is the one the badge distinguishes ("ניתוח" is both `needs_analysis` and `needs_review`),
+   and a state that is alone on its stage is that stage under a second name. Adding a
+   preparation state re-answers this on its own; it cannot be forgotten here. */
+export const preparationStateIsImpliedByStage = (state: PreparationState): boolean => {
+  const stage = stageForPreparationState[state];
+  return Object.values(stageForPreparationState).filter((entry) => entry === stage).length === 1;
+};
+
 export type StageDestinations = Partial<Record<Stage, string>>;
 
 /* Where each stage's work can be re-read, derived from the projection rather than listed
