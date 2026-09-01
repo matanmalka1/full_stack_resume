@@ -7,7 +7,7 @@ import {
   createPendingFact,
   factDetailQueryKey,
   factDetailQueryOptions,
-  factsQueryKey,
+  factsQueryPrefix,
   factsQueryOptions,
   transitionFact,
 } from "../api/facts";
@@ -79,7 +79,7 @@ export const FactLifecyclePanel = ({
   const [style, setStyle] = useState<FactStyle>("bullet");
 
   const refresh = (factId?: string) => {
-    void queryClient.invalidateQueries({ queryKey: factsQueryKey() });
+    void queryClient.invalidateQueries({ queryKey: factsQueryPrefix });
     if (factId !== undefined) {
       void queryClient.invalidateQueries({ queryKey: factDetailQueryKey(factId) });
     }

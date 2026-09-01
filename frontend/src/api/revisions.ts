@@ -44,15 +44,15 @@ const safeFilename = (contentDisposition: string | null): string => {
   return (candidate ?? "decision.md").split(/[\\/]/).at(-1) || "decision.md";
 };
 
-const decisionMarkdownQueryKey = (approvedRevisionId: string) =>
-  ["decision-markdown", approvedRevisionId] as const;
+const decisionMarkdownQueryKey = (approvedRevisionId: string, applicationId: string) =>
+  ["decision-markdown", approvedRevisionId, applicationId] as const;
 
 export const decisionMarkdownQueryOptions = (
   approvedRevisionId: string,
   applicationId: string,
 ) =>
   queryOptions({
-    queryKey: decisionMarkdownQueryKey(approvedRevisionId),
+    queryKey: decisionMarkdownQueryKey(approvedRevisionId, applicationId),
     queryFn: async ({ signal }): Promise<DecisionMarkdownDownload> => {
       const response = await apiRequest<DecisionMarkdown>(
         `${revisionPath(approvedRevisionId)}/decision-markdown?application_id=${encodeURIComponent(applicationId)}` as ApiPath,

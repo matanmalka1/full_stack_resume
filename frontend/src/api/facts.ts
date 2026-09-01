@@ -19,7 +19,9 @@ import type {
 const factsPath: ApiPath = "/api/v1/facts";
 const factPath = (factId: string): ApiPath => `/api/v1/facts/${encodeURIComponent(factId)}`;
 
-export const factsQueryKey = (status?: FactStatus) => ["facts", status ?? "all"] as const;
+export const factsQueryPrefix = ["facts"] as const;
+export const factsQueryKey = (status?: FactStatus) =>
+  [...factsQueryPrefix, status ?? "all"] as const;
 export const factDetailQueryKey = (factId: string) => ["fact", factId] as const;
 export const factHistoryQueryKey = ["fact-history"] as const;
 

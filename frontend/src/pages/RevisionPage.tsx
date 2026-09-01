@@ -2,7 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import { applicationDetailQueryOptions, startDraftGeneration } from "../api/applications";
+import {
+  applicationDetailQueryOptions,
+  applicationListQueryPrefix,
+  startDraftGeneration,
+} from "../api/applications";
 import { operationQueryKey } from "../api/operations";
 import {
   approvedPreviewSrc,
@@ -104,15 +108,14 @@ const RevisionPageContent = ({ approvedRevisionId }: RevisionPageContentProps) =
         metadata: {},
       });
     },
-    onSuccess: (result) => {
+    onSuccess: () => {
       setSubmissionOpen(false);
-      queryClient.setQueryData(["latest-submission", approvedRevisionId], result);
       if (revision !== undefined) {
         void queryClient.invalidateQueries({
           queryKey: applicationDetailQueryOptions(revision.application_id).queryKey,
         });
       }
-      void queryClient.invalidateQueries({ queryKey: ["applications"] });
+      void queryClient.invalidateQueries({ queryKey: applicationListQueryPrefix });
     },
   });
   const hasSources = detail?.active_analysis_id != null && detail.active_selection_plan_id != null;

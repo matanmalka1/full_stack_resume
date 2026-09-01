@@ -5,6 +5,8 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import {
   type ApplicationListQuery,
+  applicationDetailQueryPrefix,
+  applicationListQueryPrefix,
   applicationListQueryOptions,
   closeApplication,
 } from "../api/applications";
@@ -53,8 +55,8 @@ export const ApplicationListPage = () => {
     mutationFn: (applicationId: string) => closeApplication(applicationId),
     onSuccess: async () => {
       setClosingApplication(null);
-      await queryClient.invalidateQueries({ queryKey: ["applications"] });
-      await queryClient.invalidateQueries({ queryKey: ["application"] });
+      await queryClient.invalidateQueries({ queryKey: applicationListQueryPrefix });
+      await queryClient.invalidateQueries({ queryKey: applicationDetailQueryPrefix });
     },
   });
 

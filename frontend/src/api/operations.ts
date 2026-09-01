@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { ApiProblem, type ApiResponse, apiRequest } from "./client";
+import { ApiProblem, type ApiPath, type ApiResponse, apiRequest } from "./client";
 import type { Operation } from "./contracts";
 
 /* Which statuses end an Operation is a lifecycle rule the backend owns and now reports,
@@ -13,6 +13,9 @@ export const isTerminalOperation = (operation: Operation | undefined): boolean =
 export const OPERATION_POLL_INTERVAL_MS = 1500;
 
 export const operationQueryKey = (operationId: string) => ["operation", operationId] as const;
+
+const operationPath = (operationId: string): ApiPath =>
+  `/api/v1/operations/${encodeURIComponent(operationId)}`;
 
 /* 408 and 429 are 4xx that say "later", not "never": they stay retryable. Everything
    else in the 4xx range is the request itself being wrong, and repeating it cannot
@@ -34,7 +37,7 @@ export const operationQueryOptions = (operationId: string) =>
     queryKey: operationQueryKey(operationId),
     queryFn: async ({ signal }) => {
       const response = await apiRequest<Operation>(
-        `/api/v1/operations/${operationId}`,
+        operationPath(operationId),
         { signal },
       );
       return response.data;
@@ -51,7 +54,7 @@ export const operationQueryOptions = (operationId: string) =>
 
 export const cancelOperation = async (operationId: string): Promise<Operation> => {
   const response = await apiRequest<Operation>(
-    `/api/v1/operations/${operationId}/cancel`,
+    `${operationPath(operationId)}/cancel`,
     { method: "POST" },
   );
   return response.data;
@@ -67,7 +70,7 @@ export interface QueuedOperation {
    check: every caller carries the same obligation, and a second copy is the one that
    goes stale. */
 export const queuedOperation = (response: ApiResponse<Operation>): QueuedOperation => {
-  const expectedLocation = `/api/v1/operations/${response.data.id}`;
+  const expectedLocation = operationPath(response.data.id);
 
   if (response.status !== 202 || response.location !== expectedLocation) {
     throw new Error("Accepted response did not identify its queued Operation");
@@ -84,7 +87,7 @@ export const retryOperation = async (
   idempotencyKey: string,
 ): Promise<QueuedOperation> =>
   queuedOperation(
-    await apiRequest<Operation>(`/api/v1/operations/${operationId}/retry`, {
+    await apiRequest<Operation>(`${operationPath(operationId)}/retry`, {
       method: "POST",
       idempotencyKey,
     }),

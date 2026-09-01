@@ -10,7 +10,7 @@ import {
   factDetailQueryOptions,
   factHistoryQueryKey,
   factHistoryQueryOptions,
-  factsQueryKey,
+  factsQueryPrefix,
 } from "../../api/facts";
 import { workingDraftFactsQueryKey } from "../../api/drafts";
 import { ErrorCallout } from "../../app/ErrorCallout";
@@ -79,7 +79,7 @@ export const ClaimFactResolution = ({
   useEffect(() => setMeaning(claim.text), [claim.text]);
 
   const refreshFacts = (id?: string) => {
-    void queryClient.invalidateQueries({ queryKey: factsQueryKey() });
+    void queryClient.invalidateQueries({ queryKey: factsQueryPrefix });
     void queryClient.invalidateQueries({ queryKey: factHistoryQueryKey });
     if (id !== undefined) {
       void queryClient.invalidateQueries({ queryKey: factDetailQueryKey(id) });

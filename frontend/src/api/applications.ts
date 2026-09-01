@@ -113,8 +113,11 @@ export const acknowledgementApplies = (
   current: ApplicationIntake,
 ): boolean => answered !== undefined && intakeFingerprint(answered) === intakeFingerprint(current);
 
+export const applicationDetailQueryPrefix = ["application"] as const;
+export const applicationListQueryPrefix = ["applications"] as const;
+
 export const applicationDetailQueryKey = (applicationId: string) =>
-  ["application", applicationId] as const;
+  [...applicationDetailQueryPrefix, applicationId] as const;
 
 /* The list query, exactly as the backend defines it.
 
@@ -141,7 +144,7 @@ export interface ApplicationListQuery {
    than one that overwrites the other. Serialized through the same builder that forms the
    request, so a key can never describe a request that was not sent. */
 const applicationListQueryKey = (query: ApplicationListQuery = {}) =>
-  ["applications", applicationListSearch(query)] as const;
+  [...applicationListQueryPrefix, applicationListSearch(query)] as const;
 
 const applicationsPath: ApiPath = "/api/v1/applications";
 

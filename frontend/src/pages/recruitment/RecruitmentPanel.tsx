@@ -1,7 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
-import { applicationDetailQueryKey } from "../../api/applications";
+import {
+  applicationDetailQueryKey,
+  applicationListQueryPrefix,
+} from "../../api/applications";
 import type {
   ApplicationDetail,
   RecruitmentStatus,
@@ -118,7 +121,7 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
-    void queryClient.invalidateQueries({ queryKey: ["applications"] });
+    void queryClient.invalidateQueries({ queryKey: applicationListQueryPrefix });
   };
   const transition = useMutation({
     mutationFn: () => {
