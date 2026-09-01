@@ -4,6 +4,7 @@ import { type ApiPath, apiRequest } from "./client";
 import { type QueuedOperation, queuedOperation } from "./operations";
 import type {
   ApplySelectionChangeRequest,
+  ArchivedWorkingDraft,
   ClaimPatch,
   DraftClaim,
   Operation,
@@ -13,6 +14,7 @@ import type {
   WorkingDraft,
   WorkingDraftFacts,
   WorkingDraftUpdate,
+  WorkingDraftVersionRequest,
 } from "./contracts";
 
 /* The draft and the token that authorizes writing to it, kept together.
@@ -40,6 +42,24 @@ export const workingDraftQueryOptions = (workingDraftId: string) =>
       return { draft: response.data, etag: response.etag };
     },
   });
+
+/* §14: set the draft aside and clear the desk.
+
+   Synchronous, unlike its sibling `replaceWorkingDraft`: it writes an immutable historical
+   snapshot and clears the active pointer only once that record succeeded, so giving a
+   draft up never loses it. `expected_edit_version` addresses the exact version, so a draft
+   edited elsewhere since this screen read it is refused rather than archived unseen. */
+export const archiveWorkingDraft = async (
+  workingDraftId: string,
+  expectedEditVersion: number,
+): Promise<ArchivedWorkingDraft> => {
+  const body: WorkingDraftVersionRequest = { expected_edit_version: expectedEditVersion };
+  const response = await apiRequest<ArchivedWorkingDraft>(`${workingDraftPath(workingDraftId)}/archive` as ApiPath, {
+    method: "POST",
+    body,
+  });
+  return response.data;
+};
 
 /* §20 candidate accounting. Separate from the draft read because it answers a different
    question - what backs a line, and what could be added to one - and because the fact

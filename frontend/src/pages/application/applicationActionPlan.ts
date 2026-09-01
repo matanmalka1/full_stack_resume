@@ -15,9 +15,19 @@ export interface ApplicationActionPlan {
   /* The generate command, with the two ids it must carry. */
   createDraft: { analysisId: string; emphasized: boolean; selectionPlanId: string } | null;
   /* §14: generate writes over the one active WorkingDraft. With one in hand, discarding it
-     is a choice `replace_working_draft` carries, and this screen has neither the version
-     nor the Keep decision - so the command is withheld and this says why. */
+     is a choice `replace_working_draft` carries rather than one `create_draft` makes
+     silently, so generate is withheld and the two explicit commands below take over. */
   draftWouldReplace: boolean;
+  /* §14: the two ways out of a stale draft, and the only actions on this screen addressed
+     to a specific version of one. Both carry `active_working_draft_id`; the version itself
+     is not in the projection and is read separately by whoever sends the command.
+
+     Offered on two conditions, not one. `available_actions` is the authority on whether
+     the workflow permits the command at all, and `stale_reasons` is why this screen puts
+     it in front of the reader: replacing a draft that is not stale is a command the
+     workflow may well allow, but it is not what this screen is answering. */
+  archiveDraft: { workingDraftId: string } | null;
+  replaceDraft: { analysisId: string; emphasized: boolean; selectionPlanId: string; workingDraftId: string } | null;
   /* `update_working_draft`, `validate` and `approve` all resolve to the draft editor:
      validation is a panel there and approval a dialog opened from it. Offered side by side
      they read as three destinations that all arrive at one URL, so they collapse to one
@@ -82,11 +92,26 @@ export const applicationActionPlan = (detail: ApplicationDetail): ApplicationAct
           href: `/revisions/${encodeURIComponent(detail.latest_ready_revision_id)}`,
         };
 
+  const workingDraftId = detail.active_working_draft_id ?? null;
+  const stale = detail.stale_reasons.length > 0;
+  const replaceDraft =
+    stale &&
+    available("replace_working_draft") &&
+    workingDraftId !== null &&
+    analysisId !== null &&
+    selectionPlanId !== null
+      ? { analysisId, emphasized: recommended === "replace_working_draft", selectionPlanId, workingDraftId }
+      : null;
+  const archiveDraft =
+    stale && available("archive_working_draft") && workingDraftId !== null ? { workingDraftId } : null;
+
   const reviewHandledHere = available("apply_analysis_decisions");
   const handledHere = new Set(
     [
       analyze === null ? null : "analyze",
       createDraft === null ? null : "create_draft",
+      replaceDraft === null ? null : "replace_working_draft",
+      archiveDraft === null ? null : "archive_working_draft",
       reviewHandledHere ? "apply_analysis_decisions" : null,
       editHref === null ? null : "update_working_draft",
       validationHref === null ? null : "validate",
@@ -101,8 +126,10 @@ export const applicationActionPlan = (detail: ApplicationDetail): ApplicationAct
 
   return {
     analyze,
+    archiveDraft,
     createDraft,
     draftWouldReplace,
+    replaceDraft,
     draftScreen,
     readyRevision,
     reviewHandledHere,

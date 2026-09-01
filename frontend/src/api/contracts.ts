@@ -58,6 +58,11 @@ export type Reason = ApiSchemas["ReasonResponse"];
 export type CreateAnalysisRequest = ApiSchemas["CreateAnalysisRequest"];
 export type GenerateWorkingDraftRequest = ApiSchemas["GenerateWorkingDraftRequest"];
 export type WorkingDraftVersionRequest = ApiSchemas["WorkingDraftVersionRequest"];
+/* §14 the two ways out of a stale draft. `keep_previous` on the replacement is the Keep
+   decision - the immutable historical snapshot is materialized before the replacement is
+   attempted - and archiving produces that same snapshot without a replacement. */
+export type ReplaceWorkingDraftRequest = ApiSchemas["ReplaceWorkingDraftRequest"];
+export type ArchivedWorkingDraft = ApiSchemas["ArchivedWorkingDraftResponse"];
 export type ApproveDraftRequest = ApiSchemas["ApproveDraftRequest"];
 export type RenderRevisionRequest = ApiSchemas["RenderRevisionRequest"];
 

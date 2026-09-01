@@ -365,11 +365,16 @@ tabs שהיא לא מקיימת, השנייה **סירבה לו מנומק. הס
 שיקול נוסף שמכריע לבדו: **חוזה tabs ב־RTL הוא מקור באגים** — חץ ימין הוא ה־tab
 הקודם, וזה בדיוק סוג ההיפוך שנשכח. אין סיבה להכניס אותו למוצר.
 
-- [ ] `ApplicationViews` → `role="group"` + `aria-pressed`, כמו `ViewSwitch`.
-- [ ] להסיר `role="tabpanel"` + `aria-labelledby` מ־`ApplicationPage.tsx:261-275`.
-- [ ] **לשקול להשתמש ב־`ViewSwitch` עצמו** במקום רכיב שני — הוא כבר גנרי
-      (`<TValue extends string>`). מוחק את `ApplicationViews.tsx` כרכיב תצוגה
-      ומשאיר רק את `applicationViewFromParam`. הערת ההסבר בראש הקובץ נשמרת.
+- [x] `ApplicationViews` → `role="group"` + `aria-pressed`, כמו `ViewSwitch`.
+- [x] להסיר `role="tabpanel"` + `aria-labelledby` — הם ישבו ב־`PreparationView` וב־
+      `TrackingView`, לא ב־`ApplicationPage` (הקוד זז מאז שנכתב הסעיף). ב־`TrackingView`
+      זה השאיר `div` ריק, שנמחק.
+- [x] **בוצע — `ViewSwitch` עצמו**, ולא רכיב שני. `ApplicationViews.tsx` מחזיק כעת רק
+      את `applicationViews` (זוגות label/value בצורת ה־options של `ViewSwitch`), את הטיפוס
+      הנגזר ואת `applicationViewFromParam`. הערת ההסבר נשמרה והורחבה בנימוק להסרת ה־tabs.
+
+**בוצע בקומיט `ed15aa7`.** `getByRole("tab")` ב־`ApplicationPage.test.tsx` הפך ל־
+`getByRole("button")`.
 
 **מוחק את התת־סעיף על חצים ב־RTL, ואת רוב 10.2 —** אין יותר שני `id` של tab
 שצריך לקשר אליהם.
@@ -381,7 +386,8 @@ tabs שהיא לא מקיימת, השנייה **סירבה לו מנומק. הס
 **בשתי נקודות שונות** (שורות 69 ו־98). אם שני הענפים יכולים להתקיים יחד, יש
 כפילות `id`. בדיקה קצרה תסגור את זה.
 
-- [ ] לוודא שהענפים בלעדיים; אם לא — לייחד את ה־id.
+- [x] **נבדק — אין באג. אין לתקן.** `ActiveOperationPanel.tsx:59` הוא `if (settled) return`,
+      כך ששני הענפים בלעדיים ורק אחד מהם ב־DOM. אין כפילות `id`. סעיף סגור בלי שינוי קוד.
 
 ### 10.3 `RouteFocusManager` תופס `[data-route-heading]` הראשון
 

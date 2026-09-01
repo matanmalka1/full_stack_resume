@@ -1,15 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactElement, useMemo } from "react";
+import { type ReactElement, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { applicationDetailQueryKey, startAnalysis, startDraftGeneration } from "../../api/applications";
+import {
+  applicationDetailQueryKey,
+  replaceWorkingDraft,
+  startAnalysis,
+  startDraftGeneration,
+} from "../../api/applications";
 import type { ApplicationDetail } from "../../api/contracts";
+import { archiveWorkingDraft, workingDraftQueryKey, workingDraftQueryOptions } from "../../api/drafts";
 import { executionProvider, settingsQueryOptions } from "../../api/settings";
 import { type QueuedOperation, operationQueryKey } from "../../api/operations";
 import { ErrorCallout } from "../../app/ErrorCallout";
 import { ActionBar } from "../../ui/ActionBar";
 import { Button, buttonClasses } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
+import { Checkbox } from "../../ui/Checkbox";
+import { Dialog } from "../../ui/Dialog";
 import { applicationActionPlan } from "./applicationActionPlan";
 import { actionLabel } from "./applicationLabels";
 
@@ -67,6 +75,32 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
     onSuccess: followQueued,
   });
 
+  /* §14: the version the two stale-draft commands are addressed to.
+
+     `expected_edit_version` is optimistic concurrency, and it only does that job if it
+     comes from a read of the draft itself - the projection carries the draft's id but not
+     its version. Conditional, so an Application with nothing to replace opens no second
+     request, and shared with the editor's own read through one cache key.
+
+     Read on view rather than on press deliberately: fetching it inside the command would
+     make the guard describe the instant of sending rather than what the reader was looking
+     at, and a draft edited in another tab would be overwritten instead of refused. */
+  const staleDraftId = plan.replaceDraft?.workingDraftId ?? plan.archiveDraft?.workingDraftId ?? null;
+  const staleDraftQuery = useQuery({
+    ...workingDraftQueryOptions(staleDraftId ?? ""),
+    enabled: staleDraftId !== null,
+  });
+  const editVersion = staleDraftQuery.data?.draft.edit_version ?? null;
+
+  /* The Keep decision is made in the dialog, not assumed by the button. Default on: a
+     draft carries manual wording that nothing regenerates, so the reader opts out of
+     keeping it rather than having to know to opt in. */
+  const [replaceOpen, setReplaceOpen] = useState(false);
+  const [keepPrevious, setKeepPrevious] = useState(true);
+  /* One key per replaced version: a resent answer for the same version is the same
+     command, and a new version is a different one. */
+  const replaceKey = useMemo(() => crypto.randomUUID(), [staleDraftId, editVersion]);
+
   const draft = useMutation({
     mutationFn: async () => {
       /* Availability is the projection's answer, but the IDs are this call's arguments:
@@ -85,7 +119,74 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
     onSuccess: followQueued,
   });
 
-  const error = settingsQuery.error ?? analyze.error ?? draft.error;
+  /* A stale version is the guard doing its job, not a failure to retry: the draft moved
+     since this screen read it, so the answer is to show the conflict and re-read, and let
+     the reader decide again against what is actually there. `retry: false` on mutations is
+     the standing policy (§8.6); this adds the re-read. */
+  const onVersionConflict = () => {
+    if (staleDraftId !== null) {
+      void queryClient.invalidateQueries({ queryKey: workingDraftQueryKey(staleDraftId) });
+    }
+    void queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(detail.application.id) });
+  };
+
+  /* Closing restores the default rather than remembering the last answer. The checkbox is
+     a per-replacement decision, and an unchecked box carried over from a cancelled dialog
+     would make the next replacement silently discard history the reader never chose to
+     discard. */
+  const closeReplace = () => {
+    setReplaceOpen(false);
+    setKeepPrevious(true);
+  };
+
+  const replace = useMutation({
+    mutationFn: async () => {
+      /* Availability is the projection's answer, the version is this call's argument, and
+         a replacement without either is not a command this screen may send. */
+      if (plan.replaceDraft === null || editVersion === null) {
+        throw new Error("replace_working_draft was offered without a draft version to address");
+      }
+      return replaceWorkingDraft(
+        detail.application.id,
+        {
+          expectedEditVersion: editVersion,
+          jobAnalysisId: plan.replaceDraft.analysisId,
+          keepPrevious,
+          selectionPlanId: plan.replaceDraft.selectionPlanId,
+          workingDraftId: plan.replaceDraft.workingDraftId,
+        },
+        replaceKey,
+        { provider },
+      );
+    },
+    onError: onVersionConflict,
+    onSuccess: (queued) => {
+      closeReplace();
+      followQueued(queued);
+    },
+  });
+
+  /* Synchronous, so there is no Operation to follow - only the caches whose answer it
+     changed: the draft it archived, and the projection that named it active. */
+  const archive = useMutation({
+    mutationFn: async () => {
+      if (plan.archiveDraft === null || editVersion === null) {
+        throw new Error("archive_working_draft was offered without a draft version to address");
+      }
+      return archiveWorkingDraft(plan.archiveDraft.workingDraftId, editVersion);
+    },
+    onError: onVersionConflict,
+    onSuccess: () => {
+      onVersionConflict();
+    },
+  });
+
+  /* The version read is included: it is what both stale-draft commands are addressed with,
+     so a failure to obtain it is the reason the two buttons are disabled and has to be
+     said. Silently disabled controls beside an alert about the draft would leave the
+     reader with the problem reported and no account of why nothing can act on it. */
+  const error =
+    settingsQuery.error ?? staleDraftQuery.error ?? analyze.error ?? draft.error ?? replace.error ?? archive.error;
 
   /* Keyed because the bar renders them from an array: with more than one secondary
      action, React needs each to be identifiable across renders. */
@@ -117,6 +218,37 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
       </Button>
     );
 
+  /* Both wait on the version read: without it neither command can be addressed, and a
+     button that answers a press by throwing is worse than one that is plainly not ready
+     yet. */
+  const replaceButton =
+    plan.replaceDraft === null ? null : (
+      <Button
+        disabled={settings === undefined || editVersion === null}
+        key="replace"
+        onClick={() => setReplaceOpen(true)}
+        pending={replace.isPending}
+        pendingLabel="מחליף טיוטה…"
+        variant={plan.replaceDraft.emphasized ? "primary" : "secondary"}
+      >
+        החלפת הטיוטה
+      </Button>
+    );
+
+  const archiveButton =
+    plan.archiveDraft === null ? null : (
+      <Button
+        disabled={editVersion === null}
+        key="archive"
+        onClick={() => archive.mutate()}
+        pending={archive.isPending}
+        pendingLabel="מעביר לארכיון…"
+        variant="secondary"
+      >
+        העברת הטיוטה לארכיון
+      </Button>
+    );
+
   const routeButton = (key: string, href: string, label: string, emphasized: boolean) => (
     <Link className={buttonClasses(emphasized ? "primary" : "secondary")} key={key} to={href}>
       {label}
@@ -143,6 +275,8 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
   const inWorkflowOrder = [
     { emphasized: plan.analyze?.emphasized === true, node: analyzeButton },
     { emphasized: plan.createDraft?.emphasized === true, node: draftButton },
+    { emphasized: plan.replaceDraft?.emphasized === true, node: replaceButton },
+    { emphasized: false, node: archiveButton },
     { emphasized: plan.draftScreen?.emphasized === true, node: draftScreenButton },
     { emphasized: plan.readyRevision?.emphasized === true, node: readyButton },
   ].filter((entry): entry is { emphasized: boolean; node: ReactElement } => entry.node !== null);
@@ -219,6 +353,17 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
         </p>
       ) : null}
 
+      {/* Why the two commands are here at all, and what separates them. They appear only
+          beside a stale-draft alert, so the reader has already been told the draft is out
+          of date; what they have not been told is that the two buttons are not variants of
+          one another. */}
+      {plan.replaceDraft === null && plan.archiveDraft === null ? null : (
+        <p className="text-support leading-6 text-cv-text-muted">
+          הטיוטה אינה מעודכנת מול המקורות שלה. אפשר להחליף אותה בטיוטה חדשה שנבנית מהניתוח ומתוכנית הבחירה הפעילים, או
+          להעביר אותה לארכיון — פעולה ששומרת עותק היסטורי ומשאירה את המועמדות בלי טיוטה פעילה.
+        </p>
+      )}
+
       {inWorkflowOrder.length === 0 ? null : (
         <ActionBar
           /* The offered actions continue the next-step sentence above them rather than
@@ -230,6 +375,46 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
           secondary={restButtons.length === 0 ? undefined : restButtons}
         />
       )}
+      {/* The Keep decision is asked, not assumed, because it is the only choice here whose
+          wrong answer cannot be undone: a replacement without it leaves manual wording with
+          no historical copy, and nothing regenerates that. Not dismissible for the same
+          reason - Escape must not stand for either answer. */}
+      <Dialog
+        dismissible={false}
+        footer={
+          <>
+            <Button onClick={closeReplace} variant="secondary">
+              ביטול
+            </Button>
+            <Button
+              onClick={() => replace.mutate()}
+              pending={replace.isPending}
+              pendingLabel="מחליף טיוטה…"
+              variant="primary"
+            >
+              החלפת הטיוטה
+            </Button>
+          </>
+        }
+        headingId="replace-working-draft-heading"
+        onClose={closeReplace}
+        open={replaceOpen}
+        title="החלפת הטיוטה הפעילה"
+      >
+        <div className="flex flex-col gap-3">
+          <p>
+            טיוטה חדשה תיבנה מהניתוח ומתוכנית הבחירה הפעילים. הטיוטה הנוכחית נשמרת כפי שהיא עד שההחלפה מצליחה, ואם היא
+            נכשלת — דבר לא משתנה.
+          </p>
+          <Checkbox
+            checked={keepPrevious}
+            hint="העותק נשמר כרשומה היסטורית שאינה משתנה. בלעדיו, ניסוח ידני שנעשה בטיוטה הזאת לא יהיה ניתן לשחזור."
+            onChange={(event) => setKeepPrevious(event.target.checked)}
+          >
+            שמירת עותק היסטורי של הטיוטה הנוכחית
+          </Checkbox>
+        </div>
+      </Dialog>
     </div>
   );
 };

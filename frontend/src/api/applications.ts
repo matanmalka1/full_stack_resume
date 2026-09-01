@@ -16,6 +16,7 @@ import type {
   DuplicateMatch,
   DuplicateMatchReason,
   GenerateWorkingDraftRequest,
+  ReplaceWorkingDraftRequest,
   Operation,
   PreparationState,
   RecruitmentStatus,
@@ -188,6 +189,9 @@ const analysesPath = (applicationId: string): ApiPath =>
 const generateWorkingDraftPath = (applicationId: string): ApiPath =>
   `/api/v1/applications/${encodeURIComponent(applicationId)}/working-draft/generate`;
 
+const replaceWorkingDraftPath = (applicationId: string): ApiPath =>
+  `/api/v1/applications/${encodeURIComponent(applicationId)}/working-draft/replace`;
+
 /* The one read the application context screen is built on. §9 computes the whole
    projection in one read transaction, so it arrives as one answer and is rendered as
    one; nothing here recombines it into a second view of the same state.
@@ -307,6 +311,51 @@ export const startDraftGeneration = async (
 
   return queuedOperation(
     await apiRequest<Operation>(generateWorkingDraftPath(applicationId), {
+      method: "POST",
+      body,
+      idempotencyKey,
+    }),
+  );
+};
+
+/* §14: build a new draft in place of a stale one, from the analysis now in force.
+
+   It is `generate`'s sibling and answers `202` the same way, but it carries two arguments
+   generate does not. `working_draft_id` with `expected_edit_version` names the exact
+   version being replaced, so a draft edited in another tab since this screen read it is a
+   `412` rather than a silent overwrite; the pair is stated rather than inferred, and a
+   draft belonging to another Application is refused for the broken lineage.
+
+   `keep_previous` is the Keep decision, and it materializes the immutable historical
+   snapshot before the replacement is attempted. The existing draft is not removed until
+   the replacement succeeds. */
+export const replaceWorkingDraft = async (
+  applicationId: string,
+  request: {
+    expectedEditVersion: number;
+    jobAnalysisId: string;
+    keepPrevious: boolean;
+    selectionPlanId: string;
+    workingDraftId: string;
+  },
+  idempotencyKey: string,
+  options: { provider?: "openai" } = {},
+): Promise<QueuedOperation> => {
+  /* `provider` and `keep_previous` both carry server-side defaults, so the generated type
+     makes them required while the request may omit them. Sent as a partial for the same
+     reason `generate` is: the deterministic route is the absence of the field, not a value
+     this client invents. */
+  const body: Omit<ReplaceWorkingDraftRequest, "provider"> & Partial<Pick<ReplaceWorkingDraftRequest, "provider">> = {
+    expected_edit_version: request.expectedEditVersion,
+    job_analysis_id: request.jobAnalysisId,
+    keep_previous: request.keepPrevious,
+    selection_plan_id: request.selectionPlanId,
+    working_draft_id: request.workingDraftId,
+    ...(options.provider === undefined ? {} : { provider: options.provider }),
+  };
+
+  return queuedOperation(
+    await apiRequest<Operation>(replaceWorkingDraftPath(applicationId), {
       method: "POST",
       body,
       idempotencyKey,
