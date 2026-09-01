@@ -233,10 +233,10 @@ revision ו־application שונה לא אמורות להתקיים. זה לא ב
 **ל־mutations `retry: false` נשאר.** פקודה שנכשלה לא חוזרת מעצמה, וזה עקרוני כאן
 ולא רק זהיר: Operations הן פקודות שכותבות רשומות.
 
-**ל־queries — `retry: 1`.** המערכת רצה כשני תהליכים מול PostgreSQL אחד עם polling
-כל 1.5s; גמגום רשת בודד לא אמור להפוך ל־`ErrorCallout` על המסך.
-`operationQueryOptions` **כבר מיישם בדיוק את ההיגיון הזה בעצמו** — ממשיך על כשל
-חולף, עוצר על `isPermanentFailure` — כך שזה יישור לדפוס שכבר קיים בקוד, לא המצאה.
+**ל־queries — `retry: 1`.** גמגום רשת בודד בקריאה רגילה לא אמור להפוך מיד ל־
+`ErrorCallout`. החריג הוא `operationQueryOptions`, שמצהיר `retry: false`: ה־poll
+עצמו הוא ניסיון ההתאוששות מכשל חולף אחרי 1.5 שניות, ואילו `isPermanentFailure`
+עוצר אותו אחרי בקשה אחת עבור Operation שאינו קיים.
 
 מגבלה מפורשת: **1, לא יותר, ובלי exponential backoff.** שגיאה אמיתית צריכה להגיע
 למשתמש מהר.

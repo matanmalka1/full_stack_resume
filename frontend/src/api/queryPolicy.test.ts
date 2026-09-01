@@ -56,7 +56,31 @@ describe("query cache policy", () => {
   });
 });
 
-describe("Operation paths", () => {
+describe("Operation requests", () => {
+  it("does not immediately retry a permanently missing Operation", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(
+        {
+          type: "about:blank#operation-not-found",
+          title: "Operation not found",
+          status: 404,
+          code: "OPERATION_NOT_FOUND",
+          detail: "Operation not found",
+        },
+        404,
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: 1, retryDelay: 0 } },
+    });
+
+    await expect(
+      client.fetchQuery(operationQueryOptions("missing-operation")),
+    ).rejects.toThrow("Operation not found");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("encodes ids for reads, cancellation, retry, and Location validation", async () => {
     const operationId = "operation/with space";
     const encodedPath = "/api/v1/operations/operation%2Fwith%20space";

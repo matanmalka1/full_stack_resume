@@ -35,6 +35,10 @@ const isPermanentFailure = (error: unknown): boolean => {
 export const operationQueryOptions = (operationId: string) =>
   queryOptions({
     queryKey: operationQueryKey(operationId),
+    /* The poll is its own retry: a transient failure is queried again after 1.5 seconds.
+       Inheriting the global immediate retry would only double the request cost of a
+       permanently missing Operation before the interval below stops. */
+    retry: false,
     queryFn: async ({ signal }) => {
       const response = await apiRequest<Operation>(
         operationPath(operationId),
