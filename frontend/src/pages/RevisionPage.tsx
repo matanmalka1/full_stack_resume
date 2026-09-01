@@ -12,7 +12,7 @@ import {
 } from "../api/revisions";
 import { recordInternalSubmission } from "../api/tracking";
 import { ErrorCallout } from "../app/ErrorCallout";
-import { useWorkflowStage } from "../app/WorkflowLandmark";
+import { useWorkflowStage, workflowDestinations } from "../app/WorkflowLandmark";
 import { useWatchedOperation } from "../hooks/useWatchedOperation";
 import { Button, buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
@@ -52,7 +52,12 @@ const RevisionPageContent = ({ approvedRevisionId }: RevisionPageContentProps) =
     enabled: revision !== undefined,
   });
   const detail = applicationQuery.data;
-  useWorkflowStage(detail === undefined ? "unknown" : detail.preparation_state);
+  /* The Application this revision belongs to is named by the revision, so until it
+     arrives there is no Application to link any stage back to. */
+  useWorkflowStage(
+    detail === undefined ? "unknown" : detail.preparation_state,
+    revision === undefined ? undefined : workflowDestinations(revision.application_id, detail),
+  );
   /* The same watch the Application screen and the editor keep. This screen queues one
      command - a new draft from the approved revision - and reports it beside the files
      rather than sending the reader to a screen that holds neither. */

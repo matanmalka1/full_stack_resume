@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 
 import { applicationDetailQueryOptions } from "../api/applications";
 import type { ApplicationDetail } from "../api/contracts";
-import { useWorkflowStage } from "../app/WorkflowLandmark";
+import { useWorkflowStage, workflowDestinations } from "../app/WorkflowLandmark";
 import { buttonClasses } from "../ui/Button";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
@@ -128,7 +128,14 @@ export const JobDetailsPage = () => {
   const query = useQuery(applicationDetailQueryOptions(applicationId));
   const detail = query.data;
 
-  useWorkflowStage("none");
+  /* Job Detail said `none` while it was a screen the landmark could not link to. Now that
+     intake resolves here, staying silent meant the one destination the bar offers is also
+     the one place the bar disappears. It is an Application screen and reports its stage
+     like the others; `intake` drops out on its own, being this very path. */
+  useWorkflowStage(
+    detail === undefined ? "unknown" : detail.preparation_state,
+    workflowDestinations(applicationId, detail),
+  );
 
   return (
     <PageShell

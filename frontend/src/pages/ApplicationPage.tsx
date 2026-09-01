@@ -3,7 +3,7 @@ import { useLocation, useParams } from "react-router-dom";
 
 import { classificationFromAnalysis } from "../api/analyses";
 import { applicationDetailQueryOptions } from "../api/applications";
-import { useWorkflowStage } from "../app/WorkflowLandmark";
+import { useWorkflowStage, workflowDestinations } from "../app/WorkflowLandmark";
 import { useWatchedOperation } from "../hooks/useWatchedOperation";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
@@ -56,7 +56,10 @@ export const ApplicationPage = () => {
     watch,
   });
 
-  useWorkflowStage(detail === undefined ? "unknown" : detail.preparation_state);
+  useWorkflowStage(
+    detail === undefined ? "unknown" : detail.preparation_state,
+    workflowDestinations(applicationId, detail),
+  );
 
   /* The persistent shell already names the company and role. This masthead names
      the view and reports the axis that view is about - never both at once: the two

@@ -19,7 +19,7 @@ import {
 } from "../../api/drafts";
 import { aiRegenerationAvailable, settingsQueryOptions } from "../../api/settings";
 import { ErrorCallout } from "../../app/ErrorCallout";
-import { useWorkflowStage } from "../../app/WorkflowLandmark";
+import { useWorkflowStage, workflowDestinations } from "../../app/WorkflowLandmark";
 import { useWatchedOperation } from "../../hooks/useWatchedOperation";
 import { Button, buttonClasses } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
@@ -57,7 +57,10 @@ export const DraftEditorPage = () => {
   const settingsQuery = useQuery({ ...settingsQueryOptions, enabled: false });
   const regenerationAvailable = aiRegenerationAvailable(settingsQuery.data?.settings);
   const detail = applicationQuery.data;
-  useWorkflowStage(detail === undefined ? "unknown" : detail.preparation_state);
+  useWorkflowStage(
+    detail === undefined ? "unknown" : detail.preparation_state,
+    workflowDestinations(applicationId, detail),
+  );
   /* The same watch the Application screen keeps, on the other screen that queues durable
      work against one Application. Regeneration is reported here, beside the draft it is
      rewriting. */

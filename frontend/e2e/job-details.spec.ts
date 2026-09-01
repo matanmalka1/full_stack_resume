@@ -76,7 +76,13 @@ test.describe("the Job Detail screen", () => {
       "href",
       "/applications/app-1/preparation",
     );
-    await expect(page.getByRole("img", { name: /^שלבי הכנת קורות החיים:/ })).toHaveCount(0);
+    /* Job Detail is where the landmark's intake step leads, so the landmark is present
+       here rather than dropped: a screen that is a destination of the bar cannot be a
+       screen the bar disappears on. It is a navigation landmark because a stage behind
+       the reader can be opened; the step for this very screen carries no link. */
+    const workflow = page.getByRole("navigation", { name: /^שלבי הכנת קורות החיים:/ });
+    await expect(workflow).toBeVisible();
+    await expect(workflow.getByRole("link", { name: "חזרה לשלב משרה חדשה" })).toHaveCount(0);
 
     const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
 
