@@ -438,11 +438,28 @@ describe("SettingsPage", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/settings", "/settings", <SettingsPage />);
+    const autoGenerate = await screen.findByRole("checkbox", {
+      name: "יצירת טיוטה אוטומטית כשלא נדרשת סקירה",
+    });
+    fireEvent.click(autoGenerate);
+    fireEvent.change(screen.getByLabelText("צפיפות תצוגה"), {
+      target: { value: "compact" },
+    });
+    fireEvent.change(screen.getByLabelText("גודל טקסט"), {
+      target: { value: "large" },
+    });
     fireEvent.click(await screen.findByRole("button", { name: "שמירת הגדרות" }));
     await screen.findByRole("status");
     const request = fetchMock.mock.calls.find((call) => call[1]?.method === "PATCH");
     expect((request?.[1]?.headers as Headers).get("If-Match")).toBe('"settings-1"');
-    expect(Object.keys(JSON.parse(String(request?.[1]?.body))).sort()).toEqual(["ai_enabled_override", "auto_generate_when_review_not_required", "default_execution_mode", "ui_density", "ui_text_size"].sort());
+    expect(JSON.parse(String(request?.[1]?.body))).toEqual({
+      ai_enabled_override: null,
+      auto_generate_when_review_not_required: true,
+      default_execution_mode: "deterministic",
+      ui_density: "compact",
+      ui_text_size: "large",
+    });
+    await waitFor(() => expect(autoGenerate).not.toBeChecked());
   });
 });
 
