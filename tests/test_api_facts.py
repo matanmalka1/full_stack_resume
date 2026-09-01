@@ -9,9 +9,8 @@ those previously lacked an API surface.
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from api_harness import MUTATION_HEADERS
+from pydantic import ValidationError
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.api.schemas.facts import CaptureClaimFactRequest
