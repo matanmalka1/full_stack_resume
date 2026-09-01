@@ -16,7 +16,7 @@ import {
   recruitmentStatusLabel,
   recruitmentStatusTone,
 } from "../application/applicationLabels";
-import { operationTypeLabels, statusLabels } from "../operationLabels";
+import { operationTypeLabels, statusLabels, statusTones } from "../operationLabels";
 import {
   applicationAttention,
   formatApplicationDate,
@@ -96,15 +96,23 @@ const NextActionCell = ({ item }: { item: ApplicationListItem }) => {
 
 const RecommendedActionCell = ({ item }: { item: ApplicationListItem }) => {
   const href = `/applications/${encodeURIComponent(item.id)}`;
-  const running =
-    item.active_operation != null && !isTerminalOperation(item.active_operation) ? item.active_operation : null;
+  const latest = item.active_operation ?? item.latest_operation;
+  /* Terminal only means that polling may stop; it does not mean the outcome is safe to
+     hide. A failure remains the row's most important next-action fact until a newer run
+     supersedes it. Interrupted work has the same property. Successful and deliberately
+     cancelled work yield the column back to the projection's normal recommendation. */
+  const reported =
+    latest != null &&
+    (!isTerminalOperation(latest) || latest.status === "failed" || latest.status === "interrupted")
+      ? latest
+      : null;
 
   return (
     <td className="px-3 py-3">
       <div className="flex items-center">
-        {running !== null ? (
-          <StatusBadge className={rowBadgeClasses} tone="progress">
-            {operationTypeLabels[running.operation_type]} · {statusLabels[running.status]}
+        {reported !== null ? (
+          <StatusBadge className={rowBadgeClasses} tone={statusTones[reported.status]}>
+            {operationTypeLabels[reported.operation_type]} · {statusLabels[reported.status]}
           </StatusBadge>
         ) : item.latest_ready_revision_id != null ? (
           <Link className={rowActionClasses} to={`/revisions/${encodeURIComponent(item.latest_ready_revision_id)}`}>
@@ -176,22 +184,24 @@ export const ApplicationListRow = ({ ambiguous, item, onRequestClose }: Applicat
         {attention === null ? (
           <span className="text-support text-cv-text-muted">—</span>
         ) : (
-          /* The label joins up to three "<count> <word>" phrases with a separator. The
-             pill breaks between phrases but never inside one, so a wrapped badge still
-             reads as whole counts rather than a number stranded from its noun. */
-          <StatusBadge
-            className={cx(rowBadgeClasses, "max-w-full items-start [overflow-wrap:break-word]")}
-            tone={attention.tone}
+          /* The badge names what is waiting rather than counting it, and links to the
+             Application, where the alert region states each item with the control that
+             resolves it. `title` and `aria-label` sit on the link because StatusBadge
+             carries neither, and they hold every title - the badge itself shows at most
+             two, then the most severe one and how many it stands in front of. */
+          <Link
+            aria-label={`${item.company}: ${attention.items.map((entry) => entry.title).join(" · ")}`}
+            className="inline-flex max-w-full rounded-pill focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cv-focus"
+            title={attention.items.map((entry) => entry.title).join(" · ")}
+            to={href}
           >
-            <span className="min-w-0">
-              {attention.label.split(" · ").map((phrase, index) => (
-                <span className="whitespace-nowrap" key={phrase}>
-                  {index === 0 ? null : " · "}
-                  {phrase}
-                </span>
-              ))}
-            </span>
-          </StatusBadge>
+            <StatusBadge
+              className={cx(rowBadgeClasses, "max-w-full items-start [overflow-wrap:break-word]")}
+              tone={attention.tone}
+            >
+              <span className="min-w-0">{attention.label}</span>
+            </StatusBadge>
+          </Link>
         )}
       </td>
       <RecommendedActionCell item={item} />

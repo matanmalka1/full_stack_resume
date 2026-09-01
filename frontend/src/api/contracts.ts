@@ -66,6 +66,7 @@ export type DuplicateMatchReason = DuplicateMatch["matched_on"][number];
 export type PreparationState = ApiSchemas["PreparationState"];
 export type WorkingDraftState = ApiSchemas["WorkingDraftState"];
 export type Reason = ApiSchemas["ReasonResponse"];
+export type Warning = ApiSchemas["WarningResponse"];
 
 export type CreateAnalysisRequest = ApiSchemas["CreateAnalysisRequest"];
 export type GenerateWorkingDraftRequest = ApiSchemas["GenerateWorkingDraftRequest"];

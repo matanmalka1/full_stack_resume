@@ -1,5 +1,6 @@
 import type { ApplicationListItem } from "../../api/contracts";
 import type { StatusTone } from "../../ui/status";
+import { reasonTitle, warningTitle } from "../application/applicationLabels";
 
 const dateFormat = new Intl.DateTimeFormat("he-IL", { dateStyle: "short" });
 
@@ -25,30 +26,64 @@ export const isNextActionOverdue = (value: string | null | undefined, today: Dat
   return due < midnight;
 };
 
+export interface AttentionItem {
+  code: string;
+  title: string;
+}
+
 export interface ApplicationAttention {
+  /* Every title, most severe first: what the badge's `title` and `aria-label` carry. */
+  items: AttentionItem[];
+  /* What the badge shows: the titles themselves up to two, then the most severe one
+     plus a count of what it stands in front of. */
   label: string;
   tone: StatusTone;
 }
 
-export const applicationAttention = (item: ApplicationListItem): ApplicationAttention | null => {
-  const parts = [
-    item.review_reasons.length === 0 ? null : `${item.review_reasons.length} להכרעה`,
-    item.stale_reasons.length === 0 ? null : `${item.stale_reasons.length} לא מעודכן`,
-    item.warnings.length === 0 ? null : `${item.warnings.length} אזהרות`,
-  ].filter((part): part is string => part !== null);
+const ATTENTION_OVERFLOW_LIMIT = 2;
 
-  if (parts.length === 0) {
+/* The three sources the board reports under one column, in the severity order the
+   detail screen's alert region already uses: a blocker, then a draft that no longer
+   matches its sources, then a note.
+
+   The stale group is led by `primary_stale_reason`. The projection picks which of
+   several stale reasons is the one to name; the board repeats that choice rather than
+   re-deriving it, and the remaining reasons follow it with the primary not repeated. */
+const attentionItems = (item: ApplicationListItem): AttentionItem[] => {
+  const staleCodes = [
+    ...(item.primary_stale_reason == null ? [] : [item.primary_stale_reason]),
+    ...item.stale_reasons.map((reason) => reason.code),
+  ];
+
+  return [
+    ...item.review_reasons.map((reason) => ({
+      code: reason.code,
+      title: reasonTitle(reason.code, "נדרשת החלטה לפני המשך"),
+    })),
+    ...[...new Set(staleCodes)].map((code) => ({
+      code,
+      title: reasonTitle(code, "הטיוטה אינה מעודכנת מול המקורות שלה"),
+    })),
+    ...item.warnings.map((warning) => ({
+      code: warning.code,
+      title: warningTitle(warning.code),
+    })),
+  ];
+};
+
+export const applicationAttention = (item: ApplicationListItem): ApplicationAttention | null => {
+  const items = attentionItems(item);
+
+  if (items.length === 0) {
     return null;
   }
 
-  const tone: StatusTone =
-    item.review_reasons.length > 0
-      ? "blocker"
-      : item.stale_reasons.length > 0 || item.warnings.length > 0
-        ? "warning"
-        : "neutral";
+  const label =
+    items.length <= ATTENTION_OVERFLOW_LIMIT
+      ? items.map((entry) => entry.title).join(" · ")
+      : `${items[0].title} · +${items.length - 1} נוספים`;
 
-  return { label: parts.join(" · "), tone };
+  return { items, label, tone: item.review_reasons.length > 0 ? "blocker" : "warning" };
 };
 
 /* Mirrors the list projection's current activity classification. A future `can_close`

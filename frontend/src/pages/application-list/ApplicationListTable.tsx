@@ -18,7 +18,7 @@ const columns = [
   { label: "שלב גיוס", width: "w-[12%]" },
   { label: "פעילות אחרונה", width: "w-28" },
   { label: "הפעולה הבאה", width: "w-[13%]" },
-  { label: "אזהרות", width: "w-[15%]" },
+  { label: "דורש טיפול", width: "w-[15%]" },
   { label: "פעולה מומלצת", width: "w-[15%]" },
   { label: "", width: "w-16" },
 ] as const;

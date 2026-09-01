@@ -4,7 +4,14 @@ import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { applicationDetailQueryOptions, applicationListQueryOptions } from "../api/applications";
-import type { ApplicationDetail, ApplicationListItem, ApplicationListResponse, Reason } from "../api/contracts";
+import type {
+  ApplicationDetail,
+  ApplicationListItem,
+  ApplicationListResponse,
+  Operation,
+  Reason,
+  Warning,
+} from "../api/contracts";
 import { ApplicationListPage } from "./ApplicationListPage";
 import { actionLabel } from "./application/applicationLabels";
 
@@ -37,6 +44,26 @@ const reason = (code: string): Reason => ({
   message: `plain sentence for ${code}`,
   entity_references: {},
   allowed_resolution_actions: [],
+});
+
+const warning = (code: string): Warning => ({
+  code,
+  message: `plain sentence for ${code}`,
+  entity_references: {},
+});
+
+const operation = (overrides: Partial<Operation> = {}): Operation => ({
+  id: "op-1",
+  application_id: "app-1",
+  operation_type: "analyze_job",
+  status: "queued",
+  is_terminal: false,
+  phase: "queued",
+  message: "",
+  created_at: "2026-08-24T07:00:00Z",
+  outputs: [],
+  available_actions: ["cancel"],
+  ...overrides,
 });
 
 const jsonResponse = (body: unknown, status = 200): Response =>
@@ -214,13 +241,93 @@ describe("ApplicationListPage", () => {
     expect(screen.getByRole("link", { name: actionLabel("analyze") })).toBeInTheDocument();
   });
 
-  it("keeps a pending-decision count on one line", async () => {
+  it("keeps the latest failed Operation visible after active work ends", async () => {
+    stubList([
+      item({
+        active_operation: null,
+        latest_operation: operation({ status: "failed", is_terminal: true, phase: "completed" }),
+      }),
+    ]);
+
+    renderPage();
+
+    expect(await screen.findByText("ניתוח המשרה · נכשלה")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: actionLabel("analyze") })).not.toBeInTheDocument();
+  });
+
+  /* The column is read to decide which row to open next, so it names what is waiting
+     rather than counting it, and the badge is the way into the Application that states
+     each item beside the control that resolves it. */
+  it("names a blocking reason and links it to the Application", async () => {
     stubList([item({ review_reasons: [reason("HARD_GAP_REQUIRES_DECISION")] })]);
 
     renderPage();
 
-    const attention = await screen.findByText("1 להכרעה");
-    expect(attention).toHaveClass("whitespace-nowrap");
+    const attention = await screen.findByRole("link", { name: "Acme: יש פער חוסם מול הדרישות" });
+    expect(attention).toHaveAttribute("href", "/applications/app-1");
+    expect(within(attention).getByText("יש פער חוסם מול הדרישות")).toBeInTheDocument();
+  });
+
+  it("shows two reasons in full", async () => {
+    stubList([
+      item({
+        review_reasons: [reason("HARD_GAP_REQUIRES_DECISION")],
+        warnings: [warning("NEXT_ACTION_OVERDUE")],
+      }),
+    ]);
+
+    renderPage();
+
+    expect(await screen.findByText("יש פער חוסם מול הדרישות · הפעולה הבאה באיחור")).toBeInTheDocument();
+  });
+
+  it("reduces three or more to the most severe reason and a count of the rest", async () => {
+    stubList([
+      item({
+        review_reasons: [reason("HARD_GAP_REQUIRES_DECISION")],
+        stale_reasons: [reason("JOB_SNAPSHOT_CHANGED")],
+        warnings: [warning("NEXT_ACTION_OVERDUE")],
+      }),
+    ]);
+
+    renderPage();
+
+    expect(await screen.findByText("יש פער חוסם מול הדרישות · +2 נוספים")).toBeInTheDocument();
+  });
+
+  /* The projection decides which stale reason leads; the board repeats that choice
+     instead of re-deriving one, and does not repeat the reason it promoted. */
+  it("leads the stale group with the projection's primary reason", async () => {
+    stubList([
+      item({
+        stale_reasons: [reason("JOB_SNAPSHOT_CHANGED"), reason("POLICY_CHANGED")],
+        primary_stale_reason: "POLICY_CHANGED",
+      }),
+    ]);
+
+    renderPage();
+
+    /* Two reasons, not three: the promoted primary is not repeated among the rest. */
+    expect(await screen.findByText("כללי הבדיקה השתנו · נוסח המשרה השתנה")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Acme: כללי הבדיקה השתנו · נוסח המשרה השתנה" })).toBeInTheDocument();
+  });
+
+  /* The badge shows at most two titles, so what it drops has to stay reachable: the
+     link carries every title, in the same severity order. */
+  it("carries every reason in the badge's accessible name and tooltip", async () => {
+    stubList([
+      item({
+        review_reasons: [reason("HARD_GAP_REQUIRES_DECISION")],
+        stale_reasons: [reason("JOB_SNAPSHOT_CHANGED")],
+        warnings: [warning("NEXT_ACTION_OVERDUE")],
+      }),
+    ]);
+
+    renderPage();
+
+    const titles = "יש פער חוסם מול הדרישות · נוסח המשרה השתנה · הפעולה הבאה באיחור";
+    const attention = await screen.findByRole("link", { name: `Acme: ${titles}` });
+    expect(attention).toHaveAttribute("title", titles);
   });
 
   it("keeps the filters visible when a narrowed board matches none of the stored Applications", async () => {
