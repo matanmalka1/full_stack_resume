@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { applicationDetailQueryOptions, applicationListQueryOptions } from "../api/applications";
-import type { ApplicationListItem, Reason } from "../api/contracts";
+import type { ApplicationDetail, ApplicationListItem, ApplicationListResponse, Reason } from "../api/contracts";
 import { ApplicationListPage } from "./ApplicationListPage";
 import { actionLabel } from "./application/applicationLabels";
 
@@ -58,10 +58,10 @@ const jsonResponse = (body: unknown, status = 200): Response =>
 interface Counts {
   matched?: number;
   total?: number;
-  stageCounts?: Partial<Record<string, number>>;
+  stageCounts?: Record<string, number>;
 }
 
-const listBody = (items: ApplicationListItem[], counts: Counts = {}) => {
+const listBody = (items: ApplicationListItem[], counts: Counts = {}): ApplicationListResponse => {
   const matched = counts.matched ?? items.length;
   /* Counted over every Application rather than the page, the way the server answers it:
      the stage menu must not collapse to the one stage its own filter selected. */
@@ -84,6 +84,41 @@ const listBody = (items: ApplicationListItem[], counts: Counts = {}) => {
     stage_counts,
   };
 };
+
+const detailBody = (): ApplicationDetail => ({
+  recruitment_status: "saved",
+  allowed_recruitment_transitions: ["withdrawn", "closed"],
+  recruitment_timeline: [],
+  preparation_state: "needs_analysis",
+  working_draft_state: "none",
+  review_reasons: [],
+  stale_reasons: [],
+  warnings: [],
+  active_job_snapshot_id: "snap-1",
+  newer_draft_in_progress: false,
+  available_actions: ["analyze"],
+  blocked_actions: [],
+  recommended_action: "analyze",
+  application: {
+    id: "app-1",
+    company: "Acme",
+    target_role: "Backend Engineer",
+    current_status: "saved",
+    notes: "",
+    source: "manual",
+    created_at: "2026-08-24T07:00:00Z",
+    updated_at: "2026-08-24T07:00:00Z",
+  },
+  latest_snapshot: {
+    id: "snap-1",
+    application_id: "app-1",
+    version_number: 1,
+    job_text: "Senior Backend Engineer",
+    captured_at: "2026-08-24T07:00:00Z",
+    source_metadata: {},
+    content_hash: "hash-1",
+  },
+});
 
 const stubList = (items: ApplicationListItem[], counts: Counts = {}) => {
   const body = listBody(items, counts);
@@ -269,7 +304,7 @@ describe("ApplicationListPage", () => {
     const closedListKey = applicationListQueryOptions({ activity: "closed" }).queryKey;
     const detailKey = applicationDetailQueryOptions("app-1").queryKey;
     queryClient.setQueryData(closedListKey, listBody([], { total: 1 }));
-    queryClient.setQueryData(detailKey, { application: { id: "app-1" } });
+    queryClient.setQueryData(detailKey, detailBody());
 
     renderPage({ queryClient });
 
