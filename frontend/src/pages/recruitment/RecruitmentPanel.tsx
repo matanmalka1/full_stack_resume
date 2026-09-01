@@ -93,6 +93,8 @@ const timelineDescription = (
   )} ל־${recruitmentStatusLabel(event.to_status ?? "saved")}`;
 };
 
+const timelineReason = (reason: string): string => (reason === "application created" ? "המועמדות נוצרה" : reason);
+
 /* The two everyday recruitment controls, the timeline they write into, and two dialogs.
 
    Correction and external submission are behind dialogs rather than disclosures because
@@ -226,25 +228,32 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
   );
 
   return (
-    <section aria-labelledby="recruitment-heading" className="flex flex-col gap-6">
-      <h2 className="text-heading-sm font-semibold text-cv-text" id="recruitment-heading">
-        מעקב גיוס
-      </h2>
+    <section aria-labelledby="recruitment-heading" className="rounded-surface border border-cv-border p-5">
+      <div className="border-b border-cv-border pb-4">
+        <h2 className="text-body font-semibold text-cv-text" id="recruitment-heading">
+          מעקב גיוס
+        </h2>
+        <p className="mt-1 text-support leading-6 text-cv-text-muted">עדכון התקדמות התהליך ותכנון הצעד הבא.</p>
+      </div>
 
       {error === null ? null : (
         <ErrorCallout
+          className="mt-5"
           error={error}
           fallbackDetail="העדכון לא נשמר. הרשומות הקיימות לא השתנו."
           fallbackTitle="לא ניתן לעדכן את מעקב הגיוס"
         />
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="mt-5 grid gap-6 rounded-surface bg-cv-surface-muted p-4 sm:p-5 lg:grid-cols-2">
         <form
           className="flex flex-col gap-3"
           onSubmit={transitionForm.handleSubmit((fields) => transition.mutate(fields))}
         >
-          <h3 className="font-semibold text-cv-text">עדכון שלב</h3>
+          <div>
+            <h3 className="font-semibold text-cv-text">השלב בתהליך</h3>
+            <p className="mt-1 text-support text-cv-text-muted">מעבר לשלב הבא הזמין בתהליך הגיוס.</p>
+          </div>
           {transitionChangedOnServer ? (
             <Callout role="status" title="אפשרויות המעבר השתנו בשרת" tone="warning">
               הבחירה שלך נשמרה בטופס ולא הוחלפה. כדאי לבדוק אותה לפני השמירה.
@@ -274,18 +283,23 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
               <Field label="סיבה (רשות)">
                 {(control) => <TextInput {...control} {...transitionForm.register("reason")} />}
               </Field>
-              <Button pending={transition.isPending} pendingLabel="שומר…" type="submit">
-                שמירת השלב
-              </Button>
+              <div className="flex justify-end pt-1">
+                <Button pending={transition.isPending} pendingLabel="שומר…" type="submit">
+                  שמירת השלב
+                </Button>
+              </div>
             </>
           )}
         </form>
 
         <form
-          className="flex flex-col gap-3"
+          className="flex flex-col gap-3 border-t border-cv-border pt-6 lg:border-s lg:border-t-0 lg:ps-6 lg:pt-0"
           onSubmit={nextActionForm.handleSubmit((fields) => nextActionMutation.mutate({ clear: false, fields }))}
         >
-          <h3 className="font-semibold text-cv-text">הפעולה הבאה</h3>
+          <div>
+            <h3 className="font-semibold text-cv-text">הפעולה הבאה</h3>
+            <p className="mt-1 text-support text-cv-text-muted">תזכורת אחת ממוקדת להמשך הטיפול.</p>
+          </div>
           {nextActionChangedOnServer || nextActionDateChangedOnServer ? (
             <Callout role="status" title="הפעולה הבאה השתנתה בשרת" tone="warning">
               הערכים שהקלדת נשמרו בטופס ולא הוחלפו. כדאי לבדוק אותם לפני השמירה.
@@ -297,25 +311,25 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
           <Field label="תאריך">
             {(control) => <TextInput {...control} {...nextActionForm.register("date")} type="date" />}
           </Field>
-          <div className="flex flex-wrap gap-2">
-            <Button pending={nextActionMutation.isPending} type="submit">
-              שמירת הפעולה
-            </Button>
+          <div className="flex flex-wrap justify-end gap-2 pt-1">
             <Button
               disabled={
                 nextActionMutation.isPending ||
                 (detail.application.next_action == null && detail.application.next_action_date == null)
               }
               onClick={() => nextActionMutation.mutate({ clear: true, fields: nextActionForm.getValues() })}
-              variant="secondary"
+              variant="ghost"
             >
-              סימון כהושלם וניקוי
+              סימון כהושלמה
+            </Button>
+            <Button pending={nextActionMutation.isPending} type="submit">
+              שמירת הפעולה
             </Button>
           </div>
         </form>
       </div>
 
-      <div>
+      <div className="mt-6 border-t border-cv-border pt-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-semibold text-cv-text">ציר הזמן</h3>
           {/* The two exceptional records, offered beside the history they write into
@@ -344,7 +358,7 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
                 </p>
                 {event.reason === "" ? null : (
                   <p className="mt-1 text-support text-cv-text-muted" dir="auto">
-                    {event.reason}
+                    {timelineReason(event.reason)}
                   </p>
                 )}
               </li>

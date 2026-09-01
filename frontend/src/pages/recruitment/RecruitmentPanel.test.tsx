@@ -100,7 +100,10 @@ describe("RecruitmentPanel", () => {
   it("sends the exact forward transition and next-action choices, including a clear", async () => {
     const fetchMock = vi.fn(emptyJsonFetch);
     vi.stubGlobal("fetch", fetchMock);
-    renderPanel();
+    renderPanel(detail({ recruitment_timeline: [statusEvent({ reason: "application created" })] }));
+
+    expect(screen.getByText("המועמדות נוצרה")).toBeInTheDocument();
+    expect(screen.queryByText("application created")).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("השלב הבא"), { target: { value: "closed" } });
     fireEvent.change(screen.getByLabelText("סיבה (רשות)"), {
@@ -132,8 +135,8 @@ describe("RecruitmentPanel", () => {
       next_action_date: "2026-09-10",
     });
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "סימון כהושלם וניקוי" })).toBeEnabled());
-    fireEvent.click(screen.getByRole("button", { name: "סימון כהושלם וניקוי" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "סימון כהושלמה" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "סימון כהושלמה" }));
 
     await waitFor(() =>
       expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/next-action"))).toHaveLength(2),
