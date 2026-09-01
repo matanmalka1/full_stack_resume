@@ -193,3 +193,13 @@ dialog::backdrop {
     animation-iteration-count: 1 !important;
   }
 }
+
+/* The unlaid part of the workflow rail. Dotted rather than a paler solid: "done" and
+   "not started yet" then differ in shape as well as colour, which is what the two
+   states need to survive greyscale (A.2, colour is never the only signal). */
+.workflow-track-upcoming {
+  background-image: radial-gradient(circle, var(--color-cv-border-strong) 1px, transparent 1px);
+  background-repeat: repeat-x;
+  background-position: center;
+  background-size: 6px 4px;
+}

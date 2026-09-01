@@ -19,6 +19,26 @@ const stageLabels: Record<Stage, string> = {
   ready: "מוכן",
 };
 
+/* What each stage produces, in one line. The labels above are single nouns, and a noun
+   alone does not tell a reader what "אימות" is for or what has to be true before "מוכן".
+   Only the current stage's line is shown, so the landmark stays one sentence tall.
+
+   These describe the stage, not what may happen next: which action is possible is
+   `available_actions` and `recommended_action`, and the landmark still decides none of
+   it (A.1). */
+const stageHints: Record<Stage, string> = {
+  intake: "קליטת המודעה ויצירת המשרה",
+  analysis: "התאמת המשרה לעובדות הקנוניות",
+  draft: "ניסוח קורות החיים לפי תוכנית הבחירה",
+  validation: "בדיקת הניסוח מול העובדות לפני אישור",
+  ready: "גרסה מאושרת ומרונדרת, מוכנה לשליחה",
+};
+
+/* The stage the hint describes: where the work is, and at `ready` the stage it finished
+   on. `unknown` gets none - the stage it is on is not this module's to guess. */
+const hintFor = (stage: Exclude<WorkflowStage, "none">): string | undefined =>
+  stage === "unknown" ? undefined : stageHints[stage === "intake" ? "intake" : stageForPreparationState[stage]];
+
 /* Where the backend's PreparationState sits in the landmark. Exhaustive over the
    generated union, so a state added to the projection fails the build here rather than
    leaving the landmark on whichever stage it happened to be showing.
@@ -155,14 +175,41 @@ export const WorkflowLandmarkSteps = () => {
     return null;
   }
 
-  /* A stage whose screen is the one being read is not a way back. Dropped here rather
-     than at each caller: which screen is open is the shell's knowledge, and the pages
-     derive destinations from the projection alone. */
-  const steps = workflowStepsFor(stage, destinations).map((step) =>
-    step.href === pathname ? { label: step.label, state: step.state } : step,
-  );
+  const steps = workflowStepsFor(stage, destinations);
+  /* Which of the five stages the open screen belongs to. The shell's knowledge, not the
+     page's: the pages derive destinations from the projection alone, and matching a
+     destination against the open path is what turns that into a location.
 
-  return <WorkflowSteps label="שלבי הכנת קורות החיים" steps={steps} />;
+     The current stage wins a tie, because the editor is the screen of both טיוטה and
+     אימות and the projection is what says which of the two the reader is doing there.
+     `intake` is matched by the stage rather than by a path: the intake screen exists
+     before the Application does, so it has no destination to compare against. */
+  const hereIndex =
+    stage === "intake"
+      ? 0
+      : steps.findIndex((step) => step.state === "current" && step.href === pathname) !== -1
+        ? steps.findIndex((step) => step.state === "current" && step.href === pathname)
+        : steps.findIndex((step) => step.href === pathname);
+
+  /* A stage whose screen is the one being read is not a way back. Dropped here for the
+     same reason the location is decided here. */
+  const located = steps.map((step, index) => ({
+    ...(index === hereIndex ? { here: true } : {}),
+    ...(step.href === pathname ? {} : { href: step.href }),
+    label: step.label,
+    state: step.state,
+  }));
+
+  return (
+    <WorkflowSteps
+      /* The line describes the screen the reader is on where that is one of the five, and
+         falls back to the stage the work is on where it is not - a revision opened from
+         outside the workflow, say. */
+      hint={hereIndex === -1 ? hintFor(stage) : stageHints[stages[hereIndex]]}
+      label="שלבי הכנת קורות החיים"
+      steps={located}
+    />
+  );
 };
 
 export const useWorkflowStage = (stage: WorkflowStage, destinations?: StageDestinations): void => {

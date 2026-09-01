@@ -122,6 +122,38 @@ describe("workflow landmark navigation", () => {
     expect(screen.queryByRole("navigation")).toBeNull();
   });
 
+  /* The position and what the stage is for were only in the accessible name, so a sighted
+     reader had to count five words - and below md, where the row is shortened, could not
+     count them at all. */
+  it("states the position and what the open stage is for, in visible text", () => {
+    landmark(
+      "draft_in_progress",
+      workflowDestinations("app-1", detail({ active_working_draft_id: "draft-1" })),
+      "/applications/app-1/draft",
+    );
+
+    expect(screen.getByText("עמוד טיוטה")).toBeInTheDocument();
+    expect(screen.getByText("שלב 3 מתוך 5")).toBeInTheDocument();
+    expect(screen.getByText(/ניסוח קורות החיים לפי תוכנית הבחירה/)).toBeInTheDocument();
+  });
+
+  /* The screen being read and the stage the work is on are regularly different, and the
+     bar used to draw only the second - at `ready_for_approval` read from the preparation
+     screen it highlighted אימות, a stage whose screen the reader was not on. */
+  it("names the open screen apart from the stage the work is on", () => {
+    landmark(
+      "ready_for_approval",
+      workflowDestinations("app-1", detail({ active_working_draft_id: "draft-1" })),
+      "/applications/app-1/preparation",
+    );
+
+    expect(screen.getByText("עמוד ניתוח")).toBeInTheDocument();
+    expect(screen.getByText("העבודה בשלב 4 מתוך 5: אימות")).toBeInTheDocument();
+    expect(screen.getByRole("navigation")).toHaveAccessibleName(
+      "שלבי הכנת קורות החיים: שלב 4 מתוך 5, אימות. העמוד הפתוח: ניתוח",
+    );
+  });
+
   it("announces a completed workflow when Ready has no current step", () => {
     landmark("ready", workflowDestinations("app-1", detail({ latest_ready_revision_id: "rev-1" })));
 
