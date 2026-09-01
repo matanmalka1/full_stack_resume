@@ -1,12 +1,10 @@
 import type { Classification } from "../../../api/analyses";
 import { StatusBadge } from "../../../ui/StatusBadge";
+import { cx } from "../../../ui/cx";
 import { gapSeverityLabels } from "../analysisLabels";
 import { AnalysisSection } from "./AnalysisSection";
 
 type Gap = Classification["gaps"][number];
-
-const countBySeverity = (gaps: Gap[], severity: Gap["severity"]): number =>
-  gaps.filter((gap) => gap.severity === severity).length;
 
 /* Absence of gaps is a finding, not an empty screen. Rendering nothing left the reader
    unable to tell "the analysis matched every requirement" from "the analysis never
@@ -14,10 +12,10 @@ const countBySeverity = (gaps: Gap[], severity: Gap["severity"]): number =>
    gap list (hard becomes mandatory, warning becomes preferred), so when it is empty all
    three sections say nothing about the candidate's coverage at once.
 
-   When there are gaps, a count by severity sits above the list: the list itself keeps the
-   analysis's own order, but a reader deciding whether to press on wants "how many are
-   blocking" before "which ones", and the counts answer that without reordering the list
-   under them. */
+   Each gap reads as a line rather than a tile of its own: a severity-colored border does
+   the same job a bordered, tinted card did, at a fraction of the chrome. The badge beside
+   the requirement still names the severity in words for a reader who cannot rely on
+   color alone (A.2). */
 export const GapsSection = ({ gaps }: { gaps: Gap[] }) => {
   if (gaps.length === 0) {
     return (
@@ -30,24 +28,12 @@ export const GapsSection = ({ gaps }: { gaps: Gap[] }) => {
     );
   }
 
-  const hardCount = countBySeverity(gaps, "hard");
-  const warningCount = countBySeverity(gaps, "warning");
-
   return (
     <AnalysisSection title="פערים מול העובדות">
-      <div className="mb-3 flex flex-wrap gap-2">
-        {hardCount === 0 ? null : (
-          <StatusBadge tone="blocker">{`${gapSeverityLabels.hard} · ${hardCount}`}</StatusBadge>
-        )}
-        {warningCount === 0 ? null : (
-          <StatusBadge tone="warning">{`${gapSeverityLabels.warning} · ${warningCount}`}</StatusBadge>
-        )}
-      </div>
-
       <ul className="flex flex-col gap-3">
         {gaps.map((gap) => (
           <li
-            className="rounded-surface border border-cv-border bg-cv-surface-muted p-3"
+            className={cx("border-s-2 ps-3", gap.severity === "hard" ? "border-cv-blocker/50" : "border-cv-warning/50")}
             key={`${gap.severity}:${gap.requirement}`}
           >
             <div className="flex flex-wrap items-center gap-2">
@@ -59,7 +45,7 @@ export const GapsSection = ({ gaps }: { gaps: Gap[] }) => {
               </StatusBadge>
             </div>
             {gap.reason === "" ? null : (
-              <p className="mt-2 text-support text-cv-text-muted" dir="auto">
+              <p className="mt-1 text-support text-cv-text-muted" dir="auto">
                 {gap.reason}
               </p>
             )}

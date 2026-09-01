@@ -12,10 +12,12 @@ export const RationaleSection = ({ rationale }: { rationale: string | null }) =>
 
   return (
     <AnalysisSection title="הנימוק">
-      <p className="text-body leading-7 text-cv-text" dir="auto">
-        {rationale}
-      </p>
-      <p className="mt-2 text-support text-cv-text-muted">נוסח אוטומטית על ידי מנוע הסיווג, בשפת המקור.</p>
+      <blockquote className="border-s-2 border-cv-border ps-4">
+        <p className="text-body leading-7 text-cv-text" dir="auto">
+          {rationale}
+        </p>
+        <p className="mt-2 text-support text-cv-text-muted">נוסח אוטומטית על ידי מנוע הסיווג, בשפת המקור.</p>
+      </blockquote>
     </AnalysisSection>
   );
 };

@@ -1,10 +1,9 @@
 import type { Classification } from "../../../api/analyses";
 import { classificationItems, overrideKeyLabels } from "../analysisLabels";
 
-/* The four classification axes - track, profile, emphasis, language - as a grid of small
-   cards rather than a label/value list. They are what the draft will be built from and
-   are read together as one verdict, not compared one row at a time, so each axis gets
-   equal visual weight instead of being stacked in a column of pairs. */
+/* The four classification axes, read as one flowing line rather than four boxed tiles:
+   track, profile, emphasis, and language are one verdict - what the draft will be built
+   from - not four separate metrics that each need a frame to stand apart. */
 export const ClassificationSummary = ({ classification }: { classification: Classification }) => {
   const decided = classification.decided
     .map((key) => overrideKeyLabels[key])
@@ -12,19 +11,18 @@ export const ClassificationSummary = ({ classification }: { classification: Clas
 
   return (
     <div>
-      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <p className="text-support leading-7" dir="auto">
         {classificationItems(classification).map((item, index) => (
-          <div className="rounded-control border border-cv-border bg-cv-surface-muted p-3" key={index}>
-            <dt className="text-support text-cv-text-muted">{item.term}</dt>
-            <dd className="mt-1 text-body font-medium text-cv-text" dir="auto">
-              {item.value}
-            </dd>
-          </div>
+          <span key={index}>
+            {index === 0 ? null : <span className="text-cv-text-muted"> · </span>}
+            <span className="text-cv-text-muted">{item.term}</span>{" "}
+            <span className="font-medium text-cv-text">{item.value}</span>
+          </span>
         ))}
-      </dl>
+      </p>
 
       {decided.length === 0 ? null : (
-        <p className="mt-3 text-support text-cv-text-muted" dir="auto">
+        <p className="mt-2 text-support text-cv-text-muted" dir="auto">
           נקבע בהחלטה שלך: {decided.join(" · ")}.
         </p>
       )}

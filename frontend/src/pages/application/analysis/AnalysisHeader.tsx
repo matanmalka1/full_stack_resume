@@ -1,6 +1,6 @@
 import type { Classification } from "../../../api/analyses";
 import { StatusBadge } from "../../../ui/StatusBadge";
-import { fitDescriptions, fitIcons, fitLabels, fitTones } from "../analysisLabels";
+import { fitDescriptions, fitLabels, fitTones } from "../analysisLabels";
 
 /* Confidence is a 0..1 float in the document and a percentage to a reader.
 
@@ -12,10 +12,9 @@ import { fitDescriptions, fitIcons, fitLabels, fitTones } from "../analysisLabel
 const confidenceText = (confidence: number): string => `${Math.round(confidence * 100)}%`;
 
 /* The panel's masthead: what section this is, and the verdict that governs everything
-   below it. The fit badge carries `fitIcons` - the same signal-strength mark the
-   Application board already shows next to this same fit level - so the verdict reads as
-   a point on a low/medium/high scale before the word beside it is even read (A.2: color
-   is never the only signal, and here neither is the icon alone).
+   below it. The fit badge keeps the tone's own icon rather than a fit-specific one - a
+   signal-strength mark next to a badge that already states the level in words repeated
+   the same fact twice without adding anything a reader could act on.
 
    Confidence qualifies the fit, so it is read with it rather than lower on the page: the
    two are reported independently - a classification may carry a confidence without a fit
@@ -31,9 +30,7 @@ export const AnalysisHeader = ({ classification }: { classification: Classificat
       {classification.fit === null && classification.confidence === null ? null : (
         <div className="flex flex-wrap items-center gap-2">
           {classification.fit === null ? null : (
-            <StatusBadge icon={fitIcons[classification.fit]} tone={fitTones[classification.fit]}>
-              {fitLabels[classification.fit]}
-            </StatusBadge>
+            <StatusBadge tone={fitTones[classification.fit]}>{fitLabels[classification.fit]}</StatusBadge>
           )}
           {classification.confidence === null ? null : (
             <span className="text-support text-cv-text-muted">
