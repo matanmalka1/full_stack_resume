@@ -11,7 +11,7 @@ import {
   recruiterPdfHref,
 } from "../api/revisions";
 import { recordInternalSubmission } from "../api/tracking";
-import { briefServerFailureDetail, ErrorCallout } from "../app/ErrorCallout";
+import { ErrorCallout } from "../app/ErrorCallout";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { useWatchedOperation } from "../hooks/useWatchedOperation";
 import { Button, buttonClasses } from "../ui/Button";
@@ -22,6 +22,7 @@ import { SummaryList } from "../ui/SummaryList";
 import { Dialog } from "../ui/Dialog";
 import { Field } from "../ui/Field";
 import { TextInput } from "../ui/TextInput";
+import { localDateTimeInputValue } from "./revision/submissionDate";
 import { ValidationReportView } from "./revision/ValidationReportView";
 
 /* One approved revision: its document, its files, and the record of its submission.
@@ -32,15 +33,14 @@ import { ValidationReportView } from "./revision/ValidationReportView";
    one, and `latest_ready_revision_id` can name a revision while a newer draft is already
    in progress - so a screen keyed by the Application would answer those links with a
    different record than the one they named. */
-export const RevisionPage = () => {
-  const { revisionId: approvedRevisionId } = useParams();
+interface RevisionPageContentProps {
+  approvedRevisionId: string;
+}
+
+const RevisionPageContent = ({ approvedRevisionId }: RevisionPageContentProps) => {
   const queryClient = useQueryClient();
   const [submissionOpen, setSubmissionOpen] = useState(false);
-  const [submittedAt, setSubmittedAt] = useState(() => {
-    const now = new Date();
-    return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-  });
-  if (approvedRevisionId === undefined) throw new Error("RevisionPage requires a revisionId route parameter");
+  const [submittedAt, setSubmittedAt] = useState(() => localDateTimeInputValue(new Date()));
   const revisionQuery = useQuery(approvedRevisionQueryOptions(approvedRevisionId));
   const revision = revisionQuery.data;
   const decisionQuery = useQuery({
@@ -153,7 +153,6 @@ export const RevisionPage = () => {
     >
       <QueryState
         error={revisionQuery.error ?? applicationQuery.error}
-        fallbackDetail={briefServerFailureDetail}
         fallbackTitle="לא ניתן לטעון את הגרסה המוכנה"
         loading={revision === undefined}
         loadingLabel="טוען את הגרסה…"
@@ -233,7 +232,6 @@ export const RevisionPage = () => {
         {newDraft.error === null ? null : (
           <ErrorCallout
             error={newDraft.error}
-            fallbackDetail={briefServerFailureDetail}
             fallbackTitle="לא ניתן ליצור טיוטה חדשה"
           />
         )}
@@ -317,4 +315,14 @@ export const RevisionPage = () => {
       </Dialog>
     </PageShell>
   );
+};
+
+export const RevisionPage = () => {
+  const { revisionId } = useParams();
+
+  if (revisionId === undefined) {
+    throw new Error("RevisionPage requires a revisionId route parameter");
+  }
+
+  return <RevisionPageContent approvedRevisionId={revisionId} />;
 };
