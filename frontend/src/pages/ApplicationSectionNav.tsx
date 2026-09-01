@@ -9,9 +9,10 @@ interface ApplicationSectionNavProps {
 }
 
 /* These are two sections of one Application, not two panels of one object. Links keep
-   native keyboard, open-in-new-tab, and middle-click behavior; `replace` preserves the
-   existing history contract, where Back returns to the Application list rather than to
-   the other section. */
+   native keyboard, open-in-new-tab, and middle-click behavior, and each move is a history
+   entry: a tab that Back does not return from is a tab the reader cannot undo pressing.
+   Back from here now walks the sections visited and reaches the list behind them, rather
+   than skipping straight out of the Application. */
 export const ApplicationSectionNav = ({ applicationId, value }: ApplicationSectionNavProps) => (
   <nav aria-label="תחומי המועמדות">
     <div className="inline-flex gap-1 rounded-surface border border-cv-border bg-cv-surface-muted p-1 shadow-inner">
@@ -25,7 +26,6 @@ export const ApplicationSectionNav = ({ applicationId, value }: ApplicationSecti
               : "text-cv-text-muted hover:bg-cv-surface-muted",
           )}
           key={option.value}
-          replace
           to={
             option.value === "details"
               ? `/applications/${encodeURIComponent(applicationId)}`
