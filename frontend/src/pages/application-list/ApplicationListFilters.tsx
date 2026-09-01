@@ -152,11 +152,15 @@ export const ApplicationListFilters = ({
           value={preparationState ?? ""}
         >
           <option value="">הכול</option>
+          {/* The menu hides stages nothing is in, except the one the URL already selects:
+              dropping that option left the select falling back to its first - "הכול" -
+              while the filter was in fact still applied, so the control disagreed with
+              the results it produced. */}
           {(Object.keys(preparationStateLabels) as PreparationState[])
-            .filter((stage) => (stageCounts[stage] ?? 0) > 0)
+            .filter((stage) => (stageCounts[stage] ?? 0) > 0 || stage === preparationState)
             .map((stage) => (
               <option key={stage} value={stage}>
-                {preparationStateLabels[stage]} ({stageCounts[stage]})
+                {preparationStateLabels[stage]} ({stageCounts[stage] ?? 0})
               </option>
             ))}
         </Select>

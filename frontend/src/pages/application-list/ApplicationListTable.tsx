@@ -12,14 +12,19 @@ const ARCHIVE_COLUMN = "";
    date is the one cell whose content cannot grow, so giving it a share of the table
    only handed it space the wrapping text columns needed at narrow widths. */
 const columns = [
-  { label: "חברה ותפקיד", width: "w-[20%]" },
+  { label: "חברה ותפקיד", width: "w-[22%]" },
   { label: "נוצר", width: "w-24" },
-  { label: "מצב קורות החיים", width: "w-[17%]" },
-  { label: "שלב גיוס", width: "w-[12%]" },
+  /* Preparation state and what is waiting are one column, not two: they answer the same
+     question - how far the CV got and what is holding it - and splitting them made the
+     reader hold four status axes at once across a table that already scrolled. */
+  { label: "מצב קורות החיים", width: "w-[26%]" },
+  { label: "שלב גיוס", width: "w-[13%]" },
   { label: "פעילות אחרונה", width: "w-28" },
-  { label: "הפעולה הבאה", width: "w-[13%]" },
-  { label: "דורש טיפול", width: "w-[15%]" },
-  { label: "פעולה מומלצת", width: "w-[15%]" },
+  /* The two action columns are named for their owners. "הפעולה הבאה" beside "פעולה
+     מומלצת" read as the same thing: one is the recruitment task the user typed, the
+     other the workflow's derived next step. */
+  { label: "משימת גיוס", width: "w-[15%]" },
+  { label: "המשך הכנה", width: "w-[16%]" },
   { label: "", width: "w-16" },
 ] as const;
 

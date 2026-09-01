@@ -136,7 +136,14 @@ export const ApplicationListPage = () => {
                 <EmptyState className="mt-3">
                   <p className="text-body text-cv-text">אין מועמדות שמתאימה לסינון.</p>
                   <div className="mt-5 flex justify-center">
-                    <Button onClick={() => updateQuery({})} variant="secondary">
+                    {/* Clearing narrows the board back to everything the reader can still
+                        see from where they stand: which Applications they were looking at
+                        and in what order are their view, not part of the filter that
+                        matched nothing. */}
+                    <Button
+                      onClick={() => updateQuery({ activity: query.activity, sort: query.sort })}
+                      variant="secondary"
+                    >
                       ניקוי הסינון
                     </Button>
                   </div>

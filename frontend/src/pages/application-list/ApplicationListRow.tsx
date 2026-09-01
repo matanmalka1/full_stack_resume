@@ -1,5 +1,6 @@
 import { Archive, ArrowLeft, Clock, FileCheck2 } from "lucide-react";
-import { Link } from "react-router-dom";
+import type { MouseEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 import type { ApplicationListItem } from "../../api/contracts";
 import { isTerminalOperation } from "../../api/operations";
@@ -40,6 +41,11 @@ const CompanyMark = ({ company }: { company: string }) => (
    shared default: a smaller icon gap and narrower side padding, applied here rather
    than in StatusBadge, which eight calmer screens also use. */
 const rowBadgeClasses = "gap-1.5 px-2.5 text-start";
+
+const DUPLICATE_IDENTITY_HINT = "קיימת עוד מועמדות לאותה חברה ולאותו תפקיד";
+
+const rowRevisionLinkClasses =
+  "inline-flex items-center gap-1.5 rounded-pill text-support font-semibold text-cv-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cv-focus";
 
 const rowActionClasses =
   "inline-flex min-h-9 items-center justify-center gap-2 rounded-pill bg-cv-accent-soft px-3 py-1 text-start text-support font-semibold text-cv-accent transition-colors duration-200 hover:bg-cv-accent hover:text-cv-on-accent";
@@ -105,27 +111,35 @@ const RecommendedActionCell = ({ item }: { item: ApplicationListItem }) => {
     latest != null && (!isTerminalOperation(latest) || latest.status === "failed" || latest.status === "interrupted")
       ? latest
       : null;
+  /* A ready revision no longer suppresses the recommendation. The projection recommends
+     against the current sources, so after a posting or policy change it asks for new work
+     while an older approved revision still exists; showing only the revision hid that
+     from the board. The recommendation leads and the revision follows it as a second
+     link, so both stay reachable from the row. */
+  const readyRevisionLink =
+    item.latest_ready_revision_id == null ? null : (
+      <Link className={rowRevisionLinkClasses} to={`/revisions/${encodeURIComponent(item.latest_ready_revision_id)}`}>
+        <FileCheck2 aria-hidden="true" className="size-3.5 shrink-0" />
+        הגרסה המוכנה
+      </Link>
+    );
 
   return (
     <td className="px-3 py-3">
-      <div className="flex items-center">
+      <div className="flex flex-col items-start gap-1">
         {reported !== null ? (
           <StatusBadge className={rowBadgeClasses} tone={statusTones[reported.status]}>
             {operationTypeLabels[reported.operation_type]} · {statusLabels[reported.status]}
           </StatusBadge>
-        ) : item.latest_ready_revision_id != null ? (
-          <Link className={rowActionClasses} to={`/revisions/${encodeURIComponent(item.latest_ready_revision_id)}`}>
-            <FileCheck2 aria-hidden="true" className="size-4" />
-            הגרסה המוכנה
-          </Link>
-        ) : item.recommended_action == null ? (
-          <span className="text-support text-cv-text-muted">—</span>
-        ) : (
+        ) : item.recommended_action != null ? (
           <Link className={rowActionClasses} to={actionDestination(item.recommended_action, item.id) ?? href}>
             <ArrowLeft aria-hidden="true" className="size-4" />
             {actionLabel(item.recommended_action)}
           </Link>
-        )}
+        ) : readyRevisionLink === null ? (
+          <span className="text-support text-cv-text-muted">—</span>
+        ) : null}
+        {reported === null ? readyRevisionLink : null}
       </div>
     </td>
   );
@@ -138,13 +152,38 @@ interface ApplicationListRowProps {
 }
 
 export const ApplicationListRow = ({ ambiguous, item, onRequestClose }: ApplicationListRowProps) => {
+  const navigate = useNavigate();
   const href = `/applications/${encodeURIComponent(item.id)}`;
   const preparationHref = `${href}/preparation`;
   const attention = applicationAttention(item);
   const closed = isApplicationClosed(item);
 
+  /* The row was already painted on hover while only three cells were clickable. It now
+     navigates as a whole, and yields to whatever the reader actually aimed at: a link,
+     the archive button, or a selection they were dragging over the text. The company
+     link stays the keyboard and screen-reader route into the Application - a `tr` takes
+     no focus, so the click handler is an addition to that route, not a replacement. */
+  const openRow = (event: MouseEvent<HTMLTableRowElement>) => {
+    if (event.defaultPrevented || event.target instanceof Element === false) {
+      return;
+    }
+
+    if (event.target.closest("a, button, input, label") !== null) {
+      return;
+    }
+
+    if ((window.getSelection()?.toString() ?? "") !== "") {
+      return;
+    }
+
+    navigate(href);
+  };
+
   return (
-    <tr className="border-b border-cv-border last:border-b-0 hover:bg-cv-surface-muted [&>td:first-child]:ps-4 [&>td:last-child]:pe-4">
+    <tr
+      className="cursor-pointer border-b border-cv-border last:border-b-0 hover:bg-cv-surface-muted [&>td:first-child]:ps-4 [&>td:last-child]:pe-4"
+      onClick={openRow}
+    >
       <td className="px-3 py-3">
         <div className="flex min-w-0 items-center gap-2">
           <CompanyMark company={item.company} />
@@ -159,18 +198,46 @@ export const ApplicationListRow = ({ ambiguous, item, onRequestClose }: Applicat
         </div>
       </td>
       <td className="whitespace-nowrap px-3 py-3 text-support">
-        <span className={ambiguous ? "font-medium text-cv-text" : "text-cv-text-muted"}>
+        {/* The emphasis alone did not say why one date was darker than its neighbours,
+            so the hint names itself on hover and to a screen reader. */}
+        <span
+          className={ambiguous ? "font-medium text-cv-text" : "text-cv-text-muted"}
+          title={ambiguous ? DUPLICATE_IDENTITY_HINT : undefined}
+        >
           {formatApplicationDate(item.created_at)}
         </span>
+        {ambiguous ? <span className="sr-only"> {DUPLICATE_IDENTITY_HINT}</span> : null}
       </td>
       <td className="px-3 py-3">
-        <StatusBadge
-          className={rowBadgeClasses}
-          icon={preparationStateIcons[item.preparation_state]}
-          tone={preparationStateTones[item.preparation_state]}
-        >
-          {preparationStateLabels[item.preparation_state]}
-        </StatusBadge>
+        <div className="flex flex-col items-start gap-1.5">
+          <StatusBadge
+            className={rowBadgeClasses}
+            icon={preparationStateIcons[item.preparation_state]}
+            tone={preparationStateTones[item.preparation_state]}
+          >
+            {preparationStateLabels[item.preparation_state]}
+          </StatusBadge>
+          {attention === null ? null : (
+            /* The badge names what is waiting rather than counting it, and links to the
+               preparation screen, where the alert region states each item with the control that
+               resolves it. `title` and `aria-label` sit on the link because StatusBadge
+               carries neither, and they hold every title - the badge itself shows at most
+               two, then the most severe one and how many it stands in front of. */
+            <Link
+              aria-label={`${item.company}: ${attention.items.map((entry) => entry.title).join(" · ")}`}
+              className="inline-flex max-w-full rounded-pill focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cv-focus"
+              title={attention.items.map((entry) => entry.title).join(" · ")}
+              to={preparationHref}
+            >
+              <StatusBadge
+                className={cx(rowBadgeClasses, "max-w-full items-start [overflow-wrap:break-word]")}
+                tone={attention.tone}
+              >
+                <span className="min-w-0">{attention.label}</span>
+              </StatusBadge>
+            </Link>
+          )}
+        </div>
       </td>
       <RecruitmentStatusCell item={item} />
       <td className="whitespace-nowrap px-3 py-3 text-support text-cv-text-muted">
@@ -180,30 +247,6 @@ export const ApplicationListRow = ({ ambiguous, item, onRequestClose }: Applicat
         </span>
       </td>
       <NextActionCell item={item} />
-      <td className="px-3 py-3">
-        {attention === null ? (
-          <span className="text-support text-cv-text-muted">—</span>
-        ) : (
-          /* The badge names what is waiting rather than counting it, and links to the
-             preparation screen, where the alert region states each item with the control that
-             resolves it. `title` and `aria-label` sit on the link because StatusBadge
-             carries neither, and they hold every title - the badge itself shows at most
-             two, then the most severe one and how many it stands in front of. */
-          <Link
-            aria-label={`${item.company}: ${attention.items.map((entry) => entry.title).join(" · ")}`}
-            className="inline-flex max-w-full rounded-pill focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cv-focus"
-            title={attention.items.map((entry) => entry.title).join(" · ")}
-            to={preparationHref}
-          >
-            <StatusBadge
-              className={cx(rowBadgeClasses, "max-w-full items-start [overflow-wrap:break-word]")}
-              tone={attention.tone}
-            >
-              <span className="min-w-0">{attention.label}</span>
-            </StatusBadge>
-          </Link>
-        )}
-      </td>
       <RecommendedActionCell item={item} />
       <td className="px-1 py-3">
         {closed ? null : (

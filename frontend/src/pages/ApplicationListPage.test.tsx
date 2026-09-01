@@ -192,6 +192,7 @@ const renderPage = ({
         <Routes>
           <Route element={<ApplicationListPage />} path="/" />
           <Route element={<h1>משרה חדשה</h1>} path="/applications/new" />
+          <Route element={<h1>מסך המועמדות</h1>} path="/applications/:applicationId" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -331,6 +332,67 @@ describe("ApplicationListPage", () => {
     const titles = "יש פער חוסם מול הדרישות · נוסח המשרה השתנה · הפעולה הבאה באיחור";
     const attention = await screen.findByRole("link", { name: `Acme: ${titles}` });
     expect(attention).toHaveAttribute("title", titles);
+  });
+
+  /* A ready revision used to take the column outright, so after the posting or the rules
+     changed the board showed "open the ready revision" while the projection was asking
+     for new work. The recommendation leads; the revision stays reachable beside it. */
+  it("keeps the recommendation visible on a row that already has a ready revision", async () => {
+    stubList([
+      item({
+        latest_ready_revision_id: "rev-1",
+        recommended_action: "create_draft",
+      }),
+    ]);
+
+    renderPage();
+
+    expect(await screen.findByRole("link", { name: actionLabel("create_draft") })).toHaveAttribute(
+      "href",
+      "/applications/app-1/preparation",
+    );
+    expect(screen.getByRole("link", { name: "הגרסה המוכנה" })).toHaveAttribute("href", "/revisions/rev-1");
+  });
+
+  /* The stage menu hides stages nothing is in. Hiding the one the URL selects left the
+     select showing "הכול" while that filter was still narrowing the board. */
+  it("keeps a selected stage in the menu when the board counts none of it", async () => {
+    stubList([], { matched: 0, total: 4, stageCounts: { ready: 4 } });
+
+    renderPage({ entries: ["/?stage=needs_analysis"] });
+
+    await screen.findByText("אין מועמדות שמתאימה לסינון.");
+    expect(screen.getByLabelText("מצב קורות החיים")).toHaveValue("needs_analysis");
+  });
+
+  /* Clearing what matched nothing must not also move the reader to another board. */
+  it("keeps the activity and sort selections when the filter is cleared", async () => {
+    const { fetchMock } = stubList([], { matched: 0, total: 4, stageCounts: { ready: 4 } });
+
+    renderPage({ entries: ["/?activity=closed&sort=company&search=nothing"] });
+
+    fireEvent.click(await screen.findByRole("button", { name: "ניקוי הסינון" }));
+
+    expect(screen.getByLabelText("מועמדויות")).toHaveValue("closed");
+    expect(screen.getByLabelText("סדר")).toHaveValue("company");
+    expect(screen.getByLabelText("חיפוש")).toHaveValue("");
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        expect.stringContaining("activity=closed"),
+        expect.objectContaining({ method: "GET" }),
+      ),
+    );
+  });
+
+  /* The row was painted on hover while only three of its cells were clickable. */
+  it("opens the Application from a click anywhere the row carries no control of its own", async () => {
+    stubList([item()]);
+
+    renderPage();
+
+    fireEvent.click(await screen.findByText("Backend Engineer"));
+
+    expect(screen.getByRole("heading", { name: "מסך המועמדות" })).toBeInTheDocument();
   });
 
   it("keeps the filters visible when a narrowed board matches none of the stored Applications", async () => {
