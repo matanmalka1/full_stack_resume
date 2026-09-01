@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { Classification } from "../../api/analyses";
 import type { ApplicationDetail } from "../../api/contracts";
 import { AnalysisPanel, SupersededAnalysisNote } from "./AnalysisPanel";
+import { ArtifactsPanel } from "./ArtifactsPanel";
 import { ApplicationActions } from "./ApplicationActions";
 import { JobPostingUpdate } from "./JobPostingUpdate";
 import { JobSnapshotPanel } from "./JobSnapshotPanel";
@@ -52,6 +53,11 @@ export const PreparationView = ({
       <JobPostingUpdate detail={detail} />
 
       {supersededAnalysis ? <SupersededAnalysisNote /> : null}
+
+      {/* Product spec §14: the Application's own revisions-and-artifacts section. It
+          follows the posting and the analysis because it is their output, and it renders
+          itself away until something has actually been registered. */}
+      <ArtifactsPanel applicationId={detail.application.id} />
 
       {/* The decision stays directly under the analysis it answers. Together with the
           projected next action it gets a distinct surface, so the way forward does not

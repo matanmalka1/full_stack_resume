@@ -7,6 +7,7 @@ import type { ApplicationDetail, Reason } from "../../api/contracts";
 import { ApplicationPage } from "../ApplicationPage";
 
 const APPLY_PATH = "/api/v1/analyses/analysis-1/apply-decisions";
+const ARTIFACTS_PATH = "/api/v1/applications/app-1/artifacts";
 
 const reason = (code: string, actions: string[] = ["apply_analysis_decisions"]): Reason => ({
   code,
@@ -116,7 +117,9 @@ describe("the review decision, on the Application screen", () => {
   it("shows the fit acceptance for a hard gap and no classification selects", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(jsonResponse(detail({ review_reasons: [reason("HARD_GAP_REQUIRES_DECISION")] }))),
+      vi.fn(() =>
+        Promise.resolve(jsonResponse(detail({ review_reasons: [reason("HARD_GAP_REQUIRES_DECISION")] }))),
+      ),
     );
 
     renderPage();
@@ -180,10 +183,16 @@ describe("the review decision, on the Application screen", () => {
   });
 
   it("preserves the form and shows the safe refusal when the server refuses", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(detail()))
-      .mockResolvedValueOnce(problemResponse("PRECONDITION_FAILED", "the submitted decisions change nothing"));
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === APPLY_PATH) {
+        return Promise.resolve(problemResponse("PRECONDITION_FAILED", "the submitted decisions change nothing"));
+      }
+      if (url === ARTIFACTS_PATH) {
+        return Promise.resolve(jsonResponse({ items: [] }));
+      }
+      return Promise.resolve(jsonResponse(detail()));
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage();
@@ -198,7 +207,10 @@ describe("the review decision, on the Application screen", () => {
   });
 
   it("does not show a superseded analysis as the one under decision", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail({ active_analysis_id: "analysis-9" }))));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(jsonResponse(detail({ active_analysis_id: "analysis-9" })))),
+    );
 
     renderPage();
 

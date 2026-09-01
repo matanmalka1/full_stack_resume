@@ -92,7 +92,7 @@ afterEach(() => {
 
 describe("RecruitmentPanel", () => {
   it("sends the exact forward transition and next-action choices, including a clear", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({})));
     vi.stubGlobal("fetch", fetchMock);
     renderPanel();
 
@@ -140,7 +140,7 @@ describe("RecruitmentPanel", () => {
   });
 
   it("appends the correction and external submission exactly as entered", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({})));
     vi.stubGlobal("fetch", fetchMock);
     renderPanel();
 
@@ -206,7 +206,7 @@ describe("RecruitmentPanel", () => {
   });
 
   it("syncs untouched next-action fields from a refreshed projection", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({})));
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(jsonResponse({}))));
     const { rerenderPanel } = renderPanel();
 
     rerenderPanel(
@@ -225,7 +225,7 @@ describe("RecruitmentPanel", () => {
   });
 
   it("keeps each dirty next-action field and warns when the server changes underneath it", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({})));
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(jsonResponse({}))));
     const { rerenderPanel } = renderPanel();
 
     fireEvent.change(screen.getByLabelText("מה לעשות"), {
@@ -247,7 +247,7 @@ describe("RecruitmentPanel", () => {
   });
 
   it("preserves dirty transition and correction choices across projection refreshes", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({})));
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(jsonResponse({}))));
     const olderEvent = statusEvent({ id: "status-older", to_status: "applied" });
     const currentEvent = statusEvent({ id: "status-current", to_status: "recruiter_screen" });
     const { rerenderPanel } = renderPanel(detail({ recruitment_timeline: [olderEvent, currentEvent] }));
