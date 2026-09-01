@@ -30,13 +30,13 @@ export const PageHeading = ({ children, description, eyebrow, eyebrowTone = "acc
   return (
     <>
       {eyebrow === undefined ? null : (
-        <p className={cx("mb-2 text-support font-bold tracking-wide", eyebrowClasses[eyebrowTone])}>{eyebrow}</p>
+        <p className={cx("mb-1 text-support font-bold tracking-wide", eyebrowClasses[eyebrowTone])}>{eyebrow}</p>
       )}
       {/* A.3: a heading is usually a Hebrew constant, but the route error boundary
           passes a backend title and detail through here, so each picks its own
           direction rather than inheriting the RTL shell. */}
       <h1
-        className="text-heading-lg font-bold tracking-tight text-cv-text"
+        className="text-heading-md font-bold tracking-tight text-cv-text"
         data-route-heading
         dir="auto"
         id={id}
@@ -46,7 +46,7 @@ export const PageHeading = ({ children, description, eyebrow, eyebrowTone = "acc
         {children}
       </h1>
       {description === undefined ? null : (
-        <p className="mt-2 max-w-2xl text-body leading-7 text-cv-text-muted" dir="auto">
+        <p className="mt-1 max-w-2xl text-support leading-6 text-cv-text-muted" dir="auto">
           {description}
         </p>
       )}

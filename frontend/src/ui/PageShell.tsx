@@ -37,7 +37,7 @@ export const PageShell = ({
   return (
     <Card aria-labelledby="route-heading" className={cx("mx-auto w-full", widthClasses[width])}>
       {navigation === undefined ? null : <div className="mb-5">{navigation}</div>}
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-cv-border pb-5">
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 border-b border-cv-border pb-2">
         <div className="min-w-0">
           <PageHeading description={description} eyebrow={eyebrow} id="route-heading">
             {title}
