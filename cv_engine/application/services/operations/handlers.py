@@ -235,6 +235,24 @@ class DraftOperationHandler(AITaskHandler):
             or _model_hash(plan) != dependencies.get("selection_plan")
         ):
             raise SourceChanged("Analysis or SelectionPlan changed before draft activation.")
+        # §14: a replacement froze the identity of the draft it is replacing, and that
+        # record is a source like any other. Without this the check above validated every
+        # input to *generating* the document and nothing about the one being overwritten,
+        # so an edit or an archive landing between the `202` and this point was not seen:
+        # the edit was overwritten, and the archive turned the replacement into a brand
+        # new draft with a new id.
+        if sources.working_draft_id is not None:
+            try:
+                replaced = drafts.working_draft(sources.working_draft_id)
+            except UnknownRecord as exc:
+                raise SourceChanged("The working draft being replaced no longer exists.") from exc
+            if (
+                replaced.application_id != operation.application_id
+                or not replaced.active
+                or replaced.edit_version != sources.working_draft_edit_version
+                or replaced.content_hash != sources.working_draft_content_hash
+            ):
+                raise SourceChanged("The working draft changed before the replacement activated.")
         if sources.knowledge_context_hash != sha256_text(
             canonical_json(self.service.load_knowledge().versions())
         ):

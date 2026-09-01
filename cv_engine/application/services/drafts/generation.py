@@ -253,12 +253,16 @@ class DraftGeneration(DraftServiceBase):
         analysis = prepared.analysis
         profile = profiles.get(analysis.profile)
         presentation_rules = knowledge.presentations
+        # §14: a replacement addresses the exact draft version it named; a first draft
+        # names none and creates the active record.
         working = repo.replace_active_working_draft(
             command.application_id,
             command.job_analysis_id,
             prepared.plan_id,
             prepared.source,
             parent_revision_id=command.parent_revision_id,
+            expected_working_draft_id=command.replaces_working_draft_id,
+            expected_edit_version=command.replaces_expected_edit_version,
         )
         stored = self.store_working_draft(working.source)
         report = run_draft_validation(

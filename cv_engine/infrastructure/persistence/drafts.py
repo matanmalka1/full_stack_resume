@@ -162,8 +162,19 @@ class SqlAlchemyDraftRepository(SqlAlchemyRepositoryBase):
         *,
         parent_revision_id: str | None = None,
         updated_at: str | None = None,
+        expected_working_draft_id: str | None = None,
+        expected_edit_version: int | None = None,
     ) -> WorkingDraft:
-        """Create the active record or replace its source as a new edit."""
+        """Create the active record or replace its source as a new edit.
+
+        §14: a replacement names the exact draft version it is replacing, and then this
+        addresses that record rather than whichever one happens to be active. The
+        difference is not cosmetic - selecting by `application_id + active` meant a draft
+        archived between the command and this write left no active row, and the branch
+        below created a *new* draft with a new id in place of the replacement the user
+        asked for. Naming it turns both that and a concurrent edit into `StateConflict`,
+        which the Operation reports as `SOURCE_CHANGED` rather than overwriting.
+        """
         now = updated_at or utc_now()
         with self.transaction() as connection:
             self._require_lineage(
@@ -183,6 +194,17 @@ class SqlAlchemyDraftRepository(SqlAlchemyRepositoryBase):
                 .mappings()
                 .one_or_none()
             )
+            if expected_working_draft_id is not None:
+                if current is None or current["id"] != expected_working_draft_id:
+                    raise StateConflict(
+                        f"working draft {expected_working_draft_id} is no longer the "
+                        f"active draft of application {application_id}"
+                    )
+                if current["edit_version"] != expected_edit_version:
+                    raise StateConflict(
+                        f"working draft {expected_working_draft_id} is at edit version "
+                        f"{current['edit_version']}, not {expected_edit_version}"
+                    )
             if current is None:
                 draft_id = new_id()
                 connection.execute(
@@ -202,11 +224,19 @@ class SqlAlchemyDraftRepository(SqlAlchemyRepositoryBase):
                 )
             else:
                 draft_id = current["id"]
-                connection.execute(
+                # The version is in the WHERE, not only in the check above: the check
+                # reads and the update writes, and a concurrent commit landing between
+                # them must lose rather than be overwritten.
+                result = connection.execute(
                     update(working_drafts)
                     .where(
                         working_drafts.c.id == draft_id,
                         working_drafts.c.active.is_(True),
+                        *(
+                            ()
+                            if expected_edit_version is None
+                            else (working_drafts.c.edit_version == expected_edit_version,)
+                        ),
                     )
                     .values(
                         job_analysis_id=job_analysis_id,
@@ -218,6 +248,10 @@ class SqlAlchemyDraftRepository(SqlAlchemyRepositoryBase):
                         updated_at=now,
                     )
                 )
+                if expected_edit_version is not None and result.rowcount == 0:
+                    raise StateConflict(
+                        f"working draft {draft_id} changed before the replacement was committed"
+                    )
             row = (
                 connection.execute(select(working_drafts).where(working_drafts.c.id == draft_id))
                 .mappings()

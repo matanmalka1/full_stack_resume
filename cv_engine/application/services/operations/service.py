@@ -98,6 +98,7 @@ class OperationService(ServiceBase[OperationRepository]):
         *,
         idempotency_key: str,
         draft_service: DraftService,
+        operation_id: str | None = None,
     ) -> OperationView:
         drafts = cast(DraftRepository, self.repo)
         try:
@@ -126,6 +127,28 @@ class OperationService(ServiceBase[OperationRepository]):
                     f"{command.application_id}"
                 )
         knowledge_hash = sha256_text(canonical_json(draft_service.load_knowledge().versions()))
+        # §14: a replacement freezes the identity of the draft it is replacing, so the
+        # runner can re-check at activation that the record is still the one the user
+        # meant. Generation with nothing to replace freezes none, and the validator on
+        # `OperationSources` requires the three fields together or not at all.
+        replaced_id: str | None = None
+        replaced_version: int | None = None
+        replaced_hash: str | None = None
+        if command.replaces_working_draft_id is not None:
+            existing = drafts.working_draft(command.replaces_working_draft_id)
+            if existing.application_id != command.application_id:
+                raise LineageBroken(
+                    f"working draft {existing.id} does not belong to application "
+                    f"{command.application_id}"
+                )
+            if existing.edit_version != command.replaces_expected_edit_version:
+                raise StateConflict(
+                    f"working draft {existing.id} is at edit version "
+                    f"{existing.edit_version}, not {command.replaces_expected_edit_version}"
+                )
+            replaced_id = existing.id
+            replaced_version = existing.edit_version
+            replaced_hash = existing.content_hash
         request = CreateOperation(
             application_id=command.application_id,
             operation_type=OperationType.CREATE_DRAFT,
@@ -137,6 +160,9 @@ class OperationService(ServiceBase[OperationRepository]):
                 job_analysis_id=command.job_analysis_id,
                 selection_plan_id=command.selection_plan_id,
                 knowledge_context_hash=knowledge_hash,
+                working_draft_id=replaced_id,
+                working_draft_edit_version=replaced_version,
+                working_draft_content_hash=replaced_hash,
                 dependency_hashes={
                     "job_analysis": _model_hash(analysis["analysis"]),
                     "selection_plan": _model_hash(plan),
@@ -149,7 +175,7 @@ class OperationService(ServiceBase[OperationRepository]):
             provider=command.provider,
             model="rules-v1" if command.provider == "deterministic" else None,
         )
-        return as_operation_view(self.repo.create_operation(request))
+        return as_operation_view(self.repo.create_operation(request, operation_id=operation_id))
 
     def submit_selection_plan_proposal(
         self,
@@ -276,18 +302,47 @@ class OperationService(ServiceBase[OperationRepository]):
 
         `prepare_replacement` is what proves the named draft belongs to the
         named Application before any of that starts.
+
+        Order matters here, and it used to be wrong. Keep is a side effect that
+        writes an immutable snapshot and an audit record, and it ran before the
+        Operation existed - so a resent request with the same key materialized a
+        second snapshot before reaching the idempotency check that would have
+        recognized it as a replay. The replay is settled first now, against the
+        payload the replacement would create; only a genuinely new command
+        reaches Keep.
+
+        The draft identity travels in the payload rather than being consumed
+        here, which is also what makes two replacements distinguishable: the
+        idempotency check hashes the payload, and a payload that named neither
+        the draft nor its version made a replacement of version 8 look like a
+        replay of the one sent for version 7.
         """
-        draft_service.prepare_replacement(command)
-        return self.submit_draft(
-            DraftCommand(
-                application_id=command.application_id,
-                job_analysis_id=command.job_analysis_id,
-                selection_plan_id=command.selection_plan_id,
-                provider=command.provider,
-            ),
+        draft_command = DraftCommand(
+            application_id=command.application_id,
+            job_analysis_id=command.job_analysis_id,
+            selection_plan_id=command.selection_plan_id,
+            provider=command.provider,
+            replaces_working_draft_id=command.working_draft_id,
+            replaces_expected_edit_version=command.expected_edit_version,
+            replaces_keep_previous=command.keep_previous,
+        )
+        # The Operation is created first, and Keep runs only if this call is what created
+        # it. `create_operation` settles the idempotency question atomically: it hands back
+        # the existing Operation when the key and payload match, and raises
+        # `IDEMPOTENCY_KEY_REUSED` when the key is reused with a different payload. The id
+        # is generated here so that answer is legible - a replay comes back wearing an id
+        # this call did not mint.
+        intended_id = new_id()
+        queued = self.submit_draft(
+            draft_command,
             idempotency_key=idempotency_key,
             draft_service=draft_service,
+            operation_id=intended_id,
         )
+        if queued.id != intended_id:
+            return queued
+        draft_service.prepare_replacement(command)
+        return queued
 
     def submit_render(
         self,

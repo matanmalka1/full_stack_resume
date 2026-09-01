@@ -634,6 +634,158 @@ def test_a_refused_replacement_leaves_the_existing_draft_exactly_as_it_was(api_w
     assert _state(api_worker, application_id)["active_working_draft_id"] == working_draft_id
 
 
+# --- E3a: the window between the `202` and the write -------------------------
+#
+# Replacement is accepted as an Operation, so the command and the write are separated by
+# however long the queue is. `expected_edit_version` proved the draft was untouched when
+# the command was admitted and nothing re-checked it afterwards, so an edit or an archive
+# landing in that window was not seen: the edit was overwritten, and the archive turned
+# "replace this draft" into "create a new one". These drive that window directly by
+# holding the Operation queued while the draft moves underneath it.
+
+
+def _queued_replacement(harness, application_id: str, working_draft_id: str, sources, **extra):
+    """Submit a replacement without letting anything execute it yet."""
+    before = _read(harness, working_draft_id).json()
+    response = _post(
+        harness,
+        f"/applications/{application_id}/working-draft/replace",
+        {
+            "working_draft_id": working_draft_id,
+            "expected_edit_version": before["edit_version"],
+            "job_analysis_id": sources["job_analysis"],
+            "selection_plan_id": sources["selection_plan"],
+            **extra,
+        },
+    )
+    assert response.status_code == 202, response.text
+    return response.json()["id"], before
+
+
+def test_an_edit_after_the_replacement_was_accepted_is_not_overwritten(api_paused) -> None:
+    """§14: the version is re-checked at activation, not only at admission."""
+    application_id, working_draft_id, sources = _drafted(api_paused, "Replace Race Edit Co")
+    operation_id, before = _queued_replacement(
+        api_paused, application_id, working_draft_id, sources
+    )
+
+    read = _read(api_paused, working_draft_id)
+    edited = _patch(
+        api_paused,
+        working_draft_id,
+        read.headers["ETag"],
+        [_unsupported_edit(api_paused, application_id)],
+    )
+    assert edited.status_code == 200, edited.text
+
+    finished = api_paused.run_operation(operation_id)
+
+    assert finished["status"] == "failed", finished
+    assert finished["failure_code"] == "SOURCE_CHANGED"
+    after = _read(api_paused, working_draft_id).json()
+    assert after["edit_version"] == before["edit_version"] + 1
+    assert after["content_hash"] == edited.json()["content_hash"]
+
+
+def test_an_archive_after_the_replacement_was_accepted_does_not_create_a_new_draft(
+    api_paused,
+) -> None:
+    """§14: the command named one draft, so it may not land on a different record.
+
+    The old write selected by `application_id + active`, so an archived draft left no
+    active row and the replacement inserted a brand new draft with a new id - a record
+    nobody asked for, presented as the replacement of one that had been set aside.
+    """
+    application_id, working_draft_id, sources = _drafted(api_paused, "Replace Race Archive Co")
+    operation_id, before = _queued_replacement(
+        api_paused, application_id, working_draft_id, sources
+    )
+
+    archived = _post(
+        api_paused,
+        f"/working-drafts/{working_draft_id}/archive",
+        {"expected_edit_version": before["edit_version"]},
+    )
+    assert archived.status_code == 200, archived.text
+
+    finished = api_paused.run_operation(operation_id)
+
+    assert finished["status"] == "failed", finished
+    assert finished["failure_code"] == "SOURCE_CHANGED"
+    state = _state(api_paused, application_id)
+    assert state["active_working_draft_id"] is None
+    assert state["working_draft_state"] == "none"
+
+
+def test_a_replayed_replacement_returns_the_same_operation_and_keeps_one_snapshot(
+    api_paused,
+) -> None:
+    """§14 Keep is a side effect, so a replay must not run it twice.
+
+    Keep materialized its immutable snapshot before the Operation existed, which put it
+    ahead of the idempotency check that would have recognized the replay - so the same
+    request sent twice registered two historical records for one replacement.
+    """
+    application_id, working_draft_id, sources = _drafted(api_paused, "Replace Replay Co")
+    before = _read(api_paused, working_draft_id).json()
+    body = {
+        "working_draft_id": working_draft_id,
+        "expected_edit_version": before["edit_version"],
+        "job_analysis_id": sources["job_analysis"],
+        "selection_plan_id": sources["selection_plan"],
+        "keep_previous": True,
+    }
+    path = f"/applications/{application_id}/working-draft/replace"
+    key = {"Idempotency-Key": "replace-replay-1"}
+
+    first = _post(api_paused, path, body, **key)
+    second = _post(api_paused, path, body, **key)
+
+    assert first.status_code == 202, first.text
+    assert second.status_code == 202, second.text
+    assert second.json()["id"] == first.json()["id"]
+    snapshots = [
+        item
+        for item in api_paused.client.get(
+            f"{API_PREFIX}/applications/{application_id}/artifacts"
+        ).json()["items"]
+        if item["artifact_type"] == "working_draft_snapshot"
+    ]
+    assert [item["metadata"]["edit_version"] for item in snapshots] == [before["edit_version"]]
+    # `_audit` asserts there is exactly one record for the action, which is the assertion
+    # that matters here: a second Keep would write a second audit record beside the second
+    # snapshot. `details_json` is canonical JSON text rather than a mapping.
+    kept = json.loads(_audit(api_paused, application_id, "replace_working_draft")["details_json"])
+    assert kept["kept"] is True
+    assert kept["edit_version"] == before["edit_version"]
+
+
+def test_the_same_key_with_a_different_replacement_is_refused(api_paused) -> None:
+    """§14: two different replacements are two commands, whatever key they carry.
+
+    The draft identity travels in the Operation payload, which is what the idempotency
+    check hashes. Without it a replacement of a different version - or one that changed
+    the Keep decision - hashed identically to the first and was served back as a replay.
+    """
+    application_id, working_draft_id, sources = _drafted(api_paused, "Replace Key Reuse Co")
+    before = _read(api_paused, working_draft_id).json()
+    path = f"/applications/{application_id}/working-draft/replace"
+    key = {"Idempotency-Key": "replace-reuse-1"}
+    body = {
+        "working_draft_id": working_draft_id,
+        "expected_edit_version": before["edit_version"],
+        "job_analysis_id": sources["job_analysis"],
+        "selection_plan_id": sources["selection_plan"],
+        "keep_previous": True,
+    }
+
+    assert _post(api_paused, path, body, **key).status_code == 202
+    reused = _post(api_paused, path, {**body, "keep_previous": False}, **key)
+
+    assert reused.status_code == 409, reused.text
+    assert reused.json()["code"] == "IDEMPOTENCY_KEY_REUSED"
+
+
 # --- E4: validation ----------------------------------------------------------
 
 
@@ -793,9 +945,7 @@ def test_approval_preserves_a_diverged_working_projection_and_returns_a_specific
     api_worker,
 ) -> None:
     """An edit outside the Web editor is evidence to preserve, not output to overwrite."""
-    application_id, working_draft_id, _sources = _drafted(
-        api_worker, "Diverged Projection Co"
-    )
+    application_id, working_draft_id, _sources = _drafted(api_worker, "Diverged Projection Co")
     validated = _validated(api_worker, working_draft_id)
     markdown_path = api_worker.services.artifacts.working_paths(application_id).markdown
     edited_projection = markdown_path.read_text(encoding="utf-8") + "\nmanual edit\n"

@@ -18,6 +18,7 @@ from urllib.request import Request, urlopen
 import pytest
 from api_harness import api_with_worker
 from fake_provider import FakeOpenAI
+from fastapi.testclient import TestClient
 from foreground import foreground_executor
 from helpers import (
     ACCOUNT_MANAGER_JOB,
@@ -29,7 +30,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 import cv_engine
-from cv_engine.api.app import API_PREFIX
+from cv_engine.api.app import API_PREFIX, create_app
 from cv_engine.application.commands import (
     AnalyzeCommand,
     ApprovalResult,
@@ -67,7 +68,7 @@ from cv_engine.infrastructure.persistence import (
 )
 from cv_engine.infrastructure.persistence.tables import metadata
 from cv_engine.infrastructure.rendering import render_pdf, validate_rendered
-from cv_engine.runtime.composition import Services, build_services
+from cv_engine.runtime.composition import Services, build_api_services, build_services
 from cv_engine.runtime.config import resolve_config
 from cv_engine.runtime.paths import AppPaths
 from cv_engine.util import new_id
@@ -757,6 +758,39 @@ def api_worker(services: Services):
     """The API and an Operation worker running together over one project."""
     with api_with_worker(services) as harness:
         yield harness
+
+
+@dataclass(frozen=True)
+class PausedApiHarness:
+    """The API with nothing executing its queue, and a way to run one Operation.
+
+    The worker-backed harness is right for almost everything: a `202` only means
+    something if something drains the queue. It is the wrong tool for the window between
+    the `202` and the write, because racing a live worker thread makes the assertion a
+    coin flip. Here nothing runs until `run_operation` is called, so a test can put an
+    edit or an archive squarely inside that window and know it landed there.
+    """
+
+    client: Any
+    services: Services
+
+    def run_operation(self, operation_id: str) -> dict[str, Any]:
+        """Execute one queued Operation here, in the calling thread."""
+        finished = foreground_executor(self.services).execute(operation_id)
+        return finished.model_dump(mode="json")
+
+    #: The worker-backed harness' method name, so the setup helpers shared with the
+    #: worker-backed tests work unchanged. There it waits for a worker to reach a
+    #: terminal status; here nothing would ever reach one on its own, so waiting *is*
+    #: running. Only the Operation a test deliberately leaves queued stays queued.
+    wait_for_operation = run_operation
+
+
+@pytest.fixture
+def api_paused(services: Services):
+    """The API with no worker: Operations queue and stay queued until driven."""
+    with TestClient(create_app(build_api_services(services))) as client:
+        yield PausedApiHarness(client=client, services=services)
 
 
 @pytest.fixture

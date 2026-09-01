@@ -150,6 +150,28 @@ class DraftCommand(BoundaryDTO):
     job_analysis_id: str
     selection_plan_id: str
     parent_revision_id: str | None = None
+    #: §14 replacement: the exact draft version this generation is replacing.
+    #:
+    #: Absent for a first draft, where there is nothing to replace. Present for a
+    #: replacement, and then carried all the way to the write: the Operation freezes this
+    #: identity, re-checks it at activation, and the update is conditional on it. Without
+    #: it the worker committed over "whatever is active", so a draft edited or archived
+    #: between the `202` and the write was overwritten or silently replaced by a new
+    #: record with a new id.
+    #:
+    #: It is also what makes two replacements of different versions two different
+    #: commands: the payload hash decides idempotency, and a payload that omitted the
+    #: version made a second, distinct replacement look like a replay of the first.
+    replaces_working_draft_id: str | None = None
+    replaces_expected_edit_version: int | None = None
+    #: The Keep decision this generation was submitted under.
+    #:
+    #: Carried purely so it reaches the Operation payload, which is what the idempotency
+    #: check hashes. Keep decides whether an immutable historical snapshot is written, so
+    #: the same key sent once with Keep and once without is two materially different
+    #: commands - and without this field they hashed identically and the second was served
+    #: back as a replay of the first, silently ignoring the changed decision.
+    replaces_keep_previous: bool = False
     provider: Literal["deterministic", "openai"] = "deterministic"
 
 

@@ -72,6 +72,8 @@ class DraftRepository(ApplicationStore, JobStore, ArtifactRegistry, WorkingDraft
         *,
         parent_revision_id: str | None = None,
         updated_at: str | None = None,
+        expected_working_draft_id: str | None = None,
+        expected_edit_version: int | None = None,
     ) -> WorkingDraft: ...
 
     def update_working_draft(
