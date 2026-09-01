@@ -326,8 +326,7 @@ CLOSED_RECRUITMENT_STATUSES = frozenset({"rejected", "withdrawn", "closed"})
 
 def _is_closed(item: ApplicationListItemView) -> bool:
     return (
-        item.terminal_outcome is not None
-        or item.recruitment_status in CLOSED_RECRUITMENT_STATUSES
+        item.terminal_outcome is not None or item.recruitment_status in CLOSED_RECRUITMENT_STATUSES
     )
 
 
@@ -765,9 +764,7 @@ def recruitment_timeline_view(
     """Merge append-only tracking records into one deterministic presentation trail."""
 
     submission_audits = {
-        row["entity_id"]: row
-        for row in audits
-        if row.get("entity_type") == "submission"
+        row["entity_id"]: row for row in audits if row.get("entity_type") == "submission"
     }
     items: list[RecruitmentTimelineItemView] = []
     for row in events:

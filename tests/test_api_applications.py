@@ -324,9 +324,7 @@ def test_application_list_query_narrows_orders_and_pages_at_the_boundary(service
             if company == "Cegal":
                 closed_id = created.json()["application_id"]
 
-        closed = api.post(
-            f"{API_PREFIX}/applications/{closed_id}/close", headers=MUTATION_HEADERS
-        )
+        closed = api.post(f"{API_PREFIX}/applications/{closed_id}/close", headers=MUTATION_HEADERS)
         assert closed.status_code == 200
 
         whole = api.get(f"{API_PREFIX}/applications").json()
@@ -348,15 +346,14 @@ def test_application_list_query_narrows_orders_and_pages_at_the_boundary(service
         # Every row is at the first stage here, so the filter that names it keeps
         # them and one that names another stage keeps none - both from the computed
         # projection rather than a stored column.
-        staged = api.get(
-            f"{API_PREFIX}/applications", params={"stage": ["needs_analysis"]}
-        ).json()
+        staged = api.get(f"{API_PREFIX}/applications", params={"stage": ["needs_analysis"]}).json()
         assert staged["matched"] == 3
         # Counted before narrowing: a stage filter must not erase its own options.
         assert staged["stage_counts"] == {"needs_analysis": 3}
-        assert api.get(f"{API_PREFIX}/applications", params={"stage": ["ready"]}).json()[
-            "matched"
-        ] == 0
+        assert (
+            api.get(f"{API_PREFIX}/applications", params={"stage": ["ready"]}).json()["matched"]
+            == 0
+        )
 
         ordered = api.get(f"{API_PREFIX}/applications", params={"sort": "company"}).json()
         assert [item["company"] for item in ordered["items"]] == ["Alpha", "Binat", "Cegal"]

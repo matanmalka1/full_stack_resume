@@ -165,9 +165,7 @@ def test_an_internal_submission_records_the_exact_revision_and_pdf(
         "closed",
     ]
     submitted = next(
-        item
-        for item in detail["recruitment_timeline"]
-        if item["id"] == body["submission_id"]
+        item for item in detail["recruitment_timeline"] if item["id"] == body["submission_id"]
     )
     assert submitted["submission_type"] == "internal"
     assert submitted["approved_revision_id"] == revision_id

@@ -379,9 +379,7 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "ui_text_size IN ('normal', 'large')", name=op.f("ck_app_settings_ui_text_size")
         ),
-        sa.CheckConstraint(
-            "edit_version > 0", name=op.f("ck_app_settings_edit_version_positive")
-        ),
+        sa.CheckConstraint("edit_version > 0", name=op.f("ck_app_settings_edit_version_positive")),
         sa.CheckConstraint("singleton_id = 1", name=op.f("ck_app_settings_singleton")),
         sa.PrimaryKeyConstraint("singleton_id", name=op.f("pk_app_settings")),
     )
@@ -445,9 +443,7 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "actor_type IN ('user', 'system')", name=op.f("ck_audit_records_actor_type")
         ),
-        sa.CheckConstraint(
-            "client IN ('web', 'worker')", name=op.f("ck_audit_records_client")
-        ),
+        sa.CheckConstraint("client IN ('web', 'worker')", name=op.f("ck_audit_records_client")),
         sa.ForeignKeyConstraint(
             ["application_id"],
             ["applications.id"],

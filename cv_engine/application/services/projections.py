@@ -119,9 +119,7 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
         )
         return state, snapshot_record, analyses
 
-    def list_applications(
-        self, query: ApplicationListQuery | None = None
-    ) -> ApplicationListView:
+    def list_applications(self, query: ApplicationListQuery | None = None) -> ApplicationListView:
         """One page of the Application list, narrowed and ordered by `query`.
 
         The projection is computed for every record before the query is applied.

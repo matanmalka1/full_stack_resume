@@ -120,7 +120,9 @@ def _snapshots(harness, application_id: str) -> list[dict]:
     response = harness.client.get(f"{API_PREFIX}/applications/{application_id}/artifacts")
     assert response.status_code == 200, response.text
     return [
-        item for item in response.json()["items"] if item["artifact_type"] == "working_draft_snapshot"
+        item
+        for item in response.json()["items"]
+        if item["artifact_type"] == "working_draft_snapshot"
     ]
 
 
@@ -756,9 +758,9 @@ def test_a_replayed_replacement_returns_the_same_operation_and_keeps_one_snapsho
     assert first.status_code == 202, first.text
     assert second.status_code == 202, second.text
     assert second.json()["id"] == first.json()["id"]
-    assert [item["metadata"]["edit_version"] for item in _snapshots(api_paused, application_id)] == [
-        before["edit_version"]
-    ]
+    assert [
+        item["metadata"]["edit_version"] for item in _snapshots(api_paused, application_id)
+    ] == [before["edit_version"]]
     # `_audit` asserts there is exactly one record for the action, which is the assertion
     # that matters here: a second Keep would write a second audit record beside the second
     # snapshot. `details_json` is canonical JSON text rather than a mapping.
@@ -853,9 +855,9 @@ def test_a_replacement_interrupted_after_keep_resumes_without_a_second_snapshot(
     assert resumed.status_code == 202, resumed.text
     assert api_paused.run_operation(resumed.json()["id"])["status"] == "succeeded"
     # One snapshot, and one audit record: Keep was ensured, not repeated.
-    assert [item["metadata"]["edit_version"] for item in _snapshots(api_paused, application_id)] == [
-        before["edit_version"]
-    ]
+    assert [
+        item["metadata"]["edit_version"] for item in _snapshots(api_paused, application_id)
+    ] == [before["edit_version"]]
     _audit(api_paused, application_id, "replace_working_draft")
     assert _read(api_paused, working_draft_id).json()["edit_version"] == before["edit_version"] + 1
 
@@ -1092,9 +1094,7 @@ def test_approval_preserves_a_diverged_working_projection_and_returns_a_specific
     api_worker,
 ) -> None:
     """An edit outside the Web editor is evidence to preserve, not output to overwrite."""
-    application_id, working_draft_id, _sources = _drafted(
-        api_worker, "Diverged Projection Co"
-    )
+    application_id, working_draft_id, _sources = _drafted(api_worker, "Diverged Projection Co")
     validated = _validated(api_worker, working_draft_id)
     markdown_path = api_worker.services.artifacts.working_paths(application_id).markdown
     edited_projection = markdown_path.read_text(encoding="utf-8") + "\nmanual edit\n"

@@ -183,8 +183,7 @@ def test_stage_sort_breaks_ties_by_most_recently_updated() -> None:
 
 def test_a_page_is_a_window_on_the_ordering_and_the_counts_place_it() -> None:
     rows = [
-        item(f"app-{index}", updated_at=f"2026-08-{index + 10:02d}T00:00:00Z")
-        for index in range(5)
+        item(f"app-{index}", updated_at=f"2026-08-{index + 10:02d}T00:00:00Z") for index in range(5)
     ]
 
     page = narrow_application_list(rows, ApplicationListQuery(limit=2, offset=1))
