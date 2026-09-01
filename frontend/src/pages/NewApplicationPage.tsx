@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 import {
   JOB_TEXT_MAX_BYTES,
@@ -16,7 +16,7 @@ import { ErrorCallout } from "../app/ErrorCallout";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { useAppForm } from "../forms/useAppForm";
 import { ActionBar } from "../ui/ActionBar";
-import { Button } from "../ui/Button";
+import { Button, buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { Field } from "../ui/Field";
 import { FormSection } from "../ui/FormSection";
@@ -36,6 +36,8 @@ const SOURCE_URL_MAX_CHARACTERS = 2048;
    counter measures the same thing the refusal will. It stays a quiet character count
    until the text is close enough to the ceiling for the budget to be the useful fact. */
 const JOB_TEXT_BUDGET_NOTICE_RATIO = 0.8;
+const JOB_TEXT_SOURCE_BUTTON_CLASSES =
+  "min-h-10 shadow-none aria-pressed:border-cv-accent aria-pressed:bg-cv-accent-soft aria-pressed:text-cv-accent aria-pressed:hover:bg-cv-accent-soft";
 
 const formatMebibytes = (bytes: number): string =>
   `${(bytes / (1024 * 1024)).toLocaleString("en-US", { maximumFractionDigits: 2 })} MB`;
@@ -80,6 +82,7 @@ type SubmitResult =
 export const NewApplicationPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [jobTextSource, setJobTextSource] = useState<"paste" | "file">("paste");
   /* The intake screen is the one place `intake` is the projection's own answer, so it
      states it rather than relying on the landmark's initial value. */
   useWorkflowStage("intake");
@@ -212,12 +215,9 @@ export const NewApplicationPage = () => {
   const failure = acknowledgementRequired === null ? submit.error : null;
 
   return (
-    <PageShell
-      description="הזנת פרטי המשרה יוצרת מועמדות ותצלום משרה קבוע, ולאחר השמירה מפעילה את ניתוח המשרה."
-      title="משרה חדשה"
-    >
-      <form className="flex flex-col gap-6" noValidate onSubmit={runSubmit(undefined)}>
-        <FormSection description="שלושת אלה מזהים את המועמדות ברשימות ובכל מסכי ההמשך." title="פרטי המשרה">
+    <PageShell description="הוסף את פרטי המשרה כדי להתחיל התאמה של קורות החיים." title="משרה חדשה">
+      <form className="flex flex-col gap-5" noValidate onSubmit={runSubmit(undefined)}>
+        <FormSection divided={false} title="פרטי המשרה">
           <div className="grid gap-4 md:grid-cols-2">
             <Field error={errors.company?.message} label="שם החברה">
               {(control) => (
@@ -248,8 +248,8 @@ export const NewApplicationPage = () => {
           </div>
 
           <Field
-            hint="הכתובת נשמרת כתיעוד מקור בלבד. המערכת אינה פותחת אותה ואינה מייבאת ממנה טקסט."
-            label="כתובת המשרה (לא חובה)"
+            hint="נשמרת כתיעוד מקור בלבד; המערכת אינה פותחת את הכתובת או מייבאת ממנה טקסט."
+            label="כתובת המשרה — אופציונלי"
           >
             {(control) => (
               /* A.3: a URL is an LTR island even inside the RTL shell. */
@@ -283,13 +283,40 @@ export const NewApplicationPage = () => {
               </span>
             )
           }
-          className="rounded-surface border border-cv-border bg-cv-surface-muted/60 p-4"
-          description="הטקסט נשמר כתצלום משרה קבוע ואינו משתנה אחרי היצירה. הוא נשמר בדיוק כפי שהוזן."
-          title="תצלום המשרה"
+          description="הדבק את תיאור המשרה או טען קובץ txt מהמחשב. הטקסט יישמר בדיוק כפי שהוזן."
+          divided={false}
+          title="תיאור המשרה"
         >
-          <JobTextFileField
-            onText={(text) => setValue("job_text", text, { shouldDirty: true, shouldValidate: true })}
-          />
+          <div
+            aria-label="אופן הזנת תיאור המשרה"
+            className="flex w-fit gap-1 rounded-control bg-cv-surface-muted p-1"
+            role="group"
+          >
+            <Button
+              aria-pressed={jobTextSource === "paste"}
+              className={JOB_TEXT_SOURCE_BUTTON_CLASSES}
+              onClick={() => setJobTextSource("paste")}
+              variant="secondary"
+            >
+              הדבקת טקסט
+            </Button>
+            <Button
+              aria-pressed={jobTextSource === "file"}
+              className={JOB_TEXT_SOURCE_BUTTON_CLASSES}
+              onClick={() => setJobTextSource("file")}
+              variant="secondary"
+            >
+              העלאת קובץ
+            </Button>
+          </div>
+
+          {jobTextSource === "file" ? (
+            <div>
+              <JobTextFileField
+                onText={(text) => setValue("job_text", text, { shouldDirty: true, shouldValidate: true })}
+              />
+            </div>
+          ) : null}
 
           <Field error={errors.job_text?.message} label="טקסט המשרה">
             {(control) => (
@@ -302,8 +329,9 @@ export const NewApplicationPage = () => {
                 /* The payload of the whole screen. It opens tall enough to read a
                    posting in, grows with a paste rather than hiding it behind a
                    scrollbar, and stops at the viewport so the submit stays reachable. */
-                className="min-h-64 max-h-[60vh] [field-sizing:content]"
+                className="min-h-48 max-h-[55vh] [field-sizing:content]"
                 dir="auto"
+                placeholder={jobTextSource === "paste" ? "הדבק כאן את תיאור המשרה…" : undefined}
               />
             )}
           </Field>
@@ -335,6 +363,7 @@ export const NewApplicationPage = () => {
         )}
 
         <ActionBar
+          align="start"
           primary={
             <Button
               disabled={submit.isPending && submit.variables?.acknowledged === true}
@@ -345,7 +374,11 @@ export const NewApplicationPage = () => {
               יצירת מועמדות
             </Button>
           }
-          sticky
+          secondary={
+            <Link className={buttonClasses("ghost")} to="/">
+              ביטול
+            </Link>
+          }
         />
       </form>
     </PageShell>

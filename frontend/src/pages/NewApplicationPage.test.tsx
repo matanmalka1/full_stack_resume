@@ -132,7 +132,8 @@ const fillIntake = (jobText = "Job description text") => {
 };
 
 const chooseFile = (file: File) => {
-  const input = screen.getByLabelText("קריאת קובץ טקסט מהמחשב (לא חובה)");
+  fireEvent.click(screen.getByRole("button", { name: "העלאת קובץ" }));
+  const input = screen.getByLabelText("בחירת קובץ טקסט");
 
   /* jsdom keeps `files` read-only, so the selection is defined rather than assigned
      through the event, which would silently do nothing. */
@@ -156,9 +157,9 @@ describe("NewApplicationPage", () => {
     expect(screen.getByLabelText("שם החברה")).toBeInTheDocument();
     expect(screen.getByLabelText("תפקיד היעד")).toBeInTheDocument();
     expect(screen.getByLabelText("טקסט המשרה")).toHaveAttribute("dir", "auto");
-    expect(screen.getByLabelText("כתובת המשרה (לא חובה)")).toHaveAttribute("dir", "ltr");
+    expect(screen.getByLabelText("כתובת המשרה — אופציונלי")).toHaveAttribute("dir", "ltr");
     expect(
-      screen.getByText("הכתובת נשמרת כתיעוד מקור בלבד. המערכת אינה פותחת אותה ואינה מייבאת ממנה טקסט."),
+      screen.getByText("נשמרת כתיעוד מקור בלבד; המערכת אינה פותחת את הכתובת או מייבאת ממנה טקסט."),
     ).toBeInTheDocument();
   });
 

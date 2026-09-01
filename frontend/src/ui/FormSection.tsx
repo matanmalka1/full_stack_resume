@@ -9,6 +9,7 @@ interface FormSectionProps {
   children: ReactNode;
   className?: string;
   description?: ReactNode;
+  divided?: boolean;
   title: ReactNode;
 }
 
@@ -16,13 +17,13 @@ interface FormSectionProps {
    The group is a real `fieldset` so the grouping the eye sees is the grouping assistive
    technology announces. `legend` is taken out of the header's flow — a floated legend
    lays out inconsistently inside flex — and the visible title is a sibling. */
-export const FormSection = ({ aside, children, className, description, title }: FormSectionProps) => {
+export const FormSection = ({ aside, children, className, description, divided = true, title }: FormSectionProps) => {
   const id = useId();
 
   return (
     <fieldset className={cx("min-w-0 border-0 p-0", className)}>
       <legend className="sr-only">{title}</legend>
-      <div className="border-b border-cv-border pb-2">
+      <div className={cx(divided ? "border-b border-cv-border pb-2" : undefined)}>
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <p aria-hidden="true" className="text-heading-sm font-bold tracking-tight text-cv-text">
             {title}

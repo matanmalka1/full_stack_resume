@@ -12,9 +12,9 @@ test.describe("the New Application screen", () => {
     await expect(page.getByRole("heading", { level: 1, name: "משרה חדשה" })).toBeVisible();
     await expect(page.getByLabel("שם החברה")).toBeVisible();
     await expect(page.getByLabel("תפקיד היעד")).toBeVisible();
-    await expect(page.getByLabel("כתובת המשרה (לא חובה)")).toHaveAttribute("dir", "ltr");
+    await expect(page.getByLabel("כתובת המשרה — אופציונלי")).toHaveAttribute("dir", "ltr");
     await expect(page.getByRole("button", { name: "יצירת מועמדות" })).toBeVisible();
-    await expect(page.getByText("המערכת אינה פותחת אותה ואינה מייבאת ממנה טקסט", { exact: false })).toBeVisible();
+    await expect(page.getByText("המערכת אינה פותחת את הכתובת או מייבאת ממנה טקסט", { exact: false })).toBeVisible();
   });
 
   test("reads a local .txt file into the job text area without uploading it", async ({ page }) => {
@@ -30,7 +30,8 @@ test.describe("the New Application screen", () => {
     });
 
     await page.goto("/applications/new");
-    await page.getByLabel("קריאת קובץ טקסט מהמחשב (לא חובה)").setInputFiles({
+    await page.getByRole("button", { name: "העלאת קובץ" }).click();
+    await page.getByLabel("בחירת קובץ טקסט").setInputFiles({
       name: "job.txt",
       mimeType: "text/plain",
       buffer: Buffer.from("Senior Backend Engineer\nTel Aviv", "utf8"),
