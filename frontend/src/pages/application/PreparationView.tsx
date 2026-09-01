@@ -2,11 +2,12 @@ import type { ReactNode } from "react";
 
 import type { Classification } from "../../api/analyses";
 import type { ApplicationDetail } from "../../api/contracts";
-import { AnalysisPanel, SupersededAnalysisNote } from "./AnalysisPanel";
 import { ApplicationActions } from "./ApplicationActions";
 import { AutomaticDraftNotice } from "./AutomaticDraftNotice";
 import { PreparationAlerts } from "./PreparationAlerts";
 import { ReviewDecisionPanel, resolvedByDecisionForm } from "./ReviewDecisionPanel";
+import { AnalysisPanel } from "./analysis/AnalysisPanel";
+import { SupersededAnalysisNote } from "./analysis/SupersededAnalysisNote";
 
 export const PreparationView = ({
   classification,
