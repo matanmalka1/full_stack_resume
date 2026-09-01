@@ -8,7 +8,7 @@ import pytest
 from foreground import ForegroundOperationExecutor, foreground_executor
 from helpers import ACCOUNT_MANAGER_JOB, validate_active_draft
 from pydantic import ValidationError
-from sqlalchemy import delete, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import ProgrammingError
 
 from cv_engine.application.commands import (
@@ -49,7 +49,7 @@ from cv_engine.application.operations import (
 from cv_engine.domain.models import ValidationIssue, ValidationReport
 from cv_engine.infrastructure.operation_logging import OperationFailureLogger
 from cv_engine.infrastructure.persistence import Repository
-from cv_engine.infrastructure.persistence.tables import operations
+from cv_engine.infrastructure.persistence.tables import operation_resource_leases, operations
 from cv_engine.runtime.execution import OperationWorker
 from cv_engine.util import new_id
 
@@ -246,7 +246,20 @@ def test_two_runners_racing_one_operation_produce_one_claim(services) -> None:
 
     claimed = [result for result in results if result is not None]
     assert len(claimed) == 1
-    assert claimed[0].lease_owner in {"runner-a", "runner-b"}
+    winner = claimed[0]
+    assert winner.lease_owner in {"runner-a", "runner-b"}
+    # The loser must release only what it took. Releasing by operation_id
+    # deleted the winner's leases, and the winner then failed at its first
+    # heartbeat mid-execution with "operation resource leases are missing".
+    with services.repository.read_connection() as connection:
+        held = connection.execute(
+            select(operation_resource_leases.c.resource_kind).where(
+                operation_resource_leases.c.operation_id == created.id,
+                operation_resource_leases.c.lease_owner == winner.lease_owner,
+            )
+        ).scalars()
+        assert sorted(held) == sorted(resource.kind.value for resource in winner.resources)
+    services.repository.heartbeat_operation(created.id, runner_id=str(winner.lease_owner))
 
 
 def test_foreground_executor_and_worker_race_one_operation_without_duplicate_execution(

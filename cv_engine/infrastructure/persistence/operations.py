@@ -210,8 +210,15 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
         timestamp = now or utc_now()
         expires_at = self._expiry(timestamp, lease_seconds)
         with self.transaction() as connection:
+            # Lock the Operation row for the whole claim. Two runners that both
+            # read `queued` here would both go on to take leases, and the loser
+            # would then release them by operation_id - which are the *winner's*
+            # rows, since both are claiming the same Operation. The winner kept
+            # running with no leases and died at its first heartbeat.
             row = (
-                connection.execute(select(operations).where(operations.c.id == operation_id))
+                connection.execute(
+                    select(operations).where(operations.c.id == operation_id).with_for_update()
+                )
                 .mappings()
                 .one_or_none()
             )
@@ -223,6 +230,7 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
                 return None
 
             resources = row["resources_json"]
+            acquired: list[tuple[str, str, int]] = []
             blocked_kind: str | None = None
             for resource in resources:
                 kind = resource["kind"]
@@ -243,17 +251,14 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
                             )
                     except IntegrityError:
                         continue
+                    acquired.append((kind, key, slot))
                     break
                 else:
                     blocked_kind = kind
                     break
 
             if blocked_kind is not None:
-                connection.execute(
-                    delete(operation_resource_leases).where(
-                        operation_resource_leases.c.operation_id == operation_id
-                    )
-                )
+                self._release_acquired(connection, acquired)
                 phase, message = self._waiting_phase(blocked_kind)
                 connection.execute(
                     update(operations)
@@ -279,11 +284,7 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
                 )
             ).rowcount
             if changed != 1:
-                connection.execute(
-                    delete(operation_resource_leases).where(
-                        operation_resource_leases.c.operation_id == operation_id
-                    )
-                )
+                self._release_acquired(connection, acquired)
                 return None
             current = (
                 connection.execute(select(operations).where(operations.c.id == operation_id))
@@ -569,6 +570,22 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
             return connection.execute(
                 select(operations.c.attempts_completed).where(operations.c.id == operation_id)
             ).scalar_one()
+
+    @staticmethod
+    def _release_acquired(connection: Connection, acquired: list[tuple[str, str, int]]) -> None:
+        """Undo exactly the leases one failed claim took, and nothing else.
+
+        Releasing by operation_id would be wrong here: a claim that loses a
+        race is looking at rows another claim of the same Operation owns.
+        """
+        for kind, key, slot in acquired:
+            connection.execute(
+                delete(operation_resource_leases).where(
+                    operation_resource_leases.c.resource_kind == kind,
+                    operation_resource_leases.c.resource_key == key,
+                    operation_resource_leases.c.slot == slot,
+                )
+            )
 
     @staticmethod
     def _release(connection: Connection, operation_id: str) -> None:
