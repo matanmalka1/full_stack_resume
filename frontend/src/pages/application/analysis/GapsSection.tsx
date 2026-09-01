@@ -36,7 +36,9 @@ export const GapsSection = ({ gaps }: { gaps: Gap[] }) => {
   return (
     <AnalysisSection title="פערים מול העובדות">
       <div className="mb-3 flex flex-wrap gap-2">
-        {hardCount === 0 ? null : <StatusBadge tone="blocker">{`${gapSeverityLabels.hard} · ${hardCount}`}</StatusBadge>}
+        {hardCount === 0 ? null : (
+          <StatusBadge tone="blocker">{`${gapSeverityLabels.hard} · ${hardCount}`}</StatusBadge>
+        )}
         {warningCount === 0 ? null : (
           <StatusBadge tone="warning">{`${gapSeverityLabels.warning} · ${warningCount}`}</StatusBadge>
         )}
