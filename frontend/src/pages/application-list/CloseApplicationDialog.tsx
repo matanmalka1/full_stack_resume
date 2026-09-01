@@ -9,12 +9,7 @@ interface CloseApplicationDialogProps {
   onConfirm: () => void;
 }
 
-export const CloseApplicationDialog = ({
-  application,
-  pending,
-  onCancel,
-  onConfirm,
-}: CloseApplicationDialogProps) => (
+export const CloseApplicationDialog = ({ application, pending, onCancel, onConfirm }: CloseApplicationDialogProps) => (
   <Dialog
     footer={
       <>
@@ -37,8 +32,7 @@ export const CloseApplicationDialog = ({
         : `${application.company} — ${application.target_role} תסומן כסגורה ותרד מלוח המועמדויות הפעילות.`}
     </p>
     <p className="mt-2 text-support text-cv-text-muted">
-      שום דבר לא נמחק. תצלום המשרה, הטיוטות והגרסאות שאושרו נשמרים כפי שהם, והמועמדות
-      נשארת נגישה דרך הסינון.
+      שום דבר לא נמחק. תצלום המשרה, הטיוטות והגרסאות שאושרו נשמרים כפי שהם, והמועמדות נשארת נגישה דרך הסינון.
     </p>
   </Dialog>
 );

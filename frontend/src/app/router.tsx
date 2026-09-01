@@ -43,12 +43,7 @@ import { RouteErrorBoundary } from "./RouteErrorBoundary";
 const TrackingRedirect = () => {
   const { applicationId } = useParams();
 
-  return (
-    <Navigate
-      replace
-      to={`/applications/${encodeURIComponent(applicationId ?? "")}?view=tracking`}
-    />
-  );
+  return <Navigate replace to={`/applications/${encodeURIComponent(applicationId ?? "")}?view=tracking`} />;
 };
 
 const ReadyRedirect = () => {

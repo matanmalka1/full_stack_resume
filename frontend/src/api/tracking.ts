@@ -28,10 +28,10 @@ export const correctRecruitmentStatus = async (
   body: CorrectStatusRequest,
 ): Promise<ApplicationMutation> =>
   (
-    await apiRequest<ApplicationMutation>(
-      applicationTrackingPath(applicationId, "status-corrections"),
-      { method: "POST", body },
-    )
+    await apiRequest<ApplicationMutation>(applicationTrackingPath(applicationId, "status-corrections"), {
+      method: "POST",
+      body,
+    })
   ).data;
 
 export const recordExternalSubmission = async (
@@ -39,10 +39,10 @@ export const recordExternalSubmission = async (
   body: ExternalSubmissionRequest,
 ): Promise<Submission> =>
   (
-    await apiRequest<Submission>(
-      applicationTrackingPath(applicationId, "external-submissions"),
-      { method: "POST", body },
-    )
+    await apiRequest<Submission>(applicationTrackingPath(applicationId, "external-submissions"), {
+      method: "POST",
+      body,
+    })
   ).data;
 
 export const recordInternalSubmission = async (
@@ -56,10 +56,7 @@ export const recordInternalSubmission = async (
     })
   ).data;
 
-export const setNextAction = async (
-  applicationId: string,
-  body: NextActionRequest,
-): Promise<ApplicationMutation> =>
+export const setNextAction = async (applicationId: string, body: NextActionRequest): Promise<ApplicationMutation> =>
   (
     await apiRequest<ApplicationMutation>(applicationTrackingPath(applicationId, "next-action"), {
       method: "PATCH",

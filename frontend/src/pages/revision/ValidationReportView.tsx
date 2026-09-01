@@ -48,9 +48,7 @@ export const ValidationReportView = ({ report }: { report: ValidationReport }) =
           <p dir="auto">{issue.message}</p>
         </Callout>
       ))}
-      {report.issues.length === 0 ? (
-        <Callout title="לא נמצאו חסימות או אזהרות" tone="success" />
-      ) : null}
+      {report.issues.length === 0 ? <Callout title="לא נמצאו חסימות או אזהרות" tone="success" /> : null}
     </div>
   );
 };

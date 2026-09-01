@@ -22,18 +22,11 @@ export const DraftFactPanel = ({ busy, facts, onInclude }: DraftFactPanelProps) 
     (fact) => fact.outcome === "omitted" && fact.linked_claim_ids.length === 0,
   );
   const included = (facts?.facts ?? []).filter(
-    (fact) =>
-      fact.outcome !== null && fact.outcome !== undefined && fact.outcome !== "omitted",
+    (fact) => fact.outcome !== null && fact.outcome !== undefined && fact.outcome !== "omitted",
   );
 
   if (facts === undefined) {
-    return (
-      <QueryState
-        className="text-support leading-6"
-        loading
-        loadingLabel="טוען את חשבונאות העובדות…"
-      />
-    );
+    return <QueryState className="text-support leading-6" loading loadingLabel="טוען את חשבונאות העובדות…" />;
   }
 
   return (
@@ -43,10 +36,7 @@ export const DraftFactPanel = ({ busy, facts, onInclude }: DraftFactPanelProps) 
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2
-            className="flex items-center gap-2 text-heading-sm font-bold text-cv-text"
-            id="draft-facts-heading"
-          >
+          <h2 className="flex items-center gap-2 text-heading-sm font-bold text-cv-text" id="draft-facts-heading">
             <span className="flex size-9 items-center justify-center rounded-control bg-cv-accent-soft text-cv-accent">
               <Database aria-hidden="true" className="size-4" />
             </span>
@@ -67,9 +57,7 @@ export const DraftFactPanel = ({ busy, facts, onInclude }: DraftFactPanelProps) 
       </div>
 
       {omitted.length === 0 ? (
-        <p className="text-support leading-6 text-cv-text-muted">
-          כל העובדות שתוכנית הבחירה שקלה נכללות בטיוטה.
-        </p>
+        <p className="text-support leading-6 text-cv-text-muted">כל העובדות שתוכנית הבחירה שקלה נכללות בטיוטה.</p>
       ) : (
         <>
           <p className="text-support leading-6 text-cv-text-muted">
@@ -87,12 +75,8 @@ export const DraftFactPanel = ({ busy, facts, onInclude }: DraftFactPanelProps) 
                   </p>
                   <p className="mt-1 text-support text-cv-text-muted">
                     {selectionOutcomeLabels[fact.outcome ?? "omitted"]}
-                    {fact.reason === null || fact.reason === undefined
-                      ? ""
-                      : ` · ${omissionReasonLabels[fact.reason]}`}
-                    {fact.section === null || fact.section === undefined
-                      ? ""
-                      : ` · ${fact.section}`}
+                    {fact.reason === null || fact.reason === undefined ? "" : ` · ${omissionReasonLabels[fact.reason]}`}
+                    {fact.section === null || fact.section === undefined ? "" : ` · ${fact.section}`}
                   </p>
                 </div>
                 <Button

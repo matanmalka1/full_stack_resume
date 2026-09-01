@@ -7,8 +7,7 @@ import { operationQueryKey } from "../../api/operations";
 import { settingsQueryOptions } from "../../api/settings";
 import { type AutoDraftSources, autoDraftSources } from "./autoDraft";
 
-const autoDraftReceiptKey = (operationId: string): string =>
-  `stage-e:auto-draft:${operationId}`;
+const autoDraftReceiptKey = (operationId: string): string => `stage-e:auto-draft:${operationId}`;
 
 interface AutomaticDraftAttempt {
   sources: AutoDraftSources;

@@ -46,8 +46,7 @@ export const ActiveOperationPanel = ({
   operation: Operation;
 }) => {
   const terminal = isTerminalOperation(operation);
-  const failure =
-    operation.failure_code == null ? null : failurePresentations[operation.failure_code];
+  const failure = operation.failure_code == null ? null : failurePresentations[operation.failure_code];
   const produced = activeOutputLabels(operation);
 
   /* A run that succeeded has nothing left to watch. Reported at full panel weight it
@@ -94,10 +93,7 @@ export const ActiveOperationPanel = ({
   }
 
   return (
-    <section
-      aria-labelledby="active-operation-heading"
-      className="rounded-surface border border-cv-border p-5"
-    >
+    <section aria-labelledby="active-operation-heading" className="rounded-surface border border-cv-border p-5">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         {/* The run, not its subject. `operationTypeLabels` names the work ("ניתוח
             המשרה"), which is also what the panel reporting the resulting analysis calls
@@ -108,9 +104,7 @@ export const ActiveOperationPanel = ({
           הרצת {operationTypeLabels[operation.operation_type]}
         </h2>
         <div className="flex flex-wrap items-center gap-3">
-          <StatusBadge tone={statusTones[operation.status]}>
-            {statusLabels[operation.status]}
-          </StatusBadge>
+          <StatusBadge tone={statusTones[operation.status]}>{statusLabels[operation.status]}</StatusBadge>
           {/* The phase is the progress axis and earns its place only when it says
               something the status has not. The two share vocabulary at both ends -
               `queued`/`queued` are both "ממתינה בתור", `succeeded`/`completed` both
@@ -153,9 +147,7 @@ export const ActiveOperationPanel = ({
             title={failure?.title ?? statusLabels[operation.status]}
             tone={failureTones[operation.status] ?? "warning"}
           >
-            {operation.safe_failure_detail == null ? null : (
-              <p dir="auto">{operation.safe_failure_detail}</p>
-            )}
+            {operation.safe_failure_detail == null ? null : <p dir="auto">{operation.safe_failure_detail}</p>}
             {failure === null ? null : (
               <p className="mt-2" dir="auto">
                 {failure.guidance}
@@ -166,8 +158,8 @@ export const ActiveOperationPanel = ({
 
         {operation.cancellation_requested_at != null && !operation.is_terminal ? (
           <Callout title="בקשת הביטול התקבלה" tone="neutral">
-            הביטול של פעולה שכבר התחילה הוא מיטבי. גם אם העבודה החיצונית תסתיים, התוצאה שלה
-            לא תופעל; המצב כאן ימשיך להתעדכן עד שיירשם המצב הסופי.
+            הביטול של פעולה שכבר התחילה הוא מיטבי. גם אם העבודה החיצונית תסתיים, התוצאה שלה לא תופעל; המצב כאן ימשיך
+            להתעדכן עד שיירשם המצב הסופי.
           </Callout>
         ) : null}
 

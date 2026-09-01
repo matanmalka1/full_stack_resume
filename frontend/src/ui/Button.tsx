@@ -18,8 +18,7 @@ const variantButtonClasses: Record<ButtonVariant, string> = {
   secondary:
     "border border-cv-border bg-cv-surface text-cv-text shadow-surface hover:border-cv-border-strong hover:bg-cv-surface-muted",
   ghost: "text-cv-accent hover:bg-cv-accent-soft",
-  destructive:
-    "bg-cv-blocker text-cv-on-accent shadow-surface hover:-translate-y-0.5 hover:bg-cv-blocker-hover",
+  destructive: "bg-cv-blocker text-cv-on-accent shadow-surface hover:-translate-y-0.5 hover:bg-cv-blocker-hover",
 };
 
 /* Exported so a router Link can carry button styling without a polymorphic component. */

@@ -46,16 +46,10 @@ const deferred = () => {
   return { promise, resolve };
 };
 
-const setup = (
-  onSaved = vi.fn(),
-  onConflict = vi.fn().mockResolvedValue('"9-hash-9"'),
-) =>
-  renderHook(() =>
-    useDraftAutosave({ etag: '"4-hash-4"', onConflict, onSaved, workingDraftId: "wd-1" }),
-  );
+const setup = (onSaved = vi.fn(), onConflict = vi.fn().mockResolvedValue('"9-hash-9"')) =>
+  renderHook(() => useDraftAutosave({ etag: '"4-hash-4"', onConflict, onSaved, workingDraftId: "wd-1" }));
 
-const bodyOf = (call: unknown[] | undefined) =>
-  JSON.parse(String((call?.[1] as RequestInit)?.body));
+const bodyOf = (call: unknown[] | undefined) => JSON.parse(String((call?.[1] as RequestInit)?.body));
 
 const headerOf = (call: unknown[] | undefined, name: string) =>
   ((call?.[1] as RequestInit)?.headers as Headers).get(name);
@@ -90,10 +84,7 @@ describe("useDraftAutosave", () => {
 
   it("never opens a second save while one is in flight, and sends the next against the returned token", async () => {
     const first = deferred();
-    const fetchMock = vi
-      .fn()
-      .mockReturnValueOnce(first.promise)
-      .mockResolvedValueOnce(updateResponse(6));
+    const fetchMock = vi.fn().mockReturnValueOnce(first.promise).mockResolvedValueOnce(updateResponse(6));
     vi.stubGlobal("fetch", fetchMock);
     const { result } = setup();
 
@@ -150,14 +141,8 @@ describe("useDraftAutosave", () => {
   });
 
   it("refreshes again before reapplying and saves against the current token", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(conflictResponse())
-      .mockResolvedValueOnce(updateResponse(11));
-    const onConflict = vi
-      .fn()
-      .mockResolvedValueOnce('"9-hash-9"')
-      .mockResolvedValueOnce('"10-hash-10"');
+    const fetchMock = vi.fn().mockResolvedValueOnce(conflictResponse()).mockResolvedValueOnce(updateResponse(11));
+    const onConflict = vi.fn().mockResolvedValueOnce('"9-hash-9"').mockResolvedValueOnce('"10-hash-10"');
     vi.stubGlobal("fetch", fetchMock);
     const { result } = setup(vi.fn(), onConflict);
 

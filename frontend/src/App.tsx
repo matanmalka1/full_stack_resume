@@ -36,10 +36,7 @@ const ApplicationContext = ({
   return href === null ? (
     <div className="min-w-0 border-e border-cv-border pe-3 text-end">{body}</div>
   ) : (
-    <Link
-      className="min-w-0 rounded-control border-e border-cv-border pe-3 text-end hover:underline"
-      to={href}
-    >
+    <Link className="min-w-0 rounded-control border-e border-cv-border pe-3 text-end hover:underline" to={href}>
       {body}
     </Link>
   );
@@ -53,14 +50,9 @@ export const App = () => {
      Application without offering to navigate to it. The route declares that relationship
      in its handle; this shell does not match a named path to infer it. */
   const isApplicationScreen = matches.some(
-    (match) =>
-      (match.handle as { applicationContext?: string } | undefined)?.applicationContext ===
-      "self",
+    (match) => (match.handle as { applicationContext?: string } | undefined)?.applicationContext === "self",
   );
-  const applicationId =
-    matches
-      .map((match) => match.params.applicationId)
-      .find((id) => id !== undefined) ?? null;
+  const applicationId = matches.map((match) => match.params.applicationId).find((id) => id !== undefined) ?? null;
   const applicationContext = useQuery({
     ...applicationDetailQueryOptions(applicationId ?? ""),
     enabled: applicationId !== null,
@@ -80,9 +72,7 @@ export const App = () => {
                 the accent rule under the name does more to place it than a gradient
                 square with a spark in it. */}
             <Link className="group shrink-0 rounded-control" to="/">
-              <span className="block text-heading-sm font-extrabold tracking-tight text-cv-text">
-                קורות חיים
-              </span>
+              <span className="block text-heading-sm font-extrabold tracking-tight text-cv-text">קורות חיים</span>
               <span className="block h-0.5 w-8 bg-cv-accent transition-all duration-200 group-hover:w-full" />
             </Link>
 
@@ -92,11 +82,7 @@ export const App = () => {
               {applicationContext === undefined || applicationId === null ? null : (
                 <ApplicationContext
                   company={applicationContext.company}
-                  href={
-                    isApplicationScreen
-                      ? null
-                      : `/applications/${encodeURIComponent(applicationId)}`
-                  }
+                  href={isApplicationScreen ? null : `/applications/${encodeURIComponent(applicationId)}`}
                   targetRole={applicationContext.target_role}
                 />
               )}

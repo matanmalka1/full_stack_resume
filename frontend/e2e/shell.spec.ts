@@ -9,9 +9,7 @@ test.describe("the application shell", () => {
     await page.goto("/applications/new");
 
     await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
-    await expect(
-      page.getByRole("img", { name: /^שלבי הכנת קורות החיים:/ }),
-    ).toBeVisible();
+    await expect(page.getByRole("img", { name: /^שלבי הכנת קורות החיים:/ })).toBeVisible();
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   });
 

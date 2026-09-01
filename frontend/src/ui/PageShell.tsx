@@ -24,14 +24,7 @@ interface PageShellProps {
 /* Route pages share one document surface. Keeping the masthead border and body rhythm
    here means a page declares its content and measure without rebuilding the frame or
    teaching the application shell which route happens to need which width. */
-export const PageShell = ({
-  actions,
-  children,
-  description,
-  eyebrow,
-  title,
-  width = "reading",
-}: PageShellProps) => {
+export const PageShell = ({ actions, children, description, eyebrow, title, width = "reading" }: PageShellProps) => {
   return (
     <Card aria-labelledby="route-heading" className={cx("mx-auto w-full", widthClasses[width])}>
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-cv-border pb-5">

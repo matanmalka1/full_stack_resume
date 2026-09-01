@@ -181,8 +181,7 @@ export const NewApplicationPage = () => {
     jobTextLength * 4 < JOB_TEXT_MAX_BYTES * JOB_TEXT_BUDGET_NOTICE_RATIO
       ? null
       : new TextEncoder().encode(jobText).length;
-  const jobTextNearBudget =
-    jobTextBytes !== null && jobTextBytes >= JOB_TEXT_MAX_BYTES * JOB_TEXT_BUDGET_NOTICE_RATIO;
+  const jobTextNearBudget = jobTextBytes !== null && jobTextBytes >= JOB_TEXT_MAX_BYTES * JOB_TEXT_BUDGET_NOTICE_RATIO;
   const jobTextOverBudget = jobTextBytes !== null && jobTextBytes > JOB_TEXT_MAX_BYTES;
 
   const runSubmit = (acknowledgedIntake: ApplicationIntake | undefined) =>
@@ -203,8 +202,7 @@ export const NewApplicationPage = () => {
      there is no second copy to leave stale. */
   const answeredIntake = submit.variables?.intake;
   const acknowledgementRequired = duplicateMatchesFromProblem(submit.error);
-  const settledMatches =
-    acknowledgementRequired ?? (submit.data?.kind === "duplicates" ? submit.data.matches : null);
+  const settledMatches = acknowledgementRequired ?? (submit.data?.kind === "duplicates" ? submit.data.matches : null);
   /* The form stays editable while the precheck runs, so an answer can arrive describing
      text the user has already replaced. It is an answer about a different intake, and
      therefore not an answer about this one. */
@@ -219,10 +217,7 @@ export const NewApplicationPage = () => {
       title="משרה חדשה"
     >
       <form className="flex flex-col gap-6" noValidate onSubmit={runSubmit(undefined)}>
-        <FormSection
-          description="שלושת אלה מזהים את המועמדות ברשימות ובכל מסכי ההמשך."
-          title="פרטי המשרה"
-        >
+        <FormSection description="שלושת אלה מזהים את המועמדות ברשימות ובכל מסכי ההמשך." title="פרטי המשרה">
           <div className="grid gap-4 md:grid-cols-2">
             <Field error={errors.company?.message} label="שם החברה">
               {(control) => (
@@ -276,12 +271,7 @@ export const NewApplicationPage = () => {
               /* Close to the ceiling the byte budget is the fact that matters, so the
                  counter switches to it and says which side of the limit the text is on
                  before the server has to. */
-              <span
-                className={cx(
-                  "font-medium",
-                  jobTextOverBudget ? "text-cv-blocker" : "text-cv-warning",
-                )}
-              >
+              <span className={cx("font-medium", jobTextOverBudget ? "text-cv-blocker" : "text-cv-warning")}>
                 <LtrText>
                   {formatMebibytes(jobTextBytes ?? 0)} / {formatMebibytes(JOB_TEXT_MAX_BYTES)}
                 </LtrText>{" "}
@@ -298,9 +288,7 @@ export const NewApplicationPage = () => {
           title="תצלום המשרה"
         >
           <JobTextFileField
-            onText={(text) =>
-              setValue("job_text", text, { shouldDirty: true, shouldValidate: true })
-            }
+            onText={(text) => setValue("job_text", text, { shouldDirty: true, shouldValidate: true })}
           />
 
           <Field error={errors.job_text?.message} label="טקסט המשרה">
@@ -333,8 +321,8 @@ export const NewApplicationPage = () => {
 
         {staleAnswer ? (
           <Callout role="status" title="הקלט השתנה מאז הבדיקה" tone="neutral">
-            בדיקת הכפילויות רצה על טקסט קודם, ולכן התשובה שלה אינה חלה על מה שמופיע עכשיו.
-            יש ללחוץ שוב על יצירת מועמדות כדי לבדוק את הקלט הנוכחי.
+            בדיקת הכפילויות רצה על טקסט קודם, ולכן התשובה שלה אינה חלה על מה שמופיע עכשיו. יש ללחוץ שוב על יצירת מועמדות
+            כדי לבדוק את הקלט הנוכחי.
           </Callout>
         ) : null}
 

@@ -12,11 +12,7 @@ import { cancelOperation, operationQueryOptions, retryOperation } from "./operat
 import { decisionMarkdownQueryOptions } from "./revisions";
 import { queryClient } from "../app/queryClient";
 
-const jsonResponse = (
-  body: unknown,
-  status = 200,
-  headers: Record<string, string> = {},
-): Response =>
+const jsonResponse = (body: unknown, status = 200, headers: Record<string, string> = {}): Response =>
   new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json", ...headers },
@@ -75,9 +71,7 @@ describe("Operation requests", () => {
       defaultOptions: { queries: { retry: 1, retryDelay: 0 } },
     });
 
-    await expect(
-      client.fetchQuery(operationQueryOptions("missing-operation")),
-    ).rejects.toThrow("Operation not found");
+    await expect(client.fetchQuery(operationQueryOptions("missing-operation"))).rejects.toThrow("Operation not found");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -88,9 +82,7 @@ describe("Operation requests", () => {
       .fn()
       .mockResolvedValueOnce(jsonResponse({ id: operationId }))
       .mockResolvedValueOnce(jsonResponse({ id: operationId }))
-      .mockResolvedValueOnce(
-        jsonResponse({ id: operationId }, 202, { Location: encodedPath }),
-      );
+      .mockResolvedValueOnce(jsonResponse({ id: operationId }, 202, { Location: encodedPath }));
     vi.stubGlobal("fetch", fetchMock);
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
@@ -98,20 +90,8 @@ describe("Operation requests", () => {
     await cancelOperation(operationId);
     await retryOperation(operationId, "retry-key");
 
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
-      encodedPath,
-      expect.objectContaining({ method: "GET" }),
-    );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      `${encodedPath}/cancel`,
-      expect.objectContaining({ method: "POST" }),
-    );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
-      `${encodedPath}/retry`,
-      expect.objectContaining({ method: "POST" }),
-    );
+    expect(fetchMock).toHaveBeenNthCalledWith(1, encodedPath, expect.objectContaining({ method: "GET" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, `${encodedPath}/cancel`, expect.objectContaining({ method: "POST" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(3, `${encodedPath}/retry`, expect.objectContaining({ method: "POST" }));
   });
 });

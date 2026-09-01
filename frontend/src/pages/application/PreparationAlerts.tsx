@@ -16,9 +16,7 @@ export const PreparationAlerts = ({
   detail: ApplicationDetail;
 }) => {
   const showAutomaticFailure =
-    automaticAnalysisStartFailed &&
-    detail.preparation_state === "needs_analysis" &&
-    detail.active_operation == null;
+    automaticAnalysisStartFailed && detail.preparation_state === "needs_analysis" && detail.active_operation == null;
   const hasAlerts =
     showAutomaticFailure ||
     detail.review_reasons.length > 0 ||

@@ -90,9 +90,7 @@ export const AnalysisPanel = ({
         {classification.fit === null && classification.confidence === null ? null : (
           <div className="flex flex-wrap items-center gap-2">
             {classification.fit === null ? null : (
-              <StatusBadge tone={fitTones[classification.fit]}>
-                {fitLabels[classification.fit]}
-              </StatusBadge>
+              <StatusBadge tone={fitTones[classification.fit]}>{fitLabels[classification.fit]}</StatusBadge>
             )}
             {classification.confidence === null ? null : (
               <span className="text-support text-cv-text-muted">
@@ -148,9 +146,7 @@ export const AnalysisPanel = ({
             <p className="text-body leading-7 text-cv-text" dir="auto">
               {classification.rationale}
             </p>
-            <p className="mt-2 text-support text-cv-text-muted">
-              נוסח אוטומטית על ידי מנוע הסיווג, בשפת המקור.
-            </p>
+            <p className="mt-2 text-support text-cv-text-muted">נוסח אוטומטית על ידי מנוע הסיווג, בשפת המקור.</p>
           </Section>
         )}
 
@@ -181,8 +177,8 @@ export const AnalysisPanel = ({
         {classification.gaps.length === 0 ? (
           <Section title="פערים מול העובדות">
             <p className="text-support leading-6 text-cv-text-muted" dir="auto">
-              הניתוח לא מצא דרישה שאין לה כיסוי בעובדות המועמד. לכן גם רשימות דרישות החובה
-              והדרישות המועדפות ריקות — הן נגזרות מאותם פערים.
+              הניתוח לא מצא דרישה שאין לה כיסוי בעובדות המועמד. לכן גם רשימות דרישות החובה והדרישות המועדפות ריקות — הן
+              נגזרות מאותם פערים.
             </p>
           </Section>
         ) : (
@@ -211,7 +207,6 @@ export const AnalysisPanel = ({
             </ul>
           </Section>
         )}
-
       </div>
     </section>
   );
@@ -222,7 +217,7 @@ export const AnalysisPanel = ({
    workflow is waiting on. The projection's stale and review reasons carry the action. */
 export const SupersededAnalysisNote = () => (
   <Callout title="הניתוח שעל המסך אינו הניתוח הפעיל" tone="warning">
-    הניתוח האחרון שנשמר נעשה מול תצלום משרה קודם, ולכן אינו מוצג כאן. ניתוח חדש מול
-    התצלום הפעיל הוא מה שיציג את הסיווג העדכני.
+    הניתוח האחרון שנשמר נעשה מול תצלום משרה קודם, ולכן אינו מוצג כאן. ניתוח חדש מול התצלום הפעיל הוא מה שיציג את הסיווג
+    העדכני.
   </Callout>
 );

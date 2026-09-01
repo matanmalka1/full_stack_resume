@@ -1,10 +1,4 @@
-import type {
-  Operation,
-  OperationFailureCode,
-  OperationPhase,
-  OperationStatus,
-  OperationType,
-} from "../api/contracts";
+import type { Operation, OperationFailureCode, OperationPhase, OperationStatus, OperationType } from "../api/contracts";
 import { type StatusTone } from "../ui/status";
 
 /* The Hebrew vocabulary of an Operation, in one module because two surfaces speak it: the
@@ -87,9 +81,7 @@ export const activeOutputLabels = (operation: Operation): string[] =>
    between the last two - so this is a prefix on the final label rather than a join
    string, and a one-item list has no conjunction at all. */
 export const joinHebrewList = (labels: string[]): string =>
-  labels.length <= 1
-    ? (labels[0] ?? "")
-    : `${labels.slice(0, -1).join(", ")} ו${labels[labels.length - 1]}`;
+  labels.length <= 1 ? (labels[0] ?? "") : `${labels.slice(0, -1).join(", ")} ו${labels[labels.length - 1]}`;
 
 export const failureTones: Partial<Record<OperationStatus, StatusTone>> = {
   failed: "blocker",
@@ -159,4 +151,3 @@ export const failurePresentations: Record<OperationFailureCode, FailurePresentat
     guidance: "תוצאה שהושלמה לאחר בקשת הביטול נשמרת כראיה לא פעילה ואינה מחליפה את המצב הקיים.",
   },
 };
-

@@ -20,13 +20,7 @@ interface PageHeadingProps {
 /* A.2: focus moves to the page heading after a route change. The heading carries
    data-route-heading for RouteFocusManager and also claims focus when it mounts
    outside a navigation, such as inside the route error boundary. */
-export const PageHeading = ({
-  children,
-  description,
-  eyebrow,
-  eyebrowTone = "accent",
-  id,
-}: PageHeadingProps) => {
+export const PageHeading = ({ children, description, eyebrow, eyebrowTone = "accent", id }: PageHeadingProps) => {
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -36,9 +30,7 @@ export const PageHeading = ({
   return (
     <>
       {eyebrow === undefined ? null : (
-        <p className={cx("mb-2 text-support font-bold tracking-wide", eyebrowClasses[eyebrowTone])}>
-          {eyebrow}
-        </p>
+        <p className={cx("mb-2 text-support font-bold tracking-wide", eyebrowClasses[eyebrowTone])}>{eyebrow}</p>
       )}
       {/* A.3: a heading is usually a Hebrew constant, but the route error boundary
           passes a backend title and detail through here, so each picks its own

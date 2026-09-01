@@ -21,13 +21,7 @@ interface ActionBarProps {
   sticky?: boolean;
 }
 
-export const ActionBar = ({
-  align = "end",
-  className,
-  primary,
-  secondary,
-  sticky = false,
-}: ActionBarProps) => {
+export const ActionBar = ({ align = "end", className, primary, secondary, sticky = false }: ActionBarProps) => {
   /* The panel is the chrome of a bar with two sides: it exists to span the width and hold
      a primary and a way out at opposite edges, and the border is what makes that span read
      as one region rather than two stranded buttons.

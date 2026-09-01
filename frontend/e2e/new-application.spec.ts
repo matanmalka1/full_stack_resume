@@ -14,9 +14,7 @@ test.describe("the New Application screen", () => {
     await expect(page.getByLabel("תפקיד היעד")).toBeVisible();
     await expect(page.getByLabel("כתובת המשרה (לא חובה)")).toHaveAttribute("dir", "ltr");
     await expect(page.getByRole("button", { name: "יצירת מועמדות" })).toBeVisible();
-    await expect(
-      page.getByText("המערכת אינה פותחת אותה ואינה מייבאת ממנה טקסט", { exact: false }),
-    ).toBeVisible();
+    await expect(page.getByText("המערכת אינה פותחת אותה ואינה מייבאת ממנה טקסט", { exact: false })).toBeVisible();
   });
 
   test("reads a local .txt file into the job text area without uploading it", async ({ page }) => {
@@ -26,10 +24,7 @@ test.describe("the New Application screen", () => {
       /* Stage E makes one shell-owned Settings read. The file-input contract is that
          choosing a local file starts no command and sends no file contents; permit only
          that read-only shell request and report every other API request. */
-      if (
-        url.pathname.startsWith("/api/") &&
-        !(request.method() === "GET" && url.pathname === "/api/v1/settings")
-      ) {
+      if (url.pathname.startsWith("/api/") && !(request.method() === "GET" && url.pathname === "/api/v1/settings")) {
         unexpectedApiRequests.push(`${request.method()} ${url.pathname}`);
       }
     });
@@ -49,9 +44,7 @@ test.describe("the New Application screen", () => {
   test("has no automatically detectable accessibility violations", async ({ page }) => {
     await page.goto("/applications/new");
 
-    const results = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
-      .analyze();
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
 
     expect(results.violations).toEqual([]);
   });

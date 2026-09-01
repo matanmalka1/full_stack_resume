@@ -60,9 +60,7 @@ export const DraftClaimCard = ({
   return (
     <li className="group rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-cv-accent/30 hover:shadow-floating sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <StatusBadge tone={claimTypeTones[claim.claim_type]}>
-          {claimTypeLabels[claim.claim_type]}
-        </StatusBadge>
+        <StatusBadge tone={claimTypeTones[claim.claim_type]}>{claimTypeLabels[claim.claim_type]}</StatusBadge>
         <div className="flex flex-wrap gap-2">
           <Button disabled={unsaved} onClick={() => onRegenerate(claim)} variant="secondary">
             <RefreshCw aria-hidden="true" className="size-4" />

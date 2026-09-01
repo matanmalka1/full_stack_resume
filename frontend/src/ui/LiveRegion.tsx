@@ -13,12 +13,7 @@ interface LiveRegionProps {
 
 /* A.5: autosave, Operation phase, validation completion, and Ready completion announce
    through a live region. Polling ticks pass no children and therefore stay silent. */
-export const LiveRegion = ({
-  children,
-  className,
-  tone = "polite",
-  visuallyHidden = true,
-}: LiveRegionProps) => {
+export const LiveRegion = ({ children, className, tone = "polite", visuallyHidden = true }: LiveRegionProps) => {
   return (
     <div
       aria-atomic="true"

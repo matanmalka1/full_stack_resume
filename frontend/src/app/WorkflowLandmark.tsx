@@ -48,12 +48,7 @@ export type WorkflowStage = PreparationState | "intake" | "none" | "unknown";
    row of five in which every one is `upcoming`. Every other stage keeps its exact
    behavior. */
 const workflowStepsFor = (stage: Exclude<WorkflowStage, "none">): WorkflowStep[] => {
-  const current =
-    stage === "intake"
-      ? 0
-      : stage === "unknown"
-        ? -1
-        : stages.indexOf(stageForPreparationState[stage]);
+  const current = stage === "intake" ? 0 : stage === "unknown" ? -1 : stages.indexOf(stageForPreparationState[stage]);
   /* `ready` completes its own stage: everything is done, so nothing is in progress.
      `unknown` completes only the intake it is certainly past. */
   const completed = stage === "unknown" ? 1 : stage === "ready" ? current + 1 : current;

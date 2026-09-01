@@ -30,12 +30,7 @@ export const ErrorCallout = ({
   const problem = error instanceof ApiProblem ? error.problem : null;
 
   return (
-    <Callout
-      className={className}
-      role="alert"
-      title={problem?.title ?? fallbackTitle}
-      tone="blocker"
-    >
+    <Callout className={className} role="alert" title={problem?.title ?? fallbackTitle} tone="blocker">
       {problem?.detail ?? fallbackDetail}
     </Callout>
   );

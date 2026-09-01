@@ -9,11 +9,9 @@ import type {
   WorkingDraftVersionRequest,
 } from "./contracts";
 
-const draftPath = (workingDraftId: string): ApiPath =>
-  `/api/v1/working-drafts/${encodeURIComponent(workingDraftId)}`;
+const draftPath = (workingDraftId: string): ApiPath => `/api/v1/working-drafts/${encodeURIComponent(workingDraftId)}`;
 
-const validationRunQueryKey = (validationRunId: string) =>
-  ["validation-run", validationRunId] as const;
+const validationRunQueryKey = (validationRunId: string) => ["validation-run", validationRunId] as const;
 
 export const validationRunQueryOptions = (validationRunId: string) =>
   queryOptions({

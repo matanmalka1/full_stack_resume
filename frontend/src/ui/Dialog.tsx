@@ -15,15 +15,7 @@ interface DialogProps {
 /* Native <dialog> owns the focus trap, the inert background, and focus restoration to
    the invoker, so no dialog dependency is warranted here. Focus is moved to the dialog
    heading on open, as A.5 requires. */
-export const Dialog = ({
-  children,
-  dismissible = true,
-  footer,
-  headingId,
-  onClose,
-  open,
-  title,
-}: DialogProps) => {
+export const Dialog = ({ children, dismissible = true, footer, headingId, onClose, open, title }: DialogProps) => {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
@@ -58,19 +50,12 @@ export const Dialog = ({
       ref={dialogRef}
     >
       <div className="flex flex-col gap-4 p-6" dir="rtl">
-        <h2
-          className="text-heading-md font-semibold tracking-tight"
-          id={headingId}
-          ref={headingRef}
-          tabIndex={-1}
-        >
+        <h2 className="text-heading-md font-semibold tracking-tight" id={headingId} ref={headingRef} tabIndex={-1}>
           {title}
         </h2>
         <div className="text-body leading-7">{children}</div>
         {footer === undefined ? null : (
-          <div className="flex flex-wrap justify-end gap-3 border-t border-cv-border pt-4">
-            {footer}
-          </div>
+          <div className="flex flex-wrap justify-end gap-3 border-t border-cv-border pt-4">{footer}</div>
         )}
       </div>
     </dialog>

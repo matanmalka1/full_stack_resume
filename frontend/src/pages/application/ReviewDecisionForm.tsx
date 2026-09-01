@@ -2,13 +2,7 @@ import type { ClassificationDecisions } from "../../api/analyses";
 import { Checkbox } from "../../ui/Checkbox";
 import { Field } from "../../ui/Field";
 import { Select } from "../../ui/Select";
-import {
-  emphasisLabels,
-  languageLabels,
-  optionsFrom,
-  profileLabels,
-  trackLabels,
-} from "./analysisLabels";
+import { emphasisLabels, languageLabels, optionsFrom, profileLabels, trackLabels } from "./analysisLabels";
 
 /* Which control answers which review reason. A `Record` over exactly the codes this
    screen owns, so a review reason added to the backend falls through to being named as
@@ -62,22 +56,13 @@ interface OverrideFieldProps<T extends string> {
   value: T | null;
 }
 
-const OverrideField = <T extends string>({
-  disabled,
-  hint,
-  label,
-  labels,
-  onSelect,
-  value,
-}: OverrideFieldProps<T>) => (
+const OverrideField = <T extends string>({ disabled, hint, label, labels, onSelect, value }: OverrideFieldProps<T>) => (
   <Field hint={hint} label={label}>
     {(control) => (
       <Select
         {...control}
         disabled={disabled}
-        onChange={(event) =>
-          onSelect(event.target.value === NO_OVERRIDE ? null : (event.target.value as T))
-        }
+        onChange={(event) => onSelect(event.target.value === NO_OVERRIDE ? null : (event.target.value as T))}
         value={value ?? NO_OVERRIDE}
       >
         <option value={NO_OVERRIDE}>ללא שינוי</option>

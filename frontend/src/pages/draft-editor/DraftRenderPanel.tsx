@@ -53,8 +53,7 @@ export const DraftRenderPanel = ({ approvedRevisionId, onQueued }: DraftRenderPa
           הגרסה אושרה
         </h2>
         <p className="mt-1 text-support leading-6 text-cv-text-muted">
-          הגרסה שאושרה נשמרה כרשומה קבועה. יצירת הקובץ היא פעולה נפרדת, והגרסה נשארת מאושרת
-          גם אם היא נכשלת.
+          הגרסה שאושרה נשמרה כרשומה קבועה. יצירת הקובץ היא פעולה נפרדת, והגרסה נשארת מאושרת גם אם היא נכשלת.
         </p>
       </div>
 
@@ -68,10 +67,7 @@ export const DraftRenderPanel = ({ approvedRevisionId, onQueued }: DraftRenderPa
 
       <div className="flex flex-wrap gap-3">
         {revision?.ready_qualified === true ? (
-          <Link
-            className={buttonClasses("primary")}
-            to={`/revisions/${encodeURIComponent(revision.id)}`}
-          >
+          <Link className={buttonClasses("primary")} to={`/revisions/${encodeURIComponent(revision.id)}`}>
             צפייה בגרסה המוכנה
           </Link>
         ) : (

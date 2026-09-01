@@ -39,19 +39,14 @@ export const PreparationView = ({
           changing rather than on a separate screen. */}
       {operationPanel}
 
-      <PreparationAlerts
-        automaticAnalysisStartFailed={automaticAnalysisStartFailed}
-        detail={detail}
-      />
+      <PreparationAlerts automaticAnalysisStartFailed={automaticAnalysisStartFailed} detail={detail} />
 
       {/* The posting the analysis was run against precedes the analysis itself: input
           before conclusion. Both stay under the same condition because the snapshot on
           its own is not what this screen is for. */}
       {classification === null ? null : <JobSnapshotPanel detail={detail} />}
 
-      {classification === null ? null : (
-        <AnalysisPanel classification={classification} detail={detail} />
-      )}
+      {classification === null ? null : <AnalysisPanel classification={classification} detail={detail} />}
 
       {supersededAnalysis ? <SupersededAnalysisNote /> : null}
 

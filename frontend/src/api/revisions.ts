@@ -1,19 +1,13 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { type ApiPath, apiRequest } from "./client";
-import type {
-  ApprovedRevision,
-  DecisionMarkdown,
-  Operation,
-  RenderRevisionRequest,
-} from "./contracts";
+import type { ApprovedRevision, DecisionMarkdown, Operation, RenderRevisionRequest } from "./contracts";
 import { type QueuedOperation, queuedOperation } from "./operations";
 
 const revisionPath = (approvedRevisionId: string): ApiPath =>
   `/api/v1/approved-revisions/${encodeURIComponent(approvedRevisionId)}`;
 
-const approvedRevisionQueryKey = (approvedRevisionId: string) =>
-  ["approved-revision", approvedRevisionId] as const;
+const approvedRevisionQueryKey = (approvedRevisionId: string) => ["approved-revision", approvedRevisionId] as const;
 
 export const approvedRevisionQueryOptions = (approvedRevisionId: string) =>
   queryOptions({
@@ -47,10 +41,7 @@ const safeFilename = (contentDisposition: string | null): string => {
 const decisionMarkdownQueryKey = (approvedRevisionId: string, applicationId: string) =>
   ["decision-markdown", approvedRevisionId, applicationId] as const;
 
-export const decisionMarkdownQueryOptions = (
-  approvedRevisionId: string,
-  applicationId: string,
-) =>
+export const decisionMarkdownQueryOptions = (approvedRevisionId: string, applicationId: string) =>
   queryOptions({
     queryKey: decisionMarkdownQueryKey(approvedRevisionId, applicationId),
     queryFn: async ({ signal }): Promise<DecisionMarkdownDownload> => {
@@ -80,14 +71,8 @@ export const renderApprovedRevision = async (
   );
 };
 
-export const approvedPreviewSrc = (
-  approvedRevisionId: string,
-  htmlArtifactVersionId: string,
-): string =>
+export const approvedPreviewSrc = (approvedRevisionId: string, htmlArtifactVersionId: string): string =>
   `${revisionPath(approvedRevisionId)}/preview?html_artifact_version_id=${encodeURIComponent(htmlArtifactVersionId)}`;
 
-export const recruiterPdfHref = (
-  approvedRevisionId: string,
-  pdfArtifactVersionId: string,
-): string =>
+export const recruiterPdfHref = (approvedRevisionId: string, pdfArtifactVersionId: string): string =>
   `${revisionPath(approvedRevisionId)}/recruiter-pdf?pdf_artifact_version_id=${encodeURIComponent(pdfArtifactVersionId)}`;

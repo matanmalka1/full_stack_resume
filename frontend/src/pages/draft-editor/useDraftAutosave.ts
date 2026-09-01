@@ -26,8 +26,7 @@ interface UseDraftAutosaveOptions {
   onSaved: (update: WorkingDraftUpdate, etag: string | null) => void;
 }
 
-const emptyPatch = (patch: DraftPatch): boolean =>
-  patch.claim_edits.length === 0 && patch.claim_removals.length === 0;
+const emptyPatch = (patch: DraftPatch): boolean => patch.claim_edits.length === 0 && patch.claim_removals.length === 0;
 
 /* A.4 autosave, and the serialisation debounce alone does not give.
 
@@ -40,12 +39,7 @@ const emptyPatch = (patch: DraftPatch): boolean =>
    Everything that must not race is a ref. Component state here would be read at the value
    it had when the callback was created, which is exactly the stale token this is
    preventing. */
-export const useDraftAutosave = ({
-  workingDraftId,
-  etag,
-  onConflict,
-  onSaved,
-}: UseDraftAutosaveOptions) => {
+export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: UseDraftAutosaveOptions) => {
   const edits = useRef(new Map<string, ClaimPatch>());
   const removals = useRef(new Set<string>());
   const inFlight = useRef(false);
@@ -136,9 +130,7 @@ export const useDraftAutosave = ({
 
       publish(
         "failed",
-        error instanceof ApiProblem
-          ? error.problem.detail
-          : "השמירה נכשלה. הטקסט נשמר בדפדפן ואפשר לנסות שוב.",
+        error instanceof ApiProblem ? error.problem.detail : "השמירה נכשלה. הטקסט נשמר בדפדפן ואפשר לנסות שוב.",
       );
       return;
     } finally {

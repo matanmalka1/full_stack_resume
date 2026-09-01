@@ -2,11 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactElement, useMemo } from "react";
 import { Link } from "react-router-dom";
 
-import {
-  applicationDetailQueryKey,
-  startAnalysis,
-  startDraftGeneration,
-} from "../../api/applications";
+import { applicationDetailQueryKey, startAnalysis, startDraftGeneration } from "../../api/applications";
 import type { ApplicationDetail } from "../../api/contracts";
 import { executionProvider, settingsQueryOptions } from "../../api/settings";
 import { type QueuedOperation, operationQueryKey } from "../../api/operations";
@@ -61,7 +57,9 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
   const followQueued = ({ operation }: QueuedOperation) => {
     queryClient.setQueryData(operationQueryKey(operation.id), operation);
     onQueued(operation.id);
-    void queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(detail.application.id) });
+    void queryClient.invalidateQueries({
+      queryKey: applicationDetailQueryKey(detail.application.id),
+    });
   };
 
   const analyze = useMutation({
@@ -127,21 +125,11 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
   const draftScreenButton =
     plan.draftScreen === null
       ? null
-      : routeButton(
-          "draft-screen",
-          plan.draftScreen.href,
-          plan.draftScreen.label,
-          plan.draftScreen.emphasized,
-        );
+      : routeButton("draft-screen", plan.draftScreen.href, plan.draftScreen.label, plan.draftScreen.emphasized);
   const readyButton =
     plan.readyRevision === null
       ? null
-      : routeButton(
-          "ready",
-          plan.readyRevision.href,
-          "צפייה בגרסה המוכנה",
-          plan.readyRevision.emphasized,
-        );
+      : routeButton("ready", plan.readyRevision.href, "צפייה בגרסה המוכנה", plan.readyRevision.emphasized);
 
   /* Workflow order, and the same order every visit: analyze, draft, the draft screen,
      ready. The bar used to be sorted by how far along each action was, which moved a
@@ -159,11 +147,8 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
     { emphasized: plan.readyRevision?.emphasized === true, node: readyButton },
   ].filter((entry): entry is { emphasized: boolean; node: ReactElement } => entry.node !== null);
   const emphasizedEntry =
-    inWorkflowOrder.find((entry) => entry.emphasized) ??
-    inWorkflowOrder[inWorkflowOrder.length - 1];
-  const restButtons = inWorkflowOrder
-    .filter((entry) => entry !== emphasizedEntry)
-    .map((entry) => entry.node);
+    inWorkflowOrder.find((entry) => entry.emphasized) ?? inWorkflowOrder[inWorkflowOrder.length - 1];
+  const restButtons = inWorkflowOrder.filter((entry) => entry !== emphasizedEntry).map((entry) => entry.node);
 
   return (
     <div className="flex flex-col gap-4">
@@ -176,10 +161,7 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
       )}
 
       {plan.unbuiltRecommendation === null ? null : (
-        <Callout
-          title={`הפעולה המומלצת כעת היא ${actionLabel(plan.unbuiltRecommendation)}`}
-          tone="neutral"
-        >
+        <Callout title={`הפעולה המומלצת כעת היא ${actionLabel(plan.unbuiltRecommendation)}`} tone="neutral">
           {plan.unbuiltRecommendation === "create_draft" && plan.draftWouldReplace
             ? "הטיוטה הפעילה נשמרת כפי שהיא. החלפתה דורשת החלטה מפורשת."
             : "הפעולה אינה זמינה מכאן כרגע."}
@@ -196,8 +178,7 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
           press, and the only one of them attached to the secondary action. */}
       {plan.analyze?.reanalysis === true && plan.draftWouldReplace ? (
         <p className="text-support leading-6 text-cv-text-muted">
-          ניתוח מחדש יוצר ניתוח חדש ונפרד לאותו תצלום משרה. הטיוטה הפעילה נשמרת כפי שהיא, אך תסומן
-          כלא מעודכנת מולו.
+          ניתוח מחדש יוצר ניתוח חדש ונפרד לאותו תצלום משרה. הטיוטה הפעילה נשמרת כפי שהיא, אך תסומן כלא מעודכנת מולו.
         </p>
       ) : null}
 
@@ -233,8 +214,8 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
           stage where re-analysis is most freely available it was least explained. */}
       {plan.analyze?.reanalysis === true && !plan.draftWouldReplace ? (
         <p className="text-support leading-6 text-cv-text-muted">
-          ניתוח מחדש כדאי רק אם הסיווג שלמעלה נראה שגוי. הוא יוצר ניתוח חדש ונפרד לאותו תצלום
-          משרה, ואינו מושך נוסח משרה מעודכן.
+          ניתוח מחדש כדאי רק אם הסיווג שלמעלה נראה שגוי. הוא יוצר ניתוח חדש ונפרד לאותו תצלום משרה, ואינו מושך נוסח משרה
+          מעודכן.
         </p>
       ) : null}
 

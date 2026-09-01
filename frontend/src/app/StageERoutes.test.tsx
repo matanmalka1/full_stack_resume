@@ -32,8 +32,7 @@ describe("Stage E routes", () => {
      masthead, the projection read, and the error handling back in two places. */
   it("keeps the recruitment axis off the route table as a screen", () => {
     const element = stageERoute("applications/:applicationId/tracking")?.element;
-    const name =
-      isValidElement(element) && typeof element.type === "function" ? element.type.name : null;
+    const name = isValidElement(element) && typeof element.type === "function" ? element.type.name : null;
     /* The path itself stays - it answers older bookmarks - but only as the redirect. */
     expect(name).toBe("TrackingRedirect");
   });
@@ -59,16 +58,12 @@ const NON_SCREEN_ROUTE_COMPONENTS = new Set(["TrackingRedirect", "ReadyRedirect"
    passing because a list was not updated. */
 const routeComponentNames = (): string[] => {
   const names = (router.routes[0]?.children ?? []).map((route) =>
-    isValidElement(route.element) && typeof route.element.type === "function"
-      ? route.element.type.name
-      : null,
+    isValidElement(route.element) && typeof route.element.type === "function" ? route.element.type.name : null,
   );
   /* A route whose element is not a named function component is a hole in the derivation,
      not something to pass over quietly. */
   expect(names).not.toContain(null);
-  return [...new Set(names as string[])].filter(
-    (name) => !NON_SCREEN_ROUTE_COMPONENTS.has(name),
-  );
+  return [...new Set(names as string[])].filter((name) => !NON_SCREEN_ROUTE_COMPONENTS.has(name));
 };
 
 describe("workflow stage publishing", () => {
@@ -91,9 +86,7 @@ describe("workflow stage publishing", () => {
 
   it("requires every routed screen to publish a workflow stage", () => {
     for (const name of routeComponentNames()) {
-      const matches = Object.entries(pageSources).filter(([path]) =>
-        path.endsWith(`/${name}.tsx`),
-      );
+      const matches = Object.entries(pageSources).filter(([path]) => path.endsWith(`/${name}.tsx`));
       /* A route component with no file of that name means the derivation stopped matching
          the pages, which is a failure here rather than a silently skipped check. More
          than one match is equally ambiguous, so nested page folders do not weaken the

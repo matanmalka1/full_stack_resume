@@ -40,12 +40,7 @@ export const RouteErrorBoundary = () => {
   return (
     <main className="mx-auto max-w-5xl px-6 py-12" dir="rtl">
       <Card aria-labelledby="route-error-heading" role="alert">
-        <PageHeading
-          description={error.detail}
-          eyebrow="הבקשה נכשלה"
-          eyebrowTone="blocker"
-          id="route-error-heading"
-        >
+        <PageHeading description={error.detail} eyebrow="הבקשה נכשלה" eyebrowTone="blocker" id="route-error-heading">
           {error.title}
         </PageHeading>
         {error.status === undefined ? null : (

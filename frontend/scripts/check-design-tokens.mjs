@@ -25,9 +25,28 @@ const stylesPath = join(sourceRoot, "styles.css");
 const EXCEPTIONS = [];
 
 const PALETTE = [
-  "slate", "gray", "zinc", "neutral", "stone", "red", "orange", "amber", "yellow",
-  "lime", "green", "emerald", "teal", "cyan", "sky", "blue", "indigo", "violet",
-  "purple", "fuchsia", "pink", "rose",
+  "slate",
+  "gray",
+  "zinc",
+  "neutral",
+  "stone",
+  "red",
+  "orange",
+  "amber",
+  "yellow",
+  "lime",
+  "green",
+  "emerald",
+  "teal",
+  "cyan",
+  "sky",
+  "blue",
+  "indigo",
+  "violet",
+  "purple",
+  "fuchsia",
+  "pink",
+  "rose",
 ].join("|");
 
 const BUILTIN_RADIUS = new Set(["none", "sm", "md", "lg", "xl", "2xl", "3xl", "full"]);
@@ -36,19 +55,13 @@ const BUILTIN_SHADOW = new Set(["none", "2xs", "xs", "sm", "md", "lg", "xl", "2x
 const collectFiles = (dir) =>
   readdirSync(dir).flatMap((entry) => {
     const full = join(dir, entry);
-    return statSync(full).isDirectory()
-      ? collectFiles(full)
-      : /\.(ts|tsx)$/.test(full)
-        ? [full]
-        : [];
+    return statSync(full).isDirectory() ? collectFiles(full) : /\.(ts|tsx)$/.test(full) ? [full] : [];
   });
 
 const readTokens = (prefix) => {
   const theme = readFileSync(stylesPath, "utf8");
   const block = theme.slice(theme.indexOf("@theme"), theme.indexOf("\n}", theme.indexOf("@theme")));
-  return new Set(
-    [...block.matchAll(new RegExp(`--${prefix}-([a-z0-9-]+):`, "g"))].map((match) => match[1]),
-  );
+  return new Set([...block.matchAll(new RegExp(`--${prefix}-([a-z0-9-]+):`, "g"))].map((match) => match[1]));
 };
 
 const colorTokens = readTokens("color");
@@ -80,9 +93,7 @@ for (const file of collectFiles(sourceRoot)) {
   const source = readFileSync(file, "utf8");
 
   for (const rule of rules) {
-    const exempt = EXCEPTIONS.some(
-      (entry) => entry.file === relativePath && entry.rule === rule.name,
-    );
+    const exempt = EXCEPTIONS.some((entry) => entry.file === relativePath && entry.rule === rule.name);
 
     if (exempt) {
       continue;
@@ -94,7 +105,9 @@ for (const file of collectFiles(sourceRoot)) {
     }
   }
 
-  for (const match of source.matchAll(/\b(?:bg|text|border|ring|fill|stroke|accent|divide|outline|caret|shadow)-(cv-[a-z0-9-]+)(?:\/\d{1,3})?\b/g)) {
+  for (const match of source.matchAll(
+    /\b(?:bg|text|border|ring|fill|stroke|accent|divide|outline|caret|shadow)-(cv-[a-z0-9-]+)(?:\/\d{1,3})?\b/g,
+  )) {
     if (!colorTokens.has(match[1])) {
       const line = source.slice(0, match.index).split("\n").length;
       errors.push(`${relativePath}:${line} unknown color token --color-${match[1]}`);

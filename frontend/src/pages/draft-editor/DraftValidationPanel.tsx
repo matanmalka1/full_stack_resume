@@ -25,12 +25,7 @@ interface DraftValidationPanelProps {
    validates is the one in the editor beside it, so making the user leave the editor to
    read the result - and come back to fix it - was the trip this removes. Every command,
    key, and stale path is the one the standalone screen used. */
-export const DraftValidationPanel = ({
-  applicationId,
-  draft,
-  onExactPassingRun,
-  stale,
-}: DraftValidationPanelProps) => {
+export const DraftValidationPanel = ({ applicationId, draft, onExactPassingRun, stale }: DraftValidationPanelProps) => {
   const queryClient = useQueryClient();
   const summaryRef = useRef<HTMLHeadingElement>(null);
 
@@ -78,17 +73,8 @@ export const DraftValidationPanel = ({
       className="flex flex-col gap-4 rounded-surface border border-cv-border bg-cv-surface-muted p-5 shadow-inner"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2
-          className="text-heading-sm font-bold text-cv-text"
-          id="validation-summary"
-          ref={summaryRef}
-          tabIndex={-1}
-        >
-          {run === undefined
-            ? "אימות הטיוטה"
-            : run.passed
-              ? "הטיוטה עברה אימות"
-              : "הטיוטה לא עברה אימות"}
+        <h2 className="text-heading-sm font-bold text-cv-text" id="validation-summary" ref={summaryRef} tabIndex={-1}>
+          {run === undefined ? "אימות הטיוטה" : run.passed ? "הטיוטה עברה אימות" : "הטיוטה לא עברה אימות"}
         </h2>
         <Button
           disabled={draft === undefined}

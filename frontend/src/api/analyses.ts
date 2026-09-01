@@ -53,12 +53,8 @@ export const applyAnalysisDecisions = async (
     accept_low_fit: decisions.accept_low_fit,
     ...(decisions.track_override == null ? {} : { track_override: decisions.track_override }),
     ...(decisions.profile_override == null ? {} : { profile_override: decisions.profile_override }),
-    ...(decisions.emphasis_override == null
-      ? {}
-      : { emphasis_override: decisions.emphasis_override }),
-    ...(decisions.language_override == null
-      ? {}
-      : { language_override: decisions.language_override }),
+    ...(decisions.emphasis_override == null ? {} : { emphasis_override: decisions.emphasis_override }),
+    ...(decisions.language_override == null ? {} : { language_override: decisions.language_override }),
   };
 
   const response = await apiRequest<AnalysisDecisions>(applyDecisionsPath(analysisId), {
@@ -110,8 +106,7 @@ export interface Classification {
   approvalReasons: string[];
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
 
 const stringsFrom = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
@@ -170,9 +165,7 @@ export const classificationFromAnalysis = (detail: ApplicationDetail): Classific
     /* `confidence` is a 0..1 float in the domain model. A non-finite value is absent
        rather than rendered, so a malformed document cannot print "NaN%". */
     confidence:
-      typeof analysis.confidence === "number" && Number.isFinite(analysis.confidence)
-        ? analysis.confidence
-        : null,
+      typeof analysis.confidence === "number" && Number.isFinite(analysis.confidence) ? analysis.confidence : null,
     keywords: stringsFrom(analysis.keywords),
     mandatoryRequirements: stringsFrom(analysis.mandatory_requirements),
     preferredRequirements: stringsFrom(analysis.preferred_requirements),

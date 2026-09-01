@@ -66,11 +66,7 @@ const fallbackProblem = (response: Response): ProblemDetails => {
   };
 };
 
-const clientProblem = (
-  code: string,
-  title: string,
-  detail: string,
-): ProblemDetails => ({
+const clientProblem = (code: string, title: string, detail: string): ProblemDetails => ({
   type: `about:blank#${code.toLowerCase()}`,
   title,
   status: 0,
@@ -78,8 +74,7 @@ const clientProblem = (
   detail,
 });
 
-const isAbortError = (error: unknown): boolean =>
-  error instanceof DOMException && error.name === "AbortError";
+const isAbortError = (error: unknown): boolean => error instanceof DOMException && error.name === "AbortError";
 
 const invalidServerResponse = (): ApiProblem =>
   new ApiProblem(
@@ -90,10 +85,7 @@ const invalidServerResponse = (): ApiProblem =>
     ),
   );
 
-export const apiRequest = async <T>(
-  path: ApiPath,
-  options: ApiRequestOptions = {},
-): Promise<ApiResponse<T>> => {
+export const apiRequest = async <T>(path: ApiPath, options: ApiRequestOptions = {}): Promise<ApiResponse<T>> => {
   const headers = new Headers({
     Accept: `${JSON_CONTENT_TYPE}, ${PROBLEM_CONTENT_TYPE}`,
   });
@@ -120,11 +112,7 @@ export const apiRequest = async <T>(
     // TanStack Query uses AbortError as control flow when a query is cancelled.
     if (isAbortError(error)) throw error;
     throw new ApiProblem(
-      clientProblem(
-        "NETWORK_UNAVAILABLE",
-        "לא ניתן להגיע לשרת",
-        "החיבור לשרת נכשל. אפשר לבדוק שהשרת פועל ולנסות שוב.",
-      ),
+      clientProblem("NETWORK_UNAVAILABLE", "לא ניתן להגיע לשרת", "החיבור לשרת נכשל. אפשר לבדוק שהשרת פועל ולנסות שוב."),
     );
   }
 

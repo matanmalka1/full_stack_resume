@@ -23,13 +23,9 @@ const TechnicalProblems = ({ problems }: { problems: string[] }) =>
 
 const Report = ({ report }: { report: ReconciliationReport }) => {
   const lifecycle = report.fact_lifecycle;
-  const factCounts = Object.entries(lifecycle.fact_counts).sort(([left], [right]) =>
-    left.localeCompare(right),
-  );
+  const factCounts = Object.entries(lifecycle.fact_counts).sort(([left], [right]) => left.localeCompare(right));
   const factCount = factCounts.reduce((total, [, count]) => total + count, 0);
-  const missingArtifacts = report.problems.filter((problem) =>
-    problem.startsWith(MISSING_ARTIFACT_PREFIX),
-  );
+  const missingArtifacts = report.problems.filter((problem) => problem.startsWith(MISSING_ARTIFACT_PREFIX));
   const otherArtifactProblems = report.problems.length - missingArtifacts.length;
   const artifactsPassed = report.problems.length === 0;
 
@@ -40,9 +36,7 @@ const Report = ({ report }: { report: ReconciliationReport }) => {
         title={report.passed ? "הנתונים והתוצרים תקינים" : "נמצאה בעיית תקינות"}
         tone={report.passed ? "success" : "blocker"}
       >
-        {report.passed
-          ? "לא נדרשת פעולה."
-          : "הבדיקה מדווחת על הבעיה אך אינה משנה או מתקנת נתונים."}
+        {report.passed ? "לא נדרשת פעולה." : "הבדיקה מדווחת על הבעיה אך אינה משנה או מתקנת נתונים."}
       </Callout>
 
       <section aria-labelledby="result-summary-heading">
@@ -72,9 +66,7 @@ const Report = ({ report }: { report: ReconciliationReport }) => {
           </div>
           <div className="rounded-surface border border-cv-border p-4">
             <p className="text-support font-bold">מאגר העובדות</p>
-            <p className="mt-1 text-body font-semibold">
-              {lifecycle.passed ? "תקין" : "נמצאה אי־התאמה"}
-            </p>
+            <p className="mt-1 text-body font-semibold">{lifecycle.passed ? "תקין" : "נמצאה אי־התאמה"}</p>
             <p className="mt-2 text-support text-cv-text-muted">
               {lifecycle.passed
                 ? `${factCount} עובדות במקור; הבדיקה מול יומן השינויים תקינה.`
@@ -86,23 +78,20 @@ const Report = ({ report }: { report: ReconciliationReport }) => {
 
       {missingArtifacts.length === 0 ? null : (
         <Callout title="מה צריך לעשות" tone="warning">
-          יש לבדוק שהמערכת מחוברת לתיקיית התוצרים או ל־bucket הנכונים. אם הקבצים
-          נמחקו, יש לשחזר אותם מגיבוי. עד אז הגרסאות הקשורות אליהם עלולות לא להיות
-          זמינות להורדה או לא להיחשב מוכנות.
+          יש לבדוק שהמערכת מחוברת לתיקיית התוצרים או ל־bucket הנכונים. אם הקבצים נמחקו, יש לשחזר אותם מגיבוי. עד אז
+          הגרסאות הקשורות אליהם עלולות לא להיות זמינות להורדה או לא להיחשב מוכנות.
         </Callout>
       )}
 
       {lifecycle.passed ? null : (
         <Callout title="נדרשת בדיקה של מאגר העובדות" tone="warning">
-          יש לבדוק את קובצי העובדות ואת יומן השינויים לפני שממשיכים לעבוד עם עובדות
-          תלויות. הבדיקה אינה משנה או מתקנת אותם.
+          יש לבדוק את קובצי העובדות ואת יומן השינויים לפני שממשיכים לעבוד עם עובדות תלויות. הבדיקה אינה משנה או מתקנת
+          אותם.
         </Callout>
       )}
 
       <details className="rounded-surface border border-cv-border p-4">
-        <summary className="cursor-pointer text-support font-semibold text-cv-accent">
-          פרטים טכניים
-        </summary>
+        <summary className="cursor-pointer text-support font-semibold text-cv-accent">פרטים טכניים</summary>
         <div className="mt-4 space-y-5">
           <section aria-labelledby="artifact-technical-heading">
             <h4 className="text-support font-bold" id="artifact-technical-heading">
@@ -130,21 +119,24 @@ const Report = ({ report }: { report: ReconciliationReport }) => {
               </div>
               <div>
                 <dt className="text-cv-text-muted">גרסת מקור העובדות</dt>
-                <dd className="break-all font-mono" dir="auto">{lifecycle.facts_version}</dd>
+                <dd className="break-all font-mono" dir="auto">
+                  {lifecycle.facts_version}
+                </dd>
               </div>
               <div>
                 <dt className="text-cv-text-muted">גרסת מחזור החיים</dt>
-                <dd className="break-all font-mono" dir="auto">{lifecycle.lifecycle_version}</dd>
+                <dd className="break-all font-mono" dir="auto">
+                  {lifecycle.lifecycle_version}
+                </dd>
               </div>
             </dl>
             <h5 className="mt-4 text-caption font-bold">ספירה לפי מצב</h5>
             <dl className="mt-2 grid gap-2 sm:grid-cols-2">
               {factCounts.map(([status, count]) => (
-                <div
-                  className="flex justify-between gap-4 rounded-control bg-cv-surface-muted px-3 py-2"
-                  key={status}
-                >
-                  <dt className="text-caption" dir="auto">{status}</dt>
+                <div className="flex justify-between gap-4 rounded-control bg-cv-surface-muted px-3 py-2" key={status}>
+                  <dt className="text-caption" dir="auto">
+                    {status}
+                  </dt>
                   <dd className="text-caption font-semibold">{count}</dd>
                 </div>
               ))}
@@ -166,8 +158,7 @@ export const ReconciliationPanel = () => {
         תחזוקה
       </h2>
       <p className="mt-2 max-w-2xl text-support text-cv-text-muted">
-        בדיקת התאמה בין מסד הנתונים, התוצרים השמורים ומחזור חיי העובדות. הבדיקה
-        מדווחת בלבד ואינה מתקנת נתונים.
+        בדיקת התאמה בין מסד הנתונים, התוצרים השמורים ומחזור חיי העובדות. הבדיקה מדווחת בלבד ואינה מתקנת נתונים.
       </p>
       <div className="mt-4 flex flex-col items-start gap-6">
         <Button

@@ -9,13 +9,7 @@ type EditorView = "editor" | "preview";
 /* A.4's responsive fallback. Both panes stay mounted and one is hidden, rather than one
    being unmounted: switching views must not discard text the user has typed, and an
    unmounted editor would take its visible text with it. */
-export const EditorLayout = ({
-  editor,
-  preview,
-}: {
-  editor: ReactNode;
-  preview: ReactNode;
-}) => {
+export const EditorLayout = ({ editor, preview }: { editor: ReactNode; preview: ReactNode }) => {
   const [view, setView] = useState<EditorView>("editor");
 
   return (

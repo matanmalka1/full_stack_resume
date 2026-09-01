@@ -11,10 +11,7 @@ interface CardProps extends HTMLAttributes<HTMLElement> {
 export const Card = ({ children, className, ...rest }: CardProps) => {
   return (
     <section
-      className={cx(
-        "rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface sm:p-6",
-        className,
-      )}
+      className={cx("rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface sm:p-6", className)}
       {...rest}
     >
       {children}

@@ -40,23 +40,17 @@ test.describe("the Settings reconciliation panel", () => {
     });
   });
 
-  test("runs the report and has no automatically detectable accessibility violations", async ({
-    page,
-  }) => {
+  test("runs the report and has no automatically detectable accessibility violations", async ({ page }) => {
     await page.goto("/settings");
     await page.getByRole("button", { name: "הפעלת בדיקת התאמה" }).click();
 
     await expect(page.getByText("קבצים חסרים: 1")).toBeVisible();
     await expect(page.getByText("מה צריך לעשות")).toBeVisible();
     await page.getByText("פרטים טכניים").click();
-    await expect(
-      page.getByText("missing artifact: artifacts/outputs/revision-1/resume.pdf"),
-    ).toBeVisible();
+    await expect(page.getByText("missing artifact: artifacts/outputs/revision-1/resume.pdf")).toBeVisible();
     await expect(page.getByText("fact audit mismatch")).toBeVisible();
 
-    const results = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
-      .analyze();
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
 
     expect(results.violations).toEqual([]);
   });

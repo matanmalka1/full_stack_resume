@@ -61,10 +61,7 @@ export const useWatchedOperation = (
      The projection's copy is the fallback, and it earns its place at the other end of the
      Operation's life: it arrives with the page, so a reload mid-run paints the panel from
      the first render instead of after a second round trip. */
-  const operation =
-    watchedQuery.data?.id === watchedId
-      ? watchedQuery.data
-      : (detail?.active_operation ?? undefined);
+  const operation = watchedQuery.data?.id === watchedId ? watchedQuery.data : (detail?.active_operation ?? undefined);
 
   /* The projection is refreshed once the watched Operation reaches a terminal status:
      what it produced - a new analysis, a draft, the stage that follows - is the
@@ -81,10 +78,7 @@ export const useWatchedOperation = (
   return {
     operation,
     operationId: watchedId,
-    panel:
-      operation === undefined ? null : (
-        <ActiveOperationPanel onQueued={watch} operation={operation} />
-      ),
+    panel: operation === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={operation} />,
     watch,
   };
 };

@@ -25,10 +25,7 @@ export const DraftConflictDialog = ({
   pendingRemovals,
 }: DraftConflictDialogProps) => {
   const texts = new Map(
-    (current === undefined ? [] : outlineClaims(current)).map((claim) => [
-      claim.claim_id,
-      claim.text,
-    ]),
+    (current === undefined ? [] : outlineClaims(current)).map((claim) => [claim.claim_id, claim.text]),
   );
 
   return (
@@ -48,8 +45,7 @@ export const DraftConflictDialog = ({
       title="הטיוטה השתנתה בזמן העריכה"
     >
       <p>
-        גרסה חדשה יותר של הטיוטה נשמרה לפני השמירה שלך, ולכן השמירה נעצרה. שום דבר לא אוחד אוטומטית
-        ושום טקסט לא נמחק.
+        גרסה חדשה יותר של הטיוטה נשמרה לפני השמירה שלך, ולכן השמירה נעצרה. שום דבר לא אוחד אוטומטית ושום טקסט לא נמחק.
       </p>
 
       <ul className="flex flex-col gap-4">

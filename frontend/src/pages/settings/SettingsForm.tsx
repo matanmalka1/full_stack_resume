@@ -27,13 +27,7 @@ const editableSettings = (settings: Settings): UpdateSettingsRequest => ({
 export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
   const queryClient = useQueryClient();
   const values = editableSettings(settings);
-  const {
-    handleSubmit,
-    register,
-    reset,
-    setValue,
-    watch,
-  } = useAppForm<UpdateSettingsRequest>({
+  const { handleSubmit, register, reset, setValue, watch } = useAppForm<UpdateSettingsRequest>({
     defaultValues: values,
     values,
   });
@@ -52,15 +46,11 @@ export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
       queryClient.setQueryData(settingsQueryKey, result);
     },
   });
-  const aiAvailable =
-    settings.provider_configured && (form.ai_enabled_override ?? settings.ai_enabled);
+  const aiAvailable = settings.provider_configured && (form.ai_enabled_override ?? settings.ai_enabled);
 
   return (
     <>
-      <form
-        className="flex flex-col gap-6"
-        onSubmit={handleSubmit((fields) => save.mutate(fields))}
-      >
+      <form className="flex flex-col gap-6" onSubmit={handleSubmit((fields) => save.mutate(fields))}>
         <Checkbox
           checked={form.auto_generate_when_review_not_required}
           {...register("auto_generate_when_review_not_required")}
@@ -70,11 +60,7 @@ export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
         <Checkbox
           checked={form.ai_enabled_override ?? settings.ai_enabled}
           disabled={!settings.provider_configured}
-          hint={
-            settings.provider_configured
-              ? "מפעיל פעולות AI ידניות."
-              : "לא הוגדר ספק AI בסביבת הריצה."
-          }
+          hint={settings.provider_configured ? "מפעיל פעולות AI ידניות." : "לא הוגדר ספק AI בסביבת הריצה."}
           {...aiOverrideRegistration}
           onChange={(event) => {
             void aiOverrideRegistration.onChange(event);
@@ -121,15 +107,9 @@ export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
           }
         />
       </form>
-      {save.isSuccess ? (
-        <Callout role="status" title="ההגדרות נשמרו" tone="success" />
-      ) : null}
+      {save.isSuccess ? <Callout role="status" title="ההגדרות נשמרו" tone="success" /> : null}
       {save.error === null ? null : (
-        <ErrorCallout
-          error={save.error}
-          fallbackDetail={briefServerFailureDetail}
-          fallbackTitle="ההגדרות לא נשמרו"
-        />
+        <ErrorCallout error={save.error} fallbackDetail={briefServerFailureDetail} fallbackTitle="ההגדרות לא נשמרו" />
       )}
     </>
   );

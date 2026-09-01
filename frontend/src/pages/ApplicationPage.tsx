@@ -39,8 +39,7 @@ export const ApplicationPage = () => {
   }
 
   const automaticAnalysisStartFailed =
-    (location.state as { automaticAnalysisStartFailed?: unknown } | null)
-      ?.automaticAnalysisStartFailed === true;
+    (location.state as { automaticAnalysisStartFailed?: unknown } | null)?.automaticAnalysisStartFailed === true;
   const [searchParams, setSearchParams] = useSearchParams();
   const view = applicationViewFromParam(searchParams.get("view"));
   const query = useQuery(applicationDetailQueryOptions(applicationId));
@@ -55,8 +54,7 @@ export const ApplicationPage = () => {
      unless the analysis on record is the active one, so a superseded analysis is named
      as superseded rather than shown as the classification in force. */
   const classification = detail === undefined ? null : classificationFromAnalysis(detail);
-  const supersededAnalysis =
-    detail !== undefined && classification === null && detail.latest_analysis != null;
+  const supersededAnalysis = detail !== undefined && classification === null && detail.latest_analysis != null;
   /* The Web automation opt-in follows the watched analyze Operation. Its side effects
      live in the hook that owns dispatch and deduplication rather than in this page shell. */
   useAutomaticDraft({
@@ -73,9 +71,7 @@ export const ApplicationPage = () => {
      publishing the preparation stage from it would put the CV's position under a panel
      about the recruiter. That was TrackingPage's own answer before the two views became
      one screen, and it stays attached to the view rather than to the route. */
-  useWorkflowStage(
-    view === "tracking" ? "none" : detail === undefined ? "unknown" : detail.preparation_state,
-  );
+  useWorkflowStage(view === "tracking" ? "none" : detail === undefined ? "unknown" : detail.preparation_state);
 
   /* The persistent shell already names the company and role. This masthead names
      the view and reports the axis that view is about - never both at once: the two
@@ -116,9 +112,7 @@ export const ApplicationPage = () => {
         current={view}
         /* `replace` so switching axis does not stack history entries: the two views are
            one place, and "back" must still mean the list. */
-        onChange={(next) =>
-          setSearchParams(next === "preparation" ? {} : { view: next }, { replace: true })
-        }
+        onChange={(next) => setSearchParams(next === "preparation" ? {} : { view: next }, { replace: true })}
       />
 
       <QueryState

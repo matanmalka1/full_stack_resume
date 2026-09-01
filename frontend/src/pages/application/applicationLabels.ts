@@ -77,8 +77,7 @@ const preparationStatesImplyingNoDraft = new Set<PreparationState>([
 ]);
 
 export const draftStateIsImplied = (detail: ApplicationDetail): boolean =>
-  detail.working_draft_state === "none" &&
-  preparationStatesImplyingNoDraft.has(detail.preparation_state);
+  detail.working_draft_state === "none" && preparationStatesImplyingNoDraft.has(detail.preparation_state);
 
 /* Hebrew names for the actions the projection reports. Deliberately a partial map over
    an open set of strings rather than a Record over an enum this layer invented: the
@@ -151,12 +150,9 @@ export const recruitmentStatusLabels: Record<RecruitmentStatus, string> = {
 };
 
 export const recruitmentStatusLabel = (status: string): string =>
-  status in recruitmentStatusLabels
-    ? recruitmentStatusLabels[status as RecruitmentStatus]
-    : status;
+  status in recruitmentStatusLabels ? recruitmentStatusLabels[status as RecruitmentStatus] : status;
 
-const blockedReasonLabel = (reason: string): string | null =>
-  blockedReasonLabels[reason] ?? null;
+const blockedReasonLabel = (reason: string): string | null => blockedReasonLabels[reason] ?? null;
 
 /* The title a review or staleness reason is shown under, replacing the backend's own
    `message` paragraph.
@@ -187,8 +183,7 @@ const reasonTitles: Record<string, string> = {
   VALIDATION_STALE: "האימות אינו מעודכן",
 };
 
-export const reasonTitle = (code: string, fallback: string): string =>
-  reasonTitles[code] ?? fallback;
+export const reasonTitle = (code: string, fallback: string): string => reasonTitles[code] ?? fallback;
 
 /* Warnings carry the same problem and the same answer. */
 const warningTitles: Record<string, string> = {
@@ -198,9 +193,7 @@ const warningTitles: Record<string, string> = {
   READY_REVISION_FOR_OLDER_ANALYSIS: "הגרסה המוכנה שייכת לניתוח ישן",
 };
 
-export const warningTitle = (code: string): string =>
-  warningTitles[code] ?? "כדאי לשים לב";
-
+export const warningTitle = (code: string): string => warningTitles[code] ?? "כדאי לשים לב";
 
 /* The board's named questions, in the order the chips offer them. Keyed by the generated
    union, so a preset added to the application layer fails the build here instead of
@@ -229,7 +222,6 @@ export const recruitmentStatusOrder: readonly RecruitmentStatus[] = [
   "withdrawn",
   "closed",
 ];
-
 
 /* The recruitment axis as the board draws it: a colour and an icon per status.
 
@@ -287,9 +279,7 @@ export const preparationStateIcons: Record<PreparationState, LucideIcon> = {
 };
 
 export const recruitmentStatusTone = (status: string): StatusTone =>
-  status in recruitmentStatusTones
-    ? recruitmentStatusTones[status as RecruitmentStatus]
-    : "neutral";
+  status in recruitmentStatusTones ? recruitmentStatusTones[status as RecruitmentStatus] : "neutral";
 
 export const recruitmentStatusIcon = (status: string): LucideIcon =>
   status in recruitmentStatusIcons ? recruitmentStatusIcons[status as RecruitmentStatus] : Clock;

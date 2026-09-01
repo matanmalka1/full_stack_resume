@@ -9,13 +9,17 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run typecheck && npm run lint:tokens && vite build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "knip": "knip",
     "lint:tokens": "node scripts/check-design-tokens.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
     "preview": "vite preview",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "check": "npm run typecheck && npm run lint:tokens && npm run format:check && npm run test"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.102.2",
@@ -37,6 +41,7 @@
     "@vitejs/plugin-react": "^6.1.0",
     "jsdom": "^30.0.1",
     "knip": "^6.33.0",
+    "prettier": "^3.9.6",
     "tailwindcss": "^4.3.3",
     "typescript": "~7.0.2",
     "vite": "^8.2.2",

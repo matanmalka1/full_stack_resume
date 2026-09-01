@@ -50,10 +50,7 @@ export const WorkflowSteps = ({ label, steps }: WorkflowStepsProps) => {
   const position = current === undefined ? null : steps.indexOf(current) + 1;
   /* One sentence for anyone not reading the bar, which is also the whole of what the bar
      says: where the work is, and out of how many stages. */
-  const description =
-    position === null
-      ? label
-      : `${label}: שלב ${position} מתוך ${steps.length}, ${current?.label}`;
+  const description = position === null ? label : `${label}: שלב ${position} מתוך ${steps.length}, ${current?.label}`;
 
   return (
     <div aria-label={description} className="w-full min-w-0" role="img">
@@ -71,14 +68,9 @@ export const WorkflowSteps = ({ label, steps }: WorkflowStepsProps) => {
             )}
             key={step.label}
           >
-            <span className={cx("whitespace-nowrap text-support", stateClasses[step.state])}>
-              {step.label}
-            </span>
+            <span className={cx("whitespace-nowrap text-support", stateClasses[step.state])}>{step.label}</span>
             <span
-              className={cx(
-                "h-0.5 w-full min-w-8 rounded-pill md:min-w-10 lg:min-w-14",
-                trackClasses[step.state],
-              )}
+              className={cx("h-0.5 w-full min-w-8 rounded-pill md:min-w-10 lg:min-w-14", trackClasses[step.state])}
             />
           </div>
         ))}

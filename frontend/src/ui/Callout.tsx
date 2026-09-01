@@ -35,10 +35,7 @@ export const Callout = ({ action, children, className, role, title, tone }: Call
   const { icon: Icon, label } = statusPresentation[tone];
 
   return (
-    <div
-      className={cx("rounded-surface border p-4 shadow-surface", toneClasses[tone], className)}
-      role={role}
-    >
+    <div className={cx("rounded-surface border p-4 shadow-surface", toneClasses[tone], className)} role={role}>
       <div className="flex gap-3">
         <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-pill bg-cv-surface shadow-surface">
           <Icon aria-hidden="true" className={cx("size-4", toneIconClasses[tone])} />

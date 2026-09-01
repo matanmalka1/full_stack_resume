@@ -15,12 +15,7 @@ interface ViewSwitchProps<TValue extends string> {
 /* A.4 responsive fallback: the editor/preview split collapses into one switch. Buttons
    with aria-pressed keep it a real control without a tab/panel contract the panes do
    not have, and switching views never discards unsaved text. */
-export const ViewSwitch = <TValue extends string>({
-  label,
-  onChange,
-  options,
-  value,
-}: ViewSwitchProps<TValue>) => {
+export const ViewSwitch = <TValue extends string>({ label, onChange, options, value }: ViewSwitchProps<TValue>) => {
   return (
     <div
       aria-label={label}

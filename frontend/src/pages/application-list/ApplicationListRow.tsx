@@ -97,9 +97,7 @@ const NextActionCell = ({ item }: { item: ApplicationListItem }) => {
 const RecommendedActionCell = ({ item }: { item: ApplicationListItem }) => {
   const href = `/applications/${encodeURIComponent(item.id)}`;
   const running =
-    item.active_operation != null && !isTerminalOperation(item.active_operation)
-      ? item.active_operation
-      : null;
+    item.active_operation != null && !isTerminalOperation(item.active_operation) ? item.active_operation : null;
 
   return (
     <td className="px-3 py-3">
@@ -109,20 +107,14 @@ const RecommendedActionCell = ({ item }: { item: ApplicationListItem }) => {
             {operationTypeLabels[running.operation_type]} · {statusLabels[running.status]}
           </StatusBadge>
         ) : item.latest_ready_revision_id != null ? (
-          <Link
-            className={rowActionClasses}
-            to={`/revisions/${encodeURIComponent(item.latest_ready_revision_id)}`}
-          >
+          <Link className={rowActionClasses} to={`/revisions/${encodeURIComponent(item.latest_ready_revision_id)}`}>
             <FileCheck2 aria-hidden="true" className="size-4" />
             הגרסה המוכנה
           </Link>
         ) : item.recommended_action == null ? (
           <span className="text-support text-cv-text-muted">—</span>
         ) : (
-          <Link
-            className={rowActionClasses}
-            to={actionDestination(item.recommended_action, item.id) ?? href}
-          >
+          <Link className={rowActionClasses} to={actionDestination(item.recommended_action, item.id) ?? href}>
             <ArrowLeft aria-hidden="true" className="size-4" />
             {actionLabel(item.recommended_action)}
           </Link>
@@ -138,11 +130,7 @@ interface ApplicationListRowProps {
   onRequestClose: (item: ApplicationListItem) => void;
 }
 
-export const ApplicationListRow = ({
-  ambiguous,
-  item,
-  onRequestClose,
-}: ApplicationListRowProps) => {
+export const ApplicationListRow = ({ ambiguous, item, onRequestClose }: ApplicationListRowProps) => {
   const href = `/applications/${encodeURIComponent(item.id)}`;
   const attention = applicationAttention(item);
   const closed = isApplicationClosed(item);
@@ -153,11 +141,7 @@ export const ApplicationListRow = ({
         <div className="flex min-w-0 items-center gap-2">
           <CompanyMark company={item.company} />
           <div className="min-w-0 flex-1 text-left">
-            <Link
-              className="block truncate text-support font-bold text-cv-text hover:underline"
-              dir="auto"
-              to={href}
-            >
+            <Link className="block truncate text-support font-bold text-cv-text hover:underline" dir="auto" to={href}>
               {item.company}
             </Link>
             <p className="truncate text-support text-cv-text-muted" dir="auto">

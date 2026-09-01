@@ -45,8 +45,9 @@
   --color-cv-blocker-soft: #fce8e5;
   --color-cv-focus: #1d4ed8;
   --color-cv-on-accent: #ffffff;
-  --font-sans: "Heebo", "Assistant", "Rubik", "Arial Hebrew", "Noto Sans Hebrew",
-    system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --font-sans:
+    "Heebo", "Assistant", "Rubik", "Arial Hebrew", "Noto Sans Hebrew", system-ui, -apple-system, "Segoe UI", Arial,
+    sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
   /* A.2 typography scale: 16px body, 14px supporting text, 20/24/32px headings.
@@ -84,7 +85,9 @@
   font-family: var(--font-sans);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  font-feature-settings: "kern" 1, "liga" 1;
+  font-feature-settings:
+    "kern" 1,
+    "liga" 1;
   /* Hebrew letterforms are uniform-height and lose their word shape when tracked
      out, so the shell tracks slightly tight and the LTR islands below opt back
      out of it. */

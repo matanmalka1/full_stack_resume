@@ -22,12 +22,7 @@ export const SummaryList = ({ className, items }: SummaryListProps) => {
        a timestamp - sat alone at the start of a band of empty space with its own term
        stranded at the far edge. `max-content` keeps the pair readable as a pair, and the
        trailing `1fr` spacer absorbs the remainder instead. */
-    <dl
-      className={cx(
-        "grid gap-x-6 gap-y-3 sm:grid-cols-[max-content_minmax(0,max-content)_1fr]",
-        className,
-      )}
-    >
+    <dl className={cx("grid gap-x-6 gap-y-3 sm:grid-cols-[max-content_minmax(0,max-content)_1fr]", className)}>
       {items.map((item, index) => (
         <div className="contents" key={index}>
           <dt className="text-support font-medium text-cv-text-muted">{item.term}</dt>

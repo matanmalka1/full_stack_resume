@@ -5,8 +5,7 @@ import type { Operation } from "./contracts";
 
 /* Which statuses end an Operation is a lifecycle rule the backend owns and now reports,
    so nothing here re-derives it. */
-export const isTerminalOperation = (operation: Operation | undefined): boolean =>
-  operation?.is_terminal === true;
+export const isTerminalOperation = (operation: Operation | undefined): boolean => operation?.is_terminal === true;
 
 /* No WebSocket, no SSE. A fixed interval the user can reason about, stopped the moment
    the Operation reaches a terminal status. */
@@ -14,8 +13,7 @@ export const OPERATION_POLL_INTERVAL_MS = 1500;
 
 export const operationQueryKey = (operationId: string) => ["operation", operationId] as const;
 
-const operationPath = (operationId: string): ApiPath =>
-  `/api/v1/operations/${encodeURIComponent(operationId)}`;
+const operationPath = (operationId: string): ApiPath => `/api/v1/operations/${encodeURIComponent(operationId)}`;
 
 /* 408 and 429 are 4xx that say "later", not "never": they stay retryable. Everything
    else in the 4xx range is the request itself being wrong, and repeating it cannot
@@ -40,10 +38,7 @@ export const operationQueryOptions = (operationId: string) =>
        permanently missing Operation before the interval below stops. */
     retry: false,
     queryFn: async ({ signal }) => {
-      const response = await apiRequest<Operation>(
-        operationPath(operationId),
-        { signal },
-      );
+      const response = await apiRequest<Operation>(operationPath(operationId), { signal });
       return response.data;
     },
     /* A transient failure keeps the interval alive, so a momentary backend hiccup does
@@ -57,10 +52,9 @@ export const operationQueryOptions = (operationId: string) =>
   });
 
 export const cancelOperation = async (operationId: string): Promise<Operation> => {
-  const response = await apiRequest<Operation>(
-    `${operationPath(operationId)}/cancel`,
-    { method: "POST" },
-  );
+  const response = await apiRequest<Operation>(`${operationPath(operationId)}/cancel`, {
+    method: "POST",
+  });
   return response.data;
 };
 
@@ -86,10 +80,7 @@ export const queuedOperation = (response: ApiResponse<Operation>): QueuedOperati
   return { operation: response.data };
 };
 
-export const retryOperation = async (
-  operationId: string,
-  idempotencyKey: string,
-): Promise<QueuedOperation> =>
+export const retryOperation = async (operationId: string, idempotencyKey: string): Promise<QueuedOperation> =>
   queuedOperation(
     await apiRequest<Operation>(`${operationPath(operationId)}/retry`, {
       method: "POST",

@@ -20,8 +20,7 @@ const factsPath: ApiPath = "/api/v1/facts";
 const factPath = (factId: string): ApiPath => `/api/v1/facts/${encodeURIComponent(factId)}`;
 
 export const factsQueryPrefix = ["facts"] as const;
-export const factsQueryKey = (status?: FactStatus) =>
-  [...factsQueryPrefix, status ?? "all"] as const;
+export const factsQueryKey = (status?: FactStatus) => [...factsQueryPrefix, status ?? "all"] as const;
 export const factDetailQueryKey = (factId: string) => ["fact", factId] as const;
 export const factHistoryQueryKey = ["fact-history"] as const;
 
@@ -37,24 +36,19 @@ export const factsQueryOptions = (status?: FactStatus) =>
 export const factDetailQueryOptions = (factId: string) =>
   queryOptions({
     queryKey: factDetailQueryKey(factId),
-    queryFn: async ({ signal }) =>
-      (await apiRequest<FactDetail>(factPath(factId), { signal })).data,
+    queryFn: async ({ signal }) => (await apiRequest<FactDetail>(factPath(factId), { signal })).data,
   });
 
 export const factHistoryQueryOptions = queryOptions({
   queryKey: factHistoryQueryKey,
-  queryFn: async ({ signal }) =>
-    (await apiRequest<FactHistory>(`${factsPath}/history` as ApiPath, { signal })).data,
+  queryFn: async ({ signal }) => (await apiRequest<FactHistory>(`${factsPath}/history` as ApiPath, { signal })).data,
 });
 
 export const createPendingFact = async (body: CreateFactRequest): Promise<FactMutation> =>
   (await apiRequest<FactMutation>(factsPath, { method: "POST", body })).data;
 
-export const captureClaimFact = async (
-  body: CaptureClaimFactRequest,
-): Promise<FactMutation> =>
-  (await apiRequest<FactMutation>(`${factsPath}/from-claim` as ApiPath, { method: "POST", body }))
-    .data;
+export const captureClaimFact = async (body: CaptureClaimFactRequest): Promise<FactMutation> =>
+  (await apiRequest<FactMutation>(`${factsPath}/from-claim` as ApiPath, { method: "POST", body })).data;
 
 export const transitionFact = async (
   factId: string,
@@ -68,10 +62,7 @@ export const transitionFact = async (
     })
   ).data;
 
-export const attachFact = async (
-  factId: string,
-  body: AttachFactRequest,
-): Promise<FactAttachment> =>
+export const attachFact = async (factId: string, body: AttachFactRequest): Promise<FactAttachment> =>
   (
     await apiRequest<FactAttachment>(`${factPath(factId)}/attachments` as ApiPath, {
       method: "POST",
@@ -79,10 +70,7 @@ export const attachFact = async (
     })
   ).data;
 
-export const confirmAndUseFact = async (
-  factId: string,
-  body: ConfirmAndUseFactRequest,
-): Promise<ConfirmAndUseFact> =>
+export const confirmAndUseFact = async (factId: string, body: ConfirmAndUseFactRequest): Promise<ConfirmAndUseFact> =>
   (
     await apiRequest<ConfirmAndUseFact>(`${factPath(factId)}/confirm-and-use` as ApiPath, {
       method: "POST",

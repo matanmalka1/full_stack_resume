@@ -16,13 +16,7 @@ interface FormSectionProps {
    The group is a real `fieldset` so the grouping the eye sees is the grouping assistive
    technology announces. `legend` is taken out of the header's flow — a floated legend
    lays out inconsistently inside flex — and the visible title is a sibling. */
-export const FormSection = ({
-  aside,
-  children,
-  className,
-  description,
-  title,
-}: FormSectionProps) => {
+export const FormSection = ({ aside, children, className, description, title }: FormSectionProps) => {
   const id = useId();
 
   return (
@@ -33,9 +27,7 @@ export const FormSection = ({
           <p aria-hidden="true" className="text-heading-sm font-bold tracking-tight text-cv-text">
             {title}
           </p>
-          {aside === undefined ? null : (
-            <div className="text-support text-cv-text-muted">{aside}</div>
-          )}
+          {aside === undefined ? null : <div className="text-support text-cv-text-muted">{aside}</div>}
         </div>
         {description === undefined ? null : (
           <p className="mt-1 text-support leading-6 text-cv-text-muted" id={`${id}-description`}>

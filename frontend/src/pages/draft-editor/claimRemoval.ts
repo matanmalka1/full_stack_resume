@@ -4,8 +4,7 @@ import { type Removability, isStructuralStyle } from "./draftLabels";
 
 const SHARED_LIMIT = 60;
 
-const shorten = (text: string): string =>
-  text.length <= SHARED_LIMIT ? text : `${text.slice(0, SHARED_LIMIT)}…`;
+const shorten = (text: string): string => (text.length <= SHARED_LIMIT ? text : `${text.slice(0, SHARED_LIMIT)}…`);
 
 /* Which command, if any, removes this line.
 

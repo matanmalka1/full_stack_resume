@@ -10,10 +10,7 @@ export const formatApplicationDate = (value: string): string => {
 
 /* This is a visual comparison against the reader's local date. It does not affect
    filtering, workflow state, or any server-side deadline decision. */
-export const isNextActionOverdue = (
-  value: string | null | undefined,
-  today: Date = new Date(),
-): boolean => {
+export const isNextActionOverdue = (value: string | null | undefined, today: Date = new Date()): boolean => {
   if (value == null) {
     return false;
   }
@@ -33,9 +30,7 @@ export interface ApplicationAttention {
   tone: StatusTone;
 }
 
-export const applicationAttention = (
-  item: ApplicationListItem,
-): ApplicationAttention | null => {
+export const applicationAttention = (item: ApplicationListItem): ApplicationAttention | null => {
   const parts = [
     item.review_reasons.length === 0 ? null : `${item.review_reasons.length} להכרעה`,
     item.stale_reasons.length === 0 ? null : `${item.stale_reasons.length} לא מעודכן`,

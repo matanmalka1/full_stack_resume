@@ -86,9 +86,7 @@ const listBody = (items: ApplicationListItem[], counts: Counts = {}) => {
 
 const stubList = (items: ApplicationListItem[], counts: Counts = {}) => {
   const body = { current: listBody(items, counts) };
-  const fetchMock = vi.fn(async (_url: unknown, _options?: unknown) =>
-    jsonResponse(body.current),
-  );
+  const fetchMock = vi.fn(async (_url: unknown, _options?: unknown) => jsonResponse(body.current));
   vi.stubGlobal("fetch", fetchMock);
   return {
     fetchMock,
@@ -101,9 +99,7 @@ const stubList = (items: ApplicationListItem[], counts: Counts = {}) => {
 
 const renderPage = (entries: string[] = ["/"]) =>
   render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter initialEntries={entries}>
         <Routes>
           <Route element={<ApplicationListPage />} path="/" />
@@ -121,21 +117,12 @@ describe("ApplicationListPage", () => {
   /* The reason this screen exists: an Application that was saved has to be reachable
      without its URL, and its row has to say where it stands. */
   it("lists every Application with both of its state axes", async () => {
-    stubList([
-      item(),
-      item({ id: "app-2", company: "Binat", preparation_state: "ready" }),
-    ]);
+    stubList([item(), item({ id: "app-2", company: "Binat", preparation_state: "ready" })]);
 
     renderPage();
 
-    expect(await screen.findByRole("link", { name: "Acme" })).toHaveAttribute(
-      "href",
-      "/applications/app-1",
-    );
-    expect(screen.getByRole("link", { name: "Binat" })).toHaveAttribute(
-      "href",
-      "/applications/app-2",
-    );
+    expect(await screen.findByRole("link", { name: "Acme" })).toHaveAttribute("href", "/applications/app-1");
+    expect(screen.getByRole("link", { name: "Binat" })).toHaveAttribute("href", "/applications/app-2");
     /* Preparation and recruitment are independent axes and the board shows both: one says
        how far the CV has got, the other where the Application stands with the employer.
        Scoped to the table because the stage filter offers the same vocabulary as its

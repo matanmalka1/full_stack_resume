@@ -11,8 +11,7 @@ interface JobTextFileFieldProps {
   onText: (text: string) => void;
 }
 
-const isLocalTextFile = (file: File): boolean =>
-  file.type === "text/plain" || /\.txt$/i.test(file.name);
+const isLocalTextFile = (file: File): boolean => file.type === "text/plain" || /\.txt$/i.test(file.name);
 
 /* A.4 frame 1: choosing a `.txt` file reads it locally into the text area. Nothing is
    uploaded, and the component owns the whole local-read outcome - the refusals, the
@@ -64,10 +63,7 @@ export const JobTextFileField = ({ onText }: JobTextFileFieldProps) => {
     <div className="flex flex-col gap-3 rounded-control border border-dashed border-cv-border bg-cv-surface-muted p-3 sm:flex-row sm:items-center">
       {/* The visible control is the label, so the native file input can stay off screen
           without losing its accessible name or keyboard reachability. */}
-      <label
-        className={cx(buttonClasses("secondary"), "shrink-0 cursor-pointer font-medium")}
-        htmlFor={inputId}
-      >
+      <label className={cx(buttonClasses("secondary"), "shrink-0 cursor-pointer font-medium")} htmlFor={inputId}>
         <Upload aria-hidden="true" className="size-4" />
         קריאת קובץ טקסט מהמחשב (לא חובה)
       </label>

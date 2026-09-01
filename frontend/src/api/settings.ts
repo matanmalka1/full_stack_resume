@@ -18,10 +18,7 @@ export const settingsQueryOptions = queryOptions({
   },
 });
 
-export const updateSettings = async (
-  body: UpdateSettingsRequest,
-  etag: string,
-): Promise<SettingsRead> => {
+export const updateSettings = async (body: UpdateSettingsRequest, etag: string): Promise<SettingsRead> => {
   const response = await apiRequest<Settings>("/api/v1/settings", {
     method: "PATCH",
     body,
@@ -31,9 +28,7 @@ export const updateSettings = async (
 };
 
 export const executionProvider = (settings: Settings | undefined): "openai" | undefined =>
-  settings?.default_execution_mode === "ai" &&
-  settings.provider_configured &&
-  settings.ai_enabled
+  settings?.default_execution_mode === "ai" && settings.provider_configured && settings.ai_enabled
     ? "openai"
     : undefined;
 

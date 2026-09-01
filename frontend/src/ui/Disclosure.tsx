@@ -19,9 +19,7 @@ interface DisclosureProps {
    about what opening it would produce. */
 export const Disclosure = ({ children, className, summary }: DisclosureProps) => (
   <details className={cx("text-support", className)}>
-    <summary className="cursor-pointer rounded-control font-medium text-cv-text-muted">
-      {summary}
-    </summary>
+    <summary className="cursor-pointer rounded-control font-medium text-cv-text-muted">{summary}</summary>
     <div className="mt-2 leading-6 text-cv-text-muted">{children}</div>
   </details>
 );

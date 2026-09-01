@@ -56,9 +56,7 @@ export const ClaimFactResolution = ({
     () =>
       [...(historyQuery.data?.events ?? [])]
         .reverse()
-        .find(
-          (event) => event.application_id === applicationId && event.claim_id === claim.claim_id,
-        )?.fact_id ?? null,
+        .find((event) => event.application_id === applicationId && event.claim_id === claim.claim_id)?.fact_id ?? null,
     [applicationId, claim.claim_id, historyQuery.data],
   );
   const [capturedFactId, setCapturedFactId] = useState<string | null>(null);
@@ -67,9 +65,7 @@ export const ClaimFactResolution = ({
     ...factDetailQueryOptions(factId ?? ""),
     enabled: factId !== null,
   });
-  const [source, setSource] = useState<FactSource>(
-    profile === "development" ? "development.md" : "sales.md",
-  );
+  const [source, setSource] = useState<FactSource>(profile === "development" ? "development.md" : "sales.md");
   const [meaning, setMeaning] = useState(claim.text);
   const [tags, setTags] = useState("");
   const [provenance, setProvenance] = useState("");
@@ -127,16 +123,11 @@ export const ClaimFactResolution = ({
   const error = historyQuery.error ?? detailQuery.error ?? capture.error ?? useFact.error;
   const tagsPresent = tags.split(",").some((tag) => tag.trim() !== "");
   const canCapture =
-    meaning.trim() !== "" &&
-    provenance.trim() !== "" &&
-    tagsPresent &&
-    (language !== "he" || english.trim() !== "");
+    meaning.trim() !== "" && provenance.trim() !== "" && tagsPresent && (language !== "he" || english.trim() !== "");
 
   return (
     <details className="mt-3 rounded-control border border-cv-border bg-cv-surface-muted p-4">
-      <summary className="cursor-pointer font-semibold text-cv-text">
-        הפיכת הטקסט לעובדה מאושרת
-      </summary>
+      <summary className="cursor-pointer font-semibold text-cv-text">הפיכת הטקסט לעובדה מאושרת</summary>
       {error === null ? null : (
         <ErrorCallout
           className="mt-4"
@@ -154,16 +145,11 @@ export const ClaimFactResolution = ({
           }}
         >
           <Callout title="הניסוח נשמר בדיוק" tone="neutral">
-            הטקסט של השורה יועתק כפי שהוא. השדות הבאים מתארים את משמעותו ומקורו ואינם
-            נוצרים באמצעות AI.
+            הטקסט של השורה יועתק כפי שהוא. השדות הבאים מתארים את משמעותו ומקורו ואינם נוצרים באמצעות AI.
           </Callout>
           <Field label="מקור הידע">
             {(control) => (
-              <Select
-                {...control}
-                onChange={(event) => setSource(event.target.value as FactSource)}
-                value={source}
-              >
+              <Select {...control} onChange={(event) => setSource(event.target.value as FactSource)} value={source}>
                 {Object.entries(sourceLabels).map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
@@ -201,12 +187,7 @@ export const ClaimFactResolution = ({
           )}
           <Field hint="יש להפריד תגיות בפסיקים." label="תגיות">
             {(control) => (
-              <TextInput
-                {...control}
-                onChange={(event) => setTags(event.target.value)}
-                required
-                value={tags}
-              />
+              <TextInput {...control} onChange={(event) => setTags(event.target.value)} required value={tags} />
             )}
           </Field>
           <Field label="מקור ואימות העובדה">
@@ -228,8 +209,7 @@ export const ClaimFactResolution = ({
         <QueryState className="mt-4 text-support" loading loadingLabel="טוען את העובדה…" />
       ) : useFact.isSuccess ? (
         <Callout className="mt-4" role="status" title="העובדה אושרה ונבחרה" tone="success">
-          נוצרה תוכנית בחירה חדשה. הטיוטה הנוכחית נשמרה, ומסך המועמדות יציע לבנות אותה
-          מחדש מהתוכנית החדשה.
+          נוצרה תוכנית בחירה חדשה. הטיוטה הנוכחית נשמרה, ומסך המועמדות יציע לבנות אותה מחדש מהתוכנית החדשה.
         </Callout>
       ) : (
         <div className="mt-4 flex flex-col gap-4">
@@ -259,7 +239,12 @@ export const ClaimFactResolution = ({
               <Checkbox checked={confirmed} onChange={(event) => setConfirmed(event.currentTarget.checked)}>
                 בדקתי את הניסוח, המשמעות, התגיות והמקור ואני מאשר לקדם, לצרף ולבחור את העובדה
               </Checkbox>
-              <Button disabled={!confirmed} onClick={() => useFact.mutate()} pending={useFact.isPending} pendingLabel="מאשר ומשתמש…">
+              <Button
+                disabled={!confirmed}
+                onClick={() => useFact.mutate()}
+                pending={useFact.isPending}
+                pendingLabel="מאשר ומשתמש…"
+              >
                 אישור העובדה ושימוש בה
               </Button>
             </>

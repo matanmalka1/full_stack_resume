@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+test-results/
+playwright-report/
+*.tsbuildinfo
+
+# Hand-wrapped Hebrew prose. Prettier reflows RTL markdown into ragged lines that
+# read worse than the original wrapping, so the documents keep their own layout.
+*.md

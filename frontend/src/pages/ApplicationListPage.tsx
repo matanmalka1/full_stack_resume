@@ -48,8 +48,7 @@ export const ApplicationListPage = () => {
   const updateQuery = (
     next: ApplicationListQuery,
     { resetOffset = true, replace = true }: { resetOffset?: boolean; replace?: boolean } = {},
-  ) =>
-    setParams(paramsFromQuery(resetOffset ? { ...next, offset: 0 } : next), { replace });
+  ) => setParams(paramsFromQuery(resetOffset ? { ...next, offset: 0 } : next), { replace });
 
   const close = useMutation({
     mutationFn: (applicationId: string) => closeApplication(applicationId),
@@ -91,9 +90,7 @@ export const ApplicationListPage = () => {
         emptyState={
           <EmptyState>
             <p className="text-body text-cv-text">עוד לא נוצרה אף מועמדות.</p>
-            <p className="mt-1 text-support text-cv-text-muted">
-              מועמדות חדשה מתחילה בהדבקת מודעת המשרה.
-            </p>
+            <p className="mt-1 text-support text-cv-text-muted">מועמדות חדשה מתחילה בהדבקת מודעת המשרה.</p>
             <div className="mt-5 flex justify-center">{newApplication}</div>
           </EmptyState>
         }
@@ -127,42 +124,37 @@ export const ApplicationListPage = () => {
               stageCounts={page.stage_counts}
             />
 
-          <div
-            aria-busy={resultsAreRefreshing || undefined}
-            className={`transition-opacity ${resultsAreRefreshing ? "opacity-60" : ""}`}
-          >
-            <p aria-live="polite" className="text-support text-cv-text-muted">
-              {matched === page.total
-                ? `${page.total} מועמדויות`
-                : `${matched} מתוך ${page.total} מועמדויות`}
-            </p>
+            <div
+              aria-busy={resultsAreRefreshing || undefined}
+              className={`transition-opacity ${resultsAreRefreshing ? "opacity-60" : ""}`}
+            >
+              <p aria-live="polite" className="text-support text-cv-text-muted">
+                {matched === page.total ? `${page.total} מועמדויות` : `${matched} מתוך ${page.total} מועמדויות`}
+              </p>
 
-            {items.length === 0 ? (
-              <EmptyState className="mt-3">
-                <p className="text-body text-cv-text">אין מועמדות שמתאימה לסינון.</p>
-                <div className="mt-5 flex justify-center">
-                  <Button
-                    onClick={() => updateQuery({})}
-                    variant="secondary"
-                  >
-                    ניקוי הסינון
-                  </Button>
-                </div>
-              </EmptyState>
-            ) : (
-              <ApplicationListTable items={items} onRequestClose={setClosingApplication} />
-            )}
+              {items.length === 0 ? (
+                <EmptyState className="mt-3">
+                  <p className="text-body text-cv-text">אין מועמדות שמתאימה לסינון.</p>
+                  <div className="mt-5 flex justify-center">
+                    <Button onClick={() => updateQuery({})} variant="secondary">
+                      ניקוי הסינון
+                    </Button>
+                  </div>
+                </EmptyState>
+              ) : (
+                <ApplicationListTable items={items} onRequestClose={setClosingApplication} />
+              )}
 
-            <ApplicationListPagination
-              matchedCount={matched}
-              offset={offset}
-              onOffsetChange={(nextOffset) =>
-                updateQuery({ ...query, offset: nextOffset }, { replace: false, resetOffset: false })
-              }
-              pageSize={PAGE_SIZE}
-              visibleCount={items.length}
-            />
-          </div>
+              <ApplicationListPagination
+                matchedCount={matched}
+                offset={offset}
+                onOffsetChange={(nextOffset) =>
+                  updateQuery({ ...query, offset: nextOffset }, { replace: false, resetOffset: false })
+                }
+                pageSize={PAGE_SIZE}
+                visibleCount={items.length}
+              />
+            </div>
           </>
         )}
       </QueryState>

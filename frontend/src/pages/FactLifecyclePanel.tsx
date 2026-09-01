@@ -46,13 +46,7 @@ const statusLabels: Record<FactStatus, string> = {
 
 const factLabel = (fact: Fact): string => fact.renderings.he ?? fact.renderings.en ?? fact.meaning;
 
-export const FactLifecyclePanel = ({
-  profile,
-  sections,
-}: {
-  profile: string | null;
-  sections: string[];
-}) => {
+export const FactLifecyclePanel = ({ profile, sections }: { profile: string | null; sections: string[] }) => {
   const queryClient = useQueryClient();
   const factsQuery = useQuery(factsQueryOptions());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -68,9 +62,7 @@ export const FactLifecyclePanel = ({
   const [explicitlyConfirmed, setExplicitlyConfirmed] = useState(false);
   const [section, setSection] = useState(sections[0] ?? "");
   const [pin, setPin] = useState(false);
-  const [source, setSource] = useState<FactSource>(
-    profile === "development" ? "development.md" : "sales.md",
-  );
+  const [source, setSource] = useState<FactSource>(profile === "development" ? "development.md" : "sales.md");
   const [meaning, setMeaning] = useState("");
   const [english, setEnglish] = useState("");
   const [hebrew, setHebrew] = useState("");
@@ -135,12 +127,14 @@ export const FactLifecyclePanel = ({
   });
   const error = factsQuery.error ?? detailQuery.error ?? create.error ?? transition.error ?? attachment.error;
   const tagsPresent = tags.split(",").some((tag) => tag.trim() !== "");
-  const canCreate =
-    meaning.trim() !== "" && english.trim() !== "" && provenance.trim() !== "" && tagsPresent;
+  const canCreate = meaning.trim() !== "" && english.trim() !== "" && provenance.trim() !== "" && tagsPresent;
   const selected = detailQuery.data?.fact;
 
   return (
-    <section aria-labelledby="fact-lifecycle-heading" className="rounded-surface border border-cv-border bg-cv-surface-muted p-4 sm:p-5">
+    <section
+      aria-labelledby="fact-lifecycle-heading"
+      className="rounded-surface border border-cv-border bg-cv-surface-muted p-4 sm:p-5"
+    >
       <h2 className="text-heading-sm font-bold text-cv-text" id="fact-lifecycle-heading">
         מחזור חיי העובדות
       </h2>
@@ -167,9 +161,7 @@ export const FactLifecyclePanel = ({
               }}
               value={selectedId ?? ""}
             >
-              {(factsQuery.data?.items.length ?? 0) === 0 ? (
-                <option value="">אין עדיין עובדות</option>
-              ) : null}
+              {(factsQuery.data?.items.length ?? 0) === 0 ? <option value="">אין עדיין עובדות</option> : null}
               {factsQuery.data?.items.map(({ fact }) => (
                 <option key={fact.fact_id} value={fact.fact_id}>
                   {factLabel(fact)} · {statusLabels[fact.status]}
@@ -180,9 +172,13 @@ export const FactLifecyclePanel = ({
         </Field>
         {selected === undefined ? null : (
           <div className="rounded-control border border-cv-border bg-cv-surface p-4">
-            <p className="font-semibold text-cv-text" dir="auto">{factLabel(selected)}</p>
+            <p className="font-semibold text-cv-text" dir="auto">
+              {factLabel(selected)}
+            </p>
             <p className="mt-1 text-support text-cv-text-muted">{statusLabels[selected.status]}</p>
-            <p className="mt-2 text-support text-cv-text-muted" dir="auto">{selected.meaning}</p>
+            <p className="mt-2 text-support text-cv-text-muted" dir="auto">
+              {selected.meaning}
+            </p>
           </div>
         )}
       </div>
@@ -202,7 +198,10 @@ export const FactLifecyclePanel = ({
           </ol>
           {selected?.status === "pending" || selected?.status === "confirmed" ? (
             <div className="flex flex-col gap-3 rounded-control border border-cv-border bg-cv-surface p-4">
-              <Checkbox checked={explicitlyConfirmed} onChange={(event) => setExplicitlyConfirmed(event.currentTarget.checked)}>
+              <Checkbox
+                checked={explicitlyConfirmed}
+                onChange={(event) => setExplicitlyConfirmed(event.currentTarget.checked)}
+              >
                 בדקתי את תוכן העובדה והמקור ואני מאשר את שינוי המעמד
               </Checkbox>
               <Button
@@ -223,7 +222,11 @@ export const FactLifecyclePanel = ({
               <Field label="סעיף בפרופיל הפעיל">
                 {(control) => (
                   <Select {...control} onChange={(event) => setSection(event.target.value)} value={section}>
-                    {sections.map((name) => <option key={name} value={name}>{name}</option>)}
+                    {sections.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
                   </Select>
                 )}
               </Field>
@@ -256,7 +259,9 @@ export const FactLifecyclePanel = ({
             {(control) => (
               <Select {...control} onChange={(event) => setSource(event.target.value as FactSource)} value={source}>
                 {Object.entries(sourceLabels).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
                 ))}
               </Select>
             )}
@@ -265,27 +270,61 @@ export const FactLifecyclePanel = ({
             {(control) => (
               <Select {...control} onChange={(event) => setStyle(event.target.value as FactStyle)} value={style}>
                 {Object.entries(styleLabels).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
                 ))}
               </Select>
             )}
           </Field>
           <Field className="lg:col-span-2" label="משמעות">
-            {(control) => <TextArea {...control} dir="auto" onChange={(event) => setMeaning(event.target.value)} required value={meaning} />}
+            {(control) => (
+              <TextArea
+                {...control}
+                dir="auto"
+                onChange={(event) => setMeaning(event.target.value)}
+                required
+                value={meaning}
+              />
+            )}
           </Field>
           <Field label="ניסוח באנגלית">
-            {(control) => <TextArea {...control} dir="ltr" onChange={(event) => setEnglish(event.target.value)} required value={english} />}
+            {(control) => (
+              <TextArea
+                {...control}
+                dir="ltr"
+                onChange={(event) => setEnglish(event.target.value)}
+                required
+                value={english}
+              />
+            )}
           </Field>
           <Field label="ניסוח בעברית (רשות)">
             {(control) => <TextArea {...control} onChange={(event) => setHebrew(event.target.value)} value={hebrew} />}
           </Field>
           <Field hint="יש להפריד תגיות בפסיקים." label="תגיות">
-            {(control) => <TextInput {...control} onChange={(event) => setTags(event.target.value)} required value={tags} />}
+            {(control) => (
+              <TextInput {...control} onChange={(event) => setTags(event.target.value)} required value={tags} />
+            )}
           </Field>
           <Field label="מקור ואימות העובדה">
-            {(control) => <TextArea {...control} dir="auto" onChange={(event) => setProvenance(event.target.value)} required value={provenance} />}
+            {(control) => (
+              <TextArea
+                {...control}
+                dir="auto"
+                onChange={(event) => setProvenance(event.target.value)}
+                required
+                value={provenance}
+              />
+            )}
           </Field>
-          <Button className="lg:col-span-2" disabled={!canCreate} pending={create.isPending} pendingLabel="יוצר…" type="submit">
+          <Button
+            className="lg:col-span-2"
+            disabled={!canCreate}
+            pending={create.isPending}
+            pendingLabel="יוצר…"
+            type="submit"
+          >
             יצירת עובדה ממתינה
           </Button>
         </form>

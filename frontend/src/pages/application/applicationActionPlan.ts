@@ -44,9 +44,7 @@ export const applicationActionPlan = (detail: ApplicationDetail): ApplicationAct
   const draftWouldReplace = detail.working_draft_state !== "none";
 
   const canAnalyze = available("analyze");
-  const analyze = canAnalyze
-    ? { emphasized: recommended === "analyze", reanalysis: recommended !== "analyze" }
-    : null;
+  const analyze = canAnalyze ? { emphasized: recommended === "analyze", reanalysis: recommended !== "analyze" } : null;
 
   const createDraft =
     available("create_draft") && analysisId !== null && selectionPlanId !== null && !draftWouldReplace
@@ -73,10 +71,7 @@ export const applicationActionPlan = (detail: ApplicationDetail): ApplicationAct
       ? null
       : {
           ...draftScreenTarget,
-          emphasized:
-            recommended === "approve" ||
-            recommended === "validate" ||
-            recommended === "update_working_draft",
+          emphasized: recommended === "approve" || recommended === "validate" || recommended === "update_working_draft",
         };
 
   const readyRevision =
@@ -100,9 +95,7 @@ export const applicationActionPlan = (detail: ApplicationDetail): ApplicationAct
   );
 
   const unbuiltRecommendation =
-    recommended !== null &&
-    !handledHere.has(recommended) &&
-    actionDestination(recommended, applicationId) === null
+    recommended !== null && !handledHere.has(recommended) && actionDestination(recommended, applicationId) === null
       ? recommended
       : null;
 

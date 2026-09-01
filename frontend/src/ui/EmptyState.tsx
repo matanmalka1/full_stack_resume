@@ -7,13 +7,7 @@ interface EmptyStateProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 export const EmptyState = ({ children, className, ...rest }: EmptyStateProps) => (
-  <div
-    className={cx(
-      "rounded-surface border border-dashed border-cv-border p-8 text-center",
-      className,
-    )}
-    {...rest}
-  >
+  <div className={cx("rounded-surface border border-dashed border-cv-border p-8 text-center", className)} {...rest}>
     {children}
   </div>
 );

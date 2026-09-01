@@ -2,11 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import type { Operation } from "../api/contracts";
-import {
-  cancelOperation,
-  operationQueryKey,
-  retryOperation,
-} from "../api/operations";
+import { cancelOperation, operationQueryKey, retryOperation } from "../api/operations";
 import { ErrorCallout } from "../app/ErrorCallout";
 import { Button } from "../ui/Button";
 
@@ -28,11 +24,7 @@ interface OperationActionsProps {
   onQueued: (operationId: string) => void;
 }
 
-export const OperationActions = ({
-  collapsed = false,
-  onQueued,
-  operation,
-}: OperationActionsProps) => {
+export const OperationActions = ({ collapsed = false, onQueued, operation }: OperationActionsProps) => {
   const queryClient = useQueryClient();
   /* One key per original Operation: an uncertain response can be retried safely, while
      navigating to the newly queued Operation rotates the key for its own future retry. */

@@ -54,9 +54,7 @@ export const DraftApprovalDialog = ({
 
   const approvalKey = useMemo(
     () =>
-      draft === undefined || validationRunId === null
-        ? ""
-        : `${draft.id}:${draft.edit_version}:${validationRunId}`,
+      draft === undefined || validationRunId === null ? "" : `${draft.id}:${draft.edit_version}:${validationRunId}`,
     [draft, validationRunId],
   );
 
@@ -82,8 +80,7 @@ export const DraftApprovalDialog = ({
     },
   });
   const projectionDiverged =
-    approval.error instanceof ApiProblem &&
-    approval.error.problem.code === "WORKING_PROJECTION_DIVERGED";
+    approval.error instanceof ApiProblem && approval.error.problem.code === "WORKING_PROJECTION_DIVERGED";
 
   return (
     <Dialog
@@ -133,13 +130,11 @@ export const DraftApprovalDialog = ({
           title="נמצא שינוי בקובץ העבודה שלא יובא לטיוטה"
           tone="blocker"
         >
-          השינוי נשמר ולא נדרס. יש להחיל אותו מחדש דרך שדות העריכה במסך הזה, או להשתמש
-          בפעולת היצירה מחדש של השורה או הפרק אם הכוונה היא לוותר עליו. לאחר מכן יש לבצע
-          אימות חדש ולאשר שוב.
+          השינוי נשמר ולא נדרס. יש להחיל אותו מחדש דרך שדות העריכה במסך הזה, או להשתמש בפעולת היצירה מחדש של השורה או
+          הפרק אם הכוונה היא לוותר עליו. לאחר מכן יש לבצע אימות חדש ולאשר שוב.
         </Callout>
       ) : approval.error === null ||
-      (approval.error instanceof ApiProblem &&
-        approval.error.problem.code === "VALIDATION_STALE") ? null : (
+        (approval.error instanceof ApiProblem && approval.error.problem.code === "VALIDATION_STALE") ? null : (
         <ErrorCallout
           className="mt-4"
           error={approval.error}
@@ -156,10 +151,7 @@ export const DraftApprovalDialog = ({
               </li>
             ))}
           </ul>
-          <Checkbox
-            checked={acknowledged}
-            onChange={(event) => setAcknowledged(event.currentTarget.checked)}
-          >
+          <Checkbox checked={acknowledged} onChange={(event) => setAcknowledged(event.currentTarget.checked)}>
             קראתי את האזהרות ואני רוצה להמשיך באישור
           </Checkbox>
         </Callout>

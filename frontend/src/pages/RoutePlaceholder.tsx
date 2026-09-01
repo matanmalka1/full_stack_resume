@@ -11,7 +11,5 @@ export const RoutePlaceholder = ({ title, description }: RoutePlaceholderProps) 
      what keeps the landmark from carrying the previous screen's stage into it. */
   useWorkflowStage("none");
 
-  return (
-    <PageShell description={description} title={title} />
-  );
+  return <PageShell description={description} title={title} />;
 };

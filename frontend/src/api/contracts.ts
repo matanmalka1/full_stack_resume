@@ -5,8 +5,7 @@ export type ApiSchemas = components["schemas"];
 export type ApplicationDetail = ApiSchemas["ApplicationDetailResponse"];
 export type RecruitmentTimelineItem = ApiSchemas["RecruitmentTimelineItemResponse"];
 export type RecruitmentStatus = NonNullable<RecruitmentTimelineItem["to_status"]>;
-export type TransitionableRecruitmentStatus =
-  ApiSchemas["TransitionStatusRequest"]["target_status"];
+export type TransitionableRecruitmentStatus = ApiSchemas["TransitionStatusRequest"]["target_status"];
 export type ApplicationMutation = ApiSchemas["ApplicationMutationResponse"];
 export type TransitionStatusRequest = ApiSchemas["TransitionStatusRequest"];
 export type CorrectStatusRequest = ApiSchemas["CorrectStatusRequest"];

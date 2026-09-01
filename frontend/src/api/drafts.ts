@@ -25,11 +25,9 @@ export interface DraftRead {
   etag: string | null;
 }
 
-export const workingDraftQueryKey = (workingDraftId: string) =>
-  ["working-draft", workingDraftId] as const;
+export const workingDraftQueryKey = (workingDraftId: string) => ["working-draft", workingDraftId] as const;
 
-export const workingDraftFactsQueryKey = (workingDraftId: string) =>
-  ["working-draft-facts", workingDraftId] as const;
+export const workingDraftFactsQueryKey = (workingDraftId: string) => ["working-draft-facts", workingDraftId] as const;
 
 const workingDraftPath = (workingDraftId: string): ApiPath =>
   `/api/v1/working-drafts/${encodeURIComponent(workingDraftId)}`;
@@ -50,10 +48,9 @@ export const workingDraftFactsQueryOptions = (workingDraftId: string) =>
   queryOptions({
     queryKey: workingDraftFactsQueryKey(workingDraftId),
     queryFn: async ({ signal }) => {
-      const response = await apiRequest<WorkingDraftFacts>(
-        `${workingDraftPath(workingDraftId)}/facts` as ApiPath,
-        { signal },
-      );
+      const response = await apiRequest<WorkingDraftFacts>(`${workingDraftPath(workingDraftId)}/facts` as ApiPath, {
+        signal,
+      });
       return response.data;
     },
   });
@@ -110,12 +107,8 @@ export const updateWorkingDraft = async (
 export const selectionOverlay = (
   facts: WorkingDraftFacts,
 ): { pinned_fact_ids: string[]; excluded_fact_ids: string[] } => ({
-  pinned_fact_ids: facts.facts
-    .filter((fact) => fact.outcome === "pinned")
-    .map((fact) => fact.fact_id),
-  excluded_fact_ids: facts.facts
-    .filter((fact) => fact.reason === "excluded_by_user")
-    .map((fact) => fact.fact_id),
+  pinned_fact_ids: facts.facts.filter((fact) => fact.outcome === "pinned").map((fact) => fact.fact_id),
+  excluded_fact_ids: facts.facts.filter((fact) => fact.reason === "excluded_by_user").map((fact) => fact.fact_id),
 });
 
 /* §14: a deterministic re-selection. `201` because the change creates an immutable

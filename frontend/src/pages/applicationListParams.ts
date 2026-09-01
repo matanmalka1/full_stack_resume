@@ -96,8 +96,7 @@ export const queryFromParams = (params: URLSearchParams): ApplicationListQuery =
   const search = params.get("search") ?? "";
   /* Rounded down to a page boundary. An offset the pager could never have produced would
      leave its "previous" button one partial page from the start. */
-  const offset =
-    Math.floor((wholeNumber(params.get("offset")) ?? 0) / PAGE_SIZE) * PAGE_SIZE;
+  const offset = Math.floor((wholeNumber(params.get("offset")) ?? 0) / PAGE_SIZE) * PAGE_SIZE;
 
   return {
     activity: known(activityFilters, params.get("activity")) ?? defaultActivity,

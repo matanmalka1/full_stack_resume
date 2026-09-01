@@ -17,16 +17,13 @@ const destinations: Record<string, (applicationId: string) => string> = {
      lead to it. `apply_selection_change` and the removal path are controls on that
      screen rather than screens of their own: they act on the claim the user is looking
      at, and a separate destination would ask them to find it twice. */
-  update_working_draft: (applicationId) =>
-    `/applications/${encodeURIComponent(applicationId)}/draft`,
+  update_working_draft: (applicationId) => `/applications/${encodeURIComponent(applicationId)}/draft`,
   /* Validation and approval are states of the draft editor, not screens beside it.
      Both act on the exact draft the editor is holding, so they resolve to that one
      destination: the panel that reports the result and the dialog that approves it are
      already there when the user arrives. */
-  validate: (applicationId) =>
-    `/applications/${encodeURIComponent(applicationId)}/draft`,
-  approve: (applicationId) =>
-    `/applications/${encodeURIComponent(applicationId)}/draft`,
+  validate: (applicationId) => `/applications/${encodeURIComponent(applicationId)}/draft`,
+  approve: (applicationId) => `/applications/${encodeURIComponent(applicationId)}/draft`,
 };
 
 export const actionDestination = (action: string, applicationId: string): string | null =>

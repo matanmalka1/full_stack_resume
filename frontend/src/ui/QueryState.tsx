@@ -32,18 +32,11 @@ export const QueryState = ({
 }: QueryStateProps) => {
   const errorState =
     error !== null && error !== undefined && fallbackTitle !== undefined ? (
-      <ErrorCallout
-        className={className}
-        error={error}
-        fallbackDetail={fallbackDetail}
-        fallbackTitle={fallbackTitle}
-      />
+      <ErrorCallout className={className} error={error} fallbackDetail={fallbackDetail} fallbackTitle={fallbackTitle} />
     ) : null;
 
   if (loading) {
-    return (
-      errorState ?? <p className={cx("text-body text-cv-text-muted", className)}>{loadingLabel}</p>
-    );
+    return errorState ?? <p className={cx("text-body text-cv-text-muted", className)}>{loadingLabel}</p>;
   }
 
   const content = empty ? emptyState : children;

@@ -40,11 +40,7 @@ import { DraftSaveState } from "./DraftSaveState";
 import { DraftValidationPanel } from "./DraftValidationPanel";
 import { removability } from "./claimRemoval";
 import { useDraftAutosave } from "./useDraftAutosave";
-import {
-  reasonTitle,
-  workingDraftStateLabels,
-  workingDraftStateTones,
-} from "../application/applicationLabels";
+import { reasonTitle, workingDraftStateLabels, workingDraftStateTones } from "../application/applicationLabels";
 
 /* A.4 frame 3: the editor pane. It reads the §9 projection for which draft is active and
    what is blocking, and the draft itself for the structure it edits. It derives no second
@@ -249,8 +245,7 @@ export const DraftEditorPage = () => {
     autosave.status === "conflict" ||
     autosave.pending.length > 0 ||
     autosave.pendingRemovals.length > 0;
-  const regenerationDisabled =
-    unsaved || regeneration.isPending || !regenerationAvailable;
+  const regenerationDisabled = unsaved || regeneration.isPending || !regenerationAvailable;
 
   return (
     <PageShell
@@ -269,74 +264,59 @@ export const DraftEditorPage = () => {
         <QueryState error={draftQuery.error} fallbackTitle="לא ניתן לטעון את הטיוטה" />
       )}
 
-        {detail !== undefined && workingDraftId === null && renderRevisionId === null ? (
-          <Callout
-            action={
-              <Link className={buttonClasses("primary")} to={applicationHref}>
-                חזרה למועמדות
-              </Link>
-            }
-            title="אין כרגע טיוטה פעילה למועמדות הזו"
-            tone="neutral"
-          >
-            מסך המועמדות מציג את המצב המדויק ואת הפעולה שיוצרת טיוטה.
-          </Callout>
-        ) : null}
+      {detail !== undefined && workingDraftId === null && renderRevisionId === null ? (
+        <Callout
+          action={
+            <Link className={buttonClasses("primary")} to={applicationHref}>
+              חזרה למועמדות
+            </Link>
+          }
+          title="אין כרגע טיוטה פעילה למועמדות הזו"
+          tone="neutral"
+        >
+          מסך המועמדות מציג את המצב המדויק ואת הפעולה שיוצרת טיוטה.
+        </Callout>
+      ) : null}
 
-        {detail === undefined ? null : (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-cv-border bg-cv-surface-muted px-4 py-3 shadow-inner">
-            <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
-              {workingDraftStateLabels[detail.working_draft_state]}
-            </StatusBadge>
-            {workingDraftId === null ? null : <DraftSaveState state={autosave} />}
-          </div>
-        )}
+      {detail === undefined ? null : (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-cv-border bg-cv-surface-muted px-4 py-3 shadow-inner">
+          <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
+            {workingDraftStateLabels[detail.working_draft_state]}
+          </StatusBadge>
+          {workingDraftId === null ? null : <DraftSaveState state={autosave} />}
+        </div>
+      )}
 
-        {/* Live work, reported beside the draft it is rewriting rather than on a screen
+      {/* Live work, reported beside the draft it is rewriting rather than on a screen
             the user has to leave the text for. */}
-        {operationPanel}
+      {operationPanel}
 
-        {/* The projection's own blockers. A claim with no fact behind it raises
+      {/* The projection's own blockers. A claim with no fact behind it raises
             PENDING_FACT_REQUIRES_RESOLUTION there, and it is shown here as the reason it
             already is rather than as an approval rule this screen invented. */}
-        {(detail?.review_reasons ?? []).map((reason) => (
-          <Callout
-            key={reason.code}
-            title={reasonTitle(reason.code, "נדרשת החלטה לפני אישור הגרסה")}
-            tone="blocker"
-          />
-        ))}
+      {(detail?.review_reasons ?? []).map((reason) => (
+        <Callout key={reason.code} title={reasonTitle(reason.code, "נדרשת החלטה לפני אישור הגרסה")} tone="blocker" />
+      ))}
 
-        {(detail?.stale_reasons ?? []).map((reason) => (
-          <Callout
-            key={reason.code}
-            title={reasonTitle(reason.code, "הטיוטה אינה מעודכנת מול המקורות שלה")}
-            tone="warning"
-          />
-        ))}
+      {(detail?.stale_reasons ?? []).map((reason) => (
+        <Callout
+          key={reason.code}
+          title={reasonTitle(reason.code, "הטיוטה אינה מעודכנת מול המקורות שלה")}
+          tone="warning"
+        />
+      ))}
 
-        {renderRevisionId !== null ? (
-          <DraftRenderPanel approvedRevisionId={renderRevisionId} onQueued={watch} />
-        ) : null}
-        {renderRevisionId === null &&
-        draft === undefined &&
-        workingDraftId !== null &&
-        draftQuery.error === null ? (
-          <QueryState loading loadingLabel="טוען את הטיוטה…" />
-        ) : null}
-        {renderRevisionId === null && draft !== undefined ? (
-          <>
-            <EditorLayout
-              editor={
-                <>
-                  <section
-                    aria-labelledby="draft-structure-heading"
-                    className="flex flex-col gap-4"
-                  >
-                  <h2
-                    className="text-heading-sm font-bold text-cv-text"
-                    id="draft-structure-heading"
-                  >
+      {renderRevisionId !== null ? <DraftRenderPanel approvedRevisionId={renderRevisionId} onQueued={watch} /> : null}
+      {renderRevisionId === null && draft === undefined && workingDraftId !== null && draftQuery.error === null ? (
+        <QueryState loading loadingLabel="טוען את הטיוטה…" />
+      ) : null}
+      {renderRevisionId === null && draft !== undefined ? (
+        <>
+          <EditorLayout
+            editor={
+              <>
+                <section aria-labelledby="draft-structure-heading" className="flex flex-col gap-4">
+                  <h2 className="text-heading-sm font-bold text-cv-text" id="draft-structure-heading">
                     מבנה המסמך
                   </h2>
 
@@ -367,10 +347,7 @@ export const DraftEditorPage = () => {
                   </ul>
 
                   {draft.outline.sections.map((section) => (
-                    <div
-                      className="flex flex-col gap-3 border-t border-cv-border pt-6"
-                      key={section.name}
-                    >
+                    <div className="flex flex-col gap-3 border-t border-cv-border pt-6" key={section.name}>
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <h3 className="text-heading-sm font-bold text-cv-text" dir="auto">
                           {section.name}
@@ -385,9 +362,7 @@ export const DraftEditorPage = () => {
                         </Button>
                       </div>
                       {section.claims.length === 0 ? (
-                        <p className="text-support leading-6 text-cv-text-muted">
-                          אין כרגע שורות בסעיף הזה.
-                        </p>
+                        <p className="text-support leading-6 text-cv-text-muted">אין כרגע שורות בסעיף הזה.</p>
                       ) : (
                         <ul className="flex flex-col gap-3">
                           {section.claims.map((claim) => (
@@ -409,9 +384,7 @@ export const DraftEditorPage = () => {
                               key={claim.claim_id}
                               onBlur={autosave.flush}
                               onEdit={editClaim}
-                              onRegenerate={(claim) =>
-                                regeneration.mutate({ claimId: claim.claim_id })
-                              }
+                              onRegenerate={(claim) => regeneration.mutate({ claimId: claim.claim_id })}
                               onRemove={removeClaim}
                               unsaved={regenerationDisabled}
                             />
@@ -420,117 +393,112 @@ export const DraftEditorPage = () => {
                       )}
                     </div>
                   ))}
-                  </section>
+                </section>
 
-                  {regenerationAvailable ? null : (
-                    <Callout title="יצירה מחדש באמצעות AI אינה זמינה" tone="neutral">
-                      יש להגדיר ספק ולהפעיל AI במסך ההגדרות. לא יתבצע מעבר דטרמיניסטי שקט.
-                      <div className="mt-3">
-                        <Link className={buttonClasses("secondary")} to="/settings">
-                          מעבר להגדרות
-                        </Link>
-                      </div>
-                    </Callout>
-                  )}
+                {regenerationAvailable ? null : (
+                  <Callout title="יצירה מחדש באמצעות AI אינה זמינה" tone="neutral">
+                    יש להגדיר ספק ולהפעיל AI במסך ההגדרות. לא יתבצע מעבר דטרמיניסטי שקט.
+                    <div className="mt-3">
+                      <Link className={buttonClasses("secondary")} to="/settings">
+                        מעבר להגדרות
+                      </Link>
+                    </div>
+                  </Callout>
+                )}
 
-                  {regeneration.error === null ? null : (
-                    <ErrorCallout
-                      error={regeneration.error}
-                      fallbackDetail="לא ניתן היה להפעיל יצירה מחדש. הטיוטה נשמרה כפי שהיא."
-                      fallbackTitle="היצירה מחדש לא הופעלה"
-                    />
-                  )}
-
-                  {unsaved ? (
-                    <p className="text-support leading-6 text-cv-text-muted">
-                      יצירה מחדש מוקפאת על הגרסה השמורה של הטיוטה, ולכן היא זמינה רק אחרי שהשמירה
-                      הסתיימה.
-                    </p>
-                  ) : null}
-
-                  {selection.error === null ? null : (
-                    <ErrorCallout
-                      error={selection.error}
-                      fallbackDetail="לא ניתן היה לשנות את בחירת העובדות. הטיוטה נשמרה כפי שהיא."
-                      fallbackTitle="שינוי הבחירה לא בוצע"
-                    />
-                  )}
-
-                  <DraftFactPanel busy={selection.isPending} facts={facts} onInclude={includeFact} />
-
-                  <FactLifecyclePanel
-                    profile={detail?.application.profile ?? null}
-                    sections={draft.outline.sections.map((section) => section.name)}
+                {regeneration.error === null ? null : (
+                  <ErrorCallout
+                    error={regeneration.error}
+                    fallbackDetail="לא ניתן היה להפעיל יצירה מחדש. הטיוטה נשמרה כפי שהיא."
+                    fallbackTitle="היצירה מחדש לא הופעלה"
                   />
+                )}
 
-                  <div>
-                    <Link className={buttonClasses("secondary")} to={applicationHref}>
-                      <ArrowRight aria-hidden="true" className="size-4" />
-                      חזרה למועמדות
-                    </Link>
-                  </div>
-                </>
-              }
-              preview={
-                <>
-                  {/* The right pane is the document and everything said about it: the live
+                {unsaved ? (
+                  <p className="text-support leading-6 text-cv-text-muted">
+                    יצירה מחדש מוקפאת על הגרסה השמורה של הטיוטה, ולכן היא זמינה רק אחרי שהשמירה הסתיימה.
+                  </p>
+                ) : null}
+
+                {selection.error === null ? null : (
+                  <ErrorCallout
+                    error={selection.error}
+                    fallbackDetail="לא ניתן היה לשנות את בחירת העובדות. הטיוטה נשמרה כפי שהיא."
+                    fallbackTitle="שינוי הבחירה לא בוצע"
+                  />
+                )}
+
+                <DraftFactPanel busy={selection.isPending} facts={facts} onInclude={includeFact} />
+
+                <FactLifecyclePanel
+                  profile={detail?.application.profile ?? null}
+                  sections={draft.outline.sections.map((section) => section.name)}
+                />
+
+                <div>
+                  <Link className={buttonClasses("secondary")} to={applicationHref}>
+                    <ArrowRight aria-hidden="true" className="size-4" />
+                    חזרה למועמדות
+                  </Link>
+                </div>
+              </>
+            }
+            preview={
+              <>
+                {/* The right pane is the document and everything said about it: the live
                       preview, the validation result for the exact version shown, and the
                       approval that follows from it. Those last two were screens; reaching
                       them meant leaving the text they describe. */}
-                  <DraftPreview draft={draft} />
+                <DraftPreview draft={draft} />
 
-                  <DraftValidationPanel
-                    applicationId={applicationId}
-                    draft={draft}
-                    onExactPassingRun={onExactPassingRun}
-                    stale={validationStale}
-                  />
+                <DraftValidationPanel
+                  applicationId={applicationId}
+                  draft={draft}
+                  onExactPassingRun={onExactPassingRun}
+                  stale={validationStale}
+                />
 
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface">
-                    <p className="text-support leading-6 text-cv-text-muted">
-                      {exactPassingRunId === null
-                        ? "האישור נפתח אחרי אימות שעבר על הגרסה המוצגת."
-                        : "האימות עבר על הגרסה המוצגת."}
-                    </p>
-                    <Button
-                      disabled={exactPassingRunId === null}
-                      onClick={() => setApprovalOpen(true)}
-                    >
-                      אישור הגרסה
-                    </Button>
-                  </div>
-                </>
-              }
-            />
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface">
+                  <p className="text-support leading-6 text-cv-text-muted">
+                    {exactPassingRunId === null
+                      ? "האישור נפתח אחרי אימות שעבר על הגרסה המוצגת."
+                      : "האימות עבר על הגרסה המוצגת."}
+                  </p>
+                  <Button disabled={exactPassingRunId === null} onClick={() => setApprovalOpen(true)}>
+                    אישור הגרסה
+                  </Button>
+                </div>
+              </>
+            }
+          />
 
+          <DraftApprovalDialog
+            applicationId={applicationId}
+            detail={detail}
+            draft={draft}
+            onApproved={(revisionId) => {
+              setApprovalOpen(false);
+              setApprovedRevisionId(revisionId);
+            }}
+            onClose={() => setApprovalOpen(false)}
+            onStale={() => {
+              setApprovalOpen(false);
+              setValidationStale(true);
+            }}
+            open={approvalOpen}
+            validationRunId={exactPassingRunId}
+          />
 
-            <DraftApprovalDialog
-              applicationId={applicationId}
-              detail={detail}
-              draft={draft}
-              onApproved={(revisionId) => {
-                setApprovalOpen(false);
-                setApprovedRevisionId(revisionId);
-              }}
-              onClose={() => setApprovalOpen(false)}
-              onStale={() => {
-                setApprovalOpen(false);
-                setValidationStale(true);
-              }}
-              open={approvalOpen}
-              validationRunId={exactPassingRunId}
-            />
-
-            <DraftConflictDialog
-              current={draft}
-              onDiscardLocal={autosave.discardLocal}
-              onReapplyLocal={autosave.reapplyLocal}
-              open={autosave.status === "conflict"}
-              pending={autosave.pending}
-              pendingRemovals={autosave.pendingRemovals}
-            />
-          </>
-        ) : null}
+          <DraftConflictDialog
+            current={draft}
+            onDiscardLocal={autosave.discardLocal}
+            onReapplyLocal={autosave.reapplyLocal}
+            open={autosave.status === "conflict"}
+            pending={autosave.pending}
+            pendingRemovals={autosave.pendingRemovals}
+          />
+        </>
+      ) : null}
     </PageShell>
   );
 };

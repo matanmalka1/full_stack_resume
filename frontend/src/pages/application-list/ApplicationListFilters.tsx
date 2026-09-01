@@ -40,13 +40,7 @@ interface PresetChipsProps {
 const PresetChips = ({ preset: active, onPresetChange }: PresetChipsProps) => {
   const chip = (key: string, label: string, selected: boolean, onSelect: () => void) => (
     <label className="cursor-pointer" key={key}>
-      <input
-        checked={selected}
-        className="peer sr-only"
-        name="application-preset"
-        onChange={onSelect}
-        type="radio"
-      />
+      <input checked={selected} className="peer sr-only" name="application-preset" onChange={onSelect} type="radio" />
       <span
         className={cx(
           "inline-flex items-center rounded-pill border px-3 py-1.5 text-support font-semibold transition-colors",
@@ -65,9 +59,7 @@ const PresetChips = ({ preset: active, onPresetChange }: PresetChipsProps) => {
     <div aria-label="סינון מהיר" className="flex flex-wrap items-center gap-2" role="radiogroup">
       {chip("all", "הכל", active === undefined, () => onPresetChange(undefined))}
       {(Object.keys(applicationPresetLabels) as ApplicationPreset[]).map((preset) =>
-        chip(preset, applicationPresetLabels[preset], active === preset, () =>
-          onPresetChange(preset),
-        ),
+        chip(preset, applicationPresetLabels[preset], active === preset, () => onPresetChange(preset)),
       )}
     </div>
   );
@@ -155,9 +147,7 @@ export const ApplicationListFilters = ({
           className={toolbarControlClasses}
           id="list-stage"
           onChange={(event) =>
-            onPreparationStateChange(
-              event.target.value === "" ? undefined : (event.target.value as PreparationState),
-            )
+            onPreparationStateChange(event.target.value === "" ? undefined : (event.target.value as PreparationState))
           }
           value={preparationState ?? ""}
         >
@@ -173,19 +163,14 @@ export const ApplicationListFilters = ({
       </div>
 
       <div>
-        <label
-          className="block text-support font-semibold text-cv-text"
-          htmlFor="list-recruitment-status"
-        >
+        <label className="block text-support font-semibold text-cv-text" htmlFor="list-recruitment-status">
           שלב גיוס
         </label>
         <Select
           className={toolbarControlClasses}
           id="list-recruitment-status"
           onChange={(event) =>
-            onRecruitmentStatusChange(
-              event.target.value === "" ? undefined : (event.target.value as RecruitmentStatus),
-            )
+            onRecruitmentStatusChange(event.target.value === "" ? undefined : (event.target.value as RecruitmentStatus))
           }
           value={recruitmentStatus ?? ""}
         >

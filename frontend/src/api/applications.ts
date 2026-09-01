@@ -20,12 +20,7 @@ import type {
   PreparationState,
   RecruitmentStatus,
 } from "./contracts";
-import {
-  OPERATION_POLL_INTERVAL_MS,
-  isTerminalOperation,
-  type QueuedOperation,
-  queuedOperation,
-} from "./operations";
+import { OPERATION_POLL_INTERVAL_MS, isTerminalOperation, type QueuedOperation, queuedOperation } from "./operations";
 
 /* The only intake limit this module keeps. It is not a second copy of the intake
    policy - the server revalidates size, control characters, and URL syntax and stays
@@ -108,10 +103,8 @@ const intakeFingerprint = (intake: ApplicationIntake): string =>
    that same intake. The precheck is asynchronous and the form stays editable while it
    runs, so the text that was answered for and the text about to be created are two
    different values that have to be compared rather than assumed equal. */
-export const acknowledgementApplies = (
-  answered: ApplicationIntake | undefined,
-  current: ApplicationIntake,
-): boolean => answered !== undefined && intakeFingerprint(answered) === intakeFingerprint(current);
+export const acknowledgementApplies = (answered: ApplicationIntake | undefined, current: ApplicationIntake): boolean =>
+  answered !== undefined && intakeFingerprint(answered) === intakeFingerprint(current);
 
 export const applicationDetailQueryPrefix = ["application"] as const;
 export const applicationListQueryPrefix = ["applications"] as const;
@@ -187,8 +180,7 @@ const applicationListPath = (query: ApplicationListQuery): ApiPath => {
   return search === "" ? applicationsPath : `${applicationsPath}?${search}`;
 };
 
-const applicationPath = (applicationId: string): ApiPath =>
-  `/api/v1/applications/${encodeURIComponent(applicationId)}`;
+const applicationPath = (applicationId: string): ApiPath => `/api/v1/applications/${encodeURIComponent(applicationId)}`;
 
 const analysesPath = (applicationId: string): ApiPath =>
   `/api/v1/applications/${encodeURIComponent(applicationId)}/analyses`;
@@ -242,10 +234,9 @@ export const applicationListQueryOptions = (query: ApplicationListQuery = {}) =>
   queryOptions({
     queryKey: applicationListQueryKey(query),
     queryFn: async ({ signal }) => {
-      const response = await apiRequest<ApplicationListResponse>(
-        applicationListPath(query),
-        { signal },
-      );
+      const response = await apiRequest<ApplicationListResponse>(applicationListPath(query), {
+        signal,
+      });
       return response.data;
     },
     refetchInterval: (state) =>
@@ -276,8 +267,7 @@ export const startAnalysis = async (
 ): Promise<QueuedOperation> => {
   /* The source is always explicit. Provider is conditional and never spells out the
      deterministic default; the `Pick`s bind both field names to the generated contract. */
-  const body: Pick<CreateAnalysisRequest, "job_snapshot_id"> &
-    Partial<Pick<CreateAnalysisRequest, "provider">> = {
+  const body: Pick<CreateAnalysisRequest, "job_snapshot_id"> & Partial<Pick<CreateAnalysisRequest, "provider">> = {
     job_snapshot_id: jobSnapshotId,
     ...(provider === undefined ? {} : { provider }),
   };
@@ -311,9 +301,7 @@ export const startDraftGeneration = async (
     Partial<Pick<GenerateWorkingDraftRequest, "parent_revision_id" | "provider">> = {
     job_analysis_id: jobAnalysisId,
     selection_plan_id: selectionPlanId,
-    ...(options.parentRevisionId === undefined
-      ? {}
-      : { parent_revision_id: options.parentRevisionId }),
+    ...(options.parentRevisionId === undefined ? {} : { parent_revision_id: options.parentRevisionId }),
     ...(options.provider === undefined ? {} : { provider: options.provider }),
   };
 

@@ -36,11 +36,7 @@ export const ApplicationViews = ({
   current: ApplicationView;
   onChange: (view: ApplicationView) => void;
 }) => (
-  <div
-    aria-label="תצוגות המועמדות"
-    className="flex gap-1 border-b border-cv-border"
-    role="tablist"
-  >
+  <div aria-label="תצוגות המועמדות" className="flex gap-1 border-b border-cv-border" role="tablist">
     {views.map((view) => {
       const active = view.key === current;
 

@@ -116,7 +116,7 @@ const deterministicSettings: Settings = {
   ai_enabled: false,
   ai_enabled_override: null,
   default_execution_mode: "deterministic",
- 
+
   provider_configured: false,
   ui_density: "comfortable",
   ui_text_size: "normal",
@@ -142,9 +142,7 @@ const renderPage = (
 
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter
-        initialEntries={[{ pathname: "/applications/app-1", state: navigationState }]}
-      >
+      <MemoryRouter initialEntries={[{ pathname: "/applications/app-1", state: navigationState }]}>
         <Routes>
           <Route element={<ApplicationPage />} path="/applications/:applicationId" />
         </Routes>
@@ -173,9 +171,7 @@ describe("ApplicationPage", () => {
 
     renderPage(deterministicSettings, { automaticAnalysisStartFailed: true });
 
-    expect(
-      await screen.findByText("המועמדות נוצרה, אך הניתוח לא הופעל"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("המועמדות נוצרה, אך הניתוח לא הופעל")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ניתוח המשרה" })).toBeInTheDocument();
   });
 
@@ -185,7 +181,12 @@ describe("ApplicationPage", () => {
      what makes a reload safe. */
   it("auto-generates the draft once per successful analyze when Settings ask for it", async () => {
     let projectionReads = 0;
-    const analyzed = queued({ status: "succeeded", is_terminal: true, phase: "completed", available_actions: [] });
+    const analyzed = queued({
+      status: "succeeded",
+      is_terminal: true,
+      phase: "completed",
+      available_actions: [],
+    });
     const drafting = queued({ id: "op-draft", operation_type: "create_draft" });
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -221,11 +222,12 @@ describe("ApplicationPage", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const first = renderPage({ ...deterministicSettings, auto_generate_when_review_not_required: true });
+    const first = renderPage({
+      ...deterministicSettings,
+      auto_generate_when_review_not_required: true,
+    });
 
-    await waitFor(() =>
-      expect(sessionStorage.getItem("stage-e:auto-draft:op-1")).toBe("accepted"),
-    );
+    await waitFor(() => expect(sessionStorage.getItem("stage-e:auto-draft:op-1")).toBe("accepted"));
     const posts = fetchMock.mock.calls.filter((call) => call[1]?.method === "POST");
     expect(posts).toHaveLength(1);
     expect(JSON.parse(String(posts[0]?.[1]?.body))).toEqual({
@@ -236,9 +238,7 @@ describe("ApplicationPage", () => {
     first.unmount();
     renderPage({ ...deterministicSettings, auto_generate_when_review_not_required: true });
 
-    await waitFor(() =>
-      expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1),
-    );
+    await waitFor(() => expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1));
   });
   /* Queueing work no longer navigates: the projection carries the Operation and this
      screen reports it in place. */
@@ -256,9 +256,7 @@ describe("ApplicationPage", () => {
 
     renderPage();
 
-    expect(
-      await screen.findByRole("heading", { name: "הרצת ניתוח המשרה" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "הרצת ניתוח המשרה" })).toBeInTheDocument();
     expect(screen.getByText("מתבצעת")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "מעבר למצב הפעולה" })).not.toBeInTheDocument();
   });
@@ -268,9 +266,7 @@ describe("ApplicationPage", () => {
 
     renderPage();
 
-    expect(
-      screen.getByRole("heading", { level: 1, name: "הכנת קורות החיים" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "הכנת קורות החיים" })).toBeInTheDocument();
     /* The heading is static and appears during loading, so the projected state—not the
        h1—is the synchronization point for assertions about the loaded application. */
     expect(await screen.findByText("ממתין לניתוח המשרה")).toBeInTheDocument();
@@ -336,9 +332,7 @@ describe("ApplicationPage", () => {
 
     /* The accepted `202` is seeded as the panel's first state, so the queued Operation is
        reported on this screen rather than on one the user was sent to. */
-    expect(
-      await screen.findByRole("heading", { name: "הרצת ניתוח המשרה", level: 2 }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "הרצת ניתוח המשרה", level: 2 })).toBeInTheDocument();
 
     const request = fetchMock.mock.calls.find((call) => call[0] === ANALYSES_PATH);
     expect(request?.[0]).toBe(ANALYSES_PATH);
@@ -357,9 +351,7 @@ describe("ApplicationPage", () => {
 
     renderPage();
 
-    expect(
-      await screen.findByText("הניתוח שעל המסך אינו הניתוח הפעיל"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("הניתוח שעל המסך אינו הניתוח הפעיל")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "ניתוח המשרה" })).not.toBeInTheDocument();
     expect(screen.queryByText("The posting is a backend role.")).not.toBeInTheDocument();
   });

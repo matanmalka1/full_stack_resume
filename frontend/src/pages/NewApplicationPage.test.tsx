@@ -7,22 +7,13 @@ import type { DuplicateMatch } from "../api/contracts";
 import { settingsQueryKey } from "../api/settings";
 import { NewApplicationPage } from "./NewApplicationPage";
 
-const jsonResponse = (
-  body: unknown,
-  status = 200,
-  extraHeaders: Record<string, string> = {},
-): Response =>
+const jsonResponse = (body: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response =>
   new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json", ...extraHeaders },
   });
 
-const problemResponse = (
-  status: number,
-  code: string,
-  detail: string,
-  context?: Record<string, unknown>,
-): Response =>
+const problemResponse = (status: number, code: string, detail: string, context?: Record<string, unknown>): Response =>
   new Response(
     JSON.stringify({
       type: `about:blank#${code.toLowerCase()}`,
@@ -178,9 +169,7 @@ describe("NewApplicationPage", () => {
     chooseFile(new File(["Senior Backend Engineer\nTel Aviv"], "job.txt", { type: "text/plain" }));
 
     await waitFor(() => {
-      expect(screen.getByLabelText("טקסט המשרה")).toHaveValue(
-        "Senior Backend Engineer\nTel Aviv",
-      );
+      expect(screen.getByLabelText("טקסט המשרה")).toHaveValue("Senior Backend Engineer\nTel Aviv");
     });
     expect(screen.getByRole("status")).toHaveTextContent("job.txt");
     expect(calls).toEqual([]);
@@ -246,9 +235,7 @@ describe("NewApplicationPage", () => {
 
   it("offers the existing application and an explicit override instead of creating", async () => {
     const calls = stubFetch({
-      [DUPLICATE_CHECK_PATH]: [
-        jsonResponse({ matches: [match({ matched_on: ["source_url", "company_title"] })] }),
-      ],
+      [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [match({ matched_on: ["source_url", "company_title"] })] })],
     });
     renderPage();
 
@@ -289,11 +276,7 @@ describe("NewApplicationPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "יצירה בכל זאת" }));
 
     expect(await screen.findByRole("heading", { name: "מועמדות קיימת" })).toBeInTheDocument();
-    expect(calls.map((call) => call.path)).toEqual([
-      DUPLICATE_CHECK_PATH,
-      CREATE_PATH,
-      ANALYSES_PATH,
-    ]);
+    expect(calls.map((call) => call.path)).toEqual([DUPLICATE_CHECK_PATH, CREATE_PATH, ANALYSES_PATH]);
     expect(calls[1].body).toMatchObject({ acknowledged_duplicates: true });
   });
 
@@ -311,9 +294,7 @@ describe("NewApplicationPage", () => {
           201,
         ),
       ],
-      [ANALYSES_PATH]: [
-        problemResponse(503, "SERVICE_UNAVAILABLE", "analysis could not be queued"),
-      ],
+      [ANALYSES_PATH]: [problemResponse(503, "SERVICE_UNAVAILABLE", "analysis could not be queued")],
     });
     renderPage();
 
@@ -321,11 +302,7 @@ describe("NewApplicationPage", () => {
     submitForm();
 
     expect(await screen.findByRole("heading", { name: "מועמדות קיימת" })).toBeInTheDocument();
-    expect(calls.map((call) => call.path)).toEqual([
-      DUPLICATE_CHECK_PATH,
-      CREATE_PATH,
-      ANALYSES_PATH,
-    ]);
+    expect(calls.map((call) => call.path)).toEqual([DUPLICATE_CHECK_PATH, CREATE_PATH, ANALYSES_PATH]);
   });
 
   it("presents the create command's own duplicate refusal as the same choice", async () => {
@@ -361,7 +338,10 @@ describe("NewApplicationPage", () => {
     const inFlight = new Promise<Response>((resolve) => {
       answer = resolve;
     });
-    vi.stubGlobal("fetch", vi.fn(() => inFlight));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => inFlight),
+    );
 
     renderPage();
     fillIntake();
@@ -382,7 +362,10 @@ describe("NewApplicationPage", () => {
     const inFlight = new Promise<Response>((resolve) => {
       answer = resolve;
     });
-    vi.stubGlobal("fetch", vi.fn(() => inFlight));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => inFlight),
+    );
 
     renderPage();
     fillIntake();

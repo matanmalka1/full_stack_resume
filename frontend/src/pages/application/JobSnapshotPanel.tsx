@@ -31,17 +31,12 @@ export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
   const jobText = typeof snapshot.job_text === "string" ? snapshot.job_text.trim() : "";
 
   return (
-    <section
-      aria-labelledby="job-snapshot-heading"
-      className="rounded-surface border border-cv-border p-5"
-    >
+    <section aria-labelledby="job-snapshot-heading" className="rounded-surface border border-cv-border p-5">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-cv-border pb-4">
         <h2 className="text-body font-semibold text-cv-text" id="job-snapshot-heading">
           המשרה שנותחה
         </h2>
-        <span className="text-support text-cv-text-muted">
-          גרסה {snapshot.version_number}
-        </span>
+        <span className="text-support text-cv-text-muted">גרסה {snapshot.version_number}</span>
       </div>
 
       <div className="mt-4 flex flex-col gap-4">
@@ -72,9 +67,7 @@ export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
         />
 
         {jobText === "" ? (
-          <p className="text-support leading-6 text-cv-text-muted">
-            תצלום המשרה לא כולל טקסט שמור.
-          </p>
+          <p className="text-support leading-6 text-cv-text-muted">תצלום המשרה לא כולל טקסט שמור.</p>
         ) : (
           <Disclosure summary="הצגת נוסח המשרה שנותח">
             {/* Backend-stored source text, in whatever language the posting was written
@@ -92,7 +85,6 @@ export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
             </p>
           </Disclosure>
         )}
-
       </div>
     </section>
   );

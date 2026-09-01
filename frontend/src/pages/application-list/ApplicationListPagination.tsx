@@ -24,13 +24,8 @@ export const ApplicationListPagination = ({
   }
 
   return (
-    <nav
-      aria-label="ניווט בין דפי המועמדויות"
-      className="mt-5 flex flex-wrap items-center justify-between gap-3"
-    >
-      <p className="text-support text-cv-text-muted">
-        {`${offset + 1}–${offset + visibleCount} מתוך ${matchedCount}`}
-      </p>
+    <nav aria-label="ניווט בין דפי המועמדויות" className="mt-5 flex flex-wrap items-center justify-between gap-3">
+      <p className="text-support text-cv-text-muted">{`${offset + 1}–${offset + visibleCount} מתוך ${matchedCount}`}</p>
       <div className="flex items-center gap-2">
         <Button
           disabled={offset === 0}
@@ -40,11 +35,7 @@ export const ApplicationListPagination = ({
           <ChevronRight aria-hidden="true" className="size-4" />
           הקודם
         </Button>
-        <Button
-          disabled={!hasMore}
-          onClick={() => onOffsetChange(offset + pageSize)}
-          variant="secondary"
-        >
+        <Button disabled={!hasMore} onClick={() => onOffsetChange(offset + pageSize)} variant="secondary">
           הבא
           <ChevronLeft aria-hidden="true" className="size-4" />
         </Button>

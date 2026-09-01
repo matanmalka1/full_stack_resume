@@ -116,11 +116,7 @@ describe("the review decision, on the Application screen", () => {
   it("shows the fit acceptance for a hard gap and no classification selects", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          jsonResponse(detail({ review_reasons: [reason("HARD_GAP_REQUIRES_DECISION")] })),
-        ),
+      vi.fn().mockResolvedValue(jsonResponse(detail({ review_reasons: [reason("HARD_GAP_REQUIRES_DECISION")] }))),
     );
 
     renderPage();
@@ -155,9 +151,7 @@ describe("the review decision, on the Application screen", () => {
       void init;
       /* The decision closed the reason, which the refreshed projection is what reports. */
       return Promise.resolve(
-        jsonResponse(
-          applied ? detail({ review_reasons: [], preparation_state: "ready_to_draft" }) : detail(),
-        ),
+        jsonResponse(applied ? detail({ review_reasons: [], preparation_state: "ready_to_draft" }) : detail()),
       );
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -189,9 +183,7 @@ describe("the review decision, on the Application screen", () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse(detail()))
-      .mockResolvedValueOnce(
-        problemResponse("PRECONDITION_FAILED", "the submitted decisions change nothing"),
-      );
+      .mockResolvedValueOnce(problemResponse("PRECONDITION_FAILED", "the submitted decisions change nothing"));
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage();
@@ -206,10 +198,7 @@ describe("the review decision, on the Application screen", () => {
   });
 
   it("does not show a superseded analysis as the one under decision", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(jsonResponse(detail({ active_analysis_id: "analysis-9" }))),
-    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail({ active_analysis_id: "analysis-9" }))));
 
     renderPage();
 

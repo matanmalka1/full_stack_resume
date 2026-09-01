@@ -96,8 +96,7 @@ const approvalReasonLabels: Record<string, string> = {
   "unspecified-ambiguity": "הניתוח נשמר לפני שנרשמה סיבת ההחלטה.",
 };
 
-export const approvalReasonLabel = (reason: string): string =>
-  approvalReasonLabels[reason] ?? reason;
+export const approvalReasonLabel = (reason: string): string => approvalReasonLabels[reason] ?? reason;
 
 export const gapSeverityLabels: Record<"hard" | "warning", string> = {
   hard: "פער חוסם",

@@ -153,9 +153,7 @@ const updateResponse = (editVersion: number): Response =>
 /* One route per read, so a test states which answer it is giving rather than depending on
    the order the screen happens to request them in. */
 const stubReads = (
-  answers: Partial<
-    Record<"detail" | "draft" | "facts" | "selectionChange" | "regenerate", () => Response>
-  >,
+  answers: Partial<Record<"detail" | "draft" | "facts" | "selectionChange" | "regenerate", () => Response>>,
 ): ReturnType<typeof vi.fn> => {
   const fetchMock = vi.fn((input: unknown) => {
     const url = String(input);
@@ -205,7 +203,7 @@ const renderPage = (aiEnabled = true) => {
       ai_enabled: aiEnabled,
       ai_enabled_override: aiEnabled,
       default_execution_mode: "deterministic",
-     
+
       provider_configured: aiEnabled,
       ui_density: "comfortable",
       ui_text_size: "normal",
@@ -312,9 +310,7 @@ describe("DraftEditorPage", () => {
         return Promise.resolve(jsonResponse(facts()));
       }
       if (url === "/api/v1/facts" || url === "/api/v1/facts/history") {
-        return Promise.resolve(
-          jsonResponse(url.endsWith("/history") ? { events: [] } : { items: [] }),
-        );
+        return Promise.resolve(jsonResponse(url.endsWith("/history") ? { events: [] } : { items: [] }));
       }
       if (url === DRAFT_PATH && init?.method === "PATCH") {
         patchWrites += 1;
@@ -363,18 +359,14 @@ describe("DraftEditorPage", () => {
     expect(within(dialog).getByText("My local wording.")).toBeInTheDocument();
     expect(within(dialog).getByText("Saved in the other tab.")).toBeInTheDocument();
 
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: "החלת הטקסט שלי על הגרסה הנוכחית" }),
-    );
+    fireEvent.click(within(dialog).getByRole("button", { name: "החלת הטקסט שלי על הגרסה הנוכחית" }));
     await waitFor(() => expect(dialog).not.toHaveAttribute("open"));
 
     const patchCalls = fetchMock.mock.calls.filter(
       (call) => String(call[0]) === DRAFT_PATH && (call[1] as RequestInit)?.method === "PATCH",
     );
     expect(patchCalls).toHaveLength(2);
-    expect(((patchCalls[1]![1] as RequestInit).headers as Headers).get("If-Match")).toBe(
-      '"9-hash-9"',
-    );
+    expect(((patchCalls[1]![1] as RequestInit).headers as Headers).get("If-Match")).toBe('"9-hash-9"');
   });
 
   it("presents the projection's own review reason rather than inventing an approval rule", async () => {
@@ -402,23 +394,18 @@ describe("DraftEditorPage", () => {
        the test guards is unchanged - the blocker shown is the projection's, not a rule
        this screen invented. */
     expect(await screen.findByText("טענה בלי עובדה מאושרת")).toBeInTheDocument();
-    expect(
-      screen.queryByText("A claim in the active draft depends on a pending fact."),
-    ).toBeNull();
+    expect(screen.queryByText("A claim in the active draft depends on a pending fact.")).toBeNull();
   });
 
   it("says plainly when there is no active draft instead of reading one that does not exist", async () => {
     const fetchMock = stubReads({
-      detail: () =>
-        jsonResponse(detail({ active_working_draft_id: null, working_draft_state: "none" })),
+      detail: () => jsonResponse(detail({ active_working_draft_id: null, working_draft_state: "none" })),
     });
 
     renderPage();
 
     expect(await screen.findByText("אין כרגע טיוטה פעילה למועמדות הזו")).toBeInTheDocument();
-    expect(fetchMock.mock.calls.every((call) => !String(call[0]).startsWith(DRAFT_PATH))).toBe(
-      true,
-    );
+    expect(fetchMock.mock.calls.every((call) => !String(call[0]).startsWith(DRAFT_PATH))).toBe(true);
   });
 
   it("keeps the approved revision render step after approval deactivates the draft", async () => {
@@ -449,13 +436,9 @@ describe("DraftEditorPage", () => {
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "הגרסה אושרה" })).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "יצירת HTML ו־PDF" })).toBeEnabled(),
-    );
+    await waitFor(() => expect(screen.getByRole("button", { name: "יצירת HTML ו־PDF" })).toBeEnabled());
     expect(screen.queryByText("אין כרגע טיוטה פעילה למועמדות הזו")).not.toBeInTheDocument();
-    expect(fetchMock.mock.calls.every((call) => !String(call[0]).startsWith(DRAFT_PATH))).toBe(
-      true,
-    );
+    expect(fetchMock.mock.calls.every((call) => !String(call[0]).startsWith(DRAFT_PATH))).toBe(true);
   });
 
   it("states why a structural line stays instead of offering a removal that would be refused", async () => {
@@ -463,9 +446,7 @@ describe("DraftEditorPage", () => {
 
     renderPage();
 
-    expect(
-      await screen.findByText("שורת הכותרת היא חלק ממבנה המסמך ואינה נמחקת."),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("שורת הכותרת היא חלק ממבנה המסמך ואינה נמחקת.")).toBeInTheDocument();
   });
 });
 
@@ -500,13 +481,9 @@ describe("DraftEditorPage selection changes", () => {
     fireEvent.click(await screen.findByRole("button", { name: "הכללת העובדה" }));
 
     await waitFor(() =>
-      expect(
-        fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/apply-selection-change")),
-      ).toBe(true),
+      expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/apply-selection-change"))).toBe(true),
     );
-    const call = fetchMock.mock.calls.find((entry) =>
-      String(entry[0]).endsWith("/apply-selection-change"),
-    );
+    const call = fetchMock.mock.calls.find((entry) => String(entry[0]).endsWith("/apply-selection-change"));
     /* Absolute lists: the existing pin is resent alongside the new one, because the plan
        is built from the overlay alone. */
     expect(JSON.parse(String((call?.[1] as RequestInit).body))).toEqual({
@@ -523,17 +500,11 @@ describe("DraftEditorPage selection changes", () => {
     fireEvent.click(await screen.findByRole("button", { name: "הסרת השורה" }));
 
     await waitFor(() =>
-      expect(
-        fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/apply-selection-change")),
-      ).toBe(true),
+      expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/apply-selection-change"))).toBe(true),
     );
-    const call = fetchMock.mock.calls.find((entry) =>
-      String(entry[0]).endsWith("/apply-selection-change"),
-    );
+    const call = fetchMock.mock.calls.find((entry) => String(entry[0]).endsWith("/apply-selection-change"));
     expect(JSON.parse(String((call?.[1] as RequestInit).body)).excluded_fact_ids).toEqual(["f-1"]);
-    expect(
-      fetchMock.mock.calls.some((entry) => (entry[1] as RequestInit)?.method === "PATCH"),
-    ).toBe(false);
+    expect(fetchMock.mock.calls.some((entry) => (entry[1] as RequestInit)?.method === "PATCH")).toBe(false);
   });
 
   it("presents the manual-wording refusal as the backend states it", async () => {
@@ -556,9 +527,7 @@ describe("DraftEditorPage selection changes", () => {
     fireEvent.click(await screen.findByRole("button", { name: "הכללת העובדה" }));
 
     expect(
-      await screen.findByText(
-        "this draft carries manual wording that a deterministic rebuild would discard",
-      ),
+      await screen.findByText("this draft carries manual wording that a deterministic rebuild would discard"),
     ).toBeInTheDocument();
   });
 });
@@ -596,13 +565,9 @@ describe("DraftEditorPage regeneration", () => {
     fireEvent.click((await screen.findAllByRole("button", { name: "יצירה מחדש של השורה" }))[0]!);
 
     /* The panel, not the route: the editor's own heading is still on screen beside it. */
-    expect(
-      await screen.findByRole("heading", { name: "הרצת יצירה מחדש של טענה" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "הרצת יצירה מחדש של טענה" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "עריכה, אימות ואישור" })).toBeInTheDocument();
-    const call = fetchMock.mock.calls.find((entry) =>
-      String(entry[0]).endsWith("/regenerate-claim"),
-    );
+    const call = fetchMock.mock.calls.find((entry) => String(entry[0]).endsWith("/regenerate-claim"));
     /* All three parts of the draft's identity: that is what makes a save landing mid
        flight fail as SOURCE_CHANGED instead of overwriting the user's edit. */
     expect(JSON.parse(String((call?.[1] as RequestInit).body))).toEqual({
@@ -613,9 +578,7 @@ describe("DraftEditorPage regeneration", () => {
       selection_plan_id: "sp-1",
       claim_id: "c-headline",
     });
-    expect(((call?.[1] as RequestInit).headers as Headers).get("Idempotency-Key")).toBe(
-      "wd-1:4:c-headline",
-    );
+    expect(((call?.[1] as RequestInit).headers as Headers).get("Idempotency-Key")).toBe("wd-1:4:c-headline");
   });
 
   it("withholds regeneration while an edit is still unsaved, and says why", async () => {
@@ -626,9 +589,7 @@ describe("DraftEditorPage regeneration", () => {
     fireEvent.change(editors[0]!, { target: { value: "typed but not saved" } });
 
     expect(
-      await screen.findByText(
-        "יצירה מחדש מוקפאת על הגרסה השמורה של הטיוטה, ולכן היא זמינה רק אחרי שהשמירה הסתיימה.",
-      ),
+      await screen.findByText("יצירה מחדש מוקפאת על הגרסה השמורה של הטיוטה, ולכן היא זמינה רק אחרי שהשמירה הסתיימה."),
     ).toBeInTheDocument();
     for (const button of screen.getAllByRole("button", { name: "יצירה מחדש של השורה" })) {
       expect(button).toBeDisabled();

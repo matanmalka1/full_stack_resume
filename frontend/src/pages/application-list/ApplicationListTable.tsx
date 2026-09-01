@@ -25,9 +25,7 @@ const columns = [
 
 /* A visual hint only: rows with the same company and role emphasize their dates so the
    reader can distinguish them. It does not represent domain duplicate detection. */
-const duplicatedIdentities = (
-  items: readonly ApplicationListItem[],
-): ReadonlySet<string> => {
+const duplicatedIdentities = (items: readonly ApplicationListItem[]): ReadonlySet<string> => {
   const byIdentity = new Map<string, string[]>();
 
   for (const item of items) {
@@ -35,9 +33,7 @@ const duplicatedIdentities = (
     byIdentity.set(key, [...(byIdentity.get(key) ?? []), item.id]);
   }
 
-  return new Set(
-    [...byIdentity.values()].filter((ids) => ids.length > 1).flat(),
-  );
+  return new Set([...byIdentity.values()].filter((ids) => ids.length > 1).flat());
 };
 
 interface ApplicationListTableProps {
@@ -45,10 +41,7 @@ interface ApplicationListTableProps {
   onRequestClose: (item: ApplicationListItem) => void;
 }
 
-export const ApplicationListTable = ({
-  items,
-  onRequestClose,
-}: ApplicationListTableProps) => {
+export const ApplicationListTable = ({ items, onRequestClose }: ApplicationListTableProps) => {
   const ambiguous = duplicatedIdentities(items);
 
   return (

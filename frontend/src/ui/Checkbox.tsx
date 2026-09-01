@@ -24,9 +24,7 @@ export const Checkbox = ({ children, className, hint, ...rest }: CheckboxProps) 
       />
       <span className="flex flex-col gap-1">
         <span>{children}</span>
-        {hint === undefined ? null : (
-          <span className="text-support text-cv-text-muted">{hint}</span>
-        )}
+        {hint === undefined ? null : <span className="text-support text-cv-text-muted">{hint}</span>}
       </span>
     </label>
   );

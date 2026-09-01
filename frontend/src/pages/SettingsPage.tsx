@@ -14,19 +14,14 @@ export const SettingsPage = () => {
   const query = useQuery(settingsQueryOptions);
 
   return (
-    <PageShell
-      description="השינויים נשמרים באפליקציה ומשפיעים מיד על מסכי ה־Web."
-      title="הגדרות"
-    >
+    <PageShell description="השינויים נשמרים באפליקציה ומשפיעים מיד על מסכי ה־Web." title="הגדרות">
       <QueryState
         error={query.error}
         fallbackTitle="ההגדרות לא נשמרו"
         loading={query.data === undefined}
         loadingLabel="טוען הגדרות…"
       >
-        {query.data === undefined ? null : (
-          <SettingsForm etag={query.data.etag} settings={query.data.settings} />
-        )}
+        {query.data === undefined ? null : <SettingsForm etag={query.data.etag} settings={query.data.settings} />}
       </QueryState>
       <ReconciliationPanel />
     </PageShell>
