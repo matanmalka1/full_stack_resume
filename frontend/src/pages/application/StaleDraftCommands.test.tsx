@@ -55,6 +55,18 @@ const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =
       created_at: "2026-08-24T07:00:00Z",
       updated_at: "2026-08-24T07:00:00Z",
     },
+    /* Required by the projection: an Application exists only because a posting was
+       captured, so every detail read carries the snapshot that was captured for it. The
+       cast below is what let this fixture omit it. */
+    latest_snapshot: {
+      id: "snap-1",
+      application_id: "app-1",
+      version_number: 1,
+      job_text: "Senior Backend Engineer",
+      captured_at: "2026-08-24T07:00:00Z",
+      source_metadata: {},
+      content_hash: "hash-1",
+    },
     ...overrides,
   }) as ApplicationDetail;
 

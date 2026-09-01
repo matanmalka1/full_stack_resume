@@ -44,6 +44,11 @@ export type ApplicationIntake = ApiSchemas["DuplicateCheckRequest"];
 export type CreateApplicationRequest = ApiSchemas["CreateApplicationRequest"];
 export type CreatedApplication = ApiSchemas["CreateApplicationResponse"];
 export type ClosedApplication = ApiSchemas["CloseApplicationResponse"];
+/* A new posting version for an Application that already exists. It creates a snapshot
+   beside the ones on record rather than editing one, so the response names the new
+   snapshot and nothing else. */
+export type CreateJobSnapshotRequest = ApiSchemas["CreateJobSnapshotRequest"];
+export type CreatedJobSnapshot = ApiSchemas["CreateJobSnapshotResponse"];
 export type DuplicateCheckResult = ApiSchemas["DuplicateCheckResponse"];
 export type DuplicateMatch = ApiSchemas["DuplicateMatchResponse"];
 export type DuplicateMatchReason = DuplicateMatch["matched_on"][number];

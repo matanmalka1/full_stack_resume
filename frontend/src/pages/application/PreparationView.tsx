@@ -4,6 +4,7 @@ import type { Classification } from "../../api/analyses";
 import type { ApplicationDetail } from "../../api/contracts";
 import { AnalysisPanel, SupersededAnalysisNote } from "./AnalysisPanel";
 import { ApplicationActions } from "./ApplicationActions";
+import { JobPostingUpdate } from "./JobPostingUpdate";
 import { JobSnapshotPanel } from "./JobSnapshotPanel";
 import { PreparationAlerts } from "./PreparationAlerts";
 import { ReviewDecisionPanel, resolvedByDecisionForm } from "./ReviewDecisionPanel";
@@ -42,6 +43,13 @@ export const PreparationView = ({
       {classification === null ? null : <JobSnapshotPanel detail={detail} />}
 
       {classification === null ? null : <AnalysisPanel classification={classification} detail={detail} />}
+
+      {/* Beside the posting rather than behind a stage: a posting can be amended at any
+          point in the Application's life, including before it was ever analyzed and after
+          a revision was approved from it. It stays a closed section, because the reader
+          who came to this screen came for the analysis and its decision, not to retype a
+          posting that has not changed. */}
+      <JobPostingUpdate detail={detail} />
 
       {supersededAnalysis ? <SupersededAnalysisNote /> : null}
 

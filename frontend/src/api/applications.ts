@@ -10,8 +10,10 @@ import type {
   ApplicationSort,
   CreateAnalysisRequest,
   CreateApplicationRequest,
+  CreateJobSnapshotRequest,
   ClosedApplication,
   CreatedApplication,
+  CreatedJobSnapshot,
   DuplicateCheckResult,
   DuplicateMatch,
   DuplicateMatchReason,
@@ -183,6 +185,9 @@ const applicationListPath = (query: ApplicationListQuery): ApiPath => {
 
 const applicationPath = (applicationId: string): ApiPath => `/api/v1/applications/${encodeURIComponent(applicationId)}`;
 
+const jobSnapshotsPath = (applicationId: string): ApiPath =>
+  `/api/v1/applications/${encodeURIComponent(applicationId)}/job-snapshots`;
+
 const analysesPath = (applicationId: string): ApiPath =>
   `/api/v1/applications/${encodeURIComponent(applicationId)}/analyses`;
 
@@ -254,6 +259,34 @@ export const applicationListQueryOptions = (query: ApplicationListQuery = {}) =>
        the search field flickered the table once per keystroke. */
     placeholderData: (previous) => previous,
   });
+
+/* A posting that changed after the Application was opened: one more immutable snapshot,
+   never an edit of the one on record. The existing snapshot, the analyses run against it,
+   and every approved revision stay exactly as they are; what changes is which snapshot the
+   projection calls active, and the consequences of that - a superseded analysis, a stale
+   draft - are the engine's answer rather than this client's.
+
+   `source_metadata` is omitted rather than sent empty: the server's default is the absence
+   of the field, and the Web intake has no metadata of its own to state.
+
+   Not idempotency-keyed. This is a synchronous command with no Operation behind it, and
+   the engine already refuses a second snapshot carrying the exact content of one it holds,
+   so a resent create cannot duplicate a posting. */
+export const createJobSnapshot = async (
+  applicationId: string,
+  posting: { jobText: string; sourceUrl: string | null },
+): Promise<CreatedJobSnapshot> => {
+  const body: Pick<CreateJobSnapshotRequest, "job_text" | "source_url"> = {
+    job_text: posting.jobText,
+    source_url: posting.sourceUrl,
+  };
+
+  const response = await apiRequest<CreatedJobSnapshot>(jobSnapshotsPath(applicationId), {
+    method: "POST",
+    body,
+  });
+  return response.data;
+};
 
 /* §13: the snapshot is named by the caller. An analyze command that picked its own
    source could classify something other than what the user was looking at, so the ID

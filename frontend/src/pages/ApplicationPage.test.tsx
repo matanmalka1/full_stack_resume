@@ -8,6 +8,7 @@ import { settingsQueryKey } from "../api/settings";
 import { ApplicationPage } from "./ApplicationPage";
 
 const ANALYSES_PATH = "/api/v1/applications/app-1/analyses";
+const SNAPSHOTS_PATH = "/api/v1/applications/app-1/job-snapshots";
 
 const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail => ({
   recruitment_status: "saved",
@@ -398,6 +399,35 @@ describe("ApplicationPage", () => {
        classify something other than what the screen was showing. */
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({ job_snapshot_id: "snap-1" });
     expect((request?.[1]?.headers as Headers).get("Idempotency-Key")).not.toBeNull();
+  });
+
+  /* The posting is amended on the Application that already holds it: one more immutable
+     snapshot beside the one on record, rather than a second Application for the same job. */
+  it("captures an amended posting as a new snapshot of the same application", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        return Promise.resolve(jsonResponse({ application_id: "app-1", job_snapshot_id: "snap-2" }, 201));
+      }
+      return Promise.resolve(jsonResponse(detail()));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+    await clickEnabledButton("עדכון נוסח המשרה");
+    fireEvent.change(await screen.findByLabelText("טקסט המשרה"), {
+      target: { value: "Senior Backend Engineer, now remote" },
+    });
+    await clickEnabledButton("שמירת נוסח המשרה");
+
+    expect(await screen.findByText("נשמר תצלום משרה חדש")).toBeInTheDocument();
+    const request = fetchMock.mock.calls.find((call) => call[0] === SNAPSHOTS_PATH);
+    expect(request?.[1]).toEqual(expect.objectContaining({ method: "POST" }));
+    /* The posting is stored exactly as entered, and an absent source URL is `null`
+       rather than an empty string the server would have to interpret. */
+    expect(JSON.parse(String(request?.[1]?.body))).toEqual({
+      job_text: "Senior Backend Engineer, now remote",
+      source_url: null,
+    });
   });
 
   it("does not present a superseded analysis as the one in force", async () => {
