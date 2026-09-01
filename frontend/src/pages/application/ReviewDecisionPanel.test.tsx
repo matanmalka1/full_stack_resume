@@ -117,9 +117,7 @@ describe("the review decision, on the Application screen", () => {
   it("shows the fit acceptance for a hard gap and no classification selects", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(() =>
-        Promise.resolve(jsonResponse(detail({ review_reasons: [reason("HARD_GAP_REQUIRES_DECISION")] }))),
-      ),
+      vi.fn(() => Promise.resolve(jsonResponse(detail({ review_reasons: [reason("HARD_GAP_REQUIRES_DECISION")] })))),
     );
 
     renderPage();
