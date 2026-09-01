@@ -19,7 +19,13 @@ import { RequirementsSection } from "./RequirementsSection";
 
    The panel itself only composes: the masthead, the four findings below it, and the
    source text disclosure each live in their own file under this folder, so a change to
-   one - a new gap presentation, a reworded rationale note - never touches the others. */
+   one - a new gap presentation, a reworded rationale note - never touches the others.
+
+   Findings are laid out with the same `divide-y` rhythm JobDetailsPage uses for its own
+   top-level sections, rather than one uniform `gap-5` column: a hairline and real
+   padding between each finding read as distinct bands instead of an unbroken scroll of
+   same-weight blocks. Each finding renders as its own `<section>` (or nothing at all
+   when it has no content), which is what the divider selector below is keyed to. */
 export const AnalysisPanel = ({
   classification,
   detail,
@@ -30,7 +36,7 @@ export const AnalysisPanel = ({
   <section aria-labelledby="analysis-heading" className="rounded-surface border border-cv-border p-5">
     <AnalysisHeader classification={classification} />
 
-    <div className="mt-4 flex flex-col gap-5">
+    <div className="flex flex-col divide-y divide-cv-border [&>section]:py-5 [&>section:last-child]:pb-0">
       <ClassificationSummary classification={classification} />
 
       <ApprovalReasonsSection reasons={classification.approvalReasons} />
@@ -53,7 +59,9 @@ export const AnalysisPanel = ({
           only way to check a verdict against its source was to leave the screen the
           decision is taken on. Collapsed, because it is the source and not the
           finding. */}
-      <JobTextDisclosure detail={detail} summary="הצגת נוסח המשרה שנותח" />
+      <section>
+        <JobTextDisclosure detail={detail} summary="הצגת נוסח המשרה שנותח" />
+      </section>
     </div>
   </section>
 );

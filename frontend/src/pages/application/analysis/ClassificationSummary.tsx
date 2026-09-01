@@ -10,7 +10,7 @@ export const ClassificationSummary = ({ classification }: { classification: Clas
     .filter((label): label is string => label !== undefined);
 
   return (
-    <div>
+    <section>
       <p className="text-support leading-7" dir="auto">
         {classificationItems(classification).map((item, index) => (
           <span key={index}>
@@ -26,6 +26,6 @@ export const ClassificationSummary = ({ classification }: { classification: Clas
           נקבע בהחלטה שלך: {decided.join(" · ")}.
         </p>
       )}
-    </div>
+    </section>
   );
 };
