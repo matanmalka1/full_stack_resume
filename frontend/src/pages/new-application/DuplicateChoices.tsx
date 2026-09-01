@@ -1,8 +1,8 @@
 import { Link } from "react-router-dom";
 
-import type { DuplicateMatch, DuplicateMatchReason } from "../api/contracts";
-import { Button, buttonClasses } from "../ui/Button";
-import { Callout } from "../ui/Callout";
+import type { DuplicateMatch, DuplicateMatchReason } from "../../api/contracts";
+import { Button, buttonClasses } from "../../ui/Button";
+import { Callout } from "../../ui/Callout";
 
 /* Keyed by the generated union, so a detection reason added to the backend fails the
    frontend build instead of reaching the screen as an untranslated code. */

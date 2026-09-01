@@ -24,8 +24,8 @@ import { LtrText } from "../ui/LtrText";
 import { PageShell } from "../ui/PageShell";
 import { TextArea, TextInput } from "../ui/TextInput";
 import { cx } from "../ui/cx";
-import { DuplicateChoices } from "./DuplicateChoices";
-import { JobTextFileField } from "./JobTextFileField";
+import { DuplicateChoices } from "./new-application/DuplicateChoices";
+import { JobTextFileField } from "./new-application/JobTextFileField";
 
 /* Native input affordances, not a second validation policy: they stop the user typing
    past a limit the server would refuse anyway. The refusal itself stays the server's. */

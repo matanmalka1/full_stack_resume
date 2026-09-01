@@ -1,11 +1,11 @@
 import { type ChangeEvent, useId, useState } from "react";
 import { Upload } from "lucide-react";
 
-import { JOB_TEXT_MAX_BYTES } from "../api/applications";
-import { LiveRegion } from "../ui/LiveRegion";
-import { LtrText } from "../ui/LtrText";
-import { buttonClasses } from "../ui/Button";
-import { cx } from "../ui/cx";
+import { JOB_TEXT_MAX_BYTES } from "../../api/applications";
+import { LiveRegion } from "../../ui/LiveRegion";
+import { LtrText } from "../../ui/LtrText";
+import { buttonClasses } from "../../ui/Button";
+import { cx } from "../../ui/cx";
 
 interface JobTextFileFieldProps {
   onText: (text: string) => void;
