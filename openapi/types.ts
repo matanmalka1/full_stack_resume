@@ -1174,6 +1174,7 @@ export interface components {
             latest_analysis?: components["schemas"]["JobAnalysisResponse"] | null;
             /** Latest Approved Revision Id */
             latest_approved_revision_id?: string | null;
+            latest_operation?: components["schemas"]["OperationResponse"] | null;
             /** Latest Ready Revision Id */
             latest_ready_revision_id?: string | null;
             latest_snapshot: components["schemas"]["JobSnapshotResponse"];
@@ -1233,6 +1234,7 @@ export interface components {
             last_contact_date?: string | null;
             /** Latest Approved Revision Id */
             latest_approved_revision_id?: string | null;
+            latest_operation?: components["schemas"]["OperationResponse"] | null;
             /** Latest Ready Revision Id */
             latest_ready_revision_id?: string | null;
             /** Newer Draft In Progress */

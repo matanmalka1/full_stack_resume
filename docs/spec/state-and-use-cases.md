@@ -211,6 +211,7 @@ Application Detail and relevant list projections return:
   "primary_stale_reason": null,
   "warnings": [],
   "active_operation": null,
+  "latest_operation": null,
   "active_job_snapshot_id": "...",
   "active_analysis_id": "...",
   "active_selection_plan_id": "...",
@@ -229,6 +230,11 @@ Application Detail and relevant list projections return:
 The complete projection is computed in one read transaction. `recommended_action` is
 deterministic and nullable. Action identifiers are stable application commands, not UI
 labels.
+
+`active_operation` is limited to queued/running work and is the polling and concurrency
+signal. `latest_operation` is the newest lifecycle record whether live or terminal, so a
+failed outcome remains presentable after active work ends. A live Operation may therefore
+appear in both fields; clients prefer `active_operation` while work is in flight.
 
 ## 10. RecruitmentStatus
 

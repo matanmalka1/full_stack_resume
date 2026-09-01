@@ -293,6 +293,8 @@ class OperationRepository(Protocol):
 
     def active_operation(self, application_id: str) -> OperationView | None: ...
 
+    def latest_operation(self, application_id: str) -> OperationView | None: ...
+
     def claim_operation(
         self,
         operation_id: str,

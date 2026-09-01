@@ -68,6 +68,7 @@ class ProjectionContext:
     knowledge: Knowledge
     today: date
     active_operation: OperationView | None = None
+    latest_operation: OperationView | None = None
 
 
 def _reason(
@@ -520,6 +521,7 @@ def project_application_state(context: ProjectionContext) -> ApplicationStateVie
         primary_stale_reason=stale[0].code if stale else None,
         warnings=derive_warnings(context, latest_ready),
         active_operation=context.active_operation,
+        latest_operation=context.latest_operation,
         active_job_snapshot_id=context.active_job_snapshot_id,
         active_analysis_id=context.active_analysis_id,
         active_selection_plan_id=(

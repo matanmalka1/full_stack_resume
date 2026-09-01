@@ -122,6 +122,7 @@ class ApplicationStateView(BoundaryDTO):
     primary_stale_reason: str | None = None
     warnings: list[WarningView] = []
     active_operation: OperationView | None = None
+    latest_operation: OperationView | None = None
     active_job_snapshot_id: str
     active_analysis_id: str | None = None
     active_selection_plan_id: str | None = None

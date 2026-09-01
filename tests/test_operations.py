@@ -183,7 +183,24 @@ def test_operation_creation_is_idempotent_and_projects_active_work(services) -> 
     assert services.repository.active_operation(ingested.application_id).id == created.id
     detail = services.queries.application_detail(ingested.application_id)
     assert detail.active_operation == as_operation_view(created)
+    assert detail.latest_operation == as_operation_view(created)
     assert detail.active_operation.status is OperationStatus.QUEUED
+
+    services.repository.claim_operation(
+        created.id,
+        runner_id="runner",
+        now="2026-08-19T08:01:00+00:00",
+    )
+    failed = services.repository.fail_operation(
+        created.id,
+        OperationFailureCode.PROVIDER_UNAVAILABLE,
+        "provider unavailable",
+        runner_id="runner",
+        now="2026-08-19T08:02:00+00:00",
+    )
+    after_failure = services.queries.application_detail(ingested.application_id)
+    assert after_failure.active_operation is None
+    assert after_failure.latest_operation == as_operation_view(failed)
 
 
 def test_operation_rejects_idempotency_key_with_another_payload(services) -> None:

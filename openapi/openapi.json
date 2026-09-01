@@ -158,6 +158,16 @@
             ],
             "title": "Latest Approved Revision Id"
           },
+          "latest_operation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OperationResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "latest_ready_revision_id": {
             "anyOf": [
               {
@@ -412,6 +422,16 @@
               }
             ],
             "title": "Latest Approved Revision Id"
+          },
+          "latest_operation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OperationResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "latest_ready_revision_id": {
             "anyOf": [

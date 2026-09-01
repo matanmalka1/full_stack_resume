@@ -121,6 +121,7 @@ class ApplicationStateResponse(HttpSchema):
     primary_stale_reason: str | None = None
     warnings: list[WarningResponse]
     active_operation: OperationResponse | None = None
+    latest_operation: OperationResponse | None = None
     active_job_snapshot_id: str
     active_analysis_id: str | None = None
     active_selection_plan_id: str | None = None

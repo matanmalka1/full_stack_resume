@@ -191,6 +191,30 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
                 self._operation_record(row, self._outputs(connection, row["id"]))
             )
 
+    def latest_operation(self, application_id: str) -> OperationView | None:
+        """Return the newest lifecycle record, including its terminal outcome.
+
+        ``active_operation`` deliberately drops completed work so it remains a safe
+        concurrency and polling signal.  The presentation projection also needs the
+        newest record: otherwise a failure vanishes as soon as that active signal does.
+        """
+        with self.read_connection() as connection:
+            row = (
+                connection.execute(
+                    select(operations)
+                    .where(operations.c.application_id == application_id)
+                    .order_by(operations.c.created_at.desc(), operations.c.id.desc())
+                    .limit(1)
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if row is None:
+                return None
+            return as_operation_view(
+                self._operation_record(row, self._outputs(connection, row["id"]))
+            )
+
     @staticmethod
     def _waiting_phase(resource_kind: str) -> tuple[str, str]:
         if resource_kind == "render_browser":
