@@ -86,6 +86,9 @@ export type RenderRevisionRequest = ApiSchemas["RenderRevisionRequest"];
    maps keyed by them stay exhaustive and an added Track fails the build. */
 export type ApplyAnalysisDecisionsRequest = ApiSchemas["ApplyAnalysisDecisionsRequest"];
 export type AnalysisDecisions = ApiSchemas["AnalysisDecisionsResponse"];
+/* The analysis record's own provenance - provider, model, version, timestamp - as
+   opposed to `Classification`, which reads the opaque `analysis` document it carries. */
+export type JobAnalysisRecord = ApiSchemas["JobAnalysisResponse"];
 export type Track = ApiSchemas["Track"];
 export type ProfileName = ApiSchemas["ProfileName"];
 export type Emphasis = ApiSchemas["Emphasis"];

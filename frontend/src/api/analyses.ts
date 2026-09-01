@@ -97,6 +97,12 @@ export interface Classification {
      narrow way - an unreadable field is absent rather than `undefined` on screen. */
   rationale: string | null;
   confidence: number | null;
+  /* Set together, only when an AI proposal was actually merged in: `confidence` above is
+     `min(deterministicConfidence, proposalConfidence)` in that case, so the two together
+     are what explain a merged number a reader could otherwise not account for. Both stay
+     null on the deterministic-only path, where `confidence` is already the whole story. */
+  deterministicConfidence: number | null;
+  proposalConfidence: number | null;
   keywords: string[];
   mandatoryRequirements: string[];
   preferredRequirements: string[];
@@ -107,6 +113,11 @@ export interface Classification {
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
+
+/* A 0..1 float in the domain model. A non-finite value is absent rather than rendered,
+   so a malformed document cannot print "NaN%". */
+const finiteConfidence = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) ? value : null;
 
 const stringsFrom = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
@@ -162,10 +173,9 @@ export const classificationFromAnalysis = (detail: ApplicationDetail): Classific
     gaps: gapsFrom(analysis.gaps),
     decided: Object.keys(override),
     rationale: typeof analysis.rationale === "string" ? analysis.rationale : null,
-    /* `confidence` is a 0..1 float in the domain model. A non-finite value is absent
-       rather than rendered, so a malformed document cannot print "NaN%". */
-    confidence:
-      typeof analysis.confidence === "number" && Number.isFinite(analysis.confidence) ? analysis.confidence : null,
+    confidence: finiteConfidence(analysis.confidence),
+    deterministicConfidence: finiteConfidence(analysis.deterministic_confidence),
+    proposalConfidence: finiteConfidence(analysis.proposal_confidence),
     keywords: stringsFrom(analysis.keywords),
     mandatoryRequirements: stringsFrom(analysis.mandatory_requirements),
     preferredRequirements: stringsFrom(analysis.preferred_requirements),
