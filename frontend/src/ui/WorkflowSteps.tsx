@@ -1,3 +1,5 @@
+import { Fragment } from "react";
+
 import { Check } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -150,18 +152,28 @@ export const WorkflowSteps = ({ hint, label, steps }: WorkflowStepsProps) => {
      the strongest weight, because nothing else in the bar answers it; where the work
      stands follows.
 
+     Each clause is one element holding one string, and the separators sit between them
+     rather than inside them - so a clause reads as its own sentence rather than as one
+     beginning with a stray bullet.
+
      Hidden from assistive technology: `description` states the same thing, and hearing it
      twice is worse than hearing it once. */
+  const clauses = [
+    here === undefined ? null : <span className="font-bold text-cv-text">{`עמוד ${here.label}`}</span>,
+    progressText === null ? null : (
+      <span className={here === undefined ? "font-bold text-cv-text" : undefined}>{progressText}</span>
+    ),
+    hint === undefined ? null : <span>{hint}</span>,
+  ].filter((clause) => clause !== null);
+
   const heading = (
     <p aria-hidden="true" className="mb-1.5 truncate text-support text-cv-text-muted">
-      {here === undefined ? null : <span className="font-bold text-cv-text">עמוד {here.label}</span>}
-      {progressText === null ? null : (
-        <span className={here === undefined ? "font-bold text-cv-text" : ""}>
-          {here === undefined ? "" : " · "}
-          {progressText}
-        </span>
-      )}
-      {hint === undefined ? null : <span> · {hint}</span>}
+      {clauses.map((clause, index) => (
+        <Fragment key={index}>
+          {index === 0 ? null : " · "}
+          {clause}
+        </Fragment>
+      ))}
     </p>
   );
 
