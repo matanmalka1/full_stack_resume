@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail, RecruitmentTimelineItem } from "../../api/contracts";
+import { formatDate } from "../../ui/formatDateTime";
 import { RecruitmentPanel } from "./RecruitmentPanel";
 
 const statusEvent = (overrides: Partial<RecruitmentTimelineItem> = {}): RecruitmentTimelineItem => ({
@@ -138,8 +139,8 @@ describe("RecruitmentPanel", () => {
       next_action_date: "2026-09-10",
     });
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "סימון כהושלמה" })).toBeEnabled());
-    fireEvent.click(screen.getByRole("button", { name: "סימון כהושלמה" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "הסרת התזכורת" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "הסרת התזכורת" }));
 
     await waitFor(() =>
       expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/next-action"))).toHaveLength(2),
@@ -155,6 +156,11 @@ describe("RecruitmentPanel", () => {
     const fetchMock = vi.fn(emptyJsonFetch);
     vi.stubGlobal("fetch", fetchMock);
     renderPanel();
+
+    const timelineHeading = screen.getByRole("heading", { name: "ציר הזמן" });
+    expect(
+      within(timelineHeading.parentElement as HTMLElement).queryByRole("button", { name: "רישום הגשה חיצונית" }),
+    ).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "תיקון אירוע שנרשם" }));
     fireEvent.change(screen.getByLabelText("המצב הנכון"), {
@@ -190,6 +196,25 @@ describe("RecruitmentPanel", () => {
       artifact_version_id: null,
       metadata: { note: "Submitted by email" },
     });
+  });
+
+  it("formats a next-action calendar date instead of exposing the raw ISO value", () => {
+    vi.stubGlobal("fetch", vi.fn(emptyJsonFetch));
+    renderPanel(
+      detail({
+        recruitment_timeline: [
+          statusEvent({
+            id: "next-1",
+            item_type: "next_action",
+            next_action: "Send portfolio",
+            next_action_date: "2026-09-10",
+          }),
+        ],
+      }),
+    );
+
+    expect(screen.getByText(new RegExp(formatDate("2026-09-10")))).toBeInTheDocument();
+    expect(screen.queryByText(/2026-09-10/)).not.toBeInTheDocument();
   });
 
   it("surfaces a safe server refusal instead of swallowing it", async () => {

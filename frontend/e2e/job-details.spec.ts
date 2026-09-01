@@ -72,6 +72,7 @@ test.describe("the Job Detail screen", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Backend Engineer" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "מודעת המשרה" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "מעקב גיוס" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "עדכון מעקב הגיוס" })).toHaveAttribute("href", "#recruitment-heading");
     await expect(page.getByRole("link", { name: "הכנת קורות החיים" })).toHaveAttribute(
       "href",
       "/applications/app-1/preparation",
@@ -84,8 +85,22 @@ test.describe("the Job Detail screen", () => {
     await expect(workflow).toBeVisible();
     await expect(workflow.getByRole("link", { name: "חזרה לשלב משרה חדשה" })).toHaveCount(0);
 
+    await expect(page.getByRole("heading", { level: 2 })).toHaveText([
+      "פרטי המועמדות",
+      "מצב הכנת קורות החיים",
+      "מעקב גיוס",
+      "מודעת המשרה",
+    ]);
+
     const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
 
     expect(results.violations).toEqual([]);
+
+    await page.getByRole("button", { name: "עדכון נוסח המשרה" }).click();
+    await expect(page.getByRole("dialog", { name: "יצירת תצלום משרה חדש" })).toBeVisible();
+    const dialogResults = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+      .analyze();
+    expect(dialogResults.violations).toEqual([]);
   });
 });

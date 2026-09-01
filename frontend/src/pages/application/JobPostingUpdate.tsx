@@ -9,6 +9,7 @@ import { useAppForm } from "../../forms/useAppForm";
 import { ActionBar } from "../../ui/ActionBar";
 import { Button } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
+import { Dialog } from "../../ui/Dialog";
 import { Field } from "../../ui/Field";
 import { TextArea, TextInput } from "../../ui/TextInput";
 import { JobTextFileField } from "./JobTextFileField";
@@ -79,29 +80,48 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
     },
   });
 
+  const closeDialog = () => setOpen(false);
+
   return (
     <div className="border-t border-cv-border pt-4">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <div className="min-w-0">
           <h3 className="text-support font-semibold text-cv-text">המודעה השתנתה?</h3>
           <p className="mt-1 text-support leading-6 text-cv-text-muted">
-            שמירת נוסח חדש יוצרת תצלום נוסף ושומרת את הגרסה הקודמת ללא שינוי.
+            יצירת תצלום חדש מוסיפה את הנוסח המעודכן ושומרת את הגרסה הקודמת ללא שינוי.
           </p>
         </div>
-        <Button aria-expanded={open} onClick={() => setOpen(!open)} variant="secondary">
-          {open ? "ביטול" : "שמירת נוסח חדש"}
+        <Button
+          aria-expanded={open}
+          onClick={() => {
+            create.reset();
+            setOpen(true);
+          }}
+          variant="secondary"
+        >
+          עדכון נוסח המשרה
         </Button>
       </div>
 
       {create.isSuccess && !open ? (
-        <Callout className="mt-4" role="status" title="נשמר תצלום משרה חדש" tone="success">
+        <Callout
+          action={
+            <Button onClick={() => create.reset()} variant="ghost">
+              סגירת ההודעה
+            </Button>
+          }
+          className="mt-4"
+          role="status"
+          title="נשמר תצלום משרה חדש"
+          tone="success"
+        >
           התצלום הקודם נשמר כפי שהוא. הניתוח שנעשה עליו אינו הניתוח הפעיל יותר, ולכן נדרש ניתוח מחדש מול הנוסח החדש.
         </Callout>
       ) : null}
 
-      {open ? (
+      <Dialog headingId="job-posting-update-heading" onClose={closeDialog} open={open} title="יצירת תצלום משרה חדש">
         <form
-          className="mt-4 flex flex-col gap-4"
+          className="flex max-h-[75vh] flex-col gap-4 overflow-y-auto pe-1"
           noValidate
           onSubmit={handleSubmit((fields) => {
             create.mutate(fields, { onSuccess: () => setOpen(false) });
@@ -162,7 +182,7 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
               commands state it: the command is offered, later. */}
           {workInFlight ? (
             <p className="text-support leading-6 text-cv-text-muted">
-              פעולה מתבצעת כעת על המועמדות. שמירת נוסח חדש תהיה זמינה שוב כשהיא תסתיים.
+              פעולה מתבצעת כעת על המועמדות. יצירת תצלום חדש תהיה זמינה שוב כשהיא תסתיים.
             </p>
           ) : null}
 
@@ -170,12 +190,17 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
             align="start"
             primary={
               <Button disabled={workInFlight} pending={create.isPending} pendingLabel="שומר תצלום…" type="submit">
-                שמירת נוסח המשרה
+                יצירת התצלום החדש
+              </Button>
+            }
+            secondary={
+              <Button onClick={closeDialog} variant="secondary">
+                חזרה ללא שמירה
               </Button>
             }
           />
         </form>
-      ) : null}
+      </Dialog>
     </div>
   );
 };

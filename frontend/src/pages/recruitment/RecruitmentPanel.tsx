@@ -26,14 +26,19 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
       </div>
 
       <div className="mt-5 grid gap-6 rounded-surface bg-cv-surface-muted p-4 sm:p-5 lg:grid-cols-2">
-        <RecruitmentTransitionForm detail={detail} onChanged={refresh} />
+        <div className="flex flex-col gap-4">
+          <RecruitmentTransitionForm detail={detail} onChanged={refresh} />
+          <div className="flex justify-end border-t border-cv-border pt-4">
+            <RecruitmentExceptionalActions detail={detail} kind="external-submission" onChanged={refresh} />
+          </div>
+        </div>
         <RecruitmentNextActionForm detail={detail} onChanged={refresh} />
       </div>
 
       <div className="mt-6 border-t border-cv-border pt-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-semibold text-cv-text">ציר הזמן</h3>
-          <RecruitmentExceptionalActions detail={detail} onChanged={refresh} />
+          <RecruitmentExceptionalActions detail={detail} kind="correction" onChanged={refresh} />
         </div>
         <RecruitmentTimeline items={detail.recruitment_timeline} />
       </div>

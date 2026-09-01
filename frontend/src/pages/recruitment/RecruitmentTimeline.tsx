@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 
 import type { RecruitmentTimelineItem } from "../../api/contracts";
-import { formatDateTime } from "../../ui/formatDateTime";
+import { formatDate, formatDateTime } from "../../ui/formatDateTime";
 import { recruitmentStatusLabel } from "../application/applicationLabels";
 
 export const statusEventLabel = (event: RecruitmentTimelineItem): string =>
@@ -13,9 +13,9 @@ const descriptionFor = (event: RecruitmentTimelineItem, byId: ReadonlyMap<string
   }
   if (event.item_type === "next_action") {
     return event.next_action == null
-      ? "הפעולה הבאה נוקתה"
+      ? "התזכורת לפעולה הבאה הוסרה"
       : `הפעולה הבאה נקבעה: ${event.next_action}${
-          event.next_action_date == null ? "" : ` · ${event.next_action_date}`
+          event.next_action_date == null ? "" : ` · ${formatDate(event.next_action_date)}`
         }`;
   }
   if (event.item_type === "status_correction") {

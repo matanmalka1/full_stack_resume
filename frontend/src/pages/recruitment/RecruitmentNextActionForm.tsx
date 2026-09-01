@@ -8,7 +8,7 @@ import { Button } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 import { Field } from "../../ui/Field";
 import { TextInput } from "../../ui/TextInput";
-import { useServerSyncedField } from "./useServerSyncedField";
+import { useServerSyncedField } from "../useServerSyncedField";
 
 interface NextActionFields {
   action: string;
@@ -83,7 +83,7 @@ export const RecruitmentNextActionForm = ({ detail, onChanged }: RecruitmentNext
           onClick={() => mutation.mutate({ clear: true, values: form.getValues() })}
           variant="ghost"
         >
-          סימון כהושלמה
+          הסרת התזכורת
         </Button>
         <Button disabled={!form.formState.isDirty || !hasEnteredValue} pending={mutation.isPending} type="submit">
           שמירת הפעולה

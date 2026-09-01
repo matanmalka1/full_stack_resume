@@ -10,7 +10,7 @@ import { Field } from "../../ui/Field";
 import { Select } from "../../ui/Select";
 import { TextInput } from "../../ui/TextInput";
 import { recruitmentStatusLabel } from "../application/applicationLabels";
-import { useServerSyncedField } from "./useServerSyncedField";
+import { useServerSyncedField } from "../useServerSyncedField";
 
 interface TransitionFields {
   reason: string;

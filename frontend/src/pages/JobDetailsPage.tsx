@@ -13,14 +13,13 @@ import { SummaryList } from "../ui/SummaryList";
 import { dateTimesMatch, formatDateTime } from "../ui/formatDateTime";
 import { ApplicationSectionNav } from "./ApplicationSectionNav";
 import { ArtifactsPanel } from "./application/ArtifactsPanel";
+import { ApplicationNotes } from "./application/ApplicationNotes";
 import { JobSnapshotPanel } from "./application/JobSnapshotPanel";
 import {
   draftStateIsImplied,
   preparationStateLabels,
   preparationStateTones,
-  recruitmentStatusIcon,
   recruitmentStatusLabel,
-  recruitmentStatusTone,
   workingDraftStateLabels,
   workingDraftStateTones,
 } from "./application/applicationLabels";
@@ -55,14 +54,7 @@ const JobOverview = ({ detail }: { detail: ApplicationDetail }) => {
           ]}
         />
       </div>
-      {application.notes.trim() === "" ? null : (
-        <div className="mt-4 border-t border-cv-border pt-4">
-          <h3 className="text-support font-semibold text-cv-text">הערות</h3>
-          <p className="mt-2 whitespace-pre-wrap text-support leading-6 text-cv-text-muted" dir="auto">
-            {application.notes}
-          </p>
-        </div>
-      )}
+      <ApplicationNotes detail={detail} />
     </section>
   );
 };
@@ -85,24 +77,14 @@ const PreparationSummary = ({ detail }: { detail: ApplicationDetail }) => (
           )}
         </div>
       </div>
-      {detail.latest_ready_revision_id == null && detail.active_working_draft_id == null ? null : (
+      {detail.active_working_draft_id == null ? null : (
         <div className="flex flex-wrap gap-2">
-          {detail.latest_ready_revision_id == null ? null : (
-            <Link
-              className={buttonClasses("ghost")}
-              to={`/revisions/${encodeURIComponent(detail.latest_ready_revision_id)}`}
-            >
-              פתיחת הגרסה המוכנה
-            </Link>
-          )}
-          {detail.active_working_draft_id == null ? null : (
-            <Link
-              className={buttonClasses("ghost")}
-              to={`/applications/${encodeURIComponent(detail.application.id)}/draft`}
-            >
-              פתיחת עורך קורות החיים
-            </Link>
-          )}
+          <Link
+            className={buttonClasses("ghost")}
+            to={`/applications/${encodeURIComponent(detail.application.id)}/draft`}
+          >
+            פתיחת עורך קורות החיים
+          </Link>
         </div>
       )}
     </div>
@@ -135,12 +117,9 @@ export const JobDetailsPage = () => {
     <PageShell
       actions={
         detail === undefined ? null : (
-          <StatusBadge
-            icon={recruitmentStatusIcon(detail.recruitment_status)}
-            tone={recruitmentStatusTone(detail.recruitment_status)}
-          >
-            {recruitmentStatusLabel(detail.recruitment_status)}
-          </StatusBadge>
+          <a className={buttonClasses("primary")} href="#recruitment-heading">
+            עדכון מעקב הגיוס
+          </a>
         )
       }
       navigation={<ApplicationSectionNav applicationId={applicationId} value="details" />}
@@ -177,9 +156,9 @@ export const JobDetailsPage = () => {
             )}
             <div className="flex flex-col divide-y divide-cv-border [&>section]:py-6 [&>section:first-child]:pt-0 [&>section:last-child]:pb-0">
               <JobOverview detail={detail} />
-              <JobSnapshotPanel detail={detail} />
               <PreparationSummary detail={detail} />
               <RecruitmentPanel detail={detail} />
+              <JobSnapshotPanel detail={detail} />
               <ArtifactsPanel applicationId={applicationId} />
             </div>
           </>

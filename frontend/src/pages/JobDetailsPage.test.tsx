@@ -126,11 +126,24 @@ describe("JobDetailsPage", () => {
     expect(screen.getByText("Referral from a former colleague")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /פתיחת מודעת המקור.*example\.com/ })).toBeInTheDocument();
     expect(screen.getByText("Senior Backend Engineer")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "שמירת נוסח חדש" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "עדכון נוסח המשרה" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "מעקב גיוס" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "שמירת השלב" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "שמירת הפעולה" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "ניתוח המשרה" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "עדכון מעקב הגיוס" })).toHaveAttribute("href", "#recruitment-heading");
+  });
+
+  it("orders the sections by daily use before the static posting", async () => {
+    renderPage();
+
+    await screen.findByRole("heading", { level: 1, name: "Backend Engineer" });
+    expect(screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent)).toEqual([
+      "פרטי המועמדות",
+      "מצב הכנת קורות החיים",
+      "מעקב גיוס",
+      "מודעת המשרה",
+    ]);
   });
 
   it("shows only a preparation summary and links to its separate workflow", async () => {
@@ -163,6 +176,7 @@ describe("JobDetailsPage", () => {
     expect(await screen.findByText("קורות החיים מוכנים")).toBeInTheDocument();
     expect(screen.queryByText("אין טיוטה פעילה")).not.toBeInTheDocument();
     expect(screen.queryByText("עודכנה לאחרונה")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "פתיחת הגרסה המוכנה" })).not.toBeInTheDocument();
   });
 
   it("groups deliverable files by immutable revision and offers one revision link", async () => {
@@ -189,13 +203,16 @@ describe("JobDetailsPage", () => {
     });
     renderPage(fetchMock);
 
-    fireEvent.click(await screen.findByRole("button", { name: "שמירת נוסח חדש" }));
+    fireEvent.click(await screen.findByRole("button", { name: "עדכון נוסח המשרה" }));
+    expect(screen.getByRole("dialog", { name: "יצירת תצלום משרה חדש" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("טקסט המשרה"), {
       target: { value: "Senior Backend Engineer, now remote" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "שמירת נוסח המשרה" }));
+    fireEvent.click(screen.getByRole("button", { name: "יצירת התצלום החדש" }));
 
     expect(await screen.findByText("נשמר תצלום משרה חדש")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "סגירת ההודעה" }));
+    expect(screen.queryByText("נשמר תצלום משרה חדש")).not.toBeInTheDocument();
     await waitFor(() =>
       expect(
         fetchMock.mock.calls.some(
@@ -209,6 +226,36 @@ describe("JobDetailsPage", () => {
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({
       job_text: "Senior Backend Engineer, now remote",
       source_url: "https://example.com/jobs/1",
+    });
+  });
+
+  it("edits notes with the exact server value as an optimistic precondition", async () => {
+    let currentNotes = detail().application.notes;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith("/notes") && init?.method === "PATCH") {
+        const body = JSON.parse(String(init.body)) as { notes: string };
+        currentNotes = body.notes;
+        return Promise.resolve(jsonResponse({ application_id: "app-1", notes: currentNotes, updated_at: "now" }));
+      }
+      if (String(input).endsWith("/artifacts")) return Promise.resolve(jsonResponse({ items: [] }));
+      return Promise.resolve(
+        jsonResponse({ ...detail(), application: { ...detail().application, notes: currentNotes } }),
+      );
+    });
+    renderPage(fetchMock);
+
+    fireEvent.click(await screen.findByRole("button", { name: "עריכת הערות" }));
+    fireEvent.change(screen.getByLabelText("הערות"), { target: { value: "Follow up after the holiday" } });
+    fireEvent.click(screen.getByRole("button", { name: "שמירת ההערות" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "עריכת הערות למועמדות" })).not.toBeInTheDocument());
+    expect(screen.getByText("Follow up after the holiday")).toBeInTheDocument();
+    const request = fetchMock.mock.calls.find(
+      ([input, init]) => String(input).endsWith("/notes") && init?.method === "PATCH",
+    );
+    expect(JSON.parse(String(request?.[1]?.body))).toEqual({
+      notes: "Follow up after the holiday",
+      expected_notes: "Referral from a former colleague",
     });
   });
 });
