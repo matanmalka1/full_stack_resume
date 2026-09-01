@@ -2426,7 +2426,7 @@ export interface components {
          * OperationFailureCode
          * @enum {string}
          */
-        OperationFailureCode: "SOURCE_CHANGED" | "PROVIDER_TIMEOUT" | "PROVIDER_RATE_LIMITED" | "PROVIDER_UNAVAILABLE" | "PROVIDER_REFUSED" | "INVALID_OUTPUT" | "SCHEMA_VIOLATION" | "RENDER_FAILED" | "BROWSER_START_FAILED" | "VALIDATION_EXECUTION_FAILED" | "CANCELLED_BEFORE_ACTIVATION";
+        OperationFailureCode: "SOURCE_CHANGED" | "PROVIDER_TIMEOUT" | "PROVIDER_RATE_LIMITED" | "PROVIDER_UNAVAILABLE" | "PROVIDER_REFUSED" | "INVALID_OUTPUT" | "SCHEMA_VIOLATION" | "RENDER_FAILED" | "BROWSER_START_FAILED" | "MISSING_FACT_RENDERING" | "VALIDATION_EXECUTION_FAILED" | "CANCELLED_BEFORE_ACTIVATION";
         /**
          * OperationOutputResponse
          * @description One immutable output an Operation produced.

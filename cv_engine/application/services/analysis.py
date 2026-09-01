@@ -12,6 +12,7 @@ from ...domain.models import (
     SelectionProposal,
 )
 from ...domain.profiles import ProfileStore
+from ...domain.selection import MissingFactRendering as DomainMissingFactRendering
 from ...domain.selection import build_selection
 from ..commands import (
     AnalysisDecisionsResult,
@@ -28,6 +29,7 @@ from ..errors import (
     DependencyUnavailable,
     InfrastructureFailure,
     LineageBroken,
+    MissingFactRendering,
     PreconditionFailed,
     StateConflict,
     UnknownRecord,
@@ -243,6 +245,8 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                     else None
                 ),
             )
+        except DomainMissingFactRendering as exc:
+            raise MissingFactRendering(exc.fact_id, exc.language) from exc
         except ValueError as exc:
             raise PreconditionFailed(f"selection plan could not be built: {exc}") from exc
 
@@ -334,6 +338,8 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                 pinned_fact_ids=frozenset(command.pinned_fact_ids),
                 excluded_fact_ids=frozenset(command.excluded_fact_ids),
             )
+        except DomainMissingFactRendering as exc:
+            raise MissingFactRendering(exc.fact_id, exc.language) from exc
         except ValueError as exc:
             raise PreconditionFailed(f"selection plan could not be built: {exc}") from exc
         plan = repo.create_selection_plan(
@@ -456,6 +462,8 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                     else None
                 ),
             )
+        except DomainMissingFactRendering as exc:
+            raise MissingFactRendering(exc.fact_id, exc.language) from exc
         except ValueError as exc:
             raise PreconditionFailed(f"selection plan could not be built: {exc}") from exc
 

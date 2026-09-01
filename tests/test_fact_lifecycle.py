@@ -11,7 +11,7 @@ from sqlalchemy import delete, update
 from sqlalchemy.exc import ProgrammingError
 
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand
-from cv_engine.application.errors import KnowledgeRejected, PreconditionFailed
+from cv_engine.application.errors import KnowledgeRejected, MissingFactRendering, PreconditionFailed
 from cv_engine.application.knowledge_mutations import PrepareKnowledgeMutation
 from cv_engine.domain.facts import FactStore
 from cv_engine.domain.models import FactStatus
@@ -292,6 +292,50 @@ def test_confirm_and_use_is_one_journaled_fact_profile_and_plan_command(
         ("canonical", "canonical"),
     ]
     assert len(result.event_ids) == 3
+    assert services.repository.prepared_knowledge_mutations() == []
+    assert services.repository.quarantined_knowledge_mutations() == []
+
+
+def test_confirm_and_use_preserves_missing_rendering_as_a_domain_failure(
+    analyzed_application,
+) -> None:
+    setup = analyzed_application("Hebrew Contextual Knowledge Co")
+    services, application_id = setup
+    created = services.knowledge_lifecycle.add_fact(
+        "sales.md",
+        {
+            **NEW_FACT,
+            "fact_id": "sales.contextual.hebrew_gap",
+            "tags": ["sales", "leadership", "pipeline"],
+        },
+        application_id=application_id,
+    )
+    hebrew = services.analysis.analyze(
+        AnalyzeCommand(
+            application_id=application_id,
+            job_snapshot_id=setup.snapshot_id,
+            language_override="he",
+        )
+    )
+    fact_source = services.paths.knowledge_root / "base" / "sales.md"
+    profile_source = services.paths.knowledge_root / "profiles" / "sales" / "account-manager.yaml"
+    before_fact = fact_source.read_bytes()
+    before_profile = profile_source.read_bytes()
+
+    with pytest.raises(MissingFactRendering) as raised:
+        services.knowledge_lifecycle.confirm_and_use_fact(
+            created.fact.fact_id,
+            application_id=application_id,
+            job_analysis_id=hebrew.analysis_id,
+            profile="account-manager",
+            section="Work Experience",
+        )
+
+    assert raised.value.fact_id == created.fact.fact_id
+    assert raised.value.language == "he"
+    assert fact_source.read_bytes() == before_fact
+    assert profile_source.read_bytes() == before_profile
+    assert _reload(services).get(created.fact.fact_id).status is FactStatus.PENDING
     assert services.repository.prepared_knowledge_mutations() == []
     assert services.repository.quarantined_knowledge_mutations() == []
 

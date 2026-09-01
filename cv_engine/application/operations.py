@@ -46,15 +46,22 @@ TERMINAL_OPERATION_STATUSES = frozenset(
 def available_operation_actions(
     status: OperationStatus,
     cancellation_requested_at: str | None,
+    failure_code: OperationFailureCode | None = None,
 ) -> tuple[OperationAction, ...]:
     """Derive the commands the Operation API currently accepts.
 
     The client must not reproduce lifecycle policy from status strings. A queued
-    or running Operation can be cancelled until cancellation has been requested;
-    every terminal Operation can be retried as a new immutable Operation.
+    or running Operation can be cancelled until cancellation has been requested.
+    Terminal Operations can normally be retried as new immutable Operations;
+    a permanent error in their frozen sources is excluded explicitly.
     """
     if status in {OperationStatus.QUEUED, OperationStatus.RUNNING}:
         return (OperationAction.CANCEL,) if cancellation_requested_at is None else ()
+    if (
+        status is OperationStatus.FAILED
+        and failure_code is OperationFailureCode.MISSING_FACT_RENDERING
+    ):
+        return ()
     if status in TERMINAL_OPERATION_STATUSES:
         return (OperationAction.RETRY,)
     raise OperationContractError(f"operation action policy does not cover status {status}")
@@ -92,6 +99,7 @@ class OperationFailureCode(StrEnum):
     SCHEMA_VIOLATION = "SCHEMA_VIOLATION"
     RENDER_FAILED = "RENDER_FAILED"
     BROWSER_START_FAILED = "BROWSER_START_FAILED"
+    MISSING_FACT_RENDERING = "MISSING_FACT_RENDERING"
     VALIDATION_EXECUTION_FAILED = "VALIDATION_EXECUTION_FAILED"
     CANCELLED_BEFORE_ACTIVATION = "CANCELLED_BEFORE_ACTIVATION"
 

@@ -21,7 +21,7 @@ from .models import (
     SelectionManifest,
 )
 from .presentations import PresentationStore, PresentedClaim
-from .selection import EmphasisPolicyStore, build_selection
+from .selection import EmphasisPolicyStore, build_selection, require_fact_renderings
 
 CLAIM_NAMESPACE = uuid.UUID("e47cfc95-7f5c-4dd2-acd4-19be02c8f988")
 CANONICAL_JOIN_TEMPLATE = ("canonical-renderings", "1.0.0")
@@ -128,9 +128,6 @@ def build_draft(
 
     language = analysis.language
     contact_ids = candidate.contacts_for_track(analysis.track.value)
-    contacts = [
-        _claim("contact", facts.rendering(fact_id, language), [fact_id]) for fact_id in contact_ids
-    ]
 
     if selection is None:
         selected_by_section, selection = build_selection(
@@ -149,10 +146,22 @@ def build_draft(
         if selection.emphasis is not analysis.emphasis:
             raise ValueError("selection plan emphasis does not match analysis")
         selected = set(selection.selected_fact_ids)
+        # Plans written before the selection invariant existed are still valid
+        # records, but they may not enter composition if their eligible facts
+        # cannot be expressed in the target language.
+        require_fact_renderings(facts, selected, language)
         selected_by_section = {
             spec.name_en: [fact_id for fact_id in spec.fact_ids if fact_id in selected]
             for spec in profile.sections
         }
+
+    # Contacts are eligible through CandidateContext rather than a Profile
+    # section, so they need the same language invariant before the first claim
+    # is composed.
+    require_fact_renderings(facts, set(contact_ids), language)
+    contacts = [
+        _claim("contact", facts.rendering(fact_id, language), [fact_id]) for fact_id in contact_ids
+    ]
 
     # The headline is supported by the historical titles that actually reached
     # the document, not by every title the Profile could have shown.

@@ -30,6 +30,7 @@ from ...errors import (
 )
 from ...operations import (
     CreateOperation,
+    OperationFailureCode,
     OperationSources,
     OperationType,
     OperationView,
@@ -535,6 +536,11 @@ class OperationService(ServiceBase[OperationRepository]):
         original = self.repo.operation(operation_id)
         if not is_terminal_operation(original.status):
             raise StateConflict("only a terminal Operation can be retried")
+        if original.failure_code is OperationFailureCode.MISSING_FACT_RENDERING:
+            raise StateConflict(
+                "an Operation with a missing fact rendering cannot be retried against "
+                "the same frozen sources"
+            )
         request = CreateOperation(
             application_id=original.application_id,
             operation_type=original.operation_type,

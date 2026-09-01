@@ -11,10 +11,12 @@ from ....domain.models import (
     ValidationRunLineage,
     WorkingDraft,
 )
+from ....domain.selection import MissingFactRendering as DomainMissingFactRendering
 from ....util import canonical_json, sha256_text
 from ...errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
+    MissingFactRendering,
     PreconditionFailed,
     StateConflict,
     UnknownRecord,
@@ -75,6 +77,8 @@ class DraftServiceBase(ServiceBase[DraftRepository]):
                 presentations=knowledge.presentations,
                 selection=plan.plan,
             )
+        except DomainMissingFactRendering as exc:
+            raise MissingFactRendering(exc.fact_id, exc.language) from exc
         except ValueError as exc:
             raise PreconditionFailed(f"draft could not be built: {exc}") from exc
 

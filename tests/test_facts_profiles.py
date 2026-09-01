@@ -23,6 +23,11 @@ def test_canonical_fact_store_has_unique_stable_ids(fact_store) -> None:
         == "Managed a team of 2-3 sales representatives."
     )
     assert "YoY" not in facts.get("sales.metric.performance").renderings["en"]
+    assert (
+        facts.get("situational.agentic_multi_agent")
+        .renderings["he"]
+        .startswith("תכנן והפעיל תהליך פיתוח רב־סוכנים")
+    )
     assert facts.get("sales.role.leader.dates").effective_dates == "2020-08/2025-01"
     assert len(facts.version) == 64
 

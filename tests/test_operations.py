@@ -21,6 +21,7 @@ from cv_engine.application.commands import (
 from cv_engine.application.errors import (
     IDEMPOTENCY_KEY_REUSED,
     InfrastructureFailure,
+    MissingFactRendering,
     StateConflict,
     UnknownRecord,
 )
@@ -49,7 +50,11 @@ from cv_engine.application.operations import (
 from cv_engine.domain.models import ValidationIssue, ValidationReport
 from cv_engine.infrastructure.operation_logging import OperationFailureLogger
 from cv_engine.infrastructure.persistence import Repository
-from cv_engine.infrastructure.persistence.tables import operation_resource_leases, operations
+from cv_engine.infrastructure.persistence.tables import (
+    OPERATION_FAILURE_CODES,
+    operation_resource_leases,
+    operations,
+)
 from cv_engine.runtime.execution import OperationWorker
 from cv_engine.util import new_id
 
@@ -77,20 +82,30 @@ def test_terminal_operations_are_immutable() -> None:
 
 
 _OPERATION_ACTION_CASES = [
-    (OperationStatus.QUEUED, None, (OperationAction.CANCEL,)),
-    (OperationStatus.RUNNING, None, (OperationAction.CANCEL,)),
-    (OperationStatus.RUNNING, "2026-08-24T07:01:00Z", ()),
-    (OperationStatus.FAILED, None, (OperationAction.RETRY,)),
-    (OperationStatus.SUCCEEDED, None, (OperationAction.RETRY,)),
-    (OperationStatus.CANCELLED, None, (OperationAction.RETRY,)),
-    (OperationStatus.INTERRUPTED, None, (OperationAction.RETRY,)),
+    (OperationStatus.QUEUED, None, None, (OperationAction.CANCEL,)),
+    (OperationStatus.RUNNING, None, None, (OperationAction.CANCEL,)),
+    (OperationStatus.RUNNING, "2026-08-24T07:01:00Z", None, ()),
+    (OperationStatus.FAILED, None, None, (OperationAction.RETRY,)),
+    (OperationStatus.SUCCEEDED, None, None, (OperationAction.RETRY,)),
+    (OperationStatus.CANCELLED, None, None, (OperationAction.RETRY,)),
+    (OperationStatus.INTERRUPTED, None, None, (OperationAction.RETRY,)),
 ]
 
 
 def test_operation_actions_are_derived_by_the_lifecycle() -> None:
     assert {case[0] for case in _OPERATION_ACTION_CASES} == set(OperationStatus)
-    for status, cancellation_requested_at, expected in _OPERATION_ACTION_CASES:
-        assert available_operation_actions(status, cancellation_requested_at) == expected, status
+    for status, cancellation_requested_at, failure_code, expected in _OPERATION_ACTION_CASES:
+        assert (
+            available_operation_actions(status, cancellation_requested_at, failure_code) == expected
+        ), status
+    assert (
+        available_operation_actions(
+            OperationStatus.FAILED,
+            None,
+            OperationFailureCode.MISSING_FACT_RENDERING,
+        )
+        == ()
+    )
 
 
 def test_operation_payload_hash_is_canonical_and_secret_fields_are_refused() -> None:
@@ -112,6 +127,7 @@ def test_operation_payload_hash_is_canonical_and_secret_fields_are_refused() -> 
 
 
 def test_only_one_automatic_retry_is_allowed_for_transient_failures() -> None:
+    assert tuple(code.value for code in OperationFailureCode) == OPERATION_FAILURE_CODES
     transient_codes = [
         OperationFailureCode.PROVIDER_TIMEOUT,
         OperationFailureCode.PROVIDER_RATE_LIMITED,
@@ -698,6 +714,58 @@ def test_an_unclassified_infrastructure_failure_is_terminal_and_not_retried(
 
     assert completed.status is OperationStatus.FAILED
     assert completed.failure_code is OperationFailureCode.VALIDATION_EXECUTION_FAILED
+    assert attempts == 1
+
+
+def test_missing_fact_rendering_is_specific_terminal_failure_with_domain_context(
+    services, monkeypatch
+) -> None:
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company="Missing Rendering Co",
+            target_role="Developer",
+            job_text="Python developer role",
+            client="web",
+        )
+    )
+    attempts = 0
+
+    def prepare_that_fails(_command, *, operation_id=None):
+        nonlocal attempts
+        attempts += 1
+        raise MissingFactRendering("situational.agentic_multi_agent", "he")
+
+    monkeypatch.setattr(services.analysis, "prepare", prepare_that_fails)
+    operation = services.operations.submit_analysis(
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+            provider="deterministic",
+            language_override="he",
+        ),
+        idempotency_key="missing-rendering-failure",
+        analysis_service=services.analysis,
+    )
+
+    completed = foreground_executor(services).execute(operation.id)
+
+    assert completed.status is OperationStatus.FAILED
+    assert completed.failure_code is OperationFailureCode.MISSING_FACT_RENDERING
+    assert completed.safe_failure_detail == (
+        "Fact situational.agentic_multi_agent has no 'he' rendering."
+    )
+    assert completed.outputs == []
+    assert (
+        available_operation_actions(
+            completed.status,
+            completed.cancellation_requested_at,
+            completed.failure_code,
+        )
+        == ()
+    )
+    with pytest.raises(StateConflict, match="cannot be retried"):
+        services.operations.retry(completed.id, idempotency_key="meaningless-retry")
+    assert completed.attempts_completed == 1
     assert attempts == 1
 
 

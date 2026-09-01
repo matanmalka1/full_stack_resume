@@ -77,4 +77,10 @@ class OperationResponse(HttpSchema):
     @property
     def available_actions(self) -> list[OperationAction]:
         """Commands currently accepted, derived by the application layer."""
-        return list(available_operation_actions(self.status, self.cancellation_requested_at))
+        return list(
+            available_operation_actions(
+                self.status,
+                self.cancellation_requested_at,
+                self.failure_code,
+            )
+        )

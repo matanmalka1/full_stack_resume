@@ -4,7 +4,7 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
 
 ```json
 {
-  "source_version": "1.0.4",
+  "source_version": "1.0.5",
   "facts": [
     {
       "fact_id": "situational.testing",
@@ -230,7 +230,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "fact_id": "situational.agentic_multi_agent",
       "meaning": "Designed and ran a multi-agent development protocol in a personal project: lead agent sequencing, parallel executor lanes with exclusive file ownership, staged waves, and one git worktree per lane; a seven-stage refactor ran across three lanes without cross-lane conflict.",
       "renderings": {
-        "en": "Designed and ran a multi-agent development workflow: a lead agent sequencing the work, parallel executor lanes with exclusive file ownership, staged waves, and a separate git worktree per lane; a seven-stage refactor ran across three lanes without a cross-lane conflict."
+        "en": "Designed and ran a multi-agent development workflow: a lead agent sequencing the work, parallel executor lanes with exclusive file ownership, staged waves, and a separate git worktree per lane; a seven-stage refactor ran across three lanes without a cross-lane conflict.",
+        "he": "תכנן והפעיל תהליך פיתוח רב־סוכנים: סוכן מוביל שתזמן את העבודה, נתיבי ביצוע מקבילים עם בעלות בלעדית על קבצים, גלים מדורגים ו־Git worktree נפרד לכל נתיב; ריפקטור בן שבעה שלבים בוצע בשלושה נתיבים ללא התנגשות ביניהם."
       },
       "tags": [
         "development",

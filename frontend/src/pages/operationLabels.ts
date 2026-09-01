@@ -142,6 +142,11 @@ export const failurePresentations: Record<OperationFailureCode, FailurePresentat
     title: "מנוע יצירת הקובץ לא התחיל",
     guidance: "הגרסה שאושרה נשמרה. אפשר ליצור ניסיון חדש בלי לשנות אותה.",
   },
+  MISSING_FACT_RENDERING: {
+    title: "חסר ניסוח בשפת המסמך לעובדה שנבחרה",
+    guidance:
+      "לא נוצרה טיוטה והמצב הקיים נשמר. ניסיון חוזר מול אותם מקורות ייכשל שוב; יש להשלים ניסוח לעובדה בשפת היעד או להסיר אותה מתוכנית הבחירה.",
+  },
   VALIDATION_EXECUTION_FAILED: {
     title: "לא ניתן להשלים את בדיקות הפעולה",
     guidance: "המצב שהיה פעיל לפני הפעולה נשמר. אפשר ליצור ניסיון חדש או לחזור למועמדות.",

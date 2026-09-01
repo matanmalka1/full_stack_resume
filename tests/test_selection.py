@@ -10,10 +10,17 @@ from __future__ import annotations
 import pytest
 from helpers import PAYME_TECH_SALES_JOB
 
+from cv_engine.domain.analysis.classification import classify_job
 from cv_engine.domain.draft_markdown import serialize_markdown
+from cv_engine.domain.facts import FactStore
 from cv_engine.domain.models import Emphasis, Profile
 from cv_engine.domain.profiles import ProfileStore
-from cv_engine.domain.selection import STRUCTURAL_STYLES, SelectionError, build_selection
+from cv_engine.domain.selection import (
+    STRUCTURAL_STYLES,
+    MissingFactRendering,
+    SelectionError,
+    build_selection,
+)
 from cv_engine.infrastructure.rendering import normalized_role_filename
 
 ACCOUNT_MANAGER_JOB = (
@@ -315,8 +322,6 @@ def test_the_headline_reads_for_a_recruiter_and_the_filename_does_not(
 
 
 def _account_manager_selection(profile_store, policy_store, fact_store, **overlay):
-    from cv_engine.domain.analysis.classification import classify_job
-
     analysis = classify_job(ACCOUNT_MANAGER_JOB, profile_override="account-manager")
     return build_selection(
         analysis=analysis,
@@ -326,6 +331,45 @@ def _account_manager_selection(profile_store, policy_store, fact_store, **overla
         facts=fact_store,
         **overlay,
     )
+
+
+def test_selected_fact_without_target_language_rendering_is_refused_before_drafting(
+    profile_store: ProfileStore, policy_store, fact_store: FactStore
+) -> None:
+    analysis = classify_job(ACCOUNT_MANAGER_JOB, profile_override="account-manager")
+    _sections, baseline = build_selection(
+        analysis=analysis,
+        profile=profile_store.get("account-manager"),
+        policy=policy_store.get(analysis.emphasis),
+        policy_store_version=policy_store.version,
+        facts=fact_store,
+    )
+    missing_id = baseline.selected_fact_ids[0]
+    bilingual = {
+        fact_id: fact.model_copy(
+            update={
+                "renderings": (
+                    {key: value for key, value in fact.renderings.items() if key != "he"}
+                    if fact_id == missing_id
+                    else {**fact.renderings, "he": fact.renderings["en"]}
+                )
+            }
+        )
+        for fact_id, fact in fact_store.facts.items()
+    }
+
+    with pytest.raises(MissingFactRendering) as raised:
+        build_selection(
+            analysis=analysis.model_copy(update={"language": "he"}),
+            profile=profile_store.get("account-manager"),
+            policy=policy_store.get(analysis.emphasis),
+            policy_store_version=policy_store.version,
+            facts=FactStore(bilingual, fact_store.source_versions),
+        )
+
+    assert raised.value.fact_id == missing_id
+    assert raised.value.language == "he"
+    assert str(raised.value) == f"fact {missing_id} has no 'he' rendering"
 
 
 def test_an_overlay_free_build_is_byte_for_byte_the_build_that_ran_before(

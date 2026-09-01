@@ -7,6 +7,7 @@ from ...errors import (
     DependencyUnavailable,
     InfrastructureFailure,
     LineageBroken,
+    MissingFactRendering,
     PreconditionFailed,
     ProposalRejected,
     ProviderInvalidOutput,
@@ -39,13 +40,14 @@ FAILURE_CODE_BY_ERROR: dict[type[ApplicationError], OperationFailureCode] = {
     ProviderInvalidOutput: OperationFailureCode.INVALID_OUTPUT,
     # A Proposal the engine refused is an invalid output, not a transport
     # failure, and there is no separate code for it: the baseline schema's
-    # `failure_code` CHECK is the specification's list, and inventing a
-    # twelfth value would be a schema change for a distinction the safe
-    # failure detail already carries.
+    # `failure_code` CHECK is the specification's list, and inventing another
+    # value would be a schema change for a distinction the safe failure detail
+    # already carries.
     ProposalRejected: OperationFailureCode.INVALID_OUTPUT,
     DependencyUnavailable: OperationFailureCode.PROVIDER_REFUSED,
     StateConflict: OperationFailureCode.SOURCE_CHANGED,
     LineageBroken: OperationFailureCode.SOURCE_CHANGED,
+    MissingFactRendering: OperationFailureCode.MISSING_FACT_RENDERING,
     PreconditionFailed: OperationFailureCode.VALIDATION_EXECUTION_FAILED,
     InfrastructureFailure: OperationFailureCode.VALIDATION_EXECUTION_FAILED,
 }
@@ -61,6 +63,9 @@ _FAILURE_DETAIL: dict[OperationFailureCode, str] = {
     OperationFailureCode.SCHEMA_VIOLATION: "The AI provider returned an invalid schema.",
     OperationFailureCode.INVALID_OUTPUT: "The AI proposal was rejected.",
     OperationFailureCode.SOURCE_CHANGED: "Operation sources changed.",
+    OperationFailureCode.MISSING_FACT_RENDERING: (
+        "A selected fact has no rendering in the target language."
+    ),
     OperationFailureCode.VALIDATION_EXECUTION_FAILED: "Operation execution failed.",
 }
 
@@ -70,3 +75,11 @@ def failure_code_for(error: ApplicationError) -> OperationFailureCode:
         if cls in FAILURE_CODE_BY_ERROR:
             return FAILURE_CODE_BY_ERROR[cls]
     return OperationFailureCode.VALIDATION_EXECUTION_FAILED
+
+
+def safe_failure_detail_for(error: ApplicationError) -> str:
+    """Return public detail, including only structured domain context known to be safe."""
+    if isinstance(error, MissingFactRendering):
+        return f"Fact {error.fact_id} has no {error.language!r} rendering."
+    code = failure_code_for(error)
+    return _FAILURE_DETAIL.get(code, "Operation failed.")

@@ -45,6 +45,18 @@ class PreconditionFailed(ApplicationError):
     """The named state exists but cannot legally satisfy the command."""
 
 
+class MissingFactRendering(PreconditionFailed):
+    """A selected canonical fact has no wording in the document language."""
+
+    def __init__(self, fact_id: str, language: str):
+        self.fact_id = fact_id
+        self.language = language
+        super().__init__(
+            f"Fact {fact_id} has no {language!r} rendering.",
+            code="MISSING_FACT_RENDERING",
+        )
+
+
 class DuplicateAcknowledgementRequired(PreconditionFailed):
     """Application creation found duplicates that were not acknowledged."""
 

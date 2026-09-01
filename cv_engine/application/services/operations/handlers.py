@@ -23,6 +23,7 @@ from ...errors import (
     DependencyUnavailable,
     InfrastructureFailure,
     LineageBroken,
+    MissingFactRendering,
     ProposalRejected,
     StateConflict,
     UnknownRecord,
@@ -43,7 +44,7 @@ from ..analysis import AnalysisService, PreparedAnalysis, PreparedSelectionPropo
 from ..drafts import DraftService, PreparedDraft, PreparedRegeneration
 from ..rendering import ExecutedRender, RenderingService
 from .common import _model_hash, analysis_knowledge_context_hash
-from .failures import _FAILURE_DETAIL, failure_code_for
+from .failures import failure_code_for, safe_failure_detail_for
 
 
 class AITaskHandler:
@@ -125,7 +126,7 @@ class AITaskHandler:
     ) -> OperationExecutionError:
         code = failure_code_for(error)
         self._preserve_rejected(operation, error)
-        return OperationExecutionError(code, _FAILURE_DETAIL.get(code, "Operation failed."))
+        return OperationExecutionError(code, safe_failure_detail_for(error))
 
 
 class AnalysisOperationHandler(AITaskHandler):
@@ -168,7 +169,12 @@ class AnalysisOperationHandler(AITaskHandler):
             return self.prepared(
                 self.service.prepare(self._command(operation), operation_id=operation.id)
             )
-        except (DependencyUnavailable, InfrastructureFailure, ProposalRejected) as exc:
+        except (
+            DependencyUnavailable,
+            InfrastructureFailure,
+            MissingFactRendering,
+            ProposalRejected,
+        ) as exc:
             raise self._classified(operation, exc) from exc
 
     def activate(self, operation, prepared, repository):
@@ -265,7 +271,12 @@ class DraftOperationHandler(AITaskHandler):
             return self.prepared(
                 self.service.prepare(self._command(operation), operation_id=operation.id)
             )
-        except (DependencyUnavailable, InfrastructureFailure, ProposalRejected) as exc:
+        except (
+            DependencyUnavailable,
+            InfrastructureFailure,
+            MissingFactRendering,
+            ProposalRejected,
+        ) as exc:
             raise self._classified(operation, exc) from exc
 
     def activate(self, operation, prepared, repository):
@@ -325,17 +336,24 @@ class SelectionPlanOperationHandler(AITaskHandler):
                     self._command(operation), operation_id=operation.id
                 )
             )
-        except (DependencyUnavailable, InfrastructureFailure, ProposalRejected) as exc:
+        except (
+            DependencyUnavailable,
+            InfrastructureFailure,
+            MissingFactRendering,
+            ProposalRejected,
+        ) as exc:
             raise self._classified(operation, exc) from exc
 
     def activate(self, operation, prepared, repository):
-        del operation
         if not isinstance(prepared.value, PreparedSelectionProposal):
             raise TypeError("selection handler received an invalid prepared value")
-        result = self.service.activate_selection_proposal(
-            prepared.value,
-            cast(PreparationRepository, repository),
-        )
+        try:
+            result = self.service.activate_selection_proposal(
+                prepared.value,
+                cast(PreparationRepository, repository),
+            )
+        except MissingFactRendering as exc:
+            raise self._classified(operation, exc) from exc
         return (
             OperationOutputReference(
                 output_type="selection_plan",

@@ -55,6 +55,25 @@ class SelectionError(ValueError):
     pass
 
 
+class MissingFactRendering(SelectionError):
+    """A fact selected for a document cannot be expressed in its language."""
+
+    def __init__(self, fact_id: str, language: str):
+        self.fact_id = fact_id
+        self.language = language
+        super().__init__(f"fact {fact_id} has no {language!r} rendering")
+
+
+def require_fact_renderings(
+    facts: FactStore, fact_ids: set[str] | frozenset[str] | list[str], language: str
+) -> None:
+    """Refuse an eligible output before drafting if one selected fact cannot render."""
+    for fact_id in sorted(fact_ids):
+        fact = facts.get(fact_id, canonical_only=True)
+        if not fact.renderings.get(language):
+            raise MissingFactRendering(fact_id, language)
+
+
 class EmphasisPolicyStore:
     def __init__(self, policies: dict[Emphasis, EmphasisPolicy], policy_version: str):
         self.policies = policies
@@ -497,6 +516,7 @@ def build_selection(
         for spec in profile.sections
     }
     selected_ids = {fact_id for ids in selected_by_section.values() for fact_id in ids}
+    require_fact_renderings(facts, selected_ids, analysis.language)
 
     candidates = [
         SelectionCandidate(

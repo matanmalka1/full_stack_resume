@@ -15,6 +15,7 @@ from ....domain.models import (
     Fact,
     FactStatus,
 )
+from ....domain.selection import MissingFactRendering as DomainMissingFactRendering
 from ....domain.selection import build_selection
 from ....util import new_id, utc_now
 from ...commands import (
@@ -34,6 +35,7 @@ from ...errors import (
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     InfrastructureFailure,
     KnowledgeRejected,
+    MissingFactRendering,
     UnknownRecord,
 )
 from ...knowledge_mutations import PrepareKnowledgeMutation
@@ -415,6 +417,11 @@ class KnowledgeService(KnowledgeMutationEngine):
                 raise ValueError("confirmed fact was not selected by the replacement plan")
         except OSError as exc:
             raise InfrastructureFailure(f"could not prepare Knowledge mutation: {exc}") from exc
+        except DomainMissingFactRendering as exc:
+            if "staged_files" in locals():
+                for staged in staged_files:
+                    self._knowledge.discard_staged(staged)
+            raise MissingFactRendering(exc.fact_id, exc.language) from exc
         except (FactStoreError, ValueError) as exc:
             if "staged_files" in locals():
                 for staged in staged_files:

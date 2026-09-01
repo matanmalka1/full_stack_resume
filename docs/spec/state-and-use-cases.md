@@ -314,6 +314,7 @@ INVALID_OUTPUT
 SCHEMA_VIOLATION
 RENDER_FAILED
 BROWSER_START_FAILED
+MISSING_FACT_RENDERING
 VALIDATION_EXECUTION_FAILED
 CANCELLED_BEFORE_ACTIVATION
 ```
@@ -600,6 +601,9 @@ activated.
 
 Creates a new Operation with `retry_of_operation_id` and a new idempotency key. The old
 Operation remains immutable. Reusing the old key returns the old result.
+
+`MISSING_FACT_RENDERING` is not retryable against the same frozen sources: the selected
+Fact or its eligibility must change first, so the Operation exposes no `retry` action.
 
 ## 19a. Settings commands
 
