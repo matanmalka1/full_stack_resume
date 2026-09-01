@@ -28,11 +28,12 @@ export interface ApplicationActionPlan {
      workflow may well allow, but it is not what this screen is answering. */
   archiveDraft: { workingDraftId: string } | null;
   replaceDraft: { analysisId: string; emphasized: boolean; selectionPlanId: string; workingDraftId: string } | null;
-  /* `update_working_draft`, `validate` and `approve` all resolve to the draft editor:
-     validation is a panel there and approval a dialog opened from it. Offered side by side
-     they read as three destinations that all arrive at one URL, so they collapse to one
-     control wearing the furthest-along name - that being the one the workflow is waiting
-     on. The recommendation decides emphasis only; it never picks a different URL. */
+  /* `update_working_draft`, `validate`, `approve`, and `render` all resolve to the draft
+     editor: validation and rendering are panels there and approval is a dialog opened
+     from it. Offered side by side they read as destinations that all arrive at one URL,
+     so they collapse to one control wearing the furthest-along name - that being the one
+     the workflow is waiting on. The recommendation decides emphasis only; it never picks
+     a different URL. */
   draftScreen: { emphasized: boolean; href: string; label: string } | null;
   readyRevision: { emphasized: boolean; href: string } | null;
   /* The review decision's control is a panel on this same screen, so it is handled here
@@ -66,22 +67,30 @@ export const applicationActionPlan = (detail: ApplicationDetail): ApplicationAct
   const editHref = destinationFor("update_working_draft");
   const validationHref = destinationFor("validate");
   const approvalHref = destinationFor("approve");
+  const renderHref = destinationFor("render");
   /* Furthest along wins the label: if approval is offered the draft is validated and
-     approving is what the workflow is waiting on, and so down the chain. */
+     approving is what the workflow is waiting on; after approval, rendering is the next
+     explicit step recovered by that same screen. */
   const draftScreenTarget =
-    approvalHref !== null
-      ? { href: approvalHref, label: "אישור הגרסה" }
-      : validationHref !== null
-        ? { href: validationHref, label: "אימות הטיוטה" }
-        : editHref !== null
-          ? { href: editHref, label: "עריכת הטיוטה" }
-          : null;
+    renderHref !== null
+      ? { href: renderHref, label: "יצירת קובץ קורות החיים" }
+      : approvalHref !== null
+        ? { href: approvalHref, label: "אישור הגרסה" }
+        : validationHref !== null
+          ? { href: validationHref, label: "אימות הטיוטה" }
+          : editHref !== null
+            ? { href: editHref, label: "עריכת הטיוטה" }
+            : null;
   const draftScreen =
     draftScreenTarget === null
       ? null
       : {
           ...draftScreenTarget,
-          emphasized: recommended === "approve" || recommended === "validate" || recommended === "update_working_draft",
+          emphasized:
+            recommended === "render" ||
+            recommended === "approve" ||
+            recommended === "validate" ||
+            recommended === "update_working_draft",
         };
 
   const readyRevision =
@@ -116,6 +125,7 @@ export const applicationActionPlan = (detail: ApplicationDetail): ApplicationAct
       editHref === null ? null : "update_working_draft",
       validationHref === null ? null : "validate",
       approvalHref === null ? null : "approve",
+      renderHref === null ? null : "render",
     ].filter((action): action is string => action !== null),
   );
 

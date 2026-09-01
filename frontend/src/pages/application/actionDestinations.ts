@@ -24,6 +24,9 @@ const destinations: Record<string, (applicationId: string) => string> = {
      already there when the user arrives. */
   validate: (applicationId) => `/applications/${encodeURIComponent(applicationId)}/draft`,
   approve: (applicationId) => `/applications/${encodeURIComponent(applicationId)}/draft`,
+  /* After approval the editor recovers the exact latest approved revision from the
+     projection and renders its explicit render panel, including after a reload. */
+  render: (applicationId) => `/applications/${encodeURIComponent(applicationId)}/draft`,
 };
 
 export const actionDestination = (action: string, applicationId: string): string | null =>

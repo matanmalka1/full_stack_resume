@@ -406,7 +406,7 @@ tabs שהיא לא מקיימת, השנייה **סירבה לו מנומק. הס
 
 ## 11. כיסוי טסטים — מה הם באמת מוכיחים
 
-קבצי הטסט בפרונט כוללים כעת 111 תרחישי `it` מוצהרים (בנוסף להרחבות `it.each`).
+קבצי הטסט בפרונט כוללים כעת 112 תרחישי `it` מוצהרים (בנוסף להרחבות `it.each`).
 **האיכות גבוהה**: הטסטים בודקים התנהגות
 מוצרית ולא מימוש — "does not present a superseded analysis as the one in force",
 "never opens a second save while one is in flight", "keeps both panes mounted so
@@ -873,8 +873,9 @@ you."* הוא גם `role="img"` ולא `<nav>` — כי אין לאן ללכת: 
 carries, and this screen has neither the version nor the Keep decision — so the
 command is withheld and this says why."*
 
-**מבחינת המשתמש: המסך אומר שיש דרך, שהיא לא כאן, ולא אומר איפה כן.** ואין איפה —
-`replace_working_draft` אינו מחובר לשום מסך (סעיף 14).
+**לפני סעיף 14, מבחינת המשתמש המסך אמר שיש דרך, שהיא לא כאן, ולא אמר איפה כן.**
+לא היה איפה — `replace_working_draft` לא היה מחובר לשום מסך. הפער הזה נסגר
+בסעיף 14; הטקסט נשאר כאן כתיעוד של הממצא שהוביל אליו.
 
 ### 20.2 למה זה מחזק את סעיף 14
 
@@ -893,9 +894,14 @@ command is withheld and this says why."*
 
 המערכת יודעת מה הצעד הבא ואינה יכולה לבצע אותו. הניסוח מכובד, אבל זה עדיין קיר.
 
-- [ ] **אחרי סעיף 14 — לבדוק אילו המלצות עדיין נופלות ל־`unbuiltRecommendation`.**
-      ייתכן ש־`replace`/`archive` הן היחידות, ואז הענף הזה הופך לכמעט־מת. זו
-      בדיקה, לא משימה: הענף עצמו נכון ומגן.
+- [x] **נבדק אחרי סעיף 14.** המיפוי הנגזר מ־`derive_actions` מצא ארבעה מקרים:
+      `create_draft` מעל טיוטה stale נשאר בכוונה ומוצג לצד Replace/Archive;
+      `confirm_and_use_fact` נפתר בעורך שהמסך כבר מקשר אליו;
+      `create_selection_plan` הוא guard למצב שהכתיבה האטומית אמורה למנוע;
+      ו־`render` היה פער אמיתי. `render` חובר לנתיב העורך, שכבר משחזר את
+      `latest_approved_revision_id` אחרי reload ומציג את `DraftRenderPanel`.
+      נוסף טסט נגזר שנועל את היעד, התווית, ההדגשה והיעלמות ה־fallback. הענף נשאר
+      נחוץ לשלושת המצבים הראשונים; הוא אינו כמעט־מת.
 
 ---
 

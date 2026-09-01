@@ -132,3 +132,26 @@ describe("the way out of a stale draft (§14)", () => {
     ).toBeNull();
   });
 });
+
+describe("recommended action destinations", () => {
+  it("routes rendering back to the editor that recovers the exact approved revision", () => {
+    const plan = applicationActionPlan(
+      staleDetail({
+        preparation_state: "approved",
+        working_draft_state: "none",
+        stale_reasons: [],
+        active_working_draft_id: null,
+        latest_approved_revision_id: "revision-1",
+        available_actions: ["analyze", "render"],
+        recommended_action: "render",
+      }),
+    );
+
+    expect(plan.draftScreen).toEqual({
+      emphasized: true,
+      href: "/applications/app-1/draft",
+      label: "יצירת קובץ קורות החיים",
+    });
+    expect(plan.unbuiltRecommendation).toBeNull();
+  });
+});
