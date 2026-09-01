@@ -298,7 +298,12 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
   const draftScreenButton =
     plan.draftScreen === null
       ? null
-      : routeButton("draft-screen", plan.draftScreen.href, plan.draftScreen.label, plan.draftScreen.emphasized);
+      : routeButton(
+          "draft-screen",
+          plan.draftScreen.href,
+          plan.draftScreen.label === "אישור הגרסה" ? "מעבר לעורך לאימות ואישור" : plan.draftScreen.label,
+          plan.draftScreen.emphasized,
+        );
   const readyButton =
     plan.readyRevision === null
       ? null

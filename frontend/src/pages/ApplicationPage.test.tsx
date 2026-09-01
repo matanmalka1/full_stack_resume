@@ -312,6 +312,31 @@ describe("ApplicationPage", () => {
     expect(screen.queryByText("ממתין לניתוח המשרה")).not.toBeInTheDocument();
   });
 
+  it("names approval as a transition to the editor rather than an immediate command", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          detail({
+            preparation_state: "ready_for_approval",
+            working_draft_state: "validated",
+            active_working_draft_id: "draft-1",
+            available_actions: ["approve"],
+            recommended_action: "approve",
+          }),
+        ),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByRole("link", { name: "מעבר לעורך לאימות ואישור" })).toHaveAttribute(
+      "href",
+      "/applications/app-1/draft",
+    );
+    expect(screen.queryByRole("link", { name: "אישור הגרסה" })).not.toBeInTheDocument();
+  });
+
   it("analyzes the exact snapshot the projection names and reports the queued Operation", async () => {
     /* Routed by URL rather than by call order: once the command is accepted the screen
        watches the Operation it queued, so a fixed queue of answers would leave that read
