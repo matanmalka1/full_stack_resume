@@ -96,30 +96,30 @@
 
 ## 4. `/revisions/:id` — RevisionPage (319 שורות)
 
-- [ ] `if (approvedRevisionId === undefined) throw` יושב **אחרי** קריאות hooks.
+- [x] `if (approvedRevisionId === undefined) throw` יושב **אחרי** קריאות hooks.
       עובד, אבל שביר לשינוי סדר. להזיז לשומר route או לתחילת הרכיב.
-- [ ] אתחול תאריך ההגשה: `useState(() => ...)` עם חישוב offset של timezone inline.
+- [x] אתחול תאריך ההגשה: `useState(() => ...)` עם חישוב offset של timezone inline.
       להוציא לפונקציה נבדקת.
-- [ ] 5 מופעי `ErrorCallout` — יצטמצמו אחרי חלק 0.
-- [ ] `ValidationReportView` ל־`pages/revision/`.
+- [x] 5 מופעי `ErrorCallout` — יצטמצמו אחרי חלק 0.
+- [x] `ValidationReportView` ל־`pages/revision/`.
 
 ## 5. `/applications/new` — NewApplicationPage (367 שורות)
 
 **מצב: הדפוס הנכון, שאף עמוד אחר לא ירש.** היחיד שמשתמש ב־`useAppForm` +
 `FormSection` + `ActionBar`.
 
-- [ ] אין כאן חוב מבני משמעותי. **להשתמש בו כתקן לכל עמוד שיש בו טופס** (ראה 6).
-- [ ] `JobTextFileField`, `DuplicateChoices` ל־`pages/new-application/`.
+- [x] אין כאן חוב מבני משמעותי. **להשתמש בו כתקן לכל עמוד שיש בו טופס** (ראה 6).
+- [x] `JobTextFileField`, `DuplicateChoices` ל־`pages/new-application/`.
 
 ## 6. `/settings` — SettingsPage (92 שורות)
 
 **מצב: חריגה סגנונית בולטת.** שורות ארוכות מאוד ו־JSX דחוס בשורה אחת, בעוד כל
 שאר הקבצים מפורמטים רחב. סימן שהקובץ נכתב מחוץ לדפוס.
 
-- [ ] **לפרמט לפי שאר הקוד.** לבדוק למה Prettier/ESLint לא תפסו את זה.
-- [ ] `useState` + `useEffect` לסנכרון טופס מ־query, במקום `useAppForm` כמו
+- [x] **לפרמט לפי שאר הקוד.** לבדוק למה Prettier/ESLint לא תפסו את זה.
+- [x] `useState` + `useEffect` לסנכרון טופס מ־query, במקום `useAppForm` כמו
       NewApplicationPage. לאחד לדפוס אחד.
-- [ ] **`ReconciliationPanel` (191 שורות) מודבק בסוף העמוד** — פעולת תחזוקה על
+- [x] **`ReconciliationPanel` (191 שורות) מודבק בסוף העמוד** — פעולת תחזוקה על
       הנתונים, לא הגדרת תצוגה. להפריד לאזור משלו בעמוד, לכל הפחות.
 
 ## 7. Shell — `App.tsx` (133 שורות)
