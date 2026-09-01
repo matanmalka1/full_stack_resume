@@ -225,6 +225,31 @@ describe("ApplicationListPage", () => {
     expect(board.getAllByText("נשמר")).toHaveLength(2);
   });
 
+  /* Two rows can sit in the same stage and still not deserve the same hour: the fit the
+     analysis reported is what separates them, and it is not derivable from the stage. */
+  it("shows the analysis fit with its classification confidence", async () => {
+    stubList([item({ classification_confidence: 0.82, fit_level: "high" })]);
+
+    renderPage();
+
+    expect(await screen.findByText("התאמה גבוהה")).toBeInTheDocument();
+    expect(screen.getByTitle("רמת הביטחון של הסיווג: 82%")).toBeInTheDocument();
+  });
+
+  /* Track and origin tell two similar postings apart, and the origin stays a way back to
+     the posting itself. */
+  it("names the track and links the posting's origin under the role", async () => {
+    stubList([item({ source: "manual", source_url: "https://www.linkedin.com/jobs/view/1", track: "development" })]);
+
+    renderPage();
+
+    expect(await screen.findByText("פיתוח", { exact: false })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "linkedin.com" })).toHaveAttribute(
+      "href",
+      "https://www.linkedin.com/jobs/view/1",
+    );
+  });
+
   /* The board answers "which of these is waiting on me", so the recommended action is a
      column rather than something found by opening each Application in turn. */
   it("shows the stored recruitment follow-up alongside the workflow recommendation", async () => {
@@ -243,6 +268,17 @@ describe("ApplicationListPage", () => {
       "href",
       "/applications/app-1/preparation",
     );
+  });
+
+  /* Recruitment tasks are typed by hand and most boards have none, so the column earns
+     its width only when something is in it. */
+  it("drops the recruitment-task column from a page that carries no task", async () => {
+    stubList([item(), item({ id: "app-2", company: "Binat" })]);
+
+    renderPage();
+
+    expect(await screen.findByRole("columnheader", { name: "מצב קורות החיים" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "משימת גיוס" })).not.toBeInTheDocument();
   });
 
   it("keeps the latest failed Operation visible after active work ends", async () => {

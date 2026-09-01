@@ -1,4 +1,5 @@
 import { Archive, ArrowLeft, Clock, FileCheck2 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { MouseEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -7,7 +8,9 @@ import { isTerminalOperation } from "../../api/operations";
 import { Button } from "../../ui/Button";
 import { StatusBadge } from "../../ui/StatusBadge";
 import { cx } from "../../ui/cx";
+import { type StatusTone, statusPresentation } from "../../ui/status";
 import { actionDestination } from "../application/actionDestinations";
+import { fitLevelIcon, fitLevelLabel, fitLevelTone, trackLabel } from "../application/analysisLabels";
 import {
   actionLabel,
   preparationStateIcons,
@@ -23,6 +26,7 @@ import {
   formatApplicationDate,
   isApplicationClosed,
   isNextActionOverdue,
+  sourceHost,
 } from "./applicationListPresentation";
 
 const CompanyMark = ({ company }: { company: string }) => (
@@ -33,6 +37,37 @@ const CompanyMark = ({ company }: { company: string }) => (
     {[...company][0] ?? "?"}
   </span>
 );
+
+/* Three tinted pills per row read as three competing headlines, so only two things in a
+   row are drawn as one: what the CV needs and what is blocking it. The quieter axes -
+   the analysis fit and the recruitment stage - keep the same tone vocabulary as a mark
+   and a word with no chip around them, which leaves the single accent pill in "המשך
+   הכנה" as the row's one call to action. A.2 still holds: tone, icon, and the Hebrew
+   word travel together either way. */
+const quietToneClasses: Record<StatusTone, string> = {
+  success: "text-cv-success",
+  warning: "text-cv-warning",
+  blocker: "text-cv-blocker",
+  progress: "text-cv-accent",
+  neutral: "text-cv-text-muted",
+};
+
+interface QuietStatusProps {
+  children: string;
+  icon?: LucideIcon;
+  tone: StatusTone;
+}
+
+const QuietStatus = ({ children, icon, tone }: QuietStatusProps) => {
+  const Icon = icon ?? statusPresentation[tone].icon;
+
+  return (
+    <span className={cx("inline-flex items-start gap-1.5 text-support font-medium", quietToneClasses[tone])}>
+      <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+      <span className="min-w-0">{children}</span>
+    </span>
+  );
+};
 
 /* The label wraps rather than pinning the column to its longest string: "יצירת קובץ
    קורות החיים" alone was holding roughly a tenth of the table open, which the table
@@ -50,19 +85,80 @@ const rowRevisionLinkClasses =
 const rowActionClasses =
   "inline-flex min-h-9 items-center justify-center gap-2 rounded-pill bg-cv-accent-soft px-3 py-1 text-start text-support font-semibold text-cv-accent transition-colors duration-200 hover:bg-cv-accent hover:text-cv-on-accent";
 
+/* Track and origin, on one muted line under the role: both are what the reader uses to
+   tell two similar postings apart, and neither earns a column of its own. The origin is
+   a link when the posting carried a URL, and the stored source name otherwise - except
+   "manual", which says only that the user pasted it and is what most rows would show. */
+const ProvenanceLine = ({ item }: { item: ApplicationListItem }) => {
+  const host = sourceHost(item.source_url);
+  const origin = host ?? (item.source === "manual" ? null : item.source);
+  const parts = [item.track == null ? null : trackLabel(item.track), origin].filter((part) => part !== null);
+
+  if (parts.length === 0) {
+    return null;
+  }
+
+  return (
+    <p className="truncate text-support text-cv-text-muted">
+      {item.track == null ? null : trackLabel(item.track)}
+      {item.track != null && origin !== null ? " · " : null}
+      {origin === null ? null : host === null || item.source_url == null ? (
+        origin
+      ) : (
+        <a
+          className="hover:underline"
+          dir="ltr"
+          href={item.source_url}
+          rel="noreferrer"
+          target="_blank"
+          title={item.source_url}
+        >
+          {host}
+        </a>
+      )}
+    </p>
+  );
+};
+
+const FitCell = ({ item }: { item: ApplicationListItem }) => {
+  /* The confidence is the classifier's own certainty about the track and the fit. It is
+     a qualifier on the verdict rather than a number of its own: a row is scanned for the
+     verdict, and a percentage beside every one of them reads as a score the system does
+     not claim to have. */
+  const confidence =
+    item.classification_confidence == null
+      ? undefined
+      : `רמת הביטחון של הסיווג: ${Math.round(item.classification_confidence * 100)}%`;
+
+  return (
+    <td className="px-3 py-3 align-top">
+      {item.fit_level == null ? (
+        <span className="text-support text-cv-text-muted" title="המשרה טרם נותחה">
+          —
+        </span>
+      ) : (
+        <span title={confidence}>
+          <QuietStatus icon={fitLevelIcon(item.fit_level)} tone={fitLevelTone(item.fit_level)}>
+            {fitLevelLabel(item.fit_level)}
+          </QuietStatus>
+        </span>
+      )}
+    </td>
+  );
+};
+
 const RecruitmentStatusCell = ({ item }: { item: ApplicationListItem }) => {
   const closed = isApplicationClosed(item);
 
   return (
-    <td className="px-3 py-3">
+    <td className="px-3 py-3 align-top">
       <div className="flex flex-col items-start gap-1">
-        <StatusBadge
-          className={rowBadgeClasses}
+        <QuietStatus
           icon={recruitmentStatusIcon(item.recruitment_status)}
           tone={recruitmentStatusTone(item.recruitment_status)}
         >
           {recruitmentStatusLabel(item.recruitment_status)}
-        </StatusBadge>
+        </QuietStatus>
         {closed ? <span className="text-support text-cv-text-muted">התהליך נסגר</span> : null}
       </div>
     </td>
@@ -73,9 +169,13 @@ const NextActionCell = ({ item }: { item: ApplicationListItem }) => {
   const overdue = isNextActionOverdue(item.next_action_date);
 
   return (
-    <td className="px-3 py-3">
+    <td className="px-3 py-3 align-top">
       {item.next_action == null ? (
-        <span className="text-support text-cv-text-muted">טרם נקבעה</span>
+        /* An em dash rather than "טרם נקבעה": the sentence repeated down a column of
+           rows that mostly have no recruitment task, and read as content. */
+        <span className="text-support text-cv-text-muted" title="לא נקבעה משימת גיוס">
+          —
+        </span>
       ) : (
         <div className="flex flex-col items-start gap-1">
           <span className="text-support text-cv-text" dir="auto">
@@ -125,7 +225,7 @@ const RecommendedActionCell = ({ item }: { item: ApplicationListItem }) => {
     );
 
   return (
-    <td className="px-3 py-3">
+    <td className="px-3 py-3 align-top">
       <div className="flex flex-col items-start gap-1">
         {reported !== null ? (
           <StatusBadge className={rowBadgeClasses} tone={statusTones[reported.status]}>
@@ -148,10 +248,13 @@ const RecommendedActionCell = ({ item }: { item: ApplicationListItem }) => {
 interface ApplicationListRowProps {
   ambiguous: boolean;
   item: ApplicationListItem;
+  /* The table decides whether the recruitment-task column exists at all; the row only
+     has to agree with that decision, so its cell count stays right. */
+  showNextAction: boolean;
   onRequestClose: (item: ApplicationListItem) => void;
 }
 
-export const ApplicationListRow = ({ ambiguous, item, onRequestClose }: ApplicationListRowProps) => {
+export const ApplicationListRow = ({ ambiguous, item, showNextAction, onRequestClose }: ApplicationListRowProps) => {
   const navigate = useNavigate();
   const href = `/applications/${encodeURIComponent(item.id)}`;
   const preparationHref = `${href}/preparation`;
@@ -184,8 +287,8 @@ export const ApplicationListRow = ({ ambiguous, item, onRequestClose }: Applicat
       className="cursor-pointer border-b border-cv-border last:border-b-0 hover:bg-cv-surface-muted [&>td:first-child]:ps-4 [&>td:last-child]:pe-4"
       onClick={openRow}
     >
-      <td className="px-3 py-3">
-        <div className="flex min-w-0 items-center gap-2">
+      <td className="px-3 py-3 align-top">
+        <div className="flex min-w-0 items-start gap-2">
           <CompanyMark company={item.company} />
           <div className="min-w-0 flex-1 text-left">
             <Link className="block truncate text-support font-bold text-cv-text hover:underline" dir="auto" to={href}>
@@ -194,21 +297,20 @@ export const ApplicationListRow = ({ ambiguous, item, onRequestClose }: Applicat
             <p className="truncate text-support text-cv-text-muted" dir="auto">
               {item.target_role}
             </p>
+            <ProvenanceLine item={item} />
+            {/* Two rows for the same company and role are told apart by when each was
+                opened, so the hint names itself and carries that date instead of
+                emphasizing a column every other row also had. */}
+            {ambiguous ? (
+              <p className="truncate text-support font-medium text-cv-text" title={DUPLICATE_IDENTITY_HINT}>
+                {DUPLICATE_IDENTITY_HINT} · נפתחה ב־{formatApplicationDate(item.created_at)}
+              </p>
+            ) : null}
           </div>
         </div>
       </td>
-      <td className="whitespace-nowrap px-3 py-3 text-support">
-        {/* The emphasis alone did not say why one date was darker than its neighbours,
-            so the hint names itself on hover and to a screen reader. */}
-        <span
-          className={ambiguous ? "font-medium text-cv-text" : "text-cv-text-muted"}
-          title={ambiguous ? DUPLICATE_IDENTITY_HINT : undefined}
-        >
-          {formatApplicationDate(item.created_at)}
-        </span>
-        {ambiguous ? <span className="sr-only"> {DUPLICATE_IDENTITY_HINT}</span> : null}
-      </td>
-      <td className="px-3 py-3">
+      <FitCell item={item} />
+      <td className="px-3 py-3 align-top">
         <div className="flex flex-col items-start gap-1.5">
           <StatusBadge
             className={rowBadgeClasses}
@@ -240,15 +342,15 @@ export const ApplicationListRow = ({ ambiguous, item, onRequestClose }: Applicat
         </div>
       </td>
       <RecruitmentStatusCell item={item} />
-      <td className="whitespace-nowrap px-3 py-3 text-support text-cv-text-muted">
-        <span className="inline-flex items-center gap-1.5">
+      <td className="whitespace-nowrap px-3 py-3 align-top text-support text-cv-text-muted">
+        <span className="inline-flex items-center gap-1.5" title={`נפתחה ב־${formatApplicationDate(item.created_at)}`}>
           <Clock aria-hidden="true" className="size-3.5 shrink-0" />
           {formatApplicationDate(item.updated_at)}
         </span>
       </td>
-      <NextActionCell item={item} />
+      {showNextAction ? <NextActionCell item={item} /> : null}
       <RecommendedActionCell item={item} />
-      <td className="px-1 py-3">
+      <td className="px-1 py-3 align-top">
         {closed ? null : (
           <Button
             aria-label={`סגירת המועמדות ${item.company}`}

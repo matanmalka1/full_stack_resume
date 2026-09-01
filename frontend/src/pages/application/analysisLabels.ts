@@ -1,3 +1,6 @@
+import { SignalHigh, SignalLow, SignalMedium } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+
 import type { Classification } from "../../api/analyses";
 import type { Emphasis, Language, ProfileName, Track } from "../../api/contracts";
 import type { StatusTone } from "../../ui/status";
@@ -67,6 +70,29 @@ export const fitTones: Record<FitLevel, StatusTone> = {
   medium: "neutral",
   low: "warning",
 };
+
+/* Fit is a scale, so its mark is a scale too. The tone's own icons say "warning" and
+   "information", which is what a severity carries - a reader comparing rows is ranking
+   them, and a rising signal reads as the rank the word already states. */
+export const fitIcons: Record<FitLevel, LucideIcon> = {
+  high: SignalHigh,
+  medium: SignalMedium,
+  low: SignalLow,
+};
+
+/* The Application projections carry `fit_level` and `track` as open strings rather than
+   as the analysis unions, so the board and the Application screen read them through
+   these. The maps above stay the one place each value is named; a value this build does
+   not recognise is shown as itself rather than guessed at. */
+const isFitLevel = (fit: string): fit is FitLevel => fit in fitLabels;
+
+export const fitLevelLabel = (fit: string): string => (isFitLevel(fit) ? fitLabels[fit] : fit);
+
+export const fitLevelTone = (fit: string): StatusTone => (isFitLevel(fit) ? fitTones[fit] : "neutral");
+
+export const fitLevelIcon = (fit: string): LucideIcon | undefined => (isFitLevel(fit) ? fitIcons[fit] : undefined);
+
+export const trackLabel = (track: string): string => (track in trackLabels ? trackLabels[track as Track] : track);
 
 /* The backend's `OverrideKey` vocabulary, named for a reader. It doubles as the term
    list above, so a value the user decided is called the same thing in the summary and in

@@ -74,6 +74,7 @@ export const ApplicationListPage = () => {
     <PageShell
       actions={newApplication}
       description="מעקב אחר תהליכי התאמת קורות החיים למשרות."
+      surface="plain"
       title="המועמדויות"
       width="list"
     >
@@ -88,7 +89,7 @@ export const ApplicationListPage = () => {
       <QueryState
         empty={page?.total === 0}
         emptyState={
-          <EmptyState>
+          <EmptyState className="bg-cv-surface">
             <p className="text-body text-cv-text">עוד לא נוצרה אף מועמדות.</p>
             <p className="mt-1 text-support text-cv-text-muted">מועמדות חדשה מתחילה בהדבקת מודעת המשרה.</p>
             <div className="mt-5 flex justify-center">{newApplication}</div>
@@ -128,12 +129,14 @@ export const ApplicationListPage = () => {
               aria-busy={resultsAreRefreshing || undefined}
               className={`transition-opacity ${resultsAreRefreshing ? "opacity-60" : ""}`}
             >
-              <p aria-live="polite" className="text-support text-cv-text-muted">
+              {/* The count is the sheet's caption: it sits on the canvas directly above
+                  the rows it counts, not inside them. */}
+              <p aria-live="polite" className="mb-2 text-support text-cv-text-muted">
                 {matched === page.total ? `${page.total} מועמדויות` : `${matched} מתוך ${page.total} מועמדויות`}
               </p>
 
               {items.length === 0 ? (
-                <EmptyState className="mt-3">
+                <EmptyState className="bg-cv-surface">
                   <p className="text-body text-cv-text">אין מועמדות שמתאימה לסינון.</p>
                   <div className="mt-5 flex justify-center">
                     {/* Clearing narrows the board back to everything the reader can still

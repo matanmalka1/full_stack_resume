@@ -26,6 +26,21 @@ export const isNextActionOverdue = (value: string | null | undefined, today: Dat
   return due < midnight;
 };
 
+/* The posting's origin as the one word a row has space for: the host, without `www.`.
+   A URL the browser cannot parse is not guessed at - the row falls back to the stored
+   source name instead. */
+export const sourceHost = (url: string | null | undefined): string | null => {
+  if (url == null || url === "") {
+    return null;
+  }
+
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+};
+
 export interface AttentionItem {
   code: string;
   title: string;

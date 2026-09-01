@@ -96,11 +96,17 @@ export const ApplicationListFilters = ({
   onSearchChange,
   onSortChange,
 }: ApplicationListFiltersProps) => (
-  <div className="flex flex-col gap-4">
+  /* On a page with no card, the toolbar is what separates the masthead from the board,
+     so it closes with the same hairline the masthead opens with rather than floating
+     between two unrelated blocks. */
+  <div className="flex flex-col gap-4 border-b border-cv-border pb-5">
     <PresetChips onPresetChange={onPresetChange} preset={preset} />
 
     <div className="flex flex-wrap items-end gap-3">
-      <div className="min-w-[14rem] flex-1">
+      {/* The search field is capped rather than elastic: at board width `flex-1` gave it
+          seven times the width of the selects beside it, and a field that wide reads as
+          the page's subject instead of one control among six. */}
+      <div className="min-w-[14rem] max-w-sm flex-1">
         <label className="block text-support font-semibold text-cv-text" htmlFor="list-search">
           חיפוש
         </label>
