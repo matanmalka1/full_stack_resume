@@ -56,16 +56,14 @@ export const JobTextFileField = ({ onText }: JobTextFileFieldProps) => {
   };
 
   return (
-    /* Bound to the field it fills rather than stacked above it as a separate control:
-       the shared surface is what says this button and that text area are two ways into
-       one value. It sits on the sunken tone so it reads as an inlet to the field below
-       instead of a second card. */
-    <div className="flex flex-col gap-3 rounded-control border border-dashed border-cv-border bg-cv-surface-muted p-3 sm:flex-row sm:items-center">
+    /* A compact local-file choice rather than another bordered card. The quiet surface
+       separates the browser-only helper from the editable text it fills below. */
+    <div className="flex flex-col gap-3 rounded-control bg-cv-surface-muted p-4 sm:flex-row sm:items-center">
       {/* The visible control is the label, so the native file input can stay off screen
           without losing its accessible name or keyboard reachability. */}
       <label className={cx(buttonClasses("secondary"), "shrink-0 cursor-pointer font-medium")} htmlFor={inputId}>
         <Upload aria-hidden="true" className="size-4" />
-        קריאת קובץ טקסט מהמחשב (לא חובה)
+        בחירת קובץ טקסט
       </label>
       <input
         accept=".txt,text/plain"
@@ -96,7 +94,7 @@ export const JobTextFileField = ({ onText }: JobTextFileFieldProps) => {
           )}
           id={`${inputId}-hint`}
         >
-          הקובץ נקרא בדפדפן וממלא את שדה טקסט המשרה. שום קובץ אינו נשלח לשרת.
+          קובצי txt בלבד. הקובץ נקרא בדפדפן ואינו נשלח לשרת.
         </p>
       </div>
     </div>

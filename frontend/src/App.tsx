@@ -97,7 +97,7 @@ export const App = () => {
         <main className="w-full px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
           {/* `empty:hidden` removes the spacing on routes outside the CV workflow, where
               the landmark deliberately renders no steps. */}
-          <div className="mb-3 empty:hidden sm:mb-4">
+          <div className="mx-auto mb-3 max-w-5xl empty:hidden sm:mb-4">
             <WorkflowLandmarkSteps />
           </div>
           <Outlet />
