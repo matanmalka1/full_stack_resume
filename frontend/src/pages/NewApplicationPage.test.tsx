@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { JOB_TEXT_MAX_BYTES } from "../api/applications";
 import type { DuplicateMatch } from "../api/contracts";
 import { settingsQueryKey } from "../api/settings";
 import { NewApplicationPage } from "./NewApplicationPage";
@@ -89,6 +90,19 @@ const queuedAnalysisResponse = (): Response =>
     { Location: "/api/v1/operations/op-analyze" },
   );
 
+const CreatedApplicationDestination = () => {
+  const location = useLocation();
+  const analysisQueued = (location.state as { createdApplication?: { analysisQueued?: unknown } } | null)
+    ?.createdApplication?.analysisQueued;
+
+  return (
+    <>
+      <h1>פרטי משרה</h1>
+      <p>{analysisQueued === true ? "הניתוח הופעל" : "הניתוח לא הופעל"}</p>
+    </>
+  );
+};
+
 const renderPage = () => {
   const client = new QueryClient({
     defaultOptions: {
@@ -114,7 +128,7 @@ const renderPage = () => {
       <MemoryRouter initialEntries={["/"]}>
         <Routes>
           <Route element={<NewApplicationPage />} path="/" />
-          <Route element={<h1>פרטי משרה</h1>} path="/applications/:applicationId" />
+          <Route element={<CreatedApplicationDestination />} path="/applications/:applicationId" />
           <Route element={<h1>הכנת קורות החיים</h1>} path="/applications/:applicationId/preparation" />
         </Routes>
       </MemoryRouter>
@@ -123,16 +137,15 @@ const renderPage = () => {
 };
 
 const fillIntake = (jobText = "Job description text") => {
-  fireEvent.change(screen.getByLabelText("שם החברה"), { target: { value: " Acme " } });
-  fireEvent.change(screen.getByLabelText("תפקיד היעד"), {
+  fireEvent.change(screen.getByLabelText("שם החברה — חובה"), { target: { value: " Acme " } });
+  fireEvent.change(screen.getByLabelText("תפקיד היעד — חובה"), {
     target: { value: "Backend Engineer" },
   });
-  fireEvent.change(screen.getByLabelText("טקסט המשרה"), { target: { value: jobText } });
+  fireEvent.change(screen.getByLabelText("טקסט המשרה — חובה"), { target: { value: jobText } });
 };
 
 const chooseFile = (file: File) => {
-  fireEvent.click(screen.getByRole("button", { name: "העלאת קובץ" }));
-  const input = screen.getByLabelText("בחירת קובץ טקסט");
+  const input = screen.getByLabelText("טעינה מקובץ txt");
 
   /* jsdom keeps `files` read-only, so the selection is defined rather than assigned
      through the event, which would silently do nothing. */
@@ -149,17 +162,23 @@ afterEach(() => {
 });
 
 describe("NewApplicationPage", () => {
-  it("labels every intake field in Hebrew and keeps the source URL an LTR island", () => {
+  it("presents one consistently labelled intake form with bounded text and clear navigation", () => {
     renderPage();
 
     expect(screen.getByRole("heading", { level: 1, name: "משרה חדשה" })).toBeInTheDocument();
-    expect(screen.getByLabelText("שם החברה")).toBeInTheDocument();
-    expect(screen.getByLabelText("תפקיד היעד")).toBeInTheDocument();
-    expect(screen.getByLabelText("טקסט המשרה")).toHaveAttribute("dir", "auto");
+    expect(screen.getByLabelText("שם החברה — חובה")).toBeInTheDocument();
+    expect(screen.getByLabelText("תפקיד היעד — חובה")).toBeInTheDocument();
+    expect(screen.getByLabelText("טקסט המשרה — חובה")).toHaveAttribute("dir", "auto");
     expect(screen.getByLabelText("כתובת המשרה — אופציונלי")).toHaveAttribute("dir", "ltr");
     expect(
       screen.getByText("נשמרת כתיעוד מקור בלבד, המערכת אינה פותחת את הכתובת או מייבאת ממנה טקסט."),
     ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "חזרה לרשימת המועמדויות" })).toHaveAttribute("href", "/");
+    expect(screen.getByLabelText("טעינה מקובץ txt")).toBeInTheDocument();
+    expect(screen.getByLabelText("טקסט המשרה — חובה")).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "אופן הזנת תיאור המשרה" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("טקסט המשרה — חובה")).toHaveClass("h-64", "max-h-[55vh]");
+    expect(screen.getByRole("button", { name: "יצירת מועמדות" }).closest(".sticky")).not.toBeNull();
   });
 
   it("reads a chosen .txt file into the job text area without sending it anywhere", async () => {
@@ -169,7 +188,7 @@ describe("NewApplicationPage", () => {
     chooseFile(new File(["Senior Backend Engineer\nTel Aviv"], "job.txt", { type: "text/plain" }));
 
     await waitFor(() => {
-      expect(screen.getByLabelText("טקסט המשרה")).toHaveValue("Senior Backend Engineer\nTel Aviv");
+      expect(screen.getByLabelText("טקסט המשרה — חובה")).toHaveValue("Senior Backend Engineer\nTel Aviv");
     });
     expect(screen.getByRole("status")).toHaveTextContent("job.txt");
     expect(calls).toEqual([]);
@@ -181,7 +200,7 @@ describe("NewApplicationPage", () => {
     chooseFile(new File(["%PDF-1.7"], "job.pdf", { type: "application/pdf" }));
 
     expect(await screen.findByText("ניתן לבחור קובץ טקסט בלבד, עם סיומת txt.")).toBeInTheDocument();
-    expect(screen.getByLabelText("טקסט המשרה")).toHaveValue("");
+    expect(screen.getByLabelText("טקסט המשרה — חובה")).toHaveValue("");
   });
 
   it("creates the application and queues its analysis when the precheck finds nothing", async () => {
@@ -205,7 +224,8 @@ describe("NewApplicationPage", () => {
     fillIntake();
     submitForm();
 
-    expect(await screen.findByRole("heading", { name: "הכנת קורות החיים" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "פרטי משרה" })).toBeInTheDocument();
+    expect(screen.getByText("הניתוח הופעל")).toBeInTheDocument();
     expect(calls).toEqual([
       {
         path: DUPLICATE_CHECK_PATH,
@@ -275,7 +295,7 @@ describe("NewApplicationPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "יצירה בכל זאת" }));
 
-    expect(await screen.findByRole("heading", { name: "הכנת קורות החיים" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "פרטי משרה" })).toBeInTheDocument();
     expect(calls.map((call) => call.path)).toEqual([DUPLICATE_CHECK_PATH, CREATE_PATH, ANALYSES_PATH]);
     expect(calls[1].body).toMatchObject({ acknowledged_duplicates: true });
   });
@@ -301,7 +321,8 @@ describe("NewApplicationPage", () => {
     fillIntake();
     submitForm();
 
-    expect(await screen.findByRole("heading", { name: "הכנת קורות החיים" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "פרטי משרה" })).toBeInTheDocument();
+    expect(screen.getByText("הניתוח לא הופעל")).toBeInTheDocument();
     expect(calls.map((call) => call.path)).toEqual([DUPLICATE_CHECK_PATH, CREATE_PATH, ANALYSES_PATH]);
   });
 
@@ -347,7 +368,7 @@ describe("NewApplicationPage", () => {
     fillIntake();
     submitForm();
 
-    fireEvent.change(screen.getByLabelText("טקסט המשרה"), {
+    fireEvent.change(screen.getByLabelText("טקסט המשרה — חובה"), {
       target: { value: "A completely different posting" },
     });
     answer(jsonResponse({ matches: [match()] }));
@@ -371,12 +392,12 @@ describe("NewApplicationPage", () => {
     fillIntake();
     submitForm();
 
-    fireEvent.change(screen.getByLabelText("טקסט המשרה"), { target: { value: "Second text" } });
+    fireEvent.change(screen.getByLabelText("טקסט המשרה — חובה"), { target: { value: "Second text" } });
     answer(jsonResponse({ matches: [match()] }));
 
     expect(await screen.findByText("הקלט השתנה מאז הבדיקה")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("טקסט המשרה"), { target: { value: "Third text" } });
+    fireEvent.change(screen.getByLabelText("טקסט המשרה — חובה"), { target: { value: "Third text" } });
 
     await waitFor(() => {
       expect(screen.queryByText("הקלט השתנה מאז הבדיקה")).not.toBeInTheDocument();
@@ -394,7 +415,7 @@ describe("NewApplicationPage", () => {
 
     expect(await screen.findByText("נמצאו מועמדויות דומות")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("טקסט המשרה"), {
+    fireEvent.change(screen.getByLabelText("טקסט המשרה — חובה"), {
       target: { value: "A different posting" },
     });
 
@@ -433,6 +454,18 @@ describe("NewApplicationPage", () => {
     expect(await screen.findByText("יש להזין את שם החברה.")).toBeInTheDocument();
     expect(screen.getByText("יש להזין את תפקיד היעד.")).toBeInTheDocument();
     expect(screen.getByText("יש להזין את טקסט המשרה.")).toBeInTheDocument();
+    expect(calls).toEqual([]);
+  });
+
+  it("blocks creation when the job text exceeds the server byte budget", () => {
+    const calls = stubFetch({});
+    renderPage();
+    const overBudgetText = "a".repeat(JOB_TEXT_MAX_BYTES + 1);
+
+    fillIntake(overBudgetText);
+
+    expect(screen.getByText("— חורג מגודל התצלום המותר")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "יצירת מועמדות" })).toBeDisabled();
     expect(calls).toEqual([]);
   });
 });

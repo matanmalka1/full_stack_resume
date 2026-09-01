@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import {
@@ -36,9 +36,6 @@ const SOURCE_URL_MAX_CHARACTERS = 2048;
    counter measures the same thing the refusal will. It stays a quiet character count
    until the text is close enough to the ceiling for the budget to be the useful fact. */
 const JOB_TEXT_BUDGET_NOTICE_RATIO = 0.8;
-const JOB_TEXT_SOURCE_BUTTON_CLASSES =
-  "min-h-10 shadow-none aria-pressed:border-cv-accent aria-pressed:bg-cv-accent-soft aria-pressed:text-cv-accent aria-pressed:hover:bg-cv-accent-soft";
-
 const formatMebibytes = (bytes: number): string =>
   `${(bytes / (1024 * 1024)).toLocaleString("en-US", { maximumFractionDigits: 2 })} MB`;
 
@@ -82,7 +79,6 @@ type SubmitResult =
 export const NewApplicationPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [jobTextSource, setJobTextSource] = useState<"paste" | "file">("paste");
   /* The intake screen is the one place `intake` is the projection's own answer, so it
      states it rather than relying on the landmark's initial value. */
   useWorkflowStage("intake");
@@ -141,8 +137,9 @@ export const NewApplicationPage = () => {
     },
     onSuccess: (result) => {
       if (result.kind === "created") {
-        void navigate(`/applications/${encodeURIComponent(result.applicationId)}/preparation`, {
-          state: result.analysisQueued ? undefined : { automaticAnalysisStartFailed: true },
+        void navigate(`/applications/${encodeURIComponent(result.applicationId)}`, {
+          state: { createdApplication: { analysisQueued: result.analysisQueued } },
+          replace: true,
         });
       }
     },
@@ -219,7 +216,7 @@ export const NewApplicationPage = () => {
       <form className="flex flex-col gap-5" noValidate onSubmit={runSubmit(undefined)}>
         <FormSection divided={false} title="פרטי המשרה">
           <div className="grid gap-4 md:grid-cols-2">
-            <Field error={errors.company?.message} label="שם החברה">
+            <Field error={errors.company?.message} label="שם החברה — חובה">
               {(control) => (
                 <TextInput
                   {...control}
@@ -233,7 +230,7 @@ export const NewApplicationPage = () => {
               )}
             </Field>
 
-            <Field error={errors.target_role?.message} label="תפקיד היעד">
+            <Field error={errors.target_role?.message} label="תפקיד היעד — חובה">
               {(control) => (
                 <TextInput
                   {...control}
@@ -287,51 +284,28 @@ export const NewApplicationPage = () => {
           divided={false}
           title="תיאור המשרה"
         >
-          <div
-            aria-label="אופן הזנת תיאור המשרה"
-            className="flex w-fit gap-1 rounded-control bg-cv-surface-muted p-1"
-            role="group"
-          >
-            <Button
-              aria-pressed={jobTextSource === "paste"}
-              className={JOB_TEXT_SOURCE_BUTTON_CLASSES}
-              onClick={() => setJobTextSource("paste")}
-              variant="secondary"
-            >
-              הדבקת טקסט
-            </Button>
-            <Button
-              aria-pressed={jobTextSource === "file"}
-              className={JOB_TEXT_SOURCE_BUTTON_CLASSES}
-              onClick={() => setJobTextSource("file")}
-              variant="secondary"
-            >
-              העלאת קובץ
-            </Button>
-          </div>
+          <JobTextFileField
+            onText={(text) => setValue("job_text", text, { shouldDirty: true, shouldValidate: true })}
+          />
 
-          {jobTextSource === "file" ? (
-            <div>
-              <JobTextFileField
-                onText={(text) => setValue("job_text", text, { shouldDirty: true, shouldValidate: true })}
-              />
-            </div>
-          ) : null}
-
-          <Field error={errors.job_text?.message} label="טקסט המשרה">
+          <Field error={errors.job_text?.message} label="טקסט המשרה — חובה">
             {(control) => (
               /* Mixed Hebrew/English job text picks its own direction (A.3). */
               <TextArea
                 {...control}
                 {...register("job_text", {
-                  validate: (value) => value.trim() !== "" || "יש להזין את טקסט המשרה.",
+                  validate: {
+                    required: (value) => value.trim() !== "" || "יש להזין את טקסט המשרה.",
+                    withinBudget: (value) =>
+                      new TextEncoder().encode(value).length <= JOB_TEXT_MAX_BYTES ||
+                      "טקסט המשרה חורג מהגודל המותר. יש לקצר אותו לפני יצירת המועמדות.",
+                  },
                 })}
-                /* The payload of the whole screen. It opens tall enough to read a
-                   posting in, grows with a paste rather than hiding it behind a
-                   scrollbar, and stops at the viewport so the submit stays reachable. */
-                className="min-h-48 max-h-[55vh] [field-sizing:content]"
+                /* A long paste scrolls inside the field instead of moving the form's
+                   actions below the fold. The user can still resize it when useful. */
+                className="h-64 max-h-[55vh]"
                 dir="auto"
-                placeholder={jobTextSource === "paste" ? "הדבק כאן את תיאור המשרה…" : undefined}
+                placeholder="הדבק כאן את תיאור המשרה…"
               />
             )}
           </Field>
@@ -366,7 +340,7 @@ export const NewApplicationPage = () => {
           align="start"
           primary={
             <Button
-              disabled={submit.isPending && submit.variables?.acknowledged === true}
+              disabled={jobTextOverBudget || (submit.isPending && submit.variables?.acknowledged === true)}
               pending={submit.isPending && submit.variables?.acknowledged !== true}
               pendingLabel="בודק כפילויות…"
               type="submit"
@@ -376,9 +350,10 @@ export const NewApplicationPage = () => {
           }
           secondary={
             <Link className={buttonClasses("ghost")} to="/">
-              ביטול
+              חזרה לרשימת המועמדויות
             </Link>
           }
+          sticky
         />
       </form>
     </PageShell>

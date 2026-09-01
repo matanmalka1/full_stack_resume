@@ -51,7 +51,7 @@ export const JobTextFileField = ({ onText }: JobTextFileFieldProps) => {
     <div className="flex flex-col gap-3 rounded-control bg-cv-surface-muted p-4 sm:flex-row sm:items-center">
       <label className={cx(buttonClasses("secondary"), "shrink-0 cursor-pointer font-medium")} htmlFor={inputId}>
         <Upload aria-hidden="true" className="size-4" />
-        בחירת קובץ טקסט
+        טעינה מקובץ txt
       </label>
       <input
         accept=".txt,text/plain"
@@ -79,7 +79,7 @@ export const JobTextFileField = ({ onText }: JobTextFileFieldProps) => {
           )}
           id={`${inputId}-hint`}
         >
-          קובצי txt בלבד. הקובץ נקרא בדפדפן ואינו נשלח לשרת.
+          אפשר לטעון קובץ במקום להדביק. הקובץ נקרא בדפדפן ואינו נשלח לשרת.
         </p>
       </div>
     </div>

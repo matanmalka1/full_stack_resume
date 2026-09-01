@@ -1,4 +1,4 @@
-import { type ReactNode, useId } from "react";
+import type { ReactNode } from "react";
 
 import { cx } from "./cx";
 
@@ -18,8 +18,6 @@ interface FormSectionProps {
    technology announces. `legend` is taken out of the header's flow — a floated legend
    lays out inconsistently inside flex — and the visible title is a sibling. */
 export const FormSection = ({ aside, children, className, description, divided = true, title }: FormSectionProps) => {
-  const id = useId();
-
   return (
     <fieldset className={cx("min-w-0 border-0 p-0", className)}>
       <legend className="sr-only">{title}</legend>
@@ -31,9 +29,7 @@ export const FormSection = ({ aside, children, className, description, divided =
           {aside === undefined ? null : <div className="text-support text-cv-text-muted">{aside}</div>}
         </div>
         {description === undefined ? null : (
-          <p className="mt-1 text-support leading-6 text-cv-text-muted" id={`${id}-description`}>
-            {description}
-          </p>
+          <p className="mt-1 text-support leading-6 text-cv-text-muted">{description}</p>
         )}
       </div>
       <div className="mt-4 flex flex-col gap-4">{children}</div>

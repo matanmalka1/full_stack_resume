@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 
 import { applicationDetailQueryOptions } from "../api/applications";
 import type { ApplicationDetail } from "../api/contracts";
 import { useWorkflowStage, workflowDestinations } from "../app/WorkflowLandmark";
 import { buttonClasses } from "../ui/Button";
+import { Callout } from "../ui/Callout";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
 import { StatusBadge } from "../ui/StatusBadge";
@@ -110,6 +111,7 @@ const PreparationSummary = ({ detail }: { detail: ApplicationDetail }) => (
 
 export const JobDetailsPage = () => {
   const { applicationId } = useParams();
+  const location = useLocation();
 
   if (applicationId === undefined) {
     throw new Error("JobDetailsPage rendered without an applicationId route parameter");
@@ -117,6 +119,8 @@ export const JobDetailsPage = () => {
 
   const query = useQuery(applicationDetailQueryOptions(applicationId));
   const detail = query.data;
+  const createdApplication = (location.state as { createdApplication?: { analysisQueued?: unknown } } | null)
+    ?.createdApplication;
 
   /* Job Detail said `none` while it was a screen the landmark could not link to. Now that
      intake resolves here, staying silent meant the one destination the bar offers is also
@@ -151,13 +155,34 @@ export const JobDetailsPage = () => {
         loadingLabel="טוען את פרטי המשרה…"
       >
         {detail === undefined ? null : (
-          <div className="flex flex-col divide-y divide-cv-border [&>section]:py-6 [&>section:first-child]:pt-0 [&>section:last-child]:pb-0">
-            <JobOverview detail={detail} />
-            <JobSnapshotPanel detail={detail} />
-            <PreparationSummary detail={detail} />
-            <RecruitmentPanel detail={detail} />
-            <ArtifactsPanel applicationId={applicationId} />
-          </div>
+          <>
+            {createdApplication === undefined ? null : createdApplication.analysisQueued === true ? (
+              <Callout role="status" title="המועמדות נוצרה, הניתוח רץ" tone="progress" />
+            ) : (
+              <Callout
+                action={
+                  <Link
+                    className={buttonClasses("secondary")}
+                    to={`/applications/${encodeURIComponent(applicationId)}/preparation`}
+                  >
+                    מעבר להכנת קורות החיים
+                  </Link>
+                }
+                role="alert"
+                title="המועמדות נוצרה, אך הניתוח לא הופעל"
+                tone="warning"
+              >
+                ניתן להפעיל את הניתוח ממסך הכנת קורות החיים. המועמדות שכבר נוצרה לא תיווצר שוב.
+              </Callout>
+            )}
+            <div className="flex flex-col divide-y divide-cv-border [&>section]:py-6 [&>section:first-child]:pt-0 [&>section:last-child]:pb-0">
+              <JobOverview detail={detail} />
+              <JobSnapshotPanel detail={detail} />
+              <PreparationSummary detail={detail} />
+              <RecruitmentPanel detail={detail} />
+              <ArtifactsPanel applicationId={applicationId} />
+            </div>
+          </>
         )}
       </QueryState>
     </PageShell>

@@ -8,14 +8,12 @@ import { PreparationAlerts } from "./PreparationAlerts";
 import { ReviewDecisionPanel, resolvedByDecisionForm } from "./ReviewDecisionPanel";
 
 export const PreparationView = ({
-  automaticAnalysisStartFailed,
   classification,
   detail,
   onQueued,
   operationPanel,
   supersededAnalysis,
 }: {
-  automaticAnalysisStartFailed: boolean;
   classification: Classification | null;
   detail: ApplicationDetail;
   onQueued: (operationId: string) => void;
@@ -33,7 +31,7 @@ export const PreparationView = ({
           changing rather than on a separate screen. */}
       {operationPanel}
 
-      <PreparationAlerts automaticAnalysisStartFailed={automaticAnalysisStartFailed} detail={detail} />
+      <PreparationAlerts detail={detail} />
 
       {classification === null ? null : <AnalysisPanel classification={classification} detail={detail} />}
 

@@ -130,11 +130,7 @@ const HistoryBack = () => {
 
 /* Retries and the projection poll are off inside the test client: the interval is
    covered by its own unit test, and a live timer here would make every assertion racy. */
-const renderPage = (
-  settings: Settings = deterministicSettings,
-  navigationState?: { automaticAnalysisStartFailed: true },
-  withHistory = false,
-) => {
+const renderPage = (settings: Settings = deterministicSettings, withHistory = false) => {
   const client = new QueryClient({
     defaultOptions: {
       /* Settings is shell-owned in production and deliberately seeded here. Keep that
@@ -149,11 +145,7 @@ const renderPage = (
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter
-        initialEntries={
-          withHistory
-            ? ["/", { pathname: "/applications/app-1/preparation", state: navigationState }]
-            : [{ pathname: "/applications/app-1/preparation", state: navigationState }]
-        }
+        initialEntries={withHistory ? ["/", "/applications/app-1/preparation"] : ["/applications/app-1/preparation"]}
         initialIndex={withHistory ? 1 : 0}
       >
         {withHistory ? <HistoryBack /> : null}
@@ -182,15 +174,6 @@ afterEach(() => {
 });
 
 describe("ApplicationPage", () => {
-  it("keeps the created application usable when its automatic analysis was not queued", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail())));
-
-    renderPage(deterministicSettings, { automaticAnalysisStartFailed: true });
-
-    expect(await screen.findByText("המועמדות נוצרה, אך הניתוח לא הופעל")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "ניתוח המשרה" })).toBeInTheDocument();
-  });
-
   /* The Web automation opt-in, which moved here with the flow: queueing no longer
      navigates, so the Operation screen that used to run this chain is not on the path.
      Once per successful analyze, and not again after a remount - the session record is
@@ -314,7 +297,7 @@ describe("ApplicationPage", () => {
   it("navigates to Job Detail before the masthead and preserves list history", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail())));
 
-    renderPage(deterministicSettings, undefined, true);
+    renderPage(deterministicSettings, true);
 
     const navigation = screen.getByRole("navigation", { name: "תחומי המועמדות" });
     const details = within(navigation).getByRole("link", { name: "פרטי משרה" });

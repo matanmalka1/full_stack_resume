@@ -9,17 +9,8 @@ import { actionIsOnPreparationScreen } from "./actionDestinations";
    blockers, stale sources, general warnings, then the informational newer-draft note.
    Keeping this region visually quiet lets the action surface beside it remain the clear
    place to continue the workflow. */
-export const PreparationAlerts = ({
-  automaticAnalysisStartFailed,
-  detail,
-}: {
-  automaticAnalysisStartFailed: boolean;
-  detail: ApplicationDetail;
-}) => {
-  const showAutomaticFailure =
-    automaticAnalysisStartFailed && detail.preparation_state === "needs_analysis" && detail.active_operation == null;
+export const PreparationAlerts = ({ detail }: { detail: ApplicationDetail }) => {
   const hasAlerts =
-    showAutomaticFailure ||
     detail.review_reasons.length > 0 ||
     detail.stale_reasons.length > 0 ||
     detail.warnings.length > 0 ||
@@ -34,12 +25,6 @@ export const PreparationAlerts = ({
       aria-label="התראות"
       className="flex flex-col gap-3 rounded-surface border border-cv-border bg-cv-surface-muted p-3"
     >
-      {showAutomaticFailure ? (
-        <Callout title="המועמדות נוצרה, אך הניתוח לא הופעל" tone="warning">
-          ניתן להפעיל את ניתוח המשרה מהפעולה שלמטה. יצירת המועמדות לא תבוצע שוב.
-        </Callout>
-      ) : null}
-
       {/* A review reason whose control is in the decision panel states the requirement
           and stops there. Other reasons retain the action that resolves them. */}
       {detail.review_reasons.map((reason) => (

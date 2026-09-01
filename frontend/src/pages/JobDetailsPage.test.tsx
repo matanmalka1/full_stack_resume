@@ -64,7 +64,10 @@ const artifact = (id: string, artifactType: string): ArtifactVersion => ({
   version_number: 1,
 });
 
-const renderPage = (fetchImplementation?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) => {
+const renderPage = (
+  fetchImplementation?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
+  navigationState?: { createdApplication: { analysisQueued: boolean } },
+) => {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, refetchInterval: false, gcTime: 0 },
@@ -83,7 +86,7 @@ const renderPage = (fetchImplementation?: (input: RequestInfo | URL, init?: Requ
 
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/applications/app-1"]}>
+      <MemoryRouter initialEntries={[{ pathname: "/applications/app-1", state: navigationState }]}>
         <Routes>
           <Route element={<JobDetailsPage />} path="/applications/:applicationId" />
           <Route element={<h1>הכנת קורות החיים</h1>} path="/applications/:applicationId/preparation" />
@@ -98,6 +101,22 @@ afterEach(() => {
 });
 
 describe("JobDetailsPage", () => {
+  it("confirms creation and reports that automatic analysis is running", async () => {
+    renderPage(undefined, { createdApplication: { analysisQueued: true } });
+
+    expect(await screen.findByText("המועמדות נוצרה, הניתוח רץ")).toBeInTheDocument();
+  });
+
+  it("keeps a failed automatic analysis start actionable on the created job", async () => {
+    renderPage(undefined, { createdApplication: { analysisQueued: false } });
+
+    expect(await screen.findByText("המועמדות נוצרה, אך הניתוח לא הופעל")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "מעבר להכנת קורות החיים" })).toHaveAttribute(
+      "href",
+      "/applications/app-1/preparation",
+    );
+  });
+
   it("owns the job posting and recruitment controls before analysis exists", async () => {
     renderPage();
 

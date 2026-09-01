@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useLocation, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 
 import { classificationFromAnalysis } from "../api/analyses";
 import { applicationDetailQueryOptions } from "../api/applications";
@@ -23,7 +23,6 @@ import { useAutomaticDraft } from "./application/useAutomaticDraft";
    only the document-workflow actions the backend reports. */
 export const ApplicationPage = () => {
   const { applicationId } = useParams();
-  const location = useLocation();
 
   /* The route is applications/:applicationId/preparation, so a missing id is a router invariant
      violation rather than a state this screen supports. */
@@ -31,8 +30,6 @@ export const ApplicationPage = () => {
     throw new Error("ApplicationPage rendered without an applicationId route parameter");
   }
 
-  const automaticAnalysisStartFailed =
-    (location.state as { automaticAnalysisStartFailed?: unknown } | null)?.automaticAnalysisStartFailed === true;
   const query = useQuery(applicationDetailQueryOptions(applicationId));
   const detail = query.data;
   const {
@@ -98,7 +95,6 @@ export const ApplicationPage = () => {
       >
         {detail === undefined ? null : (
           <PreparationView
-            automaticAnalysisStartFailed={automaticAnalysisStartFailed}
             classification={classification}
             detail={detail}
             onQueued={watch}

@@ -73,9 +73,7 @@ export const router = createBrowserRouter([
         handle: { applicationContext: "self" },
       },
       {
-        /* The document workflow is addressed separately from the job record. A newly
-           created Application lands here so its queued analysis remains visible and the
-           configured automatic continuation can run. */
+        /* The document workflow is addressed separately from the job record. */
         path: "applications/:applicationId/preparation",
         element: <ApplicationPage />,
       },
