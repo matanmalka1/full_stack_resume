@@ -8,7 +8,8 @@ import { useWatchedOperation } from "../hooks/useWatchedOperation";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
 import { StatusBadge } from "../ui/StatusBadge";
-import { ApplicationViews, applicationViewFromParam } from "./ApplicationViews";
+import { ViewSwitch } from "../ui/ViewSwitch";
+import { applicationViewFromParam, applicationViews } from "./ApplicationViews";
 import { PreparationView } from "./application/PreparationView";
 import { TrackingView } from "./application/TrackingView";
 import {
@@ -108,11 +109,13 @@ export const ApplicationPage = () => {
       }
       title={view === "tracking" ? "מעקב גיוס" : "הכנת קורות החיים"}
     >
-      <ApplicationViews
-        current={view}
+      <ViewSwitch
+        label="תצוגות המועמדות"
         /* `replace` so switching axis does not stack history entries: the two views are
            one place, and "back" must still mean the list. */
         onChange={(next) => setSearchParams(next === "preparation" ? {} : { view: next }, { replace: true })}
+        options={[...applicationViews]}
+        value={view}
       />
 
       <QueryState

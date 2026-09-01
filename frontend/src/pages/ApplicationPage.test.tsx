@@ -282,7 +282,7 @@ describe("ApplicationPage", () => {
      because re-composing the panel into the preparation view is exactly the regression
      that put two independent state machines in one card (product-spec §399).
 
-     It is now a tab on this screen rather than a route of its own, so the assertion is
+     It is now a view of this screen rather than a route of its own, so the assertion is
      that the preparation view does not render it - not that the screen cannot. */
   it("leaves the recruitment axis to its own view", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail())));
@@ -294,7 +294,7 @@ describe("ApplicationPage", () => {
     expect(screen.queryByRole("button", { name: "שמירת הפעולה" })).not.toBeInTheDocument();
     expect(screen.queryByText("ציר הזמן")).not.toBeInTheDocument();
     /* The way to it, though, is on this screen. */
-    expect(screen.getByRole("tab", { name: "מעקב גיוס" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "מעקב גיוס" })).toBeInTheDocument();
   });
 
   /* Switching axis swaps the panel and the badge together. The masthead reporting one
@@ -305,7 +305,7 @@ describe("ApplicationPage", () => {
 
     renderPage();
 
-    fireEvent.click(await screen.findByRole("tab", { name: "מעקב גיוס" }));
+    fireEvent.click(await screen.findByRole("button", { name: "מעקב גיוס" }));
 
     expect(await screen.findByText("נשמר")).toBeInTheDocument();
     /* The preparation axis is gone from the masthead, not merely pushed below. */

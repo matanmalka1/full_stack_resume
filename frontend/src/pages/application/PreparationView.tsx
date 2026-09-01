@@ -29,12 +29,7 @@ export const PreparationView = ({
     detail.available_actions.length > 0;
 
   return (
-    <div
-      aria-labelledby="application-view-tab-preparation"
-      className="flex flex-col gap-5"
-      id="application-view-preparation"
-      role="tabpanel"
-    >
+    <div className="flex flex-col gap-5">
       {/* Live work is reported before the alert backdrop, beside the workflow it is
           changing rather than on a separate screen. */}
       {operationPanel}
