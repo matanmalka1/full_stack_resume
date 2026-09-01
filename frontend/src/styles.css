@@ -108,6 +108,13 @@ body {
   background: var(--color-cv-canvas);
 }
 
+/* One outer measure for every route-level surface and shell landmark. Content that
+   needs a shorter reading line constrains itself inside this shared frame. */
+.page-frame {
+  max-width: 110rem;
+  margin-inline: auto;
+}
+
 button,
 a,
 input,

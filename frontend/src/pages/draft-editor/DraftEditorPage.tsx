@@ -255,7 +255,6 @@ export const DraftEditorPage = () => {
       description={detail === undefined ? undefined : `תפקיד היעד: ${detail.application.target_role}`}
       eyebrow="סביבת עריכה"
       title="עריכה, אימות ואישור"
-      width="editor"
     >
       <QueryState
         error={applicationQuery.error}

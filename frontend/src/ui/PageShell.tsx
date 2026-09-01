@@ -2,9 +2,6 @@ import type { ReactNode } from "react";
 
 import { Card } from "./Card";
 import { PageHeading } from "./PageHeading";
-import { cx } from "./cx";
-
-type PageWidth = "reading" | "detail" | "editor" | "list";
 
 /* A page is a card when it is a work surface - a draft, a form, one Application being
    worked on - because the card is what separates that work from the canvas behind it.
@@ -14,13 +11,6 @@ type PageWidth = "reading" | "detail" | "editor" | "list";
    where the content actually is. */
 type PageSurface = "card" | "plain";
 
-const widthClasses: Record<PageWidth, string> = {
-  reading: "max-w-5xl",
-  detail: "max-w-6xl",
-  editor: "max-w-[90rem]",
-  list: "max-w-[110rem]",
-};
-
 interface PageShellProps {
   actions?: ReactNode;
   children?: ReactNode;
@@ -29,12 +19,11 @@ interface PageShellProps {
   navigation?: ReactNode;
   surface?: PageSurface;
   title: ReactNode;
-  width?: PageWidth;
 }
 
-/* Route pages share one document surface. Keeping the masthead border and body rhythm
-   here means a page declares its content and measure without rebuilding the frame or
-   teaching the application shell which route happens to need which width. */
+/* Route pages share one document surface and one outer measure. Keeping the masthead,
+   body rhythm, and width here makes every route align with the application header;
+   components that need a shorter reading measure constrain their own text instead. */
 export const PageShell = ({
   actions,
   children,
@@ -43,12 +32,11 @@ export const PageShell = ({
   navigation,
   surface = "card",
   title,
-  width = "reading",
 }: PageShellProps) => {
   const Surface = surface === "card" ? Card : "section";
 
   return (
-    <Surface aria-labelledby="route-heading" className={cx("mx-auto w-full", widthClasses[width])}>
+    <Surface aria-labelledby="route-heading" className="page-frame">
       {navigation === undefined ? null : <div className="mb-5">{navigation}</div>}
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 border-b border-cv-border pb-2">
         <div className="min-w-0">

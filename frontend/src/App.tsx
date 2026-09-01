@@ -7,7 +7,6 @@ import { WorkflowLandmark, WorkflowLandmarkSteps } from "./app/WorkflowLandmark"
 import { applicationDetailQueryOptions } from "./api/applications";
 import { settingsQueryOptions } from "./api/settings";
 import { buttonClasses } from "./ui/Button";
-import { cx } from "./ui/cx";
 
 /* The Application named on an inner screen's header line, and the way back to Job Detail. */
 const ApplicationContext = ({ company, href, targetRole }: { company: string; href: string; targetRole: string }) => {
@@ -53,7 +52,7 @@ export const App = () => {
       <RouteFocusManager />
       <WorkflowLandmark>
         <header className="sticky top-0 z-30 border-b border-cv-border bg-cv-surface/85 backdrop-blur-xl">
-          <div className="mx-auto flex min-h-16 max-w-[90rem] flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2 sm:px-6 lg:px-8">
+          <div className="page-frame flex min-h-16 flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2 sm:px-6 lg:px-8">
             {/* A wordmark rather than a logo tile: this is a local document tool, and
                 the accent rule under the name does more to place it than a gradient
                 square with a spark in it. */}
@@ -81,9 +80,8 @@ export const App = () => {
         </header>
 
         <main className="w-full px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
-          {/* `empty:hidden` removes the spacing on routes outside the CV workflow, where
-              the landmark deliberately renders no steps. */}
-          <div className={cx("mx-auto mb-3 empty:hidden sm:mb-4", isApplicationScreen ? "max-w-6xl" : "max-w-5xl")}>
+
+          <div className="page-frame mb-3 empty:hidden sm:mb-4">
             <WorkflowLandmarkSteps />
           </div>
           <Outlet />

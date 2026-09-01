@@ -76,7 +76,6 @@ export const ApplicationListPage = () => {
       description="מעקב אחר תהליכי התאמת קורות החיים למשרות."
       surface="plain"
       title="המועמדויות"
-      width="list"
     >
       {close.error === null ? null : (
         <ErrorCallout
