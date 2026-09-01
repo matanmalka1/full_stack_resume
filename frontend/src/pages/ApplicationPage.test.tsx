@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail, Operation, Settings } from "../api/contracts";
@@ -123,11 +123,17 @@ const deterministicSettings: Settings = {
   updated_at: null,
 };
 
+const HistoryBack = () => {
+  const navigate = useNavigate();
+  return <button onClick={() => navigate(-1)}>בדיקת חזרה</button>;
+};
+
 /* Retries and the projection poll are off inside the test client: the interval is
    covered by its own unit test, and a live timer here would make every assertion racy. */
 const renderPage = (
   settings: Settings = deterministicSettings,
   navigationState?: { automaticAnalysisStartFailed: true },
+  withHistory = false,
 ) => {
   const client = new QueryClient({
     defaultOptions: {
@@ -142,8 +148,17 @@ const renderPage = (
 
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[{ pathname: "/applications/app-1", state: navigationState }]}>
+      <MemoryRouter
+        initialEntries={
+          withHistory
+            ? ["/", { pathname: "/applications/app-1", state: navigationState }]
+            : [{ pathname: "/applications/app-1", state: navigationState }]
+        }
+        initialIndex={withHistory ? 1 : 0}
+      >
+        {withHistory ? <HistoryBack /> : null}
         <Routes>
+          <Route element={<h1>לוח המועמדויות</h1>} path="/" />
           <Route element={<ApplicationPage />} path="/applications/:applicationId" />
         </Routes>
       </MemoryRouter>
@@ -294,22 +309,39 @@ describe("ApplicationPage", () => {
     expect(screen.queryByRole("button", { name: "שמירת הפעולה" })).not.toBeInTheDocument();
     expect(screen.queryByText("ציר הזמן")).not.toBeInTheDocument();
     /* The way to it, though, is on this screen. */
-    expect(screen.getByRole("button", { name: "מעקב גיוס" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "מעקב גיוס" })).toBeInTheDocument();
   });
 
-  /* Switching axis swaps the panel and the badge together. The masthead reporting one
+  /* Section navigation swaps the panel and the badge together. The masthead reporting one
      axis while the body reports the other is the confusion the two views exist to
      prevent, so both are asserted in the same act. */
-  it("switches to the recruitment axis without leaving the screen", async () => {
+  it("navigates between application sections before the masthead and preserves list history", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail())));
 
-    renderPage();
+    renderPage(deterministicSettings, undefined, true);
 
-    fireEvent.click(await screen.findByRole("button", { name: "מעקב גיוס" }));
+    const navigation = screen.getByRole("navigation", { name: "תחומי המועמדות" });
+    const preparation = within(navigation).getByRole("link", { name: "הכנת קורות החיים" });
+    const tracking = within(navigation).getByRole("link", { name: "מעקב גיוס" });
+    const preparationHeading = screen.getByRole("heading", { level: 1, name: "הכנת קורות החיים" });
+    const preparationStatus = await screen.findByText("ממתין לניתוח המשרה");
 
+    expect(preparation).toHaveAttribute("aria-current", "page");
+    expect(tracking).not.toHaveAttribute("aria-current");
+    expect(preparation).toHaveAttribute("href", "/applications/app-1");
+    expect(tracking).toHaveAttribute("href", "/applications/app-1?view=tracking");
+    expect(navigation.compareDocumentPosition(preparationHeading) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(navigation.compareDocumentPosition(preparationStatus) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+
+    fireEvent.click(tracking);
+
+    expect(tracking).toHaveAttribute("aria-current", "page");
     expect(await screen.findByText("נשמר")).toBeInTheDocument();
     /* The preparation axis is gone from the masthead, not merely pushed below. */
     expect(screen.queryByText("ממתין לניתוח המשרה")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "בדיקת חזרה" }));
+    expect(await screen.findByRole("heading", { name: "לוח המועמדויות" })).toBeInTheDocument();
   });
 
   it("names approval as a transition to the editor rather than an immediate command", async () => {

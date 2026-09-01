@@ -8,8 +8,8 @@ import { useWatchedOperation } from "../hooks/useWatchedOperation";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
 import { StatusBadge } from "../ui/StatusBadge";
-import { ViewSwitch } from "../ui/ViewSwitch";
-import { applicationViewFromParam, applicationViews } from "./ApplicationViews";
+import { applicationViewFromParam } from "./ApplicationViews";
+import { ApplicationSectionNav } from "./ApplicationSectionNav";
 import { PreparationView } from "./application/PreparationView";
 import { TrackingView } from "./application/TrackingView";
 import {
@@ -41,7 +41,7 @@ export const ApplicationPage = () => {
 
   const automaticAnalysisStartFailed =
     (location.state as { automaticAnalysisStartFailed?: unknown } | null)?.automaticAnalysisStartFailed === true;
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const view = applicationViewFromParam(searchParams.get("view"));
   const query = useQuery(applicationDetailQueryOptions(applicationId));
   const detail = query.data;
@@ -107,17 +107,9 @@ export const ApplicationPage = () => {
           </div>
         )
       }
+      navigation={<ApplicationSectionNav value={view} />}
       title={view === "tracking" ? "מעקב גיוס" : "הכנת קורות החיים"}
     >
-      <ViewSwitch
-        label="תצוגות המועמדות"
-        /* `replace` so switching axis does not stack history entries: the two views are
-           one place, and "back" must still mean the list. */
-        onChange={(next) => setSearchParams(next === "preparation" ? {} : { view: next }, { replace: true })}
-        options={[...applicationViews]}
-        value={view}
-      />
-
       <QueryState
         error={query.error}
         fallbackTitle="לא ניתן לטעון את המועמדות"
