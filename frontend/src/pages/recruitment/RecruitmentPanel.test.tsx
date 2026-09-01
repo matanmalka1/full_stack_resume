@@ -70,11 +70,17 @@ const renderPanel = (value: ApplicationDetail = detail()) => {
     },
   });
 
-  return render(
+  const panel = (next: ApplicationDetail) => (
     <QueryClientProvider client={client}>
-      <RecruitmentPanel detail={value} />
-    </QueryClientProvider>,
+      <RecruitmentPanel detail={next} />
+    </QueryClientProvider>
   );
+  const rendered = render(panel(value));
+
+  return {
+    ...rendered,
+    rerenderPanel: (next: ApplicationDetail) => rendered.rerender(panel(next)),
+  };
 };
 
 const requestFor = (fetchMock: ReturnType<typeof vi.fn>, suffix: string) =>
@@ -111,9 +117,7 @@ describe("RecruitmentPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "שמירת הפעולה" }));
 
     await waitFor(() =>
-      expect(
-        fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/next-action")),
-      ).toHaveLength(1),
+      expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/next-action"))).toHaveLength(1),
     );
     const setRequest = requestFor(fetchMock, "/next-action");
     expect(setRequest?.[1]).toEqual(expect.objectContaining({ method: "PATCH" }));
@@ -122,19 +126,13 @@ describe("RecruitmentPanel", () => {
       next_action_date: "2026-09-10",
     });
 
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "סימון כהושלם וניקוי" })).toBeEnabled(),
-    );
+    await waitFor(() => expect(screen.getByRole("button", { name: "סימון כהושלם וניקוי" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "סימון כהושלם וניקוי" }));
 
     await waitFor(() =>
-      expect(
-        fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/next-action")),
-      ).toHaveLength(2),
+      expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/next-action"))).toHaveLength(2),
     );
-    const clearRequest = fetchMock.mock.calls.filter(([input]) =>
-      String(input).endsWith("/next-action"),
-    )[1];
+    const clearRequest = fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/next-action"))[1];
     expect(JSON.parse(String(clearRequest?.[1]?.body))).toEqual({
       next_action: null,
       next_action_date: null,
@@ -163,9 +161,7 @@ describe("RecruitmentPanel", () => {
       reason: "Wrong status recorded",
     });
 
-    await waitFor(() =>
-      expect(screen.queryByRole("dialog", { name: "תיקון אירוע שנרשם" })).not.toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "תיקון אירוע שנרשם" })).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "רישום הגשה חיצונית" }));
     fireEvent.change(screen.getByLabelText("מועד ההגשה"), {
       target: { value: "2026-09-01T12:30" },
@@ -207,5 +203,72 @@ describe("RecruitmentPanel", () => {
 
     expect(await screen.findByText("לא ניתן לעדכן את מעקב הגיוס")).toBeInTheDocument();
     expect(screen.getByText("הפעולה השתנתה בשרת. יש לרענן ולנסות שוב.")).toBeInTheDocument();
+  });
+
+  it("syncs untouched next-action fields from a refreshed projection", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({})));
+    const { rerenderPanel } = renderPanel();
+
+    rerenderPanel(
+      detail({
+        application: {
+          ...detail().application,
+          next_action: "Schedule interview",
+          next_action_date: "2026-09-12",
+        },
+      }),
+    );
+
+    await waitFor(() => expect(screen.getByLabelText("מה לעשות")).toHaveValue("Schedule interview"));
+    expect(screen.getByLabelText("תאריך")).toHaveValue("2026-09-12");
+    expect(screen.queryByText("הפעולה הבאה השתנתה בשרת")).not.toBeInTheDocument();
+  });
+
+  it("keeps each dirty next-action field and warns when the server changes underneath it", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({})));
+    const { rerenderPanel } = renderPanel();
+
+    fireEvent.change(screen.getByLabelText("מה לעשות"), {
+      target: { value: "My unsaved follow-up" },
+    });
+    rerenderPanel(
+      detail({
+        application: {
+          ...detail().application,
+          next_action: "Server follow-up",
+          next_action_date: "2026-09-12",
+        },
+      }),
+    );
+
+    expect(screen.getByLabelText("מה לעשות")).toHaveValue("My unsaved follow-up");
+    await waitFor(() => expect(screen.getByLabelText("תאריך")).toHaveValue("2026-09-12"));
+    expect(await screen.findByText("הפעולה הבאה השתנתה בשרת")).toBeInTheDocument();
+  });
+
+  it("preserves dirty transition and correction choices across projection refreshes", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({})));
+    const olderEvent = statusEvent({ id: "status-older", to_status: "applied" });
+    const currentEvent = statusEvent({ id: "status-current", to_status: "recruiter_screen" });
+    const { rerenderPanel } = renderPanel(detail({ recruitment_timeline: [olderEvent, currentEvent] }));
+
+    fireEvent.change(screen.getByLabelText("השלב הבא"), { target: { value: "closed" } });
+    fireEvent.click(screen.getByRole("button", { name: "תיקון אירוע שנרשם" }));
+    fireEvent.change(screen.getByLabelText("האירוע השגוי"), {
+      target: { value: "status-older" },
+    });
+
+    const newestEvent = statusEvent({ id: "status-newest", to_status: "interview" });
+    rerenderPanel(
+      detail({
+        allowed_recruitment_transitions: ["withdrawn"],
+        recruitment_timeline: [olderEvent, currentEvent, newestEvent],
+      }),
+    );
+
+    expect(screen.getByLabelText("השלב הבא")).toHaveValue("closed");
+    expect(screen.getByLabelText("האירוע השגוי")).toHaveValue("status-older");
+    expect(await screen.findByText("אפשרויות המעבר השתנו בשרת")).toBeInTheDocument();
+    expect(screen.getByText("ציר הזמן השתנה בשרת")).toBeInTheDocument();
   });
 });

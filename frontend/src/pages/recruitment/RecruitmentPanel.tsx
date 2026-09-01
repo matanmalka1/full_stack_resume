@@ -1,10 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
-import {
-  applicationDetailQueryKey,
-  applicationListQueryPrefix,
-} from "../../api/applications";
+import { applicationDetailQueryKey, applicationListQueryPrefix } from "../../api/applications";
 import type {
   ApplicationDetail,
   RecruitmentStatus,
@@ -18,6 +15,7 @@ import {
   transitionRecruitmentStatus,
 } from "../../api/tracking";
 import { ErrorCallout } from "../../app/ErrorCallout";
+import { useAppForm } from "../../forms/useAppForm";
 import { Button } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 import { Dialog } from "../../ui/Dialog";
@@ -25,6 +23,7 @@ import { Field } from "../../ui/Field";
 import { Select } from "../../ui/Select";
 import { TextArea, TextInput } from "../../ui/TextInput";
 import { recruitmentStatusLabel, recruitmentStatusLabels } from "../application/applicationLabels";
+import { useServerSyncedField } from "./useServerSyncedField";
 
 const dateTimeFormat = new Intl.DateTimeFormat("he-IL", {
   dateStyle: "medium",
@@ -44,6 +43,27 @@ const localDateTimeValue = (): string => {
 
 const allStatuses = Object.keys(recruitmentStatusLabels) as RecruitmentStatus[];
 
+interface TransitionFields {
+  reason: string;
+  target: TransitionableRecruitmentStatus | "";
+}
+
+interface NextActionFields {
+  action: string;
+  date: string;
+}
+
+interface CorrectionFields {
+  correctsEventId: string;
+  reason: string;
+  target: RecruitmentStatus;
+}
+
+interface ExternalSubmissionFields {
+  note: string;
+  submittedAt: string;
+}
+
 const statusEventLabel = (event: RecruitmentTimelineItem): string =>
   `${formatDateTime(event.occurred_at)} · ${recruitmentStatusLabel(event.to_status ?? "saved")}`;
 
@@ -52,9 +72,7 @@ const timelineDescription = (
   byId: ReadonlyMap<string, RecruitmentTimelineItem>,
 ): string => {
   if (event.item_type === "submission") {
-    return event.submission_type === "internal"
-      ? "נרשמה הגשה של הגרסה המוכנה"
-      : "נרשמה הגשה שבוצעה מחוץ למערכת";
+    return event.submission_type === "internal" ? "נרשמה הגשה של הגרסה המוכנה" : "נרשמה הגשה שבוצעה מחוץ למערכת";
   }
   if (event.item_type === "next_action") {
     return event.next_action == null
@@ -86,92 +104,122 @@ const timelineDescription = (
 export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
   const applicationId = detail.application.id;
   const queryClient = useQueryClient();
-  const [transitionTarget, setTransitionTarget] = useState<TransitionableRecruitmentStatus | "">(
-    detail.allowed_recruitment_transitions[0] ?? "",
-  );
-  const [transitionReason, setTransitionReason] = useState("");
   const statusEvents = detail.recruitment_timeline.filter(
     (event) => event.item_type === "status_transition" || event.item_type === "status_correction",
   );
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [externalOpen, setExternalOpen] = useState(false);
-  const [correctsEventId, setCorrectsEventId] = useState(statusEvents.at(-1)?.id ?? "");
-  const [correctionTarget, setCorrectionTarget] = useState<RecruitmentStatus>(
-    (detail.recruitment_status as RecruitmentStatus) ?? "saved",
-  );
-  const [correctionReason, setCorrectionReason] = useState("");
-  const [nextAction, setNextActionValue] = useState(detail.application.next_action ?? "");
-  const [nextActionDate, setNextActionDate] = useState(detail.application.next_action_date ?? "");
-  const [externalSubmittedAt, setExternalSubmittedAt] = useState(localDateTimeValue);
-  const [externalNote, setExternalNote] = useState("");
+  const transitionForm = useAppForm<TransitionFields>({
+    defaultValues: {
+      reason: "",
+      target: detail.allowed_recruitment_transitions[0] ?? "",
+    },
+  });
+  const nextActionForm = useAppForm<NextActionFields>({
+    defaultValues: {
+      action: detail.application.next_action ?? "",
+      date: detail.application.next_action_date ?? "",
+    },
+  });
+  const correctionForm = useAppForm<CorrectionFields>({
+    defaultValues: {
+      correctsEventId: statusEvents.at(-1)?.id ?? "",
+      reason: "",
+      target: (detail.recruitment_status as RecruitmentStatus) ?? "saved",
+    },
+  });
+  const externalForm = useAppForm<ExternalSubmissionFields>({
+    defaultValues: { note: "", submittedAt: localDateTimeValue() },
+  });
+  const transitionFields = transitionForm.watch();
+  const nextActionFields = nextActionForm.watch();
+  const correctionFields = correctionForm.watch();
 
-  useEffect(() => {
-    setTransitionTarget(detail.allowed_recruitment_transitions[0] ?? "");
-  }, [detail.allowed_recruitment_transitions.join("|")]);
-  useEffect(() => {
-    setNextActionValue(detail.application.next_action ?? "");
-    setNextActionDate(detail.application.next_action_date ?? "");
-  }, [detail.application.next_action, detail.application.next_action_date]);
-  /* The correction dialog opens on the latest recorded event, which is the one a mistake
-     is almost always in. Bound to the events rather than set once, so a transition made
-     while the screen is open does not leave the dialog offering to correct a stale row. */
-  useEffect(() => {
-    setCorrectsEventId(statusEvents.at(-1)?.id ?? "");
-  }, [statusEvents.map((event) => event.id).join("|")]);
+  const transitionChangedOnServer = useServerSyncedField({
+    changeToken: detail.allowed_recruitment_transitions.join("|"),
+    isDirty: transitionForm.formState.dirtyFields.target === true,
+    localValue: transitionFields.target,
+    onSync: (value) =>
+      transitionForm.resetField("target", {
+        defaultValue: value as TransitionableRecruitmentStatus | "",
+      }),
+    serverValue: detail.allowed_recruitment_transitions[0] ?? "",
+  });
+  const nextActionChangedOnServer = useServerSyncedField({
+    isDirty: nextActionForm.formState.dirtyFields.action === true,
+    localValue: nextActionFields.action,
+    onSync: (value) => nextActionForm.resetField("action", { defaultValue: value }),
+    serverValue: detail.application.next_action ?? "",
+  });
+  const nextActionDateChangedOnServer = useServerSyncedField({
+    isDirty: nextActionForm.formState.dirtyFields.date === true,
+    localValue: nextActionFields.date,
+    onSync: (value) => nextActionForm.resetField("date", { defaultValue: value }),
+    serverValue: detail.application.next_action_date ?? "",
+  });
+  /* The correction dialog opens on the latest recorded event. Once the user chooses an
+     older event, append-only timeline refreshes may offer a newer default but may not
+     replace that explicit choice. */
+  const correctionEventChangedOnServer = useServerSyncedField({
+    isDirty: correctionForm.formState.dirtyFields.correctsEventId === true,
+    localValue: correctionFields.correctsEventId,
+    onSync: (value) => correctionForm.resetField("correctsEventId", { defaultValue: value }),
+    serverValue: statusEvents.at(-1)?.id ?? "",
+  });
+  const hasTransitionChoice = detail.allowed_recruitment_transitions.length > 0 || transitionFields.target !== "";
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
     void queryClient.invalidateQueries({ queryKey: applicationListQueryPrefix });
   };
   const transition = useMutation({
-    mutationFn: () => {
-      if (transitionTarget === "") throw new Error("No transition target");
+    mutationFn: (fields: TransitionFields) => {
+      if (fields.target === "") throw new Error("No transition target");
       return transitionRecruitmentStatus(applicationId, {
-        target_status: transitionTarget,
-        reason: transitionReason,
+        target_status: fields.target,
+        reason: fields.reason,
       });
     },
     onSuccess: () => {
-      setTransitionReason("");
+      transitionForm.resetField("reason", { defaultValue: "" });
       refresh();
     },
   });
   const correction = useMutation({
-    mutationFn: () =>
+    mutationFn: (fields: CorrectionFields) =>
       correctRecruitmentStatus(applicationId, {
-        target_status: correctionTarget,
-        corrects_event_id: correctsEventId,
-        reason: correctionReason,
+        target_status: fields.target,
+        corrects_event_id: fields.correctsEventId,
+        reason: fields.reason,
       }),
     onSuccess: () => {
-      setCorrectionReason("");
+      correctionForm.resetField("reason", { defaultValue: "" });
       setCorrectionOpen(false);
       refresh();
     },
   });
   const nextActionMutation = useMutation({
-    mutationFn: (clear: boolean) =>
+    mutationFn: ({ clear, fields }: { clear: boolean; fields: NextActionFields }) =>
       setNextAction(applicationId, {
-        next_action: clear ? null : nextAction.trim() || null,
-        next_action_date: clear ? null : nextActionDate || null,
+        next_action: clear ? null : fields.action.trim() || null,
+        next_action_date: clear ? null : fields.date || null,
       }),
     onSuccess: refresh,
   });
   const externalSubmission = useMutation({
-    mutationFn: () =>
+    mutationFn: (fields: ExternalSubmissionFields) =>
       recordExternalSubmission(applicationId, {
-        submitted_at: new Date(externalSubmittedAt).toISOString(),
+        submitted_at: new Date(fields.submittedAt).toISOString(),
         artifact_version_id: null,
-        metadata: externalNote.trim() === "" ? {} : { note: externalNote.trim() },
+        metadata: fields.note.trim() === "" ? {} : { note: fields.note.trim() },
       }),
     onSuccess: () => {
-      setExternalNote("");
+      externalForm.resetField("note", { defaultValue: "" });
       setExternalOpen(false);
       refresh();
     },
   });
-  const error =
-    transition.error ?? correction.error ?? nextActionMutation.error ?? externalSubmission.error;
+  const error = transition.error ?? correction.error ?? nextActionMutation.error ?? externalSubmission.error;
   const timelineById = useMemo(
     () => new Map(detail.recruitment_timeline.map((event) => [event.id, event])),
     [detail.recruitment_timeline],
@@ -194,25 +242,27 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
       <div className="grid gap-6 lg:grid-cols-2">
         <form
           className="flex flex-col gap-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            transition.mutate();
-          }}
+          onSubmit={transitionForm.handleSubmit((fields) => transition.mutate(fields))}
         >
           <h3 className="font-semibold text-cv-text">עדכון שלב</h3>
-          {detail.allowed_recruitment_transitions.length === 0 ? (
+          {transitionChangedOnServer ? (
+            <Callout role="status" title="אפשרויות המעבר השתנו בשרת" tone="warning">
+              הבחירה שלך נשמרה בטופס ולא הוחלפה. כדאי לבדוק אותה לפני השמירה.
+            </Callout>
+          ) : null}
+          {!hasTransitionChoice ? (
             <p className="text-support text-cv-text-muted">אין מעבר ישיר זמין מהמצב הנוכחי.</p>
           ) : (
             <>
               <Field label="השלב הבא">
                 {(control) => (
-                  <Select
-                    {...control}
-                    onChange={(event) =>
-                      setTransitionTarget(event.target.value as TransitionableRecruitmentStatus)
-                    }
-                    value={transitionTarget}
-                  >
+                  <Select {...control} {...transitionForm.register("target")}>
+                    {transitionFields.target !== "" &&
+                    !detail.allowed_recruitment_transitions.includes(transitionFields.target) ? (
+                      <option value={transitionFields.target}>
+                        {recruitmentStatusLabel(transitionFields.target)} · הבחירה שלך
+                      </option>
+                    ) : null}
                     {detail.allowed_recruitment_transitions.map((status) => (
                       <option key={status} value={status}>
                         {recruitmentStatusLabel(status)}
@@ -222,13 +272,7 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
                 )}
               </Field>
               <Field label="סיבה (רשות)">
-                {(control) => (
-                  <TextInput
-                    {...control}
-                    onChange={(event) => setTransitionReason(event.target.value)}
-                    value={transitionReason}
-                  />
-                )}
+                {(control) => <TextInput {...control} {...transitionForm.register("reason")} />}
               </Field>
               <Button pending={transition.isPending} pendingLabel="שומר…" type="submit">
                 שמירת השלב
@@ -239,30 +283,19 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
 
         <form
           className="flex flex-col gap-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            nextActionMutation.mutate(false);
-          }}
+          onSubmit={nextActionForm.handleSubmit((fields) => nextActionMutation.mutate({ clear: false, fields }))}
         >
           <h3 className="font-semibold text-cv-text">הפעולה הבאה</h3>
+          {nextActionChangedOnServer || nextActionDateChangedOnServer ? (
+            <Callout role="status" title="הפעולה הבאה השתנתה בשרת" tone="warning">
+              הערכים שהקלדת נשמרו בטופס ולא הוחלפו. כדאי לבדוק אותם לפני השמירה.
+            </Callout>
+          ) : null}
           <Field label="מה לעשות">
-            {(control) => (
-              <TextInput
-                {...control}
-                onChange={(event) => setNextActionValue(event.target.value)}
-                value={nextAction}
-              />
-            )}
+            {(control) => <TextInput {...control} {...nextActionForm.register("action")} />}
           </Field>
           <Field label="תאריך">
-            {(control) => (
-              <TextInput
-                {...control}
-                onChange={(event) => setNextActionDate(event.target.value)}
-                type="date"
-                value={nextActionDate}
-              />
-            )}
+            {(control) => <TextInput {...control} {...nextActionForm.register("date")} type="date" />}
           </Field>
           <div className="flex flex-wrap gap-2">
             <Button pending={nextActionMutation.isPending} type="submit">
@@ -273,7 +306,7 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
                 nextActionMutation.isPending ||
                 (detail.application.next_action == null && detail.application.next_action_date == null)
               }
-              onClick={() => nextActionMutation.mutate(true)}
+              onClick={() => nextActionMutation.mutate({ clear: true, fields: nextActionForm.getValues() })}
               variant="secondary"
             >
               סימון כהושלם וניקוי
@@ -334,18 +367,16 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
           <form
             className="grid gap-3 lg:grid-cols-2"
             id="recruitment-correction-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              correction.mutate();
-            }}
+            onSubmit={correctionForm.handleSubmit((fields) => correction.mutate(fields))}
           >
+            {correctionEventChangedOnServer ? (
+              <Callout className="lg:col-span-2" role="status" title="ציר הזמן השתנה בשרת" tone="warning">
+                האירוע שבחרת נשמר בטופס ולא הוחלף. כדאי לבדוק אותו לפני השמירה.
+              </Callout>
+            ) : null}
             <Field label="האירוע השגוי">
               {(control) => (
-                <Select
-                  {...control}
-                  onChange={(event) => setCorrectsEventId(event.target.value)}
-                  value={correctsEventId}
-                >
+                <Select {...control} {...correctionForm.register("correctsEventId")}>
                   {statusEvents.map((item) => (
                     <option key={item.id} value={item.id}>
                       {statusEventLabel(item)}
@@ -356,11 +387,7 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
             </Field>
             <Field label="המצב הנכון">
               {(control) => (
-                <Select
-                  {...control}
-                  onChange={(event) => setCorrectionTarget(event.target.value as RecruitmentStatus)}
-                  value={correctionTarget}
-                >
+                <Select {...control} {...correctionForm.register("target")}>
                   {allStatuses.map((status) => (
                     <option key={status} value={status}>
                       {recruitmentStatusLabel(status)}
@@ -370,24 +397,13 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
               )}
             </Field>
             <Field className="lg:col-span-2" label="למה נדרש תיקון">
-              {(control) => (
-                <TextArea
-                  {...control}
-                  onChange={(event) => setCorrectionReason(event.target.value)}
-                  required
-                  value={correctionReason}
-                />
-              )}
+              {(control) => <TextArea {...control} {...correctionForm.register("reason")} required />}
             </Field>
             <div className="flex flex-wrap justify-end gap-3 lg:col-span-2">
               <Button onClick={() => setCorrectionOpen(false)} variant="secondary">
                 ביטול
               </Button>
-              <Button
-                disabled={correctionReason.trim() === ""}
-                pending={correction.isPending}
-                type="submit"
-              >
+              <Button disabled={correctionFields.reason.trim() === ""} pending={correction.isPending} type="submit">
                 הוספת אירוע תיקון
               </Button>
             </div>
@@ -403,34 +419,17 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
       >
         <form
           className="flex flex-col gap-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            externalSubmission.mutate();
-          }}
+          onSubmit={externalForm.handleSubmit((fields) => externalSubmission.mutate(fields))}
         >
           <Callout title="הרישום קבוע" tone="warning">
             ההגשה תתווסף להיסטוריה בלי להמציא גרסת קורות חיים או קובץ שלא נוצרו במערכת.
           </Callout>
           <Field label="מועד ההגשה">
             {(control) => (
-              <TextInput
-                {...control}
-                onChange={(event) => setExternalSubmittedAt(event.target.value)}
-                required
-                type="datetime-local"
-                value={externalSubmittedAt}
-              />
+              <TextInput {...control} {...externalForm.register("submittedAt")} required type="datetime-local" />
             )}
           </Field>
-          <Field label="הערה (רשות)">
-            {(control) => (
-              <TextArea
-                {...control}
-                onChange={(event) => setExternalNote(event.target.value)}
-                value={externalNote}
-              />
-            )}
-          </Field>
+          <Field label="הערה (רשות)">{(control) => <TextArea {...control} {...externalForm.register("note")} />}</Field>
           <div className="flex flex-wrap justify-end gap-3">
             <Button onClick={() => setExternalOpen(false)} variant="secondary">
               ביטול
