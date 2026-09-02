@@ -108,10 +108,11 @@ body {
   background: var(--color-cv-canvas);
 }
 
-/* One outer measure for every route-level surface and shell landmark. Content that
-   needs a shorter reading line constrains itself inside this shared frame. */
+/* One outer measure for every route-level surface and shell landmark. A page whose
+   body is a single column of inputs shortens the line by setting --page-measure rather
+   than by nesting a second frame inside this one. */
 .page-frame {
-  max-width: 110rem;
+  max-width: var(--page-measure, 110rem);
   margin-inline: auto;
 }
 

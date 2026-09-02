@@ -10,10 +10,10 @@ test.describe("the New Application screen", () => {
     await page.goto("/applications/new");
 
     await expect(page.getByRole("heading", { level: 1, name: "משרה חדשה" })).toBeVisible();
-    await expect(page.getByLabel("שם החברה — חובה")).toBeVisible();
-    await expect(page.getByLabel("תפקיד היעד — חובה")).toBeVisible();
-    await expect(page.getByLabel("כתובת המשרה — אופציונלי")).toHaveAttribute("dir", "ltr");
-    await expect(page.getByRole("link", { name: "חזרה לרשימת המועמדויות" })).toHaveAttribute("href", "/");
+    await expect(page.getByLabel("שם החברה")).toBeVisible();
+    await expect(page.getByLabel("תפקיד היעד")).toBeVisible();
+    await expect(page.getByLabel("כתובת המשרה אופציונלי")).toHaveAttribute("dir", "ltr");
+    await expect(page.getByRole("link", { name: "לוח המועמדויות" })).toHaveAttribute("href", "/");
     await expect(page.getByRole("button", { name: "יצירת מועמדות" })).toBeVisible();
     await expect(page.getByText("המערכת אינה פותחת את הכתובת או מייבאת ממנה טקסט", { exact: false })).toBeVisible();
   });
@@ -37,7 +37,7 @@ test.describe("the New Application screen", () => {
       buffer: Buffer.from("Senior Backend Engineer\nTel Aviv", "utf8"),
     });
 
-    await expect(page.getByLabel("טקסט המשרה — חובה")).toHaveValue("Senior Backend Engineer\nTel Aviv");
+    await expect(page.getByLabel("טקסט המשרה")).toHaveValue("Senior Backend Engineer\nTel Aviv");
     await expect(page.getByRole("status")).toContainText("job.txt");
     expect(unexpectedApiRequests).toEqual([]);
   });

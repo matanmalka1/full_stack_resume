@@ -1,4 +1,4 @@
-import { type ChangeEvent, useId, useState } from "react";
+import { type ChangeEvent, type DragEvent, useId, useState } from "react";
 import { Upload } from "lucide-react";
 
 import { JOB_TEXT_MAX_BYTES } from "../../api/applications";
@@ -19,10 +19,9 @@ export const JobTextFileField = ({ onText }: JobTextFileFieldProps) => {
   const inputId = useId();
   const [loadedFileName, setLoadedFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | undefined>(undefined);
+  const [dragging, setDragging] = useState(false);
 
-  const readLocalFile = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-
+  const readLocalFile = async (file: File | undefined) => {
     if (file === undefined) return;
 
     setLoadedFileName(null);
@@ -47,8 +46,38 @@ export const JobTextFileField = ({ onText }: JobTextFileFieldProps) => {
     }
   };
 
+  /* The row used to claim the presence of a drop area while offering only a button, so
+     dropping a posting on it did what the browser does by default: navigate away from a
+     form holding unsaved text. It now accepts the drop it looks like it accepts, through
+     the same reader and the same refusals as the picker. */
+  const onDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDragging(false);
+    void readLocalFile(event.dataTransfer.files[0]);
+  };
+
   return (
-    <div className="flex flex-col gap-3 rounded-control bg-cv-surface-muted p-4 sm:flex-row sm:items-center">
+    <div
+      className={cx(
+        "flex flex-col gap-3 rounded-control border border-dashed p-4 transition-colors duration-200 sm:flex-row sm:items-center",
+        dragging ? "border-cv-accent bg-cv-accent-soft" : "border-cv-border-strong bg-cv-surface-muted",
+      )}
+      onDragEnter={(event) => {
+        event.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={(event) => {
+        /* Only the crossing that leaves the zone itself; moving between its children
+           fires the same event and would flicker the state off and on. */
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setDragging(false);
+        }
+      }}
+      onDragOver={(event) => {
+        event.preventDefault();
+      }}
+      onDrop={onDrop}
+    >
       <label className={cx(buttonClasses("secondary"), "shrink-0 cursor-pointer font-medium")} htmlFor={inputId}>
         <Upload aria-hidden="true" className="size-4" />
         טעינה מקובץ txt
@@ -59,8 +88,8 @@ export const JobTextFileField = ({ onText }: JobTextFileFieldProps) => {
         aria-invalid={error === undefined ? undefined : true}
         className="sr-only"
         id={inputId}
-        onChange={(event) => {
-          void readLocalFile(event);
+        onChange={(event: ChangeEvent<HTMLInputElement>) => {
+          void readLocalFile(event.target.files?.[0]);
         }}
         type="file"
       />
@@ -79,7 +108,7 @@ export const JobTextFileField = ({ onText }: JobTextFileFieldProps) => {
           )}
           id={`${inputId}-hint`}
         >
-          אפשר לטעון קובץ במקום להדביק. הקובץ נקרא בדפדפן ואינו נשלח לשרת.
+          אפשר לטעון קובץ במקום להדביק, או לגרור אותו לכאן. הקובץ נקרא בדפדפן ואינו נשלח לשרת.
         </p>
       </div>
     </div>

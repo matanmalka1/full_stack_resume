@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   JOB_TEXT_MAX_BYTES,
@@ -16,7 +16,8 @@ import { ErrorCallout } from "../app/ErrorCallout";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { useAppForm } from "../forms/useAppForm";
 import { ActionBar } from "../ui/ActionBar";
-import { Button, buttonClasses } from "../ui/Button";
+import { BackLink } from "../ui/BackLink";
+import { Button } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { Field } from "../ui/Field";
 import { FormSection } from "../ui/FormSection";
@@ -25,6 +26,7 @@ import { PageShell } from "../ui/PageShell";
 import { TextArea, TextInput } from "../ui/TextInput";
 import { cx } from "../ui/cx";
 import { JobTextFileField } from "./application/JobTextFileField";
+import { paramsFromQuery, queryFromParams } from "./applicationListParams";
 import { DuplicateChoices } from "./new-application/DuplicateChoices";
 
 /* Native input affordances, not a second validation policy: they stop the user typing
@@ -79,6 +81,13 @@ type SubmitResult =
 export const NewApplicationPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  /* The board hands its own narrowing over in this screen's address bar, so the way back
+     returns to the board the user actually left rather than to an unfiltered one. It is
+     read back through the board's own parser, so an arbitrary value in the URL cannot
+     become an arbitrary link. */
+  const [boardParams] = useSearchParams();
+  const boardSearch = paramsFromQuery(queryFromParams(boardParams)).toString();
+  const boardPath = boardSearch === "" ? "/" : `/?${boardSearch}`;
   /* Intake creates the job the CV workflow later acts on; it is not a stage of that
      workflow, so this screen reports none rather than claiming step 1. */
   useWorkflowStage("none");
@@ -212,11 +221,21 @@ export const NewApplicationPage = () => {
   const failure = acknowledgementRequired === null ? submit.error : null;
 
   return (
-    <PageShell description="הוסף את פרטי המשרה כדי להתחיל התאמה של קורות החיים." title="משרה חדשה">
-      <form className="flex flex-col gap-5" noValidate onSubmit={runSubmit(undefined)}>
+    <PageShell
+      description="הוסף את פרטי המשרה כדי להתחיל התאמה של קורות החיים."
+      measure="form"
+      /* One step up, the way every other record screen names its parent. */
+      navigation={
+        <BackLink label="חזרה ללוח המועמדויות" to={boardPath}>
+          לוח המועמדויות
+        </BackLink>
+      }
+      title="משרה חדשה"
+    >
+      <form className="flex flex-col gap-6" noValidate onSubmit={runSubmit(undefined)}>
         <FormSection divided={false} title="פרטי המשרה">
           <div className="grid gap-4 md:grid-cols-2">
-            <Field error={errors.company?.message} label="שם החברה — חובה">
+            <Field error={errors.company?.message} label="שם החברה">
               {(control) => (
                 <TextInput
                   {...control}
@@ -230,7 +249,7 @@ export const NewApplicationPage = () => {
               )}
             </Field>
 
-            <Field error={errors.target_role?.message} label="תפקיד היעד — חובה">
+            <Field error={errors.target_role?.message} label="תפקיד היעד">
               {(control) => (
                 <TextInput
                   {...control}
@@ -246,14 +265,15 @@ export const NewApplicationPage = () => {
 
           <Field
             hint="נשמרת כתיעוד מקור בלבד, המערכת אינה פותחת את הכתובת או מייבאת ממנה טקסט."
-            label="כתובת המשרה — אופציונלי"
+            label="כתובת המשרה"
+            optional
           >
             {(control) => (
               /* A.3: a URL is an LTR island even inside the RTL shell. */
               <TextInput
                 {...control}
                 {...register("source_url")}
-                className="ltr-island max-w-xl"
+                className="ltr-island"
                 dir="ltr"
                 inputMode="url"
                 maxLength={SOURCE_URL_MAX_CHARACTERS}
@@ -264,7 +284,13 @@ export const NewApplicationPage = () => {
 
         <FormSection
           aside={
-            jobTextLength === 0 ? null : jobTextNearBudget ? (
+            /* Kept in the header at every length: appearing with the first keystroke
+               reflowed the title row while the user was typing into it. */
+            jobTextLength === 0 ? (
+              <span aria-hidden="true" className="invisible">
+                0
+              </span>
+            ) : jobTextNearBudget ? (
               /* Close to the ceiling the byte budget is the fact that matters, so the
                  counter switches to it and says which side of the limit the text is on
                  before the server has to. */
@@ -280,7 +306,10 @@ export const NewApplicationPage = () => {
               </span>
             )
           }
-          description="הדבק את תיאור המשרה או טען קובץ txt מהמחשב. הטקסט יישמר בדיוק כפי שהוזן."
+          /* Said once. How the text gets in is the file row's own sentence and the
+             text area's placeholder; what this group needs to say is what happens to
+             the text afterwards. */
+          description="הטקסט יישמר בתצלום המשרה בדיוק כפי שהוזן."
           divided={false}
           title="תיאור המשרה"
         >
@@ -288,7 +317,7 @@ export const NewApplicationPage = () => {
             onText={(text) => setValue("job_text", text, { shouldDirty: true, shouldValidate: true })}
           />
 
-          <Field error={errors.job_text?.message} label="טקסט המשרה — חובה">
+          <Field error={errors.job_text?.message} label="טקסט המשרה">
             {(control) => (
               /* Mixed Hebrew/English job text picks its own direction (A.3). */
               <TextArea
@@ -336,6 +365,12 @@ export const NewApplicationPage = () => {
           />
         )}
 
+        {/* The action does three things and named one of them. What follows the click is
+            worth knowing before it, not after the navigation. */}
+        <p className="text-support text-cv-text-muted">
+          יצירת המועמדות שומרת תצלום קבוע של המשרה ומתחילה את ניתוח ההתאמה.
+        </p>
+
         <ActionBar
           align="start"
           primary={
@@ -348,12 +383,6 @@ export const NewApplicationPage = () => {
               יצירת מועמדות
             </Button>
           }
-          secondary={
-            <Link className={buttonClasses("ghost")} to="/">
-              חזרה לרשימת המועמדויות
-            </Link>
-          }
-          sticky
         />
       </form>
     </PageShell>

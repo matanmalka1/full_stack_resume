@@ -23,7 +23,10 @@ export const FormSection = ({ aside, children, className, description, divided =
       <legend className="sr-only">{title}</legend>
       <div className={cx(divided ? "border-b border-cv-border pb-2" : undefined)}>
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <p aria-hidden="true" className="text-heading-sm font-bold tracking-tight text-cv-text">
+          {/* A group label, not a second page title: at heading size it sat four pixels
+              under the h1 and the two read as one flat level. Smaller, tracked out and
+              muted, it names the group without competing with the page. */}
+          <p aria-hidden="true" className="text-support font-bold tracking-wide text-cv-text-muted">
             {title}
           </p>
           {aside === undefined ? null : <div className="text-support text-cv-text-muted">{aside}</div>}

@@ -63,19 +63,21 @@ export const ApplicationListPage = () => {
   const items = page?.items ?? [];
   const matched = page?.matched ?? 0;
   const resultsAreRefreshing = listQuery.isFetching && !listQuery.isPending;
+  /* Intake carries the board's narrowing in its own address bar, so its way back returns
+     to this board rather than to an unfiltered one. Normalised rather than echoed: what
+     travels is the question this screen is actually asking. */
   const newApplication = (
-    <Link className={buttonClasses("primary")} to="/applications/new">
+    <Link
+      className={buttonClasses("primary")}
+      to={{ pathname: "/applications/new", search: paramsFromQuery(query).toString() }}
+    >
       <Plus aria-hidden="true" className="size-4" />
       משרה חדשה
     </Link>
   );
 
   return (
-    <PageShell
-      actions={newApplication}
-      description="מעקב אחר תהליכי התאמת קורות החיים למשרות."
-      title="המועמדויות"
-    >
+    <PageShell actions={newApplication} description="מעקב אחר תהליכי התאמת קורות החיים למשרות." title="המועמדויות">
       {close.error === null ? null : (
         <ErrorCallout
           error={close.error}

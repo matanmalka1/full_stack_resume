@@ -103,7 +103,7 @@ const CreatedApplicationDestination = () => {
   );
 };
 
-const renderPage = () => {
+const renderPage = (entry = "/") => {
   const client = new QueryClient({
     defaultOptions: {
       /* The screen deliberately reads the Settings value already held by the shell.
@@ -125,7 +125,7 @@ const renderPage = () => {
 
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/"]}>
+      <MemoryRouter initialEntries={[entry]}>
         <Routes>
           <Route element={<NewApplicationPage />} path="/" />
           <Route element={<CreatedApplicationDestination />} path="/applications/:applicationId" />
@@ -137,11 +137,11 @@ const renderPage = () => {
 };
 
 const fillIntake = (jobText = "Job description text") => {
-  fireEvent.change(screen.getByLabelText("שם החברה — חובה"), { target: { value: " Acme " } });
-  fireEvent.change(screen.getByLabelText("תפקיד היעד — חובה"), {
+  fireEvent.change(screen.getByLabelText("שם החברה"), { target: { value: " Acme " } });
+  fireEvent.change(screen.getByLabelText("תפקיד היעד"), {
     target: { value: "Backend Engineer" },
   });
-  fireEvent.change(screen.getByLabelText("טקסט המשרה — חובה"), { target: { value: jobText } });
+  fireEvent.change(screen.getByLabelText("טקסט המשרה"), { target: { value: jobText } });
 };
 
 const chooseFile = (file: File) => {
@@ -166,19 +166,30 @@ describe("NewApplicationPage", () => {
     renderPage();
 
     expect(screen.getByRole("heading", { level: 1, name: "משרה חדשה" })).toBeInTheDocument();
-    expect(screen.getByLabelText("שם החברה — חובה")).toBeInTheDocument();
-    expect(screen.getByLabelText("תפקיד היעד — חובה")).toBeInTheDocument();
-    expect(screen.getByLabelText("טקסט המשרה — חובה")).toHaveAttribute("dir", "auto");
-    expect(screen.getByLabelText("כתובת המשרה — אופציונלי")).toHaveAttribute("dir", "ltr");
+    expect(screen.getByLabelText("שם החברה")).toBeInTheDocument();
+    expect(screen.getByLabelText("תפקיד היעד")).toBeInTheDocument();
+    expect(screen.getByLabelText("טקסט המשרה")).toHaveAttribute("dir", "auto");
+    expect(screen.getByLabelText("כתובת המשרה אופציונלי")).toHaveAttribute("dir", "ltr");
     expect(
       screen.getByText("נשמרת כתיעוד מקור בלבד, המערכת אינה פותחת את הכתובת או מייבאת ממנה טקסט."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "חזרה לרשימת המועמדויות" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: "לוח המועמדויות" })).toHaveAttribute("href", "/");
     expect(screen.getByLabelText("טעינה מקובץ txt")).toBeInTheDocument();
-    expect(screen.getByLabelText("טקסט המשרה — חובה")).toBeInTheDocument();
+    expect(screen.getByLabelText("טקסט המשרה")).toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "אופן הזנת תיאור המשרה" })).not.toBeInTheDocument();
-    expect(screen.getByLabelText("טקסט המשרה — חובה")).toHaveClass("h-64", "max-h-[55vh]");
-    expect(screen.getByRole("button", { name: "יצירת מועמדות" }).closest(".sticky")).not.toBeNull();
+    expect(screen.getByLabelText("טקסט המשרה")).toHaveClass("h-64", "max-h-[55vh]");
+    /* The text area is capped, so the form's height is bounded and its actions stay in
+       the flow rather than being pinned over the page. */
+    expect(screen.getByRole("button", { name: "יצירת מועמדות" }).closest(".sticky")).toBeNull();
+  });
+
+  it("returns to the board the user left, dropping what the board would not have asked", () => {
+    renderPage("/?activity=all&stage=approved&limit=9&nonsense=x");
+
+    expect(screen.getByRole("link", { name: "לוח המועמדויות" })).toHaveAttribute(
+      "href",
+      "/?activity=all&stage=approved",
+    );
   });
 
   it("reads a chosen .txt file into the job text area without sending it anywhere", async () => {
@@ -188,7 +199,7 @@ describe("NewApplicationPage", () => {
     chooseFile(new File(["Senior Backend Engineer\nTel Aviv"], "job.txt", { type: "text/plain" }));
 
     await waitFor(() => {
-      expect(screen.getByLabelText("טקסט המשרה — חובה")).toHaveValue("Senior Backend Engineer\nTel Aviv");
+      expect(screen.getByLabelText("טקסט המשרה")).toHaveValue("Senior Backend Engineer\nTel Aviv");
     });
     expect(screen.getByRole("status")).toHaveTextContent("job.txt");
     expect(calls).toEqual([]);
@@ -200,7 +211,7 @@ describe("NewApplicationPage", () => {
     chooseFile(new File(["%PDF-1.7"], "job.pdf", { type: "application/pdf" }));
 
     expect(await screen.findByText("ניתן לבחור קובץ טקסט בלבד, עם סיומת txt.")).toBeInTheDocument();
-    expect(screen.getByLabelText("טקסט המשרה — חובה")).toHaveValue("");
+    expect(screen.getByLabelText("טקסט המשרה")).toHaveValue("");
   });
 
   it("creates the application and queues its analysis when the precheck finds nothing", async () => {
@@ -368,7 +379,7 @@ describe("NewApplicationPage", () => {
     fillIntake();
     submitForm();
 
-    fireEvent.change(screen.getByLabelText("טקסט המשרה — חובה"), {
+    fireEvent.change(screen.getByLabelText("טקסט המשרה"), {
       target: { value: "A completely different posting" },
     });
     answer(jsonResponse({ matches: [match()] }));
@@ -392,12 +403,12 @@ describe("NewApplicationPage", () => {
     fillIntake();
     submitForm();
 
-    fireEvent.change(screen.getByLabelText("טקסט המשרה — חובה"), { target: { value: "Second text" } });
+    fireEvent.change(screen.getByLabelText("טקסט המשרה"), { target: { value: "Second text" } });
     answer(jsonResponse({ matches: [match()] }));
 
     expect(await screen.findByText("הקלט השתנה מאז הבדיקה")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("טקסט המשרה — חובה"), { target: { value: "Third text" } });
+    fireEvent.change(screen.getByLabelText("טקסט המשרה"), { target: { value: "Third text" } });
 
     await waitFor(() => {
       expect(screen.queryByText("הקלט השתנה מאז הבדיקה")).not.toBeInTheDocument();
@@ -415,7 +426,7 @@ describe("NewApplicationPage", () => {
 
     expect(await screen.findByText("נמצאה מועמדות דומה")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("טקסט המשרה — חובה"), {
+    fireEvent.change(screen.getByLabelText("טקסט המשרה"), {
       target: { value: "A different posting" },
     });
 
