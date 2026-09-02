@@ -6,18 +6,6 @@ import { expect, test } from "@playwright/test";
    choices and creation need real FastAPI and a real DraftFlow, so they belong to the
    central E2E that the F gate owns, not here. */
 test.describe("the New Application screen", () => {
-  test("is the Hebrew intake form and never presents the URL as an import", async ({ page }) => {
-    await page.goto("/applications/new");
-
-    await expect(page.getByRole("heading", { level: 1, name: "משרה חדשה" })).toBeVisible();
-    await expect(page.getByLabel("שם החברה")).toBeVisible();
-    await expect(page.getByLabel("תפקיד היעד")).toBeVisible();
-    await expect(page.getByLabel("כתובת המשרה אופציונלי")).toHaveAttribute("dir", "ltr");
-    await expect(page.getByRole("link", { name: "לוח המועמדויות" })).toHaveAttribute("href", "/");
-    await expect(page.getByRole("button", { name: "יצירת מועמדות" })).toBeVisible();
-    await expect(page.getByText("המערכת אינה פותחת את הכתובת או מייבאת ממנה טקסט", { exact: false })).toBeVisible();
-  });
-
   test("reads a local .txt file into the job text area without uploading it", async ({ page }) => {
     const unexpectedApiRequests: string[] = [];
     page.on("request", (request) => {

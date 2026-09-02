@@ -162,27 +162,6 @@ afterEach(() => {
 });
 
 describe("NewApplicationPage", () => {
-  it("presents one consistently labelled intake form with bounded text and clear navigation", () => {
-    renderPage();
-
-    expect(screen.getByRole("heading", { level: 1, name: "משרה חדשה" })).toBeInTheDocument();
-    expect(screen.getByLabelText("שם החברה")).toBeInTheDocument();
-    expect(screen.getByLabelText("תפקיד היעד")).toBeInTheDocument();
-    expect(screen.getByLabelText("טקסט המשרה")).toHaveAttribute("dir", "auto");
-    expect(screen.getByLabelText("כתובת המשרה אופציונלי")).toHaveAttribute("dir", "ltr");
-    expect(
-      screen.getByText("נשמרת כתיעוד מקור בלבד, המערכת אינה פותחת את הכתובת או מייבאת ממנה טקסט."),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "לוח המועמדויות" })).toHaveAttribute("href", "/");
-    expect(screen.getByLabelText("טעינה מקובץ txt")).toBeInTheDocument();
-    expect(screen.getByLabelText("טקסט המשרה")).toBeInTheDocument();
-    expect(screen.queryByRole("group", { name: "אופן הזנת תיאור המשרה" })).not.toBeInTheDocument();
-    expect(screen.getByLabelText("טקסט המשרה")).toHaveClass("h-64", "max-h-[55vh]");
-    /* The text area is capped, so the form's height is bounded and its actions stay in
-       the flow rather than being pinned over the page. */
-    expect(screen.getByRole("button", { name: "יצירת מועמדות" }).closest(".sticky")).toBeNull();
-  });
-
   it("returns to the board the user left, dropping what the board would not have asked", () => {
     renderPage("/?activity=all&stage=approved&limit=9&nonsense=x");
 

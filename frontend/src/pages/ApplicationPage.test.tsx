@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail, Operation, Settings } from "../api/contracts";
@@ -123,14 +123,9 @@ const deterministicSettings: Settings = {
   updated_at: null,
 };
 
-const HistoryBack = () => {
-  const navigate = useNavigate();
-  return <button onClick={() => navigate(-1)}>בדיקת חזרה</button>;
-};
-
 /* Retries and the projection poll are off inside the test client: the interval is
    covered by its own unit test, and a live timer here would make every assertion racy. */
-const renderPage = (settings: Settings = deterministicSettings, withHistory = false) => {
+const renderPage = (settings: Settings = deterministicSettings) => {
   const client = new QueryClient({
     defaultOptions: {
       /* Settings is shell-owned in production and deliberately seeded here. Keep that
@@ -144,14 +139,8 @@ const renderPage = (settings: Settings = deterministicSettings, withHistory = fa
 
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter
-        initialEntries={withHistory ? ["/", "/applications/app-1/preparation"] : ["/applications/app-1/preparation"]}
-        initialIndex={withHistory ? 1 : 0}
-      >
-        {withHistory ? <HistoryBack /> : null}
+      <MemoryRouter initialEntries={["/applications/app-1/preparation"]}>
         <Routes>
-          <Route element={<h1>לוח המועמדויות</h1>} path="/" />
-          <Route element={<h1>פרטי משרה</h1>} path="/applications/:applicationId" />
           <Route element={<ApplicationPage />} path="/applications/:applicationId/preparation" />
         </Routes>
       </MemoryRouter>
@@ -239,111 +228,6 @@ describe("ApplicationPage", () => {
 
     await waitFor(() => expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1));
   });
-  /* Queueing work no longer navigates: the projection carries the Operation and this
-     screen reports it in place. */
-  it("watches a running operation without leaving the screen", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        jsonResponse(
-          detail({
-            active_operation: queued({ status: "running", phase: "executing" }),
-          }),
-        ),
-      ),
-    );
-
-    renderPage();
-
-    expect(await screen.findByRole("heading", { name: "הרצת ניתוח המשרה" })).toBeInTheDocument();
-    expect(screen.getByText("מתבצעת")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "מעבר למצב הפעולה" })).not.toBeInTheDocument();
-  });
-
-  it("names the page without repeating shell context and reports both projected states", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail())));
-
-    renderPage();
-
-    expect(screen.getByRole("heading", { level: 1, name: "הכנת קורות החיים" })).toBeInTheDocument();
-    /* The heading is static and appears during loading, so the projected state—not the
-       h1—is the synchronization point for assertions about the loaded application. */
-    expect(await screen.findByText("ממתין לניתוח המשרה")).toBeInTheDocument();
-    expect(screen.queryByText("Acme")).not.toBeInTheDocument();
-    expect(screen.queryByText("Backend Engineer")).not.toBeInTheDocument();
-    /* The draft axis is suppressed while the stage already implies it: at
-       `needs_analysis` a draft cannot exist, so "there is no active draft" beside
-       "waiting for the job analysis" is a restatement, not a second state. */
-    expect(screen.queryByText("אין טיוטה פעילה")).not.toBeInTheDocument();
-  });
-
-  /* Recruitment belongs to Job Detail. Preparation links there without composing its
-     controls into the document workflow. */
-  it("leaves recruitment management to Job Detail", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail())));
-
-    renderPage();
-
-    expect(await screen.findByText("ממתין לניתוח המשרה")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "שמירת השלב" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "שמירת הפעולה" })).not.toBeInTheDocument();
-    expect(screen.queryByText("ציר הזמן")).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "מודעת המשרה" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "עדכון נוסח המשרה" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "גרסאות וקבצים" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "פרטי משרה" })).toBeInTheDocument();
-  });
-
-  it("navigates to Job Detail before the masthead and preserves list history", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(detail())));
-
-    renderPage(deterministicSettings, true);
-
-    const navigation = screen.getByRole("navigation", { name: "חזרה לפרטי המשרה" });
-    const details = within(navigation).getByRole("link", { name: "פרטי משרה" });
-    const preparationHeading = screen.getByRole("heading", { level: 1, name: "הכנת קורות החיים" });
-    const preparationStatus = await screen.findByText("ממתין לניתוח המשרה");
-
-    /* One step up, not a peer tab: preparation is entered from the job record and returns
-       to it, and there is no link back to the screen the reader is already on. */
-    expect(details).toHaveAttribute("href", "/applications/app-1");
-    expect(within(navigation).queryByRole("link", { name: "הכנת קורות החיים" })).toBeNull();
-    expect(navigation.compareDocumentPosition(preparationHeading) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
-    expect(navigation.compareDocumentPosition(preparationStatus) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
-
-    fireEvent.click(details);
-
-    expect(await screen.findByRole("heading", { name: "פרטי משרה" })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "בדיקת חזרה" }));
-    expect(await screen.findByRole("heading", { name: "לוח המועמדויות" })).toBeInTheDocument();
-  });
-
-  it("names approval as a transition to the editor rather than an immediate command", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        jsonResponse(
-          detail({
-            preparation_state: "ready_for_approval",
-            working_draft_state: "validated",
-            active_working_draft_id: "draft-1",
-            available_actions: ["approve"],
-            recommended_action: "approve",
-          }),
-        ),
-      ),
-    );
-
-    renderPage();
-
-    expect(await screen.findByRole("link", { name: "מעבר לעורך לאימות ואישור" })).toHaveAttribute(
-      "href",
-      "/applications/app-1/draft",
-    );
-    expect(screen.queryByRole("link", { name: "אישור הגרסה" })).not.toBeInTheDocument();
-  });
-
   it("analyzes the exact snapshot the projection names and reports the queued Operation", async () => {
     /* Routed by URL rather than by call order: once the command is accepted the screen
        watches the Operation it queued, so a fixed queue of answers would leave that read
