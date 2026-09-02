@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { localDateTimeInputValue } from "./submissionDate";
+import { localDateTimeInputValue } from "./localDateTimeInputValue";
 
 describe("localDateTimeInputValue", () => {
   it("formats local date parts for a datetime-local input", () => {

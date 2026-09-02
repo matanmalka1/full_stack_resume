@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import type { Classification } from "../../api/analyses";
 import type { ApplicationDetail } from "../../api/contracts";
+import { surfaceClasses } from "../../ui/Surface";
 import { ApplicationActions } from "./ApplicationActions";
 import { AutomaticDraftNotice } from "./AutomaticDraftNotice";
 import { PreparationAlerts } from "./PreparationAlerts";
@@ -56,7 +57,7 @@ export const PreparationView = ({
           className={
             hasRecommendation
               ? "rounded-surface border-2 border-cv-accent/25 bg-cv-accent-soft/40 p-5 shadow-surface"
-              : "rounded-surface border border-cv-border bg-cv-surface p-5"
+              : surfaceClasses("bg-cv-surface p-5")
           }
         >
           <div className="flex flex-col gap-5">

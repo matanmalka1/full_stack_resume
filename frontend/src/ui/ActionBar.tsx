@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { cx } from "./cx";
+import { surfaceClasses } from "./Surface";
 
 interface ActionBarProps {
   /* Where a lone action sits. A bar closing a form belongs at the end, the way a submit
@@ -44,7 +45,7 @@ export const ActionBar = ({ align = "end", className, primary, secondary, sticky
       className={cx(
         "flex flex-wrap items-center gap-3",
         split
-          ? "mt-6 justify-between rounded-surface border border-cv-border bg-cv-surface-muted p-4 shadow-inner"
+          ? surfaceClasses("mt-6 justify-between bg-cv-surface-muted p-4 shadow-inner")
           : align === "start"
             ? "justify-start"
             : "justify-end",

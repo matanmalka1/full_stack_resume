@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { Link, type To } from "react-router-dom";
 
 import { buttonClasses } from "../../ui/Button";
+import { surfaceClasses } from "../../ui/Surface";
 
 interface DashboardHeaderProps {
   newApplicationTo: To;
@@ -18,7 +19,7 @@ export const DashboardHeader = ({ newApplicationTo, onOpenQuickIntake, totalCoun
   }, []);
 
   return (
-    <header className="relative overflow-hidden rounded-surface border border-cv-border bg-cv-surface p-5 shadow-surface sm:p-6">
+    <header className={surfaceClasses("relative overflow-hidden bg-cv-surface p-5 shadow-surface sm:p-6")}>
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-y-0 left-0 w-80 bg-gradient-to-r from-cv-accent-soft/60 to-transparent"

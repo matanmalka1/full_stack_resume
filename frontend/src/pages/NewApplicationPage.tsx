@@ -26,7 +26,9 @@ import { FormSection } from "../ui/FormSection";
 import { LtrText } from "../ui/LtrText";
 import { PageShell } from "../ui/PageShell";
 import { TextArea, TextInput } from "../ui/TextInput";
+import { surfaceClasses } from "../ui/Surface";
 import { cx } from "../ui/cx";
+import { formatBytes } from "../ui/formatBytes";
 import { JobTextFileField } from "./application/JobTextFileField";
 import { paramsFromQuery, queryFromParams } from "./applicationListParams";
 import { DuplicateChoices } from "./new-application/DuplicateChoices";
@@ -40,8 +42,6 @@ const SOURCE_URL_MAX_CHARACTERS = 2048;
    counter measures the same thing the refusal will. It stays a quiet character count
    until the text is close enough to the ceiling for the budget to be the useful fact. */
 const JOB_TEXT_BUDGET_NOTICE_RATIO = 0.8;
-const formatMebibytes = (bytes: number): string =>
-  `${(bytes / (1024 * 1024)).toLocaleString("en-US", { maximumFractionDigits: 2 })} MB`;
 
 interface NewApplicationFields {
   company: string;
@@ -252,7 +252,7 @@ export const NewApplicationPage = () => {
       title="קליטת משרה חדשה"
     >
       <form
-        className="flex flex-col gap-6 rounded-surface border border-cv-border bg-cv-surface p-5 shadow-surface sm:p-7"
+        className={surfaceClasses("flex flex-col gap-6 bg-cv-surface p-5 shadow-surface sm:p-7")}
         noValidate
         onSubmit={runSubmit(undefined)}
       >
@@ -331,7 +331,7 @@ export const NewApplicationPage = () => {
                  before the server has to. */
               <span className={cx("font-medium", jobTextOverBudget ? "text-cv-blocker" : "text-cv-warning")}>
                 <LtrText>
-                  {formatMebibytes(jobTextBytes ?? 0)} / {formatMebibytes(JOB_TEXT_MAX_BYTES)}
+                  {formatBytes(jobTextBytes ?? 0)} / {formatBytes(JOB_TEXT_MAX_BYTES)}
                 </LtrText>{" "}
                 {jobTextOverBudget ? "— חורג מגודל התצלום המותר" : "מגודל התצלום המותר"}
               </span>

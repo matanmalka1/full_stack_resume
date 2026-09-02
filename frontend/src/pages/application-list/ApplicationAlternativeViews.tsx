@@ -6,6 +6,7 @@ import { isTerminalOperation } from "../../api/operations";
 import { appRoutes } from "../../app/appRoutes";
 import { Button } from "../../ui/Button";
 import { StatusBadge } from "../../ui/StatusBadge";
+import { surfaceClasses } from "../../ui/Surface";
 import { cx } from "../../ui/cx";
 import { actionDestination } from "../application/actionDestinations";
 import { fitLevelIcon, fitLevelLabel, fitLevelTone } from "../application/analysisLabels";
@@ -42,7 +43,11 @@ const ApplicationCard = ({
       : null;
 
   return (
-    <article className="group flex h-full flex-col rounded-surface border border-cv-border bg-cv-surface-raised p-5 shadow-surface transition-all hover:border-cv-border-strong hover:shadow-floating">
+    <article
+      className={surfaceClasses(
+        "group flex h-full flex-col bg-cv-surface-raised p-5 shadow-surface transition-all hover:border-cv-border-strong hover:shadow-floating",
+      )}
+    >
       <div className="flex-1">
         <div className="mb-3 flex items-start justify-between gap-3">
           <ApplicationIdentity item={item} variant="card" />

@@ -1,6 +1,6 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
-import { cx } from "./cx";
+import { surfaceClasses } from "./Surface";
 
 interface CardProps extends HTMLAttributes<HTMLElement> {
   children: ReactNode;
@@ -13,7 +13,7 @@ interface CardProps extends HTMLAttributes<HTMLElement> {
    unpredictably with a caller's override. */
 export const Card = ({ children, className, ...rest }: CardProps) => {
   return (
-    <section className={cx("rounded-surface border border-cv-border", className)} {...rest}>
+    <section className={surfaceClasses(className)} {...rest}>
       {children}
     </section>
   );

@@ -9,6 +9,7 @@ import { Button } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 import { Dialog } from "../../ui/Dialog";
 import { Field } from "../../ui/Field";
+import { FormActions } from "../../ui/FormActions";
 import { TextArea } from "../../ui/TextInput";
 import { useServerSyncedField } from "../useServerSyncedField";
 
@@ -87,14 +88,14 @@ export const ApplicationNotes = ({ detail }: { detail: ApplicationDetail }) => {
           <Field label="הערות">
             {(control) => <TextArea {...control} {...form.register("notes")} className="min-h-36" dir="auto" />}
           </Field>
-          <div className="flex flex-wrap justify-end gap-3">
+          <FormActions>
             <Button onClick={() => setOpen(false)} variant="secondary">
               ביטול
             </Button>
             <Button disabled={!form.formState.isDirty} pending={update.isPending} pendingLabel="שומר…" type="submit">
               שמירת ההערות
             </Button>
-          </div>
+          </FormActions>
         </form>
       </Dialog>
     </div>

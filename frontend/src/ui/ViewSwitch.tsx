@@ -1,4 +1,5 @@
 import { cx } from "./cx";
+import { surfaceClasses } from "./Surface";
 
 interface ViewSwitchOption<TValue extends string> {
   label: string;
@@ -19,7 +20,7 @@ export const ViewSwitch = <TValue extends string>({ label, onChange, options, va
   return (
     <div
       aria-label={label}
-      className="inline-flex gap-1 rounded-surface border border-cv-border bg-cv-surface-muted p-1 shadow-inner"
+      className={surfaceClasses("inline-flex gap-1 bg-cv-surface-muted p-1 shadow-inner")}
       role="group"
     >
       {options.map((option) => (

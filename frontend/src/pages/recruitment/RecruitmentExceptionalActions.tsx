@@ -9,18 +9,15 @@ import { Button } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 import { Dialog } from "../../ui/Dialog";
 import { Field } from "../../ui/Field";
+import { FormActions } from "../../ui/FormActions";
 import { Select } from "../../ui/Select";
 import { TextArea, TextInput } from "../../ui/TextInput";
+import { localDateTimeInputValue } from "../../ui/localDateTimeInputValue";
 import { recruitmentStatusLabel, recruitmentStatusLabels } from "../application/applicationLabels";
 import { statusEventLabel } from "./RecruitmentTimeline";
 import { useServerSyncedField } from "../useServerSyncedField";
 
 const allStatuses = Object.keys(recruitmentStatusLabels) as RecruitmentStatus[];
-
-const localDateTimeValue = (): string => {
-  const now = new Date();
-  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-};
 
 interface CorrectionFields {
   correctsEventId: string;
@@ -53,7 +50,7 @@ export const RecruitmentExceptionalActions = ({ detail, kind, onChanged }: Recru
     },
   });
   const externalForm = useAppForm<ExternalSubmissionFields>({
-    defaultValues: { note: "", submittedAt: localDateTimeValue() },
+    defaultValues: { note: "", submittedAt: localDateTimeInputValue(new Date()) },
   });
   const correctionFields = correctionForm.watch();
   const eventChangedOnServer = useServerSyncedField({
@@ -154,14 +151,14 @@ export const RecruitmentExceptionalActions = ({ detail, kind, onChanged }: Recru
               <Field className="lg:col-span-2" label="למה נדרש תיקון">
                 {(control) => <TextArea {...control} {...correctionForm.register("reason")} required />}
               </Field>
-              <div className="flex flex-wrap justify-end gap-3 lg:col-span-2">
+              <FormActions className="lg:col-span-2">
                 <Button onClick={() => setCorrectionOpen(false)} variant="secondary">
                   ביטול
                 </Button>
                 <Button disabled={correctionFields.reason.trim() === ""} pending={correction.isPending} type="submit">
                   הוספת אירוע תיקון
                 </Button>
-              </div>
+              </FormActions>
             </form>
           )}
         </Dialog>
@@ -196,14 +193,14 @@ export const RecruitmentExceptionalActions = ({ detail, kind, onChanged }: Recru
             <Field label="הערה (רשות)">
               {(control) => <TextArea {...control} {...externalForm.register("note")} />}
             </Field>
-            <div className="flex flex-wrap justify-end gap-3">
+            <FormActions>
               <Button onClick={() => setExternalOpen(false)} variant="secondary">
                 ביטול
               </Button>
               <Button pending={externalSubmission.isPending} pendingLabel="רושם…" type="submit">
                 רישום ההגשה החיצונית
               </Button>
-            </div>
+            </FormActions>
           </form>
         </Dialog>
       ) : null}

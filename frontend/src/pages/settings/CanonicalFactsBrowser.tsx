@@ -7,6 +7,7 @@ import { ErrorCallout } from "../../app/ErrorCallout";
 import { Card } from "../../ui/Card";
 import { EmptyState } from "../../ui/EmptyState";
 import { LtrText } from "../../ui/LtrText";
+import { SectionHeader } from "../../ui/SectionHeader";
 import { StatusBadge } from "../../ui/StatusBadge";
 import type { StatusTone } from "../../ui/status";
 
@@ -34,25 +35,20 @@ export const CanonicalFactsBrowser = () => {
 
   return (
     <Card aria-labelledby="canonical-facts-heading" className="bg-cv-surface p-5 shadow-surface sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-cv-border pb-3">
-        <div className="flex items-start gap-2.5">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-cv-accent-soft text-cv-accent">
-            <BookOpen aria-hidden="true" className="size-4" />
-          </span>
-          <div>
-            <h2 className="text-heading-sm font-bold text-cv-text" id="canonical-facts-heading">
-              מאגר העובדות
-            </h2>
-            <p className="mt-1 text-support text-cv-text-muted">תצוגה לקריאה בלבד של העובדות והמקור שהן נושאות.</p>
-          </div>
-        </div>
-        {items === undefined ? null : (
-          <span className="inline-flex items-center gap-1.5 text-support font-semibold text-cv-text-muted">
-            <Database aria-hidden="true" className="size-4" />
-            {items.length} עובדות
-          </span>
-        )}
-      </div>
+      <SectionHeader
+        actions={
+          items === undefined ? undefined : (
+            <span className="inline-flex items-center gap-1.5 text-support font-semibold text-cv-text-muted">
+              <Database aria-hidden="true" className="size-4" />
+              {items.length} עובדות
+            </span>
+          )
+        }
+        description="תצוגה לקריאה בלבד של העובדות והמקור שהן נושאות."
+        headingId="canonical-facts-heading"
+        icon={BookOpen}
+        title="מאגר העובדות"
+      />
 
       {query.isPending ? (
         <p className="mt-5 text-support text-cv-text-muted">טוען את מאגר העובדות…</p>

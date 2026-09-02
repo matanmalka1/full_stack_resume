@@ -14,6 +14,7 @@ import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
 import { StatusBadge } from "../ui/StatusBadge";
 import { SummaryList } from "../ui/SummaryList";
+import { surfaceClasses } from "../ui/Surface";
 import { TextInput } from "../ui/TextInput";
 import { formatDateTime } from "../ui/formatDateTime";
 import { useRevisionPageState } from "./revision/useRevisionPageState";
@@ -157,7 +158,7 @@ const RevisionPageContent = ({ approvedRevisionId }: RevisionPageContentProps) =
                   </Callout>
                 ) : (
                   <iframe
-                    className="h-[46rem] w-full rounded-surface border border-cv-border bg-cv-surface-raised shadow-document"
+                    className={surfaceClasses("h-[46rem] w-full bg-cv-surface-raised shadow-document")}
                     sandbox=""
                     src={approvedPreviewSrc(revision.id, revision.html_artifact_version_id)}
                     title="תצוגה מאושרת של קורות החיים"
@@ -203,7 +204,7 @@ const RevisionPageContent = ({ approvedRevisionId }: RevisionPageContentProps) =
                 </Card>
 
                 {decisionQuery.data === undefined ? null : (
-                  <details className="rounded-surface border border-cv-border bg-cv-surface-muted p-4">
+                  <details className={surfaceClasses("bg-cv-surface-muted p-4")}>
                     <summary className="cursor-pointer font-semibold text-cv-text">הסבר ההחלטות של הגרסה</summary>
                     <p className="mt-2 text-support text-cv-text-muted">
                       מסמך קריא שמסביר מה נבחר, אילו פערים התקבלו ואילו חריגות נרשמו.

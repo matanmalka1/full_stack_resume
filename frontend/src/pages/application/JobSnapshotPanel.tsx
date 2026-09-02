@@ -3,6 +3,7 @@ import { ExternalLink } from "lucide-react";
 import type { ApplicationDetail } from "../../api/contracts";
 import { Card } from "../../ui/Card";
 import { LtrText } from "../../ui/LtrText";
+import { SectionHeader } from "../../ui/SectionHeader";
 import { SummaryList } from "../../ui/SummaryList";
 import { formatDateTime } from "../../ui/formatDateTime";
 import { JobPostingUpdate } from "./JobPostingUpdate";
@@ -28,12 +29,15 @@ export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
 
   return (
     <Card aria-labelledby="job-snapshot-heading" className="bg-cv-surface p-4 shadow-surface sm:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-cv-border pb-4">
-        <h2 className="text-body font-semibold text-cv-text" id="job-snapshot-heading">
-          מודעת המשרה
-        </h2>
-        <span className="text-support text-cv-text-muted">גרסה {snapshot.version_number}</span>
-      </div>
+      <SectionHeader
+        actions={<span className="text-support text-cv-text-muted">גרסה {snapshot.version_number}</span>}
+        align="center"
+        gap="wide"
+        headingId="job-snapshot-heading"
+        headingSize="body"
+        spacing="roomy"
+        title="מודעת המשרה"
+      />
 
       <div className="mt-4 flex flex-col gap-4">
         <SummaryList

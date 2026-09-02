@@ -11,7 +11,7 @@ import { approvedRevisionQueryOptions, decisionMarkdownQueryOptions } from "../.
 import { recordInternalSubmission } from "../../api/tracking";
 import { useWorkflowStage, workflowDestinations } from "../../app/WorkflowLandmark";
 import { useWatchedOperation } from "../../hooks/useWatchedOperation";
-import { localDateTimeInputValue } from "./submissionDate";
+import { localDateTimeInputValue } from "../../ui/localDateTimeInputValue";
 
 /* One approved revision: its data, its commands, and the state that guards them. Apart
    from how it is drawn (see `RevisionPage.tsx`). */

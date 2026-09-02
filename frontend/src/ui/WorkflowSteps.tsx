@@ -4,6 +4,7 @@ import { CheckCircle2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { cx } from "./cx";
+import { surfaceClasses } from "./Surface";
 
 type WorkflowStepState = "complete" | "current" | "upcoming";
 
@@ -55,7 +56,7 @@ interface WorkflowStepsProps {
   steps: WorkflowStep[];
 }
 
-const railClasses = "w-full min-w-0 rounded-surface border border-cv-border bg-cv-surface px-3 py-2.5 shadow-surface";
+const railClasses = surfaceClasses("w-full min-w-0 bg-cv-surface px-3 py-2.5 shadow-surface");
 
 /* Complete is a check while current and upcoming retain their ordinal. The mark therefore
    communicates state without colour and keeps the compact rail readable as a sequence. */

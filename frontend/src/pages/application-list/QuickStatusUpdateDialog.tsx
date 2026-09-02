@@ -14,6 +14,7 @@ import { useAppForm } from "../../forms/useAppForm";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { Field } from "../../ui/Field";
+import { FormActions } from "../../ui/FormActions";
 import { Select } from "../../ui/Select";
 import { TextArea, TextInput } from "../../ui/TextInput";
 import { recruitmentStatusLabel } from "../application/applicationLabels";
@@ -175,14 +176,14 @@ export const QuickStatusUpdateDialog = ({ application, onClose }: QuickStatusUpd
                 {(control) => <TextArea {...control} {...form.register("notes")} className="min-h-28" dir="auto" />}
               </Field>
 
-              <div className="flex flex-wrap justify-end gap-3 border-t border-cv-border pt-4">
+              <FormActions divided>
                 <Button disabled={save.isPending} onClick={onClose} variant="secondary">
                   ביטול
                 </Button>
                 <Button disabled={!hasChanges} pending={save.isPending} pendingLabel="שומר…" type="submit">
                   שמירת שינויים
                 </Button>
-              </div>
+              </FormActions>
             </form>
           )}
         </>

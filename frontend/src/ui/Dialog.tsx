@@ -1,5 +1,7 @@
 import { type ReactNode, useEffect, useRef } from "react";
 
+import { surfaceClasses } from "./Surface";
+
 interface DialogProps {
   children: ReactNode;
   /* A.5: Escape cancels only when cancelling cannot approve, discard, or overwrite
@@ -40,7 +42,9 @@ export const Dialog = ({ children, dismissible = true, footer, headingId, onClos
   return (
     <dialog
       aria-labelledby={headingId}
-      className="w-full max-w-xl rounded-surface border border-cv-border bg-cv-surface p-0 text-cv-text shadow-overlay backdrop:transition-opacity"
+      className={surfaceClasses(
+        "w-full max-w-xl bg-cv-surface p-0 text-cv-text shadow-overlay backdrop:transition-opacity",
+      )}
       onCancel={(event) => {
         if (!dismissible) {
           event.preventDefault();

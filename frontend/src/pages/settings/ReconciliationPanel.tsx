@@ -7,6 +7,8 @@ import { ErrorCallout } from "../../app/ErrorCallout";
 import { Button } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 import { Card } from "../../ui/Card";
+import { SectionHeader } from "../../ui/SectionHeader";
+import { surfaceClasses } from "../../ui/Surface";
 
 const MISSING_ARTIFACT_PREFIX = "missing artifact:";
 
@@ -46,7 +48,7 @@ const Report = ({ report }: { report: ReconciliationReport }) => {
           מה נמצא
         </h3>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-surface border border-cv-border p-4">
+          <div className={surfaceClasses("p-4")}>
             <p className="text-support font-bold">תוצרים שמורים</p>
             <p className="mt-1 text-body font-semibold">
               {artifactsPassed
@@ -66,7 +68,7 @@ const Report = ({ report }: { report: ReconciliationReport }) => {
               </p>
             )}
           </div>
-          <div className="rounded-surface border border-cv-border p-4">
+          <div className={surfaceClasses("p-4")}>
             <p className="text-support font-bold">מאגר העובדות</p>
             <p className="mt-1 text-body font-semibold">{lifecycle.passed ? "תקין" : "נמצאה אי־התאמה"}</p>
             <p className="mt-2 text-support text-cv-text-muted">
@@ -92,7 +94,7 @@ const Report = ({ report }: { report: ReconciliationReport }) => {
         </Callout>
       )}
 
-      <details className="rounded-surface border border-cv-border p-4">
+      <details className={surfaceClasses("p-4")}>
         <summary className="cursor-pointer text-support font-semibold text-cv-accent">פרטים טכניים</summary>
         <div className="mt-4 space-y-5">
           <section aria-labelledby="artifact-technical-heading">
@@ -156,19 +158,13 @@ export const ReconciliationPanel = () => {
 
   return (
     <Card aria-labelledby="reconciliation-heading" className="bg-cv-surface p-5 shadow-surface sm:p-6">
-      <div className="flex items-start gap-2.5 border-b border-cv-border pb-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-cv-accent-soft text-cv-accent">
-          <RotateCcw aria-hidden="true" className="size-4" />
-        </span>
-        <div>
-          <h2 className="text-heading-sm font-bold" id="reconciliation-heading">
-            בדיקת תקינות
-          </h2>
-          <p className="mt-1 max-w-2xl text-support text-cv-text-muted">
-            התאמה בין מסד הנתונים, התוצרים השמורים ומחזור חיי העובדות. הבדיקה מדווחת בלבד ואינה מתקנת נתונים.
-          </p>
-        </div>
-      </div>
+      <SectionHeader
+        constrainDescription
+        description="התאמה בין מסד הנתונים, התוצרים השמורים ומחזור חיי העובדות. הבדיקה מדווחת בלבד ואינה מתקנת נתונים."
+        headingId="reconciliation-heading"
+        icon={RotateCcw}
+        title="בדיקת תקינות"
+      />
       <div className="mt-4 flex flex-col items-start gap-6">
         <Button
           onClick={() => reconciliation.mutate()}

@@ -11,6 +11,7 @@ import { LtrText } from "../../ui/LtrText";
 import { PageShell } from "../../ui/PageShell";
 import { QueryState } from "../../ui/QueryState";
 import { StatusBadge } from "../../ui/StatusBadge";
+import { SectionHeader } from "../../ui/SectionHeader";
 import { reasonTitle, workingDraftStateLabels, workingDraftStateTones } from "../application/applicationLabels";
 import { FactLifecyclePanel } from "../FactLifecyclePanel";
 import { ClaimFactResolution } from "./ClaimFactResolution";
@@ -165,16 +166,15 @@ export const DraftEditorPage = () => {
                   aria-labelledby="draft-structure-heading"
                   className="flex flex-col gap-4 bg-cv-surface p-4 shadow-surface sm:p-5"
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cv-border pb-3">
-                    <h2
-                      className="flex items-center gap-2 text-heading-sm font-bold text-cv-text"
-                      id="draft-structure-heading"
-                    >
-                      <FileText aria-hidden="true" className="size-4 text-cv-accent" />
-                      כותרת ופרטי קשר
-                    </h2>
-                    <span className="text-support text-cv-text-muted">מבוססים על הקשר המועמד</span>
-                  </div>
+                  <SectionHeader
+                    actions={<span className="text-support text-cv-text-muted">מבוססים על הקשר המועמד</span>}
+                    align="center"
+                    gap="tight"
+                    headingId="draft-structure-heading"
+                    icon={FileText}
+                    iconPresentation="inline"
+                    title="כותרת ופרטי קשר"
+                  />
 
                   <ul className="flex flex-col divide-y divide-cv-border">
                     <DraftClaimCard

@@ -8,6 +8,7 @@ import { BackLink } from "../ui/BackLink";
 import { Card } from "../ui/Card";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
+import { SectionHeader } from "../ui/SectionHeader";
 import { StatusBadge } from "../ui/StatusBadge";
 import { CanonicalFactsBrowser } from "./settings/CanonicalFactsBrowser";
 import { ReconciliationPanel } from "./settings/ReconciliationPanel";
@@ -43,15 +44,12 @@ export const SettingsPage = () => {
       }
     >
       <Card className="bg-cv-surface p-5 shadow-surface sm:p-6">
-        <div className="mb-5 flex items-start gap-2.5 border-b border-cv-border pb-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-cv-accent-soft text-cv-accent">
-            <ShieldCheck aria-hidden="true" className="size-4" />
-          </span>
-          <div>
-            <h2 className="text-heading-sm font-bold text-cv-text">מדיניות הפעלה ותצוגה</h2>
-            <p className="mt-1 text-support text-cv-text-muted">השינויים נשמרים באפליקציה ומשפיעים מיד על הממשק.</p>
-          </div>
-        </div>
+        <SectionHeader
+          className="mb-5"
+          description="השינויים נשמרים באפליקציה ומשפיעים מיד על הממשק."
+          icon={ShieldCheck}
+          title="מדיניות הפעלה ותצוגה"
+        />
         <QueryState
           error={query.error}
           fallbackTitle="ההגדרות לא נטענו"
