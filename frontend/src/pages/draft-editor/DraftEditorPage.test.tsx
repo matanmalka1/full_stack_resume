@@ -622,5 +622,9 @@ describe("DraftEditorPage preview", () => {
 
     expect(screen.getAllByLabelText("טקסט השורה")[0]).toHaveValue("typed then switched away");
     expect(screen.getByTitle("תצוגה מקדימה של הטיוטה")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "עריכה בלבד" }));
+    expect(screen.getAllByLabelText("טקסט השורה")[0]).toHaveValue("typed then switched away");
+    expect(screen.getByRole("button", { name: "עריכה ותצוגה" })).toBeInTheDocument();
   });
 });

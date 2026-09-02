@@ -1,9 +1,11 @@
-import { ArrowRight, RefreshCw } from "lucide-react";
+import { ArrowRight, FileText, Layers3, RefreshCw } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
 import { ErrorCallout } from "../../app/ErrorCallout";
+import { BackLink } from "../../ui/BackLink";
 import { Button, buttonClasses } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
+import { LtrText } from "../../ui/LtrText";
 import { PageShell } from "../../ui/PageShell";
 import { QueryState } from "../../ui/QueryState";
 import { StatusBadge } from "../../ui/StatusBadge";
@@ -64,6 +66,11 @@ export const DraftEditorPage = () => {
     <PageShell
       description={detail === undefined ? undefined : `תפקיד היעד: ${detail.application.target_role}`}
       eyebrow="סביבת עריכה"
+      navigation={
+        <BackLink label="חזרה להכנת קורות החיים" to={preparationHref}>
+          הכנת קורות החיים
+        </BackLink>
+      }
       title="עריכה, אימות ואישור"
     >
       <QueryState
@@ -91,11 +98,36 @@ export const DraftEditorPage = () => {
       ) : null}
 
       {detail === undefined ? null : (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cv-border pb-3">
-          <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
-            {workingDraftStateLabels[detail.working_draft_state]}
-          </StatusBadge>
-          {workingDraftId === null ? null : <DraftSaveState state={autosave} />}
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-control bg-cv-accent-soft text-cv-accent">
+              <FileText aria-hidden="true" className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-body font-bold text-cv-text" dir="auto">
+                {detail.application.company}
+              </p>
+              <p className="truncate text-support text-cv-text-muted" dir="auto">
+                {detail.application.target_role}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {draft === undefined ? null : (
+              <LtrText
+                className="rounded-pill border border-cv-border bg-cv-surface-muted px-2.5 py-1 text-support text-cv-text-muted"
+                mono
+                title={draft.content_hash}
+              >
+                v{draft.edit_version} · {draft.content_hash.slice(0, 10)}
+              </LtrText>
+            )}
+            <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
+              {workingDraftStateLabels[detail.working_draft_state]}
+            </StatusBadge>
+            {workingDraftId === null ? null : <DraftSaveState state={autosave} />}
+          </div>
         </div>
       )}
 
@@ -127,10 +159,20 @@ export const DraftEditorPage = () => {
           <EditorLayout
             editor={
               <>
-                <section aria-labelledby="draft-structure-heading" className="flex flex-col gap-4">
-                  <h2 className="text-heading-sm font-bold text-cv-text" id="draft-structure-heading">
-                    מבנה המסמך
-                  </h2>
+                <section
+                  aria-labelledby="draft-structure-heading"
+                  className="flex flex-col gap-4 rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface sm:p-5"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cv-border pb-3">
+                    <h2
+                      className="flex items-center gap-2 text-heading-sm font-bold text-cv-text"
+                      id="draft-structure-heading"
+                    >
+                      <FileText aria-hidden="true" className="size-4 text-cv-accent" />
+                      כותרת ופרטי קשר
+                    </h2>
+                    <span className="text-support text-cv-text-muted">מבוססים על הקשר המועמד</span>
+                  </div>
 
                   <ul className="flex flex-col divide-y divide-cv-border">
                     <DraftClaimCard
@@ -157,55 +199,67 @@ export const DraftEditorPage = () => {
                       />
                     ))}
                   </ul>
+                </section>
 
-                  {draft.outline.sections.map((section) => (
-                    <div className="flex flex-col gap-2 pt-6" key={section.name}>
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <h3 className="text-heading-sm font-bold text-cv-text" dir="auto">
+                {draft.outline.sections.map((section, sectionIndex) => (
+                  <section
+                    aria-labelledby={`draft-section-${sectionIndex}`}
+                    className="flex flex-col gap-2 rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface sm:p-5"
+                    key={section.name}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cv-border pb-3">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Layers3 aria-hidden="true" className="size-4 shrink-0 text-cv-accent" />
+                        <h3
+                          className="truncate text-heading-sm font-bold text-cv-text"
+                          dir="auto"
+                          id={`draft-section-${sectionIndex}`}
+                        >
                           {section.name}
                         </h3>
-                        <Button
-                          disabled={regenerationDisabled}
-                          onClick={() => regeneration.mutate({ section: section.name })}
-                          variant="secondary"
-                        >
-                          <RefreshCw aria-hidden="true" className="size-4" />
-                          יצירה מחדש של הפרק
-                        </Button>
+                        <span className="shrink-0 text-support text-cv-text-muted">{section.claims.length} שורות</span>
                       </div>
-                      {section.claims.length === 0 ? (
-                        <p className="text-support leading-6 text-cv-text-muted">אין כרגע שורות בסעיף הזה.</p>
-                      ) : (
-                        <ul className="flex flex-col divide-y divide-cv-border">
-                          {section.claims.map((claim) => (
-                            <DraftClaimCard
-                              claim={claim}
-                              draft={draft}
-                              factResolution={
-                                <ClaimFactResolution
-                                  analysisId={detail?.active_analysis_id ?? null}
-                                  applicationId={applicationId}
-                                  claim={claim}
-                                  draft={draft}
-                                  language={facts?.language ?? detail?.application.language ?? "en"}
-                                  profile={detail?.application.profile ?? null}
-                                  section={section.name}
-                                />
-                              }
-                              facts={facts}
-                              key={claim.claim_id}
-                              onBlur={autosave.flush}
-                              onEdit={editClaim}
-                              onRegenerate={(claim) => regeneration.mutate({ claimId: claim.claim_id })}
-                              onRemove={removeClaim}
-                              unsaved={regenerationDisabled}
-                            />
-                          ))}
-                        </ul>
-                      )}
+                      <Button
+                        disabled={regenerationDisabled}
+                        onClick={() => regeneration.mutate({ section: section.name })}
+                        variant="secondary"
+                      >
+                        <RefreshCw aria-hidden="true" className="size-4" />
+                        יצירה מחדש של הפרק
+                      </Button>
                     </div>
-                  ))}
-                </section>
+                    {section.claims.length === 0 ? (
+                      <p className="text-support leading-6 text-cv-text-muted">אין כרגע שורות בסעיף הזה.</p>
+                    ) : (
+                      <ul className="flex flex-col divide-y divide-cv-border">
+                        {section.claims.map((claim) => (
+                          <DraftClaimCard
+                            claim={claim}
+                            draft={draft}
+                            factResolution={
+                              <ClaimFactResolution
+                                analysisId={detail?.active_analysis_id ?? null}
+                                applicationId={applicationId}
+                                claim={claim}
+                                draft={draft}
+                                language={facts?.language ?? detail?.application.language ?? "en"}
+                                profile={detail?.application.profile ?? null}
+                                section={section.name}
+                              />
+                            }
+                            facts={facts}
+                            key={claim.claim_id}
+                            onBlur={autosave.flush}
+                            onEdit={editClaim}
+                            onRegenerate={(claim) => regeneration.mutate({ claimId: claim.claim_id })}
+                            onRemove={removeClaim}
+                            unsaved={regenerationDisabled}
+                          />
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                ))}
 
                 {regenerationAvailable ? null : (
                   <Callout title="יצירה מחדש באמצעות AI אינה זמינה" tone="neutral">
