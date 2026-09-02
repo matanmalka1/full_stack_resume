@@ -50,55 +50,65 @@ export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
 
   return (
     <>
-      <form className="flex flex-col gap-6" onSubmit={handleSubmit((fields) => save.mutate(fields))}>
-        <Checkbox
-          checked={form.auto_generate_when_review_not_required}
-          {...register("auto_generate_when_review_not_required")}
-        >
-          יצירת טיוטה אוטומטית כשלא נדרשת סקירה
-        </Checkbox>
-        <Checkbox
-          checked={form.ai_enabled_override ?? settings.ai_enabled}
-          disabled={!settings.provider_configured}
-          hint={settings.provider_configured ? "מפעיל פעולות AI ידניות." : "לא הוגדר ספק AI בסביבת הריצה."}
-          {...aiOverrideRegistration}
-          onChange={(event) => {
-            void aiOverrideRegistration.onChange(event);
-            const enabled = event.currentTarget.checked;
+      <form className="flex flex-col gap-5" onSubmit={handleSubmit((fields) => save.mutate(fields))}>
+        <div className="flex flex-col gap-2 rounded-control bg-cv-surface-muted p-2">
+          <Checkbox
+            checked={form.auto_generate_when_review_not_required}
+            hint="לאחר ניתוח שאין בו החלטה ידנית, המערכת רשאית להתחיל יצירת טיוטה באופן אוטומטי."
+            {...register("auto_generate_when_review_not_required")}
+          >
+            יצירת טיוטה אוטומטית כשלא נדרשת סקירה
+          </Checkbox>
+          <Checkbox
+            checked={form.ai_enabled_override ?? settings.ai_enabled}
+            disabled={!settings.provider_configured}
+            hint={settings.provider_configured ? "מפעיל פעולות AI ידניות." : "לא הוגדר ספק AI בסביבת הריצה."}
+            {...aiOverrideRegistration}
+            onChange={(event) => {
+              void aiOverrideRegistration.onChange(event);
+              const enabled = event.currentTarget.checked;
 
-            if (!enabled) {
-              setValue("default_execution_mode", "deterministic");
-            }
-          }}
-        >
-          הפעלת AI
-        </Checkbox>
-        <Field label="מצב ביצוע ברירת מחדל">
-          {(control) => (
-            <Select {...control} {...register("default_execution_mode")}>
-              <option value="deterministic">דטרמיניסטי</option>
-              <option disabled={!aiAvailable} value="ai">
-                AI
-              </option>
-            </Select>
-          )}
-        </Field>
-        <Field label="צפיפות תצוגה">
-          {(control) => (
-            <Select {...control} {...register("ui_density")}>
-              <option value="comfortable">נוחה</option>
-              <option value="compact">צפופה</option>
-            </Select>
-          )}
-        </Field>
-        <Field label="גודל טקסט">
-          {(control) => (
-            <Select {...control} {...register("ui_text_size")}>
-              <option value="normal">רגיל</option>
-              <option value="large">גדול</option>
-            </Select>
-          )}
-        </Field>
+              if (!enabled) {
+                setValue("default_execution_mode", "deterministic");
+              }
+            }}
+          >
+            הפעלת AI
+          </Checkbox>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field
+            className="rounded-control bg-cv-surface-muted p-3"
+            hint="דטרמיניסטי משתמש בחוקים ובשומרי הסף בלבד."
+            label="מצב ביצוע ברירת מחדל"
+          >
+            {(control) => (
+              <Select {...control} {...register("default_execution_mode")}>
+                <option value="deterministic">דטרמיניסטי</option>
+                <option disabled={!aiAvailable} value="ai">
+                  AI
+                </option>
+              </Select>
+            )}
+          </Field>
+          <Field className="rounded-control bg-cv-surface-muted p-3" label="צפיפות תצוגה">
+            {(control) => (
+              <Select {...control} {...register("ui_density")}>
+                <option value="comfortable">נוחה</option>
+                <option value="compact">צפופה</option>
+              </Select>
+            )}
+          </Field>
+          <Field className="rounded-control bg-cv-surface-muted p-3 sm:col-span-2" label="גודל טקסט">
+            {(control) => (
+              <Select {...control} {...register("ui_text_size")}>
+                <option value="normal">רגיל</option>
+                <option value="large">גדול</option>
+              </Select>
+            )}
+          </Field>
+        </div>
         <ActionBar
           primary={
             <Button pending={save.isPending} pendingLabel="שומר…" type="submit">

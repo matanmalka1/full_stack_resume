@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { Briefcase, Building2, FileCheck2, FileText, Link2, Sparkles, type LucideIcon } from "lucide-react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import {
@@ -54,6 +55,23 @@ const emptyFields: NewApplicationFields = {
   source_url: "",
   job_text: "",
 };
+
+const SectionTitle = ({ icon: Icon, children }: { children: string; icon: LucideIcon }) => (
+  <span className="inline-flex items-center gap-2">
+    <Icon aria-hidden="true" className="size-4 text-cv-accent" />
+    {children}
+  </span>
+);
+
+const IconField = ({ children, icon: Icon }: { children: ReactNode; icon: LucideIcon }) => (
+  <span className="relative block">
+    <Icon
+      aria-hidden="true"
+      className="pointer-events-none absolute start-3.5 top-1/2 z-10 size-4 -translate-y-1/2 text-cv-text-muted"
+    />
+    {children}
+  </span>
+);
 
 /* The job text is the exact content of the immutable JobSnapshot, so it is never
    trimmed or otherwise touched. The labels are, because a trailing space in a company
@@ -222,7 +240,7 @@ export const NewApplicationPage = () => {
 
   return (
     <PageShell
-      description="הוסף את פרטי המשרה כדי להתחיל התאמה של קורות החיים."
+      description="הזנת פרטי המשרה יוצרת תצלום מקור קבוע ומתחילה ניתוח התאמה מול העובדות הקנוניות."
       measure="form"
       /* One step up, the way every other record screen names its parent. */
       navigation={
@@ -230,35 +248,47 @@ export const NewApplicationPage = () => {
           לוח המועמדויות
         </BackLink>
       }
-      title="משרה חדשה"
+      title="קליטת משרה חדשה"
     >
-      <form className="flex flex-col gap-6" noValidate onSubmit={runSubmit(undefined)}>
-        <FormSection divided={false} title="פרטי המשרה">
+      <form
+        className="flex flex-col gap-6 rounded-surface border border-cv-border bg-cv-surface p-5 shadow-surface sm:p-7"
+        noValidate
+        onSubmit={runSubmit(undefined)}
+      >
+        <FormSection divided={false} title={<SectionTitle icon={Briefcase}>פרטי המשרה</SectionTitle>}>
           <div className="grid gap-4 md:grid-cols-2">
             <Field error={errors.company?.message} label="שם החברה">
               {(control) => (
-                <TextInput
-                  {...control}
-                  {...register("company", {
-                    validate: (value) => value.trim() !== "" || "יש להזין את שם החברה.",
-                  })}
-                  autoComplete="organization"
-                  dir="auto"
-                  maxLength={LABEL_MAX_CHARACTERS}
-                />
+                <IconField icon={Building2}>
+                  <TextInput
+                    {...control}
+                    {...register("company", {
+                      validate: (value) => value.trim() !== "" || "יש להזין את שם החברה.",
+                    })}
+                    autoComplete="organization"
+                    className="ps-10"
+                    dir="auto"
+                    maxLength={LABEL_MAX_CHARACTERS}
+                    placeholder="לדוגמה: Stripe"
+                  />
+                </IconField>
               )}
             </Field>
 
             <Field error={errors.target_role?.message} label="תפקיד היעד">
               {(control) => (
-                <TextInput
-                  {...control}
-                  {...register("target_role", {
-                    validate: (value) => value.trim() !== "" || "יש להזין את תפקיד היעד.",
-                  })}
-                  dir="auto"
-                  maxLength={LABEL_MAX_CHARACTERS}
-                />
+                <IconField icon={Briefcase}>
+                  <TextInput
+                    {...control}
+                    {...register("target_role", {
+                      validate: (value) => value.trim() !== "" || "יש להזין את תפקיד היעד.",
+                    })}
+                    className="ps-10"
+                    dir="auto"
+                    maxLength={LABEL_MAX_CHARACTERS}
+                    placeholder="לדוגמה: Senior Solutions Architect"
+                  />
+                </IconField>
               )}
             </Field>
           </div>
@@ -270,14 +300,18 @@ export const NewApplicationPage = () => {
           >
             {(control) => (
               /* A.3: a URL is an LTR island even inside the RTL shell. */
-              <TextInput
-                {...control}
-                {...register("source_url")}
-                className="ltr-island"
-                dir="ltr"
-                inputMode="url"
-                maxLength={SOURCE_URL_MAX_CHARACTERS}
-              />
+              <IconField icon={Link2}>
+                <TextInput
+                  {...control}
+                  {...register("source_url")}
+                  className="ltr-island ps-10"
+                  dir="ltr"
+                  inputMode="url"
+                  maxLength={SOURCE_URL_MAX_CHARACTERS}
+                  placeholder="https://company.example/careers/job"
+                  type="url"
+                />
+              </IconField>
             )}
           </Field>
         </FormSection>
@@ -311,7 +345,7 @@ export const NewApplicationPage = () => {
              the text afterwards. */
           description="הטקסט יישמר בתצלום המשרה בדיוק כפי שהוזן."
           divided={false}
-          title="תיאור המשרה"
+          title={<SectionTitle icon={FileText}>תיאור המשרה</SectionTitle>}
         >
           <JobTextFileField
             onText={(text) => setValue("job_text", text, { shouldDirty: true, shouldValidate: true })}
@@ -367,9 +401,10 @@ export const NewApplicationPage = () => {
 
         {/* The action does three things and named one of them. What follows the click is
             worth knowing before it, not after the navigation. */}
-        <p className="text-support text-cv-text-muted">
-          יצירת המועמדות שומרת תצלום קבוע של המשרה ומתחילה את ניתוח ההתאמה.
-        </p>
+        <div className="flex items-start gap-2 rounded-control border border-cv-success/25 bg-cv-success-soft p-3 text-support text-cv-text">
+          <FileCheck2 aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-cv-success" />
+          <p>יצירת המועמדות שומרת את הטקסט בדיוק כפי שהוזן בתצלום משרה קבוע, ואז מתחילה את ניתוח ההתאמה.</p>
+        </div>
 
         <ActionBar
           align="start"
@@ -380,6 +415,7 @@ export const NewApplicationPage = () => {
               pendingLabel="בודק כפילויות…"
               type="submit"
             >
+              <Sparkles aria-hidden="true" className="size-4" />
               יצירת מועמדות
             </Button>
           }

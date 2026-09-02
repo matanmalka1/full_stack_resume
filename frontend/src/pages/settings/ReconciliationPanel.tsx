@@ -1,4 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
+import { RotateCcw } from "lucide-react";
 
 import type { ReconciliationReport } from "../../api/contracts";
 import { reconcile } from "../../api/maintenance";
@@ -153,13 +154,23 @@ export const ReconciliationPanel = () => {
   const reconciliation = useMutation({ mutationFn: reconcile });
 
   return (
-    <section aria-labelledby="reconciliation-heading" className="border-t border-cv-border pt-6">
-      <h2 className="text-heading-sm font-bold" id="reconciliation-heading">
-        תחזוקה
-      </h2>
-      <p className="mt-2 max-w-2xl text-support text-cv-text-muted">
-        בדיקת התאמה בין מסד הנתונים, התוצרים השמורים ומחזור חיי העובדות. הבדיקה מדווחת בלבד ואינה מתקנת נתונים.
-      </p>
+    <section
+      aria-labelledby="reconciliation-heading"
+      className="rounded-surface border border-cv-border bg-cv-surface p-5 shadow-surface sm:p-6"
+    >
+      <div className="flex items-start gap-2.5 border-b border-cv-border pb-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-cv-accent-soft text-cv-accent">
+          <RotateCcw aria-hidden="true" className="size-4" />
+        </span>
+        <div>
+          <h2 className="text-heading-sm font-bold" id="reconciliation-heading">
+            בדיקת תקינות
+          </h2>
+          <p className="mt-1 max-w-2xl text-support text-cv-text-muted">
+            התאמה בין מסד הנתונים, התוצרים השמורים ומחזור חיי העובדות. הבדיקה מדווחת בלבד ואינה מתקנת נתונים.
+          </p>
+        </div>
+      </div>
       <div className="mt-4 flex flex-col items-start gap-6">
         <Button
           onClick={() => reconciliation.mutate()}
