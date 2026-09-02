@@ -19,7 +19,9 @@ import {
   draftStateIsImplied,
   preparationStateLabels,
   preparationStateTones,
+  recruitmentStatusIcon,
   recruitmentStatusLabel,
+  recruitmentStatusTone,
   workingDraftStateLabels,
   workingDraftStateTones,
 } from "./application/applicationLabels";
@@ -35,7 +37,10 @@ const JobOverview = ({ detail }: { detail: ApplicationDetail }) => {
   const application = detail.application;
 
   return (
-    <section aria-labelledby="job-overview-heading">
+    <section
+      aria-labelledby="job-overview-heading"
+      className="rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface sm:p-5"
+    >
       <h2 className="text-body font-semibold text-cv-text" id="job-overview-heading">
         פרטי המועמדות
       </h2>
@@ -137,9 +142,17 @@ export const JobDetailsPage = () => {
     <PageShell
       actions={
         detail === undefined ? null : (
-          <a className={buttonClasses("primary")} href="#recruitment-heading">
-            עדכון מעקב הגיוס
-          </a>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <StatusBadge
+              icon={recruitmentStatusIcon(detail.recruitment_status)}
+              tone={recruitmentStatusTone(detail.recruitment_status)}
+            >
+              {recruitmentStatusLabel(detail.recruitment_status)}
+            </StatusBadge>
+            <a className={buttonClasses("primary")} href="#recruitment-heading">
+              עדכון מעקב הגיוס
+            </a>
+          </div>
         )
       }
       navigation={
@@ -169,11 +182,17 @@ export const JobDetailsPage = () => {
               </Callout>
             )}
             <PreparationGate detail={detail} />
-            <div className="flex flex-col divide-y divide-cv-border [&>section]:py-6 [&>section:first-child]:pt-0 [&>section:last-child]:pb-0">
-              <JobOverview detail={detail} />
-              <RecruitmentPanel detail={detail} />
-              <JobSnapshotPanel detail={detail} />
-              <ArtifactsPanel applicationId={applicationId} />
+            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+              <div className="flex min-w-0 flex-col gap-6">
+                <JobOverview detail={detail} />
+                <RecruitmentPanel detail={detail} />
+              </div>
+              <div className="min-w-0 lg:self-start">
+                <JobSnapshotPanel detail={detail} />
+              </div>
+              <div className="min-w-0 lg:col-span-2">
+                <ArtifactsPanel applicationId={applicationId} />
+              </div>
             </div>
           </>
         )}

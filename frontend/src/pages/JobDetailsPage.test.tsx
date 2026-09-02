@@ -85,6 +85,14 @@ afterEach(() => {
 });
 
 describe("JobDetailsPage", () => {
+  it("presents recruitment status separately from the CV preparation state", async () => {
+    renderPage();
+
+    expect(await screen.findByText("שיחת מגייס")).toBeInTheDocument();
+    expect(screen.getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "עדכון מעקב הגיוס" })).toHaveAttribute("href", "#recruitment-heading");
+  });
+
   it("captures an amended posting as a new immutable snapshot from Job Detail", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input).endsWith("/job-snapshots") && init?.method === "POST") {

@@ -1,15 +1,19 @@
-import { Link, useParams } from "react-router-dom";
+import { Code2, Download, FileCheck2, FilePlus2, Lock, Send, ShieldCheck } from "lucide-react";
+import { useParams } from "react-router-dom";
 
 import { approvedPreviewSrc, recruiterPdfHref } from "../api/revisions";
 import { ErrorCallout } from "../app/ErrorCallout";
+import { BackLink } from "../ui/BackLink";
 import { Button, buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { Dialog } from "../ui/Dialog";
 import { Field } from "../ui/Field";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
+import { StatusBadge } from "../ui/StatusBadge";
 import { SummaryList } from "../ui/SummaryList";
 import { TextInput } from "../ui/TextInput";
+import { formatDateTime } from "../ui/formatDateTime";
 import { useRevisionPageState } from "./revision/useRevisionPageState";
 import { ValidationReportView } from "./revision/ValidationReportView";
 
@@ -53,6 +57,13 @@ const RevisionPageContent = ({ approvedRevisionId }: RevisionPageContentProps) =
   return (
     <PageShell
       description="הגרסה המאושרת נשארת זמינה גם כאשר העבודה על המועמדות ממשיכה."
+      navigation={
+        revision === undefined ? undefined : (
+          <BackLink label="חזרה למועמדות" to={`/applications/${encodeURIComponent(revision.application_id)}`}>
+            {hasSources ? "חזרה למועמדות" : "חזרה למועמדות ליצירת מקורות עדכניים"}
+          </BackLink>
+        )
+      }
       title={revision?.ready_qualified === false ? "גרסה מאושרת" : "קורות החיים מוכנים"}
     >
       <QueryState
@@ -88,52 +99,133 @@ const RevisionPageContent = ({ approvedRevisionId }: RevisionPageContentProps) =
                 דוח האימות שמתחת מפרט את החסימות.
               </Callout>
             ) : null}
-            {/* The document is the point of this screen. It is presented as a page on the
-                canvas - full width, paper elevation, nothing competing beside it - rather
-                than as one item in a list of identifiers. */}
-            {revision.html_artifact_version_id == null ? null : (
-              <iframe
-                className="h-[46rem] w-full rounded-surface border border-cv-border bg-cv-surface-raised shadow-document"
-                sandbox=""
-                src={approvedPreviewSrc(revision.id, revision.html_artifact_version_id)}
-                title="תצוגה מאושרת של קורות החיים"
-              />
-            )}
+            <section
+              aria-labelledby="revision-summary-heading"
+              className="rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface sm:p-5"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="grid size-11 shrink-0 place-items-center rounded-pill bg-cv-success-soft text-cv-success">
+                    <FileCheck2 aria-hidden="true" className="size-5" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-heading-sm font-bold text-cv-text" id="revision-summary-heading">
+                        {revision.ready_qualified ? "גרסה מוכנה למסירה" : "גרסה מאושרת וקבועה"}
+                      </h2>
+                      <StatusBadge tone={revision.ready_qualified ? "success" : "warning"}>
+                        {revision.ready_qualified ? "Ready" : "ממתינה לקבצים תקינים"}
+                      </StatusBadge>
+                    </div>
+                    {detail === undefined ? null : (
+                      <p className="mt-1 text-support text-cv-text-muted" dir="auto">
+                        {detail.application.company} · {detail.application.target_role}
+                      </p>
+                    )}
+                    <p className="mt-1 text-support text-cv-text-muted">
+                      אושרה {formatDateTime(revision.approved_at, "short")} · גרסה {revision.version_number}
+                    </p>
+                  </div>
+                </div>
 
-            {/* What a person needs about the version, in words. */}
-            <SummaryList
-              items={[
-                { term: "מספר גרסה", value: revision.version_number, ltr: true },
-                {
-                  term: "קובץ HTML",
-                  value: revision.html_artifact_version_id == null ? "חסר" : "קיים",
-                },
-                {
-                  term: "קובץ PDF",
-                  value: revision.pdf_artifact_version_id == null ? "חסר" : "קיים",
-                },
-              ]}
-            />
+                <div className="flex flex-wrap items-center gap-2">
+                  {revision.ready_qualified && revision.pdf_artifact_version_id != null ? (
+                    <a
+                      className={buttonClasses("primary")}
+                      href={recruiterPdfHref(revision.id, revision.pdf_artifact_version_id)}
+                    >
+                      <Download aria-hidden="true" className="size-4" />
+                      הורדת PDF
+                    </a>
+                  ) : null}
+                  {revision.ready_qualified && revision.pdf_artifact_version_id != null ? (
+                    <Button onClick={() => setSubmissionOpen(true)} variant="secondary">
+                      <Send aria-hidden="true" className="size-4" />
+                      רישום הגשת הגרסה הזו
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            </section>
 
-            <ValidationReportView report={revision.ready_validation} />
+            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(19rem,1fr)]">
+              {/* The server-rendered document is the authoritative presentation. No
+                  candidate wording or artifact metadata is reconstructed in React. */}
+              <div className="min-w-0">
+                {revision.html_artifact_version_id == null ? (
+                  <Callout title="עדיין אין קובץ HTML לתצוגה" tone="neutral">
+                    הגרסה המאושרת נשמרה, אך תצוגת המסמך תופיע רק לאחר יצירת הארטיפקט הרשום.
+                  </Callout>
+                ) : (
+                  <iframe
+                    className="h-[46rem] w-full rounded-surface border border-cv-border bg-cv-surface-raised shadow-document"
+                    sandbox=""
+                    src={approvedPreviewSrc(revision.id, revision.html_artifact_version_id)}
+                    title="תצוגה מאושרת של קורות החיים"
+                  />
+                )}
+              </div>
 
-            {decisionQuery.data === undefined ? null : (
-              <details className="rounded-surface border border-cv-border bg-cv-surface-muted p-4">
-                <summary className="cursor-pointer font-semibold text-cv-text">הסבר ההחלטות של הגרסה</summary>
-                <p className="mt-2 text-support text-cv-text-muted">
-                  מסמך קריא שמסביר מה נבחר, אילו פערים התקבלו ואילו חריגות נרשמו.
-                </p>
-                <pre
-                  className="mt-4 max-h-96 overflow-auto whitespace-pre-wrap rounded-control border border-cv-border bg-cv-surface p-4 text-support"
-                  dir="auto"
+              <aside aria-label="פרטי הגרסה והאימות" className="flex min-w-0 flex-col gap-6">
+                <section
+                  aria-labelledby="revision-record-heading"
+                  className="overflow-x-auto rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface"
                 >
-                  {decisionQuery.data.content}
-                </pre>
-                <Button className="mt-3" onClick={downloadDecision} variant="secondary">
-                  הורדת מסמך ההחלטה
-                </Button>
-              </details>
-            )}
+                  <h2 className="flex items-center gap-2 font-semibold text-cv-text" id="revision-record-heading">
+                    <Lock aria-hidden="true" className="size-4 text-cv-accent" />
+                    הרשומה הקבועה
+                  </h2>
+                  <SummaryList
+                    className="mt-4"
+                    items={[
+                      { term: "מזהה גרסה", value: revision.id, ltr: true },
+                      { term: "מספר גרסה", value: revision.version_number, ltr: true },
+                      { term: "תצלום משרה", value: revision.job_snapshot_id, ltr: true },
+                      { term: "ריצת אימות", value: revision.validation_run_id, ltr: true },
+                      { term: "חתימת הטיוטה", value: revision.draft_content_hash, ltr: true },
+                      {
+                        term: "קובץ HTML",
+                        value: revision.html_artifact_version_id == null ? "חסר" : "קיים",
+                      },
+                      {
+                        term: "קובץ PDF",
+                        value: revision.pdf_artifact_version_id == null ? "חסר" : "קיים",
+                      },
+                    ]}
+                  />
+                </section>
+
+                <section
+                  aria-labelledby="ready-validation-heading"
+                  className="rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface"
+                >
+                  <h2 className="mb-4 flex items-center gap-2 font-semibold text-cv-text" id="ready-validation-heading">
+                    <ShieldCheck aria-hidden="true" className="size-4 text-cv-accent" />
+                    אימות הגרסה המוכנה
+                  </h2>
+                  <ValidationReportView report={revision.ready_validation} />
+                </section>
+
+                {decisionQuery.data === undefined ? null : (
+                  <details className="rounded-surface border border-cv-border bg-cv-surface-muted p-4">
+                    <summary className="cursor-pointer font-semibold text-cv-text">הסבר ההחלטות של הגרסה</summary>
+                    <p className="mt-2 text-support text-cv-text-muted">
+                      מסמך קריא שמסביר מה נבחר, אילו פערים התקבלו ואילו חריגות נרשמו.
+                    </p>
+                    <pre
+                      className="mt-4 max-h-96 overflow-auto whitespace-pre-wrap rounded-control border border-cv-border bg-cv-surface p-4 text-support"
+                      dir="auto"
+                    >
+                      {decisionQuery.data.content}
+                    </pre>
+                    <Button className="mt-3" onClick={downloadDecision} variant="secondary">
+                      <Code2 aria-hidden="true" className="size-4" />
+                      הורדת מסמך ההחלטה
+                    </Button>
+                  </details>
+                )}
+              </aside>
+            </div>
           </>
         )}
       </QueryState>
@@ -155,19 +247,6 @@ const RevisionPageContent = ({ approvedRevisionId }: RevisionPageContentProps) =
       ) : null}
       {revision === undefined ? null : (
         <div className="flex flex-wrap gap-3">
-          {revision.ready_qualified && revision.pdf_artifact_version_id != null ? (
-            <a
-              className={buttonClasses("primary")}
-              href={recruiterPdfHref(revision.id, revision.pdf_artifact_version_id)}
-            >
-              הורדת PDF
-            </a>
-          ) : null}
-          {revision.ready_qualified && revision.pdf_artifact_version_id != null ? (
-            <Button onClick={() => setSubmissionOpen(true)} variant="secondary">
-              רישום הגשת הגרסה הזו
-            </Button>
-          ) : null}
           {hasSources ? (
             <Button
               disabled={detail?.working_draft_state !== "none"}
@@ -176,23 +255,10 @@ const RevisionPageContent = ({ approvedRevisionId }: RevisionPageContentProps) =
               pendingLabel="יוצר טיוטה…"
               variant="secondary"
             >
+              <FilePlus2 aria-hidden="true" className="size-4" />
               יצירת טיוטה חדשה
             </Button>
           ) : null}
-          {/* The way back, offered whether or not a new draft can be started here.
-
-                It used to appear only when the sources were stale - as the fallback for a
-                missing "new draft" button rather than as an exit - which left the ordinary
-                case, a Ready revision with current sources, with no link off the screen at
-                all. Ready is the end of the workflow, not the end of the Application: the
-                approved files stay downloadable while work on the Application continues,
-                so the screen that says so has to be leaveable. */}
-          <Link
-            className={buttonClasses("secondary")}
-            to={`/applications/${encodeURIComponent(revision.application_id)}`}
-          >
-            {hasSources ? "חזרה למועמדות" : "חזרה למועמדות ליצירת מקורות עדכניים"}
-          </Link>
         </div>
       )}
       <Dialog

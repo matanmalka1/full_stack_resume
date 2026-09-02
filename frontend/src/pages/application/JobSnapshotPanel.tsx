@@ -26,7 +26,10 @@ export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
   const snapshot = detail.latest_snapshot;
 
   return (
-    <section aria-labelledby="job-snapshot-heading">
+    <section
+      aria-labelledby="job-snapshot-heading"
+      className="rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface sm:p-5"
+    >
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-cv-border pb-4">
         <h2 className="text-body font-semibold text-cv-text" id="job-snapshot-heading">
           מודעת המשרה

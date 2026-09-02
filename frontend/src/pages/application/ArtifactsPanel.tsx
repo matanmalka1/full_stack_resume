@@ -210,7 +210,10 @@ export const ArtifactsPanel = ({ applicationId }: { applicationId: string }) => 
   }
 
   return (
-    <section aria-labelledby="artifacts-heading">
+    <section
+      aria-labelledby="artifacts-heading"
+      className="rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface sm:p-5"
+    >
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 border-b border-cv-border pb-4">
         <div className="min-w-0">
           <h2 className="text-body font-semibold text-cv-text" id="artifacts-heading">
