@@ -1,6 +1,7 @@
 import { Award, Bookmark, PhoneCall, Send, Users } from "lucide-react";
 
 import type { RecruitmentStatus } from "../../api/contracts";
+import { Card } from "../../ui/Card";
 import { cx } from "../../ui/cx";
 
 export const pipelineStages = [
@@ -80,7 +81,7 @@ interface PipelineStagesBarProps {
 }
 
 export const PipelineStagesBar = ({ counts, filterActive, onSelectStage, selectedStage }: PipelineStagesBarProps) => (
-  <section className="rounded-surface border border-cv-border bg-cv-surface p-3.5 shadow-surface">
+  <Card className="bg-cv-surface p-3.5 shadow-surface">
     <div className="mb-2 flex items-center justify-between gap-3 px-1">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-support text-cv-text">
         <h2 className="font-bold">משפך שלבי הגיוס</h2>
@@ -127,5 +128,5 @@ export const PipelineStagesBar = ({ counts, filterActive, onSelectStage, selecte
         );
       })}
     </div>
-  </section>
+  </Card>
 );

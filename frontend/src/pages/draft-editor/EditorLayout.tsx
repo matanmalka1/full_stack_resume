@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 
+import { Card } from "../../ui/Card";
 import { cx } from "../../ui/cx";
 import { ViewSwitch } from "../../ui/ViewSwitch";
 
@@ -14,7 +15,7 @@ export const EditorLayout = ({ editor, preview }: { editor: ReactNode; preview: 
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-cv-border bg-cv-surface px-4 py-3 shadow-surface">
+      <Card className="flex flex-wrap items-center justify-between gap-3 bg-cv-surface px-4 py-3 shadow-surface">
         <div>
           <p className="text-support font-bold text-cv-text">סביבת העבודה</p>
           <p className="mt-0.5 text-support text-cv-text-muted">
@@ -31,7 +32,7 @@ export const EditorLayout = ({ editor, preview }: { editor: ReactNode; preview: 
           ]}
           value={view}
         />
-      </div>
+      </Card>
 
       <div
         className={cx(

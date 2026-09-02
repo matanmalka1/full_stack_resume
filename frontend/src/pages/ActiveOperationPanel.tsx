@@ -3,6 +3,7 @@ import { Check } from "lucide-react";
 import type { Operation } from "../api/contracts";
 import { isTerminalOperation } from "../api/operations";
 import { Callout } from "../ui/Callout";
+import { Card } from "../ui/Card";
 import { LiveRegion } from "../ui/LiveRegion";
 import { StatusBadge } from "../ui/StatusBadge";
 import { OperationActions } from "./OperationActions";
@@ -64,9 +65,9 @@ export const ActiveOperationPanel = ({
          single 40px row read as five competing things to look at. Everything here is
          muted body text on one baseline, and the only marks that survive are the
          status word, which carries the outcome, and the two controls. */
-      <section
+      <Card
         aria-labelledby="active-operation-heading"
-        className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-surface border border-cv-border bg-cv-surface-muted px-4 py-2.5 text-support text-cv-text-muted"
+        className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-cv-surface-muted px-4 py-2.5 text-support text-cv-text-muted"
       >
         <Check aria-hidden="true" className="size-4 shrink-0 text-cv-success" />
         <h2 className="font-medium text-cv-text" id="active-operation-heading">
@@ -88,12 +89,12 @@ export const ActiveOperationPanel = ({
               supersedes the result the screen is showing. */}
           <OperationActions collapsed onQueued={onQueued} operation={operation} />
         </div>
-      </section>
+      </Card>
     );
   }
 
   return (
-    <section aria-labelledby="active-operation-heading" className="rounded-surface border border-cv-border p-5">
+    <Card aria-labelledby="active-operation-heading" className="p-5">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         {/* The run, not its subject. `operationTypeLabels` names the work ("ניתוח
             המשרה"), which is also what the panel reporting the resulting analysis calls
@@ -168,6 +169,6 @@ export const ActiveOperationPanel = ({
             already on. */}
         <OperationActions onQueued={onQueued} operation={operation} />
       </div>
-    </section>
+    </Card>
   );
 };

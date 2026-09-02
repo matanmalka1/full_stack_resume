@@ -6,6 +6,7 @@ import { reconcile } from "../../api/maintenance";
 import { ErrorCallout } from "../../app/ErrorCallout";
 import { Button } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
+import { Card } from "../../ui/Card";
 
 const MISSING_ARTIFACT_PREFIX = "missing artifact:";
 
@@ -154,10 +155,7 @@ export const ReconciliationPanel = () => {
   const reconciliation = useMutation({ mutationFn: reconcile });
 
   return (
-    <section
-      aria-labelledby="reconciliation-heading"
-      className="rounded-surface border border-cv-border bg-cv-surface p-5 shadow-surface sm:p-6"
-    >
+    <Card aria-labelledby="reconciliation-heading" className="bg-cv-surface p-5 shadow-surface sm:p-6">
       <div className="flex items-start gap-2.5 border-b border-cv-border pb-3">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-cv-accent-soft text-cv-accent">
           <RotateCcw aria-hidden="true" className="size-4" />
@@ -189,6 +187,6 @@ export const ReconciliationPanel = () => {
           />
         )}
       </div>
-    </section>
+    </Card>
   );
 };

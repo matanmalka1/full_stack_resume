@@ -1,4 +1,5 @@
 import type { ApplicationListItem } from "../../api/contracts";
+import { Card } from "../../ui/Card";
 import { cx } from "../../ui/cx";
 import { ApplicationListRow } from "./ApplicationListRow";
 
@@ -42,7 +43,7 @@ export const ApplicationListTable = ({ items, onRequestClose, onRequestUpdate }:
        canvas, and the rows are a single sheet on top of it. That is also why the
        horizontal scroll lives on the sheet itself - the frame and the scrolling region
        are the same element, instead of a table breaking out of a card's padding. */
-    <div className="overflow-x-auto rounded-surface border border-cv-border bg-cv-surface-raised shadow-surface">
+    <Card className="overflow-x-auto bg-cv-surface-raised shadow-surface">
       <table className="w-full min-w-[64rem] table-fixed border-collapse text-start">
         <thead>
           <tr className="border-b border-cv-border bg-cv-surface-muted">
@@ -72,6 +73,6 @@ export const ApplicationListTable = ({ items, onRequestClose, onRequestUpdate }:
           ))}
         </tbody>
       </table>
-    </div>
+    </Card>
   );
 };

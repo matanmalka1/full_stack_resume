@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { applicationDetailQueryKey, applicationListQueryPrefix } from "../../api/applications";
 import type { ApplicationDetail } from "../../api/contracts";
+import { Card } from "../../ui/Card";
 import { RecruitmentExceptionalActions } from "./RecruitmentExceptionalActions";
 import { RecruitmentNextActionForm } from "./RecruitmentNextActionForm";
 import { RecruitmentTimeline } from "./RecruitmentTimeline";
@@ -17,10 +18,7 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
   };
 
   return (
-    <section
-      aria-labelledby="recruitment-heading"
-      className="rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface sm:p-5"
-    >
+    <Card aria-labelledby="recruitment-heading" className="bg-cv-surface p-4 shadow-surface sm:p-5">
       <div className="border-b border-cv-border pb-4">
         <h2 className="text-body font-semibold text-cv-text" id="recruitment-heading">
           מעקב גיוס
@@ -45,6 +43,6 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
         </div>
         <RecruitmentTimeline items={detail.recruitment_timeline} />
       </div>
-    </section>
+    </Card>
   );
 };

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { FactStatus } from "../../api/contracts";
 import { factsQueryOptions } from "../../api/facts";
 import { ErrorCallout } from "../../app/ErrorCallout";
+import { Card } from "../../ui/Card";
 import { EmptyState } from "../../ui/EmptyState";
 import { LtrText } from "../../ui/LtrText";
 import { StatusBadge } from "../../ui/StatusBadge";
@@ -32,10 +33,7 @@ export const CanonicalFactsBrowser = () => {
   const items = query.data?.items;
 
   return (
-    <section
-      aria-labelledby="canonical-facts-heading"
-      className="rounded-surface border border-cv-border bg-cv-surface p-5 shadow-surface sm:p-6"
-    >
+    <Card aria-labelledby="canonical-facts-heading" className="bg-cv-surface p-5 shadow-surface sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-cv-border pb-3">
         <div className="flex items-start gap-2.5">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-cv-accent-soft text-cv-accent">
@@ -139,6 +137,6 @@ export const CanonicalFactsBrowser = () => {
           })}
         </ul>
       )}
-    </section>
+    </Card>
   );
 };

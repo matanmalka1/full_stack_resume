@@ -1,5 +1,6 @@
 import type { ApplicationDetail } from "../../api/contracts";
 import { Callout } from "../../ui/Callout";
+import { Card } from "../../ui/Card";
 import { resolvedByDecisionForm } from "./ReviewDecisionPanel";
 import { actionLabel, blockedReasonLabel, warningTitle } from "./applicationLabels";
 import { ReasonCallout } from "./ReasonCallout";
@@ -47,10 +48,7 @@ export const PreparationAlerts = ({ detail }: { detail: ApplicationDetail }) => 
   }
 
   return (
-    <section
-      aria-label="התראות"
-      className="flex flex-col gap-3 rounded-surface border border-cv-border bg-cv-surface-muted p-3"
-    >
+    <Card aria-label="התראות" className="flex flex-col gap-3 bg-cv-surface-muted p-3">
       {/* A review reason whose control is in the decision panel states the requirement
           and stops there. Other reasons retain the action that resolves them. */}
       {detail.review_reasons.map((reason) => (
@@ -98,6 +96,6 @@ export const PreparationAlerts = ({ detail }: { detail: ApplicationDetail }) => 
           הגרסה שאושרה נשמרת בדיוק כפי שהיא. הטיוטה החדשה היא עבודה נפרדת ואינה משנה אותה.
         </Callout>
       ) : null}
-    </section>
+    </Card>
   );
 };

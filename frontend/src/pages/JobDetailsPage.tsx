@@ -7,6 +7,7 @@ import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { BackLink } from "../ui/BackLink";
 import { buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
+import { Card } from "../ui/Card";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
 import { StatusBadge } from "../ui/StatusBadge";
@@ -37,10 +38,7 @@ const JobOverview = ({ detail }: { detail: ApplicationDetail }) => {
   const application = detail.application;
 
   return (
-    <section
-      aria-labelledby="job-overview-heading"
-      className="rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface sm:p-5"
-    >
+    <Card aria-labelledby="job-overview-heading" className="bg-cv-surface p-4 shadow-surface sm:p-5">
       <h2 className="text-body font-semibold text-cv-text" id="job-overview-heading">
         פרטי המועמדות
       </h2>
@@ -62,7 +60,7 @@ const JobOverview = ({ detail }: { detail: ApplicationDetail }) => {
         />
       </div>
       <ApplicationNotes detail={detail} />
-    </section>
+    </Card>
   );
 };
 
@@ -77,9 +75,9 @@ const PreparationGate = ({ detail }: { detail: ApplicationDetail }) => {
   const application = `/applications/${encodeURIComponent(detail.application.id)}`;
 
   return (
-    <section
+    <Card
       aria-labelledby="preparation-gate-heading"
-      className="relative overflow-hidden rounded-surface border border-cv-border bg-cv-surface-muted p-4 shadow-inner sm:p-5"
+      className="relative overflow-hidden bg-cv-surface-muted p-4 shadow-inner sm:p-5"
     >
       <span aria-hidden="true" className="absolute inset-y-0 start-0 w-1 bg-cv-accent" />
       <div className="flex flex-wrap items-start justify-between gap-4 ps-2">
@@ -114,7 +112,7 @@ const PreparationGate = ({ detail }: { detail: ApplicationDetail }) => {
           )}
         </div>
       </div>
-    </section>
+    </Card>
   );
 };
 

@@ -6,6 +6,7 @@ import { ErrorCallout } from "../app/ErrorCallout";
 import { BackLink } from "../ui/BackLink";
 import { Button, buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
+import { Card } from "../ui/Card";
 import { Dialog } from "../ui/Dialog";
 import { Field } from "../ui/Field";
 import { PageShell } from "../ui/PageShell";
@@ -99,10 +100,7 @@ const RevisionPageContent = ({ approvedRevisionId }: RevisionPageContentProps) =
                 דוח האימות שמתחת מפרט את החסימות.
               </Callout>
             ) : null}
-            <section
-              aria-labelledby="revision-summary-heading"
-              className="rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface sm:p-5"
-            >
+            <Card aria-labelledby="revision-summary-heading" className="bg-cv-surface p-4 shadow-surface sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="flex min-w-0 items-start gap-3">
                   <span className="grid size-11 shrink-0 place-items-center rounded-pill bg-cv-success-soft text-cv-success">
@@ -146,7 +144,7 @@ const RevisionPageContent = ({ approvedRevisionId }: RevisionPageContentProps) =
                   ) : null}
                 </div>
               </div>
-            </section>
+            </Card>
 
             <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(19rem,1fr)]">
               {/* The server-rendered document is the authoritative presentation. No
@@ -167,9 +165,9 @@ const RevisionPageContent = ({ approvedRevisionId }: RevisionPageContentProps) =
               </div>
 
               <aside aria-label="פרטי הגרסה והאימות" className="flex min-w-0 flex-col gap-6">
-                <section
+                <Card
                   aria-labelledby="revision-record-heading"
-                  className="overflow-x-auto rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface"
+                  className="overflow-x-auto bg-cv-surface p-4 shadow-surface"
                 >
                   <h2 className="flex items-center gap-2 font-semibold text-cv-text" id="revision-record-heading">
                     <Lock aria-hidden="true" className="size-4 text-cv-accent" />
@@ -193,18 +191,15 @@ const RevisionPageContent = ({ approvedRevisionId }: RevisionPageContentProps) =
                       },
                     ]}
                   />
-                </section>
+                </Card>
 
-                <section
-                  aria-labelledby="ready-validation-heading"
-                  className="rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface"
-                >
+                <Card aria-labelledby="ready-validation-heading" className="bg-cv-surface p-4 shadow-surface">
                   <h2 className="mb-4 flex items-center gap-2 font-semibold text-cv-text" id="ready-validation-heading">
                     <ShieldCheck aria-hidden="true" className="size-4 text-cv-accent" />
                     אימות הגרסה המוכנה
                   </h2>
                   <ValidationReportView report={revision.ready_validation} />
-                </section>
+                </Card>
 
                 {decisionQuery.data === undefined ? null : (
                   <details className="rounded-surface border border-cv-border bg-cv-surface-muted p-4">

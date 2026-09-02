@@ -5,6 +5,7 @@ import { ErrorCallout } from "../../app/ErrorCallout";
 import { BackLink } from "../../ui/BackLink";
 import { Button, buttonClasses } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
+import { Card } from "../../ui/Card";
 import { LtrText } from "../../ui/LtrText";
 import { PageShell } from "../../ui/PageShell";
 import { QueryState } from "../../ui/QueryState";
@@ -98,7 +99,7 @@ export const DraftEditorPage = () => {
       ) : null}
 
       {detail === undefined ? null : (
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface">
+        <Card className="flex flex-wrap items-center justify-between gap-4 bg-cv-surface p-4 shadow-surface">
           <div className="flex min-w-0 items-center gap-3">
             <span className="grid size-10 shrink-0 place-items-center rounded-control bg-cv-accent-soft text-cv-accent">
               <FileText aria-hidden="true" className="size-5" />
@@ -128,7 +129,7 @@ export const DraftEditorPage = () => {
             </StatusBadge>
             {workingDraftId === null ? null : <DraftSaveState state={autosave} />}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Live work, reported beside the draft it is rewriting rather than on a screen
@@ -159,9 +160,9 @@ export const DraftEditorPage = () => {
           <EditorLayout
             editor={
               <>
-                <section
+                <Card
                   aria-labelledby="draft-structure-heading"
-                  className="flex flex-col gap-4 rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface sm:p-5"
+                  className="flex flex-col gap-4 bg-cv-surface p-4 shadow-surface sm:p-5"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cv-border pb-3">
                     <h2
@@ -199,12 +200,12 @@ export const DraftEditorPage = () => {
                       />
                     ))}
                   </ul>
-                </section>
+                </Card>
 
                 {draft.outline.sections.map((section, sectionIndex) => (
-                  <section
+                  <Card
                     aria-labelledby={`draft-section-${sectionIndex}`}
-                    className="flex flex-col gap-2 rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface sm:p-5"
+                    className="flex flex-col gap-2 bg-cv-surface p-4 shadow-surface sm:p-5"
                     key={section.name}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cv-border pb-3">
@@ -258,7 +259,7 @@ export const DraftEditorPage = () => {
                         ))}
                       </ul>
                     )}
-                  </section>
+                  </Card>
                 ))}
 
                 {regenerationAvailable ? null : (

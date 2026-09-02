@@ -4,6 +4,7 @@ import { Settings, ShieldCheck } from "lucide-react";
 import { settingsQueryOptions } from "../api/settings";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { BackLink } from "../ui/BackLink";
+import { Card } from "../ui/Card";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
 import { StatusBadge } from "../ui/StatusBadge";
@@ -40,7 +41,7 @@ export const SettingsPage = () => {
         </span>
       }
     >
-      <section className="rounded-surface border border-cv-border bg-cv-surface p-5 shadow-surface sm:p-6">
+      <Card className="bg-cv-surface p-5 shadow-surface sm:p-6">
         <div className="mb-5 flex items-start gap-2.5 border-b border-cv-border pb-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-cv-accent-soft text-cv-accent">
             <ShieldCheck aria-hidden="true" className="size-4" />
@@ -58,7 +59,7 @@ export const SettingsPage = () => {
         >
           {query.data === undefined ? null : <SettingsForm etag={query.data.etag} settings={query.data.settings} />}
         </QueryState>
-      </section>
+      </Card>
       <ReconciliationPanel />
       <CanonicalFactsBrowser />
     </PageShell>
