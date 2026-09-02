@@ -5,39 +5,48 @@ import { useLocation } from "react-router-dom";
 
 import { type WorkflowStep, WorkflowSteps } from "../ui/WorkflowSteps";
 
-/* A.4 frame 1 region 3: five ordered stages, and the only place their Hebrew names
-   live. */
-const stages = ["intake", "analysis", "draft", "validation", "ready"] as const;
+/* A.4 frame 1 region 3: three ordered stages, and the only place their Hebrew names
+   live.
+
+   Intake is not among them. Creating a job and reading its record is how the reader gets
+   to the work, not the first of its stages: the bar counted a step that is behind every
+   Application that exists, and made Job Detail - the screen a saved job is opened from
+   every day, long after preparation is done - read as step 1 of a document workflow it
+   does not take part in. The workflow starts where the CV does.
+
+   Validation is not a stage of its own either. It has no screen of its own, no record the
+   reader goes to read, and no way to reach it other than the editor: both stages pointed
+   at `/draft`, so the bar drew two chips for one screen and the editor then showed a
+   validation panel inside the stage the bar called "טיוטה". One screen, one stage. The
+   distinction the two chips were carrying - draft written vs. draft validated - is the
+   preparation badge's, and it is on the screen itself. */
+const stages = ["analysis", "draft", "ready"] as const;
 
 type Stage = (typeof stages)[number];
 
 const stageLabels: Record<Stage, string> = {
-  intake: "משרה חדשה",
   analysis: "ניתוח",
-  draft: "טיוטה",
-  validation: "אימות",
+  draft: "טיוטה ואימות",
   ready: "מוכן",
 };
 
 /* What each stage produces, in one line. The labels above are single nouns, and a noun
-   alone does not tell a reader what "אימות" is for or what has to be true before "מוכן".
+   alone does not tell a reader what a stage is for or what has to be true before "מוכן".
    Only the current stage's line is shown, so the landmark stays one sentence tall.
 
    These describe the stage, not what may happen next: which action is possible is
    `available_actions` and `recommended_action`, and the landmark still decides none of
    it (A.1). */
 const stageHints: Record<Stage, string> = {
-  intake: "קליטת המודעה ויצירת המשרה",
   analysis: "התאמת המשרה לעובדות הקנוניות",
-  draft: "ניסוח קורות החיים לפי תוכנית הבחירה",
-  validation: "בדיקת הניסוח מול העובדות לפני אישור",
+  draft: "ניסוח, אימות מול העובדות ואישור הגרסה",
   ready: "גרסה מאושרת ומרונדרת, מוכנה לשליחה",
 };
 
 /* The stage the hint describes: where the work is, and at `ready` the stage it finished
    on. `unknown` gets none - the stage it is on is not this module's to guess. */
 const hintFor = (stage: Exclude<WorkflowStage, "none">): string | undefined =>
-  stage === "unknown" ? undefined : stageHints[stage === "intake" ? "intake" : stageForPreparationState[stage]];
+  stage === "unknown" ? undefined : stageHints[stageForPreparationState[stage]];
 
 /* Where the backend's PreparationState sits in the landmark. Exhaustive over the
    generated union, so a state added to the projection fails the build here rather than
@@ -53,7 +62,7 @@ const stageForPreparationState: Record<PreparationState, Stage> = {
   needs_review: "analysis",
   ready_to_draft: "draft",
   draft_in_progress: "draft",
-  ready_for_approval: "validation",
+  ready_for_approval: "draft",
   approved: "ready",
   ready: "ready",
 };
@@ -75,8 +84,12 @@ export type StageDestinations = Partial<Record<Stage, string>>;
    by hand. A stage whose record does not exist yet gets no entry, so the landmark offers
    a link only where there is something at the other end.
 
-   Draft and validation share the editor: validation is a panel of the screen holding the
-   draft it validates, not a screen of its own (router.tsx). Ready names the revision the
+   Job Detail is not among them. It holds the job, not a stage of the CV, so the bar
+   offers no way to it - the screens that need a way back to it have one in the shell
+   header and in their own back link.
+
+   The editor is one destination for one stage: the draft, its validation, and its
+   approval are panels of that single screen (router.tsx). Ready names the revision the
    Application currently stands on - `latest_ready_revision_id` first, because a rendered
    revision is the one the reader means by "מוכן", and the approved revision only while no
    render exists yet. */
@@ -89,32 +102,31 @@ export const workflowDestinations = (
   const editable = detail?.active_working_draft_id != null;
 
   return {
-    /* Intake produced the job record, and Job Detail is the screen that holds it. */
-    intake: application,
     analysis: `${application}/preparation`,
-    ...(editable ? { draft: `${application}/draft`, validation: `${application}/draft` } : {}),
+    ...(editable ? { draft: `${application}/draft` } : {}),
     ...(readyRevisionId == null ? {} : { ready: `/revisions/${encodeURIComponent(readyRevisionId)}` }),
   };
 };
 
-/* Three kinds of screen, not two.
+/* Two kinds of screen beside the seven preparation states.
 
-   `intake` is the screen that exists before an Application does. `unknown` is an
-   Application whose projection has not arrived yet, which is a different thing: its
-   intake is behind it, but the stage it is on is not this module's to guess.
+   `unknown` is an Application screen whose projection has not arrived yet: it is in the
+   workflow, but the stage it is on is not this module's to guess.
 
-   `none` is a screen standing outside the workflow altogether - Settings, a not-found
-   route - where no stage is the honest answer and the landmark has nothing to report. */
-export type WorkflowStage = PreparationState | "intake" | "none" | "unknown";
+   `none` is a screen standing outside the workflow altogether - Settings, the list,
+   intake, Job Detail - where no stage is the honest answer and the landmark has nothing
+   to report. */
+export type WorkflowStage = PreparationState | "none" | "unknown";
 
 /* `none` never reaches here: the landmark renders no steps at all for it, rather than a
-   row of five in which every one is `upcoming`. Every other stage keeps its exact
+   row of three in which every one is `upcoming`. Every other stage keeps its exact
    behavior. */
 const workflowStepsFor = (stage: Exclude<WorkflowStage, "none">, destinations: StageDestinations): WorkflowStep[] => {
-  const current = stage === "intake" ? 0 : stage === "unknown" ? -1 : stages.indexOf(stageForPreparationState[stage]);
+  const current = stage === "unknown" ? -1 : stages.indexOf(stageForPreparationState[stage]);
   /* `ready` completes its own stage: everything is done, so nothing is in progress.
-     `unknown` completes only the intake it is certainly past. */
-  const completed = stage === "unknown" ? 1 : stage === "ready" ? current + 1 : current;
+     `unknown` completes nothing: with intake off the bar there is no stage an Application
+     is past merely by existing. */
+  const completed = stage === "unknown" ? 0 : stage === "ready" ? current + 1 : current;
 
   return stages.map((stage_, index) => {
     const state = index < completed ? "complete" : index === current ? "current" : "upcoming";
@@ -124,8 +136,8 @@ const workflowStepsFor = (stage: Exclude<WorkflowStage, "none">, destinations: S
       state,
       /* Never forward. The current stage is included because "current" is a position in
          the projection, not a claim about which screen is open: at `ready_for_approval`
-         read from the preparation screen, אימות is the current stage and its screen is
-         the editor, one the reader is not on. The one case the rule must exclude - the
+         read from the preparation screen, טיוטה ואימות is the current stage and its
+         screen is the editor, one the reader is not on. The one case the rule must exclude - the
          stage whose screen is the one being read - is excluded where that is known, in
          `WorkflowLandmarkSteps`. A future stage has no record to open. */
       ...(state !== "upcoming" && destinations[stage_] !== undefined ? { href: destinations[stage_] } : {}),
@@ -139,10 +151,9 @@ interface WorkflowPosition {
 }
 
 const WorkflowStageContext = createContext<((position: WorkflowPosition) => void) | undefined>(undefined);
-/* `none` before any screen has spoken, not `intake`. The claim belongs to the page, and
-   until one makes it the honest answer is that no stage is known - a default of `intake`
-   made the shell assert stage 1 of 5 on whatever screen loaded first, including the
-   Application list. */
+/* `none` before any screen has spoken. The claim belongs to the page, and until one makes
+   it the honest answer is that no stage is known - a default of the first stage made the
+   shell assert stage 1 on whatever screen loaded first, including the Application list. */
 const WorkflowStageValueContext = createContext<WorkflowPosition>({ destinations: {}, stage: "none" });
 
 /* The landmark is a shell region (A.1) but the projection belongs to the page, so the
@@ -150,8 +161,8 @@ const WorkflowStageValueContext = createContext<WorkflowPosition>({ destinations
 
    Publishing is mandatory, because the claim is no longer reset on unmount: a route that
    says nothing inherits whatever the previous screen left behind. Each of the three kinds
-   says its own - an Application route its `PreparationState`, the intake screen `intake`,
-   and a screen outside the workflow `none`. */
+   says its own - an Application workflow route its `PreparationState`, and a screen
+   outside the workflow `none`. */
 export const WorkflowLandmark = ({ children }: { children: ReactNode }) => {
   const [position, setPosition] = useState<WorkflowPosition>({ destinations: {}, stage: "none" });
 
@@ -170,26 +181,19 @@ export const WorkflowLandmarkSteps = () => {
 
   /* Off-workflow screens get no landmark rather than a stale one. Without this, removing
      the unmount reset would leave Settings showing whichever stage the previous screen
-     published - the breadcrumb still claiming "אימות" while the user is in Settings. */
+     published - the breadcrumb still claiming a stage while the user is in Settings. */
   if (stage === "none") {
     return null;
   }
 
   const steps = workflowStepsFor(stage, destinations);
-  /* Which of the five stages the open screen belongs to. The shell's knowledge, not the
+  /* Which of the three stages the open screen belongs to. The shell's knowledge, not the
      page's: the pages derive destinations from the projection alone, and matching a
      destination against the open path is what turns that into a location.
 
-     The current stage wins a tie, because the editor is the screen of both טיוטה and
-     אימות and the projection is what says which of the two the reader is doing there.
-     `intake` is matched by the stage rather than by a path: the intake screen exists
-     before the Application does, so it has no destination to compare against. */
-  const hereIndex =
-    stage === "intake"
-      ? 0
-      : steps.findIndex((step) => step.state === "current" && step.href === pathname) !== -1
-        ? steps.findIndex((step) => step.state === "current" && step.href === pathname)
-        : steps.findIndex((step) => step.href === pathname);
+     The current stage wins a tie where one arises. */
+  const currentHere = steps.findIndex((step) => step.state === "current" && step.href === pathname);
+  const hereIndex = currentHere !== -1 ? currentHere : steps.findIndex((step) => step.href === pathname);
 
   /* A stage whose screen is the one being read is not a way back. Dropped here for the
      same reason the location is decided here. */
@@ -202,7 +206,7 @@ export const WorkflowLandmarkSteps = () => {
 
   return (
     <WorkflowSteps
-      /* The line describes the screen the reader is on where that is one of the five, and
+      /* The line describes the screen the reader is on where that is one of the three, and
          falls back to the stage the work is on where it is not - a revision opened from
          outside the workflow, say. */
       hint={hereIndex === -1 ? hintFor(stage) : stageHints[stages[hereIndex]]}
@@ -222,16 +226,16 @@ export const useWorkflowStage = (stage: WorkflowStage, destinations?: StageDesti
 
   /* Layout, not effect: the landmark renders above the page that publishes to it, so a
      passive effect let the browser paint one frame of the previous screen's stage on the
-     new one - the five steps flashing over the Application list on the way back to it.
+     new one - the steps flashing over the Application list on the way back to it.
      Committing the claim before paint removes that frame. */
   useLayoutEffect(() => {
     publish?.({ destinations: published, stage });
-    /* No reset on unmount. Resetting here produced a flash of `intake` between two
+    /* No reset on unmount. Resetting here produced a flash of the first stage between two
        screens that were both mid-workflow - the landmark appearing to restart while the
        user moved from the editor to the operation it queued.
 
        That makes publishing mandatory rather than optional: a screen that publishes
        nothing now inherits the stage the previous one left behind. Every route states
-       its own answer, including `intake` and `none`. */
+       its own answer, including `none`. */
   }, [publish, published, stage]);
 };

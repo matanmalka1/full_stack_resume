@@ -73,21 +73,22 @@ test.describe("the Job Detail screen", () => {
     await expect(page.getByRole("heading", { name: "מודעת המשרה" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "מעקב גיוס" })).toBeVisible();
     await expect(page.getByRole("link", { name: "עדכון מעקב הגיוס" })).toHaveAttribute("href", "#recruitment-heading");
-    await expect(page.getByRole("link", { name: "הכנת קורות החיים" })).toHaveAttribute(
+    await expect(page.getByRole("link", { name: "מעבר להכנת קורות החיים" })).toHaveAttribute(
       "href",
       "/applications/app-1/preparation",
     );
-    /* Job Detail is where the landmark's intake step leads, so the landmark is present
-       here rather than dropped: a screen that is a destination of the bar cannot be a
-       screen the bar disappears on. It is a navigation landmark because a stage behind
-       the reader can be opened; the step for this very screen carries no link. */
-    const workflow = page.getByRole("navigation", { name: /^שלבי הכנת קורות החיים:/ });
-    await expect(workflow).toBeVisible();
-    await expect(workflow.getByRole("link", { name: "חזרה לשלב משרה חדשה" })).toHaveCount(0);
+    /* The job record is the entrance to an Application, not a stage of the CV workflow,
+       so no landmark is drawn here: this screen is still opened months after the document
+       is done, and it takes no part in the four stages the bar counts. */
+    await expect(page.getByRole("navigation", { name: /^שלבי הכנת קורות החיים:/ })).toHaveCount(0);
+    await expect(page.getByRole("img", { name: /^שלבי הכנת קורות החיים:/ })).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: "חזרה ללוח המועמדויות" })).toBeVisible();
 
+    /* The door first, then what the job is: preparation is the work started from here,
+       not another fact about the posting. */
     await expect(page.getByRole("heading", { level: 2 })).toHaveText([
+      "הכנת קורות החיים",
       "פרטי המועמדות",
-      "מצב הכנת קורות החיים",
       "מעקב גיוס",
       "מודעת המשרה",
     ]);

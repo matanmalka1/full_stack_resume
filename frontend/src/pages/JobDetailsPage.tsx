@@ -3,7 +3,8 @@ import { Link, useLocation, useParams } from "react-router-dom";
 
 import { applicationDetailQueryOptions } from "../api/applications";
 import type { ApplicationDetail } from "../api/contracts";
-import { useWorkflowStage, workflowDestinations } from "../app/WorkflowLandmark";
+import { useWorkflowStage } from "../app/WorkflowLandmark";
+import { BackLink } from "../ui/BackLink";
 import { buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { PageShell } from "../ui/PageShell";
@@ -11,7 +12,6 @@ import { QueryState } from "../ui/QueryState";
 import { StatusBadge } from "../ui/StatusBadge";
 import { SummaryList } from "../ui/SummaryList";
 import { dateTimesMatch, formatDateTime } from "../ui/formatDateTime";
-import { ApplicationSectionNav } from "./ApplicationSectionNav";
 import { ArtifactsPanel } from "./application/ArtifactsPanel";
 import { ApplicationNotes } from "./application/ApplicationNotes";
 import { JobSnapshotPanel } from "./application/JobSnapshotPanel";
@@ -27,8 +27,10 @@ import { RecruitmentPanel } from "./recruitment/RecruitmentPanel";
 
 const sourceLabel = (source: string): string => (source === "manual" ? "הזנה ידנית" : source);
 
-/* Job Detail owns the job and recruitment facts. Preparation is represented here only
-   by its server-owned projection and a link to the workflow that can change it. */
+/* Job Detail owns the job and recruitment facts. It is the entrance to an Application,
+   not a stage of the CV workflow: the job record is what the reader opens on the day
+   they apply and on the day they hear back, long after the document is done. Preparation
+   is represented here only by its server-owned projection and the door into it. */
 const JobOverview = ({ detail }: { detail: ApplicationDetail }) => {
   const application = detail.application;
 
@@ -59,37 +61,57 @@ const JobOverview = ({ detail }: { detail: ApplicationDetail }) => {
   );
 };
 
-const PreparationSummary = ({ detail }: { detail: ApplicationDetail }) => (
-  <section aria-labelledby="preparation-summary-heading">
-    <div className="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h2 className="text-body font-semibold text-cv-text" id="preparation-summary-heading">
-          מצב הכנת קורות החיים
-        </h2>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <StatusBadge tone={preparationStateTones[detail.preparation_state]}>
-            {preparationStateLabels[detail.preparation_state]}
-          </StatusBadge>
-          {draftStateIsImplied(detail) ? null : (
-            <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
-              {workingDraftStateLabels[detail.working_draft_state]}
+/* The one door on this screen, and the only place the two halves of an Application meet.
+
+   It is a surface of its own above the job's own sections rather than a fourth section
+   among them: preparation is not another fact about the job, it is the work started from
+   here, and the screen should say where that work stands and how to reach it before it
+   starts listing what the job is. The accent rail is the single loud thing on the page;
+   everything below it stays plain. */
+const PreparationGate = ({ detail }: { detail: ApplicationDetail }) => {
+  const application = `/applications/${encodeURIComponent(detail.application.id)}`;
+
+  return (
+    <section
+      aria-labelledby="preparation-gate-heading"
+      className="relative overflow-hidden rounded-surface border border-cv-border bg-cv-surface-muted p-4 shadow-inner sm:p-5"
+    >
+      <span aria-hidden="true" className="absolute inset-y-0 start-0 w-1 bg-cv-accent" />
+      <div className="flex flex-wrap items-start justify-between gap-4 ps-2">
+        <div className="min-w-0">
+          <h2 className="text-body font-semibold text-cv-text" id="preparation-gate-heading">
+            הכנת קורות החיים
+          </h2>
+          {/* Says how far the door leads, in the same count the landmark keeps on the
+              other side of it. This screen draws no landmark: it is not one of the four. */}
+          <p className="mt-1 text-support text-cv-text-muted">
+            תהליך נפרד בארבעה שלבים, מניתוח המשרה ועד גרסה מוכנה לשליחה.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <StatusBadge tone={preparationStateTones[detail.preparation_state]}>
+              {preparationStateLabels[detail.preparation_state]}
             </StatusBadge>
+            {draftStateIsImplied(detail) ? null : (
+              <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
+                {workingDraftStateLabels[detail.working_draft_state]}
+              </StatusBadge>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link className={buttonClasses("primary")} to={`${application}/preparation`}>
+            מעבר להכנת קורות החיים
+          </Link>
+          {detail.active_working_draft_id == null ? null : (
+            <Link className={buttonClasses("ghost")} to={`${application}/draft`}>
+              פתיחת עורך קורות החיים
+            </Link>
           )}
         </div>
       </div>
-      {detail.active_working_draft_id == null ? null : (
-        <div className="flex flex-wrap gap-2">
-          <Link
-            className={buttonClasses("ghost")}
-            to={`/applications/${encodeURIComponent(detail.application.id)}/draft`}
-          >
-            פתיחת עורך קורות החיים
-          </Link>
-        </div>
-      )}
-    </div>
-  </section>
-);
+    </section>
+  );
+};
 
 export const JobDetailsPage = () => {
   const { applicationId } = useParams();
@@ -104,14 +126,12 @@ export const JobDetailsPage = () => {
   const createdApplication = (location.state as { createdApplication?: { analysisQueued?: unknown } } | null)
     ?.createdApplication;
 
-  /* Job Detail said `none` while it was a screen the landmark could not link to. Now that
-     intake resolves here, staying silent meant the one destination the bar offers is also
-     the one place the bar disappears. It is an Application screen and reports its stage
-     like the others; `intake` drops out on its own, being this very path. */
-  useWorkflowStage(
-    detail === undefined ? "unknown" : detail.preparation_state,
-    workflowDestinations(applicationId, detail),
-  );
+  /* No stage. The job record is the entrance to an Application and outlives the document
+     workflow run against it, so showing the four CV stages here made a screen that is
+     never "done" report progress through a process it takes no part in. The door below
+     names where preparation stands; the landmark belongs to the screens that do the
+     work. */
+  useWorkflowStage("none");
 
   return (
     <PageShell
@@ -122,7 +142,11 @@ export const JobDetailsPage = () => {
           </a>
         )
       }
-      navigation={<ApplicationSectionNav applicationId={applicationId} value="details" />}
+      navigation={
+        <BackLink label="חזרה ללוח המועמדויות" to="/">
+          לוח המועמדויות
+        </BackLink>
+      }
       eyebrow={detail === undefined ? undefined : <span dir="auto">{detail.application.company}</span>}
       title={detail?.application.target_role ?? "פרטי משרה"}
     >
@@ -137,25 +161,16 @@ export const JobDetailsPage = () => {
             {createdApplication === undefined ? null : createdApplication.analysisQueued === true ? (
               <Callout role="status" title="המועמדות נוצרה, הניתוח רץ" tone="progress" />
             ) : (
-              <Callout
-                action={
-                  <Link
-                    className={buttonClasses("secondary")}
-                    to={`/applications/${encodeURIComponent(applicationId)}/preparation`}
-                  >
-                    מעבר להכנת קורות החיים
-                  </Link>
-                }
-                role="alert"
-                title="המועמדות נוצרה, אך הניתוח לא הופעל"
-                tone="warning"
-              >
+              /* No action of its own: the door below is the way to preparation, and two
+                 controls with the same destination one above the other made the reader
+                 choose between identical doors. */
+              <Callout role="alert" title="המועמדות נוצרה, אך הניתוח לא הופעל" tone="warning">
                 ניתן להפעיל את הניתוח ממסך הכנת קורות החיים. המועמדות שכבר נוצרה לא תיווצר שוב.
               </Callout>
             )}
+            <PreparationGate detail={detail} />
             <div className="flex flex-col divide-y divide-cv-border [&>section]:py-6 [&>section:first-child]:pt-0 [&>section:last-child]:pb-0">
               <JobOverview detail={detail} />
-              <PreparationSummary detail={detail} />
               <RecruitmentPanel detail={detail} />
               <JobSnapshotPanel detail={detail} />
               <ArtifactsPanel applicationId={applicationId} />

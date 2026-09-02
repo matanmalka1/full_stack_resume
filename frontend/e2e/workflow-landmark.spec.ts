@@ -71,7 +71,7 @@ test.describe("the workflow landmark", () => {
     });
   });
 
-  test("walks back to a stage that is already behind the reader", async ({ page }) => {
+  test("counts only the CV stages and leaves the job record to the page's own way back", async ({ page }) => {
     await page.goto("/applications/app-1/preparation");
 
     const workflow = page.getByRole("navigation", { name: /^שלבי הכנת קורות החיים:/ });
@@ -81,8 +81,12 @@ test.describe("the workflow landmark", () => {
     /* Nothing ahead of the current stage opens, because the projection has not produced
        the record such a screen would show. */
     await expect(workflow.getByRole("link", { name: /לשלב מוכן$/ })).toHaveCount(0);
+    /* The job record is not a stage: it is the entrance the work is started from, and the
+       bar neither counts it nor leads to it. */
+    await expect(workflow.getByRole("link", { name: /משרה חדשה/ })).toHaveCount(0);
+    await expect(workflow.getByRole("link", { name: "חזרה לשלב טיוטה" })).toBeVisible();
 
-    await workflow.getByRole("link", { name: "חזרה לשלב משרה חדשה" }).click();
+    await page.getByRole("navigation", { name: "חזרה לפרטי המשרה" }).getByRole("link").click();
 
     await expect(page.getByRole("heading", { level: 1, name: "Backend Engineer" })).toBeVisible();
     await expect(page).toHaveURL(/\/applications\/app-1$/);

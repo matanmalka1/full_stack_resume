@@ -4,7 +4,6 @@ import { Database, RefreshCw, Trash2 } from "lucide-react";
 import type { DraftClaim, DraftFact, WorkingDraft, WorkingDraftFacts } from "../../api/contracts";
 import { Button } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
-import { Field } from "../../ui/Field";
 import { StatusBadge } from "../../ui/StatusBadge";
 import { TextArea } from "../../ui/TextInput";
 import { removability } from "./claimRemoval";
@@ -32,6 +31,11 @@ const factRow = (fact: DraftFact) => (
   </li>
 );
 
+/* An action on one line of sixty. Spelled out, the two labels were wider than most of the
+   lines they acted on and repeated themselves down the whole page; as icons they carry
+   the same accessible name and stop competing with the text for width. */
+const rowActionClasses = "min-h-9 px-2";
+
 /* A.4 frame 3: the claim, its status in words, the facts behind it, and what may be done
    to it. The status is the backend's `claim_type`, not a judgement made here, and the
    supporting facts are named by their text - a user never has to read a fact ID. */
@@ -58,38 +62,54 @@ export const DraftClaimCard = ({
   }, [claim.text]);
 
   return (
-    <li className="group rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-cv-accent/30 hover:shadow-floating sm:p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    /* A row, not a card. Every line of the draft used to be its own bordered, shadowed,
+       lifting surface, so a document of sixty lines was sixty stacked boxes and the text
+       inside them - the only thing on the screen the user came to read - was the least
+       prominent part. The rows are separated by the list's own hairline instead. */
+    <li className="group py-3 first:pt-0">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <StatusBadge tone={claimTypeTones[claim.claim_type]}>{claimTypeLabels[claim.claim_type]}</StatusBadge>
-        <div className="flex flex-wrap gap-2">
-          <Button disabled={unsaved} onClick={() => onRegenerate(claim)} variant="secondary">
+        {/* Held out of the flow until the row is touched, so a page of rows is a page of
+            text. Focus-within keeps them reachable by keyboard, where hover is not. */}
+        <div className="flex gap-1 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100">
+          <Button
+            aria-label="יצירה מחדש של השורה"
+            className={rowActionClasses}
+            disabled={unsaved}
+            onClick={() => onRegenerate(claim)}
+            title="יצירה מחדש של השורה"
+            variant="ghost"
+          >
             <RefreshCw aria-hidden="true" className="size-4" />
-            יצירה מחדש של השורה
           </Button>
           {removal.route === "none" ? null : (
-            <Button onClick={() => onRemove(claim)} variant="secondary">
+            <Button
+              aria-label="הסרת השורה"
+              className={rowActionClasses}
+              onClick={() => onRemove(claim)}
+              title="הסרת השורה"
+              variant="ghost"
+            >
               <Trash2 aria-hidden="true" className="size-4" />
-              הסרת השורה
             </Button>
           )}
         </div>
       </div>
 
-      <Field className="mt-3" label="טקסט השורה">
-        {(control) => (
-          <TextArea
-            {...control}
-            className="min-h-24 resize-y bg-cv-surface-raised"
-            dir="auto"
-            onBlur={onBlur}
-            onChange={(event) => {
-              setText(event.target.value);
-              onEdit(claim, event.target.value);
-            }}
-            value={text}
-          />
-        )}
-      </Field>
+      {/* The label is what names the control for a screen reader, and printed above every
+          row it was a sixth repeated string down the page. It stays in the accessibility
+          tree and leaves the layout. */}
+      <TextArea
+        aria-label="טקסט השורה"
+        className="mt-2 min-h-16 resize-y border-transparent bg-transparent px-2 py-1.5 shadow-none hover:border-cv-border focus:border-cv-accent"
+        dir="auto"
+        onBlur={onBlur}
+        onChange={(event) => {
+          setText(event.target.value);
+          onEdit(claim, event.target.value);
+        }}
+        value={text}
+      />
 
       {/* The badge above already names the claim type in a word, and the facts panel
           below shows what backs it. Printed under all sixty-odd cards, this sentence
@@ -104,29 +124,37 @@ export const DraftClaimCard = ({
           before saying that approval is blocked. */}
       {claim.claim_type === "pending" ? (
         <>
-          <Callout className="mt-3" title="הטקסט הזה חוסם אישור" tone="blocker">
+          <Callout className="mt-2" title="הטקסט הזה חוסם אישור" tone="blocker">
             <p dir="auto">{claim.pending_reason ?? claimTypeExplanations.pending}</p>
           </Callout>
           {factResolution}
         </>
       ) : null}
 
+      {/* The facts behind the line, as a note under it rather than a tinted box inside a
+          box. The green mark on each fact is what says these are the confirmed backing;
+          a full panel with its own heading said it a second time, once per row. */}
       {linked.length === 0 ? null : (
-        <div className="mt-4 rounded-control border border-cv-success/20 bg-cv-success-soft p-3">
-          <p className="flex items-center gap-2 text-support font-semibold text-cv-success">
-            <Database aria-hidden="true" className="size-4" />
-            העובדות שמאחורי השורה
-          </p>
-          <ul className="mt-2 flex flex-col gap-1.5">{linked.map(factRow)}</ul>
-        </div>
+        <details className="mt-1.5 px-2">
+          <summary className="inline-flex cursor-pointer items-center gap-1.5 text-support text-cv-text-muted">
+            <Database aria-hidden="true" className="size-3.5 text-cv-success" />
+            {linked.length === 1 ? "העובדה שמאחורי השורה" : `${linked.length} עובדות שמאחורי השורה`}
+          </summary>
+          <ul className="mt-1.5 flex flex-col gap-1.5">{linked.map(factRow)}</ul>
+        </details>
       )}
 
+      {/* Both lines describe the removal control, so they appear where it does: with the
+          row under the pointer or the keyboard, not printed under all sixty rows at
+          once. */}
       {removal.route === "none" && removal.reason !== undefined ? (
-        <p className="mt-3 text-support leading-6 text-cv-text-muted">{removal.reason}</p>
+        <p className="mt-1.5 hidden px-2 text-support leading-6 text-cv-text-muted group-focus-within:block group-hover:block">
+          {removal.reason}
+        </p>
       ) : null}
 
       {removal.route === "selection" ? (
-        <p className="mt-3 text-support leading-6 text-cv-text-muted">
+        <p className="mt-1.5 hidden px-2 text-support leading-6 text-cv-text-muted group-focus-within:block group-hover:block">
           הסרת השורה מחריגה את העובדה שמאחוריה ובונה את הטיוטה מחדש בלעדיה.
         </p>
       ) : null}

@@ -106,7 +106,7 @@ const StepBody = ({ finalCompletion, step }: { finalCompletion: boolean; step: W
 /* A.1: the landmark shows completed, current, and future stages.
 
    Two markups, because the honest answer differs. With nothing to go back to it is an
-   indicator: `role="img"` with a text alternative, read as "שלב 2 מתוך 5, ניתוח" rather
+   indicator: `role="img"` with a text alternative, read as "שלב 2 מתוך 3, טיוטה ואימות" rather
    than as a list of five destinations that refuse to open. Once a completed stage can be
    opened it is a navigation landmark, and announcing it as one is what tells a screen
    reader the way back exists. The steps that are not links stay hidden from assistive

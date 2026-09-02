@@ -238,13 +238,17 @@ const DraftFlow = () => {
     <>
       <DraftValidationPanel
         applicationId="app-1"
+        /* The approval control lives in the panel's own footer, as it does in the
+           editor. */
+        approval={
+          <button disabled={runId === null} onClick={() => setOpen(true)} type="button">
+            פתיחת אישור
+          </button>
+        }
         draft={draftQuery.data?.draft}
         onExactPassingRun={onExactPassingRun}
         stale={stale}
       />
-      <button disabled={runId === null} onClick={() => setOpen(true)} type="button">
-        פתיחת אישור
-      </button>
       <DraftApprovalDialog
         applicationId="app-1"
         detail={detailQuery.data}

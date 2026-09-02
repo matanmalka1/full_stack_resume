@@ -30,30 +30,19 @@ export const DraftFactPanel = ({ busy, facts, onInclude }: DraftFactPanelProps) 
   }
 
   return (
-    <section
-      aria-labelledby="draft-facts-heading"
-      className="flex flex-col gap-4 rounded-surface border border-cv-border bg-cv-surface-muted p-4 shadow-inner sm:p-5"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-heading-sm font-bold text-cv-text" id="draft-facts-heading">
-            <span className="flex size-9 items-center justify-center rounded-control bg-cv-accent-soft text-cv-accent">
-              <Database aria-hidden="true" className="size-4" />
-            </span>
-            ביסוס עובדתי
-          </h2>
-          <p className="mt-2 text-support leading-6 text-cv-text-muted">
-            תמונת מצב של העובדות שתוכנית הבחירה שקלה עבור הטיוטה הזו.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <span className="rounded-pill border border-cv-success/25 bg-cv-success-soft px-3 py-1 text-support font-semibold text-cv-success">
-            {included.length} נכללו
-          </span>
-          <span className="rounded-pill border border-cv-border bg-cv-surface px-3 py-1 text-support font-semibold text-cv-text-muted">
-            {omitted.length} הושמטו
-          </span>
-        </div>
+    /* A section of the editor, marked by its heading and a rule - not a tinted panel
+       holding a grid of tinted cards. The counts are the summary; the sentence that
+       explained what the section is has moved into the one line that needs it, the one
+       above the omitted facts a user can act on. */
+    <section aria-labelledby="draft-facts-heading" className="flex flex-col gap-3 border-t border-cv-border pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 text-heading-sm font-bold text-cv-text" id="draft-facts-heading">
+          <Database aria-hidden="true" className="size-4 text-cv-accent" />
+          ביסוס עובדתי
+        </h2>
+        <p className="text-support text-cv-text-muted">
+          {included.length} נכללו · {omitted.length} הושמטו
+        </p>
       </div>
 
       {omitted.length === 0 ? (
@@ -63,30 +52,31 @@ export const DraftFactPanel = ({ busy, facts, onInclude }: DraftFactPanelProps) 
           <p className="text-support leading-6 text-cv-text-muted">
             הכללה של עובדה קובעת אותה במפורש ובונה את הטיוטה מחדש. שאר ההחלטות שכבר נקבעו נשמרות.
           </p>
-          <ul className="grid gap-3 xl:grid-cols-2">
+          <ul className="flex flex-col divide-y divide-cv-border">
             {omitted.map((fact) => (
-              <li
-                className="flex flex-col justify-between gap-4 rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface transition-[border-color,box-shadow] duration-200 hover:border-cv-accent/30 hover:shadow-floating"
-                key={fact.fact_id}
-              >
-                <div className="max-w-prose">
+              <li className="flex flex-wrap items-start justify-between gap-3 py-2.5 first:pt-0" key={fact.fact_id}>
+                <div className="min-w-0 max-w-prose flex-1">
                   <p className="text-body text-cv-text" dir="auto">
                     {fact.text ?? "לא ניתן לקרוא את העובדה הזו מהידע."}
                   </p>
-                  <p className="mt-1 text-support text-cv-text-muted">
+                  <p className="mt-0.5 text-support text-cv-text-muted">
                     {selectionOutcomeLabels[fact.outcome ?? "omitted"]}
                     {fact.reason === null || fact.reason === undefined ? "" : ` · ${omissionReasonLabels[fact.reason]}`}
                     {fact.section === null || fact.section === undefined ? "" : ` · ${fact.section}`}
                   </p>
                 </div>
                 <Button
-                  className="self-start"
+                  /* The row names the fact; the button says what happens to it. Its full
+                     name stays in the accessibility tree, where the row is not read
+                     alongside it. */
+                  aria-label="הכללת העובדה"
+                  className="min-h-9 shrink-0 px-3"
                   disabled={busy || fact.text === null}
                   onClick={() => onInclude(fact)}
                   variant="secondary"
                 >
                   <Plus aria-hidden="true" className="size-4" />
-                  הכללת העובדה
+                  הכללה
                 </Button>
               </li>
             ))}

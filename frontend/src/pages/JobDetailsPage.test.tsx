@@ -111,6 +111,8 @@ describe("JobDetailsPage", () => {
     renderPage(undefined, { createdApplication: { analysisQueued: false } });
 
     expect(await screen.findByText("המועמדות נוצרה, אך הניתוח לא הופעל")).toBeInTheDocument();
+    /* The notice carries no control of its own: the door below is the one way from the
+       job to preparation, and it is on the screen whether the analysis started or not. */
     expect(screen.getByRole("link", { name: "מעבר להכנת קורות החיים" })).toHaveAttribute(
       "href",
       "/applications/app-1/preparation",
@@ -139,23 +141,27 @@ describe("JobDetailsPage", () => {
 
     await screen.findByRole("heading", { level: 1, name: "Backend Engineer" });
     expect(screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent)).toEqual([
+      "הכנת קורות החיים",
       "פרטי המועמדות",
-      "מצב הכנת קורות החיים",
       "מעקב גיוס",
       "מודעת המשרה",
     ]);
   });
 
-  it("shows only a preparation summary and links to its separate workflow", async () => {
+  /* The job record is the entrance to an Application, not a stage of the CV workflow: it
+     shows where preparation stands and the door into it, and reports no stage of its own
+     so the landmark stays off this screen. */
+  it("is the entrance to preparation rather than a stage of it", async () => {
     renderPage();
 
     expect(await screen.findByText("ממתין לניתוח המשרה")).toBeInTheDocument();
-    const navigation = screen.getByRole("navigation", { name: "תחומי המועמדות" });
-    expect(within(navigation).getByRole("link", { name: "פרטי משרה" })).toHaveAttribute("aria-current", "page");
-    expect(within(navigation).getByRole("link", { name: "הכנת קורות החיים" })).toHaveAttribute(
+    const gate = screen.getByRole("region", { name: "הכנת קורות החיים" });
+    expect(within(gate).getByRole("link", { name: "מעבר להכנת קורות החיים" })).toHaveAttribute(
       "href",
       "/applications/app-1/preparation",
     );
+    expect(screen.queryByRole("navigation", { name: "תחומי המועמדות" })).toBeNull();
+    expect(screen.getByRole("navigation", { name: "חזרה ללוח המועמדויות" })).toBeInTheDocument();
   });
 
   it("suppresses milestone-implied draft absence and an unchanged update timestamp", async () => {

@@ -5,10 +5,10 @@ import { classificationFromAnalysis } from "../api/analyses";
 import { applicationDetailQueryOptions } from "../api/applications";
 import { preparationStateIsImpliedByStage, useWorkflowStage, workflowDestinations } from "../app/WorkflowLandmark";
 import { useWatchedOperation } from "../hooks/useWatchedOperation";
+import { BackLink } from "../ui/BackLink";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
 import { StatusBadge } from "../ui/StatusBadge";
-import { ApplicationSectionNav } from "./ApplicationSectionNav";
 import { PreparationView } from "./application/PreparationView";
 import {
   draftStateIsImplied,
@@ -91,7 +91,13 @@ export const ApplicationPage = () => {
           </div>
         )
       }
-      navigation={<ApplicationSectionNav applicationId={applicationId} value="preparation" />}
+      /* Up to the job the CV is being written for, not across to a peer tab: preparation
+         is entered from Job Detail and returns there. */
+      navigation={
+        <BackLink label="חזרה לפרטי המשרה" to={`/applications/${encodeURIComponent(applicationId)}`}>
+          פרטי משרה
+        </BackLink>
+      }
       title="הכנת קורות החיים"
     >
       <QueryState

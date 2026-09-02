@@ -299,16 +299,15 @@ describe("ApplicationPage", () => {
 
     renderPage(deterministicSettings, true);
 
-    const navigation = screen.getByRole("navigation", { name: "תחומי המועמדות" });
+    const navigation = screen.getByRole("navigation", { name: "חזרה לפרטי המשרה" });
     const details = within(navigation).getByRole("link", { name: "פרטי משרה" });
-    const preparation = within(navigation).getByRole("link", { name: "הכנת קורות החיים" });
     const preparationHeading = screen.getByRole("heading", { level: 1, name: "הכנת קורות החיים" });
     const preparationStatus = await screen.findByText("ממתין לניתוח המשרה");
 
-    expect(preparation).toHaveAttribute("aria-current", "page");
-    expect(details).not.toHaveAttribute("aria-current");
+    /* One step up, not a peer tab: preparation is entered from the job record and returns
+       to it, and there is no link back to the screen the reader is already on. */
     expect(details).toHaveAttribute("href", "/applications/app-1");
-    expect(preparation).toHaveAttribute("href", "/applications/app-1/preparation");
+    expect(within(navigation).queryByRole("link", { name: "הכנת קורות החיים" })).toBeNull();
     expect(navigation.compareDocumentPosition(preparationHeading) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
     expect(navigation.compareDocumentPosition(preparationStatus) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
 

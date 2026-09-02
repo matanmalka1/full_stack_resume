@@ -131,14 +131,14 @@ export const FactLifecyclePanel = ({ profile, sections }: { profile: string | nu
   const selected = detailQuery.data?.fact;
 
   return (
-    <section
-      aria-labelledby="fact-lifecycle-heading"
-      className="rounded-surface border border-cv-border bg-cv-surface-muted p-4 sm:p-5"
-    >
+    /* A section under a rule, not a tinted panel of tinted panels. It is also the one
+       thing on the editor that is not about the draft on screen - it edits the permanent
+       knowledge - so it opens closed and takes one row until asked for. */
+    <section aria-labelledby="fact-lifecycle-heading" className="border-t border-cv-border pt-4">
       <h2 className="text-heading-sm font-bold text-cv-text" id="fact-lifecycle-heading">
         מחזור חיי העובדות
       </h2>
-      <p className="mt-2 text-support text-cv-text-muted">
+      <p className="mt-1 text-support text-cv-text-muted">
         העובדות מוצגות בהקשר של הטיוטה. יצירה וקידום כאן משנים את מקור הידע הקבוע.
       </p>
       {error === null ? null : (
@@ -171,7 +171,7 @@ export const FactLifecyclePanel = ({ profile, sections }: { profile: string | nu
           )}
         </Field>
         {selected === undefined ? null : (
-          <div className="rounded-control border border-cv-border bg-cv-surface p-4">
+          <div className="border-s-2 border-cv-border ps-3">
             <p className="font-semibold text-cv-text" dir="auto">
               {factLabel(selected)}
             </p>

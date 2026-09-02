@@ -281,7 +281,7 @@ export const DraftEditorPage = () => {
       ) : null}
 
       {detail === undefined ? null : (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-cv-border bg-cv-surface-muted px-4 py-3 shadow-inner">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cv-border pb-3">
           <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
             {workingDraftStateLabels[detail.working_draft_state]}
           </StatusBadge>
@@ -322,7 +322,7 @@ export const DraftEditorPage = () => {
                     מבנה המסמך
                   </h2>
 
-                  <ul className="flex flex-col gap-3">
+                  <ul className="flex flex-col divide-y divide-cv-border">
                     <DraftClaimCard
                       claim={draft.outline.headline}
                       draft={draft}
@@ -349,7 +349,7 @@ export const DraftEditorPage = () => {
                   </ul>
 
                   {draft.outline.sections.map((section) => (
-                    <div className="flex flex-col gap-3 border-t border-cv-border pt-6" key={section.name}>
+                    <div className="flex flex-col gap-2 pt-6" key={section.name}>
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <h3 className="text-heading-sm font-bold text-cv-text" dir="auto">
                           {section.name}
@@ -366,7 +366,7 @@ export const DraftEditorPage = () => {
                       {section.claims.length === 0 ? (
                         <p className="text-support leading-6 text-cv-text-muted">אין כרגע שורות בסעיף הזה.</p>
                       ) : (
-                        <ul className="flex flex-col gap-3">
+                        <ul className="flex flex-col divide-y divide-cv-border">
                           {section.claims.map((claim) => (
                             <DraftClaimCard
                               claim={claim}
@@ -453,23 +453,28 @@ export const DraftEditorPage = () => {
                       them meant leaving the text they describe. */}
                 <DraftPreview draft={draft} />
 
+                {/* One surface for the result and the decision it gates. The sentence
+                      beside the button says only what the button cannot: why it is shut.
+                      The panel's own heading already says whether the run passed, so the
+                      second card that repeated it is gone. */}
                 <DraftValidationPanel
                   applicationId={applicationId}
+                  approval={
+                    <>
+                      {exactPassingRunId === null ? (
+                        <p className="me-auto text-support leading-6 text-cv-text-muted">
+                          האישור נפתח אחרי אימות שעבר על הגרסה המוצגת.
+                        </p>
+                      ) : null}
+                      <Button disabled={exactPassingRunId === null} onClick={() => setApprovalOpen(true)}>
+                        אישור הגרסה
+                      </Button>
+                    </>
+                  }
                   draft={draft}
                   onExactPassingRun={onExactPassingRun}
                   stale={validationStale}
                 />
-
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface">
-                  <p className="text-support leading-6 text-cv-text-muted">
-                    {exactPassingRunId === null
-                      ? "האישור נפתח אחרי אימות שעבר על הגרסה המוצגת."
-                      : "האימות עבר על הגרסה המוצגת."}
-                  </p>
-                  <Button disabled={exactPassingRunId === null} onClick={() => setApprovalOpen(true)}>
-                    אישור הגרסה
-                  </Button>
-                </div>
               </>
             }
           />

@@ -34,7 +34,7 @@ export const AnalysisPanel = ({
   detail: ApplicationDetail;
 }) => (
   <section aria-labelledby="analysis-heading" className="rounded-surface border border-cv-border p-5">
-    <AnalysisHeader classification={classification} />
+    <AnalysisHeader classification={classification} record={detail.latest_analysis ?? null} />
 
     <div className="flex flex-col divide-y divide-cv-border [&>section]:py-5 [&>section:last-child]:pb-0">
       <ClassificationSummary classification={classification} />

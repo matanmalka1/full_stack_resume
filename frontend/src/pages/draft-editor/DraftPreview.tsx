@@ -32,9 +32,7 @@ export const DraftPreview = ({ draft }: { draft: WorkingDraft }) => {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-heading-sm font-bold text-cv-text" id="draft-preview-heading">
-            <span className="flex size-9 items-center justify-center rounded-control bg-cv-accent-soft text-cv-accent">
-              <FileText aria-hidden="true" className="size-4" />
-            </span>
+            <FileText aria-hidden="true" className="size-4 text-cv-accent" />
             תצוגה מקדימה
           </h2>
           <span className="mt-2 flex items-center gap-2 text-support text-cv-text-muted">
@@ -46,21 +44,20 @@ export const DraftPreview = ({ draft }: { draft: WorkingDraft }) => {
         <StatusBadge tone="neutral">טיוטה</StatusBadge>
       </div>
 
-      <p className="text-support leading-6 text-cv-text-muted">
-        התצוגה נבנית בשרת מהגרסה השמורה של הטיוטה, באותו מסלול שמייצר את הקובץ המאושר. היא מתעדכנת אחרי כל שמירה ואינה
-        מייצרת PDF.
-      </p>
+      {/* The document is the thing; a mat around it was a card wrapping a card. The frame
+          keeps its own hairline and nothing else sits between it and the page. */}
+      <iframe
+        className="h-[72vh] w-full rounded-control border border-cv-border bg-cv-surface"
+        key={draft.edit_version}
+        onLoad={() => setLoading(false)}
+        sandbox=""
+        src={draftPreviewSrc(draft.id, draft.edit_version)}
+        title="תצוגה מקדימה של הטיוטה"
+      />
 
-      <div className="rounded-surface border border-cv-border bg-cv-canvas-strong p-3 shadow-inner sm:p-5">
-        <iframe
-          className="h-[72vh] w-full rounded-control border border-cv-border bg-cv-surface shadow-floating"
-          key={draft.edit_version}
-          onLoad={() => setLoading(false)}
-          sandbox=""
-          src={draftPreviewSrc(draft.id, draft.edit_version)}
-          title="תצוגה מקדימה של הטיוטה"
-        />
-      </div>
+      <p className="text-support leading-6 text-cv-text-muted">
+        התצוגה נבנית בשרת מהגרסה השמורה, באותו מסלול שמייצר את הקובץ המאושר. אין כאן PDF.
+      </p>
     </section>
   );
 };

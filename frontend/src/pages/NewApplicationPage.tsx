@@ -79,9 +79,9 @@ type SubmitResult =
 export const NewApplicationPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  /* The intake screen is the one place `intake` is the projection's own answer, so it
-     states it rather than relying on the landmark's initial value. */
-  useWorkflowStage("intake");
+  /* Intake creates the job the CV workflow later acts on; it is not a stage of that
+     workflow, so this screen reports none rather than claiming step 1. */
+  useWorkflowStage("none");
   const {
     formState: { errors },
     getValues,
