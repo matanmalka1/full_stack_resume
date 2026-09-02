@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import {
   applicationDetailQueryKey,
@@ -9,7 +9,8 @@ import {
 } from "../../api/applications";
 import type { ApplicationDetail } from "../../api/contracts";
 import { archiveWorkingDraft, workingDraftQueryKey, workingDraftQueryOptions } from "../../api/drafts";
-import { executionProvider, settingsQueryOptions } from "../../api/settings";
+import { executionProvider } from "../../api/settings";
+import { useSettings } from "../../api/useSettings";
 import {
   type QueuedOperation,
   isTerminalOperation,
@@ -23,23 +24,17 @@ import { applicationActionPlan } from "./applicationActionPlan";
    sent - everything the panel needs to decide, apart from how it is drawn. */
 export const useApplicationActionsMutations = (detail: ApplicationDetail, onQueued: (operationId: string) => void) => {
   const queryClient = useQueryClient();
-  /* App owns the live settings read. This subscription consumes that cache without
-     opening one request per action panel; isolated renders retain the safe deterministic
-     default until a shell-provided value exists. */
-  const settingsQuery = useQuery({ ...settingsQueryOptions, enabled: false });
-  const settings = settingsQuery.data?.settings;
+  const { settings } = useSettings();
   const provider = executionProvider(settings);
   const snapshotId = detail.active_job_snapshot_id;
   const plan = applicationActionPlan(detail);
   /* One key per snapshot: an answer that never arrived can be sent again without
-     queueing a second analysis of the same posting. */
-  const analyzeKey = useMemo(() => crypto.randomUUID(), [snapshotId]);
+     queueing a second analysis of the same posting. Derived rather than cached, since a
+     discarded useMemo would mint a new key on the same snapshot and break that guarantee. */
+  const analyzeKey = `analyze:${detail.application.id}:${snapshotId}`;
   /* One key per source pair, for the same reason: a resent generate for the same analysis
      and plan is the same command, and a different pair is a different one. */
-  const draftKey = useMemo(
-    () => crypto.randomUUID(),
-    [plan.createDraft?.analysisId, plan.createDraft?.selectionPlanId],
-  );
+  const draftKey = `draft:${plan.createDraft?.analysisId}:${plan.createDraft?.selectionPlanId}`;
 
   /* Both commands queue durable work and answer `202` with the Operation they queued, so
      both follow it the same way - and neither navigates.
@@ -113,7 +108,7 @@ export const useApplicationActionsMutations = (detail: ApplicationDetail, onQueu
   const [keepPrevious, setKeepPrevious] = useState(true);
   /* One key per replaced version: a resent answer for the same version is the same
      command, and a new version is a different one. */
-  const replaceKey = useMemo(() => crypto.randomUUID(), [staleDraftId, editVersion]);
+  const replaceKey = `replace:${staleDraftId}:${editVersion}`;
 
   const draft = useMutation({
     mutationFn: async () => {
@@ -205,8 +200,7 @@ export const useApplicationActionsMutations = (detail: ApplicationDetail, onQueu
      in-flight mutations close it. */
   const commandsBlocked = workInFlight || archive.isPending || replace.isPending;
 
-  const error =
-    settingsQuery.error ?? staleDraftQuery.error ?? analyze.error ?? draft.error ?? replace.error ?? archive.error;
+  const error = staleDraftQuery.error ?? analyze.error ?? draft.error ?? replace.error ?? archive.error;
 
   return {
     analyze,

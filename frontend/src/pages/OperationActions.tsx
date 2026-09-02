@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
 
 import type { Operation } from "../api/contracts";
 import { cancelOperation, operationQueryKey, retryOperation } from "../api/operations";
@@ -27,8 +26,10 @@ interface OperationActionsProps {
 export const OperationActions = ({ collapsed = false, onQueued, operation }: OperationActionsProps) => {
   const queryClient = useQueryClient();
   /* One key per original Operation: an uncertain response can be retried safely, while
-     navigating to the newly queued Operation rotates the key for its own future retry. */
-  const retryKey = useMemo(() => crypto.randomUUID(), [operation.id]);
+     navigating to the newly queued Operation rotates the key for its own future retry.
+     Derived rather than cached, since a discarded useMemo would mint a new key on the
+     same Operation and send a second one to the server. */
+  const retryKey = `retry:${operation.id}`;
 
   const cancel = useMutation({
     mutationFn: () => cancelOperation(operation.id),

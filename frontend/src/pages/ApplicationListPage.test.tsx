@@ -297,10 +297,10 @@ describe("ApplicationListPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "תצוגת שלבי גיוס" }));
     const pipeline = screen.getByRole("list", { name: "מועמדויות לפי שלב גיוס" });
-    expect(within(pipeline).getByRole("heading", { name: "נשמרו / בהכנה" })).toBeInTheDocument();
-    expect(within(pipeline).getByRole("heading", { name: "ראיונות והצעות" })).toBeInTheDocument();
+    expect(within(pipeline).getByRole("heading", { name: "נשמר" })).toBeInTheDocument();
+    expect(within(pipeline).getByRole("heading", { name: "ראיונות ומטלות" })).toBeInTheDocument();
     expect(within(pipeline).getByRole("heading", { name: "תהליכים סגורים" })).toBeInTheDocument();
-    expect(within(pipeline).getAllByText("אין מועמדויות בשלב זה")).toHaveLength(2);
+    expect(within(pipeline).getAllByText("אין מועמדויות בשלב זה")).toHaveLength(3);
     expect(within(pipeline).getByRole("link", { name: "Acme" })).toHaveAttribute("href", "/applications/app-1");
     expect(within(pipeline).getAllByText("ממתין לניתוח המשרה")).toHaveLength(3);
     expect(within(pipeline).getByText("Follow up")).toBeInTheDocument();

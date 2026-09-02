@@ -15,7 +15,8 @@ import {
   workingDraftQueryOptions,
 } from "../../api/drafts";
 import { type QueuedOperation, operationQueryKey } from "../../api/operations";
-import { aiRegenerationAvailable, settingsQueryOptions } from "../../api/settings";
+import { aiRegenerationAvailable } from "../../api/settings";
+import { useSettings } from "../../api/useSettings";
 import { useWorkflowStage, workflowDestinations } from "../../app/WorkflowLandmark";
 import { useWatchedOperation } from "../../hooks/useWatchedOperation";
 import { removability } from "./claimRemoval";
@@ -28,8 +29,8 @@ import { useDraftAutosave } from "./useDraftAutosave";
    backend, not by a rule invented here. */
 export const useDraftEditorState = (applicationId: string) => {
   const applicationQuery = useQuery(applicationDetailQueryOptions(applicationId));
-  const settingsQuery = useQuery({ ...settingsQueryOptions, enabled: false });
-  const regenerationAvailable = aiRegenerationAvailable(settingsQuery.data?.settings);
+  const { isPending: settingsPending, settings } = useSettings();
+  const regenerationAvailable = aiRegenerationAvailable(settings);
   const detail: ApplicationDetail | undefined = applicationQuery.data;
   useWorkflowStage(
     detail === undefined ? "unknown" : detail.preparation_state,
@@ -244,6 +245,7 @@ export const useDraftEditorState = (applicationId: string) => {
     selection,
     setApprovalOpen,
     setApprovedRevisionId,
+    settingsPending,
     setValidationStale,
     unsaved,
     validationStale,

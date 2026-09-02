@@ -26,14 +26,10 @@ import { ApplicationListTable } from "./application-list/ApplicationListTable";
 import { CloseApplicationDialog } from "./application-list/CloseApplicationDialog";
 import { DashboardHeader } from "./application-list/DashboardHeader";
 import { MetricsKpiGrid } from "./application-list/MetricsKpiGrid";
-import {
-  PipelineStagesBar,
-  pipelineStages,
-  selectedPipelineStage,
-  type PipelineStageId,
-} from "./application-list/PipelineStagesBar";
+import { PipelineStagesBar } from "./application-list/PipelineStagesBar";
 import { QuickIntakeDialog } from "./application-list/QuickIntakeDialog";
 import { QuickStatusUpdateDialog } from "./application-list/QuickStatusUpdateDialog";
+import { type RecruitmentStageId, recruitmentStages, selectedStage } from "./application-list/recruitmentStages";
 import { UrgentActionHub } from "./application-list/UrgentActionHub";
 import { PAGE_SIZE, paramsFromQuery, queryFromParams } from "./applicationListParams";
 
@@ -112,7 +108,7 @@ export const ApplicationListPage = () => {
     limit: 1,
   };
   const stageMetricQueries = useQueries({
-    queries: pipelineStages.map((stage) =>
+    queries: recruitmentStages.map((stage) =>
       applicationListQueryOptions({
         ...stageMetricQueryBase,
         recruitmentStatuses: stage.statuses,
@@ -120,8 +116,8 @@ export const ApplicationListPage = () => {
     ),
   });
   const recruitmentStageCounts = Object.fromEntries(
-    pipelineStages.map((stage, index) => [stage.id, stageMetricQueries[index]?.data?.matched]),
-  ) as Partial<Record<PipelineStageId, number | undefined>>;
+    recruitmentStages.map((stage, index) => [stage.id, stageMetricQueries[index]?.data?.matched]),
+  ) as Partial<Record<RecruitmentStageId, number | undefined>>;
 
   useWorkflowStage("none");
 
@@ -186,10 +182,10 @@ export const ApplicationListPage = () => {
           counts={recruitmentStageCounts}
           filterActive={(query.recruitmentStatuses?.length ?? 0) > 0}
           onSelectStage={(stageId) => {
-            const stage = pipelineStages.find((candidate) => candidate.id === stageId);
+            const stage = recruitmentStages.find((candidate) => candidate.id === stageId);
             updateQuery({ ...query, recruitmentStatuses: stage?.statuses ?? [] });
           }}
-          selectedStage={selectedPipelineStage(query.recruitmentStatuses)}
+          selectedStage={selectedStage(query.recruitmentStatuses)}
         />
         <UrgentActionHub
           clearingApplicationId={clearNextAction.isPending ? (clearNextAction.variables ?? null) : null}

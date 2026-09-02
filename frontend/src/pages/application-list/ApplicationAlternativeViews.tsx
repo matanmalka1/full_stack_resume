@@ -14,6 +14,7 @@ import { actionLabel, recruitmentStatusLabel } from "../application/applicationL
 import { operationTypeLabels, statusLabels, statusTones } from "../operationLabels";
 import { applicationAttention, formatApplicationDate, isApplicationClosed } from "./applicationListPresentation";
 import { ApplicationIdentity, ApplicationNextAction, ApplicationPreparationBadge } from "./ApplicationListParts";
+import { closedStage, recruitmentStages } from "./recruitmentStages";
 
 interface AlternativeViewProps {
   items: readonly ApplicationListItem[];
@@ -164,27 +165,11 @@ interface PipelineColumn {
   tone: "neutral" | "accent" | "warning" | "success";
 }
 
+/* Same stage grouping the filter bar uses, plus the closed applications the bar never
+   shows a column for - the board covers the active stages and where work ends up. */
 const pipelineColumns: readonly PipelineColumn[] = [
-  { id: "saved", title: "נשמרו / בהכנה", statuses: ["saved"], tone: "neutral" },
-  { id: "applied", title: "הוגשו", statuses: ["applied"], tone: "accent" },
-  {
-    id: "screening",
-    title: "סינון ומטלות",
-    statuses: ["recruiter_screen", "assignment"],
-    tone: "warning",
-  },
-  {
-    id: "interviews",
-    title: "ראיונות והצעות",
-    statuses: ["interview", "final_stage", "offer", "accepted"],
-    tone: "success",
-  },
-  {
-    id: "closed",
-    title: "תהליכים סגורים",
-    statuses: ["rejected", "withdrawn", "closed"],
-    tone: "neutral",
-  },
+  ...recruitmentStages.map((stage) => ({ id: stage.id, title: stage.label, statuses: stage.statuses, tone: stage.tone })),
+  { id: closedStage.id, title: closedStage.label, statuses: closedStage.statuses, tone: closedStage.tone },
 ];
 
 const pipelineToneClasses: Record<PipelineColumn["tone"], string> = {

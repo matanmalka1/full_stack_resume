@@ -1,62 +1,21 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
-import {
-  JOB_TEXT_MAX_BYTES,
-  acknowledgementApplies,
-  createApplication,
-  duplicateCheck,
-  duplicateMatchesFromProblem,
-  startAnalysis,
-} from "../../api/applications";
-import type { ApplicationIntake, DuplicateMatch } from "../../api/contracts";
-import { executionProvider, settingsQueryOptions } from "../../api/settings";
+import { JOB_TEXT_MAX_BYTES } from "../../api/applications";
 import { ErrorCallout } from "../../app/ErrorCallout";
-import { useAppForm } from "../../forms/useAppForm";
 import { Button } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 import { Dialog } from "../../ui/Dialog";
 import { Field } from "../../ui/Field";
 import { TextArea, TextInput } from "../../ui/TextInput";
 import { DuplicateChoices } from "../new-application/DuplicateChoices";
+import {
+  LABEL_MAX_CHARACTERS,
+  SOURCE_URL_MAX_CHARACTERS,
+  emptyIntakeFields,
+  useApplicationIntake,
+} from "../new-application/useApplicationIntake";
 
-const LABEL_MAX_CHARACTERS = 500;
-const SOURCE_URL_MAX_CHARACTERS = 2048;
 const FORM_ID = "quick-application-intake";
-
-interface QuickIntakeFields {
-  company: string;
-  target_role: string;
-  source_url: string;
-  job_text: string;
-}
-
-const emptyFields: QuickIntakeFields = {
-  company: "",
-  target_role: "",
-  source_url: "",
-  job_text: "",
-};
-
-const intakeFrom = (fields: QuickIntakeFields): ApplicationIntake => {
-  const sourceUrl = fields.source_url.trim();
-
-  return {
-    company: fields.company.trim(),
-    target_role: fields.target_role.trim(),
-    job_text: fields.job_text,
-    source_url: sourceUrl === "" ? null : sourceUrl,
-  };
-};
-
-interface SubmitInput {
-  acknowledged: boolean;
-  intake: ApplicationIntake;
-}
-
-type SubmitResult =
-  | { kind: "duplicates"; matches: DuplicateMatch[] }
-  | { kind: "created"; analysisQueued: boolean; applicationId: string };
 
 interface QuickIntakeDialogProps {
   onClose: () => void;
@@ -65,86 +24,21 @@ interface QuickIntakeDialogProps {
 }
 
 export const QuickIntakeDialog = ({ onClose, onCreated, open }: QuickIntakeDialogProps) => {
-  const queryClient = useQueryClient();
+  const { answeredIntake, duplicates, failure, form, runSubmit, staleAnswer, submit } = useApplicationIntake({
+    onCreated: (result) => onCreated(result.applicationId, result.analysisQueued),
+  });
   const {
     formState: { errors },
-    getValues,
-    handleSubmit,
     register,
     reset,
-    watch,
-  } = useAppForm<QuickIntakeFields>({ defaultValues: emptyFields });
-
-  const submit = useMutation<SubmitResult, Error, SubmitInput>({
-    mutationFn: async ({ acknowledged, intake }) => {
-      if (!acknowledged) {
-        const matches = await duplicateCheck(intake);
-
-        if (matches.length > 0) {
-          return { kind: "duplicates", matches };
-        }
-      }
-
-      const created = await createApplication(intake, acknowledged);
-
-      try {
-        const { settings } = await queryClient.ensureQueryData(settingsQueryOptions);
-        await startAnalysis(
-          created.application_id,
-          created.job_snapshot_id,
-          `create:${created.application_id}:${created.job_snapshot_id}`,
-          executionProvider(settings),
-        );
-        return { kind: "created", analysisQueued: true, applicationId: created.application_id };
-      } catch {
-        return { kind: "created", analysisQueued: false, applicationId: created.application_id };
-      }
-    },
-    onSuccess: (result) => {
-      if (result.kind === "created") {
-        onCreated(result.applicationId, result.analysisQueued);
-      }
-    },
-  });
-
-  const submitStateRef = useRef({ hasResult: false, reset: () => {} });
-
-  useEffect(() => {
-    submitStateRef.current = {
-      hasResult: submit.data !== undefined || submit.error !== null,
-      reset: submit.reset,
-    };
-  });
-
-  useEffect(() => {
-    const subscription = watch(() => {
-      if (submitStateRef.current.hasResult) {
-        submitStateRef.current.reset();
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [watch]);
+  } = form;
 
   useEffect(() => {
     if (!open) {
-      reset(emptyFields);
+      reset(emptyIntakeFields);
       submit.reset();
     }
   }, [open, reset, submit.reset]);
-
-  const runSubmit = (acknowledgedIntake: ApplicationIntake | undefined) =>
-    handleSubmit((fields) => {
-      const intake = intakeFrom(fields);
-      submit.mutate({ acknowledged: acknowledgementApplies(acknowledgedIntake, intake), intake });
-    });
-
-  const answeredIntake = submit.variables?.intake;
-  const acknowledgementRequired = duplicateMatchesFromProblem(submit.error);
-  const settledMatches = acknowledgementRequired ?? (submit.data?.kind === "duplicates" ? submit.data.matches : null);
-  const answerIsCurrent = acknowledgementApplies(answeredIntake, intakeFrom(getValues()));
-  const duplicates = answerIsCurrent ? settledMatches : null;
-  const staleAnswer = !answerIsCurrent && settledMatches !== null;
-  const failure = acknowledgementRequired === null ? submit.error : null;
 
   return (
     <Dialog

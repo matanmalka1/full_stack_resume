@@ -56,6 +56,7 @@ export const DraftEditorPage = () => {
     selection,
     setApprovalOpen,
     setApprovedRevisionId,
+    settingsPending,
     setValidationStale,
     unsaved,
     validationStale,
@@ -263,7 +264,7 @@ export const DraftEditorPage = () => {
                   </Card>
                 ))}
 
-                {regenerationAvailable ? null : (
+                {regenerationAvailable || settingsPending ? null : (
                   <Callout title="יצירה מחדש באמצעות AI אינה זמינה" tone="neutral">
                     יש להגדיר ספק ולהפעיל AI במסך ההגדרות. לא יתבצע מעבר דטרמיניסטי שקט.
                     <div className="mt-3">

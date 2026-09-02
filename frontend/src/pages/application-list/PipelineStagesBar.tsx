@@ -1,44 +1,8 @@
-import { Award, Bookmark, PhoneCall, Send, Users } from "lucide-react";
-
-import type { RecruitmentStatus } from "../../api/contracts";
 import { Card } from "../../ui/Card";
 import { cx } from "../../ui/cx";
+import { type RecruitmentStageId, type RecruitmentStageTone, recruitmentStages } from "./recruitmentStages";
 
-export const pipelineStages = [
-  { id: "saved", label: "נשמר", statuses: ["saved"], icon: Bookmark, tone: "neutral" },
-  { id: "applied", label: "הוגש", statuses: ["applied"], icon: Send, tone: "accent" },
-  {
-    id: "screening",
-    label: "סינון טלפוני",
-    statuses: ["recruiter_screen"],
-    icon: PhoneCall,
-    tone: "warning",
-  },
-  {
-    id: "interviews",
-    label: "ראיונות ומטלות",
-    statuses: ["interview", "assignment"],
-    icon: Users,
-    tone: "success",
-  },
-  {
-    id: "offer",
-    label: "שלב סופי והצעה",
-    statuses: ["final_stage", "offer", "accepted"],
-    icon: Award,
-    tone: "success",
-  },
-] as const satisfies readonly {
-  id: string;
-  label: string;
-  statuses: readonly RecruitmentStatus[];
-  icon: typeof Bookmark;
-  tone: "neutral" | "accent" | "warning" | "success";
-}[];
-
-export type PipelineStageId = (typeof pipelineStages)[number]["id"];
-
-const toneClasses: Record<(typeof pipelineStages)[number]["tone"], { active: string; count: string; icon: string }> = {
+const toneClasses: Record<RecruitmentStageTone, { active: string; count: string; icon: string }> = {
   neutral: {
     active: "border-cv-border-strong ring-cv-border/40",
     count: "bg-cv-surface-sunken text-cv-text-muted",
@@ -61,23 +25,11 @@ const toneClasses: Record<(typeof pipelineStages)[number]["tone"], { active: str
   },
 };
 
-export const selectedPipelineStage = (statuses: readonly RecruitmentStatus[] | undefined): PipelineStageId | null => {
-  if (statuses == null || statuses.length === 0) {
-    return null;
-  }
-
-  return (
-    pipelineStages.find((stage) =>
-      statuses.every((status) => (stage.statuses as readonly RecruitmentStatus[]).includes(status)),
-    )?.id ?? null
-  );
-};
-
 interface PipelineStagesBarProps {
-  counts: Partial<Record<PipelineStageId, number | undefined>>;
+  counts: Partial<Record<RecruitmentStageId, number | undefined>>;
   filterActive: boolean;
-  onSelectStage: (stage: PipelineStageId | null) => void;
-  selectedStage: PipelineStageId | null;
+  onSelectStage: (stage: RecruitmentStageId | null) => void;
+  selectedStage: RecruitmentStageId | null;
 }
 
 export const PipelineStagesBar = ({ counts, filterActive, onSelectStage, selectedStage }: PipelineStagesBarProps) => (
@@ -99,7 +51,7 @@ export const PipelineStagesBar = ({ counts, filterActive, onSelectStage, selecte
     </div>
 
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-      {pipelineStages.map((stage) => {
+      {recruitmentStages.map((stage) => {
         const active = selectedStage === stage.id;
         const colors = toneClasses[stage.tone];
         const Icon = stage.icon;
