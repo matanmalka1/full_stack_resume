@@ -230,4 +230,23 @@ describe("useDraftAutosave", () => {
       claim_removals: ["c-1"],
     });
   });
+
+  it("flushes an edit that is still waiting for the debounce when the editor unmounts", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(updateResponse(5));
+    vi.stubGlobal("fetch", fetchMock);
+    const { result, unmount } = setup();
+
+    act(() => {
+      result.current.queueEdit(patch("c-1", "leaving the editor"));
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    unmount();
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(bodyOf(fetchMock.mock.calls[0])).toEqual({
+      claim_edits: [patch("c-1", "leaving the editor")],
+      claim_removals: [],
+    });
+  });
 });

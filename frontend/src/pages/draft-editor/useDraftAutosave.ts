@@ -141,6 +141,11 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
        returned. */
     void send();
   }, [onConflict, onSaved, publish, restore, workingDraftId]);
+  const latestSend = useRef(send);
+
+  useEffect(() => {
+    latestSend.current = send;
+  }, [send]);
 
   const schedule = useCallback(() => {
     if (timer.current !== null) {
@@ -219,7 +224,9 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
     () => () => {
       if (timer.current !== null) {
         clearTimeout(timer.current);
+        timer.current = null;
       }
+      void latestSend.current();
     },
     [],
   );

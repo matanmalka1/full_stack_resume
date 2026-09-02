@@ -1,7 +1,6 @@
-import { BadgeCheck, BookOpen, Clock3, Database, ShieldCheck, Tags, type LucideIcon } from "lucide-react";
+import { BookOpen, Database, Tags } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
-import type { FactStatus } from "../../api/contracts";
 import { factsQueryOptions } from "../../api/facts";
 import { ErrorCallout } from "../../app/ErrorCallout";
 import { Card } from "../../ui/Card";
@@ -9,25 +8,7 @@ import { EmptyState } from "../../ui/EmptyState";
 import { LtrText } from "../../ui/LtrText";
 import { SectionHeader } from "../../ui/SectionHeader";
 import { StatusBadge } from "../../ui/StatusBadge";
-import type { StatusTone } from "../../ui/status";
-
-const statusLabels: Record<FactStatus, string> = {
-  pending: "ממתינה לאישור",
-  confirmed: "אושרה",
-  canonical: "מקור אמת",
-};
-
-const statusTones: Record<FactStatus, StatusTone> = {
-  pending: "warning",
-  confirmed: "progress",
-  canonical: "success",
-};
-
-const statusIcons: Record<FactStatus, LucideIcon> = {
-  pending: Clock3,
-  confirmed: BadgeCheck,
-  canonical: ShieldCheck,
-};
+import { factLabel, factStatusIcons, factStatusLabels, factStatusTones } from "../facts/factLabels";
 
 export const CanonicalFactsBrowser = () => {
   const query = useQuery(factsQueryOptions());
@@ -66,7 +47,7 @@ export const CanonicalFactsBrowser = () => {
       ) : (
         <ul className="mt-4 max-h-[32rem] divide-y divide-cv-border overflow-y-auto rounded-control border border-cv-border">
           {items.map(({ fact, recorded_status: recordedStatus }) => {
-            const label = fact.renderings.he ?? fact.renderings.en ?? fact.meaning;
+            const label = factLabel(fact);
             const auditMismatch = recordedStatus !== fact.status;
 
             return (
@@ -84,10 +65,10 @@ export const CanonicalFactsBrowser = () => {
                   </div>
                   <StatusBadge
                     className="shrink-0 px-2.5 py-0.5"
-                    icon={statusIcons[fact.status]}
-                    tone={statusTones[fact.status]}
+                    icon={factStatusIcons[fact.status]}
+                    tone={factStatusTones[fact.status]}
                   >
-                    {statusLabels[fact.status]}
+                    {factStatusLabels[fact.status]}
                   </StatusBadge>
                 </div>
 

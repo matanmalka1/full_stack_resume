@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
-import type { CreateFactRequest, Fact, FactStatus } from "../api/contracts";
+import type { CreateFactRequest, FactStatus } from "../api/contracts";
 import {
   attachFact,
   createPendingFact,
@@ -18,6 +18,7 @@ import { Checkbox } from "../ui/Checkbox";
 import { Field } from "../ui/Field";
 import { Select } from "../ui/Select";
 import { TextArea, TextInput } from "../ui/TextInput";
+import { factLabel, factStatusLabels } from "./facts/factLabels";
 
 type FactSource = CreateFactRequest["source"];
 type FactStyle = CreateFactRequest["resume_style"];
@@ -37,14 +38,6 @@ const styleLabels: Record<FactStyle, string> = {
   date: "תאריך",
   contact: "פרט קשר",
 };
-
-const statusLabels: Record<FactStatus, string> = {
-  pending: "ממתינה",
-  confirmed: "אושרה",
-  canonical: "מקור אמת",
-};
-
-const factLabel = (fact: Fact): string => fact.renderings.he ?? fact.renderings.en ?? fact.meaning;
 
 export const FactLifecyclePanel = ({ profile, sections }: { profile: string | null; sections: string[] }) => {
   const queryClient = useQueryClient();
@@ -164,7 +157,7 @@ export const FactLifecyclePanel = ({ profile, sections }: { profile: string | nu
               {(factsQuery.data?.items.length ?? 0) === 0 ? <option value="">אין עדיין עובדות</option> : null}
               {factsQuery.data?.items.map(({ fact }) => (
                 <option key={fact.fact_id} value={fact.fact_id}>
-                  {factLabel(fact)} · {statusLabels[fact.status]}
+                  {factLabel(fact)} · {factStatusLabels[fact.status]}
                 </option>
               ))}
             </Select>
@@ -175,7 +168,7 @@ export const FactLifecyclePanel = ({ profile, sections }: { profile: string | nu
             <p className="font-semibold text-cv-text" dir="auto">
               {factLabel(selected)}
             </p>
-            <p className="mt-1 text-support text-cv-text-muted">{statusLabels[selected.status]}</p>
+            <p className="mt-1 text-support text-cv-text-muted">{factStatusLabels[selected.status]}</p>
             <p className="mt-2 text-support text-cv-text-muted" dir="auto">
               {selected.meaning}
             </p>
@@ -191,7 +184,7 @@ export const FactLifecyclePanel = ({ profile, sections }: { profile: string | nu
               <li className="border-s-2 border-cv-border ps-3 text-support text-cv-text-muted" key={event.id}>
                 {event.from_status == null
                   ? "נוצרה כממתינה"
-                  : `${statusLabels[event.from_status as FactStatus] ?? event.from_status} ← ${statusLabels[event.to_status as FactStatus] ?? event.to_status}`}
+                  : `${factStatusLabels[event.from_status as FactStatus] ?? event.from_status} ← ${factStatusLabels[event.to_status as FactStatus] ?? event.to_status}`}
                 {event.reason === "" ? "" : ` · ${event.reason}`}
               </li>
             ))}

@@ -27,10 +27,10 @@
 | F3 | High | Medium | correctness | ✅ בוצע — useApplicationActionsMutations.ts:36,39,116, OperationActions.tsx:31 | useMemo+UUID כזהות יציבה | מפתח נגזר דטרמיניסטי |
 | F4 | High | High | גבול שכבות | applicationListPresentation.ts:106 ↔ queries.py:327 | חוק עסקי בשני runtime | שדה בפרויקציה |
 | F5 | Medium | High | state/כפילות | ✅ בוצע — useDraftEditorState.ts:31, AutomaticDraftNotice.tsx:19, useApplicationActionsMutations.ts:29 | enabled:false × 3 + הבהוב | hook useSettings() |
-| F6 | Medium | High | כפילות | FactLifecyclePanel.tsx:41-47 ↔ CanonicalFactsBrowser.tsx:14-30,69 | אוצר מילים לעובדות פעמיים, סותר | factLabels.ts |
-| F7 | Medium | High | כפילות + סמנטיקה | UrgentActionHub.tsx:31-63 ↔ applicationListPresentation.ts:14-27 | שני חישובי "באיחור" שונים | פונקציה אחת |
-| F8 | Medium | High | כפילות | useRevisionPageState.ts:95-106 | גזירה מחדש של warnings מהשרת | להשתמש ב-warningTitle |
-| F9 | Medium | Medium | data loss | useDraftAutosave.ts:218-225 | unmount מוחק עריכה תלויה | flush ב-unmount |
+| F6 | Medium | High | כפילות | ✅ בוצע — FactLifecyclePanel.tsx:41-47 ↔ CanonicalFactsBrowser.tsx:14-30,69 | אוצר מילים לעובדות פעמיים, סותר | factLabels.ts |
+| F7 | Medium | High | כפילות + סמנטיקה | ✅ בוצע — UrgentActionHub.tsx:31-63 ↔ applicationListPresentation.ts:14-27 | שני חישובי "באיחור" שונים | פונקציה אחת |
+| F8 | Medium | High | כפילות | ✅ בוצע — useRevisionPageState.ts:95-106 | גזירה מחדש של warnings מהשרת | להשתמש ב-warningTitle |
+| F9 | Medium | Medium | data loss | ✅ בוצע — useDraftAutosave.ts:218-225 | unmount מוחק עריכה תלויה | flush ב-unmount |
 | F10 | Medium | High | SoC | FactLifecyclePanel.tsx (334) | 10 useState, לא useAppForm | פיצול + טופס |
 | F11 | Medium | High | חילוץ | DraftEditorPage.tsx:103-264 | 2 בלוקי JSX גדולים inline | 2 קומפוננטות |
 | F12 | Medium | High | efficiency | ApplicationListPage.tsx:99-121 | 10 שאילתות רשימה לרינדור | endpoint counts |
@@ -200,7 +200,7 @@ useSettings() → { settings: Settings | undefined, isPending: boolean }
 
 Trade-offs. שינוי התנהגותי קטן וחיובי (ה-callout מפסיק להבהב). מוגן ע"י DraftEditorPage.test.tsx.
 
-### F6 — אוצר מילים לעובדות פעמיים, וסותר Medium / High
+### F6 — אוצר מילים לעובדות פעמיים, וסותר Medium / High ✅ בוצע
 
 FactLifecyclePanel.tsx:41-45: pending: "ממתינה"
 CanonicalFactsBrowser.tsx:14-18: pending: "ממתינה לאישור"
@@ -211,7 +211,7 @@ CanonicalFactsBrowser.tsx:14-18: pending: "ממתינה לאישור"
 
 המלצה. frontend/src/pages/facts/factLabels.ts עם factStatusLabels/factStatusTones/factStatusIcons (ממצים על FactStatus) ו-factLabel(fact). Refactor + החלטת נוסח אחת (איזו מהשתיים נשארת). ללא כיסוי טסטים כרגע.
 
-### F7 — שני חישובי "באיחור" שנותנים תשובות שונות Medium / High
+### F7 — שני חישובי "באיחור" שנותנים תשובות שונות Medium / High ✅ בוצע
 
 applicationListPresentation.ts:14-27 — isNextActionOverdue: new Date(value) מול חצות מקומי.
 UrgentActionHub.tsx:31-63 — localDateKey + isDateOnly + השוואת מחרוזות.
@@ -223,7 +223,7 @@ UrgentActionHub.tsx:31-63 — localDateKey + isDateOnly + השוואת מחרו�
 
 המלצה. להשאיר את isNextActionOverdue כבעלים היחיד, להוסיף לו isDueToday, ולמחוק localDateKey/isDateOnly מהמוקד. דורש הכרעה על אזור הזמן הקנוני — זו תזכורת שהמשתמש קבע, ולכן "מקומי" הוא ככל הנראה התשובה, כלומר isNextActionOverdue צריך לפרוס ${value}T00:00:00 ולא UTC. אין טסטים על אף אחד מהשניים; זה מקום שמצדיק כיסוי חדש.
 
-### F8 — הגזירה של "גרסה מוכנה ישנה" בשלושה עותקים Medium / High
+### F8 — הגזירה של "גרסה מוכנה ישנה" בשלושה עותקים Medium / High ✅ בוצע
 
 useRevisionPageState.ts:95-102 משווה job_snapshot_id/job_analysis_id ומרכיב משפט עברי משלו. שתי השורות אחריו (:103-106) מסננות החוצה את READY_REVISION_FOR_OLDER_SNAPSHOT ו-READY_REVISION_FOR_OLDER_ANALYSIS — בדיוק את שתי האזהרות שהשרת כבר שלח על אותה מסקנה. ול-applicationLabels.ts:190-195 כבר יש כותרות עבריות לשני הקודים האלה.
 
@@ -231,7 +231,7 @@ useRevisionPageState.ts:95-102 משווה job_snapshot_id/job_analysis_id ומר
 
 המלצה. למחוק את historicalContext ואת המסנן, ולרנדר את כל האזהרות דרך warningTitle. אם הנוסח הארוך חשוב, להעביר אותו למפה כטקסט גוף לצד הכותרת. Refactor, מקטין קוד. מוגן חלקית ע"י StageEPages.test.tsx.
 
-### F9 — autosave מאבד עריכה בזמן ה-debounce Medium / Medium
+### F9 — autosave מאבד עריכה בזמן ה-debounce Medium / Medium ✅ בוצע
 
 useDraftAutosave.ts:218-225:
 
@@ -492,7 +492,7 @@ Rollback: F4 בקומיט אחד הפיך; F13 (תזוזת קבצים בלבד) 
 לא פירשתי אף אחת מהן בשקט.
 
 - F2 — קיבוץ השלבים. assignment ו-final_stage מקובצים אחרת בסרגל הפילטר ובלוח. אי אפשר לאחד בלי להחליט איזה מהשניים נכון מוצרית.
-- F7 — אזור זמן של תזכורת. האם next_action_date הוא יום קלנדרי מקומי (ואז isNextActionOverdue צריך לפרוס מקומית) או UTC? כרגע שני המימושים חלוקים.
+- ✅ F7 הוכרע — next_action_date הוא יום קלנדרי מקומי, בהתאם להגדרת "לפני היום" במפרט ולערך date-only בצד השרת.
 - F4/F12 — האם לשלם את מחיר ה-gate. שניהם משפרים את הארכיטקטורה אבל גוררים את בדיקת הצנרת הדטרמיניסטית המלאה. F4 מסיר סתירה מול AGENTS.md ולכן מוצדק יותר; F12 הוא אופטימיזציה שלא נמדדה ואני לא ממליץ עליה לפני מדידה.
 - F3 — חלון מפתחות ה-idempotency. מפתח דטרמיניסטי ל-retry אומר שניסיון חוזר אחרי כשל קבוע יחזיר תשובה שמורה. צריך לאשר מול §13 שזו ההתנהגות הרצויה.
 ### 10 הפעולות המומלצות, בסדר ביצוע
@@ -501,9 +501,9 @@ Rollback: F4 בקומיט אחד הפיך; F13 (תזוזת קבצים בלבד) 
 2. ✅ בוצע — F3 — להמיר 4 מפתחות useMemo+UUID למפתחות נגזרים, כמו ארבעת הדטרמיניסטיים שכבר קיימים.
 3. ✅ בוצע — F2 — להכריע את קיבוץ השלבים ולרכז ב-recruitmentStages.ts. (אי-עקביות גלויה למשתמש)
 4. ✅ בוצע — F5 — useSettings() במקום שלושה enabled:false; לתקן את הבהוב ה-callout בעורך.
-5. F9 — flush ל-autosave ב-unmount; להוסיף מקרה ל-useDraftAutosave.test.ts.
-6. F7 — לאחד את חישוב "באיחור" ולהוסיף לו כיסוי טהור.
-7. F6 + F8 — factLabels.ts; למחוק את historicalContext לטובת warningTitle.
+5. ✅ בוצע — F9 — flush ל-autosave ב-unmount; נוסף מקרה ל-useDraftAutosave.test.ts.
+6. ✅ בוצע — F7 — אוחד חישוב "באיחור" ונוסף לו כיסוי טהור.
+7. ✅ בוצע — F6 + F8 — נוסף factLabels.ts; אוצר המילים של warnings רוכז תוך שמירת ההבחנה בין הגרסה המוצגת לגרסה המוכנה האחרונה.
 8. F14 + F17 + F16 + F15 — סבב primitives: QueryState, invalidateApplicationViews, formatDateTime, ViewSwitch.
 9. F10 + F11 — לפצל FactLifecyclePanel (ולהעביר ל-useAppForm) ולחלץ DraftSectionCard + DraftHeaderCard.
 10. F4 — להעביר את חוק "מועמדות סגורה" לפרויקציה, עם מלוא ה-gate. (אחרון: היחיד שנוגע בחוזה)

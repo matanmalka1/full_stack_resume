@@ -6,7 +6,13 @@ import { appRoutes } from "../../app/appRoutes";
 import { Button } from "../../ui/Button";
 import { StatusBadge } from "../../ui/StatusBadge";
 import type { StatusTone } from "../../ui/status";
-import { applicationAttention, formatApplicationDate, isApplicationClosed } from "./applicationListPresentation";
+import {
+  applicationAttention,
+  formatApplicationDate,
+  isApplicationClosed,
+  isDueToday,
+  isNextActionOverdue,
+} from "./applicationListPresentation";
 
 type HubItemType = "attention" | "due_today" | "overdue" | "ready";
 
@@ -28,22 +34,12 @@ interface UrgentActionHubProps {
   onOpenStatusDialog: (application: ApplicationListItem) => void;
 }
 
-const localDateKey = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-const isDateOnly = (value: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(value);
-
 /* This is a priority summary of the current server-projected page, not a second list
    filter. Attention comes from the projection's reason collections, Ready comes from
    its active ready revision, and the date comparison is only a local presentation of a
    stored reminder. One card per Application prevents a single row from occupying the
    entire hub when it happens to satisfy several conditions. */
 const hubItems = (items: readonly ApplicationListItem[], today: Date = new Date()): HubItem[] => {
-  const todayKey = localDateKey(today);
   const due: HubItem[] = [];
   const attention: HubItem[] = [];
   const ready: HubItem[] = [];
@@ -57,10 +53,9 @@ const hubItems = (items: readonly ApplicationListItem[], today: Date = new Date(
     if (
       application.next_action != null &&
       application.next_action_date != null &&
-      isDateOnly(application.next_action_date) &&
-      application.next_action_date <= todayKey
+      (isNextActionOverdue(application.next_action_date, today) || isDueToday(application.next_action_date, today))
     ) {
-      const overdue = application.next_action_date < todayKey;
+      const overdue = isNextActionOverdue(application.next_action_date, today);
       due.push({
         actionLabel: overdue ? "עדכון סטטוס ומשימה" : "פתיחת המועמדות",
         actionTo: overdue ? null : applicationHref,

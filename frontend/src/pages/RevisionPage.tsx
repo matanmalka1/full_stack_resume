@@ -17,6 +17,7 @@ import { SummaryList } from "../ui/SummaryList";
 import { surfaceClasses } from "../ui/Surface";
 import { TextInput } from "../ui/TextInput";
 import { formatDateTime } from "../ui/formatDateTime";
+import { warningDetail, warningTitle } from "./application/applicationLabels";
 import { useRevisionPageState } from "./revision/useRevisionPageState";
 import { ValidationReportView } from "./revision/ValidationReportView";
 
@@ -39,7 +40,7 @@ const RevisionPageContent = ({ approvedRevisionId }: RevisionPageContentProps) =
     detail,
     downloadDecision,
     hasSources,
-    historicalContext,
+    displayedRevisionWarningCode,
     newDraft,
     operationPanel,
     otherWarnings,
@@ -84,13 +85,15 @@ const RevisionPageContent = ({ approvedRevisionId }: RevisionPageContentProps) =
                 fallbackTitle="לא ניתן לטעון את הסבר ההחלטה"
               />
             )}
-            {historicalContext === null ? null : (
-              <Callout title="הגרסה היסטורית בהקשר הפעיל" tone="warning">
-                {historicalContext}
+            {displayedRevisionWarningCode === null ? null : (
+              <Callout title={warningTitle(displayedRevisionWarningCode)} tone="warning">
+                {warningDetail(displayedRevisionWarningCode, "")}
               </Callout>
             )}
             {otherWarnings?.map((warning) => (
-              <Callout key={warning.code} title={warning.message} tone="warning" />
+              <Callout key={warning.code} title={warningTitle(warning.code)} tone="warning">
+                {warningDetail(warning.code, warning.message)}
+              </Callout>
             ))}
             {detail?.newer_draft_in_progress ? (
               <Callout title="קיימת טיוטה חדשה יותר" tone="warning">

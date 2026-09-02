@@ -196,6 +196,15 @@ const warningTitles: Record<string, string> = {
 
 export const warningTitle = (code: string): string => warningTitles[code] ?? "כדאי לשים לב";
 
+const warningDetails: Record<string, string> = {
+  READY_REVISION_FOR_OLDER_SNAPSHOT:
+    "הגרסה המוכנה שייכת לתצלום משרה ישן יותר מהתצלום הפעיל. הקבצים שלה נשארים תקינים וזמינים להורדה.",
+  READY_REVISION_FOR_OLDER_ANALYSIS:
+    "הגרסה המוכנה שייכת לניתוח ישן יותר מהניתוח הפעיל. הקבצים שלה נשארים תקינים וזמינים להורדה.",
+};
+
+export const warningDetail = (code: string, fallback: string): string => warningDetails[code] ?? fallback;
+
 /* The board's named questions, in the order the chips offer them. Keyed by the generated
    union, so a preset added to the application layer fails the build here instead of
    reaching the chip row untranslated.

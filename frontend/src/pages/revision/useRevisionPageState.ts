@@ -92,18 +92,18 @@ export const useRevisionPageState = (approvedRevisionId: string) => {
     },
   });
   const hasSources = detail?.active_analysis_id != null && detail.active_selection_plan_id != null;
-  const historicalContext =
+  const displayedRevisionWarningCode =
     revision === undefined || detail === undefined
       ? null
       : revision.job_snapshot_id !== detail.active_job_snapshot_id
-        ? "הגרסה המוכנה שייכת לתצלום משרה ישן יותר מהתצלום הפעיל. הקבצים שלה נשארים תקינים וזמינים להורדה."
+        ? "READY_REVISION_FOR_OLDER_SNAPSHOT"
         : revision.job_analysis_id !== detail.active_analysis_id
-          ? "הגרסה המוכנה שייכת לניתוח ישן יותר מהניתוח הפעיל. הקבצים שלה נשארים תקינים וזמינים להורדה."
+          ? "READY_REVISION_FOR_OLDER_ANALYSIS"
           : null;
-  const otherWarnings = detail?.warnings.filter(
-    (warning) =>
-      warning.code !== "READY_REVISION_FOR_OLDER_SNAPSHOT" && warning.code !== "READY_REVISION_FOR_OLDER_ANALYSIS",
-  );
+  /* The server warning describes its latest Ready revision, while this route can show
+     any immutable revision. Suppress only the warning this displayed revision already
+     explains; a different latest-Ready warning still carries distinct information. */
+  const otherWarnings = detail?.warnings.filter((warning) => warning.code !== displayedRevisionWarningCode);
   const submittedAtValid = !Number.isNaN(new Date(submittedAt).getTime());
   const downloadDecision = () => {
     if (decisionQuery.data === undefined) return;
@@ -121,7 +121,7 @@ export const useRevisionPageState = (approvedRevisionId: string) => {
     detail,
     downloadDecision,
     hasSources,
-    historicalContext,
+    displayedRevisionWarningCode,
     newDraft,
     operationPanel,
     otherWarnings,

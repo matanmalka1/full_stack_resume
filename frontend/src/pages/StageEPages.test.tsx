@@ -657,7 +657,13 @@ describe("DraftRenderPanel and RevisionPage", () => {
                   active_job_snapshot_id: "snapshot-2",
                   active_analysis_id: "analysis-2",
                   latest_ready_revision_id: "revision-2",
-                  warnings: [],
+                  warnings: [
+                    {
+                      code: "READY_REVISION_FOR_OLDER_ANALYSIS",
+                      message: "The latest Ready revision belongs to an older analysis.",
+                      entity_references: { approved_revision_id: "revision-2" },
+                    },
+                  ],
                 })
               : revision({ job_snapshot_id: "snapshot-1", job_analysis_id: "analysis-1" }),
           ),
@@ -665,8 +671,9 @@ describe("DraftRenderPanel and RevisionPage", () => {
       ),
     );
     renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
-    expect(await screen.findByText("הגרסה היסטורית בהקשר הפעיל")).toBeInTheDocument();
+    expect(await screen.findByText("הגרסה המוכנה שייכת לנוסח משרה ישן")).toBeInTheDocument();
     expect(screen.getByText(/תצלום משרה ישן יותר/)).toBeInTheDocument();
+    expect(screen.getByText("הגרסה המוכנה שייכת לניתוח ישן")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "הורדת PDF" })).toBeInTheDocument();
   });
 

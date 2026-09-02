@@ -11,20 +11,34 @@ export const formatApplicationDate = (value: string): string => {
 
 /* This is a visual comparison against the reader's local date. It does not affect
    filtering, workflow state, or any server-side deadline decision. */
-export const isNextActionOverdue = (value: string | null | undefined, today: Date = new Date()): boolean => {
-  if (value == null) {
-    return false;
+const dateOnlyKey = (value: string | null | undefined): string | null => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value ?? "");
+  if (match === null) {
+    return null;
   }
 
-  const due = new Date(value);
-  if (Number.isNaN(due.getTime())) {
-    return false;
-  }
-
-  const midnight = new Date(today);
-  midnight.setHours(0, 0, 0, 0);
-  return due < midnight;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+  return daysInMonth !== undefined && day >= 1 && day <= daysInMonth ? match[0] : null;
 };
+
+const localDateKey = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+export const isNextActionOverdue = (value: string | null | undefined, today: Date = new Date()): boolean => {
+  const due = dateOnlyKey(value);
+  return due !== null && due < localDateKey(today);
+};
+
+export const isDueToday = (value: string | null | undefined, today: Date = new Date()): boolean =>
+  dateOnlyKey(value) === localDateKey(today);
 
 /* The posting's origin as the one word a row has space for: the host, without `www.`.
    A URL the browser cannot parse is not guessed at - the row falls back to the stored
