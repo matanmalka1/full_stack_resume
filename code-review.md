@@ -25,7 +25,7 @@
 | F1 | High | High | כפילות | ✅ בוצע — QuickIntakeDialog.tsx:23-147 ↔ NewApplicationPage.tsx:37-241 | ~120 שורות intake מועתקות | חילוץ useApplicationIntake |
 | F2 | High | High | כפילות + באג | ✅ בוצע — PipelineStagesBar.tsx:7-37 ↔ ApplicationAlternativeViews.tsx:167-188 | קיבוצי שלבים סותרים | מודול recruitmentStages.ts יחיד |
 | F3 | High | Medium | correctness | ✅ בוצע — useApplicationActionsMutations.ts:36,39,116, OperationActions.tsx:31 | useMemo+UUID כזהות יציבה | מפתח נגזר דטרמיניסטי |
-| F4 | High | High | גבול שכבות | applicationListPresentation.ts:106 ↔ queries.py:327 | חוק עסקי בשני runtime | שדה בפרויקציה |
+| F4 | High | High | גבול שכבות | ✅ בוצע — applicationListPresentation.ts:106 ↔ queries.py:327 | חוק עסקי בשני runtime | שדה בפרויקציה |
 | F5 | Medium | High | state/כפילות | ✅ בוצע — useDraftEditorState.ts:31, AutomaticDraftNotice.tsx:19, useApplicationActionsMutations.ts:29 | enabled:false × 3 + הבהוב | hook useSettings() |
 | F6 | Medium | High | כפילות | ✅ בוצע — FactLifecyclePanel.tsx:41-47 ↔ CanonicalFactsBrowser.tsx:14-30,69 | אוצר מילים לעובדות פעמיים, סותר | factLabels.ts |
 | F7 | Medium | High | כפילות + סמנטיקה | ✅ בוצע — UrgentActionHub.tsx:31-63 ↔ applicationListPresentation.ts:14-27 | שני חישובי "באיחור" שונים | פונקציה אחת |
@@ -33,16 +33,16 @@
 | F9 | Medium | Medium | data loss | ✅ בוצע — useDraftAutosave.ts:218-225 | unmount מוחק עריכה תלויה | flush ב-unmount |
 | F10 | Medium | High | SoC | ✅ בוצע — FactLifecyclePanel.tsx (334) | 10 useState, לא useAppForm | פיצול + טופס |
 | F11 | Medium | High | חילוץ | ✅ בוצע — DraftEditorPage.tsx:103-264 | 2 בלוקי JSX גדולים inline | 2 קומפוננטות |
-| F12 | Medium | High | efficiency | ApplicationListPage.tsx:99-121 | 10 שאילתות רשימה לרינדור | endpoint counts |
-| F13 | Medium | Medium | SoC | queries.py (895) | DTOs + narrowing + mappers | פיצול לחבילה |
+| F12 | Medium | High | efficiency | ✅ בוצע — ApplicationListPage.tsx:99-121 | 10 שאילתות רשימה לרינדור | endpoint counts |
+| F13 | Medium | Medium | SoC | ✅ בוצע — queries.py (895) | DTOs + narrowing + mappers | פיצול לחבילה |
 | F14 | Low | High | Loading | ✅ בוצע — ArtifactsPanel.tsx:205, CanonicalFactsBrowser.tsx:53-66 | מסך ריק / סולם ידני | QueryState |
 | F15 | Low | High | כפילות | ✅ בוצע — ApplicationListPage.tsx:255-277 ↔ ViewSwitch.tsx | switch inline למרות primitive | להשתמש ב-ViewSwitch |
 | F16 | Low | High | כפילות | ✅ בוצע — applicationListPresentation.ts:5-10 | פורמטר תאריך רביעי | style: "date" |
 | F17 | Low | High | כפילות | ✅ בוצע — 8 אתרי invalidateQueries | תבנית חוזרת לא-עקבית | invalidateApplicationViews |
-| F18 | Low | High | error handling | NewApplicationPage.tsx:155, QuickIntakeDialog.tsx:99 | סיבת כשל הניתוח נזרקת | לשמר ProblemDetails |
-| F19 | Low | Medium | validation | RecruitmentExceptionalActions.tsx:78 | toISOString() בלי הגנה | להוסיף בדיקה |
-| F20 | Low | High | גבול | useWatchedOperation.tsx:7,81 | hooks/ תלוי ב-pages/ | להחזיר נתונים, לא JSX |
-| F21 | Low | High | כפילות | 3 מסכים × throw new Error("... rendered without ...") | הגנת param משולשת | useRequiredParam |
+| F18 | Low | High | error handling | ✅ בוצע — NewApplicationPage.tsx:155, QuickIntakeDialog.tsx:99 | סיבת כשל הניתוח נזרקת | לשמר ProblemDetails |
+| F19 | Low | Medium | validation | ✅ בוצע — RecruitmentExceptionalActions.tsx:78 | toISOString() בלי הגנה | להוסיף בדיקה |
+| F20 | Low | High | גבול | ✅ בוצע — useWatchedOperation.tsx:7,81 | hooks/ תלוי ב-pages/ | להחזיר נתונים, לא JSX |
+| F21 | Low | High | כפילות | ✅ בוצע — 3 מסכים × throw new Error("... rendered without ...") | הגנת param משולשת | useRequiredParam |
 
 ## הרחבה על הממצאים המשמעותיים
 
@@ -144,7 +144,7 @@ const retryKey   = useMemo(() => crypto.randomUUID(), [operation.id]); // Operat
 
 Trade-offs. מפתח דטרמיניסטי אומר שניסיון חוזר אחרי כשל קבוע יחזיר את אותה תשובה שמורה במקום להריץ מחדש. במקרה של retry זה דווקא הכוונה. יש לוודא מול docs/spec/state-and-use-cases.md §13 את חלון השמירה של מפתחות. דורש בדיקה מול הספק — אם הספק אומר שהמפתח חייב להתחלף בין ניסיונות, אז הפתרון הוא useRef + מפתח מסומן, לא useMemo. מוגן ע"י StaleDraftCommands.test.tsx.
 
-### F4 — חוק "מועמדות סגורה" חי בשני runtime High / High
+### F4 — חוק "מועמדות סגורה" חי בשני runtime High / High ✅ בוצע
 
 התנהגות קיימת.
 
@@ -275,7 +275,7 @@ DraftSectionCard הוא החילוץ בעל הערך: הוא מבודד את ה�
 
 הערה על ה-hook. useDraftEditorState מחזיר 25 שדות. זה גדול, אבל לא הייתי מפצל אותו: כל השדות תלויים ב-draft/detail המשותפים, וחלוקה תיצור שני hooks שמעבירים זה לזה מצב. useDraftAutosave כבר מפוצל ממנו נכון. זה גבול נכון.
 
-### F12 — הלוח פותח 10 שאילתות רשימה לרינדור Medium / High
+### F12 — הלוח פותח 10 שאילתות רשימה לרינדור Medium / High ✅ בוצע
 
 ApplicationListPage.tsx:99-121: 4 שאילתות preset + 5 שאילתות pipelineStages, כולן limit: 1, נקראות רק בשביל matched. בתוספת שאילתת הרשימה עצמה — 10 בקשות.
 
@@ -285,7 +285,7 @@ ApplicationListPage.tsx:99-121: 4 שאילתות preset + 5 שאילתות pipel
 
 המלצה. אם/כשזה נמדד כאיטי: להוסיף preset_counts ו-recruitment_status_counts לתשובת ApplicationListResponse, בדיוק כפי ש-stage_counts כבר עושה שם (queries.py:190-195) ומאותו נימוק. 10 בקשות → 1. דורש שינוי חוזה ולכן את מלוא ה-gate של F4. לא הייתי עושה את זה לפני מדידה.
 
-### F13 — queries.py מחזיק שלוש אחריויות Medium / Medium
+### F13 — queries.py מחזיק שלוש אחריויות Medium / Medium ✅ בוצע
 
 895 שורות בקובץ אחד, שלושה סוגי תוכן:
 
@@ -314,7 +314,7 @@ F15: ApplicationListPage.tsx:255-277 בונה role="group" + aria-pressed + מפ
 F16: applicationListPresentation.ts:5-10 — formatApplicationDate הוא Intl formatter רביעי, עם אותה הגנת isNaN של formatDateTime. פתרון: DateTimeStyle נוסף "date", ומחיקת המקומי.
 F17: התבנית "בטל detail + list" מופיעה ב-8 מקומות ולא עקבית: await+void בסדר הפוך (ApplicationListPage.tsx:137-138 מול :144-145), Prefix מול Key(id), ומקומות שמבטלים רק את אחד מהשניים. פתרון: invalidateApplicationViews(queryClient, applicationId?) ב-api/applications.ts. זה כן שווה — הבחירה בין prefix ל-key ספציפי היא כרגע החלטה שכל קורא לוקח מחדש, וזו הסיבה לחוסר העקביות.
 
-### F18/F19/F20/F21 — נקודתיים Low
+### F18/F19/F20/F21 — נקודתיים Low ✅ בוצע
 
 F18: NewApplicationPage.tsx:150-160 ו-QuickIntakeDialog.tsx:99-101 בולעים את השגיאה מ-startAnalysis לגמרי. ההחלטה לא להיכשל נכונה (המועמדות והתצלום כבר קיימים). מה שאבד הוא הסיבה: המשתמש רואה "המועמדות נוצרה, אך הניתוח לא הופעל" (JobDetailsPage.tsx:172) בלי לדעת אם זה מפתח AI חסר, worker כבוי, או נפילת רשת. פתרון: להחזיר analysisProblem: ProblemDetails | null ב-SubmitResult ולהציג את ה-detail בתוך ה-callout. הבחנה חשובה: זה expected failure שנרשם, לא unexpected — כרגע הוא מטופל כאילו אין הבדל.
 F19: RecruitmentExceptionalActions.tsx:78 — new Date(fields.submittedAt).toISOString() בלי בדיקה, בעוד useRevisionPageState.ts:107 כן שומר submittedAtValid. required + datetime-local חוסמים את הרוב, אבל אותו טרנספורם ראוי לפונקציה אחת עם אותה הגנה — במיוחד כי localDateTimeInputValue (הכיוון ההפוך) כבר מרוכזת ב-ui/ ואף מכוסה בטסט.
@@ -449,7 +449,7 @@ npm --prefix frontend run e2e -- new-application.spec.ts
 
 Rollback: useApplicationIntake + NewApplicationPage בקומיט אחד, QuickIntakeDialog בשני — כך שאפשר לחזור על אחד מהם בלבד.
 
-### שלב 5 — שינויי חוזה ומבנה (F4, F12, F13) — רק אם מוצדק
+### שלב 5 — שינויי חוזה ומבנה (F4, F12, F13) ✅ בוצע
 
 קבצים: queries.py, openapi/types.ts (מיוצר), applicationListPresentation.ts, 3 צרכנים.
 Dependencies: אחרי כל השאר.
@@ -478,8 +478,6 @@ Rollback: F4 בקומיט אחד הפיך; F13 (תזוזת קבצים בלבד) 
 | ApplicationListRow / ApplicationCard / PipelineCard | נראים דומים, אבל ApplicationListParts.tsx כבר חילץ את המשותף עם variant. השאר הוא פריסה שונה באמת. איחוד נוסף היה יוצר קומפוננטה עם 3 ענפים ואפס משותף. |
 | useDraftEditorState עם 25 יציאות | גדול, אבל כל השדות תלויים באותו draft/detail. פיצול ייצור שני hooks שמעבירים מצב זה לזה. useDraftAutosave כבר מפוצל ממנו במקום הנכון. |
 | ui/QueryState → app/ErrorCallout | ה-import היחיד "החוצה" מ-ui/. העברת ErrorCallout ל-ui/ רק תחליף תלות ב-app/ בתלות ב-api/. אפס רווח. |
-| hooks/useWatchedOperation מחזיר JSX | גבול לא נקי (F20), אבל 4 הקוראים זהים; הפיצול מוסיף כפילות במקום להסיר. לשקול מחדש עם קורא חמישי. |
-| שלוש הגנות applicationId | 3 שורות. useRequiredParam הוא indirection ששווה רק במסך רביעי. |
 | preparationStateLabels / recruitmentStatusLabels / operationLabels / analysisLabels נפרדים | אוצרות מילים שונים לאמיתם, כל אחד ממופתח על union אחר. ריכוז ל-constants גלובלי היה מוחק בדיוק את הבטיחות שהם מספקים. |
 | applicationListParams.ts — 5 טבלאות Record<T, true> | נראה שכפול של ה-unions, אבל זו ההגנה: ערך מה-URL חייב להיבדק מול סט סגור, והממצאות שוברת build. זה guard נגזר לפי AGENTS.md, לא כפילות. |
 | שני קבצי הכפילות duplicateCheck (לקוח) + הבדיקה בפקודת ה-create (שרת) | תועד במפורש ב-applications.ts:89-93 כשתי ריצות בכוונה. השרת סמכותי. לא כפילות. |
@@ -493,7 +491,7 @@ Rollback: F4 בקומיט אחד הפיך; F13 (תזוזת קבצים בלבד) 
 
 - F2 — קיבוץ השלבים. assignment ו-final_stage מקובצים אחרת בסרגל הפילטר ובלוח. אי אפשר לאחד בלי להחליט איזה מהשניים נכון מוצרית.
 - ✅ F7 הוכרע — next_action_date הוא יום קלנדרי מקומי, בהתאם להגדרת "לפני היום" במפרט ולערך date-only בצד השרת.
-- F4/F12 — האם לשלם את מחיר ה-gate. שניהם משפרים את הארכיטקטורה אבל גוררים את בדיקת הצנרת הדטרמיניסטית המלאה. F4 מסיר סתירה מול AGENTS.md ולכן מוצדק יותר; F12 הוא אופטימיזציה שלא נמדדה ואני לא ממליץ עליה לפני מדידה.
+- ✅ F4/F12 הוכרעו ובוצעו — חוק הסגירה עבר לפרויקציה וספירות הלוח אוחדו לתשובת הרשימה. מלוא ה-gate עדיין נדרש להרצת המשתמש.
 - F3 — חלון מפתחות ה-idempotency. מפתח דטרמיניסטי ל-retry אומר שניסיון חוזר אחרי כשל קבוע יחזיר תשובה שמורה. צריך לאשר מול §13 שזו ההתנהגות הרצויה.
 ### 10 הפעולות המומלצות, בסדר ביצוע
 
@@ -506,5 +504,5 @@ Rollback: F4 בקומיט אחד הפיך; F13 (תזוזת קבצים בלבד) 
 7. ✅ בוצע — F6 + F8 — נוסף factLabels.ts; אוצר המילים של warnings רוכז תוך שמירת ההבחנה בין הגרסה המוצגת לגרסה המוכנה האחרונה.
 8. ✅ בוצע — F14 + F17 + F16 + F15 — סבב primitives: QueryState, invalidateApplicationViews, formatDateTime, ViewSwitch.
 9. ✅ בוצע — F10 + F11 — לפצל FactLifecyclePanel (ולהעביר ל-useAppForm) ולחלץ DraftSectionCard + DraftHeaderCard.
-10. F4 — להעביר את חוק "מועמדות סגורה" לפרויקציה, עם מלוא ה-gate. (אחרון: היחיד שנוגע בחוזה)
-11. F12, F13, F18–F21 — לתעד ולדחות עד ששינוי אחר יפתח את האזור.
+10. ✅ בוצע — F4 — חוק "מועמדות סגורה" עבר לפרויקציה; מלוא ה-gate עדיין נדרש.
+11. ✅ בוצע — F12, F13, F18–F21 — ספירות אוחדו, queries פוצל, ותוקנו גבולות השכבות והטיפול בשגיאות ובקלט.
