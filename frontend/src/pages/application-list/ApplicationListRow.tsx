@@ -1,4 +1,4 @@
-import { Archive, ArrowLeft, Clock, FileCheck2 } from "lucide-react";
+import { Archive, ArrowLeft, Clock, FileCheck2, SlidersHorizontal } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { MouseEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -200,7 +200,7 @@ const NextActionCell = ({ item }: { item: ApplicationListItem }) => {
   );
 };
 
-const RecommendedActionCell = ({ item }: { item: ApplicationListItem }) => {
+const RecommendedActionContent = ({ item }: { item: ApplicationListItem }) => {
   const href = `/applications/${encodeURIComponent(item.id)}`;
   const latest = item.active_operation ?? item.latest_operation;
   /* Terminal only means that polling may stop; it does not mean the outcome is safe to
@@ -225,21 +225,59 @@ const RecommendedActionCell = ({ item }: { item: ApplicationListItem }) => {
     );
 
   return (
+    <div className="flex flex-col items-start gap-1">
+      {reported !== null ? (
+        <StatusBadge className={rowBadgeClasses} tone={statusTones[reported.status]}>
+          {operationTypeLabels[reported.operation_type]} · {statusLabels[reported.status]}
+        </StatusBadge>
+      ) : item.recommended_action != null ? (
+        <Link className={rowActionClasses} to={actionDestination(item.recommended_action, item.id) ?? href}>
+          <ArrowLeft aria-hidden="true" className="size-4" />
+          {actionLabel(item.recommended_action)}
+        </Link>
+      ) : readyRevisionLink === null ? (
+        <span className="text-support text-cv-text-muted">—</span>
+      ) : null}
+      {reported === null ? readyRevisionLink : null}
+    </div>
+  );
+};
+
+const QuickActionsCell = ({
+  item,
+  onRequestClose,
+}: {
+  item: ApplicationListItem;
+  onRequestClose: (item: ApplicationListItem) => void;
+}) => {
+  const closed = isApplicationClosed(item);
+  const href = `/applications/${encodeURIComponent(item.id)}`;
+
+  return (
     <td className="px-3 py-3 align-top">
-      <div className="flex flex-col items-start gap-1">
-        {reported !== null ? (
-          <StatusBadge className={rowBadgeClasses} tone={statusTones[reported.status]}>
-            {operationTypeLabels[reported.operation_type]} · {statusLabels[reported.status]}
-          </StatusBadge>
-        ) : item.recommended_action != null ? (
-          <Link className={rowActionClasses} to={actionDestination(item.recommended_action, item.id) ?? href}>
-            <ArrowLeft aria-hidden="true" className="size-4" />
-            {actionLabel(item.recommended_action)}
+      <div className="flex items-start justify-between gap-1.5">
+        <RecommendedActionContent item={item} />
+        <div className="flex shrink-0 items-center gap-0.5">
+          <Link
+            aria-label={`עדכון סטטוס ומשימות עבור ${item.company}`}
+            className="inline-flex min-h-9 items-center rounded-control px-2 text-cv-text-muted transition-colors hover:bg-cv-surface-muted hover:text-cv-text"
+            title="עדכון סטטוס ומשימות"
+            to={`${href}/tracking`}
+          >
+            <SlidersHorizontal aria-hidden="true" className="size-4" />
           </Link>
-        ) : readyRevisionLink === null ? (
-          <span className="text-support text-cv-text-muted">—</span>
-        ) : null}
-        {reported === null ? readyRevisionLink : null}
+          {closed ? null : (
+            <Button
+              aria-label={`סגירת המועמדות ${item.company}`}
+              className="min-h-9 px-2 text-cv-text-muted hover:text-cv-blocker"
+              onClick={() => onRequestClose(item)}
+              title="סגירת מועמדות"
+              variant="ghost"
+            >
+              <Archive aria-hidden="true" className="size-4" />
+            </Button>
+          )}
+        </div>
       </div>
     </td>
   );
@@ -248,18 +286,14 @@ const RecommendedActionCell = ({ item }: { item: ApplicationListItem }) => {
 interface ApplicationListRowProps {
   ambiguous: boolean;
   item: ApplicationListItem;
-  /* The table decides whether the recruitment-task column exists at all; the row only
-     has to agree with that decision, so its cell count stays right. */
-  showNextAction: boolean;
   onRequestClose: (item: ApplicationListItem) => void;
 }
 
-export const ApplicationListRow = ({ ambiguous, item, showNextAction, onRequestClose }: ApplicationListRowProps) => {
+export const ApplicationListRow = ({ ambiguous, item, onRequestClose }: ApplicationListRowProps) => {
   const navigate = useNavigate();
   const href = `/applications/${encodeURIComponent(item.id)}`;
   const preparationHref = `${href}/preparation`;
   const attention = applicationAttention(item);
-  const closed = isApplicationClosed(item);
 
   /* The row was already painted on hover while only three cells were clickable. It now
      navigates as a whole, and yields to whatever the reader actually aimed at: a link,
@@ -309,7 +343,7 @@ export const ApplicationListRow = ({ ambiguous, item, showNextAction, onRequestC
           </div>
         </div>
       </td>
-      <FitCell item={item} />
+      <RecruitmentStatusCell item={item} />
       <td className="px-3 py-3 align-top">
         <div className="flex flex-col items-start gap-1.5">
           <StatusBadge
@@ -341,27 +375,15 @@ export const ApplicationListRow = ({ ambiguous, item, showNextAction, onRequestC
           )}
         </div>
       </td>
-      <RecruitmentStatusCell item={item} />
+      <FitCell item={item} />
+      <NextActionCell item={item} />
       <td className="whitespace-nowrap px-3 py-3 align-top text-support text-cv-text-muted">
         <span className="inline-flex items-center gap-1.5" title={`נפתחה ב־${formatApplicationDate(item.created_at)}`}>
           <Clock aria-hidden="true" className="size-3.5 shrink-0" />
           {formatApplicationDate(item.updated_at)}
         </span>
       </td>
-      {showNextAction ? <NextActionCell item={item} /> : null}
-      <RecommendedActionCell item={item} />
-      <td className="px-1 py-3 align-top">
-        {closed ? null : (
-          <Button
-            aria-label={`סגירת המועמדות ${item.company}`}
-            className="px-2"
-            onClick={() => onRequestClose(item)}
-            variant="ghost"
-          >
-            <Archive aria-hidden="true" className="size-4" />
-          </Button>
-        )}
-      </td>
+      <QuickActionsCell item={item} onRequestClose={onRequestClose} />
     </tr>
   );
 };

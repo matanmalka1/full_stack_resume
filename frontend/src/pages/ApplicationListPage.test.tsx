@@ -195,6 +195,12 @@ describe("ApplicationListPage", () => {
     expect(board.getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
     expect(board.getByText("קורות החיים מוכנים")).toBeInTheDocument();
     expect(board.getAllByText("נשמר")).toHaveLength(2);
+    expect(board.getByRole("columnheader", { name: "צעד הבא ויעד" })).toBeInTheDocument();
+    expect(board.getByRole("columnheader", { name: "פעולות מהירות" })).toBeInTheDocument();
+    expect(board.getByRole("link", { name: "עדכון סטטוס ומשימות עבור Acme" })).toHaveAttribute(
+      "href",
+      "/applications/app-1/tracking",
+    );
   });
 
   /* The column is read to decide which row to open next, so it names what is waiting
