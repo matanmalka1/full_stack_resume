@@ -246,26 +246,28 @@ const RecommendedActionContent = ({ item }: { item: ApplicationListItem }) => {
 const QuickActionsCell = ({
   item,
   onRequestClose,
+  onRequestUpdate,
 }: {
   item: ApplicationListItem;
   onRequestClose: (item: ApplicationListItem) => void;
+  onRequestUpdate: (item: ApplicationListItem) => void;
 }) => {
   const closed = isApplicationClosed(item);
-  const href = `/applications/${encodeURIComponent(item.id)}`;
 
   return (
     <td className="px-3 py-3 align-top">
       <div className="flex items-start justify-between gap-1.5">
         <RecommendedActionContent item={item} />
         <div className="flex shrink-0 items-center gap-0.5">
-          <Link
+          <button
             aria-label={`עדכון סטטוס ומשימות עבור ${item.company}`}
             className="inline-flex min-h-9 items-center rounded-control px-2 text-cv-text-muted transition-colors hover:bg-cv-surface-muted hover:text-cv-text"
+            onClick={() => onRequestUpdate(item)}
             title="עדכון סטטוס ומשימות"
-            to={`${href}/tracking`}
+            type="button"
           >
             <SlidersHorizontal aria-hidden="true" className="size-4" />
-          </Link>
+          </button>
           {closed ? null : (
             <Button
               aria-label={`סגירת המועמדות ${item.company}`}
@@ -287,9 +289,10 @@ interface ApplicationListRowProps {
   ambiguous: boolean;
   item: ApplicationListItem;
   onRequestClose: (item: ApplicationListItem) => void;
+  onRequestUpdate: (item: ApplicationListItem) => void;
 }
 
-export const ApplicationListRow = ({ ambiguous, item, onRequestClose }: ApplicationListRowProps) => {
+export const ApplicationListRow = ({ ambiguous, item, onRequestClose, onRequestUpdate }: ApplicationListRowProps) => {
   const navigate = useNavigate();
   const href = `/applications/${encodeURIComponent(item.id)}`;
   const preparationHref = `${href}/preparation`;
@@ -383,7 +386,7 @@ export const ApplicationListRow = ({ ambiguous, item, onRequestClose }: Applicat
           {formatApplicationDate(item.updated_at)}
         </span>
       </td>
-      <QuickActionsCell item={item} onRequestClose={onRequestClose} />
+      <QuickActionsCell item={item} onRequestClose={onRequestClose} onRequestUpdate={onRequestUpdate} />
     </tr>
   );
 };

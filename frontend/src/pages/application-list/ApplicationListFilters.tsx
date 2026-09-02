@@ -1,21 +1,10 @@
 import { Search } from "lucide-react";
 
-import type {
-  ActivityFilter,
-  ApplicationPreset,
-  ApplicationSort,
-  PreparationState,
-  RecruitmentStatus,
-} from "../../api/contracts";
+import type { ActivityFilter, ApplicationSort, PreparationState } from "../../api/contracts";
 import { Select } from "../../ui/Select";
 import { TextInput } from "../../ui/TextInput";
 import { cx } from "../../ui/cx";
-import {
-  applicationPresetLabels,
-  preparationStateLabels,
-  recruitmentStatusLabel,
-  recruitmentStatusOrder,
-} from "../application/applicationLabels";
+import { preparationStateLabels } from "../application/applicationLabels";
 
 const activityLabels: Record<ActivityFilter, string> = {
   open: "פעילות",
@@ -32,51 +21,14 @@ const sortLabels: Record<ApplicationSort, string> = {
 
 const toolbarControlClasses = "mt-1 min-h-9 rounded-xl py-1.5";
 
-interface PresetChipsProps {
-  preset: ApplicationPreset | undefined;
-  onPresetChange: (preset: ApplicationPreset | undefined) => void;
-}
-
-const PresetChips = ({ preset: active, onPresetChange }: PresetChipsProps) => {
-  const chip = (key: string, label: string, selected: boolean, onSelect: () => void) => (
-    <label className="cursor-pointer" key={key}>
-      <input checked={selected} className="peer sr-only" name="application-preset" onChange={onSelect} type="radio" />
-      <span
-        className={cx(
-          "inline-flex items-center rounded-pill border px-3 py-1.5 text-support font-semibold transition-colors",
-          "peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-cv-focus",
-          selected
-            ? "border-cv-accent bg-cv-accent-soft text-cv-accent"
-            : "border-cv-border bg-cv-surface text-cv-text-muted hover:bg-cv-surface-muted",
-        )}
-      >
-        {label}
-      </span>
-    </label>
-  );
-
-  return (
-    <div aria-label="סינון מהיר" className="flex flex-wrap items-center gap-2" role="radiogroup">
-      {chip("all", "הכל", active === undefined, () => onPresetChange(undefined))}
-      {(Object.keys(applicationPresetLabels) as ApplicationPreset[]).map((preset) =>
-        chip(preset, applicationPresetLabels[preset], active === preset, () => onPresetChange(preset)),
-      )}
-    </div>
-  );
-};
-
 interface ApplicationListFiltersProps {
   activity: ActivityFilter;
   preparationState: PreparationState | undefined;
-  preset: ApplicationPreset | undefined;
-  recruitmentStatus: RecruitmentStatus | undefined;
   search: string;
   sort: ApplicationSort;
   stageCounts: Partial<Record<PreparationState, number>>;
   onActivityChange: (activity: ActivityFilter) => void;
   onPreparationStateChange: (stage: PreparationState | undefined) => void;
-  onPresetChange: (preset: ApplicationPreset | undefined) => void;
-  onRecruitmentStatusChange: (status: RecruitmentStatus | undefined) => void;
   onSearchChange: (search: string) => void;
   onSortChange: (sort: ApplicationSort) => void;
 }
@@ -84,28 +36,22 @@ interface ApplicationListFiltersProps {
 export const ApplicationListFilters = ({
   activity,
   preparationState,
-  preset,
-  recruitmentStatus,
   search,
   sort,
   stageCounts,
   onActivityChange,
   onPreparationStateChange,
-  onPresetChange,
-  onRecruitmentStatusChange,
   onSearchChange,
   onSortChange,
 }: ApplicationListFiltersProps) => (
   /* On a page with no card, the toolbar is what separates the masthead from the board,
      so it closes with the same hairline the masthead opens with rather than floating
      between two unrelated blocks. */
-  <div className="flex flex-col gap-4 border-b border-cv-border pb-5">
-    <PresetChips onPresetChange={onPresetChange} preset={preset} />
-
+  <div className="border-b border-cv-border pb-5">
     <div className="flex flex-wrap items-end gap-3">
       {/* The search field is capped rather than elastic: at board width `flex-1` gave it
-          seven times the width of the selects beside it, and a field that wide reads as
-          the page's subject instead of one control among six. */}
+          several times the width of the selects beside it, and a field that wide reads
+          as the page's subject instead of one control among the toolbar filters. */}
       <div className="min-w-[14rem] max-w-sm flex-1">
         <label className="block text-support font-semibold text-cv-text" htmlFor="list-search">
           חיפוש
@@ -169,27 +115,6 @@ export const ApplicationListFilters = ({
                 {preparationStateLabels[stage]} ({stageCounts[stage] ?? 0})
               </option>
             ))}
-        </Select>
-      </div>
-
-      <div>
-        <label className="block text-support font-semibold text-cv-text" htmlFor="list-recruitment-status">
-          שלב גיוס
-        </label>
-        <Select
-          className={toolbarControlClasses}
-          id="list-recruitment-status"
-          onChange={(event) =>
-            onRecruitmentStatusChange(event.target.value === "" ? undefined : (event.target.value as RecruitmentStatus))
-          }
-          value={recruitmentStatus ?? ""}
-        >
-          <option value="">כל שלבי הגיוס</option>
-          {recruitmentStatusOrder.map((status) => (
-            <option key={status} value={status}>
-              {recruitmentStatusLabel(status)}
-            </option>
-          ))}
         </Select>
       </div>
 

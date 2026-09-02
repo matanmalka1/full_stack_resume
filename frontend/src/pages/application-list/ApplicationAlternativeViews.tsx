@@ -27,6 +27,7 @@ import {
 interface AlternativeViewProps {
   items: readonly ApplicationListItem[];
   onRequestClose: (item: ApplicationListItem) => void;
+  onRequestUpdate: (item: ApplicationListItem) => void;
 }
 
 const CompanyMark = ({ company }: { company: string }) => (
@@ -58,9 +59,11 @@ const Provenance = ({ item }: { item: ApplicationListItem }) => {
 const ApplicationCard = ({
   item,
   onRequestClose,
+  onRequestUpdate,
 }: {
   item: ApplicationListItem;
   onRequestClose: AlternativeViewProps["onRequestClose"];
+  onRequestUpdate: AlternativeViewProps["onRequestUpdate"];
 }) => {
   const href = `/applications/${encodeURIComponent(item.id)}`;
   const attention = applicationAttention(item);
@@ -170,14 +173,15 @@ const ApplicationCard = ({
 
       <div className="mt-2 flex items-end justify-between gap-3 border-t border-cv-border pt-3">
         <div className="flex items-center gap-1">
-          <Link
+          <button
             aria-label={`עדכון סטטוס ומשימות עבור ${item.company}`}
             className="inline-flex min-h-9 items-center rounded-control px-2 text-cv-text-muted transition-colors hover:bg-cv-surface-muted hover:text-cv-text"
+            onClick={() => onRequestUpdate(item)}
             title="עדכון סטטוס ומשימות"
-            to={`${href}/tracking`}
+            type="button"
           >
             <SlidersHorizontal aria-hidden="true" className="size-4" />
-          </Link>
+          </button>
           {closed ? null : (
             <Button
               aria-label={`סגירת המועמדות ${item.company}`}
@@ -223,10 +227,10 @@ const ApplicationCard = ({
   );
 };
 
-export const ApplicationCardsView = ({ items, onRequestClose }: AlternativeViewProps) => (
+export const ApplicationCardsView = ({ items, onRequestClose, onRequestUpdate }: AlternativeViewProps) => (
   <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
     {items.map((item) => (
-      <ApplicationCard item={item} key={item.id} onRequestClose={onRequestClose} />
+      <ApplicationCard item={item} key={item.id} onRequestClose={onRequestClose} onRequestUpdate={onRequestUpdate} />
     ))}
   </div>
 );
@@ -268,7 +272,13 @@ const pipelineToneClasses: Record<PipelineColumn["tone"], string> = {
   success: "border-cv-success/30 bg-cv-success-soft/40",
 };
 
-const PipelineCard = ({ item }: { item: ApplicationListItem }) => {
+const PipelineCard = ({
+  item,
+  onRequestUpdate,
+}: {
+  item: ApplicationListItem;
+  onRequestUpdate: (item: ApplicationListItem) => void;
+}) => {
   const href = `/applications/${encodeURIComponent(item.id)}`;
 
   return (
@@ -304,16 +314,20 @@ const PipelineCard = ({ item }: { item: ApplicationListItem }) => {
         )}
       </div>
       <div className="flex items-center justify-between gap-2 border-t border-cv-border pt-2 text-support">
-        <Link className="font-semibold text-cv-text-muted hover:text-cv-text hover:underline" to={`${href}/tracking`}>
+        <button
+          className="font-semibold text-cv-text-muted hover:text-cv-text hover:underline"
+          onClick={() => onRequestUpdate(item)}
+          type="button"
+        >
           פרטים ומשימה
-        </Link>
+        </button>
         <span className="text-cv-text-muted">{recruitmentStatusLabel(item.recruitment_status)}</span>
       </div>
     </article>
   );
 };
 
-export const ApplicationPipelineView = ({ items }: AlternativeViewProps) => {
+export const ApplicationPipelineView = ({ items, onRequestUpdate }: AlternativeViewProps) => {
   const knownStatuses = new Set(pipelineColumns.flatMap((column) => column.statuses));
   const unknownStatuses = [...new Set(items.map((item) => item.recruitment_status))].filter(
     (status) => !knownStatuses.has(status),
@@ -357,7 +371,7 @@ export const ApplicationPipelineView = ({ items }: AlternativeViewProps) => {
             ) : (
               <div className="flex flex-col gap-3">
                 {stageItems.map((item) => (
-                  <PipelineCard item={item} key={item.id} />
+                  <PipelineCard item={item} key={item.id} onRequestUpdate={onRequestUpdate} />
                 ))}
               </div>
             )}

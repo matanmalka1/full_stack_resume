@@ -31,9 +31,10 @@ const duplicatedIdentities = (items: readonly ApplicationListItem[]): ReadonlySe
 interface ApplicationListTableProps {
   items: readonly ApplicationListItem[];
   onRequestClose: (item: ApplicationListItem) => void;
+  onRequestUpdate: (item: ApplicationListItem) => void;
 }
 
-export const ApplicationListTable = ({ items, onRequestClose }: ApplicationListTableProps) => {
+export const ApplicationListTable = ({ items, onRequestClose, onRequestUpdate }: ApplicationListTableProps) => {
   const ambiguous = duplicatedIdentities(items);
 
   return (
@@ -66,6 +67,7 @@ export const ApplicationListTable = ({ items, onRequestClose }: ApplicationListT
               item={item}
               key={item.id}
               onRequestClose={onRequestClose}
+              onRequestUpdate={onRequestUpdate}
             />
           ))}
         </tbody>

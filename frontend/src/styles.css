@@ -178,12 +178,40 @@ pre {
   letter-spacing: normal;
 }
 
-/* A.5: the modal dialog is the only overlay surface. */
+/* A.5: the modal dialog is the only overlay surface. It settles in with a short
+   rise-and-fade rather than appearing instantly, so the interruption reads as
+   deliberate; prefers-reduced-motion collapses this to 0.01ms below. */
+dialog {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease,
+    overlay 0.18s ease allow-discrete,
+    display 0.18s ease allow-discrete;
+}
+@starting-style {
+  dialog[open] {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+}
+
 dialog::backdrop {
   /* The same cool neutral the shadows are cast in, so the scrim dims the page
      rather than tinting it. */
   background: rgb(17 24 39 / 0.45);
   backdrop-filter: blur(2px);
+  opacity: 1;
+  transition:
+    opacity 0.18s ease,
+    overlay 0.18s ease allow-discrete,
+    display 0.18s ease allow-discrete;
+}
+@starting-style {
+  dialog[open]::backdrop {
+    opacity: 0;
+  }
 }
 
 ::selection {
