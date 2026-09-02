@@ -28,10 +28,10 @@ import { DashboardHeader } from "./application-list/DashboardHeader";
 import { MetricsKpiGrid } from "./application-list/MetricsKpiGrid";
 import { PipelineStagesBar } from "./application-list/PipelineStagesBar";
 import { QuickIntakeDialog } from "./application-list/QuickIntakeDialog";
-import { QuickStatusUpdateDialog } from "./application-list/QuickStatusUpdateDialog";
 import { type RecruitmentStageId, recruitmentStages, selectedStage } from "./application-list/recruitmentStages";
 import { UrgentActionHub } from "./application-list/UrgentActionHub";
 import { PAGE_SIZE, paramsFromQuery, queryFromParams } from "./applicationListParams";
+import { RecruitmentUpdateDialog } from "./recruitment/RecruitmentUpdateDialog";
 
 const SEARCH_DEBOUNCE_MS = 300;
 type ViewMode = "table" | "cards" | "pipeline";
@@ -293,7 +293,7 @@ export const ApplicationListPage = () => {
           }}
           open={quickIntakeOpen}
         />
-        <QuickStatusUpdateDialog application={updatingApplication} onClose={() => setUpdatingApplication(null)} />
+        <RecruitmentUpdateDialog application={updatingApplication} onClose={() => setUpdatingApplication(null)} />
       </div>
     </section>
   );

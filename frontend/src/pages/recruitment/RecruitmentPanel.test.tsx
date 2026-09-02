@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { applicationDetailQueryKey } from "../../api/applications";
 import type { ApplicationDetail, RecruitmentTimelineItem } from "../../api/contracts";
 import { formatDate } from "../../ui/formatDateTime";
 import { RecruitmentPanel } from "./RecruitmentPanel";
@@ -72,10 +73,11 @@ const emptyJsonFetch = (_input: RequestInfo | URL, _init?: RequestInit): Promise
 const renderPanel = (value: ApplicationDetail = detail()) => {
   const client = new QueryClient({
     defaultOptions: {
-      queries: { retry: false, gcTime: 0 },
+      queries: { retry: false, gcTime: 0, staleTime: Infinity },
       mutations: { retry: false },
     },
   });
+  client.setQueryData(applicationDetailQueryKey(value.application.id), value);
 
   const panel = (next: ApplicationDetail) => (
     <QueryClientProvider client={client}>
@@ -86,7 +88,10 @@ const renderPanel = (value: ApplicationDetail = detail()) => {
 
   return {
     ...rendered,
-    rerenderPanel: (next: ApplicationDetail) => rendered.rerender(panel(next)),
+    rerenderPanel: (next: ApplicationDetail) => {
+      client.setQueryData(applicationDetailQueryKey(next.application.id), next);
+      rendered.rerender(panel(next));
+    },
   };
 };
 
@@ -98,54 +103,71 @@ afterEach(() => {
 });
 
 describe("RecruitmentPanel", () => {
-  it("sends the exact forward transition and next-action choices, including a clear", async () => {
-    const fetchMock = vi.fn(emptyJsonFetch);
+  it("sends the exact forward transition and next-action choices from one dialog", async () => {
+    const value = detail({ recruitment_timeline: [statusEvent({ reason: "application created" })] });
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === undefined && String(input).endsWith("/applications/app-1")
+        ? Promise.resolve(jsonResponse(value))
+        : emptyJsonFetch(input, init),
+    );
     vi.stubGlobal("fetch", fetchMock);
-    renderPanel(detail({ recruitment_timeline: [statusEvent({ reason: "application created" })] }));
+    renderPanel(value);
 
     expect(screen.getByText("המועמדות נוצרה")).toBeInTheDocument();
     expect(screen.queryByText("application created")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("השלב הבא")).toHaveValue("");
-    expect(screen.getByRole("button", { name: "שמירת השלב" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "שמירת הפעולה" })).toBeDisabled();
+    expect(screen.getByText("לא נקבע צעד הבא")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("מעבר לשלב הבא (רשות)")).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("השלב הבא"), { target: { value: "closed" } });
-    fireEvent.change(screen.getByLabelText("סיבה (רשות)"), {
+    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימה" }));
+    expect(await screen.findByRole("dialog", { name: "עדכון סטטוס ומשימות: Acme" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "שמירת שינויים" })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/מעבר לשלב הבא/), { target: { value: "closed" } });
+    fireEvent.change(screen.getByLabelText(/סיבת המעבר/), {
       target: { value: "Position filled" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "שמירת השלב" }));
+    fireEvent.change(screen.getByLabelText(/הצעד הבא/), {
+      target: { value: " Send portfolio " },
+    });
+    fireEvent.change(screen.getByLabelText(/תאריך יעד/), { target: { value: "2026-09-10" } });
+    fireEvent.click(screen.getByRole("button", { name: "שמירת שינויים" }));
 
     await waitFor(() => expect(requestFor(fetchMock, "/status")).toBeDefined());
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/next-action"))).toHaveLength(1),
+    );
     const transitionRequest = requestFor(fetchMock, "/status");
     expect(transitionRequest?.[1]).toEqual(expect.objectContaining({ method: "POST" }));
     expect(JSON.parse(String(transitionRequest?.[1]?.body))).toEqual({
       target_status: "closed",
       reason: "Position filled",
     });
-
-    fireEvent.change(screen.getByLabelText("מה לעשות"), {
-      target: { value: " Send portfolio " },
-    });
-    fireEvent.change(screen.getByLabelText("תאריך"), { target: { value: "2026-09-10" } });
-    fireEvent.click(screen.getByRole("button", { name: "שמירת הפעולה" }));
-
-    await waitFor(() =>
-      expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/next-action"))).toHaveLength(1),
-    );
     const setRequest = requestFor(fetchMock, "/next-action");
     expect(setRequest?.[1]).toEqual(expect.objectContaining({ method: "PATCH" }));
     expect(JSON.parse(String(setRequest?.[1]?.body))).toEqual({
       next_action: "Send portfolio",
       next_action_date: "2026-09-10",
     });
+  });
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "הסרת התזכורת" })).toBeEnabled());
-    fireEvent.click(screen.getByRole("button", { name: "הסרת התזכורת" }));
-
-    await waitFor(() =>
-      expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/next-action"))).toHaveLength(2),
+  it("clears the next action by saving empty fields instead of showing another panel button", async () => {
+    const value = detail();
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === undefined && String(input).endsWith("/applications/app-1")
+        ? Promise.resolve(jsonResponse(value))
+        : emptyJsonFetch(input, init),
     );
-    const clearRequest = fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/next-action"))[1];
+    vi.stubGlobal("fetch", fetchMock);
+    renderPanel(value);
+
+    expect(screen.queryByRole("button", { name: "הסרת התזכורת" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימה" }));
+    fireEvent.change(await screen.findByLabelText(/הצעד הבא/), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText(/תאריך יעד/), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "שמירת שינויים" }));
+
+    await waitFor(() => expect(requestFor(fetchMock, "/next-action")).toBeDefined());
+    const clearRequest = requestFor(fetchMock, "/next-action");
     expect(JSON.parse(String(clearRequest?.[1]?.body))).toEqual({
       next_action: null,
       next_action_date: null,
@@ -157,10 +179,8 @@ describe("RecruitmentPanel", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderPanel();
 
-    const timelineHeading = screen.getByRole("heading", { name: "ציר הזמן" });
-    expect(
-      within(timelineHeading.parentElement as HTMLElement).queryByRole("button", { name: "רישום הגשה חיצונית" }),
-    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "רישום הגשה חיצונית" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("פעולות נוספות"));
 
     fireEvent.click(screen.getByRole("button", { name: "תיקון אירוע שנרשם" }));
     fireEvent.change(screen.getByLabelText("המצב הנכון"), {
@@ -218,26 +238,32 @@ describe("RecruitmentPanel", () => {
   });
 
   it("surfaces a safe server refusal instead of swallowing it", async () => {
+    const value = detail();
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        jsonResponse(
-          {
-            type: "about:blank#invalid-next-action",
-            title: "Invalid next action",
-            status: 409,
-            code: "INVALID_NEXT_ACTION",
-            detail: "הפעולה השתנתה בשרת. יש לרענן ולנסות שוב.",
-          },
-          409,
-          "application/problem+json",
-        ),
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+        init?.method === undefined && String(input).endsWith("/applications/app-1")
+          ? Promise.resolve(jsonResponse(value))
+          : Promise.resolve(
+              jsonResponse(
+                {
+                  type: "about:blank#invalid-next-action",
+                  title: "Invalid next action",
+                  status: 409,
+                  code: "INVALID_NEXT_ACTION",
+                  detail: "הפעולה השתנתה בשרת. יש לרענן ולנסות שוב.",
+                },
+                409,
+                "application/problem+json",
+              ),
+            ),
       ),
     );
-    renderPanel();
+    renderPanel(value);
 
-    fireEvent.change(screen.getByLabelText("מה לעשות"), { target: { value: "Try again tomorrow" } });
-    fireEvent.click(screen.getByRole("button", { name: "שמירת הפעולה" }));
+    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימה" }));
+    fireEvent.change(await screen.findByLabelText(/הצעד הבא/), { target: { value: "Try again tomorrow" } });
+    fireEvent.click(screen.getByRole("button", { name: "שמירת שינויים" }));
 
     expect(await screen.findByText("Invalid next action")).toBeInTheDocument();
     expect(screen.getByText("הפעולה השתנתה בשרת. יש לרענן ולנסות שוב.")).toBeInTheDocument();
@@ -246,6 +272,9 @@ describe("RecruitmentPanel", () => {
   it("syncs untouched next-action fields from a refreshed projection", async () => {
     vi.stubGlobal("fetch", vi.fn(emptyJsonFetch));
     const { rerenderPanel } = renderPanel();
+
+    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימה" }));
+    expect(await screen.findByLabelText(/הצעד הבא/)).toHaveValue("Follow up");
 
     rerenderPanel(
       detail({
@@ -257,20 +286,23 @@ describe("RecruitmentPanel", () => {
       }),
     );
 
-    await waitFor(() => expect(screen.getByLabelText("מה לעשות")).toHaveValue("Schedule interview"));
-    expect(screen.getByLabelText("תאריך")).toHaveValue("2026-09-12");
-    expect(screen.queryByText("הפעולה הבאה השתנתה בשרת")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText(/הצעד הבא/)).toHaveValue("Schedule interview"));
+    expect(screen.getByLabelText(/תאריך יעד/)).toHaveValue("2026-09-12");
+    expect(screen.queryByText("פרטי המועמדות השתנו בשרת")).not.toBeInTheDocument();
   });
 
   it("keeps each dirty next-action field and warns when the server changes underneath it", async () => {
     vi.stubGlobal("fetch", vi.fn(emptyJsonFetch));
     const { rerenderPanel } = renderPanel();
 
-    fireEvent.change(screen.getByLabelText("מה לעשות"), {
+    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימה" }));
+    fireEvent.change(await screen.findByLabelText(/הצעד הבא/), {
       target: { value: "My unsaved follow-up" },
     });
+    fireEvent.change(screen.getByLabelText(/מעבר לשלב הבא/), { target: { value: "closed" } });
     rerenderPanel(
       detail({
+        allowed_recruitment_transitions: ["withdrawn"],
         application: {
           ...detail().application,
           next_action: "Server follow-up",
@@ -279,18 +311,19 @@ describe("RecruitmentPanel", () => {
       }),
     );
 
-    expect(screen.getByLabelText("מה לעשות")).toHaveValue("My unsaved follow-up");
-    await waitFor(() => expect(screen.getByLabelText("תאריך")).toHaveValue("2026-09-12"));
-    expect(await screen.findByText("הפעולה הבאה השתנתה בשרת")).toBeInTheDocument();
+    expect(screen.getByLabelText(/הצעד הבא/)).toHaveValue("My unsaved follow-up");
+    expect(screen.getByLabelText(/מעבר לשלב הבא/)).toHaveValue("closed");
+    await waitFor(() => expect(screen.getByLabelText(/תאריך יעד/)).toHaveValue("2026-09-12"));
+    expect(await screen.findByText("פרטי המועמדות השתנו בשרת")).toBeInTheDocument();
   });
 
-  it("preserves dirty transition and correction choices across projection refreshes", async () => {
+  it("preserves a dirty correction choice across projection refreshes", async () => {
     vi.stubGlobal("fetch", vi.fn(emptyJsonFetch));
     const olderEvent = statusEvent({ id: "status-older", to_status: "applied" });
     const currentEvent = statusEvent({ id: "status-current", to_status: "recruiter_screen" });
     const { rerenderPanel } = renderPanel(detail({ recruitment_timeline: [olderEvent, currentEvent] }));
 
-    fireEvent.change(screen.getByLabelText("השלב הבא"), { target: { value: "closed" } });
+    fireEvent.click(screen.getByText("פעולות נוספות"));
     fireEvent.click(screen.getByRole("button", { name: "תיקון אירוע שנרשם" }));
     fireEvent.change(screen.getByLabelText("האירוע השגוי"), {
       target: { value: "status-older" },
@@ -304,9 +337,7 @@ describe("RecruitmentPanel", () => {
       }),
     );
 
-    expect(screen.getByLabelText("השלב הבא")).toHaveValue("closed");
     expect(screen.getByLabelText("האירוע השגוי")).toHaveValue("status-older");
-    expect(await screen.findByText("אפשרויות המעבר השתנו בשרת")).toBeInTheDocument();
     expect(screen.getByText("ציר הזמן השתנה בשרת")).toBeInTheDocument();
   });
 });

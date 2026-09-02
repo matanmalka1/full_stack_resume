@@ -1,20 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
-import { applicationDetailQueryOptions, invalidateApplicationViews, updateApplicationNotes } from "../../api/applications";
+import {
+  applicationDetailQueryOptions,
+  invalidateApplicationViews,
+  updateApplicationNotes,
+} from "../../api/applications";
 import type { ApplicationListItem, TransitionableRecruitmentStatus } from "../../api/contracts";
 import { setNextAction, transitionRecruitmentStatus } from "../../api/tracking";
 import { ErrorCallout } from "../../app/ErrorCallout";
 import { useAppForm } from "../../forms/useAppForm";
 import { Button } from "../../ui/Button";
+import { Callout } from "../../ui/Callout";
 import { Dialog } from "../../ui/Dialog";
 import { Field } from "../../ui/Field";
 import { FormActions } from "../../ui/FormActions";
 import { Select } from "../../ui/Select";
 import { TextArea, TextInput } from "../../ui/TextInput";
 import { recruitmentStatusLabel } from "../application/applicationLabels";
+import { useServerSyncedField } from "../useServerSyncedField";
 
-interface QuickStatusFields {
+interface RecruitmentUpdateFields {
   nextAction: string;
   nextActionDate: string;
   notes: string;
@@ -22,7 +28,7 @@ interface QuickStatusFields {
   targetStatus: TransitionableRecruitmentStatus | "";
 }
 
-const emptyFields: QuickStatusFields = {
+const emptyFields: RecruitmentUpdateFields = {
   nextAction: "",
   nextActionDate: "",
   notes: "",
@@ -30,12 +36,17 @@ const emptyFields: QuickStatusFields = {
   targetStatus: "",
 };
 
-interface QuickStatusUpdateDialogProps {
-  application: ApplicationListItem | null;
+type RecruitmentUpdateTarget = Pick<ApplicationListItem, "company" | "id" | "target_role">;
+
+interface RecruitmentUpdateDialogProps {
+  application: RecruitmentUpdateTarget | null;
   onClose: () => void;
 }
 
-export const QuickStatusUpdateDialog = ({ application, onClose }: QuickStatusUpdateDialogProps) => {
+/* Dashboard and Application Detail intentionally share this command surface. A status
+   transition, next action, and notes are one ordinary update from the user's point of
+   view even though each value still goes to the application command that owns it. */
+export const RecruitmentUpdateDialog = ({ application, onClose }: RecruitmentUpdateDialogProps) => {
   const queryClient = useQueryClient();
   const applicationId = application?.id ?? "";
   const detailQuery = useQuery({
@@ -43,11 +54,16 @@ export const QuickStatusUpdateDialog = ({ application, onClose }: QuickStatusUpd
     enabled: application !== null,
   });
   const detail = detailQuery.data;
-  const form = useAppForm<QuickStatusFields>({ defaultValues: emptyFields });
+  const form = useAppForm<RecruitmentUpdateFields>({ defaultValues: emptyFields });
   const fields = form.watch();
+  const initializedApplicationId = useRef<string | null>(null);
 
   useEffect(() => {
-    if (detail !== undefined) {
+    if (application === null) {
+      initializedApplicationId.current = null;
+      form.reset(emptyFields);
+    } else if (detail !== undefined && initializedApplicationId.current !== applicationId) {
+      initializedApplicationId.current = applicationId;
       form.reset({
         nextAction: detail.application.next_action ?? "",
         nextActionDate: detail.application.next_action_date ?? "",
@@ -56,10 +72,41 @@ export const QuickStatusUpdateDialog = ({ application, onClose }: QuickStatusUpd
         targetStatus: "",
       });
     }
-  }, [detail, form.reset]);
+  }, [application, applicationId, detail, form.reset]);
+
+  const statusChangedOnServer = useServerSyncedField({
+    changeToken: detail?.allowed_recruitment_transitions.join("|") ?? "",
+    isDirty: fields.targetStatus !== "",
+    localValue: fields.targetStatus,
+    onSync: () => form.resetField("targetStatus", { defaultValue: "" }),
+    serverValue: "",
+  });
+  const actionChangedOnServer = useServerSyncedField({
+    isDirty: form.formState.dirtyFields.nextAction === true,
+    localValue: fields.nextAction,
+    onSync: (value) => form.resetField("nextAction", { defaultValue: value }),
+    serverValue: detail?.application.next_action ?? "",
+  });
+  const dateChangedOnServer = useServerSyncedField({
+    isDirty: form.formState.dirtyFields.nextActionDate === true,
+    localValue: fields.nextActionDate,
+    onSync: (value) => form.resetField("nextActionDate", { defaultValue: value }),
+    serverValue: detail?.application.next_action_date ?? "",
+  });
+  const notesChangedOnServer = useServerSyncedField({
+    isDirty: form.formState.dirtyFields.notes === true,
+    localValue: fields.notes,
+    onSync: (value) => form.resetField("notes", { defaultValue: value }),
+    serverValue: detail?.application.notes ?? "",
+  });
+  const selectedStatus = fields.targetStatus;
+  const statusOptions =
+    detail !== undefined && selectedStatus !== "" && !detail.allowed_recruitment_transitions.includes(selectedStatus)
+      ? [selectedStatus, ...detail.allowed_recruitment_transitions]
+      : (detail?.allowed_recruitment_transitions ?? []);
 
   const save = useMutation({
-    mutationFn: async (values: QuickStatusFields) => {
+    mutationFn: async (values: RecruitmentUpdateFields) => {
       if (detail === undefined) {
         throw new Error("Application detail is unavailable");
       }
@@ -110,7 +157,7 @@ export const QuickStatusUpdateDialog = ({ application, onClose }: QuickStatusUpd
   return (
     <Dialog
       dismissible={!save.isPending}
-      headingId="quick-status-heading"
+      headingId="recruitment-update-heading"
       onClose={onClose}
       open={application !== null}
       title={application === null ? "עדכון מועמדות" : `עדכון סטטוס ומשימות: ${application.company}`}
@@ -125,7 +172,7 @@ export const QuickStatusUpdateDialog = ({ application, onClose }: QuickStatusUpd
           ) : detailQuery.error !== null ? (
             <ErrorCallout
               error={detailQuery.error}
-              fallbackDetail="לא ניתן לפתוח את העדכון המהיר. אפשר לנסות שוב או לעבור למסך המועמדות."
+              fallbackDetail="לא ניתן לפתוח את העדכון. אפשר לנסות שוב לאחר רענון המסך."
               fallbackTitle="טעינת פרטי המועמדות נכשלה"
             />
           ) : detail === undefined ? null : (
@@ -137,14 +184,22 @@ export const QuickStatusUpdateDialog = ({ application, onClose }: QuickStatusUpd
                   fallbackTitle="לא ניתן להשלים את העדכון"
                 />
               )}
+              {statusChangedOnServer || actionChangedOnServer || dateChangedOnServer || notesChangedOnServer ? (
+                <Callout role="status" title="פרטי המועמדות השתנו בשרת" tone="warning">
+                  הערכים שהקלדת נשמרו בטופס ולא הוחלפו. כדאי לבדוק אותם לפני השמירה.
+                </Callout>
+              ) : null}
 
               <Field label="מעבר לשלב הבא" optional>
                 {(control) => (
                   <Select {...control} {...form.register("targetStatus")} value={fields.targetStatus}>
                     <option value="">ללא שינוי בשלב</option>
-                    {detail.allowed_recruitment_transitions.map((status) => (
+                    {statusOptions.map((status) => (
                       <option key={status} value={status}>
                         {recruitmentStatusLabel(status)}
+                        {status === selectedStatus && !detail.allowed_recruitment_transitions.includes(status)
+                          ? " · הבחירה שלך"
+                          : ""}
                       </option>
                     ))}
                   </Select>
