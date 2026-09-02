@@ -9,6 +9,7 @@ import {
 } from "../../api/artifacts";
 import type { ArtifactVersion } from "../../api/contracts";
 import { ErrorCallout } from "../../app/ErrorCallout";
+import { appRoutes } from "../../app/appRoutes";
 import { Button, buttonClasses } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 import { Card } from "../../ui/Card";
@@ -168,7 +169,7 @@ const ArtifactGroupList = ({ artifacts }: { artifacts: ArtifactVersion[] }) => (
                 {group.artifacts.length === 1 ? "קובץ אחד" : `${group.artifacts.length} קבצים`}
               </p>
             </div>
-            <Link className={buttonClasses("ghost")} to={`/revisions/${encodeURIComponent(group.revisionId)}`}>
+            <Link className={buttonClasses("ghost")} to={appRoutes.revision(group.revisionId)}>
               מעבר לגרסה
             </Link>
           </div>

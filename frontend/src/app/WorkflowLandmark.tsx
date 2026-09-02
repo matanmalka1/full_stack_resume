@@ -4,6 +4,7 @@ import type { ApplicationDetail, PreparationState } from "../api/contracts";
 import { useLocation } from "react-router-dom";
 
 import { type WorkflowStep, WorkflowSteps } from "../ui/WorkflowSteps";
+import { appRoutes } from "./appRoutes";
 
 /* A.4 frame 1 region 3: three ordered stages, and the only place their Hebrew names
    live.
@@ -97,14 +98,13 @@ export const workflowDestinations = (
   applicationId: string,
   detail: ApplicationDetail | undefined,
 ): StageDestinations => {
-  const application = `/applications/${encodeURIComponent(applicationId)}`;
   const readyRevisionId = detail?.latest_ready_revision_id ?? detail?.latest_approved_revision_id ?? null;
   const editable = detail?.active_working_draft_id != null;
 
   return {
-    analysis: `${application}/preparation`,
-    ...(editable ? { draft: `${application}/draft` } : {}),
-    ...(readyRevisionId == null ? {} : { ready: `/revisions/${encodeURIComponent(readyRevisionId)}` }),
+    analysis: appRoutes.preparation(applicationId),
+    ...(editable ? { draft: appRoutes.draft(applicationId) } : {}),
+    ...(readyRevisionId == null ? {} : { ready: appRoutes.revision(readyRevisionId) }),
   };
 };
 

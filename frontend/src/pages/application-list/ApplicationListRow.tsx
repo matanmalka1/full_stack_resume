@@ -5,38 +5,22 @@ import { Link, useNavigate } from "react-router-dom";
 
 import type { ApplicationListItem } from "../../api/contracts";
 import { isTerminalOperation } from "../../api/operations";
+import { appRoutes } from "../../app/appRoutes";
 import { Button } from "../../ui/Button";
 import { StatusBadge } from "../../ui/StatusBadge";
 import { cx } from "../../ui/cx";
 import { type StatusTone, statusPresentation } from "../../ui/status";
 import { actionDestination } from "../application/actionDestinations";
-import { fitLevelIcon, fitLevelLabel, fitLevelTone, trackLabel } from "../application/analysisLabels";
+import { fitLevelIcon, fitLevelLabel, fitLevelTone } from "../application/analysisLabels";
 import {
   actionLabel,
-  preparationStateIcons,
-  preparationStateLabels,
-  preparationStateTones,
   recruitmentStatusIcon,
   recruitmentStatusLabel,
   recruitmentStatusTone,
 } from "../application/applicationLabels";
 import { operationTypeLabels, statusLabels, statusTones } from "../operationLabels";
-import {
-  applicationAttention,
-  formatApplicationDate,
-  isApplicationClosed,
-  isNextActionOverdue,
-  sourceHost,
-} from "./applicationListPresentation";
-
-const CompanyMark = ({ company }: { company: string }) => (
-  <span
-    aria-hidden="true"
-    className="flex size-9 shrink-0 items-center justify-center rounded-control bg-cv-accent-soft text-support font-bold text-cv-accent"
-  >
-    {[...company][0] ?? "?"}
-  </span>
-);
+import { applicationAttention, formatApplicationDate, isApplicationClosed } from "./applicationListPresentation";
+import { ApplicationIdentity, ApplicationNextAction, ApplicationPreparationBadge } from "./ApplicationListParts";
 
 /* Three tinted pills per row read as three competing headlines, so only two things in a
    row are drawn as one: what the CV needs and what is blocking it. The quieter axes -
@@ -77,8 +61,6 @@ const QuietStatus = ({ children, icon, tone }: QuietStatusProps) => {
    than in StatusBadge, which eight calmer screens also use. */
 const rowBadgeClasses = "gap-1.5 px-2.5 text-start";
 
-const DUPLICATE_IDENTITY_HINT = "קיימת עוד מועמדות לאותה חברה ולאותו תפקיד";
-
 const rowRevisionLinkClasses =
   "inline-flex items-center gap-1.5 rounded-pill text-support font-semibold text-cv-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cv-focus";
 
@@ -89,37 +71,6 @@ const rowActionClasses =
    tell two similar postings apart, and neither earns a column of its own. The origin is
    a link when the posting carried a URL, and the stored source name otherwise - except
    "manual", which says only that the user pasted it and is what most rows would show. */
-const ProvenanceLine = ({ item }: { item: ApplicationListItem }) => {
-  const host = sourceHost(item.source_url);
-  const origin = host ?? (item.source === "manual" ? null : item.source);
-  const parts = [item.track == null ? null : trackLabel(item.track), origin].filter((part) => part !== null);
-
-  if (parts.length === 0) {
-    return null;
-  }
-
-  return (
-    <p className="truncate text-support text-cv-text-muted">
-      {item.track == null ? null : trackLabel(item.track)}
-      {item.track != null && origin !== null ? " · " : null}
-      {origin === null ? null : host === null || item.source_url == null ? (
-        origin
-      ) : (
-        <a
-          className="hover:underline"
-          dir="ltr"
-          href={item.source_url}
-          rel="noreferrer"
-          target="_blank"
-          title={item.source_url}
-        >
-          {host}
-        </a>
-      )}
-    </p>
-  );
-};
-
 const FitCell = ({ item }: { item: ApplicationListItem }) => {
   /* The confidence is the classifier's own certainty about the track and the fit. It is
      a qualifier on the verdict rather than a number of its own: a row is scanned for the
@@ -165,43 +116,8 @@ const RecruitmentStatusCell = ({ item }: { item: ApplicationListItem }) => {
   );
 };
 
-const NextActionCell = ({ item }: { item: ApplicationListItem }) => {
-  const overdue = isNextActionOverdue(item.next_action_date);
-
-  return (
-    <td className="px-3 py-3 align-top">
-      {item.next_action == null ? (
-        /* An em dash rather than "טרם נקבעה": the sentence repeated down a column of
-           rows that mostly have no recruitment task, and read as content. */
-        <span className="text-support text-cv-text-muted" title="לא נקבעה משימת גיוס">
-          —
-        </span>
-      ) : (
-        <div className="flex flex-col items-start gap-1">
-          <span className="text-support text-cv-text" dir="auto">
-            {item.next_action}
-          </span>
-          {item.next_action_date == null ? null : (
-            <span className="flex items-center gap-1.5 text-support text-cv-text-muted">
-              {overdue ? (
-                <StatusBadge className="gap-1 px-2 py-0.5" tone="warning">
-                  באיחור
-                </StatusBadge>
-              ) : null}
-              <span className="inline-flex items-center gap-1.5">
-                <Clock aria-hidden="true" className="size-3.5 shrink-0" />
-                {formatApplicationDate(item.next_action_date)}
-              </span>
-            </span>
-          )}
-        </div>
-      )}
-    </td>
-  );
-};
-
 const RecommendedActionContent = ({ item }: { item: ApplicationListItem }) => {
-  const href = `/applications/${encodeURIComponent(item.id)}`;
+  const href = appRoutes.application(item.id);
   const latest = item.active_operation ?? item.latest_operation;
   /* Terminal only means that polling may stop; it does not mean the outcome is safe to
      hide. A failure remains the row's most important next-action fact until a newer run
@@ -218,7 +134,7 @@ const RecommendedActionContent = ({ item }: { item: ApplicationListItem }) => {
      link, so both stay reachable from the row. */
   const readyRevisionLink =
     item.latest_ready_revision_id == null ? null : (
-      <Link className={rowRevisionLinkClasses} to={`/revisions/${encodeURIComponent(item.latest_ready_revision_id)}`}>
+      <Link className={rowRevisionLinkClasses} to={appRoutes.revision(item.latest_ready_revision_id)}>
         <FileCheck2 aria-hidden="true" className="size-3.5 shrink-0" />
         הגרסה המוכנה
       </Link>
@@ -294,8 +210,8 @@ interface ApplicationListRowProps {
 
 export const ApplicationListRow = ({ ambiguous, item, onRequestClose, onRequestUpdate }: ApplicationListRowProps) => {
   const navigate = useNavigate();
-  const href = `/applications/${encodeURIComponent(item.id)}`;
-  const preparationHref = `${href}/preparation`;
+  const href = appRoutes.application(item.id);
+  const preparationHref = appRoutes.preparation(item.id);
   const attention = applicationAttention(item);
 
   /* The row was already painted on hover while only three cells were clickable. It now
@@ -325,37 +241,12 @@ export const ApplicationListRow = ({ ambiguous, item, onRequestClose, onRequestU
       onClick={openRow}
     >
       <td className="px-3 py-3 align-top">
-        <div className="flex min-w-0 items-start gap-2">
-          <CompanyMark company={item.company} />
-          <div className="min-w-0 flex-1 text-left">
-            <Link className="block truncate text-support font-bold text-cv-text hover:underline" dir="auto" to={href}>
-              {item.company}
-            </Link>
-            <p className="truncate text-support text-cv-text-muted" dir="auto">
-              {item.target_role}
-            </p>
-            <ProvenanceLine item={item} />
-            {/* Two rows for the same company and role are told apart by when each was
-                opened, so the hint names itself and carries that date instead of
-                emphasizing a column every other row also had. */}
-            {ambiguous ? (
-              <p className="truncate text-support font-medium text-cv-text" title={DUPLICATE_IDENTITY_HINT}>
-                {DUPLICATE_IDENTITY_HINT} · נפתחה ב־{formatApplicationDate(item.created_at)}
-              </p>
-            ) : null}
-          </div>
-        </div>
+        <ApplicationIdentity ambiguous={ambiguous} item={item} variant="row" />
       </td>
       <RecruitmentStatusCell item={item} />
       <td className="px-3 py-3 align-top">
         <div className="flex flex-col items-start gap-1.5">
-          <StatusBadge
-            className={rowBadgeClasses}
-            icon={preparationStateIcons[item.preparation_state]}
-            tone={preparationStateTones[item.preparation_state]}
-          >
-            {preparationStateLabels[item.preparation_state]}
-          </StatusBadge>
+          <ApplicationPreparationBadge item={item} variant="row" />
           {attention === null ? null : (
             /* The badge names what is waiting rather than counting it, and links to the
                preparation screen, where the alert region states each item with the control that
@@ -379,7 +270,9 @@ export const ApplicationListRow = ({ ambiguous, item, onRequestClose, onRequestU
         </div>
       </td>
       <FitCell item={item} />
-      <NextActionCell item={item} />
+      <td className="px-3 py-3 align-top">
+        <ApplicationNextAction item={item} variant="row" />
+      </td>
       <td className="whitespace-nowrap px-3 py-3 align-top text-support text-cv-text-muted">
         <span className="inline-flex items-center gap-1.5" title={`נפתחה ב־${formatApplicationDate(item.created_at)}`}>
           <Clock aria-hidden="true" className="size-3.5 shrink-0" />

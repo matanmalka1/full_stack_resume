@@ -15,6 +15,7 @@ import type { ApplicationIntake, DuplicateMatch } from "../api/contracts";
 import { executionProvider, settingsQueryOptions } from "../api/settings";
 import { ErrorCallout } from "../app/ErrorCallout";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
+import { appRoutes } from "../app/appRoutes";
 import { useAppForm } from "../forms/useAppForm";
 import { ActionBar } from "../ui/ActionBar";
 import { BackLink } from "../ui/BackLink";
@@ -105,7 +106,7 @@ export const NewApplicationPage = () => {
      become an arbitrary link. */
   const [boardParams] = useSearchParams();
   const boardSearch = paramsFromQuery(queryFromParams(boardParams)).toString();
-  const boardPath = boardSearch === "" ? "/" : `/?${boardSearch}`;
+  const boardPath = boardSearch === "" ? appRoutes.home : `${appRoutes.home}?${boardSearch}`;
   /* Intake creates the job the CV workflow later acts on; it is not a stage of that
      workflow, so this screen reports none rather than claiming step 1. */
   useWorkflowStage("none");
@@ -164,7 +165,7 @@ export const NewApplicationPage = () => {
     },
     onSuccess: (result) => {
       if (result.kind === "created") {
-        void navigate(`/applications/${encodeURIComponent(result.applicationId)}`, {
+        void navigate(appRoutes.application(result.applicationId), {
           state: { createdApplication: { analysisQueued: result.analysisQueued } },
           replace: true,
         });

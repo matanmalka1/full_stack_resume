@@ -2,6 +2,7 @@ import { Building2, ChevronLeft, FileText, Link2, type LucideIcon } from "lucide
 import { Link } from "react-router-dom";
 
 import type { DuplicateMatch, DuplicateMatchReason } from "../../api/contracts";
+import { appRoutes } from "../../app/appRoutes";
 import { Button } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 
@@ -81,7 +82,7 @@ export const DuplicateChoices = ({ matches, onCreateAnyway, pending }: Duplicate
                 <Link
                   aria-label={openLabel}
                   className="group flex items-center gap-3 py-3 transition-colors duration-200 hover:text-cv-accent"
-                  to={`/applications/${encodeURIComponent(match.application_id)}`}
+                  to={appRoutes.application(match.application_id)}
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium text-cv-text group-hover:text-cv-accent" dir="auto">

@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { operationQueryKey } from "../../api/operations";
 import { approvedRevisionQueryOptions, renderApprovedRevision } from "../../api/revisions";
 import { ErrorCallout } from "../../app/ErrorCallout";
+import { appRoutes } from "../../app/appRoutes";
 import { Button, buttonClasses } from "../../ui/Button";
 
 interface DraftRenderPanelProps {
@@ -67,7 +68,7 @@ export const DraftRenderPanel = ({ approvedRevisionId, onQueued }: DraftRenderPa
 
       <div className="flex flex-wrap gap-3">
         {revision?.ready_qualified === true ? (
-          <Link className={buttonClasses("primary")} to={`/revisions/${encodeURIComponent(revision.id)}`}>
+          <Link className={buttonClasses("primary")} to={appRoutes.revision(revision.id)}>
             צפייה בגרסה המוכנה
           </Link>
         ) : (

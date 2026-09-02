@@ -9,6 +9,7 @@ import { NewApplicationPage } from "../pages/NewApplicationPage";
 import { RevisionPage } from "../pages/RevisionPage";
 import { RoutePlaceholder } from "../pages/RoutePlaceholder";
 import { SettingsPage } from "../pages/SettingsPage";
+import { appRoutes } from "./appRoutes";
 import { RouteErrorBoundary } from "./RouteErrorBoundary";
 
 /* The root is the Application list, and intake is a screen reached from it. The two were
@@ -41,13 +42,13 @@ import { RouteErrorBoundary } from "./RouteErrorBoundary";
 const TrackingRedirect = () => {
   const { applicationId } = useParams();
 
-  return <Navigate replace to={`/applications/${encodeURIComponent(applicationId ?? "")}`} />;
+  return <Navigate replace to={appRoutes.application(applicationId ?? "")} />;
 };
 
 const ReadyRedirect = () => {
   const { revisionId } = useParams();
 
-  return <Navigate replace to={`/revisions/${encodeURIComponent(revisionId ?? "")}`} />;
+  return <Navigate replace to={appRoutes.revision(revisionId ?? "")} />;
 };
 
 export const router = createBrowserRouter([

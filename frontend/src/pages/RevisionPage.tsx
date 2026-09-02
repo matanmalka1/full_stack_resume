@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 
 import { approvedPreviewSrc, recruiterPdfHref } from "../api/revisions";
 import { ErrorCallout } from "../app/ErrorCallout";
+import { appRoutes } from "../app/appRoutes";
 import { BackLink } from "../ui/BackLink";
 import { Button, buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
@@ -60,7 +61,7 @@ const RevisionPageContent = ({ approvedRevisionId }: RevisionPageContentProps) =
       description="הגרסה המאושרת נשארת זמינה גם כאשר העבודה על המועמדות ממשיכה."
       navigation={
         revision === undefined ? undefined : (
-          <BackLink label="חזרה למועמדות" to={`/applications/${encodeURIComponent(revision.application_id)}`}>
+          <BackLink label="חזרה למועמדות" to={appRoutes.application(revision.application_id)}>
             {hasSources ? "חזרה למועמדות" : "חזרה למועמדות ליצירת מקורות עדכניים"}
           </BackLink>
         )

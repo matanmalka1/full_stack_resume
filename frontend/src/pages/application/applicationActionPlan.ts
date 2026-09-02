@@ -1,4 +1,5 @@
 import type { ApplicationDetail } from "../../api/contracts";
+import { appRoutes } from "../../app/appRoutes";
 import { actionDestination } from "./actionDestinations";
 
 /* What the preparation screen may offer, derived from the §9 projection alone.
@@ -98,7 +99,7 @@ export const applicationActionPlan = (detail: ApplicationDetail): ApplicationAct
       ? null
       : {
           emphasized: detail.preparation_state === "ready",
-          href: `/revisions/${encodeURIComponent(detail.latest_ready_revision_id)}`,
+          href: appRoutes.revision(detail.latest_ready_revision_id),
         };
 
   const workingDraftId = detail.active_working_draft_id ?? null;

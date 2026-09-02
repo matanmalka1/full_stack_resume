@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
+import { FileCheck2 } from "lucide-react";
 import { Link, useLocation, useParams } from "react-router-dom";
 
 import { applicationDetailQueryOptions } from "../api/applications";
 import type { ApplicationDetail } from "../api/contracts";
+import { appRoutes } from "../app/appRoutes";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { BackLink } from "../ui/BackLink";
 import { buttonClasses } from "../ui/Button";
@@ -16,16 +18,8 @@ import { dateTimesMatch, formatDateTime } from "../ui/formatDateTime";
 import { ArtifactsPanel } from "./application/ArtifactsPanel";
 import { ApplicationNotes } from "./application/ApplicationNotes";
 import { JobSnapshotPanel } from "./application/JobSnapshotPanel";
-import {
-  draftStateIsImplied,
-  preparationStateLabels,
-  preparationStateTones,
-  recruitmentStatusIcon,
-  recruitmentStatusLabel,
-  recruitmentStatusTone,
-  workingDraftStateLabels,
-  workingDraftStateTones,
-} from "./application/applicationLabels";
+import { PreparationStatusBadges } from "./application/PreparationStatusBadges";
+import { recruitmentStatusIcon, recruitmentStatusLabel, recruitmentStatusTone } from "./application/applicationLabels";
 import { RecruitmentPanel } from "./recruitment/RecruitmentPanel";
 
 const sourceLabel = (source: string): string => (source === "manual" ? "הזנה ידנית" : source);
@@ -72,7 +66,7 @@ const JobOverview = ({ detail }: { detail: ApplicationDetail }) => {
    starts listing what the job is. The accent rail is the single loud thing on the page;
    everything below it stays plain. */
 const PreparationGate = ({ detail }: { detail: ApplicationDetail }) => {
-  const application = `/applications/${encodeURIComponent(detail.application.id)}`;
+  const applicationId = detail.application.id;
 
   return (
     <Card
@@ -90,23 +84,23 @@ const PreparationGate = ({ detail }: { detail: ApplicationDetail }) => {
           <p className="mt-1 text-support text-cv-text-muted">
             תהליך נפרד בארבעה שלבים, מניתוח המשרה ועד גרסה מוכנה לשליחה.
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <StatusBadge tone={preparationStateTones[detail.preparation_state]}>
-              {preparationStateLabels[detail.preparation_state]}
-            </StatusBadge>
-            {draftStateIsImplied(detail) ? null : (
-              <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
-                {workingDraftStateLabels[detail.working_draft_state]}
-              </StatusBadge>
-            )}
-          </div>
+          <PreparationStatusBadges className="mt-3 flex flex-wrap gap-2" detail={detail} />
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link className={buttonClasses("primary")} to={`${application}/preparation`}>
+          {detail.latest_ready_revision_id == null ? null : (
+            <Link className={buttonClasses("primary")} to={appRoutes.revision(detail.latest_ready_revision_id)}>
+              <FileCheck2 aria-hidden="true" className="size-4" />
+              צפייה בגרסה המוכנה
+            </Link>
+          )}
+          <Link
+            className={buttonClasses(detail.latest_ready_revision_id == null ? "primary" : "secondary")}
+            to={appRoutes.preparation(applicationId)}
+          >
             מעבר להכנת קורות החיים
           </Link>
           {detail.active_working_draft_id == null ? null : (
-            <Link className={buttonClasses("ghost")} to={`${application}/draft`}>
+            <Link className={buttonClasses("ghost")} to={appRoutes.draft(applicationId)}>
               פתיחת עורך קורות החיים
             </Link>
           )}
@@ -154,7 +148,7 @@ export const JobDetailsPage = () => {
         )
       }
       navigation={
-        <BackLink label="חזרה ללוח המועמדויות" to="/">
+        <BackLink label="חזרה ללוח המועמדויות" to={appRoutes.home}>
           לוח המועמדויות
         </BackLink>
       }

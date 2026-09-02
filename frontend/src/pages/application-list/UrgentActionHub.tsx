@@ -2,6 +2,7 @@ import { BellOff, ChevronLeft, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "../../api/contracts";
+import { appRoutes } from "../../app/appRoutes";
 import { Button } from "../../ui/Button";
 import { StatusBadge } from "../../ui/StatusBadge";
 import type { StatusTone } from "../../ui/status";
@@ -52,7 +53,7 @@ const hubItems = (items: readonly ApplicationListItem[], today: Date = new Date(
       continue;
     }
 
-    const applicationHref = `/applications/${encodeURIComponent(application.id)}`;
+    const applicationHref = appRoutes.application(application.id);
     if (
       application.next_action != null &&
       application.next_action_date != null &&
@@ -77,7 +78,7 @@ const hubItems = (items: readonly ApplicationListItem[], today: Date = new Date(
     if (projectedAttention != null) {
       attention.push({
         actionLabel: "פתיחת מסך ההכנה",
-        actionTo: `${applicationHref}/preparation`,
+        actionTo: appRoutes.preparation(application.id),
         application,
         label: "דורש טיפול",
         subtitle: application.target_role,
@@ -91,7 +92,7 @@ const hubItems = (items: readonly ApplicationListItem[], today: Date = new Date(
     if (application.latest_ready_revision_id != null) {
       ready.push({
         actionLabel: "פתיחת הגרסה המוכנה",
-        actionTo: `/revisions/${encodeURIComponent(application.latest_ready_revision_id)}`,
+        actionTo: appRoutes.revision(application.latest_ready_revision_id),
         application,
         label: "מוכן לשליחה",
         subtitle: application.target_role,

@@ -85,6 +85,25 @@ afterEach(() => {
 });
 
 describe("JobDetailsPage", () => {
+  it("links a Ready application to the exact immutable revision", async () => {
+    renderPage((input) =>
+      Promise.resolve(
+        String(input).endsWith("/artifacts")
+          ? jsonResponse({ items: [] })
+          : jsonResponse({
+              ...detail(),
+              preparation_state: "ready",
+              latest_ready_revision_id: "revision-7",
+            }),
+      ),
+    );
+
+    expect(await screen.findByRole("link", { name: "צפייה בגרסה המוכנה" })).toHaveAttribute(
+      "href",
+      "/revisions/revision-7",
+    );
+  });
+
   it("presents recruitment status separately from the CV preparation state", async () => {
     renderPage();
 

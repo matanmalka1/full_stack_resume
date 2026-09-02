@@ -2,6 +2,7 @@ import { ArrowRight, FileText, Layers3, RefreshCw } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
 import { ErrorCallout } from "../../app/ErrorCallout";
+import { appRoutes } from "../../app/appRoutes";
 import { BackLink } from "../../ui/BackLink";
 import { Button, buttonClasses } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
@@ -61,7 +62,7 @@ export const DraftEditorPage = () => {
     workingDraftId,
   } = useDraftEditorState(applicationId);
 
-  const preparationHref = `/applications/${encodeURIComponent(applicationId)}/preparation`;
+  const preparationHref = appRoutes.preparation(applicationId);
 
   return (
     <PageShell
@@ -266,7 +267,7 @@ export const DraftEditorPage = () => {
                   <Callout title="יצירה מחדש באמצעות AI אינה זמינה" tone="neutral">
                     יש להגדיר ספק ולהפעיל AI במסך ההגדרות. לא יתבצע מעבר דטרמיניסטי שקט.
                     <div className="mt-3">
-                      <Link className={buttonClasses("secondary")} to="/settings">
+                      <Link className={buttonClasses("secondary")} to={appRoutes.settings}>
                         מעבר להגדרות
                       </Link>
                     </div>

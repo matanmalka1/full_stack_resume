@@ -3,58 +3,22 @@ import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "../../api/contracts";
 import { isTerminalOperation } from "../../api/operations";
+import { appRoutes } from "../../app/appRoutes";
 import { Button } from "../../ui/Button";
 import { StatusBadge } from "../../ui/StatusBadge";
 import { cx } from "../../ui/cx";
 import { actionDestination } from "../application/actionDestinations";
-import { fitLevelIcon, fitLevelLabel, fitLevelTone, trackLabel } from "../application/analysisLabels";
-import {
-  actionLabel,
-  preparationStateIcons,
-  preparationStateLabels,
-  preparationStateTones,
-  recruitmentStatusLabel,
-} from "../application/applicationLabels";
+import { fitLevelIcon, fitLevelLabel, fitLevelTone } from "../application/analysisLabels";
+import { actionLabel, recruitmentStatusLabel } from "../application/applicationLabels";
 import { operationTypeLabels, statusLabels, statusTones } from "../operationLabels";
-import {
-  applicationAttention,
-  formatApplicationDate,
-  isApplicationClosed,
-  isNextActionOverdue,
-  sourceHost,
-} from "./applicationListPresentation";
+import { applicationAttention, formatApplicationDate, isApplicationClosed } from "./applicationListPresentation";
+import { ApplicationIdentity, ApplicationNextAction, ApplicationPreparationBadge } from "./ApplicationListParts";
 
 interface AlternativeViewProps {
   items: readonly ApplicationListItem[];
   onRequestClose: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
 }
-
-const CompanyMark = ({ company }: { company: string }) => (
-  <span
-    aria-hidden="true"
-    className="flex size-11 shrink-0 items-center justify-center rounded-control border border-cv-accent/20 bg-cv-accent-soft text-support font-extrabold text-cv-accent shadow-surface"
-  >
-    {[...company].slice(0, 2).join("").toLocaleUpperCase() || "?"}
-  </span>
-);
-
-const Provenance = ({ item }: { item: ApplicationListItem }) => {
-  const host = sourceHost(item.source_url);
-  const origin = host ?? (item.source === "manual" ? null : item.source);
-
-  if (item.track == null && origin == null) {
-    return null;
-  }
-
-  return (
-    <p className="truncate text-support text-cv-text-muted">
-      {item.track == null ? null : trackLabel(item.track)}
-      {item.track != null && origin != null ? " · " : null}
-      {origin}
-    </p>
-  );
-};
 
 const ApplicationCard = ({
   item,
@@ -65,10 +29,9 @@ const ApplicationCard = ({
   onRequestClose: AlternativeViewProps["onRequestClose"];
   onRequestUpdate: AlternativeViewProps["onRequestUpdate"];
 }) => {
-  const href = `/applications/${encodeURIComponent(item.id)}`;
+  const href = appRoutes.application(item.id);
   const attention = applicationAttention(item);
   const closed = isApplicationClosed(item);
-  const nextActionOverdue = !closed && isNextActionOverdue(item.next_action_date);
   const latestOperation = item.active_operation ?? item.latest_operation;
   const reportedOperation =
     latestOperation != null &&
@@ -82,22 +45,7 @@ const ApplicationCard = ({
     <article className="group flex h-full flex-col rounded-surface border border-cv-border bg-cv-surface-raised p-5 shadow-surface transition-all hover:border-cv-border-strong hover:shadow-floating">
       <div className="flex-1">
         <div className="mb-3 flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <CompanyMark company={item.company} />
-            <div className="min-w-0 text-left">
-              <Link
-                className="block truncate font-extrabold text-cv-text transition-colors group-hover:text-cv-accent hover:underline"
-                dir="auto"
-                to={href}
-              >
-                {item.company}
-              </Link>
-              <p className="truncate text-support text-cv-text-muted" dir="auto" title={item.target_role}>
-                {item.target_role}
-              </p>
-              <Provenance item={item} />
-            </div>
-          </div>
+          <ApplicationIdentity item={item} variant="card" />
           {item.fit_level == null ? null : (
             <StatusBadge
               className="shrink-0 px-2 py-0.5"
@@ -113,41 +61,10 @@ const ApplicationCard = ({
           <StatusBadge className="px-2.5 py-0.5" tone="neutral">
             {recruitmentStatusLabel(item.recruitment_status)}
           </StatusBadge>
-          <StatusBadge
-            className="px-2.5 py-0.5"
-            icon={preparationStateIcons[item.preparation_state]}
-            tone={preparationStateTones[item.preparation_state]}
-          >
-            {preparationStateLabels[item.preparation_state]}
-          </StatusBadge>
+          <ApplicationPreparationBadge item={item} variant="card" />
         </div>
 
-        {item.next_action == null ? null : (
-          <div
-            className={cx(
-              "mb-3 rounded-control border px-3 py-2 text-support",
-              nextActionOverdue
-                ? "border-cv-blocker/30 bg-cv-blocker-soft text-cv-blocker"
-                : "border-cv-border bg-cv-surface-muted text-cv-text",
-            )}
-          >
-            <div className="mb-1 flex items-center justify-between gap-2 font-semibold">
-              <span className="inline-flex items-center gap-1.5 text-cv-text-muted">
-                <Clock aria-hidden="true" className="size-3.5 text-cv-accent" />
-                הצעד הבא
-              </span>
-              {item.next_action_date == null ? null : (
-                <span className="whitespace-nowrap text-cv-text-muted">
-                  {formatApplicationDate(item.next_action_date)}
-                  {nextActionOverdue ? " · באיחור" : null}
-                </span>
-              )}
-            </div>
-            <p className="line-clamp-2 font-semibold" dir="auto">
-              {item.next_action}
-            </p>
-          </div>
-        )}
+        <ApplicationNextAction closed={closed} item={item} variant="card" />
 
         {attention == null ? null : (
           <Link
@@ -157,7 +74,7 @@ const ApplicationCard = ({
                 ? "border-cv-blocker/30 bg-cv-blocker-soft text-cv-blocker"
                 : "border-cv-warning/30 bg-cv-warning-soft text-cv-warning",
             )}
-            to={`${href}/preparation`}
+            to={appRoutes.preparation(item.id)}
           >
             <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
             <span className="line-clamp-2">{attention.label}</span>
@@ -215,7 +132,7 @@ const ApplicationCard = ({
           {reportedOperation == null && item.latest_ready_revision_id != null ? (
             <Link
               className="inline-flex items-center gap-1.5 text-support font-semibold text-cv-accent hover:underline"
-              to={`/revisions/${encodeURIComponent(item.latest_ready_revision_id)}`}
+              to={appRoutes.revision(item.latest_ready_revision_id)}
             >
               <FileCheck2 aria-hidden="true" className="size-4" />
               הגרסה המוכנה
@@ -279,39 +196,22 @@ const PipelineCard = ({
   item: ApplicationListItem;
   onRequestUpdate: (item: ApplicationListItem) => void;
 }) => {
-  const href = `/applications/${encodeURIComponent(item.id)}`;
-
   return (
     <article className="group flex flex-col gap-2.5 rounded-control border border-cv-border bg-cv-surface p-3 shadow-surface transition-all hover:border-cv-border-strong hover:shadow-floating">
       <div>
-        <div className="mb-1 flex items-start justify-between gap-2">
-          <Link
-            className="min-w-0 truncate text-support font-extrabold text-cv-text transition-colors group-hover:text-cv-accent hover:underline"
-            dir="auto"
-            to={href}
-          >
-            {item.company}
-          </Link>
-          {item.fit_level == null ? null : (
-            <span className="shrink-0 text-support font-semibold text-cv-accent">{fitLevelLabel(item.fit_level)}</span>
-          )}
-        </div>
-        <p className="mb-2 truncate text-support text-cv-text-muted" dir="auto" title={item.target_role}>
-          {item.target_role}
-        </p>
-        <StatusBadge
-          className="px-2 py-0.5"
-          icon={preparationStateIcons[item.preparation_state]}
-          tone={preparationStateTones[item.preparation_state]}
-        >
-          {preparationStateLabels[item.preparation_state]}
-        </StatusBadge>
-        {item.next_action == null ? null : (
-          <p className="mt-2 line-clamp-2 rounded-control bg-cv-surface-muted px-2 py-1.5 text-support text-cv-text-muted">
-            <strong className="text-cv-text">הבא: </strong>
-            <span dir="auto">{item.next_action}</span>
-          </p>
-        )}
+        <ApplicationIdentity
+          afterCompany={
+            item.fit_level == null ? null : (
+              <span className="shrink-0 text-support font-semibold text-cv-accent">
+                {fitLevelLabel(item.fit_level)}
+              </span>
+            )
+          }
+          item={item}
+          variant="pipeline"
+        />
+        <ApplicationPreparationBadge item={item} variant="pipeline" />
+        <ApplicationNextAction item={item} variant="pipeline" />
       </div>
       <div className="flex items-center justify-between gap-2 border-t border-cv-border pt-2 text-support">
         <button

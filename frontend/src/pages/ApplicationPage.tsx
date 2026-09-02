@@ -3,20 +3,14 @@ import { useParams } from "react-router-dom";
 
 import { classificationFromAnalysis } from "../api/analyses";
 import { applicationDetailQueryOptions } from "../api/applications";
-import { preparationStateIsImpliedByStage, useWorkflowStage, workflowDestinations } from "../app/WorkflowLandmark";
+import { appRoutes } from "../app/appRoutes";
+import { useWorkflowStage, workflowDestinations } from "../app/WorkflowLandmark";
 import { useWatchedOperation } from "../hooks/useWatchedOperation";
 import { BackLink } from "../ui/BackLink";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
-import { StatusBadge } from "../ui/StatusBadge";
+import { PreparationStatusBadges } from "./application/PreparationStatusBadges";
 import { PreparationView } from "./application/PreparationView";
-import {
-  draftStateIsImplied,
-  preparationStateLabels,
-  preparationStateTones,
-  workingDraftStateLabels,
-  workingDraftStateTones,
-} from "./application/applicationLabels";
 import { useAutomaticDraft } from "./application/useAutomaticDraft";
 
 /* The CV preparation screen for one Application. It renders the §9 projection and offers
@@ -67,34 +61,17 @@ export const ApplicationPage = () => {
     <PageShell
       actions={
         detail === undefined ? null : (
-          <div className="flex flex-wrap items-center gap-2">
-            {/* The stage landmark above already names where the workflow stands. The
-                badge earns its place only where the stage is ambiguous - two preparation
-                states sharing one stage - and repeats it in a third wording where it is
-                not, so "אימות" was on screen as a stage, as a badge, and as an alert at
-                once. Which case this is comes from the landmark's own map. */}
-            {preparationStateIsImpliedByStage(detail.preparation_state) ? null : (
-              <StatusBadge tone={preparationStateTones[detail.preparation_state]}>
-                {preparationStateLabels[detail.preparation_state]}
-              </StatusBadge>
-            )}
-            {/* The draft axis is reported only where it says something the preparation
-                stage does not. Before the analysis exists a draft cannot, so "there is no
-                active draft" beside "waiting for the job analysis" is one fact wearing
-                two badges - and it costs a badge in the masthead, which is where the
-                screen's two states are supposed to be distinguishable at a glance. */}
-            {draftStateIsImplied(detail) ? null : (
-              <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
-                {workingDraftStateLabels[detail.working_draft_state]}
-              </StatusBadge>
-            )}
-          </div>
+          <PreparationStatusBadges
+            className="flex flex-wrap items-center gap-2"
+            detail={detail}
+            hideStageImpliedStatus
+          />
         )
       }
       /* Up to the job the CV is being written for, not across to a peer tab: preparation
          is entered from Job Detail and returns there. */
       navigation={
-        <BackLink label="חזרה לפרטי המשרה" to={`/applications/${encodeURIComponent(applicationId)}`}>
+        <BackLink label="חזרה לפרטי המשרה" to={appRoutes.application(applicationId)}>
           פרטי משרה
         </BackLink>
       }

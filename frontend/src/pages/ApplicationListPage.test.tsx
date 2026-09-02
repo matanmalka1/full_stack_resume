@@ -301,6 +301,9 @@ describe("ApplicationListPage", () => {
     expect(within(pipeline).getByRole("heading", { name: "ראיונות והצעות" })).toBeInTheDocument();
     expect(within(pipeline).getByRole("heading", { name: "תהליכים סגורים" })).toBeInTheDocument();
     expect(within(pipeline).getAllByText("אין מועמדויות בשלב זה")).toHaveLength(2);
+    expect(within(pipeline).getByRole("link", { name: "Acme" })).toHaveAttribute("href", "/applications/app-1");
+    expect(within(pipeline).getAllByText("ממתין לניתוח המשרה")).toHaveLength(3);
+    expect(within(pipeline).getByText("Follow up")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(10);
   });
 

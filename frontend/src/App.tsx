@@ -4,6 +4,7 @@ import { Link, Outlet, useMatches } from "react-router-dom";
 
 import { RouteFocusManager } from "./app/RouteFocusManager";
 import { WorkflowLandmark, WorkflowLandmarkSteps } from "./app/WorkflowLandmark";
+import { appRoutes } from "./app/appRoutes";
 import { applicationDetailQueryOptions } from "./api/applications";
 import { settingsQueryOptions } from "./api/settings";
 import { buttonClasses } from "./ui/Button";
@@ -56,7 +57,7 @@ export const App = () => {
             {/* A wordmark rather than a logo tile: this is a local document tool, and
                 the accent rule under the name does more to place it than a gradient
                 square with a spark in it. */}
-            <Link className="group shrink-0 rounded-control" to="/">
+            <Link className="group shrink-0 rounded-control" to={appRoutes.home}>
               <span className="block text-heading-sm font-extrabold tracking-tight text-cv-text">קורות חיים</span>
               <span className="block h-0.5 w-8 bg-cv-accent transition-all duration-200 group-hover:w-full" />
             </Link>
@@ -67,11 +68,11 @@ export const App = () => {
               {applicationContext === undefined || applicationId === null || isApplicationScreen ? null : (
                 <ApplicationContext
                   company={applicationContext.company}
-                  href={`/applications/${encodeURIComponent(applicationId)}`}
+                  href={appRoutes.application(applicationId)}
                   targetRole={applicationContext.target_role}
                 />
               )}
-              <Link className={buttonClasses("ghost")} to="/settings">
+              <Link className={buttonClasses("ghost")} to={appRoutes.settings}>
                 <Settings aria-hidden="true" className="size-4" />
                 הגדרות
               </Link>

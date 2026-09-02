@@ -14,6 +14,7 @@ import type { ApplicationListItem, ApplicationPreset } from "../api/contracts";
 import { setNextAction } from "../api/tracking";
 import { ErrorCallout } from "../app/ErrorCallout";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
+import { appRoutes } from "../app/appRoutes";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { Button, buttonClasses } from "../ui/Button";
 import { EmptyState } from "../ui/EmptyState";
@@ -156,7 +157,7 @@ export const ApplicationListPage = () => {
      to this board rather than to an unfiltered one. Normalised rather than echoed: what
      travels is the question this screen is actually asking. */
   const newApplicationTo = {
-    pathname: "/applications/new",
+    pathname: appRoutes.newApplication,
     search: paramsFromQuery(query).toString(),
   };
   const newApplication = (
@@ -341,7 +342,7 @@ export const ApplicationListPage = () => {
           onCreated={(applicationId, analysisQueued) => {
             setQuickIntakeOpen(false);
             void queryClient.invalidateQueries({ queryKey: applicationListQueryPrefix });
-            void navigate(`/applications/${encodeURIComponent(applicationId)}`, {
+            void navigate(appRoutes.application(applicationId), {
               state: { createdApplication: { analysisQueued } },
             });
           }}

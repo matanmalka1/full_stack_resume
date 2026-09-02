@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Settings, ShieldCheck } from "lucide-react";
 
 import { settingsQueryOptions } from "../api/settings";
+import { appRoutes } from "../app/appRoutes";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { BackLink } from "../ui/BackLink";
 import { Card } from "../ui/Card";
@@ -30,7 +31,7 @@ export const SettingsPage = () => {
       description="מדיניות ביצוע, תצוגת הממשק ובדיקות התקינות של מאגר הידע והתוצרים."
       measure="form"
       navigation={
-        <BackLink label="חזרה ללוח המועמדויות" to="/">
+        <BackLink label="חזרה ללוח המועמדויות" to={appRoutes.home}>
           לוח המועמדויות
         </BackLink>
       }
