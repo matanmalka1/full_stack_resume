@@ -22,11 +22,11 @@
 
 | ID | Sev | Conf | Category | Location | Problem | Recommended change |
 | --- | --- | --- | --- | --- | --- | --- |
-| F1 | High | High | כפילות | QuickIntakeDialog.tsx:23-147 ↔ NewApplicationPage.tsx:37-241 | ~120 שורות intake מועתקות | חילוץ useApplicationIntake |
-| F2 | High | High | כפילות + באג | PipelineStagesBar.tsx:7-37 ↔ ApplicationAlternativeViews.tsx:167-188 | קיבוצי שלבים סותרים | מודול recruitmentStages.ts יחיד |
-| F3 | High | Medium | correctness | useApplicationActionsMutations.ts:36,39,116, OperationActions.tsx:31 | useMemo+UUID כזהות יציבה | מפתח נגזר דטרמיניסטי |
+| F1 | High | High | כפילות | ✅ בוצע — QuickIntakeDialog.tsx:23-147 ↔ NewApplicationPage.tsx:37-241 | ~120 שורות intake מועתקות | חילוץ useApplicationIntake |
+| F2 | High | High | כפילות + באג | ✅ בוצע — PipelineStagesBar.tsx:7-37 ↔ ApplicationAlternativeViews.tsx:167-188 | קיבוצי שלבים סותרים | מודול recruitmentStages.ts יחיד |
+| F3 | High | Medium | correctness | ✅ בוצע — useApplicationActionsMutations.ts:36,39,116, OperationActions.tsx:31 | useMemo+UUID כזהות יציבה | מפתח נגזר דטרמיניסטי |
 | F4 | High | High | גבול שכבות | applicationListPresentation.ts:106 ↔ queries.py:327 | חוק עסקי בשני runtime | שדה בפרויקציה |
-| F5 | Medium | High | state/כפילות | useDraftEditorState.ts:31, AutomaticDraftNotice.tsx:19, useApplicationActionsMutations.ts:29 | enabled:false × 3 + הבהוב | hook useSettings() |
+| F5 | Medium | High | state/כפילות | ✅ בוצע — useDraftEditorState.ts:31, AutomaticDraftNotice.tsx:19, useApplicationActionsMutations.ts:29 | enabled:false × 3 + הבהוב | hook useSettings() |
 | F6 | Medium | High | כפילות | FactLifecyclePanel.tsx:41-47 ↔ CanonicalFactsBrowser.tsx:14-30,69 | אוצר מילים לעובדות פעמיים, סותר | factLabels.ts |
 | F7 | Medium | High | כפילות + סמנטיקה | UrgentActionHub.tsx:31-63 ↔ applicationListPresentation.ts:14-27 | שני חישובי "באיחור" שונים | פונקציה אחת |
 | F8 | Medium | High | כפילות | useRevisionPageState.ts:95-106 | גזירה מחדש של warnings מהשרת | להשתמש ב-warningTitle |
@@ -46,7 +46,7 @@
 
 ## הרחבה על הממצאים המשמעותיים
 
-### F1 — כפילות intake מלאה High / High
+### F1 — כפילות intake מלאה High / High ✅ בוצע
 
 התנהגות קיימת. שני משטחים יוצרים מועמדות. NewApplicationPage.tsx (מסך) ו-QuickIntakeDialog.tsx (דיאלוג בלוח). זהים ממש, לא "דומים":
 
@@ -85,7 +85,7 @@ useApplicationIntake({ onCreated }) → {
 
 Trade-offs. hook עם 7 יציאות; מוצדק כי כולן קשורות ל-mutation אחד. רגרסיה בעיקר במסך המכוסה — הדיאלוג ייחשף רק ידנית או ב-e2e. Refactor בלבד, ללא שינוי התנהגות. מוגן ע"י NewApplicationPage.test.tsx ו-e2e/new-application.spec.ts.
 
-### F2 — שלושה קיבוצי שלבי גיוס סותרים High / High
+### F2 — שלושה קיבוצי שלבי גיוס סותרים High / High ✅ בוצע (assignment→interviews, final_stage→offer, לפי הכרעת המשתמש)
 
 התנהגות קיימת.
 
@@ -117,7 +117,7 @@ queries.py:246-256 — _INTERVIEW_STATUSES (ה-preset active_interviews): recrui
 
 Trade-offs. צריך החלטה מוצרית אחת: לאיזה שלב שייך assignment ולאיזה final_stage. זו הכרעה של המשתמש — לא אאחד בשקט. אין טסט על אף אחד מהשניים; כדאי טסט קטן על selectedStage. דורש שינוי התנהגותי (הקיבוץ בצד אחד ישתנה).
 
-### F3 — מפתחות idempotency דרך useMemo High / Medium
+### F3 — מפתחות idempotency דרך useMemo High / Medium ✅ בוצע
 
 התנהגות קיימת. ארבעה מפתחות נבנים כך:
 
@@ -172,7 +172,7 @@ export const isApplicationClosed = (item) => item.terminal_outcome != null || cl
 
 ⚠️ זה שינוי בשדה פרויקציה — לפי AGENTS.md הוא גורר את הבדיקה הדטרמיניסטית מקצה-לקצה (tests/test_pipeline_end_to_end.py) מול PostgreSQL נקי, בנוסף ל-tests/test_application_list_query.py ולרגנרציה של openapi/types.ts. דורש שינוי התנהגותי בחוזה. אם העלות לא מוצדקת עכשיו — הפתרון הזול הוא לפחות לקבע את הסט בטסט משותף, אבל זה guard ידני ולכן פחות טוב מהנגזר.
 
-### F5 — קריאת Settings בשלושה עותקים עם enabled: false Medium / High
+### F5 — קריאת Settings בשלושה עותקים עם enabled: false Medium / High ✅ בוצע
 
 התנהגות קיימת. App.tsx:33 מבצע את הקריאה האמיתית. שלושה צרכנים קוראים מה-cache:
 
@@ -497,10 +497,10 @@ Rollback: F4 בקומיט אחד הפיך; F13 (תזוזת קבצים בלבד) 
 - F3 — חלון מפתחות ה-idempotency. מפתח דטרמיניסטי ל-retry אומר שניסיון חוזר אחרי כשל קבוע יחזיר תשובה שמורה. צריך לאשר מול §13 שזו ההתנהגות הרצויה.
 ### 10 הפעולות המומלצות, בסדר ביצוע
 
-1. F1 — לחלץ useApplicationIntake ולמחוק ~120 שורות כפולות מ-QuickIntakeDialog. (ההשפעה הגדולה ביותר; צד אחד לא מכוסה בטסטים כלל)
-2. F3 — להמיר 4 מפתחות useMemo+UUID למפתחות נגזרים, כמו ארבעת הדטרמיניסטיים שכבר קיימים.
-3. F2 — להכריע את קיבוץ השלבים ולרכז ב-recruitmentStages.ts. (אי-עקביות גלויה למשתמש)
-4. F5 — useSettings() במקום שלושה enabled:false; לתקן את הבהוב ה-callout בעורך.
+1. ✅ בוצע — F1 — לחלץ useApplicationIntake ולמחוק ~120 שורות כפולות מ-QuickIntakeDialog. (ההשפעה הגדולה ביותר; צד אחד לא מכוסה בטסטים כלל)
+2. ✅ בוצע — F3 — להמיר 4 מפתחות useMemo+UUID למפתחות נגזרים, כמו ארבעת הדטרמיניסטיים שכבר קיימים.
+3. ✅ בוצע — F2 — להכריע את קיבוץ השלבים ולרכז ב-recruitmentStages.ts. (אי-עקביות גלויה למשתמש)
+4. ✅ בוצע — F5 — useSettings() במקום שלושה enabled:false; לתקן את הבהוב ה-callout בעורך.
 5. F9 — flush ל-autosave ב-unmount; להוסיף מקרה ל-useDraftAutosave.test.ts.
 6. F7 — לאחד את חישוב "באיחור" ולהוסיף לו כיסוי טהור.
 7. F6 + F8 — factLabels.ts; למחוק את historicalContext לטובת warningTitle.
