@@ -7,7 +7,7 @@ from pydantic import Field
 from ...application.queries import PreparationState, WorkingDraftState
 from .health import HttpSchema
 from .operations import OperationResponse
-from .tracking import RecruitmentTimelineItemResponse, TransitionableStatus
+from .tracking import CorrectableStatus, RecruitmentTimelineItemResponse, TransitionableStatus
 
 
 class ApplicationIntake(HttpSchema):
@@ -177,7 +177,7 @@ class ApplicationDetailResponse(ApplicationStateResponse):
 
 
 class ApplicationListItemResponse(ApplicationResponse, ApplicationStateResponse):
-    pass
+    is_closed: bool
 
 
 class ApplicationListResponse(HttpSchema):
@@ -204,6 +204,8 @@ class ApplicationListResponse(HttpSchema):
     """
 
     stage_counts: dict[PreparationState, int] = {}
+    preset_counts: dict[str, int] = {}
+    recruitment_status_counts: dict[CorrectableStatus, int] = {}
 
 
 class ArtifactVersionResponse(HttpSchema):

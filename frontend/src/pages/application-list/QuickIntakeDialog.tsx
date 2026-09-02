@@ -9,6 +9,7 @@ import { Field } from "../../ui/Field";
 import { TextArea, TextInput } from "../../ui/TextInput";
 import { DuplicateChoices } from "../new-application/DuplicateChoices";
 import {
+  type ApplicationIntakeResult,
   LABEL_MAX_CHARACTERS,
   SOURCE_URL_MAX_CHARACTERS,
   emptyIntakeFields,
@@ -19,13 +20,17 @@ const FORM_ID = "quick-application-intake";
 
 interface QuickIntakeDialogProps {
   onClose: () => void;
-  onCreated: (applicationId: string, analysisQueued: boolean) => void;
+  onCreated: (
+    applicationId: string,
+    analysisQueued: boolean,
+    analysisProblem: Extract<ApplicationIntakeResult, { kind: "created" }>["analysisProblem"],
+  ) => void;
   open: boolean;
 }
 
 export const QuickIntakeDialog = ({ onClose, onCreated, open }: QuickIntakeDialogProps) => {
   const { answeredIntake, duplicates, failure, form, runSubmit, staleAnswer, submit } = useApplicationIntake({
-    onCreated: (result) => onCreated(result.applicationId, result.analysisQueued),
+    onCreated: (result) => onCreated(result.applicationId, result.analysisQueued, result.analysisProblem),
   });
   const {
     formState: { errors },

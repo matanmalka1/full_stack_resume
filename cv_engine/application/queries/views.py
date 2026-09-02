@@ -1,18 +1,14 @@
-"""Purpose-built read projections returned by the application layer."""
+"""Boundary DTOs for purpose-built application-layer read projections."""
 
 from __future__ import annotations
 
-import json
 from enum import StrEnum
 from typing import Any
 
 from pydantic import Field
 
-from ..domain.drafts import draft_claims
-from ..domain.facts import FactStore
-from ..domain.models import (
+from ...domain.models import (
     ApplicationStatus,
-    ApprovedRevision,
     ClaimStyle,
     ClaimType,
     DraftDocument,
@@ -21,8 +17,8 @@ from ..domain.models import (
     SelectionOutcome,
     ValidationReport,
 )
-from .commands import BoundaryDTO
-from .operations import OperationView
+from ..commands import BoundaryDTO
+from ..operations import OperationView
 
 # Public application-boundary type for recruitment-status query filters.  HTTP
 # adapters depend on this query vocabulary rather than reaching through the
@@ -166,6 +162,8 @@ class ApplicationDetailView(ApplicationStateView):
 class ApplicationListItemView(ApplicationView, ApplicationStateView):
     """The shared state/action projection plus list-display Application fields."""
 
+    is_closed: bool
+
 
 class ApplicationListView(BoundaryDTO):
     """One page of the list, and the two counts that place it.
@@ -193,6 +191,16 @@ class ApplicationListView(BoundaryDTO):
     """
 
     stage_counts: dict[PreparationState, int] = {}
+
+    """Dashboard facets computed from the same projected rows as this page.
+
+    Each facet ignores its own selected value while respecting the other query
+    fields, so selecting an option does not erase the alternatives beside it.
+    `preset_counts["all"]` is the count before the preset predicate.
+    """
+
+    preset_counts: dict[str, int] = {}
+    recruitment_status_counts: dict[ApplicationStatus, int] = {}
 
 
 class ActivityFilter(StrEnum):
@@ -237,33 +245,6 @@ class ApplicationPreset(StrEnum):
     ACTIVE_INTERVIEWS = "active_interviews"
     """Live conversations with the employer, from first recruiter contact through
     to an offer. Closed Applications are excluded by the statuses themselves."""
-
-
-"""Which recruitment statuses `ACTIVE_INTERVIEWS` means.
-
-Named here rather than inline so the preset and any client vocabulary describing it
-stay derived from one list. It stops before the terminal statuses: an accepted or
-rejected Application is not an active conversation.
-"""
-_INTERVIEW_STATUSES = frozenset(
-    {
-        ApplicationStatus.RECRUITER_SCREEN,
-        ApplicationStatus.INTERVIEW,
-        ApplicationStatus.ASSIGNMENT,
-        ApplicationStatus.FINAL_STAGE,
-        ApplicationStatus.OFFER,
-    }
-)
-
-
-def _matches_preset(item: ApplicationListItemView, preset: ApplicationPreset | None) -> bool:
-    if preset is None:
-        return True
-    if preset is ApplicationPreset.NEEDS_ATTENTION:
-        return bool(item.review_reasons or item.stale_reasons or item.warnings)
-    if preset is ApplicationPreset.READY_TO_SEND:
-        return item.latest_ready_revision_id is not None
-    return item.recruitment_status in _INTERVIEW_STATUSES
 
 
 class ApplicationListQuery(BoundaryDTO):
@@ -313,134 +294,6 @@ class ApplicationListQuery(BoundaryDTO):
 
     limit: int | None = Field(default=None, ge=1, le=200)
     offset: int = Field(default=0, ge=0)
-
-
-"""Which recruitment statuses mean the Application is no longer live.
-
-`terminal_outcome` is the record's own answer and is preferred wherever it is set.
-This set is the fallback for a record that reached a closing status without one:
-the status is what a reader sees, so a row reading `rejected` must not count as
-open because a nullable column beside it was never written.
-"""
-CLOSED_RECRUITMENT_STATUSES = frozenset({"rejected", "withdrawn", "closed"})
-
-
-def _is_closed(item: ApplicationListItemView) -> bool:
-    return (
-        item.terminal_outcome is not None or item.recruitment_status in CLOSED_RECRUITMENT_STATUSES
-    )
-
-
-def _matches_search(item: ApplicationListItemView, search: str) -> bool:
-    """Free text over what the row identifies itself by.
-
-    The two lifecycle codes are searched alongside company and role because they
-    are what the caller filters by everywhere else; the Hebrew a client prints for
-    them is the client's vocabulary and is not known here.
-    """
-    needle = search.strip().casefold()
-    if not needle:
-        return True
-
-    haystack = "\n".join(
-        (
-            item.company,
-            item.target_role,
-            item.preparation_state.value,
-            item.recruitment_status,
-        )
-    ).casefold()
-    return needle in haystack
-
-
-"""Declaration order of `PreparationState` is the workflow order, so the position of
-each member is how far the CV has got. Derived rather than restated, so a state added
-to the enum orders itself instead of sorting as an unknown."""
-_STAGE_ORDER = {state: index for index, state in enumerate(PreparationState)}
-
-
-def _sort_key(sort: ApplicationSort) -> Any:
-    if sort is ApplicationSort.COMPANY:
-        return lambda item: (item.company.casefold(), item.target_role.casefold())
-    if sort is ApplicationSort.CREATED:
-        return lambda item: _descending(item.created_at)
-    if sort is ApplicationSort.STAGE:
-        # Furthest along first, then most recently touched inside a stage.
-        return lambda item: (-_STAGE_ORDER[item.preparation_state], _descending(item.updated_at))
-    return lambda item: _descending(item.updated_at)
-
-
-class _Descending:
-    """A sort key that reverses one field without reversing the whole tuple.
-
-    `sorted(reverse=True)` would flip the tie-breakers too, and the stage sort needs
-    stage ascending-by-negation with its timestamp tie-break descending.
-    """
-
-    __slots__ = ("value",)
-
-    def __init__(self, value: str) -> None:
-        self.value = value
-
-    def __lt__(self, other: _Descending) -> bool:
-        return self.value > other.value
-
-
-def _descending(value: str) -> _Descending:
-    return _Descending(value)
-
-
-def narrow_application_list(
-    items: list[ApplicationListItemView], query: ApplicationListQuery
-) -> ApplicationListView:
-    """Apply one `ApplicationListQuery` to a fully projected list.
-
-    Filter, then order, then window: the page is a slice of the ordering, so the
-    sort has to be settled before `offset` names a position in it. An `offset`
-    past the end is an empty page rather than a refusal - it is what a client
-    holding a stale page number asks for, and the counts it comes back with are
-    what tell it so.
-    """
-    matched = sorted(
-        (
-            item
-            for item in items
-            if _matches_activity(item, query.activity)
-            and (not query.stages or item.preparation_state in query.stages)
-            and (
-                not query.recruitment_statuses
-                or item.recruitment_status in query.recruitment_statuses
-            )
-            and _matches_preset(item, query.preset)
-            and _matches_search(item, query.search)
-        ),
-        key=_sort_key(query.sort),
-    )
-    window = (
-        matched[query.offset :]
-        if query.limit is None
-        else matched[query.offset : query.offset + query.limit]
-    )
-    stage_counts: dict[PreparationState, int] = {}
-    for item in items:
-        stage_counts[item.preparation_state] = stage_counts.get(item.preparation_state, 0) + 1
-
-    return ApplicationListView(
-        items=window,
-        matched=len(matched),
-        total=len(items),
-        limit=query.limit,
-        offset=query.offset,
-        # Over every Application, not the page: a filter's own options must not
-        # disappear the moment it is applied.
-        stage_counts=stage_counts,
-    )
-
-
-def _matches_activity(item: ApplicationListItemView, activity: ActivityFilter) -> bool:
-    if activity is ActivityFilter.ALL:
-        return True
-    return _is_closed(item) is (activity is ActivityFilter.CLOSED)
 
 
 class DraftClaimView(BoundaryDTO):
@@ -662,234 +515,3 @@ class DecisionRecordView(BoundaryDTO):
     structured: dict[str, Any]
     summary: str
     created_at: str
-
-
-def application_view(record: dict[str, Any]) -> ApplicationView:
-    return ApplicationView.model_validate(record)
-
-
-def _claim_view(claim: Any) -> DraftClaimView:
-    return DraftClaimView(
-        claim_id=claim.claim_id,
-        style=claim.style,
-        text=claim.text,
-        claim_type=claim.claim_type,
-        fact_ids=list(claim.fact_ids),
-        pending_reason=claim.pending_reason,
-    )
-
-
-def draft_outline_view(draft: DraftDocument) -> DraftOutlineView:
-    """The editable structure of one draft, derived from the draft itself."""
-    return DraftOutlineView(
-        headline=_claim_view(draft.headline),
-        contacts=[_claim_view(claim) for claim in draft.contacts],
-        sections=[
-            DraftSectionView(
-                name=section.name,
-                claims=[_claim_view(claim) for claim in section.claims],
-            )
-            for section in draft.sections
-        ],
-    )
-
-
-def draft_facts_view(
-    working_draft_id: str,
-    application_id: str,
-    selection_plan_id: str,
-    draft: DraftDocument,
-    facts: FactStore,
-) -> WorkingDraftFactsView:
-    """Every fact this draft links, plus every candidate its plan considered.
-
-    Walked through `draft_claims` rather than `sections`, so the headline's
-    support and the contacts - which no SelectionPlan contains - are accounted
-    for alongside the candidates that can still be included or excluded.
-
-    `draft.omitted_facts` is deliberately not a third source. It spans every
-    canonical fact the store holds minus the selected ones, so reading it here
-    would hand the browser the whole fact pool - the general Knowledge manager
-    the product spec excludes - rather than this draft's accounting.
-    """
-    linked: dict[str, list[str]] = {}
-    for claim in draft_claims(draft):
-        for fact_id in claim.fact_ids:
-            linked.setdefault(fact_id, []).append(claim.claim_id)
-
-    candidates = {
-        candidate.fact_id: candidate
-        for candidate in (draft.selection.candidates if draft.selection is not None else [])
-    }
-
-    def rendering(fact_id: str) -> str | None:
-        try:
-            return facts.rendering(fact_id, draft.language)
-        except (KeyError, ValueError):
-            # A fact the store can no longer resolve is exactly what the
-            # projection reports as a stale reason. It is reported as
-            # unreadable, not raised: the editor still has to render the line
-            # that depends on it.
-            return None
-
-    return WorkingDraftFactsView(
-        working_draft_id=working_draft_id,
-        application_id=application_id,
-        selection_plan_id=selection_plan_id,
-        language=draft.language,
-        facts=[
-            DraftFactView(
-                fact_id=fact_id,
-                text=rendering(fact_id),
-                linked_claim_ids=linked.get(fact_id, []),
-                section=candidates[fact_id].section if fact_id in candidates else None,
-                outcome=candidates[fact_id].outcome if fact_id in candidates else None,
-                reason=candidates[fact_id].reason if fact_id in candidates else None,
-            )
-            for fact_id in sorted(set(linked) | set(candidates))
-        ],
-    )
-
-
-def application_list_item_view(
-    record: dict[str, Any], state: ApplicationStateView
-) -> ApplicationListItemView:
-    return ApplicationListItemView.model_validate({**record, **state.model_dump(mode="python")})
-
-
-def recruitment_timeline_view(
-    events: list[dict[str, Any]],
-    submissions: list[dict[str, Any]],
-    audits: list[dict[str, Any]],
-) -> list[RecruitmentTimelineItemView]:
-    """Merge append-only tracking records into one deterministic presentation trail."""
-
-    submission_audits = {
-        row["entity_id"]: row for row in audits if row.get("entity_type") == "submission"
-    }
-    items: list[RecruitmentTimelineItemView] = []
-    for row in events:
-        payload = json.loads(row.get("payload_json") or "{}")
-        items.append(
-            RecruitmentTimelineItemView(
-                id=row["id"],
-                item_type=row["event_type"],
-                occurred_at=row["occurred_at"],
-                actor_type=row.get("actor_type"),
-                client=row.get("client"),
-                from_status=row.get("from_status"),
-                to_status=row.get("to_status"),
-                corrects_event_id=row.get("corrects_event_id"),
-                reason=row.get("reason") or "",
-                next_action=payload.get("next_action"),
-                next_action_date=payload.get("next_action_date"),
-            )
-        )
-    for row in submissions:
-        audit = submission_audits.get(row["id"], {})
-        items.append(
-            RecruitmentTimelineItemView(
-                id=row["id"],
-                item_type="submission",
-                occurred_at=row["submitted_at"],
-                actor_type=audit.get("actor_type"),
-                client=audit.get("client"),
-                submission_type=row["submission_type"],
-                approved_revision_id=row.get("approved_revision_id"),
-                artifact_version_id=row.get("artifact_version_id"),
-                metadata=json.loads(row.get("metadata_json") or "{}"),
-            )
-        )
-
-    priority = {
-        "submission": 0,
-        "status_transition": 1,
-        "status_correction": 2,
-        "next_action": 3,
-    }
-    return sorted(
-        items,
-        key=lambda item: (item.occurred_at, priority.get(item.item_type, 9), item.id),
-    )
-
-
-def snapshot_view(record: dict[str, Any], job_text: str) -> JobSnapshotView:
-    return JobSnapshotView.model_validate(
-        {
-            **{
-                key: record.get(key)
-                for key in JobSnapshotView.model_fields
-                if key not in {"source_metadata", "job_text"}
-            },
-            "job_text": job_text,
-            "source_metadata": json.loads(record.get("source_metadata_json") or "{}"),
-        }
-    )
-
-
-def analysis_view(record: dict[str, Any]) -> JobAnalysisView:
-    return JobAnalysisView.model_validate(
-        {
-            **{key: record.get(key) for key in JobAnalysisView.model_fields if key != "analysis"},
-            "analysis": record["analysis"],
-        }
-    )
-
-
-def artifact_version_view(record: dict[str, Any]) -> ArtifactVersionView:
-    return ArtifactVersionView.model_validate(
-        {
-            **{
-                key: record.get(key)
-                for key in ArtifactVersionView.model_fields
-                if key != "metadata"
-            },
-            "metadata": json.loads(record.get("metadata_json") or "{}"),
-        }
-    )
-
-
-def approved_revision_view(
-    revision: ApprovedRevision,
-    qualification: Any,
-) -> ApprovedRevisionView:
-    """Build the client view field by field, never from the record's attributes.
-
-    `model_validate(record, from_attributes=True)` returns the record untouched
-    when it is already an instance of a wider model, which is the no-op that
-    shipped the runner's Operation record to HTTP clients three separate times
-    in M3. Naming the fields makes the two stored path references impossible to
-    inherit by accident.
-    """
-    return ApprovedRevisionView(
-        id=revision.id,
-        application_id=revision.application_id,
-        version_number=revision.version_number,
-        working_draft_id=revision.working_draft_id,
-        job_snapshot_id=revision.job_snapshot_id,
-        job_analysis_id=revision.job_analysis_id,
-        selection_plan_id=revision.selection_plan_id,
-        validation_run_id=revision.validation_run_id,
-        draft_edit_version=revision.draft_edit_version,
-        draft_content_hash=revision.draft_content_hash,
-        facts_version=revision.facts_version,
-        approved_at=revision.approved_at,
-        decision_provenance=revision.decision_provenance,
-        ready_qualified=qualification.ready_qualified,
-        pdf_artifact_version_id=qualification.pdf_artifact_version_id,
-        html_artifact_version_id=qualification.html_artifact_version_id,
-        ready_validation=qualification.validation,
-    )
-
-
-def decision_view(record: dict[str, Any]) -> DecisionRecordView:
-    return DecisionRecordView.model_validate(
-        {
-            **{
-                key: record.get(key)
-                for key in DecisionRecordView.model_fields
-                if key != "structured"
-            },
-            "structured": json.loads(record.get("structured_json") or "{}"),
-        }
-    )

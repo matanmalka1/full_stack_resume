@@ -7,6 +7,7 @@ import { approvedRevisionQueryOptions, decisionMarkdownQueryOptions } from "../.
 import { recordInternalSubmission } from "../../api/tracking";
 import { useWorkflowStage, workflowDestinations } from "../../app/WorkflowLandmark";
 import { useWatchedOperation } from "../../hooks/useWatchedOperation";
+import { isoFromLocalDateTimeInput } from "../../ui/isoFromLocalDateTimeInput";
 import { localDateTimeInputValue } from "../../ui/localDateTimeInputValue";
 
 /* One approved revision: its data, its commands, and the state that guards them. Apart
@@ -35,7 +36,7 @@ export const useRevisionPageState = (approvedRevisionId: string) => {
   /* The same watch the Application screen and the editor keep. This screen queues one
      command - a new draft from the approved revision - and reports it beside the files
      rather than sending the reader to a screen that holds neither. */
-  const { panel: operationPanel, watch } = useWatchedOperation(revision?.application_id ?? "", detail);
+  const { operation, watch } = useWatchedOperation(revision?.application_id ?? "", detail);
   const newDraftKey = useMemo(
     () =>
       `revision-draft:${approvedRevisionId}:${detail?.active_analysis_id ?? "none"}:${detail?.active_selection_plan_id ?? "none"}`,
@@ -70,10 +71,14 @@ export const useRevisionPageState = (approvedRevisionId: string) => {
       if (revision === undefined || revision.pdf_artifact_version_id == null) {
         throw new Error("Submission requires the exact Ready revision and PDF");
       }
+      const submittedAtIso = isoFromLocalDateTimeInput(submittedAt);
+      if (submittedAtIso === null) {
+        throw new Error("Submission requires a valid date and time");
+      }
       return recordInternalSubmission(revision.application_id, {
         approved_revision_id: revision.id,
         pdf_artifact_version_id: revision.pdf_artifact_version_id,
-        submitted_at: new Date(submittedAt).toISOString(),
+        submitted_at: submittedAtIso,
         metadata: {},
       });
     },
@@ -95,7 +100,7 @@ export const useRevisionPageState = (approvedRevisionId: string) => {
      any immutable revision. Suppress only the warning this displayed revision already
      explains; a different latest-Ready warning still carries distinct information. */
   const otherWarnings = detail?.warnings.filter((warning) => warning.code !== displayedRevisionWarningCode);
-  const submittedAtValid = !Number.isNaN(new Date(submittedAt).getTime());
+  const submittedAtValid = isoFromLocalDateTimeInput(submittedAt) !== null;
   const downloadDecision = () => {
     if (decisionQuery.data === undefined) return;
     const href = URL.createObjectURL(new Blob([decisionQuery.data.content], { type: "text/markdown;charset=utf-8" }));
@@ -114,7 +119,7 @@ export const useRevisionPageState = (approvedRevisionId: string) => {
     hasSources,
     displayedRevisionWarningCode,
     newDraft,
-    operationPanel,
+    operation,
     otherWarnings,
     revision,
     revisionQuery,
@@ -124,5 +129,6 @@ export const useRevisionPageState = (approvedRevisionId: string) => {
     submissionOpen,
     submittedAt,
     submittedAtValid,
+    watch,
   };
 };

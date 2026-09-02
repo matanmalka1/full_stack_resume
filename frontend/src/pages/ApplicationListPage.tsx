@@ -1,4 +1,4 @@
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Kanban, LayoutGrid, Table2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -9,7 +9,7 @@ import {
   closeApplication,
   invalidateApplicationViews,
 } from "../api/applications";
-import type { ApplicationListItem, ApplicationPreset } from "../api/contracts";
+import type { ApplicationListItem } from "../api/contracts";
 import { setNextAction } from "../api/tracking";
 import { ErrorCallout } from "../app/ErrorCallout";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
@@ -35,13 +35,6 @@ import { PAGE_SIZE, paramsFromQuery, queryFromParams } from "./applicationListPa
 
 const SEARCH_DEBOUNCE_MS = 300;
 type ViewMode = "table" | "cards" | "pipeline";
-const metricPresets: readonly (ApplicationPreset | undefined)[] = [
-  undefined,
-  "active_interviews",
-  "ready_to_send",
-  "needs_attention",
-];
-
 const viewOptions: readonly { icon: typeof Table2; label: string; value: ViewMode }[] = [
   { icon: Table2, label: "תצוגת טבלה", value: "table" },
   { icon: LayoutGrid, label: "תצוגת כרטיסים", value: "cards" },
@@ -85,38 +78,13 @@ export const ApplicationListPage = () => {
     }),
   );
   const page = listQuery.data;
-  const metricQueryBase: ApplicationListQuery = {
-    activity: query.activity,
-    stages: query.stages,
-    recruitmentStatuses: query.recruitmentStatuses,
-    search: settledSearch === "" ? undefined : settledSearch,
-    limit: 1,
-  };
-  const [allMetricQuery, activeInterviewsMetricQuery, readyMetricQuery, attentionMetricQuery] = useQueries({
-    queries: metricPresets.map((metricPreset) =>
-      applicationListQueryOptions({
-        ...metricQueryBase,
-        ...(metricPreset === undefined ? {} : { preset: metricPreset }),
-      }),
-    ),
-  });
-  const stageMetricQueryBase: ApplicationListQuery = {
-    activity: query.activity,
-    stages: query.stages,
-    preset: query.preset,
-    search: settledSearch === "" ? undefined : settledSearch,
-    limit: 1,
-  };
-  const stageMetricQueries = useQueries({
-    queries: recruitmentStages.map((stage) =>
-      applicationListQueryOptions({
-        ...stageMetricQueryBase,
-        recruitmentStatuses: stage.statuses,
-      }),
-    ),
-  });
   const recruitmentStageCounts = Object.fromEntries(
-    recruitmentStages.map((stage, index) => [stage.id, stageMetricQueries[index]?.data?.matched]),
+    recruitmentStages.map((stage) => [
+      stage.id,
+      page === undefined
+        ? undefined
+        : stage.statuses.reduce((count, status) => count + (page.recruitment_status_counts[status] ?? 0), 0),
+    ]),
   ) as Partial<Record<RecruitmentStageId, number | undefined>>;
 
   useWorkflowStage("none");
@@ -169,12 +137,12 @@ export const ApplicationListPage = () => {
       />
       <div className="mt-6 flex flex-col gap-6">
         <MetricsKpiGrid
-          activeInterviewsCount={activeInterviewsMetricQuery.data?.matched}
+          activeInterviewsCount={page?.preset_counts.active_interviews}
           activePreset={query.preset ?? "all"}
-          needsAttentionCount={attentionMetricQuery.data?.matched}
+          needsAttentionCount={page?.preset_counts.needs_attention}
           onSelectPreset={(preset) => updateQuery({ ...query, preset: preset === "all" ? undefined : preset })}
-          readyCount={readyMetricQuery.data?.matched}
-          totalCount={allMetricQuery.data?.matched}
+          readyCount={page?.preset_counts.ready_to_send}
+          totalCount={page?.preset_counts.all}
         />
         <PipelineStagesBar
           counts={recruitmentStageCounts}
@@ -316,11 +284,11 @@ export const ApplicationListPage = () => {
         />
         <QuickIntakeDialog
           onClose={() => setQuickIntakeOpen(false)}
-          onCreated={(applicationId, analysisQueued) => {
+          onCreated={(applicationId, analysisQueued, analysisProblem) => {
             setQuickIntakeOpen(false);
             void invalidateApplicationViews(queryClient);
             void navigate(appRoutes.application(applicationId), {
-              state: { createdApplication: { analysisQueued } },
+              state: { createdApplication: { analysisProblem, analysisQueued } },
             });
           }}
           open={quickIntakeOpen}

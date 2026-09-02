@@ -390,6 +390,10 @@
             "title": "Id",
             "type": "string"
           },
+          "is_closed": {
+            "title": "Is Closed",
+            "type": "boolean"
+          },
           "language": {
             "anyOf": [
               {
@@ -613,7 +617,8 @@
           "notes",
           "source",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "is_closed"
         ],
         "title": "ApplicationListItemResponse",
         "type": "object"
@@ -648,6 +653,37 @@
             "default": 0,
             "title": "Offset",
             "type": "integer"
+          },
+          "preset_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "default": {},
+            "title": "Preset Counts",
+            "type": "object"
+          },
+          "recruitment_status_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "default": {},
+            "propertyNames": {
+              "enum": [
+                "saved",
+                "applied",
+                "recruiter_screen",
+                "interview",
+                "assignment",
+                "final_stage",
+                "offer",
+                "accepted",
+                "rejected",
+                "withdrawn",
+                "closed"
+              ]
+            },
+            "title": "Recruitment Status Counts",
+            "type": "object"
           },
           "stage_counts": {
             "additionalProperties": {

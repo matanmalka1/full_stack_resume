@@ -9,7 +9,6 @@ import type { StatusTone } from "../../ui/status";
 import {
   applicationAttention,
   formatApplicationDate,
-  isApplicationClosed,
   isDueToday,
   isNextActionOverdue,
 } from "./applicationListPresentation";
@@ -45,7 +44,7 @@ const hubItems = (items: readonly ApplicationListItem[], today: Date = new Date(
   const ready: HubItem[] = [];
 
   for (const application of items) {
-    if (isApplicationClosed(application)) {
+    if (application.is_closed) {
       continue;
     }
 

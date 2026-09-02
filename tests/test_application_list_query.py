@@ -33,6 +33,11 @@ def item(
     created_at: str = "2026-08-24T07:00:00Z",
     updated_at: str = "2026-08-24T07:00:00Z",
 ) -> ApplicationListItemView:
+    is_closed = terminal_outcome is not None or recruitment_status in {
+        "rejected",
+        "withdrawn",
+        "closed",
+    }
     return ApplicationListItemView(
         id=application_id,
         company=company,
@@ -40,6 +45,7 @@ def item(
         current_status=recruitment_status,
         recruitment_status=recruitment_status,
         terminal_outcome=terminal_outcome,
+        is_closed=is_closed,
         preparation_state=preparation_state,
         working_draft_state=WorkingDraftState.NONE,
         active_job_snapshot_id="snap-1",
@@ -213,6 +219,40 @@ def test_stage_counts_are_over_every_application_not_the_narrowed_page() -> None
     assert narrowed.stage_counts == {
         PreparationState.NEEDS_ANALYSIS: 2,
         PreparationState.READY: 1,
+    }
+
+
+def test_dashboard_facets_ignore_their_own_axis_and_keep_other_filters() -> None:
+    rows = [
+        item("screen", recruitment_status="recruiter_screen"),
+        item("interview", recruitment_status="interview"),
+        item(
+            "ready",
+            recruitment_status="offer",
+            preparation_state=PreparationState.READY,
+        ),
+        item("closed", recruitment_status="closed"),
+    ]
+
+    result = narrow_application_list(
+        rows,
+        ApplicationListQuery(
+            activity=ActivityFilter.OPEN,
+            recruitment_statuses=frozenset({"interview"}),
+        ),
+    )
+
+    assert ids(result.items) == ["interview"]
+    assert result.preset_counts == {
+        "all": 1,
+        "needs_attention": 0,
+        "ready_to_send": 0,
+        "active_interviews": 1,
+    }
+    assert result.recruitment_status_counts == {
+        "recruiter_screen": 1,
+        "interview": 1,
+        "offer": 1,
     }
 
 

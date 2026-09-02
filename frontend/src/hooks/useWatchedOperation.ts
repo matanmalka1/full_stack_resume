@@ -1,10 +1,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { applicationDetailQueryKey } from "../api/applications";
 import type { ApplicationDetail, Operation } from "../api/contracts";
 import { isTerminalOperation, operationQueryOptions } from "../api/operations";
-import { ActiveOperationPanel } from "../pages/ActiveOperationPanel";
 
 /* Watching one Application's live work, on whichever screen queued it.
 
@@ -22,8 +21,7 @@ import { ActiveOperationPanel } from "../pages/ActiveOperationPanel";
    projection reports an Operation only on its next read, so waiting for it would put the
    panel on screen a poll after the press that caused it.
 
-   The ready `panel` keeps the watch callback paired with retries inside the operation
-   presentation. A host only places it and hands `watch` to the action that queues work. */
+   Presentation remains with the owning page; this hook returns only watched data. */
 export const useWatchedOperation = (
   applicationId: string,
   detail: ApplicationDetail | undefined,
@@ -33,7 +31,6 @@ export const useWatchedOperation = (
      Operation that triggered it, and needs that id before the record has arrived. */
   operationId: string | null;
   operation: Operation | undefined;
-  panel: ReactNode;
   watch: (operationId: string) => void;
 } => {
   const queryClient = useQueryClient();
@@ -78,7 +75,6 @@ export const useWatchedOperation = (
   return {
     operation,
     operationId: watchedId,
-    panel: operation === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={operation} />,
     watch,
   };
 };

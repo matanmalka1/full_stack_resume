@@ -19,7 +19,7 @@ import {
   recruitmentStatusTone,
 } from "../application/applicationLabels";
 import { operationTypeLabels, statusLabels, statusTones } from "../operationLabels";
-import { applicationAttention, formatApplicationDate, isApplicationClosed } from "./applicationListPresentation";
+import { applicationAttention, formatApplicationDate } from "./applicationListPresentation";
 import { ApplicationIdentity, ApplicationNextAction, ApplicationPreparationBadge } from "./ApplicationListParts";
 
 /* Three tinted pills per row read as three competing headlines, so only two things in a
@@ -99,7 +99,7 @@ const FitCell = ({ item }: { item: ApplicationListItem }) => {
 };
 
 const RecruitmentStatusCell = ({ item }: { item: ApplicationListItem }) => {
-  const closed = isApplicationClosed(item);
+  const closed = item.is_closed;
 
   return (
     <td className="px-3 py-3 align-top">
@@ -168,7 +168,7 @@ const QuickActionsCell = ({
   onRequestClose: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
 }) => {
-  const closed = isApplicationClosed(item);
+  const closed = item.is_closed;
 
   return (
     <td className="px-3 py-3 align-top">

@@ -39,7 +39,7 @@ export const useDraftEditorState = (applicationId: string) => {
   /* The same watch the Application screen keeps, on the other screen that queues durable
      work against one Application. Regeneration is reported here, beside the draft it is
      rewriting. */
-  const { panel: operationPanel, watch } = useWatchedOperation(applicationId, detail);
+  const { operation, watch } = useWatchedOperation(applicationId, detail);
 
   const workingDraftId = detail?.active_working_draft_id ?? null;
   const draftQuery = useQuery({
@@ -236,7 +236,7 @@ export const useDraftEditorState = (applicationId: string) => {
     facts,
     includeFact,
     onExactPassingRun,
-    operationPanel,
+    operation,
     regeneration,
     regenerationAvailable,
     regenerationDisabled,

@@ -12,6 +12,7 @@ import { Field } from "../../ui/Field";
 import { FormActions } from "../../ui/FormActions";
 import { Select } from "../../ui/Select";
 import { TextArea, TextInput } from "../../ui/TextInput";
+import { isoFromLocalDateTimeInput } from "../../ui/isoFromLocalDateTimeInput";
 import { localDateTimeInputValue } from "../../ui/localDateTimeInputValue";
 import { recruitmentStatusLabel, recruitmentStatusLabels } from "../application/applicationLabels";
 import { statusEventLabel } from "./RecruitmentTimeline";
@@ -73,12 +74,17 @@ export const RecruitmentExceptionalActions = ({ detail, kind, onChanged }: Recru
     },
   });
   const externalSubmission = useMutation({
-    mutationFn: (fields: ExternalSubmissionFields) =>
-      recordExternalSubmission(detail.application.id, {
-        submitted_at: new Date(fields.submittedAt).toISOString(),
+    mutationFn: (fields: ExternalSubmissionFields) => {
+      const submittedAt = isoFromLocalDateTimeInput(fields.submittedAt);
+      if (submittedAt === null) {
+        throw new Error("invalid datetime-local value passed form validation");
+      }
+      return recordExternalSubmission(detail.application.id, {
+        submitted_at: submittedAt,
         artifact_version_id: null,
         metadata: fields.note.trim() === "" ? {} : { note: fields.note.trim() },
-      }),
+      });
+    },
     onSuccess: () => {
       externalForm.resetField("note", { defaultValue: "" });
       setExternalOpen(false);
@@ -185,9 +191,18 @@ export const RecruitmentExceptionalActions = ({ detail, kind, onChanged }: Recru
             <Callout title="הרישום קבוע" tone="warning">
               ההגשה תתווסף להיסטוריה בלי להמציא גרסת קורות חיים או קובץ שלא נוצרו במערכת.
             </Callout>
-            <Field label="מועד ההגשה">
+            <Field error={externalForm.formState.errors.submittedAt?.message} label="מועד ההגשה">
               {(control) => (
-                <TextInput {...control} {...externalForm.register("submittedAt")} required type="datetime-local" />
+                <TextInput
+                  {...control}
+                  {...externalForm.register("submittedAt", {
+                    required: "יש להזין מועד הגשה.",
+                    validate: (value) =>
+                      isoFromLocalDateTimeInput(value) !== null || "יש להזין מועד הגשה תקין.",
+                  })}
+                  required
+                  type="datetime-local"
+                />
               )}
             </Field>
             <Field label="הערה (רשות)">

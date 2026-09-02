@@ -640,7 +640,10 @@ failure.
 
 Initial query contracts include:
 
-- Application list with search/filter/sort and Dashboard projection
+- Application list with search/filter/sort and Dashboard projection. Each row carries
+  application-owned `is_closed`; the response carries preparation-state, preset, and
+  recruitment-status counts computed from the same projected read. Each Dashboard facet
+  ignores its own selected value while respecting the other list filters.
 - Application detail with consistent state/action policy and unified timeline
 - duplicate candidates for a proposed Application
 - active preparation context

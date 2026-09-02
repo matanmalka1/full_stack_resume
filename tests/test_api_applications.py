@@ -353,6 +353,18 @@ def test_application_list_query_narrows_orders_and_pages_at_the_boundary(service
         # Every row is at the first stage, and a state nothing reached is absent
         # rather than reported as zero.
         assert whole["stage_counts"] == {"needs_analysis": 3}
+        assert whole["preset_counts"] == {
+            "all": 3,
+            "needs_attention": 0,
+            "ready_to_send": 0,
+            "active_interviews": 0,
+        }
+        assert whole["recruitment_status_counts"] == {"saved": 2, "closed": 1}
+        assert {item["company"]: item["is_closed"] for item in whole["items"]} == {
+            "Alpha": False,
+            "Binat": False,
+            "Cegal": True,
+        }
 
         # A closed Application stays stored and reachable, and is not what a board
         # of live work is asking about.

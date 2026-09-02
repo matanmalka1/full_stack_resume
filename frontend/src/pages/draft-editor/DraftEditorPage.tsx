@@ -1,8 +1,9 @@
 import { ArrowRight, FileText } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 import { ErrorCallout } from "../../app/ErrorCallout";
 import { appRoutes } from "../../app/appRoutes";
+import { useRequiredParam } from "../../app/useRequiredParam";
 import { BackLink } from "../../ui/BackLink";
 import { Button, buttonClasses } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
@@ -12,6 +13,7 @@ import { QueryState } from "../../ui/QueryState";
 import { SectionHeader } from "../../ui/SectionHeader";
 import { reasonTitle } from "../application/applicationLabels";
 import { FactLifecyclePanel } from "../facts/FactLifecyclePanel";
+import { ActiveOperationPanel } from "../ActiveOperationPanel";
 import { DraftApprovalDialog } from "./DraftApprovalDialog";
 import { DraftClaimCard } from "./DraftClaimCard";
 import { DraftConflictDialog } from "./DraftConflictDialog";
@@ -27,11 +29,7 @@ import { useDraftEditorState } from "./useDraftEditorState";
 /* A.4 frame 3: the editor pane. Data and commands live in `useDraftEditorState`; what is
    left here is how they are drawn. */
 export const DraftEditorPage = () => {
-  const { applicationId } = useParams();
-
-  if (applicationId === undefined) {
-    throw new Error("DraftEditorPage rendered without an applicationId route parameter");
-  }
+  const applicationId = useRequiredParam("applicationId");
 
   const {
     applicationQuery,
@@ -45,7 +43,7 @@ export const DraftEditorPage = () => {
     facts,
     includeFact,
     onExactPassingRun,
-    operationPanel,
+    operation,
     regeneration,
     regenerationAvailable,
     regenerationDisabled,
@@ -105,7 +103,7 @@ export const DraftEditorPage = () => {
 
       {/* Live work, reported beside the draft it is rewriting rather than on a screen
             the user has to leave the text for. */}
-      {operationPanel}
+      {operation === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={operation} />}
 
       {/* The projection's own blockers. A claim with no fact behind it raises
             PENDING_FACT_REQUIRES_RESOLUTION there, and it is shown here as the reason it

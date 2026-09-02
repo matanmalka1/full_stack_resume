@@ -1245,6 +1245,8 @@ export interface components {
             fit_level?: string | null;
             /** Id */
             id: string;
+            /** Is Closed */
+            is_closed: boolean;
             /** Language */
             language?: string | null;
             /** Last Contact Date */
@@ -1316,6 +1318,20 @@ export interface components {
              * @default 0
              */
             offset: number;
+            /**
+             * Preset Counts
+             * @default {}
+             */
+            preset_counts: {
+                [key: string]: number;
+            };
+            /**
+             * Recruitment Status Counts
+             * @default {}
+             */
+            recruitment_status_counts: {
+                [key: string]: number;
+            };
             /**
              * Stage Counts
              * @default {}

@@ -110,10 +110,3 @@ export const applicationAttention = (item: ApplicationListItem): ApplicationAtte
 
   return { items, label, tone: item.review_reasons.length > 0 ? "blocker" : "warning" };
 };
-
-/* Mirrors the list projection's current activity classification. A future `can_close`
-   projection should replace this duplicated client-side classification. */
-const closedStatuses: ReadonlySet<string> = new Set(["rejected", "withdrawn", "closed"]);
-
-export const isApplicationClosed = (item: ApplicationListItem): boolean =>
-  item.terminal_outcome != null || closedStatuses.has(item.recruitment_status);

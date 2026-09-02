@@ -18,6 +18,7 @@ import { surfaceClasses } from "../ui/Surface";
 import { TextInput } from "../ui/TextInput";
 import { formatDateTime } from "../ui/formatDateTime";
 import { warningDetail, warningTitle } from "./application/applicationLabels";
+import { ActiveOperationPanel } from "./ActiveOperationPanel";
 import { useRevisionPageState } from "./revision/useRevisionPageState";
 import { ValidationReportView } from "./revision/ValidationReportView";
 
@@ -42,7 +43,7 @@ const RevisionPageContent = ({ approvedRevisionId }: RevisionPageContentProps) =
     hasSources,
     displayedRevisionWarningCode,
     newDraft,
-    operationPanel,
+    operation,
     otherWarnings,
     revision,
     revisionQuery,
@@ -52,6 +53,7 @@ const RevisionPageContent = ({ approvedRevisionId }: RevisionPageContentProps) =
     submissionOpen,
     submittedAt,
     submittedAtValid,
+    watch,
   } = useRevisionPageState(approvedRevisionId);
 
   /* The heading follows the revision, not the route. It read "קורות החיים מוכנים"
@@ -229,7 +231,7 @@ const RevisionPageContent = ({ approvedRevisionId }: RevisionPageContentProps) =
           </>
         )}
       </QueryState>
-      {operationPanel}
+      {operation === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={operation} />}
       {newDraft.error === null ? null : (
         <ErrorCallout error={newDraft.error} fallbackTitle="לא ניתן ליצור טיוטה חדשה" />
       )}

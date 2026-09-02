@@ -92,13 +92,20 @@ const queuedAnalysisResponse = (): Response =>
 
 const CreatedApplicationDestination = () => {
   const location = useLocation();
-  const analysisQueued = (location.state as { createdApplication?: { analysisQueued?: unknown } } | null)
-    ?.createdApplication?.analysisQueued;
+  const createdApplication = (
+    location.state as {
+      createdApplication?: { analysisProblem?: { detail?: unknown } | null; analysisQueued?: unknown };
+    } | null
+  )?.createdApplication;
+  const analysisQueued = createdApplication?.analysisQueued;
 
   return (
     <>
       <h1>פרטי משרה</h1>
       <p>{analysisQueued === true ? "הניתוח הופעל" : "הניתוח לא הופעל"}</p>
+      {typeof createdApplication?.analysisProblem?.detail === "string" ? (
+        <p>{createdApplication.analysisProblem.detail}</p>
+      ) : null}
     </>
   );
 };
@@ -313,6 +320,7 @@ describe("NewApplicationPage", () => {
 
     expect(await screen.findByRole("heading", { name: "פרטי משרה" })).toBeInTheDocument();
     expect(screen.getByText("הניתוח לא הופעל")).toBeInTheDocument();
+    expect(screen.getByText(/analysis could not be queued/)).toBeInTheDocument();
     expect(calls.map((call) => call.path)).toEqual([DUPLICATE_CHECK_PATH, CREATE_PATH, ANALYSES_PATH]);
   });
 

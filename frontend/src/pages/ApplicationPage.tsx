@@ -1,14 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
-import { useParams } from "react-router-dom";
 
 import { classificationFromAnalysis } from "../api/analyses";
 import { applicationDetailQueryOptions } from "../api/applications";
 import { appRoutes } from "../app/appRoutes";
+import { useRequiredParam } from "../app/useRequiredParam";
 import { useWorkflowStage, workflowDestinations } from "../app/WorkflowLandmark";
 import { useWatchedOperation } from "../hooks/useWatchedOperation";
 import { BackLink } from "../ui/BackLink";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
+import { ActiveOperationPanel } from "./ActiveOperationPanel";
 import { PreparationStatusBadges } from "./application/PreparationStatusBadges";
 import { PreparationView } from "./application/PreparationView";
 import { useAutomaticDraft } from "./application/useAutomaticDraft";
@@ -16,20 +17,13 @@ import { useAutomaticDraft } from "./application/useAutomaticDraft";
 /* The CV preparation screen for one Application. It renders the §9 projection and offers
    only the document-workflow actions the backend reports. */
 export const ApplicationPage = () => {
-  const { applicationId } = useParams();
-
-  /* The route is applications/:applicationId/preparation, so a missing id is a router invariant
-     violation rather than a state this screen supports. */
-  if (applicationId === undefined) {
-    throw new Error("ApplicationPage rendered without an applicationId route parameter");
-  }
+  const applicationId = useRequiredParam("applicationId");
 
   const query = useQuery(applicationDetailQueryOptions(applicationId));
   const detail = query.data;
   const {
     operation: watched,
     operationId: watchedId,
-    panel: operationPanel,
     watch,
   } = useWatchedOperation(applicationId, detail);
   /* The same narrow read the review screen uses, and the same guard: it answers `null`
@@ -88,7 +82,9 @@ export const ApplicationPage = () => {
             classification={classification}
             detail={detail}
             onQueued={watch}
-            operationPanel={operationPanel}
+            operationPanel={
+              watched === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={watched} />
+            }
             supersededAnalysis={supersededAnalysis}
           />
         )}

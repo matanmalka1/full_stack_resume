@@ -9,6 +9,7 @@ import {
   startAnalysis,
 } from "../../api/applications";
 import type { ApplicationIntake, DuplicateMatch } from "../../api/contracts";
+import { ApiProblem, type ProblemDetails } from "../../api/client";
 import { executionProvider, settingsQueryOptions } from "../../api/settings";
 import { useAppForm } from "../../forms/useAppForm";
 
@@ -52,7 +53,12 @@ interface SubmitInput {
 
 export type ApplicationIntakeResult =
   | { kind: "duplicates"; matches: DuplicateMatch[] }
-  | { kind: "created"; analysisQueued: boolean; applicationId: string };
+  | {
+      kind: "created";
+      analysisProblem: ProblemDetails | null;
+      analysisQueued: boolean;
+      applicationId: string;
+    };
 
 interface UseApplicationIntakeOptions {
   onCreated: (result: Extract<ApplicationIntakeResult, { kind: "created" }>) => void;
@@ -97,15 +103,17 @@ export const useApplicationIntake = ({ onCreated }: UseApplicationIntakeOptions)
 
         return {
           kind: "created",
+          analysisProblem: null,
           analysisQueued: true,
           applicationId: created.application_id,
         };
-      } catch {
+      } catch (error) {
         /* The Application and its immutable snapshot already exist. Treating this as a
            failed creation would invite a retry that creates a duplicate; the caller
            navigates to the record and leaves its normal Analyze action available instead. */
         return {
           kind: "created",
+          analysisProblem: error instanceof ApiProblem ? error.problem : null,
           analysisQueued: false,
           applicationId: created.application_id,
         };

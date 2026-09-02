@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { FileCheck2 } from "lucide-react";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 import { applicationDetailQueryOptions } from "../api/applications";
+import type { ProblemDetails } from "../api/client";
 import type { ApplicationDetail } from "../api/contracts";
 import { appRoutes } from "../app/appRoutes";
+import { useRequiredParam } from "../app/useRequiredParam";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { BackLink } from "../ui/BackLink";
 import { buttonClasses } from "../ui/Button";
@@ -111,17 +113,19 @@ const PreparationGate = ({ detail }: { detail: ApplicationDetail }) => {
 };
 
 export const JobDetailsPage = () => {
-  const { applicationId } = useParams();
+  const applicationId = useRequiredParam("applicationId");
   const location = useLocation();
-
-  if (applicationId === undefined) {
-    throw new Error("JobDetailsPage rendered without an applicationId route parameter");
-  }
 
   const query = useQuery(applicationDetailQueryOptions(applicationId));
   const detail = query.data;
-  const createdApplication = (location.state as { createdApplication?: { analysisQueued?: unknown } } | null)
-    ?.createdApplication;
+  const createdApplication = (
+    location.state as {
+      createdApplication?: {
+        analysisProblem?: ProblemDetails | null;
+        analysisQueued?: unknown;
+      };
+    } | null
+  )?.createdApplication;
 
   /* No stage. The job record is the entrance to an Application and outlives the document
      workflow run against it, so showing the four CV stages here made a screen that is
@@ -170,7 +174,9 @@ export const JobDetailsPage = () => {
                  controls with the same destination one above the other made the reader
                  choose between identical doors. */
               <Callout role="alert" title="המועמדות נוצרה, אך הניתוח לא הופעל" tone="warning">
-                ניתן להפעיל את הניתוח ממסך הכנת קורות החיים. המועמדות שכבר נוצרה לא תיווצר שוב.
+                {createdApplication.analysisProblem?.detail ??
+                  "ניתן להפעיל את הניתוח ממסך הכנת קורות החיים."}{" "}
+                המועמדות שכבר נוצרה לא תיווצר שוב.
               </Callout>
             )}
             <PreparationGate detail={detail} />

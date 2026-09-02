@@ -60,7 +60,12 @@ export const NewApplicationPage = () => {
   const { answeredIntake, duplicates, failure, form, runSubmit, staleAnswer, submit } = useApplicationIntake({
     onCreated: (result) => {
       void navigate(appRoutes.application(result.applicationId), {
-        state: { createdApplication: { analysisQueued: result.analysisQueued } },
+        state: {
+          createdApplication: {
+            analysisProblem: result.analysisProblem,
+            analysisQueued: result.analysisQueued,
+          },
+        },
         replace: true,
       });
     },

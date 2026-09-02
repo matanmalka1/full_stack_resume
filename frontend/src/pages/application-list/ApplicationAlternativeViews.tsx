@@ -12,7 +12,7 @@ import { actionDestination } from "../application/actionDestinations";
 import { fitLevelIcon, fitLevelLabel, fitLevelTone } from "../application/analysisLabels";
 import { actionLabel, recruitmentStatusLabel } from "../application/applicationLabels";
 import { operationTypeLabels, statusLabels, statusTones } from "../operationLabels";
-import { applicationAttention, formatApplicationDate, isApplicationClosed } from "./applicationListPresentation";
+import { applicationAttention, formatApplicationDate } from "./applicationListPresentation";
 import { ApplicationIdentity, ApplicationNextAction, ApplicationPreparationBadge } from "./ApplicationListParts";
 import { closedStage, recruitmentStages } from "./recruitmentStages";
 
@@ -33,7 +33,7 @@ const ApplicationCard = ({
 }) => {
   const href = appRoutes.application(item.id);
   const attention = applicationAttention(item);
-  const closed = isApplicationClosed(item);
+  const closed = item.is_closed;
   const latestOperation = item.active_operation ?? item.latest_operation;
   const reportedOperation =
     latestOperation != null &&

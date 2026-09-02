@@ -8,8 +8,8 @@ import type { ApplicationDetail, ApplicationListItem, ApplicationListResponse, R
 import { settingsQueryKey } from "../api/settings";
 import { ApplicationListPage } from "./ApplicationListPage";
 
-const item = (overrides: Partial<ApplicationListItem> = {}): ApplicationListItem =>
-  ({
+const item = (overrides: Partial<ApplicationListItem> = {}): ApplicationListItem => {
+  const result = {
     id: "app-1",
     company: "Acme",
     target_role: "Backend Engineer",
@@ -30,7 +30,12 @@ const item = (overrides: Partial<ApplicationListItem> = {}): ApplicationListItem
     blocked_actions: [],
     recommended_action: "analyze",
     ...overrides,
-  }) as ApplicationListItem;
+  } as ApplicationListItem;
+  result.is_closed =
+    overrides.is_closed ??
+    (result.terminal_outcome != null || ["rejected", "withdrawn", "closed"].includes(result.recruitment_status));
+  return result;
+};
 
 const reason = (code: string): Reason => ({
   code,
@@ -57,6 +62,8 @@ const jsonResponse = (body: unknown, status = 200, extraHeaders: Record<string, 
    re-asks the question. */
 interface Counts {
   matched?: number;
+  presetCounts?: Record<string, number>;
+  recruitmentStatusCounts?: Record<string, number>;
   total?: number;
   stageCounts?: Record<string, number>;
 }
@@ -74,6 +81,22 @@ const listBody = (items: ApplicationListItem[], counts: Counts = {}): Applicatio
       }),
       {},
     );
+  const recruitment_status_counts =
+    counts.recruitmentStatusCounts ??
+    items.reduce<Record<string, number>>((totals, item) => {
+      totals[item.recruitment_status] = (totals[item.recruitment_status] ?? 0) + 1;
+      return totals;
+    }, {});
+  const preset_counts = counts.presetCounts ?? {
+    all: matched,
+    active_interviews: items.filter((entry) =>
+      ["recruiter_screen", "interview", "assignment", "final_stage", "offer"].includes(entry.recruitment_status),
+    ).length,
+    ready_to_send: items.filter((entry) => entry.latest_ready_revision_id != null).length,
+    needs_attention: items.filter(
+      (entry) => entry.review_reasons.length > 0 || entry.stale_reasons.length > 0 || entry.warnings.length > 0,
+    ).length,
+  };
 
   return {
     items,
@@ -81,6 +104,8 @@ const listBody = (items: ApplicationListItem[], counts: Counts = {}): Applicatio
     total: counts.total ?? matched,
     limit: 25,
     offset: 0,
+    preset_counts,
+    recruitment_status_counts,
     stage_counts,
   };
 };
@@ -284,7 +309,7 @@ describe("ApplicationListPage", () => {
     renderPage();
 
     expect(await screen.findByRole("table")).toBeInTheDocument();
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(10));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole("button", { name: "תצוגת כרטיסים" }));
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
@@ -304,7 +329,7 @@ describe("ApplicationListPage", () => {
     expect(within(pipeline).getByRole("link", { name: "Acme" })).toHaveAttribute("href", "/applications/app-1");
     expect(within(pipeline).getAllByText("ממתין לניתוח המשרה")).toHaveLength(3);
     expect(within(pipeline).getByText("Follow up")).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledTimes(10);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("summarizes due work from the visible server projection and clears only its reminder", async () => {
@@ -330,6 +355,7 @@ describe("ApplicationListPage", () => {
 
   it("loads preset metrics from authoritative server counts and applies a selected metric", async () => {
     const countsByPreset: Record<string, number> = {
+      all: 9,
       active_interviews: 3,
       ready_to_send: 2,
       needs_attention: 4,
@@ -338,25 +364,24 @@ describe("ApplicationListPage", () => {
       saved: 5,
       applied: 4,
       recruiter_screen: 3,
-      "assignment,interview": 2,
-      "accepted,final_stage,offer": 1,
+      assignment: 1,
+      interview: 1,
+      accepted: 0,
+      final_stage: 1,
+      offer: 0,
     };
     const fetchMock = vi.fn(async (url: unknown) => {
       const requestUrl = new URL(String(url), "http://localhost");
       const preset = requestUrl.searchParams.get("preset");
-      const metricRequest = requestUrl.searchParams.get("limit") === "1";
-      const statuses = requestUrl.searchParams.getAll("recruitment_status").sort().join(",");
-      const matched =
-        statuses !== ""
-          ? (countsByRecruitmentStatuses[statuses] ?? 0)
-          : preset == null
-            ? 9
-            : (countsByPreset[preset] ?? 0);
+      const matched = preset == null ? 9 : (countsByPreset[preset] ?? 0);
 
       return jsonResponse(
-        metricRequest
-          ? listBody([], { matched, total: 9 })
-          : listBody([item()], { matched: preset == null ? 9 : matched, total: 9 }),
+        listBody([item()], {
+          matched,
+          presetCounts: countsByPreset,
+          recruitmentStatusCounts: countsByRecruitmentStatuses,
+          total: 9,
+        }),
       );
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -366,10 +391,8 @@ describe("ApplicationListPage", () => {
     const interviews = await screen.findByRole("button", { name: /ראיונות פעילים/ });
     const ready = screen.getByRole("button", { name: /מסמכים מוכנים לשליחה/ });
     const attention = screen.getByRole("button", { name: /דורש טיפול/ });
-    /* The button renders before its metric query settles, so its count starts as the
-       "—" placeholder. Waiting for the resolved digit is what the test means to assert;
-       a synchronous read would pass or fail on how fast the mocked fetch happens to
-       resolve rather than on the value it resolves to. */
+    /* The buttons render before the single list query settles, so their counts start as
+       placeholders. The resolved response carries all authoritative facets together. */
     expect(await within(interviews).findByText("3")).toBeInTheDocument();
     expect(await within(ready).findByText("2")).toBeInTheDocument();
     expect(await within(attention).findByText("4")).toBeInTheDocument();
@@ -621,13 +644,13 @@ describe("ApplicationListPage", () => {
     });
 
     expect(await screen.findByDisplayValue("second")).toBeInTheDocument();
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(10));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole("button", { name: "בדיקת חזרה" }));
 
     expect(screen.getByDisplayValue("first")).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledTimes(10);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(20));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(fetchMock).toHaveBeenLastCalledWith(
       expect.stringContaining("search=first"),
       expect.objectContaining({ method: "GET" }),
