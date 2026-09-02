@@ -21,10 +21,7 @@ import { applicationActionPlan } from "./applicationActionPlan";
 /* A.1: the actions come from the projection, read by `applicationActionPlan`. What is left
    here is the mutations this screen sends, and the state that guards when they may be
    sent - everything the panel needs to decide, apart from how it is drawn. */
-export const useApplicationActionsMutations = (
-  detail: ApplicationDetail,
-  onQueued: (operationId: string) => void,
-) => {
+export const useApplicationActionsMutations = (detail: ApplicationDetail, onQueued: (operationId: string) => void) => {
   const queryClient = useQueryClient();
   /* App owns the live settings read. This subscription consumes that cache without
      opening one request per action panel; isolated renders retain the safe deterministic

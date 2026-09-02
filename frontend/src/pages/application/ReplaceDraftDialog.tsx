@@ -51,8 +51,8 @@ export const ReplaceDraftDialog = ({
   >
     <div className="flex flex-col gap-3">
       <p>
-        טיוטה חדשה תיבנה מהניתוח ומתוכנית הבחירה הפעילים. הטיוטה הנוכחית נשמרת כפי שהיא עד שההחלפה מצליחה, ואם היא
-        נכשלת — היא נשארת בדיוק כפי שהייתה.
+        טיוטה חדשה תיבנה מהניתוח ומתוכנית הבחירה הפעילים. הטיוטה הנוכחית נשמרת כפי שהיא עד שההחלפה מצליחה, ואם היא נכשלת
+        — היא נשארת בדיוק כפי שהייתה.
       </p>
       {/* What "nothing changes on failure" leaves out, and why it was not accurate. Keep
           writes its historical snapshot before the replacement starts, and the snapshot is

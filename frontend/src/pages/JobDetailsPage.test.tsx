@@ -51,9 +51,7 @@ const jsonResponse = (body: unknown): Response =>
     headers: { "Content-Type": "application/json" },
   });
 
-const renderPage = (
-  fetchImplementation?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
-) => {
+const renderPage = (fetchImplementation?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) => {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, refetchInterval: false, gcTime: 0 },

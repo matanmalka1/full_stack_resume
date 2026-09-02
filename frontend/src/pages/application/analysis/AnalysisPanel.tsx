@@ -45,10 +45,7 @@ export const AnalysisPanel = ({
 
       <RequirementsSection items={classification.mandatoryRequirements} title="דרישות חובה שזוהו" />
 
-      <RequirementsSection
-        items={classification.preferredRequirements}
-        title="דרישות מועדפות שזוהו"
-      />
+      <RequirementsSection items={classification.preferredRequirements} title="דרישות מועדפות שזוהו" />
 
       <RequirementsSection items={classification.keywords} title="מילות מפתח מהמשרה" />
 
