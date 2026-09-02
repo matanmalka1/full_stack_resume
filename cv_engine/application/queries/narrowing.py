@@ -58,9 +58,12 @@ def _matches_search(item: ApplicationListItemView, search: str) -> bool:
     needle = search.strip().casefold()
     if not needle:
         return True
-    return needle in "\n".join(
-        (item.company, item.target_role, item.preparation_state.value, item.recruitment_status)
-    ).casefold()
+    return (
+        needle
+        in "\n".join(
+            (item.company, item.target_role, item.preparation_state.value, item.recruitment_status)
+        ).casefold()
+    )
 
 
 def _matches_activity(item: ApplicationListItemView, activity: ActivityFilter) -> bool:
@@ -92,6 +95,7 @@ def _sort_key(sort: ApplicationSort) -> Any:
 
 class _Descending:
     """Reverse one sort field without reversing the whole compound key."""
+
     __slots__ = ("value",)
 
     def __init__(self, value: str) -> None:
@@ -121,11 +125,7 @@ def narrow_application_list(
     ]
     recruitment_base = [item for item in common if _matches_preset(item, query.preset)]
     matched = sorted(
-        (
-            item
-            for item in preset_base
-            if _matches_preset(item, query.preset)
-        ),
+        (item for item in preset_base if _matches_preset(item, query.preset)),
         key=_sort_key(query.sort),
     )
     window = (

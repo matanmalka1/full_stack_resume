@@ -153,7 +153,12 @@ cv_engine/application/queries.py:327-332:
 
 ```python
 CLOSED_RECRUITMENT_STATUSES = frozenset({"rejected", "withdrawn", "closed"})
-def _is_closed(item): return item.terminal_outcome is not None or item.recruitment_status in CLOSED_RECRUITMENT_STATUSES
+
+
+def _is_closed(item):
+    return (
+        item.terminal_outcome is not None or item.recruitment_status in CLOSED_RECRUITMENT_STATUSES
+    )
 ```
 
 applicationListPresentation.ts:106-109:

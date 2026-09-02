@@ -111,9 +111,7 @@ def application_list_item_view(
         {
             **record,
             **state.model_dump(mode="python"),
-            "is_closed": application_is_closed(
-                state.terminal_outcome, state.recruitment_status
-            ),
+            "is_closed": application_is_closed(state.terminal_outcome, state.recruitment_status),
         }
     )
 
