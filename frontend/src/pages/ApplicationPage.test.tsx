@@ -271,4 +271,57 @@ describe("ApplicationPage", () => {
     expect(screen.queryByRole("heading", { name: "ניתוח המשרה" })).not.toBeInTheDocument();
     expect(screen.queryByText("The posting is a backend role.")).not.toBeInTheDocument();
   });
+
+  it("keeps the projected warning explanation available behind its alert disclosure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          detail({
+            warnings: [
+              {
+                code: "NEXT_ACTION_OVERDUE",
+                message: "The next recruitment action is past its target date.",
+                entity_references: {},
+              },
+            ],
+          }),
+        ),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("הפעולה הבאה באיחור")).toBeInTheDocument();
+    const explanation = screen.getByText("The next recruitment action is past its target date.");
+    expect(explanation).not.toBeVisible();
+    fireEvent.click(screen.getByText("פרטי האזהרה"));
+    expect(explanation).toBeVisible();
+  });
+
+  it("shows translated exceptional blockers without exposing routine or unknown reason codes", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          detail({
+            preparation_state: "draft_in_progress",
+            working_draft_state: "validation_failed",
+            blocked_actions: [
+              {
+                action: "approve",
+                reasons: ["VALIDATION_FAILED", "WORKING_DRAFT_REQUIRED"],
+              },
+            ],
+          }),
+        ),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("הפעולה אישור הגרסה חסומה כרגע")).toBeInTheDocument();
+    expect(screen.getByText("האימות נכשל. צריך לתקן ולאמת מחדש.")).toBeInTheDocument();
+    expect(screen.queryByText("WORKING_DRAFT_REQUIRED")).not.toBeInTheDocument();
+  });
 });

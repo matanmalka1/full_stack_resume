@@ -1,6 +1,6 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Kanban, LayoutGrid, Table2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
@@ -59,9 +59,26 @@ export const ApplicationListPage = () => {
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [quickIntakeOpen, setQuickIntakeOpen] = useState(false);
   const [updatingApplication, setUpdatingApplication] = useState<ApplicationListItem | null>(null);
-  /* The URL is the search field's single source of truth, so Back, Forward, and shared
-     links update the control without a local mirror. Only the server read is debounced. */
-  const settledSearch = useDebouncedValue(query.search ?? "", SEARCH_DEBOUNCE_MS);
+  /* Typing owns a local buffer so a keystroke is never lost waiting on a URL round-trip;
+     the buffer is what gets debounced, and only the settled value is written to the URL.
+     The URL stays the field's source of truth for Back, Forward, and shared links - the
+     sync effect below mirrors an external URL change back into the buffer. */
+  const [searchInput, setSearchInput] = useState(query.search ?? "");
+  const settledSearch = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS);
+
+  useEffect(() => {
+    setSearchInput(query.search ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query.search]);
+
+  useEffect(() => {
+    if (settledSearch === (query.search ?? "")) {
+      return;
+    }
+    updateQuery({ ...query, search: settledSearch === "" ? undefined : settledSearch });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settledSearch]);
+
   const [closingApplication, setClosingApplication] = useState<ApplicationListItem | null>(null);
 
   const listQuery = useQuery(
@@ -216,10 +233,10 @@ export const ApplicationListPage = () => {
                 onPreparationStateChange={(stage) =>
                   updateQuery({ ...query, stages: stage === undefined ? [] : [stage] })
                 }
-                onSearchChange={(search) => updateQuery({ ...query, search })}
+                onSearchChange={setSearchInput}
                 onSortChange={(sort) => updateQuery({ ...query, sort })}
                 preparationState={query.stages?.[0]}
-                search={query.search ?? ""}
+                search={searchInput}
                 sort={query.sort ?? "updated"}
                 stageCounts={page.stage_counts}
               />

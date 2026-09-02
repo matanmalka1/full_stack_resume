@@ -153,7 +153,7 @@ export const recruitmentStatusLabels: Record<RecruitmentStatus, string> = {
 export const recruitmentStatusLabel = (status: string): string =>
   status in recruitmentStatusLabels ? recruitmentStatusLabels[status as RecruitmentStatus] : status;
 
-const blockedReasonLabel = (reason: string): string | null => blockedReasonLabels[reason] ?? null;
+export const blockedReasonLabel = (reason: string): string | null => blockedReasonLabels[reason] ?? null;
 
 /* The title a review or staleness reason is shown under, replacing the backend's own
    `message` paragraph.
