@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 
-import { Check } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { cx } from "./cx";
@@ -32,22 +32,19 @@ const stateClasses: Record<WorkflowStepState, string> = {
   upcoming: "text-cv-text-muted",
 };
 
-/* The track each step draws under its own label: a filled segment for what is done, the
-   accent for where the work is, a dotted rule for what is ahead.
-
-   It replaced a row of numbered circles - filled discs, a checkmark, connecting rules -
-   which is the visual language of a wizard whose every step is pressable. Forward is
-   still not a place: which action is possible is the projection's answer, so a stage it
-   has not reached opens nothing. What it has reached does have a screen, so those steps
-   are links and the rest are not - and the bar keeps reading as progress rather than as
-   five buttons of which some ignore you.
-
-   Upcoming is dotted rather than a paler solid, so the segment says "not laid yet" in
-   greyscale too. */
+/* The connector entering each step says whether that milestone has been reached. The
+   dotted future remains distinct in greyscale; a solid success/accent connector never
+   makes an upcoming stage look available. */
 const trackClasses: Record<WorkflowStepState, string> = {
   complete: "bg-cv-success",
   current: "bg-cv-accent",
   upcoming: "workflow-track-upcoming",
+};
+
+const markClasses: Record<WorkflowStepState, string> = {
+  complete: "border-cv-success bg-cv-success-soft text-cv-success",
+  current: "border-cv-accent bg-cv-accent text-cv-on-accent shadow-surface",
+  upcoming: "border-cv-border bg-cv-canvas text-cv-text-muted",
 };
 
 interface WorkflowStepsProps {
@@ -58,56 +55,68 @@ interface WorkflowStepsProps {
   steps: WorkflowStep[];
 }
 
-/* Below md the row keeps the open step, the current one, and whatever can be reached from
-   them. Hiding the completed steps there would remove the back gesture at exactly the
-   width where it is hardest to replace, and hiding the open one would drop the "you are
-   here" mark on the widths that need it most. The position line above carries the count
-   that the shortened row can no longer show. */
-const visibilityClasses = (step: WorkflowStep) =>
-  step.here === true || step.state === "current" || step.href !== undefined ? "flex" : "hidden md:flex";
+const railClasses = "w-full min-w-0 rounded-surface border border-cv-border bg-cv-surface px-3 py-2.5 shadow-surface";
 
-/* Complete is a check, current a filled dot, upcoming nothing. Redundant with the colour
-   rather than decorative: it is what survives a greyscale print or a reader who cannot
-   separate the green track from the grey one. */
-const StepMark = ({ state }: { state: WorkflowStepState }) => {
+/* Complete is a check while current and upcoming retain their ordinal. The mark therefore
+   communicates state without colour and keeps the compact rail readable as a sequence. */
+const StepMark = ({ index, state }: { index: number; state: WorkflowStepState }) => {
   if (state === "complete") {
-    return <Check aria-hidden="true" className="size-3.5 shrink-0 text-cv-success" />;
+    return (
+      <span
+        aria-hidden="true"
+        className={`flex size-8 shrink-0 items-center justify-center rounded-pill border ${markClasses[state]}`}
+      >
+        <CheckCircle2 className="size-4" />
+      </span>
+    );
   }
 
-  if (state === "current") {
-    return <span aria-hidden="true" className="size-1.5 shrink-0 rounded-pill bg-cv-accent" />;
-  }
-
-  return null;
+  return (
+    <span
+      aria-hidden="true"
+      className={`flex size-8 shrink-0 items-center justify-center rounded-pill border text-support font-bold ${markClasses[state]}`}
+    >
+      {index + 1}
+    </span>
+  );
 };
 
-const StepBody = ({ finalCompletion, step }: { finalCompletion: boolean; step: WorkflowStep }) => (
-  <>
-    <span className="flex min-w-0 items-center gap-1">
-      <StepMark state={step.state} />
+const StepBody = ({
+  finalCompletion,
+  index,
+  step,
+}: {
+  finalCompletion: boolean;
+  index: number;
+  step: WorkflowStep;
+}) => (
+  <span
+    className={cx(
+      "flex min-w-0 items-center gap-2 rounded-control px-2 py-1.5 text-start",
+      step.here === true ? "bg-cv-accent-soft/70" : "",
+    )}
+  >
+    <StepMark index={index} state={step.state} />
+    <span className="flex min-w-0 flex-col">
       <span
         className={cx(
           "whitespace-nowrap text-support",
           finalCompletion ? "font-bold text-cv-success" : stateClasses[step.state],
-          /* The open stage is a filled chip, and the position line above names the same
-             stage in the same words. The chip is what ties that sentence to a column, so
-             the reader does not have to work out which of five the sentence meant. */
-          step.here === true ? "rounded-control bg-cv-accent-soft px-1.5 font-bold text-cv-text" : "",
           step.href === undefined ? "" : "group-hover:text-cv-text group-hover:underline",
         )}
       >
         {step.label}
       </span>
+      {step.here === true ? <span className="text-[0.75rem] text-cv-text-muted">העמוד הפתוח</span> : null}
     </span>
-    <span className={cx("h-1 w-full min-w-8 rounded-pill md:min-w-10 lg:min-w-14", trackClasses[step.state])} />
-  </>
+  </span>
 );
 
 /* A.1: the landmark shows completed, current, and future stages.
 
    Two markups, because the honest answer differs. With nothing to go back to it is an
    indicator: `role="img"` with a text alternative, read as "שלב 2 מתוך 3, טיוטה ואימות" rather
-   than as a list of five destinations that refuse to open. Once a completed stage can be
+   than as a list of destinations that refuse to open. Once a completed stage can be
    opened it is a navigation landmark, and announcing it as one is what tells a screen
    reader the way back exists. The steps that are not links stay hidden from assistive
    technology in both, since the group's own sentence already states the position.
@@ -178,42 +187,51 @@ export const WorkflowSteps = ({ hint, label, steps }: WorkflowStepsProps) => {
   );
 
   const row = (
-    <div className="flex items-end gap-1.5 md:gap-2">
-      {steps.map((step, index) =>
-        step.href === undefined ? (
-          <div
-            aria-hidden="true"
-            className={cx("min-w-0 flex-1 flex-col gap-1.5", visibilityClasses(step))}
-            key={step.label}
-          >
-            <StepBody finalCompletion={completed && index === steps.length - 1} step={step} />
-          </div>
-        ) : (
-          <Link
-            /* "חזרה" only where it is true. The current stage is a link when its screen is
-               not the one open, and calling that a way back would misname it. */
-            aria-current={step.state === "current" ? "step" : undefined}
-            aria-label={
-              completed && index === steps.length - 1
-                ? `פתיחת שלב ${step.label}`
-                : `${step.state === "complete" ? "חזרה" : "מעבר"} לשלב ${step.label}`
-            }
-            className={cx("group min-w-0 flex-1 flex-col gap-1.5 rounded-control", visibilityClasses(step))}
-            key={step.label}
-            to={step.href}
-          >
-            <StepBody finalCompletion={completed && index === steps.length - 1} step={step} />
-          </Link>
-        ),
-      )}
+    <div className="overflow-x-auto pb-1">
+      <div className="flex min-w-[30rem] items-center">
+        {steps.map((step, index) => {
+          const finalCompletion = completed && index === steps.length - 1;
+          const body = <StepBody finalCompletion={finalCompletion} index={index} step={step} />;
+          const next = steps[index + 1];
+
+          return (
+            <Fragment key={step.label}>
+              {step.href === undefined ? (
+                <div aria-hidden="true" className="min-w-0 flex-1">
+                  {body}
+                </div>
+              ) : (
+                <Link
+                  /* "חזרה" only where it is true. The current stage is a link when its
+                     screen is not the one open, and calling that a way back would
+                     misname it. */
+                  aria-current={step.state === "current" ? "step" : undefined}
+                  aria-label={
+                    finalCompletion
+                      ? `פתיחת שלב ${step.label}`
+                      : `${step.state === "complete" ? "חזרה" : "מעבר"} לשלב ${step.label}`
+                  }
+                  className="group min-w-0 flex-1 rounded-control"
+                  to={step.href}
+                >
+                  {body}
+                </Link>
+              )}
+              {next === undefined ? null : (
+                <span aria-hidden="true" className={cx("h-0.5 min-w-6 flex-1", trackClasses[next.state])} />
+              )}
+            </Fragment>
+          );
+        })}
+      </div>
     </div>
   );
 
   if (!navigable) {
     return (
-      <div aria-label={description} className="w-full min-w-0" role="img">
+      <div aria-label={description} className={railClasses} role="img">
         {/* Hidden from assistive technology entirely: the group above already states the
-            position in one sentence, and reading five segment labels after it says the
+            position in one sentence, and reading the segment labels after it says the
             same thing a second time, worse. */}
         <div aria-hidden="true">
           {heading}
@@ -224,7 +242,7 @@ export const WorkflowSteps = ({ hint, label, steps }: WorkflowStepsProps) => {
   }
 
   return (
-    <nav aria-label={description} className="w-full min-w-0">
+    <nav aria-label={description} className={railClasses}>
       {heading}
       {row}
     </nav>
