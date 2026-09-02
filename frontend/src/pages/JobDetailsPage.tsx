@@ -8,6 +8,7 @@ import type { ApplicationDetail } from "../api/contracts";
 import { appRoutes } from "../app/appRoutes";
 import { useRequiredParam } from "../app/useRequiredParam";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
+import { useWatchedOperation } from "../hooks/useWatchedOperation";
 import { BackLink } from "../ui/BackLink";
 import { buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
@@ -17,6 +18,7 @@ import { QueryState } from "../ui/QueryState";
 import { StatusBadge } from "../ui/StatusBadge";
 import { SummaryList } from "../ui/SummaryList";
 import { dateTimesMatch, formatDateTime } from "../ui/formatDateTime";
+import { ActiveOperationPanel } from "./ActiveOperationPanel";
 import { ArtifactsPanel } from "./application/ArtifactsPanel";
 import { ApplicationNotes } from "./application/ApplicationNotes";
 import { JobSnapshotPanel } from "./application/JobSnapshotPanel";
@@ -118,6 +120,7 @@ export const JobDetailsPage = () => {
 
   const query = useQuery(applicationDetailQueryOptions(applicationId));
   const detail = query.data;
+  const { operation: watched, watch } = useWatchedOperation(applicationId, detail);
   const createdApplication = (
     location.state as {
       createdApplication?: {
@@ -168,7 +171,11 @@ export const JobDetailsPage = () => {
         {detail === undefined ? null : (
           <>
             {createdApplication === undefined ? null : createdApplication.analysisQueued === true ? (
-              <Callout role="status" title="המועמדות נוצרה, הניתוח רץ" tone="progress" />
+              watched === undefined ? (
+                <Callout role="status" title="המועמדות נוצרה, הניתוח רץ" tone="progress" />
+              ) : (
+                <ActiveOperationPanel onQueued={watch} operation={watched} />
+              )
             ) : (
               /* No action of its own: the door below is the way to preparation, and two
                  controls with the same destination one above the other made the reader
