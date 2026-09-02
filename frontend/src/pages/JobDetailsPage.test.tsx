@@ -105,7 +105,9 @@ describe("JobDetailsPage", () => {
 
     expect(await screen.findByText("נשמר תצלום משרה חדש")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "סגירת ההודעה" }));
-    expect(screen.queryByText("נשמר תצלום משרה חדש")).not.toBeInTheDocument();
+    /* The mutation's reset notification is batched, so the callout it controls does not
+       drop out of the DOM in the same tick as the click. */
+    await waitFor(() => expect(screen.queryByText("נשמר תצלום משרה חדש")).not.toBeInTheDocument());
     await waitFor(() =>
       expect(
         fetchMock.mock.calls.some(

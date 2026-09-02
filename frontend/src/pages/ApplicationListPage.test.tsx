@@ -363,9 +363,13 @@ describe("ApplicationListPage", () => {
     const interviews = await screen.findByRole("button", { name: /ראיונות פעילים/ });
     const ready = screen.getByRole("button", { name: /מסמכים מוכנים לשליחה/ });
     const attention = screen.getByRole("button", { name: /דורש טיפול/ });
-    expect(within(interviews).getByText("3")).toBeInTheDocument();
-    expect(within(ready).getByText("2")).toBeInTheDocument();
-    expect(within(attention).getByText("4")).toBeInTheDocument();
+    /* The button renders before its metric query settles, so its count starts as the
+       "—" placeholder. Waiting for the resolved digit is what the test means to assert;
+       a synchronous read would pass or fail on how fast the mocked fetch happens to
+       resolve rather than on the value it resolves to. */
+    expect(await within(interviews).findByText("3")).toBeInTheDocument();
+    expect(await within(ready).findByText("2")).toBeInTheDocument();
+    expect(await within(attention).findByText("4")).toBeInTheDocument();
     const interviewStage = screen.getByRole("button", { name: /ראיונות ומטלות/ });
     expect(within(interviewStage).getByText("2")).toBeInTheDocument();
 
@@ -509,7 +513,9 @@ describe("ApplicationListPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "עדכון סטטוס ומשימות עבור Acme" }));
     expect(await screen.findByRole("dialog", { name: "עדכון סטטוס ומשימות: Acme" })).toBeInTheDocument();
-    const status = screen.getByLabelText(/מעבר לשלב הבא/);
+    /* The dialog opens before its own detail fetch settles - it shows a loading line
+       until then - so the form's fields exist only once that resolves. */
+    const status = await screen.findByLabelText(/מעבר לשלב הבא/);
     expect(within(status).getByRole("option", { name: "סגור" })).toBeInTheDocument();
     expect(within(status).queryByRole("option", { name: "הוגש" })).not.toBeInTheDocument();
 
@@ -564,6 +570,9 @@ describe("ApplicationListPage", () => {
     expect(screen.queryByText("אין מועמדות שמתאימה לסינון.")).not.toBeInTheDocument();
   });
 
+  /* The inner findByRole below already budgets 5s for the post-navigation query under
+     load; the test's own timeout must exceed that budget, or the outer clock can end the
+     test before the inner wait it deliberately allows gets the chance to. */
   it("moves through server pages and writes page-boundary offsets to the URL query", async () => {
     const firstPage = Array.from({ length: 25 }, (_, index) =>
       item({ id: `app-${index + 1}`, company: `Company ${index + 1}` }),
@@ -597,7 +606,7 @@ describe("ApplicationListPage", () => {
     );
     expect(screen.getByRole("button", { name: "הבא" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "הקודם" })).toBeEnabled();
-  });
+  }, 10_000);
 
   it("updates the field from browser history immediately and delays only the server read", async () => {
     const { fetchMock } = stubList([item()]);

@@ -704,7 +704,14 @@ describe("DraftRenderPanel and RevisionPage", () => {
 
 describe("SettingsPage", () => {
   it("shows provider availability and keeps AI mode unavailable without one", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(settings(), 200, { ETag: '"settings-0"' })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string | URL | Request) =>
+        Promise.resolve(
+          String(input) === "/api/v1/facts" ? json({ items: [] }) : json(settings(), 200, { ETag: '"settings-0"' }),
+        ),
+      ),
+    );
     renderRoute("/settings", "/settings", <SettingsPage />);
     expect(await screen.findByText("לא הוגדר ספק AI בסביבת הריצה.")).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "AI" })).toBeDisabled();
@@ -712,8 +719,12 @@ describe("SettingsPage", () => {
   });
 
   it("saves all product settings under the read ETag", async () => {
-    const fetchMock = vi.fn((_input: string | URL | Request, _init?: RequestInit) =>
-      Promise.resolve(json(settings({ edit_version: 1 }), 200, { ETag: '"settings-1"' })),
+    const fetchMock = vi.fn((input: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(
+        String(input) === "/api/v1/facts"
+          ? json({ items: [] })
+          : json(settings({ edit_version: 1 }), 200, { ETag: '"settings-1"' }),
+      ),
     );
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/settings", "/settings", <SettingsPage />);
@@ -740,6 +751,40 @@ describe("SettingsPage", () => {
     });
     await waitFor(() => expect(autoGenerate).not.toBeChecked());
   });
+
+  it("shows canonical facts read-only and reports a missing audit status", async () => {
+    const fetchMock = vi.fn((input: string | URL | Request) =>
+      Promise.resolve(
+        String(input) === "/api/v1/facts"
+          ? json({
+              items: [
+                {
+                  fact: {
+                    fact_id: "fact-1",
+                    meaning: "Built backend services",
+                    provenance: "Confirmed by candidate",
+                    renderings: { en: "Built backend services" },
+                    resume_style: "bullet",
+                    source: "development.md",
+                    status: "canonical",
+                    tags: ["backend"],
+                  },
+                  recorded_status: null,
+                },
+              ],
+            })
+          : json(settings(), 200, { ETag: '"settings-0"' }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderRoute("/settings", "/settings", <SettingsPage />);
+
+    expect(await screen.findByText("Built backend services")).toBeInTheDocument();
+    expect(screen.getByText("מקור אמת")).toBeInTheDocument();
+    expect(screen.getByText(/מצב העובדה אינו תואם למצב האחרון ביומן/)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter((call) => String(call[0]) === "/api/v1/facts")).toHaveLength(1);
+  });
 });
 
 describe("Settings reconciliation", () => {
@@ -754,11 +799,14 @@ describe("Settings reconciliation", () => {
         journal_quarantined: 1,
       },
     });
-    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) =>
-      String(input).includes("/maintenance/reconciliations") && init?.method === "POST"
-        ? Promise.resolve(json(report))
-        : Promise.resolve(json(settings(), 200, { ETag: '"settings-0"' })),
-    );
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).includes("/maintenance/reconciliations") && init?.method === "POST") {
+        return Promise.resolve(json(report));
+      }
+      return Promise.resolve(
+        String(input) === "/api/v1/facts" ? json({ items: [] }) : json(settings(), 200, { ETag: '"settings-0"' }),
+      );
+    });
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/settings", "/settings", <SettingsPage />);
 

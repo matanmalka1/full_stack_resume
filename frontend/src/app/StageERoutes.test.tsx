@@ -79,7 +79,7 @@ describe("workflow stage publishing", () => {
 
      The sources come through Vite rather than `node:fs`: the app's TypeScript project
      deliberately carries no Node types, and this check needs none. */
-  const pageSources = import.meta.glob("../pages/**/*.tsx", {
+  const pageSources = import.meta.glob("../pages/**/*.{ts,tsx}", {
     query: "?raw",
     import: "default",
     eager: true,
@@ -95,7 +95,20 @@ describe("workflow stage publishing", () => {
       expect(matches).toHaveLength(1);
       const source = matches[0]?.[1];
       expect(source).toBeDefined();
-      expect(source).toMatch(/useWorkflowStage\(/);
+
+      /* A page may delegate its state - and the `useWorkflowStage` call with it - to a
+         `use<Page>State` hook instead of calling it inline (elsewhere in the tree: the
+         hook is not required to sit beside its page). The hook is still what the page
+         publishes through, so its source counts toward the same guard. The convention
+         drops a trailing "Page" inconsistently (`DraftEditorPage` -> `useDraftEditorState`,
+         `RevisionPage` -> `useRevisionPageState`), so both spellings are tried. */
+      const stateHookNames = new Set([`use${name}State.ts`, `use${name.replace(/Page$/, "")}State.ts`]);
+      const stateHookSource = Object.entries(pageSources)
+        .filter(([path]) => [...stateHookNames].some((hookName) => path.endsWith(`/${hookName}`)))
+        .map(([, hookSource]) => hookSource)
+        .join("\n");
+
+      expect(source + stateHookSource).toMatch(/useWorkflowStage\(/);
     }
   });
 });
