@@ -13,8 +13,8 @@ from ..commands import (
     DuplicateMatchReason,
     IngestCommand,
     IngestedApplication,
-    UpdatedApplicationNotes,
     UpdateApplicationNotesCommand,
+    UpdatedApplicationNotes,
 )
 from ..errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
