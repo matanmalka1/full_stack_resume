@@ -14,6 +14,7 @@ import { Button, buttonClasses } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 import { Card } from "../../ui/Card";
 import { LtrText } from "../../ui/LtrText";
+import { QueryState } from "../../ui/QueryState";
 import { SectionHeader } from "../../ui/SectionHeader";
 import { SummaryList } from "../../ui/SummaryList";
 import { formatBytes } from "../../ui/formatBytes";
@@ -199,10 +200,10 @@ export const ArtifactsPanel = ({ applicationId }: { applicationId: string }) => 
   const deliverables = ordered.filter((artifact) => isDeliverableArtifact(artifact.artifact_type));
   const internal = ordered.filter((artifact) => !isDeliverableArtifact(artifact.artifact_type));
 
-  /* Nothing is registered until the first render, and a heading over an empty list would
-     be a section about files that do not exist yet. The failure is still reported: the
-     list not loading is different from there being nothing in it. */
-  if (query.error === null && ordered.length === 0) {
+  /* Nothing is registered and nothing is loading, and a heading over an empty list would
+     be a section about files that do not exist yet. Still loading is a different state
+     from there being nothing in it - the panel stays visible below and reports that. */
+  if (!query.isPending && query.error === null && ordered.length === 0) {
     return null;
   }
 
@@ -219,27 +220,28 @@ export const ArtifactsPanel = ({ applicationId }: { applicationId: string }) => 
         title="גרסאות וקבצים"
       />
 
-      {query.error === null ? null : (
-        <ErrorCallout
-          className="mt-4"
-          error={query.error}
-          fallbackDetail="שום קובץ לא השתנה. אפשר לרענן ולנסות שוב."
-          fallbackTitle="לא ניתן לטעון את רשימת הקבצים"
-        />
-      )}
+      <QueryState
+        className="mt-4"
+        empty={ordered.length === 0}
+        error={query.error}
+        fallbackDetail="שום קובץ לא השתנה. אפשר לרענן ולנסות שוב."
+        fallbackTitle="לא ניתן לטעון את רשימת הקבצים"
+        loading={query.isPending}
+        loadingLabel="טוען את רשימת הקבצים…"
+      >
+        {deliverables.length === 0 ? null : <ArtifactGroupList artifacts={deliverables} />}
 
-      {deliverables.length === 0 ? null : <ArtifactGroupList artifacts={deliverables} />}
-
-      {internal.length === 0 ? null : (
-        <div className="mt-4 flex flex-col gap-3">
-          <div>
-            <Button aria-expanded={showInternal} onClick={() => setShowInternal(!showInternal)} variant="ghost">
-              {showInternal ? "הסתרת תוצרי המנוע" : `הצגת תוצרי המנוע (${internal.length})`}
-            </Button>
+        {internal.length === 0 ? null : (
+          <div className="flex flex-col gap-3">
+            <div>
+              <Button aria-expanded={showInternal} onClick={() => setShowInternal(!showInternal)} variant="ghost">
+                {showInternal ? "הסתרת תוצרי המנוע" : `הצגת תוצרי המנוע (${internal.length})`}
+              </Button>
+            </div>
+            {showInternal ? <ArtifactGroupList artifacts={internal} /> : null}
           </div>
-          {showInternal ? <ArtifactGroupList artifacts={internal} /> : null}
-        </div>
-      )}
+        )}
+      </QueryState>
     </Card>
   );
 };

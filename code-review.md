@@ -31,14 +31,14 @@
 | F7 | Medium | High | כפילות + סמנטיקה | ✅ בוצע — UrgentActionHub.tsx:31-63 ↔ applicationListPresentation.ts:14-27 | שני חישובי "באיחור" שונים | פונקציה אחת |
 | F8 | Medium | High | כפילות | ✅ בוצע — useRevisionPageState.ts:95-106 | גזירה מחדש של warnings מהשרת | להשתמש ב-warningTitle |
 | F9 | Medium | Medium | data loss | ✅ בוצע — useDraftAutosave.ts:218-225 | unmount מוחק עריכה תלויה | flush ב-unmount |
-| F10 | Medium | High | SoC | FactLifecyclePanel.tsx (334) | 10 useState, לא useAppForm | פיצול + טופס |
-| F11 | Medium | High | חילוץ | DraftEditorPage.tsx:103-264 | 2 בלוקי JSX גדולים inline | 2 קומפוננטות |
+| F10 | Medium | High | SoC | ✅ בוצע — FactLifecyclePanel.tsx (334) | 10 useState, לא useAppForm | פיצול + טופס |
+| F11 | Medium | High | חילוץ | ✅ בוצע — DraftEditorPage.tsx:103-264 | 2 בלוקי JSX גדולים inline | 2 קומפוננטות |
 | F12 | Medium | High | efficiency | ApplicationListPage.tsx:99-121 | 10 שאילתות רשימה לרינדור | endpoint counts |
 | F13 | Medium | Medium | SoC | queries.py (895) | DTOs + narrowing + mappers | פיצול לחבילה |
-| F14 | Low | High | Loading | ArtifactsPanel.tsx:205, CanonicalFactsBrowser.tsx:53-66 | מסך ריק / סולם ידני | QueryState |
-| F15 | Low | High | כפילות | ApplicationListPage.tsx:255-277 ↔ ViewSwitch.tsx | switch inline למרות primitive | להשתמש ב-ViewSwitch |
-| F16 | Low | High | כפילות | applicationListPresentation.ts:5-10 | פורמטר תאריך רביעי | style: "date" |
-| F17 | Low | High | כפילות | 8 אתרי invalidateQueries | תבנית חוזרת לא-עקבית | invalidateApplicationViews |
+| F14 | Low | High | Loading | ✅ בוצע — ArtifactsPanel.tsx:205, CanonicalFactsBrowser.tsx:53-66 | מסך ריק / סולם ידני | QueryState |
+| F15 | Low | High | כפילות | ✅ בוצע — ApplicationListPage.tsx:255-277 ↔ ViewSwitch.tsx | switch inline למרות primitive | להשתמש ב-ViewSwitch |
+| F16 | Low | High | כפילות | ✅ בוצע — applicationListPresentation.ts:5-10 | פורמטר תאריך רביעי | style: "date" |
+| F17 | Low | High | כפילות | ✅ בוצע — 8 אתרי invalidateQueries | תבנית חוזרת לא-עקבית | invalidateApplicationViews |
 | F18 | Low | High | error handling | NewApplicationPage.tsx:155, QuickIntakeDialog.tsx:99 | סיבת כשל הניתוח נזרקת | לשמר ProblemDetails |
 | F19 | Low | Medium | validation | RecruitmentExceptionalActions.tsx:78 | toISOString() בלי הגנה | להוסיף בדיקה |
 | F20 | Low | High | גבול | useWatchedOperation.tsx:7,81 | hooks/ תלוי ב-pages/ | להחזיר נתונים, לא JSX |
@@ -248,7 +248,7 @@ useEffect(() => () => { if (timer.current !== null) clearTimeout(timer.current);
 
 Trade-offs. send היא async; בקשה שיוצאת מ-unmount לא תוכל לדווח שגיאה למסך שכבר לא קיים. זה עדיין עדיף על אובדן שקט. סיכון רגרסיה בינוני-נמוך; useDraftAutosave.test.ts (233 שורות) מכסה את ההתנהגות ויצטרך תוספת מקרה. דורש שינוי התנהגותי.
 
-### F10 — FactLifecyclePanel עושה יותר מדי Medium / High
+### F10 — FactLifecyclePanel עושה יותר מדי Medium / High ✅ בוצע
 
 334 שורות. מעורבים: query לרשימת עובדות, query לפרטים, effect לבחירה אוטומטית (:53-57), שלוש mutations, עשרה useState לשדות טופס (:62-71), ולידציה ידנית ב-canCreate (:130), ו-JSX של שלושה אזורים.
 
@@ -264,7 +264,7 @@ Trade-offs. send היא async; בקשה שיוצאת מ-unmount לא תוכל ל
 
 Trade-offs. error = a ?? b ?? c ?? d ?? e (:128) מקפל חמש שגיאות שונות לכותרת אחת ("לא ניתן לעדכן את העובדה") — כשל בקריאת הרשימה מוצג כאילו כשלה מוטציה. הפיצול פותר את זה בדרך אגב. אין טסט על הקומפוננטה; רגרסיה תיתפס רק ידנית.
 
-### F11 — חילוצים מ-DraftEditorPage Medium / High
+### F11 — חילוצים מ-DraftEditorPage Medium / High ✅ בוצע
 
 | רכיב מוצע | מה מחולץ | props | היקף | מיקום |
 | --- | --- | --- | --- | --- |
@@ -299,7 +299,7 @@ ApplicationListPage.tsx:99-121: 4 שאילתות preset + 5 שאילתות pipel
 
 Trade-offs. רק תזוזת קבצים. __init__.py שמייצא מחדש שומר על כל ה-imports הקיימים, אז הסיכון קרוב לאפס — אבל גם התועלת המיידית קטנה. אני לא ממליץ לעשות את זה עכשיו אלא כשמשהו באזור הזה משתנה ממילא. מוגן ע"י test_application_list_query.py ו-test_architecture.py (שרץ רקורסיבית ולכן ימשיך לכסות).
 
-### F14 — Loading states לא עקביים Low / High
+### F14 — Loading states לא עקביים Low / High ✅ בוצע
 
 יש primitive טוב, QueryState, ו-8 קבצים משתמשים בו. שניים לא:
 
@@ -308,7 +308,7 @@ Trade-offs. רק תזוזת קבצים. __init__.py שמייצא מחדש שומ
 
 המלצה. להעביר את שניהם ל-QueryState. יש כאן אחידות סמנטית אמיתית, אז ה-primitive מוצדק — ורק לכן אני ממליץ.
 
-### F15/F16/F17 — כפילויות קטנות עם primitive קיים Low / High
+### F15/F16/F17 — כפילויות קטנות עם primitive קיים Low / High ✅ בוצע
 
 F15: ApplicationListPage.tsx:255-277 בונה role="group" + aria-pressed + מפת classes ל-toggle תצוגה — בדיוק מה ש-ui/ViewSwitch.tsx הוא, כולל ה-classes bg-cv-surface text-cv-accent shadow-surface. ההבדל היחיד: הגרסה ב-ViewSwitch היא label טקסטואלי והגרסה בלוח היא icon. פתרון: icon?: LucideIcon ל-ViewSwitchOption. אם ההבדל הויזואלי מכוון (padding/גודל), עדיף להשאיר כפול ולתעד — אבל אז צריך לומר את זה בהערה, וכרגע לא נאמר.
 F16: applicationListPresentation.ts:5-10 — formatApplicationDate הוא Intl formatter רביעי, עם אותה הגנת isNaN של formatDateTime. פתרון: DateTimeStyle נוסף "date", ומחיקת המקומי.
@@ -504,7 +504,7 @@ Rollback: F4 בקומיט אחד הפיך; F13 (תזוזת קבצים בלבד) 
 5. ✅ בוצע — F9 — flush ל-autosave ב-unmount; נוסף מקרה ל-useDraftAutosave.test.ts.
 6. ✅ בוצע — F7 — אוחד חישוב "באיחור" ונוסף לו כיסוי טהור.
 7. ✅ בוצע — F6 + F8 — נוסף factLabels.ts; אוצר המילים של warnings רוכז תוך שמירת ההבחנה בין הגרסה המוצגת לגרסה המוכנה האחרונה.
-8. F14 + F17 + F16 + F15 — סבב primitives: QueryState, invalidateApplicationViews, formatDateTime, ViewSwitch.
-9. F10 + F11 — לפצל FactLifecyclePanel (ולהעביר ל-useAppForm) ולחלץ DraftSectionCard + DraftHeaderCard.
+8. ✅ בוצע — F14 + F17 + F16 + F15 — סבב primitives: QueryState, invalidateApplicationViews, formatDateTime, ViewSwitch.
+9. ✅ בוצע — F10 + F11 — לפצל FactLifecyclePanel (ולהעביר ל-useAppForm) ולחלץ DraftSectionCard + DraftHeaderCard.
 10. F4 — להעביר את חוק "מועמדות סגורה" לפרויקציה, עם מלוא ה-gate. (אחרון: היחיד שנוגע בחוזה)
 11. F12, F13, F18–F21 — לתעד ולדחות עד ששינוי אחר יפתח את האזור.

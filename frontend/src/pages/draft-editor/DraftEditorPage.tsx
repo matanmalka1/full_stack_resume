@@ -1,4 +1,4 @@
-import { ArrowRight, FileText, Layers3, RefreshCw } from "lucide-react";
+import { ArrowRight, FileText } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
 import { ErrorCallout } from "../../app/ErrorCallout";
@@ -7,21 +7,19 @@ import { BackLink } from "../../ui/BackLink";
 import { Button, buttonClasses } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 import { Card } from "../../ui/Card";
-import { LtrText } from "../../ui/LtrText";
 import { PageShell } from "../../ui/PageShell";
 import { QueryState } from "../../ui/QueryState";
-import { StatusBadge } from "../../ui/StatusBadge";
 import { SectionHeader } from "../../ui/SectionHeader";
-import { reasonTitle, workingDraftStateLabels, workingDraftStateTones } from "../application/applicationLabels";
-import { FactLifecyclePanel } from "../FactLifecyclePanel";
-import { ClaimFactResolution } from "./ClaimFactResolution";
+import { reasonTitle } from "../application/applicationLabels";
+import { FactLifecyclePanel } from "../facts/FactLifecyclePanel";
 import { DraftApprovalDialog } from "./DraftApprovalDialog";
 import { DraftClaimCard } from "./DraftClaimCard";
 import { DraftConflictDialog } from "./DraftConflictDialog";
 import { DraftFactPanel } from "./DraftFactPanel";
+import { DraftHeaderCard } from "./DraftHeaderCard";
 import { DraftPreview } from "./DraftPreview";
 import { DraftRenderPanel } from "./DraftRenderPanel";
-import { DraftSaveState } from "./DraftSaveState";
+import { type ClaimHandlers, DraftSectionCard } from "./DraftSectionCard";
 import { DraftValidationPanel } from "./DraftValidationPanel";
 import { EditorLayout } from "./EditorLayout";
 import { useDraftEditorState } from "./useDraftEditorState";
@@ -102,37 +100,7 @@ export const DraftEditorPage = () => {
       ) : null}
 
       {detail === undefined ? null : (
-        <Card className="flex flex-wrap items-center justify-between gap-4 bg-cv-surface p-4 shadow-surface">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-control bg-cv-accent-soft text-cv-accent">
-              <FileText aria-hidden="true" className="size-5" />
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-body font-bold text-cv-text" dir="auto">
-                {detail.application.company}
-              </p>
-              <p className="truncate text-support text-cv-text-muted" dir="auto">
-                {detail.application.target_role}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {draft === undefined ? null : (
-              <LtrText
-                className="rounded-pill border border-cv-border bg-cv-surface-muted px-2.5 py-1 text-support text-cv-text-muted"
-                mono
-                title={draft.content_hash}
-              >
-                v{draft.edit_version} · {draft.content_hash.slice(0, 10)}
-              </LtrText>
-            )}
-            <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
-              {workingDraftStateLabels[detail.working_draft_state]}
-            </StatusBadge>
-            {workingDraftId === null ? null : <DraftSaveState state={autosave} />}
-          </div>
-        </Card>
+        <DraftHeaderCard autosave={autosave} detail={detail} draft={draft} workingDraftId={workingDraftId} />
       )}
 
       {/* Live work, reported beside the draft it is rewriting rather than on a screen
@@ -158,7 +126,21 @@ export const DraftEditorPage = () => {
       {renderRevisionId === null && draft === undefined && workingDraftId !== null && draftQuery.error === null ? (
         <QueryState loading loadingLabel="טוען את הטיוטה…" />
       ) : null}
-      {renderRevisionId === null && draft !== undefined ? (
+      {renderRevisionId !== null || draft === undefined ? null : (() => {
+        /* The five props every `DraftClaimCard` on this screen needs, bundled once: one
+           draft, one facts read, one blur/edit/regenerate/remove policy for every claim,
+           whichever section it sits in. */
+        const claimHandlers: ClaimHandlers = {
+          draft,
+          facts,
+          onBlur: autosave.flush,
+          onEdit: editClaim,
+          onRegenerate: (claim) => regeneration.mutate({ claimId: claim.claim_id }),
+          onRemove: removeClaim,
+          unsaved: regenerationDisabled,
+        };
+
+        return (
         <>
           <EditorLayout
             editor={
@@ -178,90 +160,24 @@ export const DraftEditorPage = () => {
                   />
 
                   <ul className="flex flex-col divide-y divide-cv-border">
-                    <DraftClaimCard
-                      claim={draft.outline.headline}
-                      draft={draft}
-                      facts={facts}
-                      onBlur={autosave.flush}
-                      onEdit={editClaim}
-                      onRegenerate={(claim) => regeneration.mutate({ claimId: claim.claim_id })}
-                      onRemove={removeClaim}
-                      unsaved={regenerationDisabled}
-                    />
+                    <DraftClaimCard {...claimHandlers} claim={draft.outline.headline} />
                     {draft.outline.contacts.map((contact) => (
-                      <DraftClaimCard
-                        claim={contact}
-                        draft={draft}
-                        facts={facts}
-                        key={contact.claim_id}
-                        onBlur={autosave.flush}
-                        onEdit={editClaim}
-                        onRegenerate={(claim) => regeneration.mutate({ claimId: claim.claim_id })}
-                        onRemove={removeClaim}
-                        unsaved={regenerationDisabled}
-                      />
+                      <DraftClaimCard {...claimHandlers} claim={contact} key={contact.claim_id} />
                     ))}
                   </ul>
                 </Card>
 
                 {draft.outline.sections.map((section, sectionIndex) => (
-                  <Card
-                    aria-labelledby={`draft-section-${sectionIndex}`}
-                    className="flex flex-col gap-2 bg-cv-surface p-4 shadow-surface sm:p-5"
+                  <DraftSectionCard
+                    applicationId={applicationId}
+                    claimHandlers={claimHandlers}
+                    detail={detail}
                     key={section.name}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cv-border pb-3">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <Layers3 aria-hidden="true" className="size-4 shrink-0 text-cv-accent" />
-                        <h3
-                          className="truncate text-heading-sm font-bold text-cv-text"
-                          dir="auto"
-                          id={`draft-section-${sectionIndex}`}
-                        >
-                          {section.name}
-                        </h3>
-                        <span className="shrink-0 text-support text-cv-text-muted">{section.claims.length} שורות</span>
-                      </div>
-                      <Button
-                        disabled={regenerationDisabled}
-                        onClick={() => regeneration.mutate({ section: section.name })}
-                        variant="secondary"
-                      >
-                        <RefreshCw aria-hidden="true" className="size-4" />
-                        יצירה מחדש של הפרק
-                      </Button>
-                    </div>
-                    {section.claims.length === 0 ? (
-                      <p className="text-support leading-6 text-cv-text-muted">אין כרגע שורות בסעיף הזה.</p>
-                    ) : (
-                      <ul className="flex flex-col divide-y divide-cv-border">
-                        {section.claims.map((claim) => (
-                          <DraftClaimCard
-                            claim={claim}
-                            draft={draft}
-                            factResolution={
-                              <ClaimFactResolution
-                                analysisId={detail?.active_analysis_id ?? null}
-                                applicationId={applicationId}
-                                claim={claim}
-                                draft={draft}
-                                language={facts?.language ?? detail?.application.language ?? "en"}
-                                profile={detail?.application.profile ?? null}
-                                section={section.name}
-                              />
-                            }
-                            facts={facts}
-                            key={claim.claim_id}
-                            onBlur={autosave.flush}
-                            onEdit={editClaim}
-                            onRegenerate={(claim) => regeneration.mutate({ claimId: claim.claim_id })}
-                            onRemove={removeClaim}
-                            unsaved={regenerationDisabled}
-                          />
-                        ))}
-                      </ul>
-                    )}
-                  </Card>
+                    onRegenerateSection={() => regeneration.mutate({ section: section.name })}
+                    regenerationDisabled={regenerationDisabled}
+                    section={section}
+                    sectionIndex={sectionIndex}
+                  />
                 ))}
 
                 {regenerationAvailable || settingsPending ? null : (
@@ -372,7 +288,8 @@ export const DraftEditorPage = () => {
             pendingRemovals={autosave.pendingRemovals}
           />
         </>
-      ) : null}
+        );
+      })()}
     </PageShell>
   );
 };

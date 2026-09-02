@@ -1,11 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
-import {
-  applicationDetailQueryOptions,
-  applicationListQueryPrefix,
-  startDraftGeneration,
-} from "../../api/applications";
+import { applicationDetailQueryOptions, invalidateApplicationViews, startDraftGeneration } from "../../api/applications";
 import { operationQueryKey } from "../../api/operations";
 import { approvedRevisionQueryOptions, decisionMarkdownQueryOptions } from "../../api/revisions";
 import { recordInternalSubmission } from "../../api/tracking";
@@ -83,12 +79,7 @@ export const useRevisionPageState = (approvedRevisionId: string) => {
     },
     onSuccess: () => {
       setSubmissionOpen(false);
-      if (revision !== undefined) {
-        void queryClient.invalidateQueries({
-          queryKey: applicationDetailQueryOptions(revision.application_id).queryKey,
-        });
-      }
-      void queryClient.invalidateQueries({ queryKey: applicationListQueryPrefix });
+      void invalidateApplicationViews(queryClient, revision?.application_id);
     },
   });
   const hasSources = detail?.active_analysis_id != null && detail.active_selection_plan_id != null;

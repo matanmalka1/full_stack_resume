@@ -5,10 +5,9 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   type ApplicationListQuery,
-  applicationDetailQueryPrefix,
-  applicationListQueryPrefix,
   applicationListQueryOptions,
   closeApplication,
+  invalidateApplicationViews,
 } from "../api/applications";
 import type { ApplicationListItem, ApplicationPreset } from "../api/contracts";
 import { setNextAction } from "../api/tracking";
@@ -19,6 +18,7 @@ import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { Button, buttonClasses } from "../ui/Button";
 import { EmptyState } from "../ui/EmptyState";
 import { QueryState } from "../ui/QueryState";
+import { ViewSwitch } from "../ui/ViewSwitch";
 import { ApplicationListFilters } from "./application-list/ApplicationListFilters";
 import { ApplicationCardsView, ApplicationPipelineView } from "./application-list/ApplicationAlternativeViews";
 import { ApplicationListPagination } from "./application-list/ApplicationListPagination";
@@ -128,17 +128,15 @@ export const ApplicationListPage = () => {
 
   const close = useMutation({
     mutationFn: (applicationId: string) => closeApplication(applicationId),
-    onSuccess: async () => {
+    onSuccess: async (_result, applicationId) => {
       setClosingApplication(null);
-      await queryClient.invalidateQueries({ queryKey: applicationListQueryPrefix });
-      await queryClient.invalidateQueries({ queryKey: applicationDetailQueryPrefix });
+      await invalidateApplicationViews(queryClient, applicationId);
     },
   });
   const clearNextAction = useMutation({
     mutationFn: (applicationId: string) => setNextAction(applicationId, { next_action: null, next_action_date: null }),
     onSuccess: async (_result, applicationId) => {
-      await queryClient.invalidateQueries({ queryKey: applicationDetailQueryPrefix });
-      await queryClient.invalidateQueries({ queryKey: applicationListQueryPrefix });
+      await invalidateApplicationViews(queryClient, applicationId);
       if (updatingApplication?.id === applicationId) {
         setUpdatingApplication(null);
       }
@@ -248,29 +246,12 @@ export const ApplicationListPage = () => {
                   <p aria-live="polite" className="text-support font-semibold text-cv-text-muted">
                     {matched === page.total ? `${page.total} מועמדויות` : `${matched} מתוך ${page.total} מועמדויות`}
                   </p>
-                  <div
-                    aria-label="בחירת תצוגת מועמדויות"
-                    className="inline-flex items-center rounded-control border border-cv-border bg-cv-surface-muted p-0.5"
-                    role="group"
-                  >
-                    {viewOptions.map(({ icon: Icon, label, value }) => (
-                      <button
-                        aria-label={label}
-                        aria-pressed={viewMode === value}
-                        className={`rounded-control p-2 transition-colors ${
-                          viewMode === value
-                            ? "bg-cv-surface text-cv-accent shadow-surface"
-                            : "text-cv-text-muted hover:text-cv-text"
-                        }`}
-                        key={value}
-                        onClick={() => setViewMode(value)}
-                        title={label}
-                        type="button"
-                      >
-                        <Icon aria-hidden="true" className="size-4" />
-                      </button>
-                    ))}
-                  </div>
+                  <ViewSwitch
+                    label="בחירת תצוגת מועמדויות"
+                    onChange={setViewMode}
+                    options={viewOptions}
+                    value={viewMode}
+                  />
                 </div>
 
                 {items.length === 0 ? (
@@ -337,7 +318,7 @@ export const ApplicationListPage = () => {
           onClose={() => setQuickIntakeOpen(false)}
           onCreated={(applicationId, analysisQueued) => {
             setQuickIntakeOpen(false);
-            void queryClient.invalidateQueries({ queryKey: applicationListQueryPrefix });
+            void invalidateApplicationViews(queryClient);
             void navigate(appRoutes.application(applicationId), {
               state: { createdApplication: { analysisQueued } },
             });

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { applicationDetailQueryKey, applicationListQueryPrefix, updateApplicationNotes } from "../../api/applications";
+import { invalidateApplicationViews, updateApplicationNotes } from "../../api/applications";
 import type { ApplicationDetail } from "../../api/contracts";
 import { ErrorCallout } from "../../app/ErrorCallout";
 import { useAppForm } from "../../forms/useAppForm";
@@ -36,8 +36,7 @@ export const ApplicationNotes = ({ detail }: { detail: ApplicationDetail }) => {
         expected_notes: detail.application.notes,
       }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
-      void queryClient.invalidateQueries({ queryKey: applicationListQueryPrefix });
+      await invalidateApplicationViews(queryClient, applicationId);
       setOpen(false);
     },
   });

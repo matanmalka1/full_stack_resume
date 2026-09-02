@@ -1,12 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
-import {
-  applicationDetailQueryKey,
-  applicationDetailQueryOptions,
-  applicationListQueryPrefix,
-  updateApplicationNotes,
-} from "../../api/applications";
+import { applicationDetailQueryOptions, invalidateApplicationViews, updateApplicationNotes } from "../../api/applications";
 import type { ApplicationListItem, TransitionableRecruitmentStatus } from "../../api/contracts";
 import { setNextAction, transitionRecruitmentStatus } from "../../api/tracking";
 import { ErrorCallout } from "../../app/ErrorCallout";
@@ -96,12 +91,10 @@ export const QuickStatusUpdateDialog = ({ application, onClose }: QuickStatusUpd
       }
     },
     onError: async () => {
-      await queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
-      void queryClient.invalidateQueries({ queryKey: applicationListQueryPrefix });
+      await invalidateApplicationViews(queryClient, applicationId);
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
-      void queryClient.invalidateQueries({ queryKey: applicationListQueryPrefix });
+      await invalidateApplicationViews(queryClient, applicationId);
       onClose();
     },
   });

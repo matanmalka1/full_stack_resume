@@ -1,6 +1,7 @@
-type DateTimeStyle = "medium" | "short";
+type DateTimeStyle = "date" | "medium" | "short";
 
 const formatters: Record<DateTimeStyle, Intl.DateTimeFormat> = {
+  date: new Intl.DateTimeFormat("he-IL", { dateStyle: "short" }),
   medium: new Intl.DateTimeFormat("he-IL", { dateStyle: "medium", timeStyle: "short" }),
   short: new Intl.DateTimeFormat("he-IL", { dateStyle: "short", timeStyle: "short" }),
 };

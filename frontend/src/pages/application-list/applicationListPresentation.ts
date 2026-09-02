@@ -1,13 +1,9 @@
 import type { ApplicationListItem } from "../../api/contracts";
 import type { StatusTone } from "../../ui/status";
+import { formatDateTime } from "../../ui/formatDateTime";
 import { reasonTitle, warningTitle } from "../application/applicationLabels";
 
-const dateFormat = new Intl.DateTimeFormat("he-IL", { dateStyle: "short" });
-
-export const formatApplicationDate = (value: string): string => {
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : dateFormat.format(parsed);
-};
+export const formatApplicationDate = (value: string): string => formatDateTime(value, "date");
 
 /* This is a visual comparison against the reader's local date. It does not affect
    filtering, workflow state, or any server-side deadline decision. */

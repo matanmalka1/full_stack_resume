@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 
-import { applicationDetailQueryKey, applicationListQueryPrefix } from "../../api/applications";
+import { invalidateApplicationViews } from "../../api/applications";
 import type { ApplicationDetail } from "../../api/contracts";
 import { Card } from "../../ui/Card";
 import { SectionHeader } from "../../ui/SectionHeader";
@@ -14,8 +14,7 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
   const queryClient = useQueryClient();
 
   const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
-    void queryClient.invalidateQueries({ queryKey: applicationListQueryPrefix });
+    void invalidateApplicationViews(queryClient, applicationId);
   };
 
   return (

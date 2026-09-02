@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { type QueryClient, queryOptions } from "@tanstack/react-query";
 
 import { ApiProblem, type ApiPath, apiRequest } from "./client";
 import type {
@@ -116,6 +116,19 @@ export const applicationListQueryPrefix = ["applications"] as const;
 
 export const applicationDetailQueryKey = (applicationId: string) =>
   [...applicationDetailQueryPrefix, applicationId] as const;
+
+/* The one invalidation every command that changes an Application sends: its detail read
+   (when the command names the Application) and the board's list read, which mirrors the
+   same §9 projection per row. Centralized so the choice between a specific key and the
+   whole prefix, and the order two invalidations run in, is made once rather than by each
+   caller - it was answered differently at eight call sites before this existed. */
+export const invalidateApplicationViews = (queryClient: QueryClient, applicationId?: string): Promise<unknown> =>
+  Promise.all([
+    applicationId === undefined
+      ? Promise.resolve()
+      : queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) }),
+    queryClient.invalidateQueries({ queryKey: applicationListQueryPrefix }),
+  ]);
 
 /* The list query, exactly as the backend defines it.
 
