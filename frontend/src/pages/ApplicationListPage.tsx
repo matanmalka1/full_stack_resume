@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Kanban, LayoutGrid, Plus, Table2 } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
@@ -18,6 +18,7 @@ import { EmptyState } from "../ui/EmptyState";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
 import { ApplicationListFilters } from "./application-list/ApplicationListFilters";
+import { ApplicationCardsView, ApplicationPipelineView } from "./application-list/ApplicationAlternativeViews";
 import { ApplicationListPagination } from "./application-list/ApplicationListPagination";
 import { ApplicationListTable } from "./application-list/ApplicationListTable";
 import { CloseApplicationDialog } from "./application-list/CloseApplicationDialog";
@@ -25,11 +26,19 @@ import { PAGE_SIZE, paramsFromQuery, queryFromParams } from "./applicationListPa
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 
 const SEARCH_DEBOUNCE_MS = 300;
+type ViewMode = "table" | "cards" | "pipeline";
+
+const viewOptions: readonly { icon: typeof Table2; label: string; value: ViewMode }[] = [
+  { icon: Table2, label: "תצוגת טבלה", value: "table" },
+  { icon: LayoutGrid, label: "תצוגת כרטיסים", value: "cards" },
+  { icon: Kanban, label: "תצוגת שלבי גיוס", value: "pipeline" },
+];
 
 export const ApplicationListPage = () => {
   const [params, setParams] = useSearchParams();
   const query = queryFromParams(params);
   const queryClient = useQueryClient();
+  const [viewMode, setViewMode] = useState<ViewMode>("table");
   /* The URL is the search field's single source of truth, so Back, Forward, and shared
      links update the control without a local mirror. Only the server read is debounced. */
   const settledSearch = useDebouncedValue(query.search ?? "", SEARCH_DEBOUNCE_MS);
@@ -131,9 +140,34 @@ export const ApplicationListPage = () => {
             >
               {/* The count is the sheet's caption: it sits on the canvas directly above
                   the rows it counts, not inside them. */}
-              <p aria-live="polite" className="mb-2 text-support text-cv-text-muted">
-                {matched === page.total ? `${page.total} מועמדויות` : `${matched} מתוך ${page.total} מועמדויות`}
-              </p>
+              <div className="mb-3 flex items-center justify-between gap-4">
+                <p aria-live="polite" className="text-support font-semibold text-cv-text-muted">
+                  {matched === page.total ? `${page.total} מועמדויות` : `${matched} מתוך ${page.total} מועמדויות`}
+                </p>
+                <div
+                  aria-label="בחירת תצוגת מועמדויות"
+                  className="inline-flex items-center rounded-control border border-cv-border bg-cv-surface-muted p-0.5"
+                  role="group"
+                >
+                  {viewOptions.map(({ icon: Icon, label, value }) => (
+                    <button
+                      aria-label={label}
+                      aria-pressed={viewMode === value}
+                      className={`rounded-control p-2 transition-colors ${
+                        viewMode === value
+                          ? "bg-cv-surface text-cv-accent shadow-surface"
+                          : "text-cv-text-muted hover:text-cv-text"
+                      }`}
+                      key={value}
+                      onClick={() => setViewMode(value)}
+                      title={label}
+                      type="button"
+                    >
+                      <Icon aria-hidden="true" className="size-4" />
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               {items.length === 0 ? (
                 <EmptyState className="bg-cv-surface">
@@ -151,6 +185,10 @@ export const ApplicationListPage = () => {
                     </Button>
                   </div>
                 </EmptyState>
+              ) : viewMode === "cards" ? (
+                <ApplicationCardsView items={items} onRequestClose={setClosingApplication} />
+              ) : viewMode === "pipeline" ? (
+                <ApplicationPipelineView items={items} onRequestClose={setClosingApplication} />
               ) : (
                 <ApplicationListTable items={items} onRequestClose={setClosingApplication} />
               )}

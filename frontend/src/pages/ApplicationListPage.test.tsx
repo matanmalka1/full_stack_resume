@@ -4,12 +4,7 @@ import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { applicationDetailQueryOptions, applicationListQueryOptions } from "../api/applications";
-import type {
-  ApplicationDetail,
-  ApplicationListItem,
-  ApplicationListResponse,
-  Reason,
-} from "../api/contracts";
+import type { ApplicationDetail, ApplicationListItem, ApplicationListResponse, Reason } from "../api/contracts";
 import { ApplicationListPage } from "./ApplicationListPage";
 
 const item = (overrides: Partial<ApplicationListItem> = {}): ApplicationListItem =>
@@ -253,6 +248,38 @@ describe("ApplicationListPage", () => {
     fireEvent.click(await screen.findByText("Backend Engineer"));
 
     expect(screen.getByRole("heading", { name: "מסך המועמדות" })).toBeInTheDocument();
+  });
+
+  it("switches between table, card, and recruitment pipeline views without changing the server query", async () => {
+    const { fetchMock } = stubList([
+      item({ next_action: "Follow up", next_action_date: "2020-01-01" }),
+      item({ id: "app-2", company: "Binat", notes: "Referral from Dana", recruitment_status: "interview" }),
+      item({ id: "app-3", company: "ClosedCo", recruitment_status: "rejected" }),
+    ]);
+
+    renderPage();
+
+    expect(await screen.findByRole("table")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "תצוגת כרטיסים" }));
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Acme" })).toHaveLength(1);
+    expect(screen.getAllByRole("link", { name: "Binat" })).toHaveLength(1);
+    expect(screen.getByText("Follow up")).toBeInTheDocument();
+    expect(screen.getByText(/באיחור/)).toBeInTheDocument();
+    expect(screen.getByText(/Referral from Dana/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "עדכון סטטוס ומשימות עבור Acme" })).toHaveAttribute(
+      "href",
+      "/applications/app-1/tracking",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "תצוגת שלבי גיוס" }));
+    const pipeline = screen.getByRole("list", { name: "מועמדויות לפי שלב גיוס" });
+    expect(within(pipeline).getByRole("heading", { name: "נשמרו / בהכנה" })).toBeInTheDocument();
+    expect(within(pipeline).getByRole("heading", { name: "ראיונות והצעות" })).toBeInTheDocument();
+    expect(within(pipeline).getByRole("heading", { name: "תהליכים סגורים" })).toBeInTheDocument();
+    expect(within(pipeline).getAllByText("אין מועמדויות בשלב זה")).toHaveLength(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the filters visible when a narrowed board matches none of the stored Applications", async () => {
