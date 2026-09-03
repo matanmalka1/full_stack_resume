@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import get_args
 
 import pytest
-from helpers import PAYME_TECH_SALES_JOB
+from helpers import AMBIGUOUS_HEBREW_JOB, PAYME_TECH_SALES_JOB
 
 from cv_engine.domain.analysis.approval import (
     ACCEPTED_INCOMPLETE_ANALYSIS,
@@ -14,7 +14,12 @@ from cv_engine.domain.analysis.approval import (
     CONFIDENCE_APPROVAL_THRESHOLD,
     unresolved_approval_reasons,
 )
-from cv_engine.domain.analysis.classification import classification_confidence, classify_job
+from cv_engine.domain.analysis.classification import (
+    PROFILE_TERMS,
+    classification_confidence,
+    classify_job,
+    requirement_profile_scores,
+)
 from cv_engine.domain.analysis.gaps import FIT_SEVERITY, derive_fit, derive_gaps, merge_fit
 from cv_engine.domain.analysis.requirements import (
     RequirementConceptError,
@@ -31,7 +36,15 @@ from cv_engine.domain.analysis.requirements import (
     requirement_lines,
     statement_lines,
 )
-from cv_engine.domain.models import FactStatus, FitLevel, Gap, JobAnalysis, Language, Track
+from cv_engine.domain.models import (
+    FactStatus,
+    FitLevel,
+    Gap,
+    JobAnalysis,
+    Language,
+    ProfileName,
+    Track,
+)
 
 
 def test_direct_saas_requirement_is_hard_gap(classify) -> None:
@@ -147,10 +160,11 @@ globally, Riverside's your place.
 """
 
 
-def _riverside(fact_store, requirement_concepts):
+def _riverside(fact_store, profile_store, requirement_concepts):
     return classify_job(
         RIVERSIDE_JOB,
         facts=fact_store,
+        profiles=profile_store,
         concepts=requirement_concepts,
         normalized_hash="riverside",
     )
@@ -211,17 +225,21 @@ def test_extraction_never_receives_the_fact_store() -> None:
 
 
 def test_threshold_below_demand_is_unsupported_and_still_lists_evidence(
-    fact_store, requirement_concepts
+    fact_store, profile_store, requirement_concepts
 ) -> None:
     """Falling short is not half-met. English is Fluent; the posting wants Native."""
-    english = _by_concept(_riverside(fact_store, requirement_concepts))["english-proficiency"]
+    english = _by_concept(_riverside(fact_store, profile_store, requirement_concepts))[
+        "english-proficiency"
+    ]
     assert english.mandatory
     assert english.coverage == "unsupported"
     assert english.supporting_fact_ids == ["common.language.english"]
 
 
-def test_threshold_at_or_above_demand_is_matched(fact_store, requirement_concepts) -> None:
-    years = _by_concept(_riverside(fact_store, requirement_concepts))[
+def test_threshold_at_or_above_demand_is_matched(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    years = _by_concept(_riverside(fact_store, profile_store, requirement_concepts))[
         "sales-closing-experience-years"
     ]
     assert years.mandatory
@@ -229,10 +247,10 @@ def test_threshold_at_or_above_demand_is_matched(fact_store, requirement_concept
 
 
 def test_compositional_requirement_with_one_component_missing_is_partial(
-    fact_store, requirement_concepts
+    fact_store, profile_store, requirement_concepts
 ) -> None:
     """One sales fact plus one technology fact does not make technology-company sales."""
-    technology = _by_concept(_riverside(fact_store, requirement_concepts))[
+    technology = _by_concept(_riverside(fact_store, profile_store, requirement_concepts))[
         "technology-company-sales"
     ]
     assert technology.mandatory
@@ -243,9 +261,11 @@ def test_compositional_requirement_with_one_component_missing_is_partial(
     assert technology.boundary_fact_ids == ["sales.tech_sales.boundary"]
 
 
-def test_a_clause_qualifier_governs_its_own_clause_only(fact_store, requirement_concepts) -> None:
+def test_a_clause_qualifier_governs_its_own_clause_only(
+    fact_store, profile_store, requirement_concepts
+) -> None:
     """ "(ideally European market)" inside a "(must)" bullet is preferred, not mandatory."""
-    by_concept = _by_concept(_riverside(fact_store, requirement_concepts))
+    by_concept = _by_concept(_riverside(fact_store, profile_store, requirement_concepts))
     assert by_concept["european-market-experience"].mandatory is False
     assert by_concept["media-industry-experience"].mandatory is False
     # The span that swallows the aside must not inherit its "ideally".
@@ -253,9 +273,9 @@ def test_a_clause_qualifier_governs_its_own_clause_only(fact_store, requirement_
 
 
 def test_mandatory_partial_and_unsupported_both_produce_hard_gaps(
-    fact_store, requirement_concepts
+    fact_store, profile_store, requirement_concepts
 ) -> None:
-    analysis = _riverside(fact_store, requirement_concepts)
+    analysis = _riverside(fact_store, profile_store, requirement_concepts)
     hard = {gap.requirement for gap in analysis.gaps if gap.severity == "hard"}
     by_concept = _by_concept(analysis)
     assert by_concept["english-proficiency"].text in hard
@@ -263,8 +283,10 @@ def test_mandatory_partial_and_unsupported_both_produce_hard_gaps(
     assert analysis.fit.value == "low"
 
 
-def test_matched_requirements_produce_no_gap(fact_store, requirement_concepts) -> None:
-    analysis = _riverside(fact_store, requirement_concepts)
+def test_matched_requirements_produce_no_gap(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    analysis = _riverside(fact_store, profile_store, requirement_concepts)
     matched = {
         requirement.text
         for requirement in analysis.requirements
@@ -274,18 +296,22 @@ def test_matched_requirements_produce_no_gap(fact_store, requirement_concepts) -
     assert matched.isdisjoint({gap.requirement for gap in analysis.gaps})
 
 
-def test_gap_carries_the_requirement_it_projects(fact_store, requirement_concepts) -> None:
+def test_gap_carries_the_requirement_it_projects(
+    fact_store, profile_store, requirement_concepts
+) -> None:
     """Per-gap acceptance in Stage 3 needs this identity to exist."""
-    analysis = _riverside(fact_store, requirement_concepts)
+    analysis = _riverside(fact_store, profile_store, requirement_concepts)
     known = {requirement.requirement_id for requirement in analysis.requirements}
     projected = [gap for gap in analysis.gaps if gap.requirement_id is not None]
     assert projected
     assert all(gap.requirement_id in known for gap in projected)
 
 
-def test_boundary_fact_supplies_the_authoritative_reason(fact_store, requirement_concepts) -> None:
+def test_boundary_fact_supplies_the_authoritative_reason(
+    fact_store, profile_store, requirement_concepts
+) -> None:
     """Canonical Knowledge explains the gap; the engine does not narrate it."""
-    analysis = _riverside(fact_store, requirement_concepts)
+    analysis = _riverside(fact_store, profile_store, requirement_concepts)
     technology = _by_concept(analysis)["technology-company-sales"]
     gap = next(gap for gap in analysis.gaps if gap.requirement_id == technology.requirement_id)
     assert gap.reason == fact_store.get("sales.tech_sales.boundary").meaning
@@ -449,10 +475,10 @@ def test_a_boundary_fact_cannot_meet_a_threshold(fact_store) -> None:
 
 
 def test_boundary_facts_are_never_listed_as_supporting_evidence(
-    fact_store, requirement_concepts
+    fact_store, profile_store, requirement_concepts
 ) -> None:
     """The two lists must stay disjoint on every requirement, not just this one."""
-    analysis = _riverside(fact_store, requirement_concepts)
+    analysis = _riverside(fact_store, profile_store, requirement_concepts)
     for requirement in analysis.requirements:
         assert not set(requirement.supporting_fact_ids) & set(requirement.boundary_fact_ids)
     technology = _by_concept(analysis)["technology-company-sales"]
@@ -560,10 +586,13 @@ def test_a_hard_gap_outranks_a_failed_extraction() -> None:
     assert derive_fit(hard, extraction_failed=True) is FitLevel.LOW
 
 
-def test_extraction_failure_produces_unknown_fit(fact_store, requirement_concepts) -> None:
+def test_extraction_failure_produces_unknown_fit(
+    fact_store, profile_store, requirement_concepts
+) -> None:
     analysis = classify_job(
         UNREADABLE_JOB,
         facts=fact_store,
+        profiles=profile_store,
         concepts=requirement_concepts,
         normalized_hash="unreadable",
     )
@@ -571,21 +600,27 @@ def test_extraction_failure_produces_unknown_fit(fact_store, requirement_concept
     assert analysis.fit is FitLevel.UNKNOWN
 
 
-def test_extraction_failure_records_the_reason(fact_store, requirement_concepts) -> None:
+def test_extraction_failure_records_the_reason(
+    fact_store, profile_store, requirement_concepts
+) -> None:
     analysis = classify_job(
         UNREADABLE_JOB,
         facts=fact_store,
+        profiles=profile_store,
         concepts=requirement_concepts,
         normalized_hash="unreadable",
     )
     assert "extraction-failed" in analysis.approval_reasons
 
 
-def test_extraction_failure_blocks_drafting(fact_store, requirement_concepts) -> None:
+def test_extraction_failure_blocks_drafting(
+    fact_store, profile_store, requirement_concepts
+) -> None:
     """Through the existing ambiguity gate, with no new review code."""
     analysis = classify_job(
         UNREADABLE_JOB,
         facts=fact_store,
+        profiles=profile_store,
         concepts=requirement_concepts,
         normalized_hash="unreadable",
     )
@@ -594,7 +629,7 @@ def test_extraction_failure_blocks_drafting(fact_store, requirement_concepts) ->
 
 
 def test_no_classification_override_settles_a_failed_extraction(
-    fact_store, requirement_concepts
+    fact_store, profile_store, requirement_concepts
 ) -> None:
     """Naming the job does not recover the requirements that could not be read.
 
@@ -613,6 +648,7 @@ def test_no_classification_override_settles_a_failed_extraction(
         analysis = classify_job(
             UNREADABLE_JOB,
             facts=fact_store,
+            profiles=profile_store,
             concepts=requirement_concepts,
             normalized_hash="unreadable",
             **override,
@@ -688,12 +724,13 @@ def test_every_approval_reason_the_engine_records_is_registered() -> None:
 
 
 def test_accepting_an_incomplete_analysis_resolves_it_and_nothing_else(
-    fact_store, requirement_concepts
+    fact_store, profile_store, requirement_concepts
 ) -> None:
     """The override answers extraction, leaves Fit unknown, and is its own key."""
     analysis = classify_job(
         UNREADABLE_JOB,
         facts=fact_store,
+        profiles=profile_store,
         concepts=requirement_concepts,
         normalized_hash="unreadable",
     )
@@ -724,11 +761,15 @@ def test_accepting_an_incomplete_analysis_resolves_it_and_nothing_else(
 
 
 def test_successful_extraction_never_records_extraction_failed(
-    fact_store, requirement_concepts
+    fact_store, profile_store, requirement_concepts
 ) -> None:
     for text, digest in ((RIVERSIDE_JOB, "riverside"), (THIN_JOB, "thin")):
         analysis = classify_job(
-            text, facts=fact_store, concepts=requirement_concepts, normalized_hash=digest
+            text,
+            facts=fact_store,
+            profiles=profile_store,
+            concepts=requirement_concepts,
+            normalized_hash=digest,
         )
         assert "extraction-failed" not in analysis.approval_reasons
         assert analysis.fit is not FitLevel.UNKNOWN
@@ -745,12 +786,13 @@ def test_a_short_posting_is_not_punished_for_being_short(fact_store, requirement
 
 
 def test_weak_extraction_lowers_confidence_even_when_classification_is_strong(
-    fact_store, requirement_concepts
+    fact_store, profile_store, requirement_concepts
 ) -> None:
     """The product must not let a confident classification carry an unread posting."""
     analysis = classify_job(
         UNREADABLE_JOB,
         facts=fact_store,
+        profiles=profile_store,
         concepts=requirement_concepts,
         normalized_hash="unreadable",
     )
@@ -764,12 +806,13 @@ def test_weak_extraction_lowers_confidence_even_when_classification_is_strong(
 
 
 def test_the_two_confidence_components_are_separately_diagnosable(
-    fact_store, requirement_concepts
+    fact_store, profile_store, requirement_concepts
 ) -> None:
     """A low stored confidence must be attributable to one half or the other."""
     analysis = classify_job(
         RIVERSIDE_JOB,
         facts=fact_store,
+        profiles=profile_store,
         concepts=requirement_concepts,
         normalized_hash="riverside",
     )
@@ -834,7 +877,9 @@ RESPONSIBILITIES_JOB = (
 )
 
 
-def test_requirements_in_prose_are_not_a_free_pass(fact_store, requirement_concepts) -> None:
+def test_requirements_in_prose_are_not_a_free_pass(
+    fact_store, profile_store, requirement_concepts
+) -> None:
     """No `Requirements:` block does not mean nothing was required."""
     extracted = extract_requirements(
         PROSE_JOB, normalized_hash="prose", concepts=requirement_concepts
@@ -843,7 +888,11 @@ def test_requirements_in_prose_are_not_a_free_pass(fact_store, requirement_conce
     assert extraction_state(PROSE_JOB, extracted, requirement_concepts) == "unparsed"
 
     analysis = classify_job(
-        PROSE_JOB, facts=fact_store, concepts=requirement_concepts, normalized_hash="prose"
+        PROSE_JOB,
+        facts=fact_store,
+        profiles=profile_store,
+        concepts=requirement_concepts,
+        normalized_hash="prose",
     )
     assert analysis.fit is FitLevel.UNKNOWN
     assert "extraction-failed" in analysis.approval_reasons
@@ -866,11 +915,17 @@ def test_the_four_extraction_states(job, state, requirement_concepts) -> None:
     assert extraction_state(job, extracted, requirement_concepts) == state
 
 
-def test_only_unparsed_is_an_extraction_failure(fact_store, requirement_concepts) -> None:
+def test_only_unparsed_is_an_extraction_failure(
+    fact_store, profile_store, requirement_concepts
+) -> None:
     """`absent` is not a failure: a posting that requires nothing missed nothing."""
     for job, digest in ((THIN_JOB, "thin"), (RESPONSIBILITIES_JOB, "resp"), (RIVERSIDE_JOB, "riv")):
         analysis = classify_job(
-            job, facts=fact_store, concepts=requirement_concepts, normalized_hash=digest
+            job,
+            facts=fact_store,
+            profiles=profile_store,
+            concepts=requirement_concepts,
+            normalized_hash=digest,
         )
         assert "extraction-failed" not in analysis.approval_reasons, job[:40]
         assert analysis.fit is not FitLevel.UNKNOWN
@@ -1150,7 +1205,7 @@ def test_the_fixture_denominator_matches_production(requirement_concepts) -> Non
 
 
 def test_a_requirement_only_the_legacy_rules_understand_is_not_a_failure(
-    fact_store, requirement_concepts
+    fact_store, profile_store, requirement_concepts
 ) -> None:
     """The rules are the other half of requirement understanding, for now.
 
@@ -1173,7 +1228,11 @@ def test_a_requirement_only_the_legacy_rules_understand_is_not_a_failure(
     )
     # So the analysis is assessed rather than unknown.
     analysis = classify_job(
-        job, facts=fact_store, concepts=requirement_concepts, normalized_hash="rules"
+        job,
+        facts=fact_store,
+        profiles=profile_store,
+        concepts=requirement_concepts,
+        normalized_hash="rules",
     )
     assert analysis.gaps
     assert analysis.fit is not FitLevel.UNKNOWN
@@ -1229,7 +1288,9 @@ def test_hebrew_mandatory_language_is_requirement_bearing(requirement_concepts) 
     assert all(line.kind == "requirement" for line in lines)
 
 
-def test_hebrew_prose_requirements_are_not_absent(fact_store, requirement_concepts) -> None:
+def test_hebrew_prose_requirements_are_not_absent(
+    fact_store, profile_store, requirement_concepts
+) -> None:
     """No `דרישות:` heading does not mean nothing was required.
 
     The English false green had a Hebrew twin: a posting whose requirements the
@@ -1244,6 +1305,7 @@ def test_hebrew_prose_requirements_are_not_absent(fact_store, requirement_concep
     analysis = classify_job(
         HEBREW_PROSE_JOB,
         facts=fact_store,
+        profiles=profile_store,
         concepts=requirement_concepts,
         normalized_hash="he-prose",
     )
@@ -1252,7 +1314,7 @@ def test_hebrew_prose_requirements_are_not_absent(fact_store, requirement_concep
 
 
 def test_hebrew_unmodelled_requirements_are_unknown_not_high(
-    fact_store, requirement_concepts
+    fact_store, profile_store, requirement_concepts
 ) -> None:
     extracted = extract_requirements(
         HEBREW_UNREADABLE_JOB, normalized_hash="he-unread", concepts=requirement_concepts
@@ -1262,6 +1324,7 @@ def test_hebrew_unmodelled_requirements_are_unknown_not_high(
     analysis = classify_job(
         HEBREW_UNREADABLE_JOB,
         facts=fact_store,
+        profiles=profile_store,
         concepts=requirement_concepts,
         normalized_hash="he-unread",
     )
@@ -1421,3 +1484,106 @@ def test_the_three_hard_gap_gates_ask_one_question() -> None:
         "domain/validation.py",
         "domain/analysis/gaps.py",
     } <= callers
+
+
+# --------------------------------------------------------------------------
+# The Profile is chosen by what the posting requires (Stage 4)
+# --------------------------------------------------------------------------
+
+
+def test_the_profile_follows_the_evidence_the_posting_calls_for(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    """Requirement coverage outranks the words in the title.
+
+    Riverside is titled like a closing role, so the vocabulary picked
+    `account-executive`. What it actually demands is sales at a technology
+    company, and the facts that evidence that are not in that Profile's pool at
+    all - so the CV it produced could not speak to the posting's own mandatory
+    requirement. The Profile that can is the one chosen now.
+    """
+    analysis = _riverside(fact_store, profile_store, requirement_concepts)
+    assert analysis.profile is ProfileName.TECH_SALES
+
+    # The vocabulary on its own still says otherwise, which is the point: this
+    # is not the two signals agreeing, it is coverage outranking the title.
+    lowered = RIVERSIDE_JOB.casefold()
+    terms = {
+        profile: sum(lowered.count(term) for term in vocabulary)
+        for profile, vocabulary in PROFILE_TERMS.items()
+    }
+    assert max(terms, key=lambda name: terms[name]) is ProfileName.ACCOUNT_EXECUTIVE
+
+    scores = requirement_profile_scores(analysis.requirements, profile_store)
+    assert scores[ProfileName.TECH_SALES] > scores[ProfileName.ACCOUNT_EXECUTIVE]
+
+
+def test_a_mandatory_requirement_outweighs_a_preferred_one(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    """Weighted, so a Profile that answers what is demanded outranks one that
+    answers what is merely liked."""
+    analysis = _riverside(fact_store, profile_store, requirement_concepts)
+    mandatory = [requirement for requirement in analysis.requirements if requirement.mandatory]
+    preferred = [requirement for requirement in analysis.requirements if not requirement.mandatory]
+    assert mandatory and preferred
+    assert (
+        requirement_profile_scores(mandatory, profile_store)[ProfileName.TECH_SALES]
+        > (requirement_profile_scores(preferred, profile_store)[ProfileName.TECH_SALES])
+    )
+
+
+def test_the_vocabulary_still_decides_a_posting_with_no_requirements_read(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    """Demoted to a tie-breaker, not removed - and the tie-break is unchanged.
+
+    For a posting the requirement model cannot read, coverage is zero for every
+    Profile and the title terms are the only signal there is. Those postings
+    must classify exactly as they did, including which Profile wins a tie:
+    ordering ties any other way silently reclassifies all of them.
+    """
+    analysis = classify_job(
+        AMBIGUOUS_HEBREW_JOB,
+        facts=fact_store,
+        profiles=profile_store,
+        concepts=requirement_concepts,
+        normalized_hash="ambiguous",
+    )
+    assert analysis.requirements == []
+    assert all(score == 0 for score in requirement_profile_scores([], profile_store).values())
+    # A three-way tie in the vocabulary, settled by declaration order as it
+    # always was.
+    assert analysis.profile is ProfileName.ACCOUNT_MANAGER
+    assert "ambiguous-signals" in analysis.approval_reasons
+
+
+def test_coverage_is_decided_before_the_profile_is(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    """The ordering that keeps the choice from justifying itself.
+
+    Requirements are covered against the whole fact store, so what the posting
+    requires and what evidence exists for it are the same answer whichever
+    Profile is chosen. If coverage were computed from the chosen Profile's own
+    pool, every Profile would look like the right one for the posting it had
+    just been used to read.
+    """
+    default = classify_job(
+        RIVERSIDE_JOB,
+        facts=fact_store,
+        profiles=profile_store,
+        concepts=requirement_concepts,
+        normalized_hash="riverside",
+    )
+    for override in ("account-manager", "sdr-bdr", "development"):
+        forced = classify_job(
+            RIVERSIDE_JOB,
+            facts=fact_store,
+            profiles=profile_store,
+            concepts=requirement_concepts,
+            normalized_hash="riverside",
+            profile_override=override,
+        )
+        assert forced.profile.value == override
+        assert forced.requirements == default.requirements, override

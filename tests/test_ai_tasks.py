@@ -756,6 +756,7 @@ def test_injected_job_text_changes_no_policy_owned_result(
         baseline = classify_job(
             job_text,
             facts=knowledge.facts,
+            profiles=knowledge.profiles,
             concepts=knowledge.requirement_concepts,
             normalized_hash=snapshot["normalized_hash"],
         )

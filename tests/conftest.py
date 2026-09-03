@@ -332,7 +332,11 @@ def requirement_concepts(project_root: Path) -> RequirementConceptStore:
 
 
 @pytest.fixture
-def classify(fact_store: FactStore, requirement_concepts: RequirementConceptStore):
+def classify(
+    fact_store: FactStore,
+    profile_store: ProfileStore,
+    requirement_concepts: RequirementConceptStore,
+):
     """`classify_job` bound to this project's Knowledge.
 
     `classify_job` requires Knowledge rather than defaulting it, so that a
@@ -344,6 +348,7 @@ def classify(fact_store: FactStore, requirement_concepts: RequirementConceptStor
         return classify_job(
             text,
             facts=fact_store,
+            profiles=profile_store,
             concepts=requirement_concepts,
             normalized_hash=sha256_text(text),
             **overrides,
@@ -720,6 +725,7 @@ def draft_factory(
         analysis = classify_job(
             job,
             facts=fact_store,
+            profiles=profile_store,
             concepts=load_requirement_concepts(project_root),
             normalized_hash=sha256_text(job),
             **overrides,

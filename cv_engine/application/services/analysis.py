@@ -178,10 +178,12 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         except (OSError, ValueError) as exc:
             raise InfrastructureFailure(f"could not read job snapshot payload: {exc}") from exc
         knowledge = self.load_knowledge()
+        profiles = knowledge.profiles
         try:
             deterministic = classify_job(
                 job_text,
                 facts=knowledge.facts,
+                profiles=profiles,
                 concepts=knowledge.requirement_concepts,
                 normalized_hash=snapshot["normalized_hash"],
                 track_override=command.track_override,
@@ -193,7 +195,6 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             raise PreconditionFailed(f"invalid analysis request: {exc}") from exc
         result = deterministic
         used_provider, used_model = "deterministic", "rules-v1"
-        profiles = knowledge.profiles
         evidence: ProviderEvidence | None = None
         if command.provider == "openai":
             if operation_id is None:
