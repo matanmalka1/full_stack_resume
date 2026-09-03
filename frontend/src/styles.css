@@ -98,6 +98,50 @@ html {
   direction: rtl;
 }
 
+/* Keep page and nested scroll areas visually consistent. Firefox uses the
+   standard properties; browsers with WebKit scrollbar selectors use the more
+   expressive states below. */
+* {
+  scrollbar-color: var(--color-cv-border-strong) var(--color-cv-surface-sunken);
+  scrollbar-width: thin;
+}
+
+@supports selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-color: auto;
+    scrollbar-width: auto;
+  }
+
+  *::-webkit-scrollbar {
+    width: 0.625rem;
+    height: 0.625rem;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: var(--color-cv-surface-sunken);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    min-width: 2rem;
+    min-height: 2rem;
+    border: 2px solid var(--color-cv-surface-sunken);
+    border-radius: var(--radius-pill);
+    background: var(--color-cv-border-strong);
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--color-cv-accent);
+  }
+
+  *::-webkit-scrollbar-thumb:active {
+    background: var(--color-cv-accent-hover);
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: var(--color-cv-surface-sunken);
+  }
+}
+
 body {
   min-width: 320px;
   min-height: 100vh;
