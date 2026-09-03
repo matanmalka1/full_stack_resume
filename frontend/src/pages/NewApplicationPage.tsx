@@ -24,14 +24,10 @@ import { paramsFromQuery, queryFromParams } from "./applicationListParams";
 import { DuplicateChoices } from "./new-application/DuplicateChoices";
 import { useApplicationIntake } from "./new-application/useApplicationIntake";
 
-/* The snapshot limit the server enforces is a byte budget, not a character count, so the
-   counter measures the same thing the refusal will. It stays a quiet character count
-   until the text is close enough to the ceiling for the budget to be the useful fact. */
+
 const JOB_TEXT_BUDGET_NOTICE_RATIO = 0.8;
 
-/* A placeholder cannot wrap its LTR example in a <bdi> element. Unicode isolates give
-   the English example the same boundary without letting it reorder the Hebrew prefix
-   or its colon. */
+
 const examplePlaceholder = (example: string) => `לדוגמה: \u2066${example}\u2069`;
 
 const SectionTitle = ({ icon: Icon, children }: { children: string; icon: LucideIcon }) => (
@@ -53,10 +49,7 @@ const IconField = ({ children, icon: Icon }: { children: ReactNode; icon: Lucide
 
 export const NewApplicationPage = () => {
   const navigate = useNavigate();
-  /* The board hands its own narrowing over in this screen's address bar, so the way back
-     returns to the board the user actually left rather than to an unfiltered one. It is
-     read back through the board's own parser, so an arbitrary value in the URL cannot
-     become an arbitrary link. */
+
   const [boardParams] = useSearchParams();
   const boardSearch = paramsFromQuery(queryFromParams(boardParams)).toString();
   const boardPath = boardSearch === "" ? appRoutes.home : `${appRoutes.home}?${boardSearch}`;
@@ -83,32 +76,34 @@ export const NewApplicationPage = () => {
     watch,
   } = form;
 
-  /* The snapshot is written exactly as entered, so its size is worth showing while it is
-     still editable. Subscribing to this one field keeps the counter live without making
-     the whole form controlled. */
   const jobText = watch("job_text");
   const jobTextLength = jobText.length;
-  /* Measured only once the text is long enough to be worth measuring: encoding every
-     keystroke of a short paste to report a fraction of a percent is work for nothing. */
+
   const jobTextBytes =
     jobTextLength * 4 < JOB_TEXT_MAX_BYTES * JOB_TEXT_BUDGET_NOTICE_RATIO
       ? null
       : new TextEncoder().encode(jobText).length;
   const jobTextNearBudget = jobTextBytes !== null && jobTextBytes >= JOB_TEXT_MAX_BYTES * JOB_TEXT_BUDGET_NOTICE_RATIO;
   const jobTextOverBudget = jobTextBytes !== null && jobTextBytes > JOB_TEXT_MAX_BYTES;
+  const jobTextCounter =
+    jobTextLength === 0 ? null : jobTextNearBudget ? (
+      <span aria-hidden="true" className={cx("font-medium", jobTextOverBudget ? "text-cv-blocker" : "text-cv-warning")}>
+        <LtrText>
+          {formatBytes(jobTextBytes ?? 0)} / {formatBytes(JOB_TEXT_MAX_BYTES)}
+        </LtrText>{" "}
+        {jobTextOverBudget ? "— חורג מגודל התצלום המותר" : "מגודל התצלום המותר"}
+      </span>
+    ) : (
+      <span aria-hidden="true" className="font-normal text-cv-text-muted">
+        <LtrText>{jobTextLength.toLocaleString("en-US")}</LtrText> תווים
+      </span>
+    );
 
   return (
     <PageShell
       description="הזנת פרטי המשרה יוצרת תצלום מקור קבוע ומתחילה ניתוח התאמה מול העובדות הקנוניות."
       measure="form"
-      navigation={
-        <Breadcrumbs
-          items={[
-            { label: "מועמדויות", to: boardPath },
-            { label: "משרה חדשה" },
-          ]}
-        />
-      }
+      navigation={<Breadcrumbs items={[{ label: "מועמדויות", to: boardPath }, { label: "משרה חדשה" }]} />}
       title="קליטת משרה חדשה"
     >
       <form
@@ -160,7 +155,7 @@ export const NewApplicationPage = () => {
             optional
           >
             {(control) => (
-              /* A.3: a URL is an LTR island even inside the RTL shell. */
+              
               <IconField icon={Link2}>
                 <TextInput
                   {...control}
@@ -178,32 +173,7 @@ export const NewApplicationPage = () => {
         </FormSection>
 
         <FormSection
-          aside={
-            /* Kept in the header at every length: appearing with the first keystroke
-               reflowed the title row while the user was typing into it. */
-            jobTextLength === 0 ? (
-              <span aria-hidden="true" className="invisible">
-                0
-              </span>
-            ) : jobTextNearBudget ? (
-              /* Close to the ceiling the byte budget is the fact that matters, so the
-                 counter switches to it and says which side of the limit the text is on
-                 before the server has to. */
-              <span className={cx("font-medium", jobTextOverBudget ? "text-cv-blocker" : "text-cv-warning")}>
-                <LtrText>
-                  {formatBytes(jobTextBytes ?? 0)} / {formatBytes(JOB_TEXT_MAX_BYTES)}
-                </LtrText>{" "}
-                {jobTextOverBudget ? "— חורג מגודל התצלום המותר" : "מגודל התצלום המותר"}
-              </span>
-            ) : (
-              <span>
-                <LtrText>{jobTextLength.toLocaleString("en-US")}</LtrText> תווים
-              </span>
-            )
-          }
-          /* Said once. How the text gets in is the file row's own sentence and the
-             text area's placeholder; what this group needs to say is what happens to
-             the text afterwards. */
+          
           description="הטקסט יישמר בתצלום המשרה בדיוק כפי שהוזן."
           divided={false}
           title={<SectionTitle icon={FileText}>תיאור המשרה</SectionTitle>}
@@ -212,9 +182,16 @@ export const NewApplicationPage = () => {
             onText={(text) => setValue("job_text", text, { shouldDirty: true, shouldValidate: true })}
           />
 
-          <Field error={errors.job_text?.message} label="טקסט המשרה">
+          <Field
+            error={errors.job_text?.message}
+            label={
+              <span className="flex w-full items-baseline justify-between gap-4">
+                <span>טקסט המשרה</span>
+                {jobTextCounter}
+              </span>
+            }
+          >
             {(control) => (
-              /* Mixed Hebrew/English job text picks its own direction (A.3). */
               <TextArea
                 {...control}
                 {...register("job_text", {
@@ -225,8 +202,6 @@ export const NewApplicationPage = () => {
                       "טקסט המשרה חורג מהגודל המותר. יש לקצר אותו לפני יצירת המועמדות.",
                   },
                 })}
-                /* A long paste scrolls inside the field instead of moving the form's
-                   actions below the fold. The user can still resize it when useful. */
                 className="rtl-placeholder h-64 max-h-[55vh]"
                 dir="auto"
                 placeholder="הדבק כאן את תיאור המשרה…"
