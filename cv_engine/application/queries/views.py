@@ -7,16 +7,18 @@ from typing import Any
 
 from pydantic import Field
 
-from ...domain.models import (
-    ApplicationStatus,
+from ...domain.contracts.analysis import JobAnalysis
+from ...domain.contracts.drafts import (
     ClaimStyle,
     ClaimType,
     DraftDocument,
-    JobAnalysis,
+)
+from ...domain.contracts.recruitment import ApplicationStatus
+from ...domain.contracts.selection import (
     OmissionReason,
     SelectionOutcome,
-    ValidationReport,
 )
+from ...domain.contracts.validation import ValidationReport
 from ..commands import BoundaryDTO
 from ..operations import OperationView
 

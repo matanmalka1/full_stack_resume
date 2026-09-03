@@ -10,11 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ....domain.contracts.knowledge import Fact, FactStatus
 from ....domain.facts import FactStoreError
-from ....domain.models import (
-    Fact,
-    FactStatus,
-)
 from ....domain.selection import MissingFactRendering as DomainMissingFactRendering
 from ....domain.selection import build_selection
 from ....util import new_id, utc_now

@@ -11,20 +11,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Generic, Protocol, TypeVar
 
-from ...domain.knowledge import Knowledge
-from ...domain.models import (
+from ...domain.contracts.analysis import JobClassificationProposal
+from ...domain.contracts.base import StrictModel
+from ...domain.contracts.drafts import DraftDocument
+from ...domain.contracts.knowledge import (
     CandidateContext,
-    ClaimProposal,
-    DraftDocument,
-    DraftProposal,
-    JobClassificationProposal,
     Profile,
+)
+from ...domain.contracts.providers import (
+    ClaimProposal,
+    DraftProposal,
     ProviderTaskResult,
     SectionProposal,
     SelectionProposal,
-    StrictModel,
-    ValidationReport,
 )
+from ...domain.contracts.validation import ValidationReport
+from ...domain.knowledge import Knowledge
 from ..knowledge_mutations import (
     KnowledgeFileState,
     KnowledgeMutation,

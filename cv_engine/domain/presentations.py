@@ -6,8 +6,11 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from ..util import canonical_json, sha256_text
+from .contracts.base import StrictModel
+from .contracts.drafts import ClaimStyle
+from .contracts.knowledge import Profile
+from .contracts.taxonomy import Emphasis, ProfileName
 from .facts import FactStore
-from .models import ClaimStyle, Emphasis, Profile, ProfileName, StrictModel
 
 
 class PresentationError(ValueError):

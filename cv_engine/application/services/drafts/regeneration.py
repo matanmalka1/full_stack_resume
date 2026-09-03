@@ -4,8 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ....domain.contracts.analysis import JobAnalysis
+from ....domain.contracts.drafts import (
+    DraftDocument,
+    WorkingDraft,
+)
+from ....domain.contracts.providers import ProposedClaim
 from ....domain.knowledge import Knowledge
-from ....domain.models import DraftDocument, JobAnalysis, ProposedClaim, WorkingDraft
 from ...commands import RegenerateClaimCommand, RegenerateSectionCommand, RegenerationResult
 from ...errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and

@@ -4,7 +4,7 @@ import json
 import re
 
 from ..util import canonical_json, sha256_text, utc_now
-from .models import Fact, FactSource, FactStatus
+from .contracts.knowledge import Fact, FactSource, FactStatus
 
 FACT_BLOCK = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
 FACT_SOURCE_NAMES = ("common.md", "sales.md", "development.md", "situational_skills.md")

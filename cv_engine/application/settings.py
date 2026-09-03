@@ -93,9 +93,7 @@ class SettingsService:
 
     def _view(self, stored: StoredSettings) -> SettingsView:
         enabled = self.provider_configured and stored.ai_enabled_override is not False
-        selected_model = normalize_ai_model(
-            stored.default_ai_model or self.runtime_default_model
-        )
+        selected_model = normalize_ai_model(stored.default_ai_model or self.runtime_default_model)
         return SettingsView(
             **stored.model_dump(mode="python", exclude={"default_ai_model"}),
             default_ai_model=selected_model,

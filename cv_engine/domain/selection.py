@@ -22,19 +22,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..util import canonical_json, sha256_text
-from .facts import FactStore
-from .models import (
-    Emphasis,
-    EmphasisPolicy,
-    Fact,
-    JobAnalysis,
+from .contracts.analysis import JobAnalysis
+from .contracts.knowledge import EmphasisPolicy, Fact, Profile, ResumeSectionSpec
+from .contracts.selection import (
     OmissionReason,
-    Profile,
-    ResumeSectionSpec,
     SelectionCandidate,
     SelectionManifest,
     SelectionOutcome,
 )
+from .contracts.taxonomy import Emphasis
+from .facts import FactStore
 
 SELECTION_POLICY_VERSION = "1.1.0"
 

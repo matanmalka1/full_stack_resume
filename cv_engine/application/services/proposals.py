@@ -20,9 +20,14 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 
+from ...domain.contracts.drafts import DraftDocument
+from ...domain.contracts.knowledge import Profile
+from ...domain.contracts.providers import (
+    ProposedClaim,
+    ProviderTaskResult,
+)
 from ...domain.drafts import apply_claim_edit, draft_claims
 from ...domain.facts import FactStore
-from ...domain.models import DraftDocument, Profile, ProposedClaim, ProviderTaskResult
 from ..errors import ProposalRejected
 from ..ports import SnapshotPayload
 

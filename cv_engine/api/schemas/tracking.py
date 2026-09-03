@@ -19,7 +19,7 @@ from typing import Any, Literal
 
 from pydantic import Field
 
-from ...domain.models import ApplicationStatus
+from ...domain.contracts.recruitment import ApplicationStatus
 from .health import HttpSchema
 
 #: Every status a client may ask for directly. `applied` is excluded because it

@@ -24,7 +24,12 @@ from typing import Any, Literal
 
 from pydantic import Field
 
-from ...domain.models import Emphasis, Language, ProfileName, Track
+from ...domain.contracts.analysis import Language
+from ...domain.contracts.taxonomy import (
+    Emphasis,
+    ProfileName,
+    Track,
+)
 from .health import HttpSchema
 
 

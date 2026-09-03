@@ -12,14 +12,18 @@ from __future__ import annotations
 from contextlib import AbstractContextManager
 from typing import Any, Protocol, Self
 
-from ...domain.models import (
-    AcceptedGap,
+from ...domain.contracts.drafts import (
+    DraftDocument,
+    WorkingDraft,
+)
+from ...domain.contracts.records import (
     ApprovedRevision,
     AuditRecord,
-    DraftDocument,
+)
+from ...domain.contracts.selection import (
+    AcceptedGap,
     SelectionManifest,
     SelectionPlan,
-    WorkingDraft,
 )
 from ..knowledge_mutations import (
     KnowledgeMutation,

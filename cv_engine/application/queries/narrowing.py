@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ...domain.models import ApplicationStatus
+from ...domain.contracts.recruitment import ApplicationStatus
 from .views import (
     ActivityFilter,
     ApplicationListItemView,

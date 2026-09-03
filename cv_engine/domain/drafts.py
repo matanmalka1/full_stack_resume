@@ -6,20 +6,12 @@ import uuid
 from dataclasses import dataclass
 
 from ..util import canonical_json, sha256_text
+from .contracts.analysis import JobAnalysis
+from .contracts.drafts import ClaimLine, ClaimStyle, ClaimType, DraftDocument, ResumeSection
+from .contracts.knowledge import CandidateContext, Profile
+from .contracts.selection import OmissionReason, SelectionManifest
 from .draft_markdown import serialize_markdown as _serialize_markdown
 from .facts import FactStore
-from .models import (
-    CandidateContext,
-    ClaimLine,
-    ClaimStyle,
-    ClaimType,
-    DraftDocument,
-    JobAnalysis,
-    OmissionReason,
-    Profile,
-    ResumeSection,
-    SelectionManifest,
-)
 from .presentations import PresentationStore, PresentedClaim
 from .selection import EmphasisPolicyStore, build_selection, require_fact_renderings
 

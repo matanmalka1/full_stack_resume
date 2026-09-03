@@ -7,18 +7,14 @@ from dataclasses import dataclass, field
 from ..util import sha256_text
 from .analysis.approval import ANALYSIS_INCOMPLETE, approval_reason, unresolved_approval_reasons
 from .analysis.gaps import unaccepted_hard_gaps
+from .contracts.analysis import JobAnalysis
+from .contracts.drafts import ClaimLine, DraftDocument
+from .contracts.knowledge import Profile
+from .contracts.selection import SelectionPlan
+from .contracts.validation import ValidationIssue, ValidationReport
 from .draft_markdown import serialize_markdown
 from .drafts import render_composite_claim, validate_derived_wording
 from .facts import FactStore, FactStoreError
-from .models import (
-    ClaimLine,
-    DraftDocument,
-    JobAnalysis,
-    Profile,
-    SelectionPlan,
-    ValidationIssue,
-    ValidationReport,
-)
 from .presentations import PresentationStore
 from .selection import STRUCTURAL_STYLES, EmphasisPolicyStore
 

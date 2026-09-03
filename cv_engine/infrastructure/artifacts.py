@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import Protocol
 
 from ..application.ports import DraftPaths, StoredDraft
+from ..domain.contracts.drafts import DraftDocument
 from ..domain.draft_markdown import parse_draft
 from ..domain.drafts import seal_draft
-from ..domain.models import DraftDocument
 
 
 class ArtifactPaths(Protocol):

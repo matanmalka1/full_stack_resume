@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+from ....domain.contracts.drafts import (
+    DraftDocument,
+    WorkingDraft,
+)
+from ....domain.contracts.records import (
+    AuditRecord,
+    DecisionRecord,
+)
 from ....domain.draft_markdown import serialize_markdown
 from ....domain.drafts import seal_draft
 from ....domain.knowledge import Knowledge
-from ....domain.models import AuditRecord, DecisionRecord, DraftDocument, WorkingDraft
 from ....util import new_id, sha256_text, utc_now
 from ...commands import ApprovalResult, ApproveDraftCommand
 from ...errors import (

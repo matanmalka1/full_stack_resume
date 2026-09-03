@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from ...domain.contracts.drafts import DraftDocument
+from ...domain.contracts.records import ApprovedRevision
 from ...domain.drafts import draft_claims
 from ...domain.facts import FactStore
-from ...domain.models import ApprovedRevision, DraftDocument
 from .narrowing import application_is_closed
 from .views import (
     ApplicationListItemView,

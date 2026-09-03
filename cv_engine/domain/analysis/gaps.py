@@ -3,7 +3,9 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 
-from ..models import FitLevel, Gap, JobAnalysis, Requirement, SelectionPlan, Track
+from ..contracts.analysis import FitLevel, Gap, JobAnalysis, Requirement
+from ..contracts.selection import SelectionPlan
+from ..contracts.taxonomy import Track
 
 #: Only the three assessed levels are ordered. UNKNOWN is deliberately absent:
 #: it is not a point on the scale, so giving it a number would let it be

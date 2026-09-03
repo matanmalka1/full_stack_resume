@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy import insert, select
 
 from ...application.errors import StateConflict
-from ...domain.models import AuditRecord
+from ...domain.contracts.records import AuditRecord
 from ...util import canonical_json, new_id, sha256_text, utc_now
 from .base import SqlAlchemyRepositoryBase
 from .tables import audit_records, fact_events

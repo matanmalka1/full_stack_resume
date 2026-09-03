@@ -17,6 +17,13 @@ from ..domain.analysis.requirements.concepts import (
     RequirementConceptStore,
 )
 from ..domain.candidate import CANDIDATE_FILE, CandidateContextError, build_candidate_context
+from ..domain.contracts.knowledge import (
+    CandidateContext,
+    Fact,
+    FactSource,
+    FactStatus,
+    Profile,
+)
 from ..domain.facts import (
     FACT_SOURCE_NAMES,
     FactStore,
@@ -30,7 +37,6 @@ from ..domain.facts import (
     with_promoted_fact,
 )
 from ..domain.knowledge import Knowledge
-from ..domain.models import CandidateContext, Fact, FactSource, FactStatus, Profile
 from ..domain.presentations import PresentationError, PresentationStore
 from ..domain.profiles import ProfileStore, ProfileStoreError, attach_fact_to_section
 from ..domain.selection import EmphasisPolicyStore, SelectionError

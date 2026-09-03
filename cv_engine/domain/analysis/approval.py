@@ -4,7 +4,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from ..models import JobAnalysis, JobClassificationProposal, OverrideKey
+from ..contracts.analysis import JobAnalysis, JobClassificationProposal, OverrideKey
 from .gaps import derive_fit, merge_fit, merge_gaps
 
 if TYPE_CHECKING:

@@ -6,7 +6,9 @@ from typing import Any
 
 from ..util import normalized_text
 from .candidate import contact_href
-from .models import CandidateContext, DraftDocument, Profile, ValidationIssue, ValidationReport
+from .contracts.drafts import DraftDocument
+from .contracts.knowledge import CandidateContext, Profile
+from .contracts.validation import ValidationIssue, ValidationReport
 
 RENDER_VALIDATION_GROUPS = (
     "render",

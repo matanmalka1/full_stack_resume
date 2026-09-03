@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from ....domain.drafts import build_draft
-from ....domain.knowledge import Knowledge
-from ....domain.models import (
+from ....domain.contracts.analysis import JobAnalysis
+from ....domain.contracts.drafts import (
     DraftDocument,
-    JobAnalysis,
-    SelectionPlan,
-    ValidationRunLineage,
     WorkingDraft,
 )
+from ....domain.contracts.records import ValidationRunLineage
+from ....domain.contracts.selection import SelectionPlan
+from ....domain.drafts import build_draft
+from ....domain.knowledge import Knowledge
 from ....domain.selection import MissingFactRendering as DomainMissingFactRendering
 from ...errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and

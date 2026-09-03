@@ -4,8 +4,8 @@ from dataclasses import dataclass
 
 from ..util import canonical_json, sha256_text
 from .analysis.requirements.concepts import RequirementConceptStore
+from .contracts.knowledge import CandidateContext
 from .facts import FactStore
-from .models import CandidateContext
 from .presentations import PresentationStore
 from .profiles import ProfileStore
 from .selection import EmphasisPolicyStore

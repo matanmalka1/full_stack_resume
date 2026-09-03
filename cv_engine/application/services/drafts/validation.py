@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from ....domain.contracts.drafts import WorkingDraft
+from ....domain.contracts.validation import ValidationReport
 from ....domain.draft_markdown import serialize_markdown
 from ....domain.knowledge import Knowledge
-from ....domain.models import ValidationReport, WorkingDraft
 from ....domain.validation import validate_draft as run_draft_validation
 from ...commands import ValidateDraftCommand, ValidationRunResult
 from ..base import bound_analysis

@@ -12,7 +12,12 @@ from ...application.errors import (
     UnknownRecord,
     ValidationBlocked,
 )
-from ...domain.models import ApprovedRevision, DraftDocument, ValidationReport, WorkingDraft
+from ...domain.contracts.drafts import (
+    DraftDocument,
+    WorkingDraft,
+)
+from ...domain.contracts.records import ApprovedRevision
+from ...domain.contracts.validation import ValidationReport
 from ...util import new_id, utc_now
 from .base import SqlAlchemyRepositoryBase
 from .tables import (

@@ -3,7 +3,8 @@ from __future__ import annotations
 from datetime import date
 from typing import cast
 
-from ...domain.models import ApplicationStatus, WorkingDraft
+from ...domain.contracts.drafts import WorkingDraft
+from ...domain.contracts.recruitment import ApplicationStatus
 from ...domain.recruitment import user_transition_targets
 from ..artifacts import verify_artifact
 from ..errors import (

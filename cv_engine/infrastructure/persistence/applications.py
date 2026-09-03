@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy import insert, select, update
 
 from ...application.errors import StateConflict, UnknownRecord
-from ...domain.models import ApplicationStatus
+from ...domain.contracts.recruitment import ApplicationStatus
 from ...util import new_id, utc_now
 from .base import SqlAlchemyRepositoryBase
 from .tables import application_events, applications, recruitment_events

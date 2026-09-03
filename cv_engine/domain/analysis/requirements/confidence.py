@@ -128,4 +128,3 @@ def extraction_confidence(
 #: understood. The floor keeps the product from collapsing on partial coverage
 #: while still separating it from full coverage.
 _COVERAGE_FLOOR = 0.4
-

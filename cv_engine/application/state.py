@@ -17,10 +17,14 @@ from ..domain.analysis.approval import (
     unresolved_approval_reasons,
 )
 from ..domain.analysis.gaps import unaccepted_hard_gaps
+from ..domain.contracts.analysis import JobAnalysis
+from ..domain.contracts.drafts import WorkingDraft
+from ..domain.contracts.knowledge import FactStatus
+from ..domain.contracts.records import ApprovedRevision
+from ..domain.contracts.selection import SelectionPlan
 from ..domain.drafts import render_composite_claim, validate_derived_wording
 from ..domain.facts import FactStoreError
 from ..domain.knowledge import Knowledge
-from ..domain.models import ApprovedRevision, FactStatus, JobAnalysis, SelectionPlan, WorkingDraft
 from .operations import OperationView
 from .queries import (
     ApplicationStateView,

@@ -9,15 +9,17 @@ from __future__ import annotations
 
 from typing import Any, Protocol, Self, runtime_checkable
 
-from ...domain.models import (
-    AcceptedGap,
+from ...domain.contracts.drafts import WorkingDraft
+from ...domain.contracts.records import (
     DecisionRecord,
+    ValidationRunLineage,
+)
+from ...domain.contracts.selection import (
+    AcceptedGap,
     SelectionManifest,
     SelectionPlan,
-    ValidationReport,
-    ValidationRunLineage,
-    WorkingDraft,
 )
+from ...domain.contracts.validation import ValidationReport
 from ..knowledge_mutations import (
     KnowledgeMutation,
     PrepareKnowledgeMutation,

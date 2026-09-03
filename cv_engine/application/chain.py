@@ -12,8 +12,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..domain.contracts.analysis import JobAnalysis
+from ..domain.contracts.drafts import DraftDocument
 from ..domain.facts import FactStore
-from ..domain.models import DraftDocument, JobAnalysis
 from ..domain.profiles import ProfileStore
 from ..util import canonical_json, sha256_text
 from .errors import UnknownRecord

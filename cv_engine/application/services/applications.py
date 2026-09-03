@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from ...domain.models import AuditRecord
+from ...domain.contracts.records import AuditRecord
 from ...util import new_id, normalized_text, sha256_text, utc_now
 from ..commands import (
     CreatedJobSnapshot,

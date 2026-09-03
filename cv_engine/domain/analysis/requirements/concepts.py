@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ....util import canonical_json, sha256_text
-from ...models import RequirementKind
+from ...contracts.analysis import RequirementKind
 
 _HEADING_DECORATION = " \t*_#~`-\u2013\u2014\u2022\u2023\u25aa\u25e6:?.!,"
 _WHITESPACE = re.compile(r"\s+")

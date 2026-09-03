@@ -11,8 +11,9 @@ from ....domain.analysis.approval import (
     unresolved_approval_reasons,
 )
 from ....domain.analysis.gaps import unaccepted_hard_gaps
+from ....domain.contracts.analysis import JobAnalysis
+from ....domain.contracts.drafts import DraftDocument
 from ....domain.knowledge import Knowledge
-from ....domain.models import DraftDocument, JobAnalysis
 from ....domain.validation import validate_draft as run_draft_validation
 from ...commands import DraftCommand, DraftResult
 from ...errors import (

@@ -5,8 +5,9 @@ from __future__ import annotations
 import re
 from datetime import date
 
+from ...contracts.analysis import Coverage, MissingComponent, Requirement
+from ...contracts.knowledge import FactStatus
 from ...facts import FactStore
-from ...models import Coverage, FactStatus, MissingComponent, Requirement
 from .concepts import RequirementConcept, RequirementConceptStore
 from .extraction import ExtractedRequirement
 

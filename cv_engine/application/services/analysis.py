@@ -4,13 +4,15 @@ from dataclasses import dataclass
 
 from ...domain.analysis.approval import ACCEPTED_INCOMPLETE_ANALYSIS, merge_classification
 from ...domain.analysis.classification import classify_job
-from ...domain.models import (
-    AcceptedGap,
+from ...domain.contracts.analysis import (
     JobAnalysis,
     OverrideKey,
-    Profile,
+)
+from ...domain.contracts.knowledge import Profile
+from ...domain.contracts.providers import SelectionProposal
+from ...domain.contracts.selection import (
+    AcceptedGap,
     SelectionManifest,
-    SelectionProposal,
 )
 from ...domain.profiles import ProfileStore
 from ...domain.selection import MissingFactRendering as DomainMissingFactRendering

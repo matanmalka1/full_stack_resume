@@ -3,15 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ...domain.draft_markdown import parse_draft
-from ...domain.knowledge import Knowledge
-from ...domain.models import (
-    DraftDocument,
-    JobAnalysis,
-    Profile,
+from ...domain.contracts.analysis import JobAnalysis
+from ...domain.contracts.drafts import DraftDocument
+from ...domain.contracts.knowledge import Profile
+from ...domain.contracts.validation import (
     ReadyQualification,
     ValidationReport,
 )
+from ...domain.draft_markdown import parse_draft
+from ...domain.knowledge import Knowledge
 from ...domain.validation import validate_draft
 from ...util import new_id
 from ..artifacts import ArtifactDelivery, deliver_artifact

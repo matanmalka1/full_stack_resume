@@ -11,7 +11,11 @@ from ...application.errors import (
     PreconditionFailed,
     UnknownRecord,
 )
-from ...domain.models import DecisionRecord, ValidationReport, ValidationRunLineage
+from ...domain.contracts.records import (
+    DecisionRecord,
+    ValidationRunLineage,
+)
+from ...domain.contracts.validation import ValidationReport
 from ...util import canonical_json, new_id, utc_now
 from .base import SqlAlchemyRepositoryBase
 from .tables import (

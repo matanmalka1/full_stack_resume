@@ -5,17 +5,15 @@ from collections import Counter
 from collections.abc import Iterable
 from typing import cast
 
-from ..facts import FactStore
-from ..models import (
-    Emphasis,
+from ..contracts.analysis import (
     Gap,
     JobAnalysis,
     Language,
     OverrideKey,
-    ProfileName,
     Requirement,
-    Track,
 )
+from ..contracts.taxonomy import Emphasis, ProfileName, Track
+from ..facts import FactStore
 from ..profiles import ProfileStore
 from .approval import CONFIDENCE_APPROVAL_THRESHOLD, unresolved_reasons
 from .gaps import derive_fit, derive_gaps, gaps_from_requirements

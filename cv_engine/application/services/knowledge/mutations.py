@@ -22,10 +22,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from ....domain.models import (
-    Fact,
-    SelectionManifest,
-)
+from ....domain.contracts.knowledge import Fact
+from ....domain.contracts.selection import SelectionManifest
 from ...commands import FactMutationResult
 from ...errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and

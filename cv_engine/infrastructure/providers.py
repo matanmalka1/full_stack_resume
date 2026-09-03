@@ -56,10 +56,11 @@ from ..application.ports import (
     SelectionPlanContext,
     TaskContracts,
 )
-from ..domain.models import (
+from ..domain.contracts.analysis import JobClassificationProposal
+from ..domain.contracts.base import StrictModel
+from ..domain.contracts.providers import (
     ClaimProposal,
     DraftProposal,
-    JobClassificationProposal,
     ProviderContext,
     ProviderCost,
     ProviderPricing,
@@ -67,7 +68,6 @@ from ..domain.models import (
     ProviderUsage,
     SectionProposal,
     SelectionProposal,
-    StrictModel,
 )
 from ..util import canonical_json, sha256_text
 

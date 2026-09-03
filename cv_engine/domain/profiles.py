@@ -3,8 +3,9 @@ from __future__ import annotations
 import re
 
 from ..util import canonical_json, sha256_text
+from .contracts.knowledge import FactStatus, Profile
+from .contracts.taxonomy import ProfileName
 from .facts import FactStore
-from .models import FactStatus, Profile, ProfileName
 from .selection import ROLE_BLOCK_TAG
 
 

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Literal
 
-from ...domain.models import ApplicationStatus, AuditRecord
+from ...domain.contracts.records import AuditRecord
+from ...domain.contracts.recruitment import ApplicationStatus
 from ...domain.recruitment import terminal_outcome_after, transition_allowed
 from ...util import new_id, utc_now
 from ..commands import (

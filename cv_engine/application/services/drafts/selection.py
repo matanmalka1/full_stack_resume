@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import cast
 
+from ....domain.contracts.analysis import JobAnalysis
 from ....domain.drafts import manually_edited
-from ....domain.models import JobAnalysis
 from ...commands import (
     ApplySelectionChangeCommand,
     CreateSelectionPlanCommand,

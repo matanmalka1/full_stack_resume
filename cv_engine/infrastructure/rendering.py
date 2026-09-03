@@ -12,12 +12,12 @@ from pypdf import PdfReader
 
 from ..application.errors import InfrastructureFailure
 from ..domain.candidate import contact_href
-from ..domain.models import (
+from ..domain.contracts.drafts import DraftDocument
+from ..domain.contracts.knowledge import (
     CandidateContext,
-    DraftDocument,
     Profile,
-    ValidationReport,
 )
+from ..domain.contracts.validation import ValidationReport
 from ..domain.render_validation import (
     RenderEvidence,
     RenderGeometry,

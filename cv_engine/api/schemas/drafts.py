@@ -15,7 +15,14 @@ from typing import Any, Literal
 
 from pydantic import Field, model_validator
 
-from ...domain.models import ClaimStyle, ClaimType, OmissionReason, SelectionOutcome
+from ...domain.contracts.drafts import (
+    ClaimStyle,
+    ClaimType,
+)
+from ...domain.contracts.selection import (
+    OmissionReason,
+    SelectionOutcome,
+)
 from .health import HttpSchema
 
 

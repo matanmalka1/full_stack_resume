@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from ....domain.contracts.drafts import WorkingDraft
+from ....domain.contracts.records import AuditRecord
 from ....domain.drafts import seal_draft
-from ....domain.models import AuditRecord, WorkingDraft
 from ....util import new_id, utc_now
 from ...commands import (
     ArchivedWorkingDraftResult,

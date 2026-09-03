@@ -28,8 +28,9 @@ from typing import Literal
 from pydantic import Field
 
 from ...application.commands import FactEventView
+from ...domain.contracts.knowledge import Fact, FactStatus
+from ...domain.contracts.selection import SelectionPlan
 from ...domain.facts import FACT_SOURCE_NAMES, source_name_of
-from ...domain.models import Fact, FactStatus, SelectionPlan
 from .health import HttpSchema
 
 FactSource = Literal["common.md", "sales.md", "development.md", "situational_skills.md"]

@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..domain.contracts.validation import (
+    ReadyQualification,
+    ValidationIssue,
+    ValidationReport,
+)
 from ..domain.draft_markdown import parse_draft
-from ..domain.models import ReadyQualification, ValidationIssue, ValidationReport
 from .errors import UnknownRecord
 from .ports import ReadinessRepository, SnapshotPayloadStore
 

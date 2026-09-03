@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .models import ApplicationStatus
+from .contracts.recruitment import ApplicationStatus
 
 ALLOWED_TRANSITIONS: dict[ApplicationStatus, set[ApplicationStatus]] = {
     ApplicationStatus.SAVED: {

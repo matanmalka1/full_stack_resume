@@ -11,7 +11,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ..domain.models import Fact, JobAnalysis, SelectionPlan, ValidationReport
+from ..domain.contracts.analysis import JobAnalysis
+from ..domain.contracts.knowledge import Fact
+from ..domain.contracts.selection import SelectionPlan
+from ..domain.contracts.validation import ValidationReport
 
 
 class BoundaryDTO(BaseModel):

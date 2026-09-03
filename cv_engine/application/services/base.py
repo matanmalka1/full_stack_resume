@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from typing import Any, Generic, TypeVar, cast
 
-from ...domain.facts import FactStore
-from ...domain.knowledge import Knowledge
-from ...domain.models import (
-    CandidateContext,
+from ...domain.contracts.analysis import JobAnalysis
+from ...domain.contracts.drafts import (
     DraftDocument,
-    JobAnalysis,
-    ProviderTaskResult,
     WorkingDraft,
 )
+from ...domain.contracts.knowledge import CandidateContext
+from ...domain.contracts.providers import ProviderTaskResult
+from ...domain.facts import FactStore
+from ...domain.knowledge import Knowledge
 from ...domain.profiles import ProfileStore
 from ...domain.selection import EmphasisPolicyStore
 from ...util import new_id

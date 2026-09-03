@@ -12,9 +12,9 @@ from ...application.errors import (
     UnknownRecord,
 )
 from ...application.ports import UnitOfWork
-from ...domain.models import (
+from ...domain.contracts.analysis import JobAnalysis
+from ...domain.contracts.selection import (
     AcceptedGap,
-    JobAnalysis,
     SelectionManifest,
     SelectionPlan,
     merge_accepted_gaps,

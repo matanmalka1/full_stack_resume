@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 
 from ....util import canonical_json, sha256_text
-from ...models import RequirementKind
+from ...contracts.analysis import RequirementKind
 from .concepts import RequirementConcept, RequirementConceptStore
 from .segmentation import _segments
 

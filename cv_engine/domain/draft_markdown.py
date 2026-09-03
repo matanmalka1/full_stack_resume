@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from .models import ClaimLine, DraftDocument
+from .contracts.drafts import ClaimLine, DraftDocument
 
 
 def _marker(claim: ClaimLine) -> str:
