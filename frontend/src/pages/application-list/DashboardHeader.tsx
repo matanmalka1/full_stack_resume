@@ -1,5 +1,4 @@
 import { PlusCircle, ShieldCheck, Sparkles, UserCheck } from "lucide-react";
-import { useEffect, useRef } from "react";
 import { Link, type To } from "react-router-dom";
 
 import { buttonClasses } from "../../ui/Button";
@@ -11,12 +10,6 @@ interface DashboardHeaderProps {
 }
 
 export const DashboardHeader = ({ newApplicationTo, totalCount }: DashboardHeaderProps) => {
-  const headingRef = useRef<HTMLHeadingElement>(null);
-
-  useEffect(() => {
-    headingRef.current?.focus();
-  }, []);
-
   return (
     <header className={surfaceClasses("relative overflow-hidden bg-cv-surface p-5 shadow-surface sm:p-6")}>
       <div
@@ -42,7 +35,6 @@ export const DashboardHeader = ({ newApplicationTo, totalCount }: DashboardHeade
               className="text-heading-lg font-extrabold tracking-tight text-cv-text"
               data-route-heading
               id="route-heading"
-              ref={headingRef}
               tabIndex={-1}
             >
               לוח מועמדויות ומעקב גיוס

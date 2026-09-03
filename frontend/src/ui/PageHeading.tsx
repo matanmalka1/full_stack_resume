@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef } from "react";
+import type { ReactNode } from "react";
 
 import { cx } from "./cx";
 
@@ -17,16 +17,11 @@ interface PageHeadingProps {
   id: string;
 }
 
-/* A.2: focus moves to the page heading after a route change. The heading carries
-   data-route-heading for RouteFocusManager and also claims focus when it mounts
-   outside a navigation, such as inside the route error boundary. */
+/* A.2: focus moves to the page heading after a route change. The heading only marks
+   itself with data-route-heading; moving focus is RouteFocusManager's, so that a
+   heading mounting outside a navigation - the first screen of a visit - does not put a
+   focus ring on a reader who never left anywhere. */
 export const PageHeading = ({ children, description, eyebrow, eyebrowTone = "accent", id }: PageHeadingProps) => {
-  const headingRef = useRef<HTMLHeadingElement>(null);
-
-  useEffect(() => {
-    headingRef.current?.focus();
-  }, []);
-
   return (
     <>
       {eyebrow === undefined ? null : (
@@ -40,7 +35,6 @@ export const PageHeading = ({ children, description, eyebrow, eyebrowTone = "acc
         data-route-heading
         dir="auto"
         id={id}
-        ref={headingRef}
         tabIndex={-1}
       >
         {children}
