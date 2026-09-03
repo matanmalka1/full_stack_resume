@@ -123,7 +123,9 @@ class DraftRegeneration(DraftServiceBase):
                 ],
                 allowed_facts=fact_context(knowledge.facts, allowed, draft.language),
                 instruction=command.instruction,
-            )
+            ),
+            model=command.model,
+            reasoning_effort=command.reasoning_effort,
         )
         evidence = self.preserve(
             command.application_id, operation_id, "regenerate_section", answered.provenance
@@ -187,7 +189,9 @@ class DraftRegeneration(DraftServiceBase):
                 current_text=claim.text,
                 allowed_facts=fact_context(knowledge.facts, allowed, draft.language),
                 instruction=command.instruction,
-            )
+            ),
+            model=command.model,
+            reasoning_effort=command.reasoning_effort,
         )
         evidence = self.preserve(
             command.application_id, operation_id, "regenerate_claim", answered.provenance

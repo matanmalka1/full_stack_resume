@@ -13,6 +13,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..util import canonical_json, sha256_text
+from .ai_configuration import ReasoningEffort
 
 
 class OperationContractError(ValueError):
@@ -198,6 +199,7 @@ class CreateOperation(OperationModel):
     sources: OperationSources
     provider: str | None = None
     model: str | None = None
+    reasoning_effort: ReasoningEffort | None = None
     retry_of_operation_id: str | None = None
 
     @model_validator(mode="after")
@@ -232,6 +234,14 @@ class OperationView(OperationModel):
     failure_code: OperationFailureCode | None = None
     safe_failure_detail: str | None = None
     retry_of_operation_id: str | None = None
+    provider: str | None = None
+    model: str | None = None
+    reasoning_effort: ReasoningEffort | None = None
+    input_tokens: int | None = None
+    cached_input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+    cost_usd: str | None = None
     outputs: list[OperationOutputReference] = []
 
 
@@ -243,8 +253,6 @@ class PersistedOperation(OperationView):
     idempotency_key: str
     sources: OperationSources
     resources: tuple[OperationResource, ...]
-    provider: str | None = None
-    model: str | None = None
     lease_owner: str | None = None
     lease_expires_at: str | None = None
     heartbeat_at: str | None = None

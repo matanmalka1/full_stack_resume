@@ -886,8 +886,28 @@ class ClaimProposal(StrictModel):
 
 class ProviderUsage(StrictModel):
     input_tokens: int = 0
+    cached_input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0
+
+
+class ProviderPricing(StrictModel):
+    currency: Literal["USD"] = "USD"
+    version: str
+    source: str
+    input_per_million_usd: str
+    cached_input_per_million_usd: str
+    output_per_million_usd: str
+    long_context_threshold_tokens: int
+    long_context_input_multiplier: str
+    long_context_output_multiplier: str
+
+
+class ProviderCost(StrictModel):
+    currency: Literal["USD"] = "USD"
+    input_usd: str
+    output_usd: str
+    total_usd: str
 
 
 class ProviderContext(StrictModel):
@@ -895,12 +915,13 @@ class ProviderContext(StrictModel):
 
     No field here can hold a credential. The key is environment configuration
     that never enters a record, request headers are never captured, and hidden
-    reasoning is never requested or retained - so what is stored is the
-    execution's identity, not its content.
+    reasoning content is never requested or retained - so what is stored is
+    the execution's identity and effort setting, not hidden reasoning.
     """
 
     provider: str
     model: str
+    reasoning_effort: str | None = None
     task_contract_version: str
     prompt_version: str
     prompt_hash: str
@@ -917,6 +938,8 @@ class ProviderContext(StrictModel):
     output_schema_hash: str
     response_id: str | None = None
     usage: ProviderUsage = ProviderUsage()
+    pricing: ProviderPricing | None = None
+    cost: ProviderCost | None = None
     latency_ms: int = 0
 
 

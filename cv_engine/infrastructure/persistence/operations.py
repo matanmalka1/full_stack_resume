@@ -23,6 +23,7 @@ from ...application.operations import (
 from ...util import canonical_json, new_id, sha256_text, utc_now
 from .base import SqlAlchemyRepositoryBase
 from .tables import (
+    artifact_versions,
     idempotency_receipts,
     operation_outputs,
     operation_resource_leases,
@@ -48,6 +49,16 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
         if row is None:
             raise UnknownRecord("operation does not exist")
         record = dict(row)
+        provider_metadata = next(
+            (
+                output.get("metadata_json") or {}
+                for output in outputs
+                if output["output_type"] == "provider_response"
+            ),
+            {},
+        )
+        usage = provider_metadata.get("usage") or {}
+        cost = provider_metadata.get("cost") or {}
         return PersistedOperation(
             id=record["id"],
             application_id=record["application_id"],
@@ -59,6 +70,12 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
             resources=tuple(record["resources_json"]),
             provider=record["provider"],
             model=record["model"],
+            reasoning_effort=record["reasoning_effort"],
+            input_tokens=usage.get("input_tokens"),
+            cached_input_tokens=usage.get("cached_input_tokens"),
+            output_tokens=usage.get("output_tokens"),
+            total_tokens=usage.get("total_tokens"),
+            cost_usd=cost.get("total_usd"),
             status=record["status"],
             phase=record["phase"],
             message=record["message"],
@@ -92,7 +109,9 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
                 operation_outputs.c.output_type,
                 operation_outputs.c.output_id,
                 operation_outputs.c.active,
+                artifact_versions.c.metadata_json,
             )
+            .outerjoin(artifact_versions, artifact_versions.c.id == operation_outputs.c.output_id)
             .where(operation_outputs.c.operation_id == operation_id)
             .order_by(operation_outputs.c.created_at, operation_outputs.c.id)
         )
@@ -139,6 +158,7 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
                         resources_json=[resource.model_dump(mode="json") for resource in resources],
                         provider=request.provider,
                         model=request.model,
+                        reasoning_effort=request.reasoning_effort,
                         status=OperationStatus.QUEUED.value,
                         phase=OperationPhase.QUEUED.value,
                         message="",

@@ -250,6 +250,8 @@ Automated provider tests use fake HTTP/provider responses and validate:
 - no silent fallback
 - raw response sanitization and artifact registration
 - exact provider/model/usage/latency/response metadata
+- allowlisted model and reasoning selection frozen before worker execution
+- cached-token accounting, dated price snapshot, and deterministic USD cost calculation
 - stateless inputs and minimal context
 - one allowed transient retry
 - no retry for invalid schema, business validation, unsupported claim, conflict, or
@@ -272,6 +274,7 @@ Release requires a manual live OpenAI smoke checklist, not an automated CI gate:
 - one `draft_resume` call
 - valid structured outputs
 - provider/model/usage metadata persisted
+- selected reasoning effort and calculated cost visible without exposing a secret
 - refusal/failure path checked periodically and documented
 
 ## 7. Concurrency and race matrix

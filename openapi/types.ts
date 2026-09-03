@@ -1138,6 +1138,28 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AIModelOptionResponse */
+        AIModelOptionResponse: {
+            /** Cached Input Per Million Usd */
+            cached_input_per_million_usd: string;
+            /**
+             * Id
+             * @enum {string}
+             */
+            id: "gpt-5.6-luna" | "gpt-5.6-terra" | "gpt-5.6-sol";
+            /** Input Per Million Usd */
+            input_per_million_usd: string;
+            /** Label */
+            label: string;
+            /** Output Per Million Usd */
+            output_per_million_usd: string;
+            /** Pricing Source */
+            pricing_source: string;
+            /** Pricing Version */
+            pricing_version: string;
+            /** Recommended */
+            recommended: boolean;
+        };
         /**
          * AcceptedGap
          * @description One hard gap the user knowingly proceeded past.
@@ -1873,17 +1895,13 @@ export interface components {
             job_snapshot_id: string;
             /** Language Override */
             language_override?: ("en" | "he") | null;
-            /**
-             * Model
-             * @default rules-v1
-             */
-            model: string;
             profile_override?: components["schemas"]["ProfileName"] | null;
             /**
              * Provider
              * @default deterministic
+             * @enum {string}
              */
-            provider: string;
+            provider: "deterministic" | "openai";
             track_override?: components["schemas"]["Track"] | null;
         };
         /** CreateApplicationRequest */
@@ -2567,8 +2585,12 @@ export interface components {
              * @description Commands currently accepted, derived by the application layer.
              */
             readonly available_actions: components["schemas"]["OperationAction"][];
+            /** Cached Input Tokens */
+            cached_input_tokens?: number | null;
             /** Cancellation Requested At */
             cancellation_requested_at?: string | null;
+            /** Cost Usd */
+            cost_usd?: string | null;
             /** Created At */
             created_at: string;
             failure_code?: components["schemas"]["OperationFailureCode"] | null;
@@ -2576,6 +2598,8 @@ export interface components {
             finished_at?: string | null;
             /** Id */
             id: string;
+            /** Input Tokens */
+            input_tokens?: number | null;
             /**
              * Is Terminal
              * @description Derived from the same predicate the runner uses.
@@ -2583,10 +2607,18 @@ export interface components {
             readonly is_terminal: boolean;
             /** Message */
             message: string;
+            /** Model */
+            model?: string | null;
             operation_type: components["schemas"]["OperationType"];
+            /** Output Tokens */
+            output_tokens?: number | null;
             /** Outputs */
             outputs: components["schemas"]["OperationOutputResponse"][];
             phase: components["schemas"]["OperationPhase"];
+            /** Provider */
+            provider?: string | null;
+            /** Reasoning Effort */
+            reasoning_effort?: ("low" | "medium" | "high") | null;
             /** Retry Of Operation Id */
             retry_of_operation_id?: string | null;
             /** Safe Failure Detail */
@@ -2594,6 +2626,8 @@ export interface components {
             /** Started At */
             started_at?: string | null;
             status: components["schemas"]["OperationStatus"];
+            /** Total Tokens */
+            total_tokens?: number | null;
         };
         /**
          * OperationStatus
@@ -2988,11 +3022,23 @@ export interface components {
             ai_enabled_override?: boolean | null;
             /** Auto Generate When Review Not Required */
             auto_generate_when_review_not_required: boolean;
+            /** Available Ai Models */
+            available_ai_models: components["schemas"]["AIModelOptionResponse"][];
+            /**
+             * Default Ai Model
+             * @enum {string}
+             */
+            default_ai_model: "gpt-5.6-luna" | "gpt-5.6-terra" | "gpt-5.6-sol";
             /**
              * Default Execution Mode
              * @enum {string}
              */
             default_execution_mode: "deterministic" | "ai";
+            /**
+             * Default Reasoning Effort
+             * @enum {string}
+             */
+            default_reasoning_effort: "low" | "medium" | "high";
             /** Edit Version */
             edit_version: number;
             /** Provider Configured */
@@ -3113,10 +3159,20 @@ export interface components {
             /** Auto Generate When Review Not Required */
             auto_generate_when_review_not_required: boolean;
             /**
+             * Default Ai Model
+             * @enum {string}
+             */
+            default_ai_model: "gpt-5.6-luna" | "gpt-5.6-terra" | "gpt-5.6-sol";
+            /**
              * Default Execution Mode
              * @enum {string}
              */
             default_execution_mode: "deterministic" | "ai";
+            /**
+             * Default Reasoning Effort
+             * @enum {string}
+             */
+            default_reasoning_effort: "low" | "medium" | "high";
             /**
              * Ui Density
              * @enum {string}

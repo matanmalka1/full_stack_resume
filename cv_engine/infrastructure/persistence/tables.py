@@ -23,6 +23,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
+from ...application.ai_configuration import AI_MODEL_IDS, REASONING_EFFORTS
+
 NAMING_CONVENTION = {
     "ix": "ix_%(table_name)s_%(column_0_N_name)s",
     "uq": "uq_%(table_name)s_%(column_0_N_name)s",
@@ -481,6 +483,7 @@ operations = Table(
     Column("resources_json", JSONB, nullable=False),
     Column("provider", Text),
     Column("model", Text),
+    Column("reasoning_effort", Text),
     Column("status", Text, nullable=False),
     Column("phase", Text, nullable=False),
     Column("message", Text, nullable=False, server_default=text("''")),
@@ -502,6 +505,10 @@ operations = Table(
         name="operation_type",
     ),
     CheckConstraint("length(payload_hash) = 64", name="payload_hash_length"),
+    CheckConstraint(
+        f"reasoning_effort IS NULL OR reasoning_effort IN ({_sql_values(REASONING_EFFORTS)})",
+        name="reasoning_effort",
+    ),
     CheckConstraint("length(trim(idempotency_key)) > 0", name="idempotency_key_nonempty"),
     CheckConstraint(
         f"status IN ({_sql_values(OPERATION_STATUSES)})",
@@ -674,6 +681,8 @@ app_settings = Table(
     Column("auto_generate_when_review_not_required", Boolean, nullable=False),
     Column("ai_enabled_override", Boolean),
     Column("default_execution_mode", Text, nullable=False),
+    Column("default_ai_model", Text),
+    Column("default_reasoning_effort", Text, nullable=False, server_default=text("'medium'")),
     Column("ui_density", Text, nullable=False),
     Column("ui_text_size", Text, nullable=False),
     Column("updated_at", Text, nullable=False),
@@ -682,6 +691,14 @@ app_settings = Table(
     CheckConstraint(
         "default_execution_mode IN ('deterministic', 'ai')",
         name="default_execution_mode",
+    ),
+    CheckConstraint(
+        f"default_ai_model IS NULL OR default_ai_model IN ({_sql_values(AI_MODEL_IDS)})",
+        name="default_ai_model",
+    ),
+    CheckConstraint(
+        f"default_reasoning_effort IN ({_sql_values(REASONING_EFFORTS)})",
+        name="default_reasoning_effort",
     ),
     CheckConstraint("ui_density IN ('comfortable', 'compact')", name="ui_density"),
     CheckConstraint("ui_text_size IN ('normal', 'large')", name="ui_text_size"),

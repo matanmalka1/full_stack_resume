@@ -182,7 +182,10 @@ def build_services(
         "snapshots": resolved_payloads,
     }
     analysis_service = AnalysisService(**shared)
-    operation_service = OperationService(**shared)
+    operation_service = OperationService(
+        **shared,
+        default_ai_model=str(resolved_config.get("model")),
+    )
     draft_service = DraftService(**shared)
     rendering_service = RenderingService(**shared)
     failure_logger = OperationFailureLogger(paths.root, paths.logs_root)
@@ -209,7 +212,9 @@ def build_services(
     knowledge_service = KnowledgeService(**shared)
     knowledge_service.recover_knowledge_mutations()
     settings_service = SettingsService(
-        resolved_repository, provider_configured=resolved_provider is not None
+        resolved_repository,
+        provider_configured=resolved_provider is not None,
+        runtime_default_model=str(resolved_config.get("model")),
     )
     return Services(
         paths=paths,

@@ -450,7 +450,7 @@ phase until an eligible runner claims it or the user cancels. It never starts a
 duplicate render merely because another runner owns the current global lease.
 
 Operation records contain type, full secret-free structured payload and hash,
-idempotency key, provider/model, source IDs, expected versions/hashes, lifecycle
+idempotency key, provider/model/reasoning effort, source IDs, expected versions/hashes, lifecycle
 timestamps, lease owner/expiry, heartbeat, cancellation request, phase/message,
 failure code, safe message, technical detail/log reference, retry reference, and output
 references.
@@ -479,9 +479,11 @@ Each task receives minimal allowed context. Provider text and fact IDs pass sche
 semantic support validation. A valid ID paired with strengthened wording fails. Claims
 are not silently dropped.
 
-Calls are stateless. Default model and per-task overrides are backend configuration.
-Exact model/provider, semantic task-contract version, prompt version/hash, input/output
-schema versions, usage, latency, response ID, and output hashes are stored.
+Calls are stateless. The settings query exposes a closed backend-owned model catalog;
+the selected default model and reasoning effort are frozen when the Operation is
+submitted. Exact model/provider/reasoning effort, semantic task-contract version,
+prompt version/hash, input/output schema versions, usage, latency, response ID, dated
+pricing snapshot, derived USD cost, and output hashes are stored.
 
 Sanitized raw response is an immutable payload in the object store, registered like
 any other. Sanitization removes secrets and excludes hidden chain-of-thought. Provider failure is explicit; deterministic

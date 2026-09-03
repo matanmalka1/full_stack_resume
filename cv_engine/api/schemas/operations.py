@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pydantic import computed_field
 
+from ...application.ai_configuration import ReasoningEffort
 from ...application.operations import (
     OperationAction,
     OperationFailureCode,
@@ -65,6 +66,14 @@ class OperationResponse(HttpSchema):
     failure_code: OperationFailureCode | None = None
     safe_failure_detail: str | None = None
     retry_of_operation_id: str | None = None
+    provider: str | None = None
+    model: str | None = None
+    reasoning_effort: ReasoningEffort | None = None
+    input_tokens: int | None = None
+    cached_input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+    cost_usd: str | None = None
     outputs: list[OperationOutputResponse]
 
     @computed_field  # type: ignore[prop-decorator]

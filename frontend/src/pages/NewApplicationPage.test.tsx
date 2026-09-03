@@ -124,6 +124,9 @@ const renderPage = (entry = "/") => {
   client.setQueryData(settingsQueryKey, {
     settings: {
       default_execution_mode: "deterministic",
+      default_ai_model: "gpt-5.6-terra",
+      default_reasoning_effort: "medium",
+      available_ai_models: [],
       provider_configured: false,
       ai_enabled: false,
     },

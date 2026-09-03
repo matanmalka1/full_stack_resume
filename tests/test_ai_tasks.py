@@ -32,6 +32,7 @@ from cv_engine.application.commands import (
 from cv_engine.application.errors import StateConflict, UnknownRecord
 from cv_engine.application.operations import OperationFailureCode
 from cv_engine.application.services.proposals import allowed_fact_pool
+from cv_engine.application.settings import UpdateSettings
 from cv_engine.domain.analysis.classification import classify_job
 from cv_engine.domain.models import (
     ClaimProposal,
@@ -127,7 +128,7 @@ def _provider_artifacts(services, application_id: str) -> list[dict]:
     ]
 
 
-def _analysis_operation(services, ingested, *, model: str = "gpt-test"):
+def _analysis_operation(services, ingested, *, model: str = "gpt-5.6-terra"):
     return services.operations.submit_analysis(
         AnalyzeCommand(
             application_id=ingested.application_id,
@@ -155,6 +156,54 @@ def test_propose_job_analysis_commits_an_analysis_and_its_initial_plan(
     assert completed.status.value == "succeeded", completed.safe_failure_detail
     outputs = {output.output_type for output in completed.outputs}
     assert {"job_analysis", "selection_plan"} <= outputs
+
+
+def test_ai_preferences_are_frozen_before_settings_can_change(
+    ai_services, fake_openai: FakeOpenAI
+) -> None:
+    ai_services.repository.update_app_settings(
+        0,
+        UpdateSettings(
+            auto_generate_when_review_not_required=False,
+            ai_enabled_override=None,
+            default_execution_mode="deterministic",
+            default_ai_model="gpt-5.6-luna",
+            default_reasoning_effort="high",
+            ui_density="comfortable",
+            ui_text_size="normal",
+        ),
+    )
+    fake_openai.script("propose_job_analysis", CLASSIFICATION)
+    ingested = _ingested(ai_services, "Frozen Preferences Co")
+    queued = _analysis_operation(ai_services, ingested, model=None)
+
+    assert queued.model == "gpt-5.6-luna"
+    assert queued.reasoning_effort == "high"
+
+    ai_services.repository.update_app_settings(
+        1,
+        UpdateSettings(
+            auto_generate_when_review_not_required=False,
+            ai_enabled_override=None,
+            default_execution_mode="deterministic",
+            default_ai_model="gpt-5.6-terra",
+            default_reasoning_effort="low",
+            ui_density="comfortable",
+            ui_text_size="normal",
+        ),
+    )
+    completed = _run(ai_services, queued)
+    request = fake_openai.calls_for("propose_job_analysis")[-1].body
+
+    assert request["model"] == "gpt-5.6-luna"
+    assert request["reasoning"] == {"effort": "high"}
+    assert completed.model == "gpt-5.6-luna"
+    assert completed.reasoning_effort == "high"
+    assert completed.input_tokens == 11
+    assert completed.cached_input_tokens == 3
+    assert completed.output_tokens == 22
+    assert completed.total_tokens == 33
+    assert completed.cost_usd == "0.00002806"
 
 
 def test_propose_selection_plan_commits_the_proposed_overlay(
@@ -485,9 +534,17 @@ def test_a_successful_run_registers_the_sanitized_response_with_full_provenance(
     metadata = json.loads(row["metadata_json"])
     assert metadata["raw_output_hash"] == sha256_text(stored)
     assert metadata["provider"] == "openai"
-    assert metadata["model"] == "gpt-test"
+    assert metadata["model"] == "gpt-5.6-terra"
     assert metadata["response_id"] == "resp_fake_1"
-    assert metadata["usage"] == {"input_tokens": 11, "output_tokens": 22, "total_tokens": 33}
+    assert metadata["reasoning_effort"] == "medium"
+    assert metadata["usage"] == {
+        "input_tokens": 11,
+        "cached_input_tokens": 3,
+        "output_tokens": 22,
+        "total_tokens": 33,
+    }
+    assert metadata["pricing"]["version"] == "openai-2026-09-03"
+    assert metadata["cost"]["total_usd"] == "0.00028060"
     assert metadata["task"] == "propose_job_analysis"
     assert metadata["prompt_version"] and metadata["prompt_hash"]
     assert metadata["task_contract_version"] and metadata["system_version"]

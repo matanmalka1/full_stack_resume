@@ -30,6 +30,15 @@ from typing import Any, Protocol, TypeVar, cast
 
 from pydantic import BaseModel, ValidationError
 
+from ..application.ai_configuration import (
+    DEFAULT_REASONING_EFFORT,
+    PRICING_SOURCE,
+    PRICING_VERSION,
+    execution_cost,
+    model_definition,
+    normalize_ai_model,
+    normalize_reasoning_effort,
+)
 from ..application.errors import (
     KnowledgeRejected,
     ProviderRateLimited,
@@ -52,6 +61,8 @@ from ..domain.models import (
     DraftProposal,
     JobClassificationProposal,
     ProviderContext,
+    ProviderCost,
+    ProviderPricing,
     ProviderTaskResult,
     ProviderUsage,
     SectionProposal,
@@ -195,10 +206,12 @@ class OpenAIResponsesProvider:
         self,
         *,
         model: str,
+        reasoning_effort: str = DEFAULT_REASONING_EFFORT,
         api_key: str | None = None,
         timeout: int = 90,
     ):
-        self.model = model
+        self.model = normalize_ai_model(model)
+        self.reasoning_effort = normalize_reasoning_effort(reasoning_effort)
         self.api_key = api_key
         if not self.api_key:
             raise ProviderRefused("OPENAI_API_KEY is required when provider=openai")
@@ -213,6 +226,7 @@ class OpenAIResponsesProvider:
     ) -> dict[str, Any]:
         return {
             "model": self.model,
+            "reasoning": {"effort": self.reasoning_effort},
             "input": [
                 {"role": "system", "content": contracts.prompt_text},
                 {"role": "user", "content": canonical_json({"task": task, "input": payload})},
@@ -276,6 +290,32 @@ class OpenAIResponsesProvider:
             raise ProviderSchemaViolation("provider response is not JSON") from exc
         sanitized = canonical_json(sanitize_response(envelope))
         usage = envelope.get("usage") or {}
+        input_details = usage.get("input_tokens_details") or {}
+        provider_usage = ProviderUsage(
+            input_tokens=int(usage.get("input_tokens") or 0),
+            cached_input_tokens=int(input_details.get("cached_tokens") or 0),
+            output_tokens=int(usage.get("output_tokens") or 0),
+            total_tokens=int(usage.get("total_tokens") or 0),
+        )
+        definition = model_definition(self.model)
+        provider_pricing = ProviderPricing(
+            version=PRICING_VERSION,
+            source=PRICING_SOURCE,
+            input_per_million_usd=format(definition.input_per_million_usd, "f"),
+            cached_input_per_million_usd=format(definition.cached_input_per_million_usd, "f"),
+            output_per_million_usd=format(definition.output_per_million_usd, "f"),
+            long_context_threshold_tokens=definition.long_context_threshold_tokens,
+            long_context_input_multiplier=format(definition.long_context_input_multiplier, "f"),
+            long_context_output_multiplier=format(definition.long_context_output_multiplier, "f"),
+        )
+        provider_cost = ProviderCost(
+            **execution_cost(
+                self.model,
+                input_tokens=provider_usage.input_tokens,
+                cached_input_tokens=provider_usage.cached_input_tokens,
+                output_tokens=provider_usage.output_tokens,
+            )
+        )
 
         def provenance_for(output: dict[str, Any]) -> ProviderTaskResult:
             """One provenance shape, whether the answer was used or refused.
@@ -290,6 +330,7 @@ class OpenAIResponsesProvider:
                 context=ProviderContext(
                     provider=self.name,
                     model=self.model,
+                    reasoning_effort=self.reasoning_effort,
                     task_contract_version=contract.version,
                     prompt_version=contracts.prompt_version,
                     prompt_hash=contracts.prompt_hash,
@@ -299,11 +340,9 @@ class OpenAIResponsesProvider:
                     output_schema_version=contract.output_schema_version,
                     output_schema_hash=schema_hash(body["text"]["format"]["schema"]),
                     response_id=envelope.get("id"),
-                    usage=ProviderUsage(
-                        input_tokens=int(usage.get("input_tokens") or 0),
-                        output_tokens=int(usage.get("output_tokens") or 0),
-                        total_tokens=int(usage.get("total_tokens") or 0),
-                    ),
+                    usage=provider_usage,
+                    pricing=provider_pricing,
+                    cost=provider_cost,
                     latency_ms=latency_ms,
                 ),
                 input_hash=sha256_text(canonical_json(payload)),
@@ -362,10 +401,9 @@ TASK_OUTPUT_MODELS: dict[str, type[StrictModel]] = {
 class OpenAIProvider:
     """The five contracted tasks, behind the application's `AIProvider` port.
 
-    The per-task model override comes from the task contract rather than from a
-    caller: architecture §11 makes default model and per-task overrides backend
-    configuration, and a caller that could choose a model per call would make
-    the stored `model` a client's opinion rather than the installation's.
+    An Operation supplies the model and reasoning values it froze at submission.
+    The task-contract model remains a backend-only fallback for direct application
+    calls; it is never accepted from an HTTP request.
     """
 
     def __init__(
@@ -379,10 +417,19 @@ class OpenAIProvider:
         self._contracts = contracts
         self._default_model = default_model
         self._client_factory = client_factory or (
-            lambda model: OpenAIResponsesProvider(model=model, api_key=api_key)
+            lambda model, effort: OpenAIResponsesProvider(
+                model=model, reasoning_effort=effort, api_key=api_key
+            )
         )
 
-    def _run(self, task: str, context: StrictModel):
+    def _run(
+        self,
+        task: str,
+        context: StrictModel,
+        *,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+    ):
         contract = self._contracts.get(task)
         output_model = TASK_OUTPUT_MODELS[task]
         # The contract file names the input and output models. Checked here
@@ -396,7 +443,9 @@ class OpenAIProvider:
             raise KnowledgeRejected(
                 f"AI task contract {task} declares {declared} but the engine sends {actual}"
             )
-        client = self._client_factory(contract.model or self._default_model)
+        selected_model = normalize_ai_model(model or contract.model or self._default_model)
+        selected_effort = normalize_reasoning_effort(reasoning_effort)
+        client = self._client_factory(selected_model, selected_effort)
         return client.run(
             task,
             context.model_dump(mode="json"),
@@ -406,25 +455,61 @@ class OpenAIProvider:
         )
 
     def propose_job_analysis(
-        self, context: JobAnalysisContext
+        self,
+        context: JobAnalysisContext,
+        *,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
     ) -> AIProposal[JobClassificationProposal]:
-        proposal, provenance = self._run("propose_job_analysis", context)
+        proposal, provenance = self._run(
+            "propose_job_analysis", context, model=model, reasoning_effort=reasoning_effort
+        )
         return AIProposal(proposal=cast(JobClassificationProposal, proposal), provenance=provenance)
 
     def propose_selection_plan(
-        self, context: SelectionPlanContext
+        self,
+        context: SelectionPlanContext,
+        *,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
     ) -> AIProposal[SelectionProposal]:
-        proposal, provenance = self._run("propose_selection_plan", context)
+        proposal, provenance = self._run(
+            "propose_selection_plan", context, model=model, reasoning_effort=reasoning_effort
+        )
         return AIProposal(proposal=cast(SelectionProposal, proposal), provenance=provenance)
 
-    def draft_resume(self, context: DraftResumeContext) -> AIProposal[DraftProposal]:
-        proposal, provenance = self._run("draft_resume", context)
+    def draft_resume(
+        self,
+        context: DraftResumeContext,
+        *,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+    ) -> AIProposal[DraftProposal]:
+        proposal, provenance = self._run(
+            "draft_resume", context, model=model, reasoning_effort=reasoning_effort
+        )
         return AIProposal(proposal=cast(DraftProposal, proposal), provenance=provenance)
 
-    def regenerate_section(self, context: RegenerateSectionContext) -> AIProposal[SectionProposal]:
-        proposal, provenance = self._run("regenerate_section", context)
+    def regenerate_section(
+        self,
+        context: RegenerateSectionContext,
+        *,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+    ) -> AIProposal[SectionProposal]:
+        proposal, provenance = self._run(
+            "regenerate_section", context, model=model, reasoning_effort=reasoning_effort
+        )
         return AIProposal(proposal=cast(SectionProposal, proposal), provenance=provenance)
 
-    def regenerate_claim(self, context: RegenerateClaimContext) -> AIProposal[ClaimProposal]:
-        proposal, provenance = self._run("regenerate_claim", context)
+    def regenerate_claim(
+        self,
+        context: RegenerateClaimContext,
+        *,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+    ) -> AIProposal[ClaimProposal]:
+        proposal, provenance = self._run(
+            "regenerate_claim", context, model=model, reasoning_effort=reasoning_effort
+        )
         return AIProposal(proposal=cast(ClaimProposal, proposal), provenance=provenance)

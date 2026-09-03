@@ -1,6 +1,60 @@
 {
   "components": {
     "schemas": {
+      "AIModelOptionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "cached_input_per_million_usd": {
+            "title": "Cached Input Per Million Usd",
+            "type": "string"
+          },
+          "id": {
+            "enum": [
+              "gpt-5.6-luna",
+              "gpt-5.6-terra",
+              "gpt-5.6-sol"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "input_per_million_usd": {
+            "title": "Input Per Million Usd",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "output_per_million_usd": {
+            "title": "Output Per Million Usd",
+            "type": "string"
+          },
+          "pricing_source": {
+            "title": "Pricing Source",
+            "type": "string"
+          },
+          "pricing_version": {
+            "title": "Pricing Version",
+            "type": "string"
+          },
+          "recommended": {
+            "title": "Recommended",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "input_per_million_usd",
+          "cached_input_per_million_usd",
+          "output_per_million_usd",
+          "recommended",
+          "pricing_version",
+          "pricing_source"
+        ],
+        "title": "AIModelOptionResponse",
+        "type": "object"
+      },
       "AcceptedGap": {
         "additionalProperties": false,
         "description": "One hard gap the user knowingly proceeded past.\n\nAcceptance means only that: it never changes a gap to satisfied, never\nauthorizes an unsupported claim, and never touches requirement coverage or\nfact ranking. It is recorded per gap, keyed on the `Requirement` the gap\nprojects, so accepting one deficiency cannot dismiss another the user has\nnot seen.\n\nIt lives on the SelectionPlan rather than the JobAnalysis because it is not\na change to what the requirement *means* - the analysis is untouched and\nstays reusable - only to whether the user proceeds despite it.",
@@ -2143,12 +2197,6 @@
             ],
             "title": "Language Override"
           },
-          "model": {
-            "default": "rules-v1",
-            "maxLength": 100,
-            "title": "Model",
-            "type": "string"
-          },
           "profile_override": {
             "anyOf": [
               {
@@ -2161,7 +2209,10 @@
           },
           "provider": {
             "default": "deterministic",
-            "maxLength": 50,
+            "enum": [
+              "deterministic",
+              "openai"
+            ],
             "title": "Provider",
             "type": "string"
           },
@@ -3751,6 +3802,17 @@
             "title": "Available Actions",
             "type": "array"
           },
+          "cached_input_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cached Input Tokens"
+          },
           "cancellation_requested_at": {
             "anyOf": [
               {
@@ -3761,6 +3823,17 @@
               }
             ],
             "title": "Cancellation Requested At"
+          },
+          "cost_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Usd"
           },
           "created_at": {
             "title": "Created At",
@@ -3791,6 +3864,17 @@
             "title": "Id",
             "type": "string"
           },
+          "input_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Tokens"
+          },
           "is_terminal": {
             "description": "Derived from the same predicate the runner uses.",
             "readOnly": true,
@@ -3801,8 +3885,30 @@
             "title": "Message",
             "type": "string"
           },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
           "operation_type": {
             "$ref": "#/components/schemas/OperationType"
+          },
+          "output_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Tokens"
           },
           "outputs": {
             "items": {
@@ -3813,6 +3919,33 @@
           },
           "phase": {
             "$ref": "#/components/schemas/OperationPhase"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "reasoning_effort": {
+            "anyOf": [
+              {
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning Effort"
           },
           "retry_of_operation_id": {
             "anyOf": [
@@ -3849,6 +3982,17 @@
           },
           "status": {
             "$ref": "#/components/schemas/OperationStatus"
+          },
+          "total_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Tokens"
           }
         },
         "required": [
@@ -4730,12 +4874,37 @@
             "title": "Auto Generate When Review Not Required",
             "type": "boolean"
           },
+          "available_ai_models": {
+            "items": {
+              "$ref": "#/components/schemas/AIModelOptionResponse"
+            },
+            "title": "Available Ai Models",
+            "type": "array"
+          },
+          "default_ai_model": {
+            "enum": [
+              "gpt-5.6-luna",
+              "gpt-5.6-terra",
+              "gpt-5.6-sol"
+            ],
+            "title": "Default Ai Model",
+            "type": "string"
+          },
           "default_execution_mode": {
             "enum": [
               "deterministic",
               "ai"
             ],
             "title": "Default Execution Mode",
+            "type": "string"
+          },
+          "default_reasoning_effort": {
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Default Reasoning Effort",
             "type": "string"
           },
           "edit_version": {
@@ -4779,6 +4948,9 @@
           "auto_generate_when_review_not_required",
           "ai_enabled",
           "default_execution_mode",
+          "default_ai_model",
+          "default_reasoning_effort",
+          "available_ai_models",
           "ui_density",
           "ui_text_size",
           "provider_configured"
@@ -5032,12 +5204,30 @@
             "title": "Auto Generate When Review Not Required",
             "type": "boolean"
           },
+          "default_ai_model": {
+            "enum": [
+              "gpt-5.6-luna",
+              "gpt-5.6-terra",
+              "gpt-5.6-sol"
+            ],
+            "title": "Default Ai Model",
+            "type": "string"
+          },
           "default_execution_mode": {
             "enum": [
               "deterministic",
               "ai"
             ],
             "title": "Default Execution Mode",
+            "type": "string"
+          },
+          "default_reasoning_effort": {
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Default Reasoning Effort",
             "type": "string"
           },
           "ui_density": {
@@ -5060,6 +5250,8 @@
         "required": [
           "auto_generate_when_review_not_required",
           "default_execution_mode",
+          "default_ai_model",
+          "default_reasoning_effort",
           "ui_density",
           "ui_text_size"
         ],

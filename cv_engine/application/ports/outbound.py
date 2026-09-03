@@ -350,17 +350,41 @@ class AIProvider(Protocol):
     """
 
     def propose_job_analysis(
-        self, context: JobAnalysisContext
+        self,
+        context: JobAnalysisContext,
+        *,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
     ) -> AIProposal[JobClassificationProposal]: ...
 
     def propose_selection_plan(
-        self, context: SelectionPlanContext
+        self,
+        context: SelectionPlanContext,
+        *,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
     ) -> AIProposal[SelectionProposal]: ...
 
-    def draft_resume(self, context: DraftResumeContext) -> AIProposal[DraftProposal]: ...
+    def draft_resume(
+        self,
+        context: DraftResumeContext,
+        *,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+    ) -> AIProposal[DraftProposal]: ...
 
     def regenerate_section(
-        self, context: RegenerateSectionContext
+        self,
+        context: RegenerateSectionContext,
+        *,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
     ) -> AIProposal[SectionProposal]: ...
 
-    def regenerate_claim(self, context: RegenerateClaimContext) -> AIProposal[ClaimProposal]: ...
+    def regenerate_claim(
+        self,
+        context: RegenerateClaimContext,
+        *,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+    ) -> AIProposal[ClaimProposal]: ...

@@ -10,6 +10,9 @@ SETTINGS_FIELDS = {
     "ai_enabled",
     "ai_enabled_override",
     "default_execution_mode",
+    "default_ai_model",
+    "default_reasoning_effort",
+    "available_ai_models",
     "ui_density",
     "ui_text_size",
     "provider_configured",
@@ -22,6 +25,8 @@ def _update_body(**overrides) -> dict:
         "auto_generate_when_review_not_required": False,
         "ai_enabled_override": None,
         "default_execution_mode": "deterministic",
+        "default_ai_model": "gpt-5.6-terra",
+        "default_reasoning_effort": "medium",
         "ui_density": "comfortable",
         "ui_text_size": "normal",
         **overrides,
@@ -47,6 +52,40 @@ def test_settings_api_returns_pure_defaults_etag_and_no_secret_surface(api_worke
         "ai_enabled": False,
         "ai_enabled_override": None,
         "default_execution_mode": "deterministic",
+        "default_ai_model": "gpt-5.6-sol",
+        "default_reasoning_effort": "medium",
+        "available_ai_models": [
+            {
+                "id": "gpt-5.6-luna",
+                "label": "GPT-5.6 Luna",
+                "input_per_million_usd": "0.20",
+                "cached_input_per_million_usd": "0.02",
+                "output_per_million_usd": "1.20",
+                "recommended": False,
+                "pricing_version": "openai-2026-09-03",
+                "pricing_source": "https://developers.openai.com/api/docs/models/compare",
+            },
+            {
+                "id": "gpt-5.6-terra",
+                "label": "GPT-5.6 Terra",
+                "input_per_million_usd": "2.00",
+                "cached_input_per_million_usd": "0.20",
+                "output_per_million_usd": "12.00",
+                "recommended": True,
+                "pricing_version": "openai-2026-09-03",
+                "pricing_source": "https://developers.openai.com/api/docs/models/compare",
+            },
+            {
+                "id": "gpt-5.6-sol",
+                "label": "GPT-5.6 Sol",
+                "input_per_million_usd": "4.00",
+                "cached_input_per_million_usd": "0.40",
+                "output_per_million_usd": "20.00",
+                "recommended": False,
+                "pricing_version": "openai-2026-09-03",
+                "pricing_source": "https://developers.openai.com/api/docs/models/compare",
+            },
+        ],
         "ui_density": "comfortable",
         "ui_text_size": "normal",
         "provider_configured": False,
@@ -105,6 +144,8 @@ def test_settings_patch_updates_live_and_rejects_a_stale_etag_without_writing(
         ai_enabled_override=False,
         ui_density="compact",
         ui_text_size="large",
+        default_ai_model="gpt-5.6-luna",
+        default_reasoning_effort="low",
     )
 
     updated = _patch(api_worker, initial.headers["ETag"], requested)
@@ -146,3 +187,16 @@ def test_ai_default_mode_requires_effective_ai_to_remain_enabled(ai_api_worker) 
         ai_api_worker.client.get(f"{API_PREFIX}/settings").headers["ETag"]
         == configured.headers["ETag"]
     )
+
+
+def test_settings_reject_arbitrary_models_and_reasoning_values(api_worker) -> None:
+    initial = api_worker.client.get(f"{API_PREFIX}/settings")
+    for body in (
+        _update_body(default_ai_model="provider-model-not-in-catalog"),
+        _update_body(default_reasoning_effort="maximum"),
+    ):
+        refused = _patch(api_worker, initial.headers["ETag"], body)
+        assert refused.status_code == 422, refused.text
+
+    unchanged = api_worker.client.get(f"{API_PREFIX}/settings")
+    assert unchanged.headers["ETag"] == initial.headers["ETag"]

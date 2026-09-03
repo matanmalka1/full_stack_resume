@@ -7,9 +7,15 @@ method narrows to before returning.
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Any, cast
 
-from ....util import new_id
+from ....util import canonical_json, new_id, sha256_text
+from ...ai_configuration import (
+    DEFAULT_AI_MODEL,
+    DEFAULT_REASONING_EFFORT,
+    normalize_ai_model,
+    normalize_reasoning_effort,
+)
 from ...commands import (
     AnalyzeCommand,
     ApprovalResult,
@@ -43,6 +49,7 @@ from ...ports import (
     PreparationRepository,
     ReadinessRepository,
 )
+from ...settings import SettingsRepository
 from ..analysis import AnalysisService
 from ..base import ServiceBase
 from ..drafts import DraftService
@@ -65,6 +72,30 @@ class OperationService(ServiceBase[OperationRepository]):
     because a caller that forgets is exactly how it leaked before.
     """
 
+    def __init__(
+        self,
+        *,
+        default_ai_model: str = DEFAULT_AI_MODEL,
+        default_reasoning_effort: str = DEFAULT_REASONING_EFFORT,
+        **dependencies: Any,
+    ):
+        super().__init__(**dependencies)
+        self._default_ai_model = normalize_ai_model(default_ai_model)
+        self._default_reasoning_effort = normalize_reasoning_effort(default_reasoning_effort)
+
+    def _freeze_ai_execution(self, command):
+        """Copy current safe preferences into the immutable Operation payload."""
+        stored = cast(SettingsRepository, self.repo).app_settings()
+        model = normalize_ai_model(
+            command.model or stored.default_ai_model or self._default_ai_model
+        )
+        effort = normalize_reasoning_effort(
+            command.reasoning_effort
+            or stored.default_reasoning_effort
+            or self._default_reasoning_effort
+        )
+        return command.model_copy(update={"model": model, "reasoning_effort": effort})
+
     def submit_analysis(
         self,
         command: AnalyzeCommand,
@@ -72,6 +103,10 @@ class OperationService(ServiceBase[OperationRepository]):
         idempotency_key: str,
         analysis_service: AnalysisService,
     ) -> OperationView:
+        if command.provider == "openai":
+            command = self._freeze_ai_execution(command)
+        elif command.provider == "deterministic":
+            command = command.model_copy(update={"model": "rules-v1", "reasoning_effort": None})
         preparation = cast(PreparationRepository, self.repo)
         try:
             snapshot = preparation.get_snapshot(command.job_snapshot_id)
@@ -94,6 +129,7 @@ class OperationService(ServiceBase[OperationRepository]):
             ),
             provider=command.provider,
             model=command.model,
+            reasoning_effort=command.reasoning_effort,
         )
         return as_operation_view(self.repo.create_operation(request))
 
@@ -105,6 +141,11 @@ class OperationService(ServiceBase[OperationRepository]):
         draft_service: DraftService,
         operation_id: str | None = None,
     ) -> OperationView:
+        command = (
+            self._freeze_ai_execution(command)
+            if command.provider == "openai"
+            else command.model_copy(update={"model": "rules-v1", "reasoning_effort": None})
+        )
         drafts = cast(DraftRepository, self.repo)
         try:
             analysis = drafts.get_analysis(command.job_analysis_id)
@@ -178,7 +219,8 @@ class OperationService(ServiceBase[OperationRepository]):
             # `required_operation_resources` derives from these two fields
             # rather than from a second list of AI operation types.
             provider=command.provider,
-            model="rules-v1" if command.provider == "deterministic" else None,
+            model=command.model,
+            reasoning_effort=command.reasoning_effort,
         )
         return as_operation_view(self.repo.create_operation(request, operation_id=operation_id))
 
@@ -195,6 +237,7 @@ class OperationService(ServiceBase[OperationRepository]):
         replaces the analysis while this is queued fails the source check
         instead of proposing a plan for an analysis nobody is looking at.
         """
+        command = self._freeze_ai_execution(command)
         preparation = cast(PreparationRepository, self.repo)
         try:
             analysis = preparation.get_analysis(command.job_analysis_id)
@@ -220,6 +263,7 @@ class OperationService(ServiceBase[OperationRepository]):
             ),
             provider="openai",
             model=command.model,
+            reasoning_effort=command.reasoning_effort,
         )
         return as_operation_view(self.repo.create_operation(request))
 
@@ -238,6 +282,7 @@ class OperationService(ServiceBase[OperationRepository]):
         so a regeneration cannot be launched against sources the client did not
         name.
         """
+        command = self._freeze_ai_execution(command)
         drafts = cast(DraftRepository, self.repo)
         try:
             working = drafts.working_draft(command.working_draft_id)
@@ -285,7 +330,8 @@ class OperationService(ServiceBase[OperationRepository]):
                 },
             ),
             provider="openai",
-            model=None,
+            model=command.model,
+            reasoning_effort=command.reasoning_effort,
         )
         return as_operation_view(self.repo.create_operation(request))
 
@@ -551,6 +597,7 @@ class OperationService(ServiceBase[OperationRepository]):
             sources=original.sources,
             provider=original.provider,
             model=original.model,
+            reasoning_effort=original.reasoning_effort,
             retry_of_operation_id=original.id,
         )
         return as_operation_view(self.repo.create_operation(request))

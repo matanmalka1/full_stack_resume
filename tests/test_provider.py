@@ -20,6 +20,7 @@ import urllib.request
 import pytest
 from fake_provider import FakeOpenAI, HTTPStatus, Timeout, envelope, refusal_envelope
 
+from cv_engine.application.ai_configuration import execution_cost
 from cv_engine.application.errors import (
     ProviderRateLimited,
     ProviderRefused,
@@ -42,9 +43,7 @@ from cv_engine.domain.models import (
     SectionProposal,
     SelectionProposal,
 )
-from cv_engine.infrastructure.providers import (
-    TASK_OUTPUT_MODELS,
-)
+from cv_engine.infrastructure.providers import TASK_OUTPUT_MODELS
 from cv_engine.util import canonical_json, sha256_text
 
 ANALYSIS_CONTEXT = JobAnalysisContext(
@@ -111,6 +110,19 @@ TASKS = [
 ]
 
 
+def test_long_context_cost_uses_the_pricing_snapshot_multipliers() -> None:
+    assert execution_cost(
+        "gpt-5.6-terra",
+        input_tokens=300_000,
+        cached_input_tokens=0,
+        output_tokens=1_000,
+    ) == {
+        "input_usd": "1.20000000",
+        "output_usd": "0.01800000",
+        "total_usd": "1.21800000",
+    }
+
+
 def _call(provider, task, context):
     return getattr(provider, task)(context)
 
@@ -171,6 +183,7 @@ def test_each_task_sends_a_strict_schema_and_parses_its_own_proposal(
         call = fake_openai.calls_for(task)[-1]
         assert call.payload == context.model_dump(mode="json"), task
         assert [message["role"] for message in call.body["input"]] == ["system", "user"]
+        assert call.body["reasoning"] == {"effort": "medium"}
         assert "previous_response_id" not in call.body
         assert "conversation" not in call.body
 
@@ -223,10 +236,16 @@ def test_the_system_prompt_and_versions_come_from_the_contract_file(
     )
     assert context.output_schema_hash == sha256_text(canonical_json(sent))
     assert context.provider == "openai"
-    assert context.model == "gpt-test"
+    assert context.model == "gpt-5.6-terra"
+    assert context.reasoning_effort == "medium"
     assert context.response_id == "resp_fake_1"
     assert (context.usage.input_tokens, context.usage.output_tokens) == (11, 22)
+    assert context.usage.cached_input_tokens == 3
     assert context.usage.total_tokens == 33
+    assert context.pricing is not None
+    assert context.pricing.version == "openai-2026-09-03"
+    assert context.cost is not None
+    assert context.cost.total_usd == "0.00028060"
     assert context.latency_ms >= 0
     assert len(answered.provenance.input_hash) == 64
     assert len(answered.provenance.output_hash) == 64
@@ -246,7 +265,7 @@ def test_a_refusal_is_a_provider_refusal_carrying_its_own_evidence(
     # A refusal is exactly when "which model refused, under which contract"
     # has to be answerable, so the record is as complete as a success's.
     assert provenance.context.provider == "openai"
-    assert provenance.context.model == "gpt-test"
+    assert provenance.context.model == "gpt-5.6-terra"
     assert provenance.context.response_id == "resp_fake_refusal"
     assert provenance.output == {}
 

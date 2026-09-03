@@ -172,15 +172,18 @@ bucket alike.
 
 The deterministic engine completes the entire workflow offline. Configuring a key
 enables OpenAI classification proposals through the provider-neutral structured task
-contract; analysis then accepts a provider and model, and the Web UI offers the choice
-where the engine allows it:
+contract. The Web settings page then offers a closed model catalog and
+low/medium/high reasoning effort; those defaults are frozen onto each queued AI
+Operation:
 
 ```bash
 export OPENAI_API_KEY='...'
 ```
 
 Provider output is Pydantic-validated and deterministic hard gaps remain authoritative.
-The adapter uses strict Structured Outputs through the Responses API.
+The adapter uses strict Structured Outputs through the Responses API. Each provider
+artifact preserves token usage, the dated pricing snapshot, and its calculated USD
+cost; the Operation panel shows the selected model, effort, and final cost.
 
 ## Local Web UI
 

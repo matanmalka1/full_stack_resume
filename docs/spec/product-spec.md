@@ -148,7 +148,7 @@ The following are not part of the product:
 - Cover letters, LinkedIn messages, recruiter emails, or other document types.
 - AI-generated decision explanations.
 - AI extraction/linking of arbitrary edited claims.
-- Arbitrary user prompts or per-screen model selection.
+- Arbitrary user prompts, arbitrary provider model IDs, or per-operation model selection.
 - A general Knowledge Manager or Web editing of Profiles, policies, prompts, or rules.
 - A general WYSIWYG editor, section reordering, or drag-and-drop.
 - Mobile-first flows or a full internationalization framework.
@@ -387,14 +387,17 @@ cannot enable it. It is never stored in PostgreSQL, sent to React, or written to
 Settings expose only whether it is configured.
 
 When a key is configured, `ai_enabled` defaults to true. Commands still choose an
-explicit `ai` or `deterministic` mode. There is no ambiguous `auto` execution mode, no
-model picker, and no dynamic model discovery. Default model and per-task overrides live
-in configuration, and exact provider/model metadata is stored on every run.
+explicit `ai` or `deterministic` mode. There is no ambiguous `auto` execution mode and
+no dynamic model discovery. Settings offer a backend-supplied allowlist of supported
+models and `low`/`medium`/`high` reasoning effort. The selected defaults are copied into
+each new Operation, so a later settings change cannot alter queued work. Clients cannot
+submit arbitrary model IDs or override one individual Operation.
 
 Parsed output and a sanitized raw response are preserved. Raw responses are immutable
 artifacts rather than PostgreSQL blobs. Response ID, model, usage, latency, hash,
-refusal/error metadata, and contract/prompt versions are recorded. Secrets and hidden
-chain-of-thought are never retained.
+refusal/error metadata, contract/prompt versions, the dated USD price snapshot, and the
+derived execution cost are recorded. Cached input is accounted separately. Secrets and
+hidden chain-of-thought are never retained.
 
 Job descriptions and user content are untrusted data. They may influence the proposed
 content but never policy, allowed facts, validation, approval, or output schemas.
@@ -513,10 +516,10 @@ Node and frontend development details are not runtime requirements for the user.
 Playwright-managed Chromium is the normal renderer. Local Chrome is a diagnostic/manual
 fallback only and is never selected silently.
 
-Safe UI settings are limited to automatic generation when review is not
-required, `ai_enabled`, default execution mode (`ai` or `deterministic`), and basic UI
-preferences. Model/task overrides, timezone, and secrets remain backend/project
-configuration.
+Safe UI settings are limited to automatic generation when review is not required,
+`ai_enabled`, default execution mode (`ai` or `deterministic`), an allowlisted default
+AI model and reasoning effort, and basic UI preferences. Per-task overrides, timezone,
+arbitrary model IDs, and secrets remain unavailable to the client.
 
 ## 16. Storage, provenance, and retention
 
@@ -621,7 +624,7 @@ Operation, and low AI concurrency with a default ceiling of two. Locks are resou
 specific rather than one global mutex.
 
 Operations store a full structured, secret-free payload and hash, resource IDs,
-expected versions/hashes, provider/model, timestamps, phases, safe user message,
+expected versions/hashes, provider/model/reasoning effort, timestamps, phases, safe user message,
 technical log reference, and failure metadata. The shared Operation runner uses atomic
 PostgreSQL claiming, leases, and heartbeat. The worker process hosts the background
 worker loops, and the claim contract holds for more than one of them: whichever claims a

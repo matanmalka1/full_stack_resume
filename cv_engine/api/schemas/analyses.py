@@ -54,8 +54,7 @@ class CreateAnalysisRequest(ClassificationOverrides):
     """
 
     job_snapshot_id: str
-    provider: str = Field(default="deterministic", max_length=50)
-    model: str = Field(default="rules-v1", max_length=100)
+    provider: Literal["deterministic", "openai"] = "deterministic"
 
 
 class SelectionOverlayRequest(HttpSchema):

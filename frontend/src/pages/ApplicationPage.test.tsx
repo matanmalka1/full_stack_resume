@@ -116,6 +116,9 @@ const deterministicSettings: Settings = {
   ai_enabled: false,
   ai_enabled_override: null,
   default_execution_mode: "deterministic",
+  default_ai_model: "gpt-5.6-terra",
+  default_reasoning_effort: "medium",
+  available_ai_models: [],
 
   provider_configured: false,
   ui_density: "comfortable",
@@ -257,6 +260,35 @@ describe("ApplicationPage", () => {
        classify something other than what the screen was showing. */
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({ job_snapshot_id: "snap-1" });
     expect((request?.[1]?.headers as Headers).get("Idempotency-Key")).not.toBeNull();
+  });
+
+  it("shows the frozen AI execution and its calculated cost", async () => {
+    const aiOperation = queued({
+      provider: "openai",
+      model: "gpt-5.6-luna",
+      reasoning_effort: "high",
+      input_tokens: 11,
+      cached_input_tokens: 3,
+      output_tokens: 22,
+      total_tokens: 33,
+      cost_usd: "0.00002806",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) =>
+        Promise.resolve(
+          String(input).includes("/operations/")
+            ? jsonResponse(aiOperation)
+            : jsonResponse(detail({ active_operation: aiOperation })),
+        ),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("gpt-5.6-luna")).toBeInTheDocument();
+    expect(screen.getByText("$0.00002806")).toBeInTheDocument();
+    expect(screen.getByText(/מאמץ גבוה/)).toBeInTheDocument();
   });
 
   it("does not present a superseded analysis as the one in force", async () => {

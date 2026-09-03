@@ -9,6 +9,7 @@ import { Button } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 import { Checkbox } from "../../ui/Checkbox";
 import { Field } from "../../ui/Field";
+import { LtrText } from "../../ui/LtrText";
 import { Select } from "../../ui/Select";
 
 interface SettingsFormProps {
@@ -20,6 +21,8 @@ const editableSettings = (settings: Settings): UpdateSettingsRequest => ({
   auto_generate_when_review_not_required: settings.auto_generate_when_review_not_required,
   ai_enabled_override: settings.ai_enabled_override,
   default_execution_mode: settings.default_execution_mode,
+  default_ai_model: settings.default_ai_model,
+  default_reasoning_effort: settings.default_reasoning_effort,
   ui_density: settings.ui_density,
   ui_text_size: settings.ui_text_size,
 });
@@ -47,6 +50,7 @@ export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
     },
   });
   const aiAvailable = settings.provider_configured && (form.ai_enabled_override ?? settings.ai_enabled);
+  const selectedModel = settings.available_ai_models.find((model) => model.id === form.default_ai_model);
 
   return (
     <>
@@ -92,6 +96,35 @@ export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
               </Select>
             )}
           </Field>
+          <Field
+            className="rounded-control bg-cv-surface-muted p-3"
+            hint="הבחירה נשמרת לכל פעולת AI חדשה; פעולה שכבר נשלחה שומרת את המודל שלה."
+            label="מודל AI"
+          >
+            {(control) => (
+              <Select {...control} {...register("default_ai_model")}>
+                {settings.available_ai_models.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.label}
+                    {model.recommended ? " — מומלץ" : ""}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <Field
+            className="rounded-control bg-cv-surface-muted p-3"
+            hint="מאמץ גבוה עשוי לשפר משימות קשות, אך מגדיל זמן ועלות."
+            label="מאמץ חשיבה"
+          >
+            {(control) => (
+              <Select {...control} {...register("default_reasoning_effort")}>
+                <option value="low">נמוך — מהיר</option>
+                <option value="medium">בינוני — מאוזן</option>
+                <option value="high">גבוה — איכות</option>
+              </Select>
+            )}
+          </Field>
           <Field className="rounded-control bg-cv-surface-muted p-3" label="צפיפות תצוגה">
             {(control) => (
               <Select {...control} {...register("ui_density")}>
@@ -109,6 +142,18 @@ export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
             )}
           </Field>
         </div>
+        {selectedModel === undefined ? null : (
+          <Callout title={`תעריפי ${selectedModel.label}`} tone="neutral">
+            <p>
+              לכל מיליון טוקנים: קלט <LtrText>${selectedModel.input_per_million_usd}</LtrText>, קלט שמור במטמון{" "}
+              <LtrText>${selectedModel.cached_input_per_million_usd}</LtrText>, ופלט{" "}
+              <LtrText>${selectedModel.output_per_million_usd}</LtrText>. העלות בפועל תוצג לאחר כל פעולה.
+            </p>
+            <p className="mt-2 text-support text-cv-text-muted">
+              בבקשות ארוכות במיוחד עשוי לחול תעריף מוגדל. המחירון הוא snapshot מתוארך ולא התחייבות למחיר עתידי.
+            </p>
+          </Callout>
+        )}
         <ActionBar
           primary={
             <Button pending={save.isPending} pendingLabel="שומר…" type="submit">

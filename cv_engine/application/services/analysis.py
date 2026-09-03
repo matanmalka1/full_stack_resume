@@ -218,7 +218,9 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                     overrides={
                         str(key): value for key, value in deterministic.user_override.items()
                     },
-                )
+                ),
+                model=command.model,
+                reasoning_effort=command.reasoning_effort,
             )
             evidence = self.preserve(
                 command.application_id, operation_id, "propose_job_analysis", answered.provenance
@@ -507,7 +509,9 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                     "selected_fact_ids": list(manifest.selected_fact_ids),
                     "emphasis_policy_version": manifest.emphasis_policy_version,
                 },
-            )
+            ),
+            model=command.model,
+            reasoning_effort=command.reasoning_effort,
         )
         evidence = self.preserve(
             command.application_id,

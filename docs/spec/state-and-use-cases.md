@@ -401,6 +401,10 @@ Preconditions:
 - expected Knowledge/policy inputs still match before activation
 - AI mode requires a configured provider
 
+For AI mode, the application resolves the current allowlisted model and reasoning
+preference before writing the Operation. Those values are part of the immutable payload
+and runner record; the worker never re-reads Settings to decide what to execute.
+
 ### `apply_analysis_decisions`
 
 Synchronous. It accepts one local form submission. When requirement
@@ -445,6 +449,9 @@ compatible DraftDocument. AI mode uses `draft_resume` Proposal and semantic vali
 Before activation it confirms Application/snapshot/analysis/plan/Knowledge preconditions
 again. It creates or replaces the one active WorkingDraft only after a successful
 commit.
+
+AI selection-plan proposals, draft generation, and targeted regeneration freeze the same
+model/reasoning pair at submission. Retry copies that pair from the original Operation.
 
 When replacement succeeds, the previous working copy may be discarded. If the user
 selected Keep, it is first materialized as an immutable historical draft snapshot.
@@ -650,8 +657,9 @@ is optimistic: `expected_edit_version` must match the stored one, and a mismatch
 conflict that changes nothing. Each successful write increments `edit_version`, which the
 transport carries as an ETag.
 
-Model and task overrides, timezone, and secrets are not settings. They are backend
-configuration and are never writable through this command.
+The default model and reasoning effort are settings only through their closed
+backend-supplied allowlists. Arbitrary model IDs, per-task overrides, timezone, and
+secrets are never writable through this command.
 
 ## 19b. Maintenance commands
 
@@ -688,6 +696,8 @@ Initial query contracts include:
 - submissions and recruitment history
 - next-action/overdue projection
 - runtime/provider configuration status without secrets
+- the allowlisted model catalog, current AI defaults, and immutable execution
+  model/reasoning/usage/cost metadata
 
 Queries may use direct efficient joins and read models. They return DTOs, not database
 rows or local paths.

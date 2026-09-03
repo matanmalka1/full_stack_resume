@@ -203,6 +203,9 @@ const renderPage = (aiEnabled = true) => {
       ai_enabled: aiEnabled,
       ai_enabled_override: aiEnabled,
       default_execution_mode: "deterministic",
+      default_ai_model: "gpt-5.6-terra",
+      default_reasoning_effort: "medium",
+      available_ai_models: [],
 
       provider_configured: aiEnabled,
       ui_density: "comfortable",

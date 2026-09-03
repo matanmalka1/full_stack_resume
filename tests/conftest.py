@@ -812,7 +812,7 @@ def provider_analysis(ai_services: Services, fake_openai: FakeOpenAI):
                 language_override=analyze_kwargs.pop("language", None),
                 accept_low_fit=analyze_kwargs.pop("accept_low_fit", False),
                 provider="openai",
-                model="gpt-test",
+                model="gpt-5.6-terra",
                 **analyze_kwargs,
             ),
             idempotency_key=new_id(),

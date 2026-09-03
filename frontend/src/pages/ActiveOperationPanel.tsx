@@ -5,6 +5,7 @@ import { isTerminalOperation } from "../api/operations";
 import { Callout } from "../ui/Callout";
 import { Card } from "../ui/Card";
 import { LiveRegion } from "../ui/LiveRegion";
+import { LtrText } from "../ui/LtrText";
 import { StatusBadge } from "../ui/StatusBadge";
 import { OperationActions } from "./OperationActions";
 import {
@@ -17,6 +18,12 @@ import {
   statusLabels,
   statusTones,
 } from "./operationLabels";
+
+const reasoningEffortLabels: Record<NonNullable<Operation["reasoning_effort"]>, string> = {
+  low: "נמוך",
+  medium: "בינוני",
+  high: "גבוה",
+};
 
 /* Work in progress, on the screen that queued it.
 
@@ -49,6 +56,19 @@ export const ActiveOperationPanel = ({
   const terminal = isTerminalOperation(operation);
   const failure = operation.failure_code == null ? null : failurePresentations[operation.failure_code];
   const produced = activeOutputLabels(operation);
+  const aiExecution = operation.provider === "openai" && operation.model != null;
+  const executionDetail = aiExecution ? (
+    <span className="text-support text-cv-text-muted">
+      <LtrText>{operation.model}</LtrText>
+      {operation.reasoning_effort == null ? null : <> · מאמץ {reasoningEffortLabels[operation.reasoning_effort]}</>}
+      {operation.cost_usd == null ? null : (
+        <>
+          {" "}
+          · עלות <LtrText>${operation.cost_usd}</LtrText>
+        </>
+      )}
+    </span>
+  ) : null;
 
   /* A run that succeeded has nothing left to watch. Reported at full panel weight it
      took the top of the screen - heading, badge, progress sentence, actions, link - to
@@ -78,6 +98,7 @@ export const ActiveOperationPanel = ({
             ? statusLabels[operation.status]
             : `${statusLabels[operation.status]} · יצרה ${joinHebrewList(produced)}`}
         </p>
+        {executionDetail}
 
         {/* A.5: the row a watched run collapses into is the moment worth announcing, so
             the live region survives the change of shape. Without it the panel went quiet
@@ -126,6 +147,7 @@ export const ActiveOperationPanel = ({
       </LiveRegion>
 
       <div className="mt-4 flex flex-col gap-4">
+        {executionDetail}
         <p className="text-support leading-6 text-cv-text-muted" dir="auto">
           {terminal
             ? produced.length === 0

@@ -68,7 +68,12 @@ def envelope(payload: Any, **extra: Any) -> dict[str, Any]:
         "id": "resp_fake_1",
         "model": "gpt-test",
         "output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}],
-        "usage": {"input_tokens": 11, "output_tokens": 22, "total_tokens": 33},
+        "usage": {
+            "input_tokens": 11,
+            "input_tokens_details": {"cached_tokens": 3},
+            "output_tokens": 22,
+            "total_tokens": 33,
+        },
         **extra,
     }
 
@@ -129,9 +134,13 @@ class FakeOpenAI:
         monkeypatch.setattr(urllib.request, "urlopen", self.urlopen)
         return self
 
-    def provider(self, contracts, *, default_model: str = "gpt-test") -> OpenAIProvider:
+    def provider(self, contracts, *, default_model: str = "gpt-5.6-terra") -> OpenAIProvider:
         return OpenAIProvider(
             contracts,
             default_model=default_model,
-            client_factory=lambda model: OpenAIResponsesProvider(model=model, api_key="test-key"),
+            client_factory=lambda model, effort: OpenAIResponsesProvider(
+                model=model,
+                reasoning_effort=effort,
+                api_key="test-key",
+            ),
         )

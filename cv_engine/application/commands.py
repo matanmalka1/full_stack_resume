@@ -85,7 +85,8 @@ class AnalyzeCommand(BoundaryDTO):
     acceptance_reason: str | None = None
     expected_selection_plan_id: str | None = None
     provider: str = "deterministic"
-    model: str = "rules-v1"
+    model: str | None = None
+    reasoning_effort: str | None = None
 
 
 class SelectionOverlay(BoundaryDTO):
@@ -175,6 +176,7 @@ class ProposeSelectionPlanCommand(SelectionOverlay):
     expected_profile_version: str | None = None
     expected_selection_policy_version: str | None = None
     model: str | None = None
+    reasoning_effort: str | None = None
 
 
 class DraftCommand(BoundaryDTO):
@@ -234,6 +236,8 @@ class DraftCommand(BoundaryDTO):
         return self
 
     provider: Literal["deterministic", "openai"] = "deterministic"
+    model: str | None = None
+    reasoning_effort: str | None = None
 
 
 class RegenerateSectionCommand(BoundaryDTO):
@@ -253,6 +257,8 @@ class RegenerateSectionCommand(BoundaryDTO):
     selection_plan_id: str
     section: str
     instruction: str = ""
+    model: str | None = None
+    reasoning_effort: str | None = None
 
 
 class RegenerateClaimCommand(BoundaryDTO):
@@ -266,6 +272,8 @@ class RegenerateClaimCommand(BoundaryDTO):
     selection_plan_id: str
     claim_id: str
     instruction: str = ""
+    model: str | None = None
+    reasoning_effort: str | None = None
 
 
 class ClaimPatch(BoundaryDTO):

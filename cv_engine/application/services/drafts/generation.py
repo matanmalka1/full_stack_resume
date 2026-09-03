@@ -197,7 +197,13 @@ class DraftGeneration(DraftServiceBase):
                     "AI generation runs as an Operation; there is no synchronous form"
                 )
             draft, evidence = self._propose_wording(
-                command.application_id, operation_id, draft, analysis, knowledge
+                command.application_id,
+                operation_id,
+                draft,
+                analysis,
+                knowledge,
+                model=command.model,
+                reasoning_effort=command.reasoning_effort,
             )
         return PreparedDraft(
             source=draft,
@@ -214,6 +220,9 @@ class DraftGeneration(DraftServiceBase):
         draft: DraftDocument,
         analysis: JobAnalysis,
         knowledge: Knowledge,
+        *,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
     ) -> tuple[DraftDocument, ProviderEvidence]:
         """`draft_resume`: ask for wording over a document the engine composed.
 
@@ -259,7 +268,9 @@ class DraftGeneration(DraftServiceBase):
                     for section in draft.sections
                 ],
                 allowed_facts=fact_context(knowledge.facts, selected, draft.language),
-            )
+            ),
+            model=model,
+            reasoning_effort=reasoning_effort,
         )
         evidence = self.preserve(application_id, operation_id, "draft_resume", answered.provenance)
         del allowed

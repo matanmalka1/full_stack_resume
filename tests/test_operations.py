@@ -721,7 +721,7 @@ def test_an_unclassified_infrastructure_failure_is_terminal_and_not_retried(
             application_id=ingested.application_id,
             job_snapshot_id=ingested.job_snapshot_id,
             provider="openai",
-            model="test-model",
+            model="gpt-5.6-luna",
         ),
         idempotency_key="unclassified-failure",
         analysis_service=services.analysis,

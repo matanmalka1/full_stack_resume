@@ -146,6 +146,30 @@ const settings = (overrides: Partial<Settings> = {}): Settings => ({
   ai_enabled: false,
   ai_enabled_override: null,
   default_execution_mode: "deterministic",
+  default_ai_model: "gpt-5.6-terra",
+  default_reasoning_effort: "medium",
+  available_ai_models: [
+    {
+      id: "gpt-5.6-luna",
+      label: "GPT-5.6 Luna",
+      input_per_million_usd: "0.20",
+      cached_input_per_million_usd: "0.02",
+      output_per_million_usd: "1.20",
+      recommended: false,
+      pricing_version: "openai-2026-09-03",
+      pricing_source: "https://developers.openai.com/api/docs/models/compare",
+    },
+    {
+      id: "gpt-5.6-terra",
+      label: "GPT-5.6 Terra",
+      input_per_million_usd: "2.00",
+      cached_input_per_million_usd: "0.20",
+      output_per_million_usd: "12.00",
+      recommended: true,
+      pricing_version: "openai-2026-09-03",
+      pricing_source: "https://developers.openai.com/api/docs/models/compare",
+    },
+  ],
   provider_configured: false,
   ui_density: "comfortable",
   ui_text_size: "normal",
@@ -748,6 +772,12 @@ describe("SettingsPage", () => {
     fireEvent.change(screen.getByLabelText("גודל טקסט"), {
       target: { value: "large" },
     });
+    fireEvent.change(screen.getByLabelText("מודל AI"), {
+      target: { value: "gpt-5.6-luna" },
+    });
+    fireEvent.change(screen.getByLabelText("מאמץ חשיבה"), {
+      target: { value: "high" },
+    });
     fireEvent.click(await screen.findByRole("button", { name: "שמירת הגדרות" }));
     await screen.findByRole("status");
     const request = fetchMock.mock.calls.find((call) => call[1]?.method === "PATCH");
@@ -756,6 +786,8 @@ describe("SettingsPage", () => {
       ai_enabled_override: null,
       auto_generate_when_review_not_required: true,
       default_execution_mode: "deterministic",
+      default_ai_model: "gpt-5.6-luna",
+      default_reasoning_effort: "high",
       ui_density: "compact",
       ui_text_size: "large",
     });
