@@ -9,7 +9,6 @@ import { Button } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 import { Dialog } from "../../ui/Dialog";
 import { Field } from "../../ui/Field";
-import { FormActions } from "../../ui/FormActions";
 import { TextArea } from "../../ui/TextInput";
 import { useServerSyncedField } from "../useServerSyncedField";
 
@@ -66,12 +65,32 @@ export const ApplicationNotes = ({ detail }: { detail: ApplicationDetail }) => {
       </div>
 
       <Dialog
+        footer={
+          <>
+            <Button onClick={() => setOpen(false)} variant="secondary">
+              ביטול
+            </Button>
+            <Button
+              disabled={!form.formState.isDirty}
+              form="application-notes-form"
+              pending={update.isPending}
+              pendingLabel="שומר…"
+              type="submit"
+            >
+              שמירת ההערות
+            </Button>
+          </>
+        }
         headingId="application-notes-heading"
         onClose={() => setOpen(false)}
         open={open}
         title="עריכת הערות למועמדות"
       >
-        <form className="flex flex-col gap-4" onSubmit={form.handleSubmit((values) => update.mutate(values))}>
+        <form
+          className="flex flex-col gap-4"
+          id="application-notes-form"
+          onSubmit={form.handleSubmit((values) => update.mutate(values))}
+        >
           {update.error === null ? null : (
             <ErrorCallout
               error={update.error}
@@ -87,14 +106,6 @@ export const ApplicationNotes = ({ detail }: { detail: ApplicationDetail }) => {
           <Field label="הערות">
             {(control) => <TextArea {...control} {...form.register("notes")} className="min-h-36" dir="auto" />}
           </Field>
-          <FormActions>
-            <Button onClick={() => setOpen(false)} variant="secondary">
-              ביטול
-            </Button>
-            <Button disabled={!form.formState.isDirty} pending={update.isPending} pendingLabel="שומר…" type="submit">
-              שמירת ההערות
-            </Button>
-          </FormActions>
         </form>
       </Dialog>
     </div>

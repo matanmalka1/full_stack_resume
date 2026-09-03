@@ -5,6 +5,7 @@ import { applicationDetailQueryKey } from "../../api/applications";
 import type { WorkingDraft } from "../../api/contracts";
 import { validateWorkingDraft, validationRunQueryOptions } from "../../api/validation";
 import { briefServerFailureDetail, ErrorCallout } from "../../app/ErrorCallout";
+import { ActionBar } from "../../ui/ActionBar";
 import { Button } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 import { LiveRegion } from "../../ui/LiveRegion";
@@ -117,7 +118,7 @@ export const DraftValidationPanel = ({
         <ValidationReportView report={run.report} />
       )}
 
-      <div className="flex flex-wrap items-center justify-end gap-3 border-t border-cv-border pt-3">{approval}</div>
+      <ActionBar className="border-t border-cv-border pt-3" primary={approval} />
 
       <LiveRegion>
         {validation.data === undefined

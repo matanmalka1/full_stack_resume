@@ -14,7 +14,6 @@ import { Button } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 import { Dialog } from "../../ui/Dialog";
 import { Field } from "../../ui/Field";
-import { FormActions } from "../../ui/FormActions";
 import { Select } from "../../ui/Select";
 import { TextArea, TextInput } from "../../ui/TextInput";
 import { recruitmentStatusLabel } from "../application/applicationLabels";
@@ -157,6 +156,24 @@ export const RecruitmentUpdateDialog = ({ application, onClose }: RecruitmentUpd
   return (
     <Dialog
       dismissible={!save.isPending}
+      footer={
+        detail === undefined ? undefined : (
+          <>
+            <Button disabled={save.isPending} onClick={onClose} variant="secondary">
+              ביטול
+            </Button>
+            <Button
+              disabled={!hasChanges}
+              form="recruitment-update-form"
+              pending={save.isPending}
+              pendingLabel="שומר…"
+              type="submit"
+            >
+              שמירת שינויים
+            </Button>
+          </>
+        )
+      }
       headingId="recruitment-update-heading"
       onClose={onClose}
       open={application !== null}
@@ -176,7 +193,11 @@ export const RecruitmentUpdateDialog = ({ application, onClose }: RecruitmentUpd
               fallbackTitle="טעינת פרטי המועמדות נכשלה"
             />
           ) : detail === undefined ? null : (
-            <form className="flex flex-col gap-4" onSubmit={form.handleSubmit((values) => save.mutate(values))}>
+            <form
+              className="flex flex-col gap-4"
+              id="recruitment-update-form"
+              onSubmit={form.handleSubmit((values) => save.mutate(values))}
+            >
               {save.error === null ? null : (
                 <ErrorCallout
                   error={save.error}
@@ -223,15 +244,6 @@ export const RecruitmentUpdateDialog = ({ application, onClose }: RecruitmentUpd
               <Field label="הערות" optional>
                 {(control) => <TextArea {...control} {...form.register("notes")} className="min-h-28" dir="auto" />}
               </Field>
-
-              <FormActions divided>
-                <Button disabled={save.isPending} onClick={onClose} variant="secondary">
-                  ביטול
-                </Button>
-                <Button disabled={!hasChanges} pending={save.isPending} pendingLabel="שומר…" type="submit">
-                  שמירת שינויים
-                </Button>
-              </FormActions>
             </form>
           )}
         </>

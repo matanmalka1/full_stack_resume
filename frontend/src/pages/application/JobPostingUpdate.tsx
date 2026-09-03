@@ -6,7 +6,6 @@ import type { ApplicationDetail } from "../../api/contracts";
 import { isTerminalOperation } from "../../api/operations";
 import { ErrorCallout } from "../../app/ErrorCallout";
 import { useAppForm } from "../../forms/useAppForm";
-import { ActionBar } from "../../ui/ActionBar";
 import { Button } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 import { Dialog } from "../../ui/Dialog";
@@ -119,9 +118,31 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
         </Callout>
       ) : null}
 
-      <Dialog headingId="job-posting-update-heading" onClose={closeDialog} open={open} title="יצירת תצלום משרה חדש">
+      <Dialog
+        footer={
+          <>
+            <Button onClick={closeDialog} variant="secondary">
+              חזרה ללא שמירה
+            </Button>
+            <Button
+              disabled={workInFlight}
+              form="job-posting-update-form"
+              pending={create.isPending}
+              pendingLabel="שומר תצלום…"
+              type="submit"
+            >
+              יצירת התצלום החדש
+            </Button>
+          </>
+        }
+        headingId="job-posting-update-heading"
+        onClose={closeDialog}
+        open={open}
+        title="יצירת תצלום משרה חדש"
+      >
         <form
           className="flex max-h-[75vh] flex-col gap-4 overflow-y-auto pe-1"
+          id="job-posting-update-form"
           noValidate
           onSubmit={handleSubmit((fields) => {
             create.mutate(fields, { onSuccess: () => setOpen(false) });
@@ -185,20 +206,6 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
               פעולה מתבצעת כעת על המועמדות. יצירת תצלום חדש תהיה זמינה שוב כשהיא תסתיים.
             </p>
           ) : null}
-
-          <ActionBar
-            align="start"
-            primary={
-              <Button disabled={workInFlight} pending={create.isPending} pendingLabel="שומר תצלום…" type="submit">
-                יצירת התצלום החדש
-              </Button>
-            }
-            secondary={
-              <Button onClick={closeDialog} variant="secondary">
-                חזרה ללא שמירה
-              </Button>
-            }
-          />
         </form>
       </Dialog>
     </div>

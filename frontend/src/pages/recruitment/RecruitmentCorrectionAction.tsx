@@ -9,7 +9,6 @@ import { Button } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 import { Dialog } from "../../ui/Dialog";
 import { Field } from "../../ui/Field";
-import { FormActions } from "../../ui/FormActions";
 import { Select } from "../../ui/Select";
 import { TextArea } from "../../ui/TextInput";
 import { recruitmentStatusLabel, recruitmentStatusLabels } from "../application/applicationLabels";
@@ -69,6 +68,23 @@ export const RecruitmentCorrectionAction = ({ detail, onChanged }: RecruitmentCo
       </Button>
 
       <Dialog
+        footer={
+          statusEvents.length === 0 ? undefined : (
+            <>
+              <Button onClick={() => setOpen(false)} variant="secondary">
+                ביטול
+              </Button>
+              <Button
+                disabled={fields.reason.trim() === ""}
+                form="recruitment-correction-form"
+                pending={correction.isPending}
+                type="submit"
+              >
+                הוספת אירוע תיקון
+              </Button>
+            </>
+          )
+        }
         headingId="recruitment-correction-heading"
         onClose={() => setOpen(false)}
         open={open}
@@ -120,14 +136,6 @@ export const RecruitmentCorrectionAction = ({ detail, onChanged }: RecruitmentCo
             <Field className="lg:col-span-2" label="למה נדרש תיקון">
               {(control) => <TextArea {...control} {...form.register("reason")} required />}
             </Field>
-            <FormActions className="lg:col-span-2">
-              <Button onClick={() => setOpen(false)} variant="secondary">
-                ביטול
-              </Button>
-              <Button disabled={fields.reason.trim() === ""} pending={correction.isPending} type="submit">
-                הוספת אירוע תיקון
-              </Button>
-            </FormActions>
           </form>
         )}
       </Dialog>

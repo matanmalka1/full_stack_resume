@@ -9,7 +9,6 @@ import { Button } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 import { Dialog } from "../../ui/Dialog";
 import { Field } from "../../ui/Field";
-import { FormActions } from "../../ui/FormActions";
 import { TextArea, TextInput } from "../../ui/TextInput";
 import { isoFromLocalDateTimeInput } from "../../ui/isoFromLocalDateTimeInput";
 import { localDateTimeInputValue } from "../../ui/localDateTimeInputValue";
@@ -55,12 +54,26 @@ export const ExternalSubmissionAction = ({ detail, onChanged }: ExternalSubmissi
       </Button>
 
       <Dialog
+        footer={
+          <>
+            <Button onClick={() => setOpen(false)} variant="secondary">
+              ביטול
+            </Button>
+            <Button form="external-submission-form" pending={submission.isPending} pendingLabel="רושם…" type="submit">
+              רישום ההגשה החיצונית
+            </Button>
+          </>
+        }
         headingId="recruitment-external-heading"
         onClose={() => setOpen(false)}
         open={open}
         title="רישום הגשה שבוצעה מחוץ למערכת"
       >
-        <form className="flex flex-col gap-3" onSubmit={form.handleSubmit((fields) => submission.mutate(fields))}>
+        <form
+          className="flex flex-col gap-3"
+          id="external-submission-form"
+          onSubmit={form.handleSubmit((fields) => submission.mutate(fields))}
+        >
           {submission.error === null ? null : (
             <ErrorCallout
               error={submission.error}
@@ -85,14 +98,6 @@ export const ExternalSubmissionAction = ({ detail, onChanged }: ExternalSubmissi
             )}
           </Field>
           <Field label="הערה (רשות)">{(control) => <TextArea {...control} {...form.register("note")} />}</Field>
-          <FormActions>
-            <Button onClick={() => setOpen(false)} variant="secondary">
-              ביטול
-            </Button>
-            <Button pending={submission.isPending} pendingLabel="רושם…" type="submit">
-              רישום ההגשה החיצונית
-            </Button>
-          </FormActions>
         </form>
       </Dialog>
     </>
