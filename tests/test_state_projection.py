@@ -15,7 +15,11 @@ from cv_engine.application.commands import (
 )
 from cv_engine.application.queries import PreparationState, WorkingDraftState
 from cv_engine.application.state import ProjectionContext, derive_review_reasons
-from cv_engine.domain.analysis.approval import APPROVAL_RESOLVING_OVERRIDES
+from cv_engine.domain.analysis.approval import (
+    ANALYSIS_INCOMPLETE,
+    APPROVAL_REASONS,
+    CLASSIFICATION_AMBIGUITY,
+)
 from cv_engine.domain.facts import FactStore
 from cv_engine.domain.knowledge import Knowledge
 from cv_engine.domain.models import (
@@ -181,26 +185,55 @@ def _analysis_needing(reason: str) -> JobAnalysis:
     )
 
 
-@pytest.mark.parametrize("reason", sorted(APPROVAL_RESOLVING_OVERRIDES))
-def test_an_approval_reason_an_override_answers_is_offered_that_command(knowledge, reason) -> None:
-    """Derived from the resolution table, so a new reason must register in it."""
+@pytest.mark.parametrize(
+    "reason",
+    sorted(
+        name
+        for name, entry in APPROVAL_REASONS.items()
+        if entry.review_code == CLASSIFICATION_AMBIGUITY
+    ),
+)
+def test_a_classification_reason_is_offered_the_command_that_decides_it(knowledge, reason) -> None:
+    """Derived from the table, so a reason cannot change kind without saying so."""
     reasons = _reasons_for(knowledge, _analysis_needing(reason))
-    assert reasons["MATERIAL_CLASSIFICATION_AMBIGUITY"] == ["apply_analysis_decisions"]
-    assert "ANALYSIS_INCOMPLETE" not in reasons
+    assert reasons[CLASSIFICATION_AMBIGUITY] == ["apply_analysis_decisions"]
+    assert ANALYSIS_INCOMPLETE not in reasons
 
 
-def test_an_approval_reason_no_override_answers_is_projected_without_an_action(knowledge) -> None:
-    """`extraction-failed` blocks, and advertises nothing, because nothing resolves it.
+def test_extraction_failure_is_its_own_reason_with_its_own_decision(knowledge) -> None:
+    """It blocks, it is not a classification ambiguity, and it has a way out.
 
-    It was projected as a classification ambiguity offering
-    `apply_analysis_decisions`, which cannot close it: naming the Track or
-    Profile does not recover requirements that were never read. The command
-    committed, returned success, and left the same blocker standing.
+    It was projected as `MATERIAL_CLASSIFICATION_AMBIGUITY` offering
+    `apply_analysis_decisions`, which committed, returned success and left the
+    same blocker standing - naming a Track recovers nothing. Reporting it with
+    no action at all was honest but left a blocked state with no exit, which is
+    not a review reason either.
     """
-    assert "extraction-failed" not in APPROVAL_RESOLVING_OVERRIDES
     reasons = _reasons_for(knowledge, _analysis_needing("extraction-failed"))
-    assert reasons["ANALYSIS_INCOMPLETE"] == []
-    assert "MATERIAL_CLASSIFICATION_AMBIGUITY" not in reasons
+    assert reasons[ANALYSIS_INCOMPLETE] == ["apply_analysis_decisions"]
+    assert CLASSIFICATION_AMBIGUITY not in reasons
+
+
+def test_an_unregistered_reason_blocks_and_advertises_nothing(knowledge) -> None:
+    """Fail closed, so the guard is the only thing that has to be right.
+
+    A reason the table does not know cannot be said to be resolvable by
+    anything, and must not be silently dropped either. It blocks with no
+    action, and grouping it beside a reason that *is* resolvable takes the
+    intersection - so the resolvable one's command is not advertised as
+    settling what it cannot.
+    """
+    reasons = _reasons_for(knowledge, _analysis_needing("brand-new-reason"))
+    assert reasons[ANALYSIS_INCOMPLETE] == []
+
+    analysis = _analysis_needing("extraction-failed")
+    both = JobAnalysis.model_validate(
+        {
+            **analysis.model_dump(mode="json"),
+            "approval_reasons": ["extraction-failed", "brand-new-reason"],
+        }
+    )
+    assert _reasons_for(knowledge, both)[ANALYSIS_INCOMPLETE] == []
 
 
 def test_an_unreadable_posting_stays_blocked_after_the_classification_is_decided(
@@ -208,10 +241,11 @@ def test_an_unreadable_posting_stays_blocked_after_the_classification_is_decided
 ) -> None:
     """The decidable half is offered once, taken, and does not come back.
 
-    Both reasons stand at first: the confidence a failed extraction produces is
-    a real classification decision, and the failure itself is not. After the
-    decision the classification reason is settled and the analysis is still
-    incomplete - with no action recommended, because there is none.
+    Both reasons stand at first, because a posting that could not be read also
+    scores no confidence, and "what is this job?" is a different question from
+    "proceed although nothing was read?". Each is reported on its own terms and
+    each is answered separately: after the classification decision the analysis
+    is still incomplete, and says so on its own terms.
     """
     ingested = services.applications.ingest(
         IngestCommand(
@@ -230,8 +264,9 @@ def test_an_unreadable_posting_stays_blocked_after_the_classification_is_decided
     detail = services.queries.application_detail(ingested.application_id)
     assert detail.preparation_state is PreparationState.NEEDS_REVIEW
     offered = {reason.code: reason.allowed_resolution_actions for reason in detail.review_reasons}
-    assert offered["ANALYSIS_INCOMPLETE"] == []
-    assert offered["MATERIAL_CLASSIFICATION_AMBIGUITY"] == ["apply_analysis_decisions"]
+    # Two reasons, two decisions, each advertising the command that takes it.
+    assert offered[ANALYSIS_INCOMPLETE] == ["apply_analysis_decisions"]
+    assert offered[CLASSIFICATION_AMBIGUITY] == ["apply_analysis_decisions"]
 
     services.analysis.apply_analysis_decisions(
         ApplyAnalysisDecisionsCommand(
@@ -243,14 +278,12 @@ def test_an_unreadable_posting_stays_blocked_after_the_classification_is_decided
     )
 
     after = services.queries.application_detail(ingested.application_id)
-    codes = {reason.code for reason in after.review_reasons}
-    assert "MATERIAL_CLASSIFICATION_AMBIGUITY" not in codes
-    assert "ANALYSIS_INCOMPLETE" in codes
+    offered = {reason.code: reason.allowed_resolution_actions for reason in after.review_reasons}
+    assert CLASSIFICATION_AMBIGUITY not in offered
+    assert offered[ANALYSIS_INCOMPLETE] == ["apply_analysis_decisions"]
     assert after.preparation_state is PreparationState.NEEDS_REVIEW
-    assert "apply_analysis_decisions" not in after.available_actions
-    assert after.recommended_action is None
     blocked = {item.action: item.reasons for item in after.blocked_actions}
-    assert "ANALYSIS_INCOMPLETE" in blocked["create_draft"]
+    assert ANALYSIS_INCOMPLETE in blocked["create_draft"]
 
 
 def test_ready_milestone_survives_a_new_draft_for_the_same_context(ready_application) -> None:

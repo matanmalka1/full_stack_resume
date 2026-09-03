@@ -356,7 +356,7 @@ class Gap(StrictModel):
     requirement_id: str | None = None
 
 
-OverrideKey = Literal["track", "profile", "emphasis", "language", "fit"]
+OverrideKey = Literal["track", "profile", "emphasis", "language", "fit", "analysis"]
 Language = Literal["en", "he"]
 
 
@@ -522,9 +522,7 @@ class AcceptedGap(StrictModel):
     reason: str | None = None
 
 
-def merge_accepted_gaps(
-    previous: list[AcceptedGap], new: list[AcceptedGap]
-) -> list[AcceptedGap]:
+def merge_accepted_gaps(previous: list[AcceptedGap], new: list[AcceptedGap]) -> list[AcceptedGap]:
     """Carry the standing acceptances forward and add the new ones.
 
     Accumulating rather than replacing is what makes a second decision not a
@@ -573,6 +571,7 @@ class SelectionPlan(StrictModel):
                 f"made against another analysis: {', '.join(foreign)}"
             )
         return self
+
     candidate_context_version: str
     candidate_context_hash: str
     profile_version: str

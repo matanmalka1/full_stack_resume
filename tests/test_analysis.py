@@ -1,3 +1,4 @@
+import ast
 import inspect
 import json
 from pathlib import Path
@@ -7,7 +8,9 @@ import pytest
 from helpers import PAYME_TECH_SALES_JOB
 
 from cv_engine.domain.analysis.approval import (
-    APPROVAL_RESOLVING_OVERRIDES,
+    ACCEPTED_INCOMPLETE_ANALYSIS,
+    ANALYSIS_INCOMPLETE,
+    APPROVAL_REASONS,
     CONFIDENCE_APPROVAL_THRESHOLD,
     unresolved_approval_reasons,
 )
@@ -617,9 +620,107 @@ def test_no_classification_override_settles_a_failed_extraction(
         assert "extraction-failed" in unresolved_approval_reasons(analysis), override
 
 
-def test_extraction_failed_has_no_resolving_override() -> None:
-    """The absence is the design, so it is asserted rather than assumed."""
-    assert "extraction-failed" not in APPROVAL_RESOLVING_OVERRIDES
+def test_only_accepting_an_incomplete_analysis_resolves_extraction_failure() -> None:
+    """No classification decision answers it, and it answers nothing else.
+
+    The table used to omit `extraction-failed` entirely to say "nothing
+    resolves this", which made an absent entry mean two different things - that,
+    or a reason someone forgot to register. Now the entry is explicit and names
+    the one override that settles it.
+    """
+    entry = APPROVAL_REASONS["extraction-failed"]
+    assert entry.overrides == frozenset({"analysis"})
+    assert entry.review_code == ANALYSIS_INCOMPLETE
+    # The blanket bypass Stage 3 removed must not come back through this door.
+    assert not entry.overrides & {"track", "profile", "emphasis", "language", "fit"}
+    assert all(
+        "analysis" not in other.overrides
+        for name, other in APPROVAL_REASONS.items()
+        if name != "extraction-failed"
+    )
+
+
+def test_every_approval_reason_the_engine_records_is_registered() -> None:
+    """Derived from the code that emits reasons, not from the table itself.
+
+    A test that iterates the table can only see reasons already in it, so it
+    cannot catch the case it exists for: a reason added later and never
+    registered. That reason would fall through to the unregistered default and
+    be reported as a posting that could not be read, silently, even though a
+    decision might well have answered it.
+
+    So the vocabulary is read out of the two modules that record reasons: any
+    string assigned to or appended to a `reasons` list is one the projection
+    must know how to report.
+    """
+    emitted: set[str] = set()
+    for module in ("classification.py", "approval.py"):
+        path = Path(__file__).resolve().parents[1] / "cv_engine" / "domain" / "analysis" / module
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            collect: ast.AST | None = None
+            if isinstance(node, ast.Assign) and any(
+                isinstance(target, ast.Name) and target.id == "reasons" for target in node.targets
+            ):
+                collect = node.value
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "append"
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "reasons"
+            ):
+                collect = node
+            if collect is None:
+                continue
+            emitted.update(
+                child.value
+                for child in ast.walk(collect)
+                if isinstance(child, ast.Constant) and isinstance(child.value, str)
+            )
+
+    assert "extraction-failed" in emitted, "the reason vocabulary was not found; fix this guard"
+    unregistered = sorted(emitted - set(APPROVAL_REASONS))
+    assert not unregistered, (
+        "these approval reasons are recorded but not registered in APPROVAL_REASONS, so "
+        f"the projection cannot say what resolves them: {unregistered}"
+    )
+
+
+def test_accepting_an_incomplete_analysis_resolves_it_and_nothing_else(
+    fact_store, requirement_concepts
+) -> None:
+    """The override answers extraction, leaves Fit unknown, and is its own key."""
+    analysis = classify_job(
+        UNREADABLE_JOB,
+        facts=fact_store,
+        concepts=requirement_concepts,
+        normalized_hash="unreadable",
+    )
+    assert "extraction-failed" in unresolved_approval_reasons(analysis)
+
+    accepted = JobAnalysis.model_validate(
+        {
+            **analysis.model_dump(mode="json"),
+            "user_override": {"analysis": ACCEPTED_INCOMPLETE_ANALYSIS},
+        }
+    )
+    # It settles extraction and leaves everything else exactly where it was.
+    # An unread posting also scores no confidence, and that is a different
+    # question with a different answer: this decision does not pretend to know
+    # what the job is, so `low-confidence` still stands.
+    assert "extraction-failed" not in unresolved_approval_reasons(accepted)
+    assert "low-confidence" in unresolved_approval_reasons(accepted)
+    # It is a decision to proceed, not a claim that the posting was understood.
+    assert accepted.fit is FitLevel.UNKNOWN
+    assert accepted.requirements == analysis.requirements
+    assert accepted.gaps == analysis.gaps
+    # And no classification override reaches it.
+    for key in ("track", "profile", "emphasis", "language", "fit"):
+        overridden = JobAnalysis.model_validate(
+            {**analysis.model_dump(mode="json"), "user_override": {key: "anything"}}
+        )
+        assert "extraction-failed" in unresolved_approval_reasons(overridden), key
 
 
 def test_successful_extraction_never_records_extraction_failed(

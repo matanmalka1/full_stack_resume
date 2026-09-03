@@ -10,7 +10,12 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
-from ..domain.analysis.approval import APPROVAL_RESOLVING_OVERRIDES, unresolved_approval_reasons
+from ..domain.analysis.approval import (
+    ANALYSIS_INCOMPLETE,
+    approval_reason,
+    resolving_actions,
+    unresolved_approval_reasons,
+)
 from ..domain.analysis.gaps import unaccepted_hard_gaps
 from ..domain.drafts import render_composite_claim, validate_derived_wording
 from ..domain.facts import FactStoreError
@@ -84,6 +89,18 @@ def _reason(
         entity_references=references or {},
         allowed_resolution_actions=actions or [],
     )
+
+
+def _approval_message(code: str, reasons: list[str]) -> str:
+    """What the projection says about the approval reasons it is reporting.
+
+    The incomplete-analysis sentence names the reasons it stands for. A blocker
+    that says only "requires a decision" while offering no way to take one is
+    what this reason was split off to stop saying.
+    """
+    if code == ANALYSIS_INCOMPLETE:
+        return f"The analysis did not read this posting's requirements: {', '.join(reasons)}."
+    return "The job classification requires an explicit decision."
 
 
 def derive_staleness(context: ProjectionContext) -> list[ReasonView]:
@@ -204,36 +221,28 @@ def derive_review_reasons(context: ProjectionContext, stale: list[ReasonView]) -
     plan = context.active_selection_plan
     draft = context.active_working_draft
     reasons: list[ReasonView] = []
-    # An approval reason clears when the user overrides a field that answers
-    # it, so which command resolves a reason is decided by whether any override
-    # answers it at all - derived from the same table `unresolved_approval_reasons`
-    # consults, never listed a second time here.
+    # Which review reason an approval reason is reported as, and what resolves
+    # it, both come from one table in the domain. The projection asks it rather
+    # than deciding for itself, so a reason cannot be advertised here as
+    # something a command can settle when the table says nothing settles it.
     unresolved = unresolved_approval_reasons(analysis) if analysis is not None else []
-    decidable = [reason for reason in unresolved if reason in APPROVAL_RESOLVING_OVERRIDES]
-    undecidable = [reason for reason in unresolved if reason not in APPROVAL_RESOLVING_OVERRIDES]
-    if decidable:
+    grouped: dict[str, list[str]] = {}
+    for reason in unresolved:
+        grouped.setdefault(approval_reason(reason).review_code, []).append(reason)
+    for code, names in grouped.items():
+        # The intersection, not the union: every reason reported under this code
+        # must be one the advertised command can actually close. Offering an
+        # action that settles only some of what the reason reports is the same
+        # false advertisement in a smaller form.
+        actions = set(resolving_actions(names[0]))
+        for name in names[1:]:
+            actions &= set(resolving_actions(name))
         reasons.append(
             _reason(
-                "MATERIAL_CLASSIFICATION_AMBIGUITY",
-                "The job classification requires an explicit decision.",
+                code,
+                _approval_message(code, names),
                 {"job_analysis_id": context.active_analysis_id or ""},
-                ["apply_analysis_decisions"],
-            )
-        )
-    # `extraction-failed` has no resolving override, so `apply_analysis_decisions`
-    # cannot close it: naming the Track or Profile does not recover requirements
-    # that were never read. Advertising it anyway offered the user a button that
-    # committed a decision, returned success, and left the same blocker standing.
-    # The blocker is unchanged - it is simply reported with no action, because
-    # there is none to take. It clears when a later analysis reads the posting.
-    if undecidable:
-        reasons.append(
-            _reason(
-                "ANALYSIS_INCOMPLETE",
-                "The analysis records "
-                + ", ".join(undecidable)
-                + ", which no review decision resolves.",
-                {"job_analysis_id": context.active_analysis_id or ""},
+                sorted(actions),
             )
         )
     if (
