@@ -61,7 +61,7 @@ export const DuplicateChoices = ({ matches, onCreateAnyway, pending }: Duplicate
       title={matches.length === 1 ? "נמצאה מועמדות דומה" : `נמצאו ${matches.length} מועמדויות דומות`}
       tone="warning"
     >
-      <p>זו אזהרה בלבד ואינה חוסמת. אפשר לפתוח מועמדות קיימת, או להמשיך ולפתוח מועמדות נוספת.</p>
+      <p>נדרש אישור מפורש כדי ליצור מועמדות נוספת. אפשר גם לפתוח אחת מהמועמדויות הקיימות.</p>
 
       {ranked.length === 0 ? (
         <p className="mt-3">השרת ביקש אישור מפורש אך לא החזיר פירוט של המועמדויות הדומות.</p>

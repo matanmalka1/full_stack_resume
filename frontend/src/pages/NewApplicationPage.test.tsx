@@ -265,7 +265,9 @@ describe("NewApplicationPage", () => {
       "href",
       "/applications/app-existing",
     );
+    expect(screen.getByText("נדרש אישור מפורש כדי ליצור מועמדות נוספת.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "יצירת מועמדות נוספת" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "יצירת מועמדות" })).not.toBeInTheDocument();
     expect(calls.map((call) => call.path)).toEqual([DUPLICATE_CHECK_PATH]);
   });
 
@@ -421,6 +423,7 @@ describe("NewApplicationPage", () => {
       expect(screen.queryByText("נמצאה מועמדות דומה")).not.toBeInTheDocument();
     });
     expect(screen.queryByRole("button", { name: "יצירת מועמדות נוספת" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "יצירת מועמדות" })).toBeInTheDocument();
   });
 
   it("shows a refused creation as a blocker with the server's safe detail", async () => {

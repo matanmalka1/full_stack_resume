@@ -260,20 +260,25 @@ export const NewApplicationPage = () => {
           <p>יצירת המועמדות שומרת את הטקסט בדיוק כפי שהוזן בתצלום משרה קבוע, ואז מתחילה את ניתוח ההתאמה.</p>
         </div>
 
-        <ActionBar
-          align="start"
-          primary={
-            <Button
-              disabled={jobTextOverBudget || (submit.isPending && submit.variables?.acknowledged === true)}
-              pending={submit.isPending && submit.variables?.acknowledged !== true}
-              pendingLabel="בודק כפילויות…"
-              type="submit"
-            >
-              <Sparkles aria-hidden="true" className="size-4" />
-              יצירת מועמדות
-            </Button>
-          }
-        />
+        {/* Once duplicate choices are current, the callout owns the only creation
+            action. Keeping this generic submit beside the explicit override would make
+            two visually competing actions appear to create the same record. */}
+        {duplicates === null ? (
+          <ActionBar
+            align="start"
+            primary={
+              <Button
+                disabled={jobTextOverBudget || (submit.isPending && submit.variables?.acknowledged === true)}
+                pending={submit.isPending && submit.variables?.acknowledged !== true}
+                pendingLabel="בודק כפילויות…"
+                type="submit"
+              >
+                <Sparkles aria-hidden="true" className="size-4" />
+                יצירת מועמדות
+              </Button>
+            }
+          />
+        ) : null}
       </form>
     </PageShell>
   );
