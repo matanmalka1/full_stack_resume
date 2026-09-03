@@ -1036,6 +1036,11 @@
         "additionalProperties": false,
         "description": "One review-form submission (§13).\n\nCarries both kinds of decision because one form does, and which branch runs\nis decided by what actually changes rather than by which fields arrived.",
         "properties": {
+          "accept_incomplete_analysis": {
+            "default": false,
+            "title": "Accept Incomplete Analysis",
+            "type": "boolean"
+          },
           "accept_low_fit": {
             "default": false,
             "title": "Accept Low Fit",

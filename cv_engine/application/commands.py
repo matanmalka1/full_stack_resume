@@ -74,6 +74,10 @@ class AnalyzeCommand(BoundaryDTO):
     emphasis_override: str | None = None
     language_override: str | None = None
     accept_low_fit: bool = False
+    #: Set only by an explicit acceptance submission, never by the analyze
+    #: endpoint. That is what keeps the decision from surviving a re-analysis:
+    #: a fresh analyze of a new snapshot starts with it unset and blocks again.
+    accept_incomplete_analysis: bool = False
     provider: str = "deterministic"
     model: str = "rules-v1"
 
@@ -134,6 +138,11 @@ class ApplyAnalysisDecisionsCommand(SelectionOverlay):
     #: every hard gap along with it, so one checkbox dismissed deficiencies the
     #: user had never been shown.
     accept_low_fit: bool = False
+    #: Clears `ANALYSIS_INCOMPLETE` and nothing else: the user proceeds knowing
+    #: the engine did not read this posting's requirements. It answers neither
+    #: low Fit nor any hard gap, for the same reason low Fit no longer answers
+    #: a gap.
+    accept_incomplete_analysis: bool = False
     #: Requirement IDs whose hard gaps the user knowingly proceeds past.
     accepted_requirement_ids: list[str] = []
     acceptance_reason: str | None = None

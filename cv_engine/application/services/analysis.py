@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ...domain.analysis.approval import merge_classification
+from ...domain.analysis.approval import ACCEPTED_INCOMPLETE_ANALYSIS, merge_classification
 from ...domain.analysis.classification import classify_job
 from ...domain.models import (
     AcceptedGap,
@@ -228,10 +228,18 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         elif command.provider != "deterministic":
             raise DependencyUnavailable(f"unsupported provider: {command.provider}")
 
-        if command.accept_low_fit:
+        accepted: dict[str, str] = {
+            **({"fit": "accepted-low-fit"} if command.accept_low_fit else {}),
+            **(
+                {"analysis": ACCEPTED_INCOMPLETE_ANALYSIS}
+                if command.accept_incomplete_analysis
+                else {}
+            ),
+        }
+        if accepted:
             # Rebuilt through validation rather than model_copy(update=...), which
             # would skip the model validators that guard this state.
-            overrides = {**result.user_override, "fit": "accepted-low-fit"}
+            overrides = {**result.user_override, **accepted}
             result = JobAnalysis.model_validate(
                 {**result.model_dump(mode="json"), "user_override": overrides}
             )
@@ -597,12 +605,12 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         }
         if command.accept_low_fit:
             submitted["fit"] = "accepted-low-fit"
+        if command.accept_incomplete_analysis:
+            submitted["analysis"] = ACCEPTED_INCOMPLETE_ANALYSIS
         merged = {**analysis.user_override, **submitted}
         changes_meaning = merged != dict(analysis.user_override)
         has_overlay = bool(
-            command.pinned_fact_ids
-            or command.excluded_fact_ids
-            or command.accepted_requirement_ids
+            command.pinned_fact_ids or command.excluded_fact_ids or command.accepted_requirement_ids
         )
 
         if changes_meaning and has_overlay:
@@ -628,6 +636,15 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                     emphasis_override=merged.get("emphasis"),
                     language_override=merged.get("language"),
                     accept_low_fit=merged.get("fit") == "accepted-low-fit",
+                    # Carried across a decision the user takes on this same
+                    # posting, because a classification decision changes
+                    # neither the text nor what was read from it. A genuinely
+                    # new analysis - another snapshot, or changed Knowledge -
+                    # is reached through `analyze`, which never sets this, so
+                    # the acceptance does not survive one.
+                    accept_incomplete_analysis=(
+                        merged.get("analysis") == ACCEPTED_INCOMPLETE_ANALYSIS
+                    ),
                 )
             )
             return AnalysisDecisionsResult(

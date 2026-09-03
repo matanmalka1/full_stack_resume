@@ -109,6 +109,12 @@ class ApplyAnalysisDecisionsRequest(SelectionOverlayRequest, ClassificationOverr
     """
 
     application_id: str
+    #: Deliberately here and not on `ClassificationOverrides`, which
+    #: `CreateAnalysisRequest` also uses: accepting an analysis that read
+    #: nothing is a decision about an analysis the user has seen. Offering it
+    #: on the analyze endpoint would let a client pre-accept a posting before
+    #: anyone had looked at what the engine made of it.
+    accept_incomplete_analysis: bool = False
 
 
 class SelectionPlanResponse(HttpSchema):

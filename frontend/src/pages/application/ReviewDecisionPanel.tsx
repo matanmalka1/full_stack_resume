@@ -10,6 +10,7 @@ import { Button } from "../../ui/Button";
 import {
   CLASSIFICATION_REASON,
   FIT_REASONS,
+  INCOMPLETE_ANALYSIS_REASON,
   REVIEW_REASONS_THIS_SCREEN_OWNS,
   ReviewDecisionForm,
   emptyDecisions,
@@ -47,6 +48,7 @@ export const ReviewDecisionPanel = ({ detail }: { detail: ApplicationDetail }) =
   const mine = detail.review_reasons.filter(resolvedByDecisionForm);
   const showClassification = mine.some((reason) => reason.code === CLASSIFICATION_REASON);
   const showFit = mine.some((reason) => Object.hasOwn(FIT_REASONS, reason.code));
+  const showIncompleteAnalysis = mine.some((reason) => reason.code === INCOMPLETE_ANALYSIS_REASON);
 
   const apply = useMutation({
     mutationFn: async () => {
@@ -84,6 +86,7 @@ export const ReviewDecisionPanel = ({ detail }: { detail: ApplicationDetail }) =
           onChange={setDecisions}
           showClassification={showClassification}
           showFit={showFit}
+          showIncompleteAnalysis={showIncompleteAnalysis}
         />
 
         {/* §13: what the commit does, and the two things the controls cannot say. */}

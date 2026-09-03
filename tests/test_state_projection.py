@@ -16,6 +16,7 @@ from cv_engine.application.commands import (
 from cv_engine.application.queries import PreparationState, WorkingDraftState
 from cv_engine.application.state import ProjectionContext, derive_review_reasons
 from cv_engine.domain.analysis.approval import (
+    ACCEPTED_INCOMPLETE_ANALYSIS,
     ANALYSIS_INCOMPLETE,
     APPROVAL_REASONS,
     CLASSIFICATION_AMBIGUITY,
@@ -23,6 +24,7 @@ from cv_engine.domain.analysis.approval import (
 from cv_engine.domain.facts import FactStore
 from cv_engine.domain.knowledge import Knowledge
 from cv_engine.domain.models import (
+    FitLevel,
     JobAnalysis,
     ValidationIssue,
     ValidationReport,
@@ -245,7 +247,7 @@ def test_an_unreadable_posting_stays_blocked_after_the_classification_is_decided
     scores no confidence, and "what is this job?" is a different question from
     "proceed although nothing was read?". Each is reported on its own terms and
     each is answered separately: after the classification decision the analysis
-    is still incomplete, and says so on its own terms.
+    is still incomplete, and the acceptance is what settles that.
     """
     ingested = services.applications.ingest(
         IngestCommand(
@@ -284,6 +286,22 @@ def test_an_unreadable_posting_stays_blocked_after_the_classification_is_decided
     assert after.preparation_state is PreparationState.NEEDS_REVIEW
     blocked = {item.action: item.reasons for item in after.blocked_actions}
     assert ANALYSIS_INCOMPLETE in blocked["create_draft"]
+
+    # The decision that does answer it, and what it leaves standing.
+    accepted = services.analysis.apply_analysis_decisions(
+        ApplyAnalysisDecisionsCommand(
+            application_id=ingested.application_id,
+            job_analysis_id=after.active_analysis_id or "",
+            accept_incomplete_analysis=True,
+        )
+    )
+    settled = services.queries.application_detail(ingested.application_id)
+    assert ANALYSIS_INCOMPLETE not in {reason.code for reason in settled.review_reasons}
+    assert settled.preparation_state is PreparationState.READY_TO_DRAFT
+    # Accepted, not understood: the analysis still reports it read nothing.
+    assert accepted.analysis.fit is FitLevel.UNKNOWN
+    assert "extraction-failed" in accepted.analysis.approval_reasons
+    assert accepted.analysis.user_override["analysis"] == ACCEPTED_INCOMPLETE_ANALYSIS
 
 
 def test_ready_milestone_survives_a_new_draft_for_the_same_context(ready_application) -> None:
