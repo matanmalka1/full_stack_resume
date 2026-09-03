@@ -78,6 +78,12 @@ class AnalyzeCommand(BoundaryDTO):
     #: endpoint. That is what keeps the decision from surviving a re-analysis:
     #: a fresh analyze of a new snapshot starts with it unset and blocks again.
     accept_incomplete_analysis: bool = False
+    #: Gap acceptances submitted with the decision that creates this analysis.
+    #: Set only by an explicit decision submission; the analyze endpoint never
+    #: carries them, so a plain re-analysis starts with nothing accepted.
+    accepted_requirement_ids: list[str] = []
+    acceptance_reason: str | None = None
+    expected_selection_plan_id: str | None = None
     provider: str = "deterministic"
     model: str = "rules-v1"
 

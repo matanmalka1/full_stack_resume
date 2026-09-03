@@ -15,19 +15,26 @@ from typing import cast
 
 import pytest
 from fastapi.testclient import TestClient
-from helpers import ACCOUNT_MANAGER_JOB, approve_active_draft, validate_active_draft
+from helpers import (
+    ACCOUNT_MANAGER_JOB,
+    AMBIGUOUS_HEBREW_JOB,
+    approve_active_draft,
+    validate_active_draft,
+)
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import ProgrammingError
 
 from cv_engine.api.app import API_PREFIX, create_app
 from cv_engine.application.commands import (
     AnalyzeCommand,
+    ApplyAnalysisDecisionsCommand,
     ApproveDraftCommand,
     DraftCommand,
     IngestCommand,
 )
 from cv_engine.application.errors import (
     LineageBroken,
+    PreconditionFailed,
     StateConflict,
     UnknownRecord,
     WorkflowError,
@@ -41,7 +48,9 @@ from cv_engine.infrastructure.persistence.repository import Repository
 from cv_engine.infrastructure.persistence.tables import (
     approved_revisions,
     decision_records,
+    job_analyses,
     metadata,
+    selection_plans,
 )
 from cv_engine.runtime.composition import Services, build_api_services
 from cv_engine.runtime.paths import AppPaths
@@ -629,3 +638,151 @@ def test_no_stage_after_analysis_reads_the_requirement_vocabulary(project_root: 
         "these read the requirement vocabulary but are excluded from the document "
         f"knowledge scope: {sorted(str(path) for path in readers - allowed)}"
     )
+
+
+#: Classified as Development, and one of its hard gaps exists only under that
+#: Track: the years rule is the one gap a reclassification can delete.
+DEVELOPMENT_YEARS_JOB = (
+    "Senior Backend Developer.\n"
+    "Python API React microservices.\n"
+    "5+ years of experience required.\n"
+    "Must have proven direct SaaS Sales experience.\n"
+)
+
+
+def _hard_gap_ids(services: Services, analysis_id: str) -> list[str]:
+    analysis = services.repository.get_analysis(analysis_id)["analysis"]
+    return [gap.requirement_id for gap in analysis.gaps if gap.severity == "hard"]
+
+
+def test_a_classification_decision_carries_its_gap_acceptance_in_one_write(
+    services: Services,
+) -> None:
+    """Both decisions, one record, and the acceptance names the analysis it landed on.
+
+    The submission used to be refused so the client could send the acceptance
+    again against an analysis it had not asked for. A gap acceptance names a
+    requirement, and requirement identity is keyed on the snapshot text rather
+    than on the classification, so it survives the reclassification and is
+    re-checked against the analysis being written.
+    """
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company="Atomic Decision Co",
+            target_role="Account Manager",
+            job_text=AMBIGUOUS_HEBREW_JOB,
+            client="web",
+        )
+    )
+    analysed = services.analysis.analyze(
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+        )
+    )
+    accepted_id = _hard_gap_ids(services, analysed.analysis_id)[0]
+
+    result = services.analysis.apply_analysis_decisions(
+        ApplyAnalysisDecisionsCommand(
+            application_id=ingested.application_id,
+            job_analysis_id=analysed.analysis_id,
+            profile_override="account-manager",
+            accepted_requirement_ids=[accepted_id],
+            expected_selection_plan_id=analysed.selection_plan_id,
+        )
+    )
+
+    assert result.created_analysis is True
+    plan = services.repository.selection_plan(result.selection_plan_id)
+    assert [accepted.requirement_id for accepted in plan.accepted_gaps] == [accepted_id]
+    # Stamped with the analysis it was written beside, never the one decided on.
+    assert {accepted.job_analysis_id for accepted in plan.accepted_gaps} == {result.job_analysis_id}
+    assert plan.job_analysis_id == result.job_analysis_id
+    # One plan for the new analysis, not an initial one and then a replacement.
+    assert len(_rows(services, selection_plans)) == 2
+    assert len(_rows(services, job_analyses)) == 2
+
+    detail = services.queries.application_detail(ingested.application_id)
+    assert "HARD_GAP_REQUIRES_DECISION" not in {reason.code for reason in detail.review_reasons}
+
+
+def test_an_acceptance_the_reclassification_removes_is_refused_whole(
+    services: Services,
+) -> None:
+    """The atomic form refuses atomically: no analysis, no plan, no acceptance.
+
+    A Track override deletes the rule-derived gap that only Development states.
+    Accepting it and then reclassifying would store a decision about a gap the
+    new analysis does not have, which would later read as a decision about
+    something.
+    """
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company="Reclassified Gap Co",
+            target_role="Backend Developer",
+            job_text=DEVELOPMENT_YEARS_JOB,
+            client="web",
+        )
+    )
+    analysed = services.analysis.analyze(
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+        )
+    )
+    analysis = services.repository.get_analysis(analysed.analysis_id)["analysis"]
+    years = next(
+        gap.requirement_id
+        for gap in analysis.gaps
+        if gap.severity == "hard" and "Development experience" in gap.requirement
+    )
+
+    before = _persisted(services)
+    with pytest.raises(PreconditionFailed, match="no hard gap to accept"):
+        services.analysis.apply_analysis_decisions(
+            ApplyAnalysisDecisionsCommand(
+                application_id=ingested.application_id,
+                job_analysis_id=analysed.analysis_id,
+                track_override="sales",
+                profile_override="account-manager",
+                accepted_requirement_ids=[years],
+                expected_selection_plan_id=analysed.selection_plan_id,
+            )
+        )
+    assert _persisted(services) == before
+
+
+def test_a_fact_overlay_still_may_not_ride_a_classification_decision(
+    services: Services,
+) -> None:
+    """The refusal narrowed to what it was actually about.
+
+    A fact overlay is decided against candidate accounting the new analysis has
+    not produced yet, so it stays a second command. That is a different question
+    from a gap acceptance, which names a requirement the new analysis restates.
+    """
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company="Fact Overlay Co",
+            target_role="Account Manager",
+            job_text=AMBIGUOUS_HEBREW_JOB,
+            client="web",
+        )
+    )
+    analysed = services.analysis.analyze(
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+        )
+    )
+    before = _persisted(services)
+    with pytest.raises(PreconditionFailed, match="fact overlay"):
+        services.analysis.apply_analysis_decisions(
+            ApplyAnalysisDecisionsCommand(
+                application_id=ingested.application_id,
+                job_analysis_id=analysed.analysis_id,
+                profile_override="account-manager",
+                excluded_fact_ids=["sales.company.activity"],
+            )
+        )
+    assert _persisted(services) == before

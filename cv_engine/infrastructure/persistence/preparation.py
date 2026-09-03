@@ -297,7 +297,19 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         profile_version: str,
         selection_policy_version: str,
         track_emphasis_dependencies: dict[str, str],
+        accepted_requirement_ids: list[str] | None = None,
+        acceptance_actor: str = "",
+        acceptance_reason: str | None = None,
+        expected_selection_plan_id: str | None = None,
     ) -> tuple[str, SelectionPlan]:
+        """Write one analysis and its initial plan as a single record.
+
+        The requirement ids are ids and not records: the acceptance names the
+        analysis it was made against, and that analysis is allocated here. The
+        caller has already refused any id that does not name a hard gap of the
+        analysis being written, so what arrives is a decision about gaps this
+        analysis actually states.
+        """
         analysis_id = new_id()
         selection_plan_id = new_id()
         now = utc_now()
@@ -308,6 +320,7 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                 ).where(job_analyses.c.application_id == application_id)
             ).scalar_one()
             self._lock_application(connection, application_id)
+            self._active_plan(connection, application_id, expected_selection_plan_id)
             connection.execute(
                 insert(job_analyses).values(
                     id=analysis_id,
@@ -333,8 +346,20 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                 track_emphasis_dependencies,
                 now,
                 # A new analysis inherits nothing: the carry is keyed on the
-                # analysis id, and this one did not exist a moment ago.
-                accepted_gaps=[],
+                # analysis id, and this one did not exist a moment ago. What it
+                # may carry is an acceptance submitted with the decision that
+                # created it, stamped with the analysis allocated above so it
+                # can never read as a decision about a different one.
+                accepted_gaps=[
+                    AcceptedGap(
+                        requirement_id=requirement_id,
+                        job_analysis_id=analysis_id,
+                        actor=acceptance_actor,
+                        accepted_at=now,
+                        reason=acceptance_reason,
+                    )
+                    for requirement_id in accepted_requirement_ids or []
+                ],
             )
             connection.execute(
                 update(applications)
@@ -457,24 +482,19 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
             select(applications.c.id).where(applications.c.id == application_id).with_for_update()
         ).one_or_none()
 
-    def _standing_acceptances(
+    def _active_plan(
         self,
         connection: Connection,
         application_id: str,
-        job_analysis_id: str,
         expected_selection_plan_id: str | None,
-    ) -> list[AcceptedGap]:
-        """The acceptances the next plan version inherits, read under the write.
-
-        Inherited only from a plan for the *same* analysis. An acceptance is a
-        decision about the gaps as one analysis stated them, so carrying it
-        onto a plan for a different analysis would report a decision the user
-        never made.
+    ) -> SelectionPlan | None:
+        """The active plan, refusing if it moved since the decision was made.
 
         `expected_selection_plan_id` is the optimistic check: it is the plan the
         user was looking at when they decided. If the active plan has moved on,
         the command is refused rather than quietly rebased onto something the
-        user never saw.
+        user never saw. One implementation, because both plan writers make the
+        same promise about it.
         """
         row = (
             connection.execute(
@@ -494,6 +514,23 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                 "the active SelectionPlan moved since this decision was made: expected "
                 f"{expected_selection_plan_id}, found {latest.id if latest else 'none'}"
             )
+        return latest
+
+    def _standing_acceptances(
+        self,
+        connection: Connection,
+        application_id: str,
+        job_analysis_id: str,
+        expected_selection_plan_id: str | None,
+    ) -> list[AcceptedGap]:
+        """The acceptances the next plan version inherits, read under the write.
+
+        Inherited only from a plan for the *same* analysis. An acceptance is a
+        decision about the gaps as one analysis stated them, so carrying it
+        onto a plan for a different analysis would report a decision the user
+        never made.
+        """
+        latest = self._active_plan(connection, application_id, expected_selection_plan_id)
         if latest is None or latest.job_analysis_id != job_analysis_id:
             return []
         return list(latest.accepted_gaps)

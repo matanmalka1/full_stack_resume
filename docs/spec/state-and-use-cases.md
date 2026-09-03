@@ -409,6 +409,14 @@ that analysis's initial deterministic SelectionPlan. When only selection/accepte
 decisions change, it creates one replacement SelectionPlan. It records overrides and
 never mutates the original analysis or plan.
 
+A gap acceptance may accompany a classification decision, and both land in that one
+write. Requirement identity is keyed on the snapshot text rather than on the
+classification, so an accepted requirement is still stated by the new analysis; it is
+re-checked against that analysis before it is stored, and a requirement whose gap the
+reclassification removed is refused with the whole submission. A *fact* overlay may not
+accompany one: pinned and excluded facts are decided against candidate accounting the
+new analysis has not produced yet, so they stay a second command.
+
 It also carries `accept_incomplete_analysis`, the decision to proceed although the
 analysis read none of the posting's requirements. It records the `analysis` override and
 resolves `ANALYSIS_INCOMPLETE` alone: Fit stays `unknown`, no gap is accepted, and no

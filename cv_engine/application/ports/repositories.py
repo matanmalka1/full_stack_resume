@@ -122,6 +122,10 @@ class JobStore(Protocol):
         profile_version: str,
         selection_policy_version: str,
         track_emphasis_dependencies: dict[str, str],
+        accepted_requirement_ids: list[str] | None = ...,
+        acceptance_actor: str = ...,
+        acceptance_reason: str | None = ...,
+        expected_selection_plan_id: str | None = ...,
     ) -> tuple[str, SelectionPlan]: ...
 
     def get_analysis(self, analysis_id: str) -> dict[str, Any]: ...
