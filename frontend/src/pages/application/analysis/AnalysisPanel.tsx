@@ -5,7 +5,7 @@ import { JobTextDisclosure } from "../JobTextDisclosure";
 import { AnalysisHeader } from "./AnalysisHeader";
 import { ApprovalReasonsSection } from "./ApprovalReasonsSection";
 import { ClassificationSummary } from "./ClassificationSummary";
-import { GapsSection } from "./GapsSection";
+import { type GapAcceptance, GapsSection } from "./GapsSection";
 import { RationaleSection } from "./RationaleSection";
 import { RequirementsSection } from "./RequirementsSection";
 
@@ -13,10 +13,11 @@ import { RequirementsSection } from "./RequirementsSection";
    its own: the analysis is the reasoning behind the stage this screen already reports,
    and a separate screen would ask the reader to leave the actions to read it.
 
-   It reports the analysis and offers nothing. Overriding a classification stays the
-   review screen's, which the projection opens through `available_actions` - a second
-   place to change the same values would be the second workflow state machine A.1
-   forbids.
+   It reports the analysis and decides nothing. The one control it carries - marking a
+   hard gap as accepted - is submitted by the decision panel below, in that panel's single
+   request; overriding a classification stays there too, which the projection opens
+   through `available_actions`. A second place that *commits* the same values would be the
+   second workflow state machine A.1 forbids.
 
    The panel itself only composes: the masthead, the four findings below it, and the
    source text disclosure each live in their own file under this folder, so a change to
@@ -30,9 +31,14 @@ import { RequirementsSection } from "./RequirementsSection";
 export const AnalysisPanel = ({
   classification,
   detail,
+  gapAcceptance,
 }: {
   classification: Classification;
   detail: ApplicationDetail;
+  /* Passed through untouched. The panel still offers no decision of its own: this is the
+     decision panel's control, placed on the gap it is about because that is where the
+     reader is when they take it. */
+  gapAcceptance: GapAcceptance | null;
 }) => (
   <section aria-labelledby="analysis-heading" className={surfaceClasses("p-5")}>
     <AnalysisHeader classification={classification} record={detail.latest_analysis ?? null} />
@@ -50,7 +56,7 @@ export const AnalysisPanel = ({
 
       <RequirementsSection items={classification.keywords} title="מילות מפתח מהמשרה" />
 
-      <GapsSection gaps={classification.gaps} />
+      <GapsSection acceptance={gapAcceptance} gaps={classification.gaps} />
 
       {/* The text the classification was drawn from, under the classification itself.
           Everything above is conclusion; without the posting on the same screen the

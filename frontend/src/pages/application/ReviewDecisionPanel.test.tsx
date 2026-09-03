@@ -27,6 +27,7 @@ const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =
     warnings: [],
     active_job_snapshot_id: "snap-1",
     active_analysis_id: "analysis-1",
+    active_selection_plan_id: "plan-1",
     newer_draft_in_progress: false,
     available_actions: ["apply_analysis_decisions"],
     blocked_actions: [],
@@ -61,7 +62,9 @@ const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =
         emphasis: "account-growth",
         language: "he",
         fit: "low",
-        gaps: [{ requirement: "5 years of Kubernetes", severity: "hard", reason: "missing" }],
+        gaps: [
+          { requirement: "5 years of Kubernetes", severity: "hard", reason: "missing", requirement_id: "req-k8s" },
+        ],
         user_override: {},
       },
       provider: "deterministic",
@@ -113,7 +116,11 @@ afterEach(() => {
 });
 
 describe("the review decision, on the Application screen", () => {
-  it("shows the fit acceptance for a hard gap and no classification selects", async () => {
+  /* The decision a hard gap takes is per requirement and is recorded on the SelectionPlan.
+     The fit acceptance is recorded on the analysis and answers low fit alone, so offering
+     it here left the reader with a control that could not close the blocker: it re-derived
+     the analysis and the same gap came back. */
+  it("offers a hard gap its own acceptance rather than the fit checkbox", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(() => Promise.resolve(jsonResponse(detail({ review_reasons: [reason("HARD_GAP_REQUIRES_DECISION")] })))),
@@ -121,8 +128,81 @@ describe("the review decision, on the Application screen", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("checkbox")).toBeInTheDocument();
+    expect(await screen.findByRole("checkbox", { name: /5 years of Kubernetes/ })).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: /ההתאמה הנמוכה/ })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("מסלול")).not.toBeInTheDocument();
+  });
+
+  /* An acceptance names a Requirement, and an analysis written before requirement
+     extraction has none to name. The server refuses such an id, so the screen says why
+     instead of offering a control that could only fail. */
+  it("names a hard gap from a legacy analysis as one it cannot decide", async () => {
+    const legacy = detail({ review_reasons: [reason("HARD_GAP_REQUIRES_DECISION")] });
+    legacy.latest_analysis!.analysis.gaps = [
+      { requirement: "5 years of Kubernetes", severity: "hard", reason: "missing" },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(jsonResponse(legacy))),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText(/ניתוח מחדש של המשרה יזהה את הדרישה/)).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: /5 years of Kubernetes/ })).not.toBeInTheDocument();
+  });
+
+  it("sends an accepted gap with the plan the decision was taken against", async () => {
+    let applied = false;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      void init;
+      const url = String(input);
+      if (url === APPLY_PATH) {
+        applied = true;
+        return Promise.resolve(
+          jsonResponse(
+            {
+              application_id: "app-1",
+              job_analysis_id: "analysis-1",
+              selection_plan_id: "plan-2",
+              created_analysis: false,
+              analysis: {},
+              plan: {},
+            },
+            201,
+          ),
+        );
+      }
+      return Promise.resolve(
+        jsonResponse(
+          applied
+            ? detail({ review_reasons: [], preparation_state: "ready_to_draft" })
+            : detail({ review_reasons: [reason("HARD_GAP_REQUIRES_DECISION")] }),
+        ),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("checkbox", { name: /5 years of Kubernetes/ }));
+    fireEvent.change(screen.getByLabelText(/סיבת הקבלה/), { target: { value: "נסגר בראיון" } });
+    fireEvent.click(screen.getByRole("button", { name: "החלת כל ההחלטות" }));
+
+    expect(await screen.findByText("מוכן ליצירת טיוטה")).toBeInTheDocument();
+
+    const applyCall = fetchMock.mock.calls.find((call) => call[0] === APPLY_PATH);
+    expect(applyCall).toBeDefined();
+    /* The plan id rides with the acceptance: without it the server would apply the
+       decision to whatever plan is active now rather than the one on screen. */
+    expect(JSON.parse((applyCall as [string, RequestInit])[1].body as string)).toEqual({
+      application_id: "app-1",
+      accept_low_fit: false,
+      accept_incomplete_analysis: false,
+      accepted_requirement_ids: ["req-k8s"],
+      acceptance_reason: "נסגר בראיון",
+      expected_selection_plan_id: "plan-1",
+    });
   });
 
   it("commits every decision in one request without leaving the screen", async () => {
@@ -177,6 +257,8 @@ describe("the review decision, on the Application screen", () => {
       accept_incomplete_analysis: false,
       track_override: "tech-sales",
       emphasis_override: "leadership",
+      /* No gap was marked, so the acceptance is empty and carries no plan id with it. */
+      accepted_requirement_ids: [],
     });
   });
 

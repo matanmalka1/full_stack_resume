@@ -9,7 +9,8 @@ import { ActionBar } from "../../ui/ActionBar";
 import { Button } from "../../ui/Button";
 import {
   CLASSIFICATION_REASON,
-  FIT_REASONS,
+  FIT_REASON,
+  GAP_REASON,
   INCOMPLETE_ANALYSIS_REASON,
   REVIEW_REASONS_THIS_SCREEN_OWNS,
   ReviewDecisionForm,
@@ -37,7 +38,20 @@ export const resolvedByDecisionForm = (reason: Reason): boolean =>
 
    It reports nothing about what happens next: `apply_analysis_decisions` is one commit
    and the refreshed projection is what says whether the reason closed. */
-export const ReviewDecisionPanel = ({ detail }: { detail: ApplicationDetail }) => {
+export const ReviewDecisionPanel = ({
+  acceptableGapCount,
+  acceptedRequirementIds,
+  detail,
+  onAcceptancesApplied,
+}: {
+  /* How many hard gaps of this analysis carry a Requirement to accept. The marks arrive
+     from the gap list above, which is where they are taken; this panel only reports what
+     is about to be sent and sends it. */
+  acceptableGapCount: number;
+  acceptedRequirementIds: readonly string[];
+  detail: ApplicationDetail;
+  onAcceptancesApplied: () => void;
+}) => {
   const queryClient = useQueryClient();
   const [decisions, setDecisions] = useState(emptyDecisions);
   const applicationId = detail.application.id;
@@ -45,23 +59,34 @@ export const ReviewDecisionPanel = ({ detail }: { detail: ApplicationDetail }) =
   /* The analysis being decided on is the one the projection calls active, which is also
      the one every review reason names in its entity references. */
   const analysisId = detail.active_analysis_id ?? null;
+  /* The plan the acceptance is recorded against, and the plan the reader was shown. The
+     server refuses an acceptance that does not name one, so without it the controls are
+     withheld: with no active SelectionPlan the projection is asking for
+     `FACT_SELECTION_UNRESOLVED`, which is a different reason with a different action. */
+  const selectionPlanId = detail.active_selection_plan_id ?? null;
   const mine = detail.review_reasons.filter(resolvedByDecisionForm);
   const showClassification = mine.some((reason) => reason.code === CLASSIFICATION_REASON);
-  const showFit = mine.some((reason) => Object.hasOwn(FIT_REASONS, reason.code));
+  const showFit = mine.some((reason) => reason.code === FIT_REASON);
+  const showGapAcceptance = selectionPlanId !== null && mine.some((reason) => reason.code === GAP_REASON);
   const showIncompleteAnalysis = mine.some((reason) => reason.code === INCOMPLETE_ANALYSIS_REASON);
+
+  /* The marks are the gap list's state, so they are merged in at the submission rather
+     than copied into this panel's - one value, read where it is sent. */
+  const submitted = { ...decisions, accepted_requirement_ids: showGapAcceptance ? [...acceptedRequirementIds] : [] };
 
   const apply = useMutation({
     mutationFn: async () => {
       if (analysisId === null) {
         throw new Error("apply_analysis_decisions was offered without an active analysis");
       }
-      return applyAnalysisDecisions(analysisId, applicationId, decisions);
+      return applyAnalysisDecisions(analysisId, applicationId, submitted, selectionPlanId);
     },
     /* Nothing from the response body is seeded into the cache. `created_analysis` is read
        as what happened rather than assumed, and the refreshed projection is what reports
        the state that follows - which is this screen, so there is nowhere to navigate. */
     onSuccess: async () => {
       setDecisions(emptyDecisions);
+      onAcceptancesApplied();
       await queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
     },
   });
@@ -83,17 +108,24 @@ export const ReviewDecisionPanel = ({ detail }: { detail: ApplicationDetail }) =
         <ReviewDecisionForm
           decisions={decisions}
           disabled={apply.isPending}
+          gapAcceptance={
+            showGapAcceptance ? { acceptable: acceptableGapCount, marked: acceptedRequirementIds.length } : null
+          }
           onChange={setDecisions}
           showClassification={showClassification}
           showFit={showFit}
           showIncompleteAnalysis={showIncompleteAnalysis}
         />
 
-        {/* §13: what the commit does, and the two things the controls cannot say. */}
+        {/* §13: what the commit does, and the two things the controls cannot say. What
+            it writes depends on what was decided - a classification decision derives a
+            new analysis, while a gap acceptance alone is recorded on a new SelectionPlan
+            for the analysis on screen - so the sentence names both rather than promising
+            the one that happens to be more common. */}
         <p className="text-support leading-6 text-cv-text-muted" dir="auto">
-          כל ההחלטות נשלחות יחד בפעולה אחת, שיוצרת ניתוח חדש ובלתי משתנה יחד עם תוכנית הבחירה ההתחלתית שלו. הניתוח
-          והתוכנית שעליהם הוחלט נשמרים בדיוק כפי שהם. החלטות מצטברות: השארת שדה ריק שומרת על החלטה קודמת ואינה מבטלת
-          אותה.
+          כל ההחלטות נשלחות יחד בפעולה אחת. שינוי סיווג יוצר ניתוח חדש ובלתי משתנה יחד עם תוכנית הבחירה ההתחלתית שלו,
+          וקבלת פער נרשמת בתוכנית בחירה חדשה עבור אותו ניתוח. הניתוח והתוכנית שעליהם הוחלט נשמרים בדיוק כפי שהם. החלטות
+          מצטברות: השארת שדה ריק שומרת על החלטה קודמת ואינה מבטלת אותה.
         </p>
 
         {apply.error === null ? null : (
@@ -108,7 +140,7 @@ export const ReviewDecisionPanel = ({ detail }: { detail: ApplicationDetail }) =
           align="start"
           primary={
             <Button
-              disabled={!hasDecision(decisions) || analysisId === null}
+              disabled={!hasDecision(submitted) || analysisId === null}
               onClick={() => apply.mutate()}
               pending={apply.isPending}
               pendingLabel="מחיל את ההחלטות…"

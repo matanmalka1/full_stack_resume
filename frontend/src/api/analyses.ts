@@ -17,11 +17,16 @@ import {
   trackLabels,
 } from "../pages/application/analysisLabels";
 
-/* The four classification decisions this screen may submit. The fact overlay is
-   deliberately absent: no endpoint exposes the candidate fact pool to the browser, and
-   the backend refuses a submission carrying both kinds at once. Omitting the fields
-   makes that refusal unreachable from here by construction rather than by a client-side
-   copy of a server rule. */
+/* What this screen may submit: the four classification decisions, the two acceptances
+   recorded on the analysis, and the per-gap acceptance recorded on the SelectionPlan.
+   The fact overlay is deliberately absent: no endpoint exposes the candidate fact pool
+   to the browser, and the backend refuses a submission carrying a fact overlay together
+   with a classification decision. Omitting the fields makes that refusal unreachable
+   from here by construction rather than by a client-side copy of a server rule.
+
+   A gap acceptance carries no such restriction and rides along with a classification
+   decision in the same commit: it names a requirement rather than a fact, and the server
+   re-checks it against the analysis it is about to write. */
 export type ClassificationDecisions = Pick<
   ApplyAnalysisDecisionsRequest,
   | "track_override"
@@ -30,10 +35,48 @@ export type ClassificationDecisions = Pick<
   | "language_override"
   | "accept_low_fit"
   | "accept_incomplete_analysis"
+  | "accepted_requirement_ids"
+  | "acceptance_reason"
 >;
 
 const applyDecisionsPath = (analysisId: string): ApiPath =>
   `/api/v1/analyses/${encodeURIComponent(analysisId)}/apply-decisions`;
+
+/* The gap acceptance, with the plan id it is only ever valid against. The two travel
+   together because the server refuses them apart: an acceptance without
+   `expected_selection_plan_id` is a decision applied to whatever plan is active now
+   rather than to the one the reader was shown, and that rebase is exactly what the check
+   exists to prevent.
+
+   An empty acceptance therefore carries no plan id, so an unrelated decision - a Track
+   override on a screen that also shows gaps - is not turned into an optimistic write
+   against a plan it says nothing about.
+
+   Marking a gap with no active SelectionPlan is refused here rather than sent and refused
+   there. It cannot be reached from the screen, which withholds the controls in that state;
+   raising is what keeps a decision from being dropped silently if it ever is. */
+const acceptanceFields = (
+  decisions: ClassificationDecisions,
+  activeSelectionPlanId: string | null,
+): Pick<ApplyAnalysisDecisionsRequest, "accepted_requirement_ids"> &
+  Partial<Pick<ApplyAnalysisDecisionsRequest, "acceptance_reason" | "expected_selection_plan_id">> => {
+  const accepted = decisions.accepted_requirement_ids;
+  if (accepted.length === 0) {
+    return { accepted_requirement_ids: [] };
+  }
+  if (activeSelectionPlanId === null) {
+    throw new Error("a gap acceptance was submitted without an active SelectionPlan to record it against");
+  }
+  /* Blank is absent, as everywhere else on this form: the reason is optional, and `""`
+     would be a recorded reason that says nothing. */
+  const reason = decisions.acceptance_reason?.trim() ?? "";
+
+  return {
+    accepted_requirement_ids: accepted,
+    expected_selection_plan_id: activeSelectionPlanId,
+    ...(reason === "" ? {} : { acceptance_reason: reason }),
+  };
+};
 
 /* §13: synchronous, one commit, no Operation - so no `Idempotency-Key` and no
    `202`/`Location` obligation. `application_id` is stated rather than inferred from the
@@ -49,16 +92,12 @@ export const applyAnalysisDecisions = async (
   analysisId: string,
   applicationId: string,
   decisions: ClassificationDecisions,
+  activeSelectionPlanId: string | null,
 ): Promise<AnalysisDecisions> => {
-  /* The overlay fields are omitted by type, not merely left unset: naming them in the
-     `Omit` is what makes adding one here a compile error rather than a quiet change of
-     what this screen commits. `accepted_requirement_ids` is one of them - accepting a
-     hard gap is a decision about a specific requirement, and this screen has no control
-     that names one. */
-  const body: Omit<
-    ApplyAnalysisDecisionsRequest,
-    "pinned_fact_ids" | "excluded_fact_ids" | "accepted_requirement_ids"
-  > = {
+  /* The fact overlay is omitted by type, not merely left unset: naming it in the `Omit`
+     is what makes adding a field here a compile error rather than a quiet change of what
+     this screen commits. */
+  const body: Omit<ApplyAnalysisDecisionsRequest, "pinned_fact_ids" | "excluded_fact_ids"> = {
     application_id: applicationId,
     accept_low_fit: decisions.accept_low_fit,
     accept_incomplete_analysis: decisions.accept_incomplete_analysis,
@@ -66,6 +105,7 @@ export const applyAnalysisDecisions = async (
     ...(decisions.profile_override == null ? {} : { profile_override: decisions.profile_override }),
     ...(decisions.emphasis_override == null ? {} : { emphasis_override: decisions.emphasis_override }),
     ...(decisions.language_override == null ? {} : { language_override: decisions.language_override }),
+    ...acceptanceFields(decisions, activeSelectionPlanId),
   };
 
   const response = await apiRequest<AnalysisDecisions>(applyDecisionsPath(analysisId), {
@@ -93,6 +133,11 @@ interface AnalysisGap {
   requirement: string;
   severity: "hard" | "warning";
   reason: string;
+  /* The Requirement this gap projects, and the only thing an acceptance may name. Absent
+     on an analysis written before requirement extraction existed, whose stored gaps stay
+     authoritative exactly as recorded - and which therefore has no acceptable gap at all,
+     since the server refuses any id that names no hard gap of the analysis being written. */
+  requirementId: string | null;
 }
 
 export interface Classification {
@@ -147,6 +192,7 @@ const gapsFrom = (value: unknown): AnalysisGap[] => {
             requirement: gap.requirement,
             severity: gap.severity,
             reason: typeof gap.reason === "string" ? gap.reason : "",
+            requirementId: typeof gap.requirement_id === "string" ? gap.requirement_id : null,
           },
         ]
       : [];

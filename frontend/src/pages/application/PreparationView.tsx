@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useCallback, useState } from "react";
 
 import type { Classification } from "../../api/analyses";
 import type { ApplicationDetail } from "../../api/contracts";
@@ -9,6 +9,7 @@ import { AutomaticDraftNotice } from "./AutomaticDraftNotice";
 import { PreparationAlerts } from "./PreparationAlerts";
 import { ReviewDecisionPanel, resolvedByDecisionForm } from "./ReviewDecisionPanel";
 import { AnalysisPanel } from "./analysis/AnalysisPanel";
+import { GAP_REASON } from "./ReviewDecisionForm";
 
 export const PreparationView = ({
   classification,
@@ -34,6 +35,32 @@ export const PreparationView = ({
   const hasRecommendation = detail.review_reasons.some(resolvedByDecisionForm) || detail.recommended_action != null;
   const hasActionSurface = hasRecommendation || detail.available_actions.length > 0;
 
+  /* Which hard gaps the reader has marked as knowingly accepted. It lives here because the
+     mark is taken on the gap in the analysis panel and sent from the decision panel below
+     it - two siblings, one decision, so the state belongs to the parent they share rather
+     than being duplicated into each.
+
+     Cleared on a successful commit, in the same beat the form clears: what was accepted is
+     then part of the new SelectionPlan the refreshed projection reports, and leaving the
+     marks would show a decision as pending after it landed. */
+  const [acceptedRequirementIds, setAcceptedRequirementIds] = useState<string[]>([]);
+  const toggleAcceptance = useCallback((requirementId: string) => {
+    setAcceptedRequirementIds((current) =>
+      current.includes(requirementId) ? current.filter((id) => id !== requirementId) : [...current, requirementId],
+    );
+  }, []);
+  const clearAcceptances = useCallback(() => setAcceptedRequirementIds([]), []);
+
+  /* Offered only while the projection is asking for that decision, and only against the
+     plan the acceptance would be recorded on. Anything else - a gap the reader is merely
+     reading, an analysis with no active plan - keeps the section read-only. */
+  const gapDecisionOpen =
+    detail.active_selection_plan_id != null && detail.review_reasons.some((reason) => reason.code === GAP_REASON);
+  const acceptableGaps =
+    classification === null
+      ? []
+      : classification.gaps.filter((gap) => gap.severity === "hard" && gap.requirementId !== null);
+
   return (
     <div className="flex flex-col gap-5">
       {/* Live work is reported before the alert backdrop, beside the workflow it is
@@ -44,7 +71,15 @@ export const PreparationView = ({
 
       <PreparationAlerts detail={detail} />
 
-      {classification === null ? null : <AnalysisPanel classification={classification} detail={detail} />}
+      {classification === null ? null : (
+        <AnalysisPanel
+          classification={classification}
+          detail={detail}
+          gapAcceptance={
+            gapDecisionOpen ? { disabled: false, onToggle: toggleAcceptance, selected: acceptedRequirementIds } : null
+          }
+        />
+      )}
 
       {/* A superseded analysis is not shown as if it were the one in force: the reader is
           told the analysis on record belongs to an older snapshot and that a new one is
@@ -70,7 +105,12 @@ export const PreparationView = ({
           }
         >
           <div className="flex flex-col gap-5">
-            <ReviewDecisionPanel detail={detail} />
+            <ReviewDecisionPanel
+              acceptableGapCount={acceptableGaps.length}
+              acceptedRequirementIds={acceptedRequirementIds}
+              detail={detail}
+              onAcceptancesApplied={clearAcceptances}
+            />
             <ApplicationActions detail={detail} onQueued={onQueued} />
           </div>
         </section>
