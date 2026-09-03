@@ -232,6 +232,13 @@ class Profile(StrictModel):
     headline: str | None = None
     required_tags: list[str] = []
     tag_weights: dict[str, int] = {}
+    # The dated roles this Profile deliberately does not offer, each against the
+    # reason it does not. Employment-history coverage is checked against the
+    # fact store, so a dated role that is neither offered nor named here fails
+    # the profile set instead of quietly vanishing from the CV. A waiver records
+    # a decision about the head or tail of the timeline; it cannot buy off a
+    # hole between two roles the Profile does offer.
+    omitted_roles: dict[str, str] = {}
     sections: list[ResumeSectionSpec]
     allow_two_pages: bool = False
 
@@ -243,6 +250,22 @@ class Profile(StrictModel):
             raise ValueError("headline must be one of the safe headlines")
         if self.normalized_role not in self.safe_headlines:
             raise ValueError("normalized role must be a safe headline")
+        return self
+
+    @model_validator(mode="after")
+    def validate_omitted_role_reasons(self) -> Profile:
+        """A declined role states why, so the waiver records a decision.
+
+        Without this the reason is decoration: `{"role": ""}` would satisfy the
+        coverage rule and leave the omission as unexplained as never declaring
+        it. An empty string is what an absent-minded edit produces, which is
+        precisely the case the waiver list exists to catch.
+        """
+        blank = sorted(
+            fact_id for fact_id, reason in self.omitted_roles.items() if not reason.strip()
+        )
+        if blank:
+            raise ValueError(f"omitted roles need a reason: {', '.join(blank)}")
         return self
 
 

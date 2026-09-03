@@ -22,6 +22,9 @@
     "closing": 100,
     "new-business": 90
   },
+  "omitted_roles": {
+    "development.phdigital.role": "A software engineering role is not this CV's argument; the commercial history it prints runs unbroken to its end."
+  },
   "sections": [
     {
       "name_en": "Professional Summary",
