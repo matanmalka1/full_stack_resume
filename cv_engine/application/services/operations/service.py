@@ -213,7 +213,9 @@ class OperationService(ServiceBase[OperationRepository]):
             sources=OperationSources(
                 job_snapshot_id=analysis["job_snapshot_id"],
                 job_analysis_id=command.job_analysis_id,
-                knowledge_context_hash=analysis_knowledge_context_hash(analysis_service),
+                # Building a plan reads no requirement concepts: it consumes the
+                # analysis, which is already frozen in `dependency_hashes`.
+                knowledge_context_hash=document_knowledge_context_hash(analysis_service),
                 dependency_hashes={"job_analysis": _model_hash(analysis["analysis"])},
             ),
             provider="openai",

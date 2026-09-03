@@ -732,3 +732,79 @@ def test_every_selection_plan_write_takes_the_application_lock_first() -> None:
         assert insert is not None and lock < insert, f"{node.name} locks after inserting"
         if standing is not None:
             assert lock < standing, f"{node.name} reads the standing acceptances before locking"
+
+
+def test_every_operation_records_the_knowledge_scope_its_activation_checks() -> None:
+    """A submission and its re-check must measure the same thing.
+
+    The knowledge context is scoped: an analysis is measured against every
+    dependency, and every stage after it against the dependencies it actually
+    consumes. If a submitter freezes one scope and the handler compares the
+    other, the two can never match, and the operation fails SOURCE_CHANGED on
+    every run with nothing wrong. That is exactly what happened to
+    `propose_selection_plan` when only one side was moved.
+
+    Derived from the composition registry, so a new operation type is paired
+    here the moment it is wired rather than when someone remembers to add it.
+    """
+    root = Path(__file__).resolve().parents[1] / "cv_engine"
+    composition = (root / "runtime" / "composition.py").read_text(encoding="utf-8")
+    handlers_source = (root / "application" / "services" / "operations" / "handlers.py").read_text(
+        encoding="utf-8"
+    )
+    service_source = (root / "application" / "services" / "operations" / "service.py").read_text(
+        encoding="utf-8"
+    )
+
+    def scope(body: str) -> str:
+        if "analysis_knowledge_context_hash" in body:
+            return "analysis"
+        if "document_knowledge_context_hash" in body:
+            return "document"
+        return "none"
+
+    def bodies(source: str, kind) -> dict[str, str]:
+        tree = ast.parse(source)
+        return {
+            f"{outer.name}.{node.name}" if outer is not None else node.name: (
+                ast.get_source_segment(source, node) or ""
+            )
+            for outer in [None, *[n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]]
+            for node in (ast.walk(tree) if outer is None else outer.body)
+            if isinstance(node, kind)
+        }
+
+    # Which handler class serves which operation type, read from the registry.
+    registered = dict(re.findall(r"OperationType\.([A-Z_]+):\s*([A-Za-z]+)\(", composition))
+    assert registered, "the operation registry was not found; fix this guard"
+
+    handler_scopes: dict[str, str] = {}
+    for node in ast.walk(ast.parse(handlers_source)):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        for method in node.body:
+            if isinstance(method, ast.FunctionDef) and method.name == "check_sources":
+                handler_scopes[node.name] = scope(
+                    ast.get_source_segment(handlers_source, method) or ""
+                )
+
+    # Which submitter freezes which scope, matched to a type by the constant it names.
+    submitter_scopes: dict[str, str] = {}
+    for node in ast.walk(ast.parse(service_source)):
+        if not isinstance(node, ast.FunctionDef) or not node.name.startswith("submit_"):
+            continue
+        body = ast.get_source_segment(service_source, node) or ""
+        for operation_type in re.findall(r"OperationType\.([A-Z_]+)", body):
+            submitter_scopes[operation_type] = scope(body)
+
+    disagreements = [
+        (operation_type, submitter_scopes[operation_type], handler_scopes.get(handler))
+        for operation_type, handler in registered.items()
+        if operation_type in submitter_scopes
+        and handler_scopes.get(handler) != "none"
+        and submitter_scopes[operation_type] != handler_scopes.get(handler)
+    ]
+    assert not disagreements, (
+        "these freeze one knowledge scope and re-check another, so activation can never "
+        f"match: {disagreements}"
+    )
