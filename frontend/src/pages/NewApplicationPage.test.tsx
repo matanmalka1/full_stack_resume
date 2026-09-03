@@ -265,7 +265,9 @@ describe("NewApplicationPage", () => {
       "href",
       "/applications/app-existing",
     );
-    expect(screen.getByText("נדרש אישור מפורש כדי ליצור מועמדות נוספת.")).toBeInTheDocument();
+    expect(
+      screen.getByText("נדרש אישור מפורש כדי ליצור מועמדות נוספת. אפשר גם לפתוח אחת מהמועמדויות הקיימות."),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "יצירת מועמדות נוספת" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "יצירת מועמדות" })).not.toBeInTheDocument();
     expect(calls.map((call) => call.path)).toEqual([DUPLICATE_CHECK_PATH]);
