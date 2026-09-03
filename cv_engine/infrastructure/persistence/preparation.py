@@ -314,12 +314,15 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         selection_plan_id = new_id()
         now = utc_now()
         with self.transaction() as connection:
+            self._lock_application(connection, application_id)
+            # Allocated under the lock. Read before it, the highest version is
+            # whatever the snapshot happened to see, and the insert collides on
+            # the unique constraint instead of taking the next number.
             version = connection.execute(
                 select(
                     (func.coalesce(func.max(job_analyses.c.version_number), 0) + 1).label("version")
                 ).where(job_analyses.c.application_id == application_id)
             ).scalar_one()
-            self._lock_application(connection, application_id)
             self._active_plan(connection, application_id, expected_selection_plan_id)
             connection.execute(
                 insert(job_analyses).values(
@@ -462,6 +465,19 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                 .one_or_none()
             )
         return self._selection_plan_record(row)
+
+    def lock_application(self, application_id: str) -> None:
+        """Take the Application lock before this unit of work reads anything.
+
+        A unit of work runs at REPEATABLE READ, so its snapshot is fixed by its
+        first statement. Locking later means reading under a snapshot taken
+        before the lock was available: the waiting writer then finds the row
+        updated by whoever held it and fails to serialize, and any version
+        number it allocated from that snapshot is already stale. Taken first,
+        the snapshot begins where the lock does.
+        """
+        with self.transaction() as connection:
+            self._lock_application(connection, application_id)
 
     @staticmethod
     def _lock_application(connection: Connection, application_id: str) -> None:

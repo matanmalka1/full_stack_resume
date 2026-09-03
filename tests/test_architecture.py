@@ -732,6 +732,16 @@ def test_every_selection_plan_write_takes_the_application_lock_first() -> None:
         assert insert is not None and lock < insert, f"{node.name} locks after inserting"
         if standing is not None:
             assert lock < standing, f"{node.name} reads the standing acceptances before locking"
+        # Every statement, not only the ones named above. The version number was
+        # allocated by a `select(max(...))` before the lock, so under a snapshot
+        # taken before it: the highest version seen was whatever the snapshot
+        # held, and the insert collided on the unique constraint rather than
+        # taking the next number.
+        executed = [line for line, name in calls if name == "execute" and line != lock]
+        assert all(lock < line for line in executed), (
+            f"{node.name} runs a statement before taking the lock; every read it makes "
+            "has to be under the lock, not only the ones this guard could name"
+        )
 
 
 def test_every_operation_records_the_knowledge_scope_its_activation_checks() -> None:
@@ -808,3 +818,42 @@ def test_every_operation_records_the_knowledge_scope_its_activation_checks() -> 
         "these freeze one knowledge scope and re-check another, so activation can never "
         f"match: {disagreements}"
     )
+
+
+def test_the_activation_unit_of_work_locks_before_it_reads() -> None:
+    """The runner's snapshot has to begin where the lock does.
+
+    A unit of work runs at REPEATABLE READ, so its first statement fixes its
+    snapshot. Activation used to read the Operation, write two phase rows and
+    run the source checks before the write it was all leading to took the
+    Application lock - so the lock was taken under a snapshot that predated it.
+    A writer that waited then found the row updated by whoever held the lock and
+    failed to serialize, having already done the work.
+
+    Asserted on the first statement of the block rather than on the call being
+    present somewhere in it, for the same reason the repository guard is: a lock
+    taken after the read satisfies a presence check and protects nothing.
+    """
+    source = (
+        Path(__file__).resolve().parents[1] / "cv_engine" / "application" / "operation_runner.py"
+    ).read_text(encoding="utf-8")
+    blocks = [
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.With)
+        and "unit_of_work()" in (ast.get_source_segment(source, node) or "")
+    ]
+    assert blocks, "the activation unit of work was not found; fix this guard"
+    for block in blocks:
+        names = [
+            getattr(inner.func, "attr", None) or getattr(inner.func, "id", None)
+            for statement in block.body
+            for inner in ast.walk(statement)
+            if isinstance(inner, ast.Call)
+        ]
+        taken = names.index("lock_application") if "lock_application" in names else None
+        assert taken is not None, "the activation unit of work never takes the Application lock"
+        assert taken == 0 or names[:taken] == ["bind"], (
+            "the activation unit of work reads before it locks, so its snapshot is fixed "
+            f"before the lock: {names[: taken + 1]}"
+        )
