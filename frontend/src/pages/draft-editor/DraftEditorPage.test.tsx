@@ -251,6 +251,16 @@ describe("DraftEditorPage", () => {
     expect(screen.getByRole("heading", { level: 3, name: "Core Skills" })).toBeInTheDocument();
     expect(screen.getAllByText("מבוסס עובדה").length).toBeGreaterThan(0);
     expect(screen.getByDisplayValue("Account Manager")).toBeInTheDocument();
+    const breadcrumbs = screen.getByRole("navigation", { name: "פירורי לחם" });
+    expect(within(breadcrumbs).getByRole("link", { name: "Acme – Account Manager" })).toHaveAttribute(
+      "href",
+      "/applications/app-1",
+    );
+    expect(within(breadcrumbs).getByRole("link", { name: "הכנת קורות החיים" })).toHaveAttribute(
+      "href",
+      "/applications/app-1/preparation",
+    );
+    expect(within(breadcrumbs).getByText("עורך טיוטה")).toHaveAttribute("aria-current", "page");
   });
 
   it("names the facts behind a claim by their text, never by their identifier", async () => {

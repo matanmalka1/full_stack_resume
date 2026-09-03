@@ -9,7 +9,6 @@ import { appRoutes } from "../app/appRoutes";
 import { useRequiredParam } from "../app/useRequiredParam";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { useWatchedOperation } from "../hooks/useWatchedOperation";
-import { BackLink } from "../ui/BackLink";
 import { buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { Card } from "../ui/Card";
@@ -20,6 +19,7 @@ import { dateTimesMatch, formatDateTime } from "../ui/formatDateTime";
 import { ActiveOperationPanel } from "./ActiveOperationPanel";
 import { ArtifactsPanel } from "./application/ArtifactsPanel";
 import { ApplicationNotes } from "./application/ApplicationNotes";
+import { ApplicationBreadcrumbs } from "./application/ApplicationBreadcrumbs";
 import { JobSnapshotPanel } from "./application/JobSnapshotPanel";
 import { PreparationStatusBadges } from "./application/PreparationStatusBadges";
 import { recruitmentStatusLabel } from "./application/applicationLabels";
@@ -139,9 +139,12 @@ export const JobDetailsPage = () => {
   return (
     <PageShell
       navigation={
-        <BackLink label="חזרה ללוח המועמדויות" to={appRoutes.home}>
-          לוח המועמדויות
-        </BackLink>
+        <ApplicationBreadcrumbs
+          applicationId={applicationId}
+          company={detail?.application.company}
+          page="job"
+          targetRole={detail?.application.target_role}
+        />
       }
       eyebrow={detail === undefined ? undefined : <span dir="auto">{detail.application.company}</span>}
       title={detail?.application.target_role ?? "פרטי משרה"}

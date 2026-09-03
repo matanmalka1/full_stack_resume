@@ -2,13 +2,12 @@ import { FilePlus2 } from "lucide-react";
 import { useParams } from "react-router-dom";
 
 import { ErrorCallout } from "../app/ErrorCallout";
-import { appRoutes } from "../app/appRoutes";
-import { BackLink } from "../ui/BackLink";
 import { Button } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
 import { ActiveOperationPanel } from "./ActiveOperationPanel";
+import { ApplicationBreadcrumbs } from "./application/ApplicationBreadcrumbs";
 import { warningDetail, warningTitle } from "./application/applicationLabels";
 import { RevisionRecord } from "./revision/RevisionRecord";
 import { RevisionSubmissionDialog } from "./revision/RevisionSubmissionDialog";
@@ -25,11 +24,13 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
     <PageShell
       description="הגרסה המאושרת נשארת זמינה גם כאשר העבודה על המועמדות ממשיכה."
       navigation={
-        revision === undefined ? undefined : (
-          <BackLink label="חזרה למועמדות" to={appRoutes.application(revision.application_id)}>
-            {state.hasSources ? "חזרה למועמדות" : "חזרה למועמדות ליצירת מקורות עדכניים"}
-          </BackLink>
-        )
+        <ApplicationBreadcrumbs
+          applicationId={revision?.application_id}
+          company={detail?.application.company}
+          page="revision"
+          revisionLabel={revision?.ready_qualified === false ? "גרסה מאושרת" : "גרסה מוכנה"}
+          targetRole={detail?.application.target_role}
+        />
       }
       title={revision?.ready_qualified === false ? "גרסה מאושרת" : "קורות החיים מוכנים"}
     >

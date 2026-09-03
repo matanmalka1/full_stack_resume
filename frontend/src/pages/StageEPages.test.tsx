@@ -720,11 +720,14 @@ describe("DraftRenderPanel and RevisionPage", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
     const newDraft = await screen.findByRole("button", { name: "יצירת טיוטה חדשה" });
-    /* The way back is offered alongside the draft button, not instead of it. It used to
-       appear only when the sources were stale - as the fallback for a missing button
-       rather than as an exit - which left this case, a Ready revision with current
-       sources, with no link off the screen at all. */
-    expect(screen.getByRole("link", { name: "חזרה למועמדות" })).toHaveAttribute("href", "/applications/app-1");
+    /* The immutable revision keeps the complete route back to its Application and its
+       preparation screen alongside the action that starts newer work. */
+    expect(screen.getByRole("link", { name: "Acme – Engineer" })).toHaveAttribute("href", "/applications/app-1");
+    expect(screen.getByRole("link", { name: "הכנת קורות החיים" })).toHaveAttribute(
+      "href",
+      "/applications/app-1/preparation",
+    );
+    expect(screen.getByText("גרסה מוכנה")).toHaveAttribute("aria-current", "page");
     fireEvent.click(newDraft);
     await waitFor(() => expect(fetchMock.mock.calls.some((call) => call[1]?.method === "POST")).toBe(true));
     const request = fetchMock.mock.calls.find((call) => call[1]?.method === "POST");
@@ -747,6 +750,8 @@ describe("SettingsPage", () => {
       ),
     );
     renderRoute("/settings", "/settings", <SettingsPage />);
+    expect(screen.getByRole("link", { name: "מועמדויות" })).toHaveAttribute("href", "/");
+    expect(screen.getByText("הגדרות")).toHaveAttribute("aria-current", "page");
     expect(await screen.findByText("לא הוגדר ספק AI בסביבת הריצה.")).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "AI" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "הפעלת בדיקת התאמה" })).toBeInTheDocument();

@@ -175,10 +175,11 @@ describe("NewApplicationPage", () => {
   it("returns to the board the user left, dropping what the board would not have asked", () => {
     renderPage("/?activity=all&stage=approved&limit=9&nonsense=x");
 
-    expect(screen.getByRole("link", { name: "לוח המועמדויות" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "מועמדויות" })).toHaveAttribute(
       "href",
       "/?activity=all&stage=approved",
     );
+    expect(screen.getByText("משרה חדשה")).toHaveAttribute("aria-current", "page");
   });
 
   it("reads a chosen .txt file into the job text area without sending it anywhere", async () => {

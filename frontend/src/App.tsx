@@ -1,48 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { Settings } from "lucide-react";
-import { Link, Outlet, useMatches } from "react-router-dom";
+import { Link, Outlet } from "react-router-dom";
 
 import { RouteFocusManager } from "./app/RouteFocusManager";
 import { WorkflowLandmark, WorkflowLandmarkSteps } from "./app/WorkflowLandmark";
 import { appRoutes } from "./app/appRoutes";
-import { applicationDetailQueryOptions } from "./api/applications";
 import { settingsQueryOptions } from "./api/settings";
 import { buttonClasses } from "./ui/Button";
 
-/* The Application named on an inner screen's header line, and the way back to Job Detail. */
-const ApplicationContext = ({ company, href, targetRole }: { company: string; href: string; targetRole: string }) => {
-  const body = (
-    <>
-      <span className="block truncate text-support font-bold text-cv-text" dir="auto">
-        {company}
-      </span>
-      <span className="block truncate text-support text-cv-text-muted" dir="auto">
-        {targetRole}
-      </span>
-    </>
-  );
-
-  return (
-    <Link className="min-w-0 rounded-control border-e border-cv-border pe-3 text-end hover:underline" to={href}>
-      {body}
-    </Link>
-  );
-};
-
 export const App = () => {
   const settings = useQuery(settingsQueryOptions).data?.settings;
-  const matches = useMatches();
-  /* Job Detail names the company and role in its own content, so repeating the same pair
-     in the shell would make the new owner look duplicated. Inner screens keep the pair as
-     their link back to Job Detail. The route declares that relationship in its handle. */
-  const isApplicationScreen = matches.some(
-    (match) => (match.handle as { applicationContext?: string } | undefined)?.applicationContext === "self",
-  );
-  const applicationId = matches.map((match) => match.params.applicationId).find((id) => id !== undefined) ?? null;
-  const applicationContext = useQuery({
-    ...applicationDetailQueryOptions(applicationId ?? ""),
-    enabled: applicationId !== null,
-  }).data?.application;
 
   return (
     <div
@@ -63,15 +30,6 @@ export const App = () => {
             </Link>
 
             <div className="ms-auto flex min-w-0 items-center gap-3">
-              {/* Shown at every width. Hidden below `sm` it was absent exactly where a
-                  back gesture is hardest to reach. */}
-              {applicationContext === undefined || applicationId === null || isApplicationScreen ? null : (
-                <ApplicationContext
-                  company={applicationContext.company}
-                  href={appRoutes.application(applicationId)}
-                  targetRole={applicationContext.target_role}
-                />
-              )}
               <Link className={buttonClasses("ghost")} to={appRoutes.settings}>
                 <Settings aria-hidden="true" className="size-4" />
                 הגדרות

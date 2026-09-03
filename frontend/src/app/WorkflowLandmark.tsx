@@ -181,7 +181,7 @@ export const WorkflowLandmarkSteps = () => {
 
   /* Off-workflow screens get no landmark rather than a stale one. Without this, removing
      the unmount reset would leave Settings showing whichever stage the previous screen
-     published - the breadcrumb still claiming a stage while the user is in Settings. */
+     published - the workflow landmark still claiming a stage while the user is in Settings. */
   if (stage === "none") {
     return null;
   }

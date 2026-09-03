@@ -85,6 +85,14 @@ afterEach(() => {
 });
 
 describe("JobDetailsPage", () => {
+  it("places the job under the applications breadcrumb", async () => {
+    renderPage();
+
+    expect(await screen.findByRole("navigation", { name: "פירורי לחם" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "מועמדויות" })).toHaveAttribute("href", "/");
+    expect(screen.getByText("Acme – Backend Engineer")).toHaveAttribute("aria-current", "page");
+  });
+
   it("links a Ready application to the exact immutable revision", async () => {
     renderPage((input) =>
       Promise.resolve(

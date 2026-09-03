@@ -166,6 +166,18 @@ afterEach(() => {
 });
 
 describe("ApplicationPage", () => {
+  it("shows the complete hierarchy above CV preparation", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(jsonResponse(detail()))));
+
+    renderPage();
+
+    expect(await screen.findByRole("link", { name: "Acme – Backend Engineer" })).toHaveAttribute(
+      "href",
+      "/applications/app-1",
+    );
+    expect(screen.getByText("הכנת קורות החיים", { selector: "[aria-current='page']" })).toBeInTheDocument();
+  });
+
   /* The Web automation opt-in, which moved here with the flow: queueing no longer
      navigates, so the Operation screen that used to run this chain is not on the path.
      Once per successful analyze, and not again after a remount - the session record is

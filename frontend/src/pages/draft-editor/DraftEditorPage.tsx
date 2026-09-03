@@ -4,7 +4,6 @@ import { Link } from "react-router-dom";
 import { ErrorCallout } from "../../app/ErrorCallout";
 import { appRoutes } from "../../app/appRoutes";
 import { useRequiredParam } from "../../app/useRequiredParam";
-import { BackLink } from "../../ui/BackLink";
 import { Button, buttonClasses } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 import { Card } from "../../ui/Card";
@@ -12,6 +11,7 @@ import { PageShell } from "../../ui/PageShell";
 import { QueryState } from "../../ui/QueryState";
 import { SectionHeader } from "../../ui/SectionHeader";
 import { reasonTitle } from "../application/applicationLabels";
+import { ApplicationBreadcrumbs } from "../application/ApplicationBreadcrumbs";
 import { FactLifecyclePanel } from "../facts/FactLifecyclePanel";
 import { ActiveOperationPanel } from "../ActiveOperationPanel";
 import { DraftApprovalDialog } from "./DraftApprovalDialog";
@@ -67,9 +67,12 @@ export const DraftEditorPage = () => {
       description={detail === undefined ? undefined : `תפקיד היעד: ${detail.application.target_role}`}
       eyebrow="סביבת עריכה"
       navigation={
-        <BackLink label="חזרה להכנת קורות החיים" to={preparationHref}>
-          הכנת קורות החיים
-        </BackLink>
+        <ApplicationBreadcrumbs
+          applicationId={applicationId}
+          company={detail?.application.company}
+          page="draft"
+          targetRole={detail?.application.target_role}
+        />
       }
       title="עריכה, אימות ואישור"
     >

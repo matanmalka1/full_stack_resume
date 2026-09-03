@@ -7,7 +7,7 @@ import { ErrorCallout } from "../app/ErrorCallout";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
 import { appRoutes } from "../app/appRoutes";
 import { ActionBar } from "../ui/ActionBar";
-import { BackLink } from "../ui/BackLink";
+import { Breadcrumbs } from "../ui/Breadcrumbs";
 import { Button } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { Field } from "../ui/Field";
@@ -96,11 +96,13 @@ export const NewApplicationPage = () => {
     <PageShell
       description="הזנת פרטי המשרה יוצרת תצלום מקור קבוע ומתחילה ניתוח התאמה מול העובדות הקנוניות."
       measure="form"
-      /* One step up, the way every other record screen names its parent. */
       navigation={
-        <BackLink label="חזרה ללוח המועמדויות" to={boardPath}>
-          לוח המועמדויות
-        </BackLink>
+        <Breadcrumbs
+          items={[
+            { label: "מועמדויות", to: boardPath },
+            { label: "משרה חדשה" },
+          ]}
+        />
       }
       title="קליטת משרה חדשה"
     >

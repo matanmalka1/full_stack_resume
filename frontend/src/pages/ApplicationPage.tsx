@@ -2,14 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 
 import { classificationFromAnalysis } from "../api/analyses";
 import { applicationDetailQueryOptions } from "../api/applications";
-import { appRoutes } from "../app/appRoutes";
 import { useRequiredParam } from "../app/useRequiredParam";
 import { useWorkflowStage, workflowDestinations } from "../app/WorkflowLandmark";
 import { useWatchedOperation } from "../hooks/useWatchedOperation";
-import { BackLink } from "../ui/BackLink";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
 import { ActiveOperationPanel } from "./ActiveOperationPanel";
+import { ApplicationBreadcrumbs } from "./application/ApplicationBreadcrumbs";
 import { PreparationStatusBadges } from "./application/PreparationStatusBadges";
 import { PreparationView } from "./application/PreparationView";
 import { useAutomaticDraft } from "./application/useAutomaticDraft";
@@ -58,12 +57,13 @@ export const ApplicationPage = () => {
           />
         )
       }
-      /* Up to the job the CV is being written for, not across to a peer tab: preparation
-         is entered from Job Detail and returns there. */
       navigation={
-        <BackLink label="חזרה לפרטי המשרה" to={appRoutes.application(applicationId)}>
-          פרטי משרה
-        </BackLink>
+        <ApplicationBreadcrumbs
+          applicationId={applicationId}
+          company={detail?.application.company}
+          page="preparation"
+          targetRole={detail?.application.target_role}
+        />
       }
       title="הכנת קורות החיים"
     >

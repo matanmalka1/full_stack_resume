@@ -4,7 +4,7 @@ import { Settings, ShieldCheck } from "lucide-react";
 import { settingsQueryOptions } from "../api/settings";
 import { appRoutes } from "../app/appRoutes";
 import { useWorkflowStage } from "../app/WorkflowLandmark";
-import { BackLink } from "../ui/BackLink";
+import { Breadcrumbs } from "../ui/Breadcrumbs";
 import { Card } from "../ui/Card";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
@@ -32,9 +32,12 @@ export const SettingsPage = () => {
       description="מדיניות ביצוע, תצוגת הממשק ובדיקות התקינות של מאגר הידע והתוצרים."
       measure="form"
       navigation={
-        <BackLink label="חזרה ללוח המועמדויות" to={appRoutes.home}>
-          לוח המועמדויות
-        </BackLink>
+        <Breadcrumbs
+          items={[
+            { label: "מועמדויות", to: appRoutes.home },
+            { label: "הגדרות" },
+          ]}
+        />
       }
       title={
         <span className="inline-flex items-center gap-2">

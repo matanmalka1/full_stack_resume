@@ -71,7 +71,6 @@ export const router = createBrowserRouter([
            history, preparation summary, and immutable outputs. */
         path: "applications/:applicationId",
         element: <JobDetailsPage />,
-        handle: { applicationContext: "self" },
       },
       {
         /* The document workflow is addressed separately from the job record. */
