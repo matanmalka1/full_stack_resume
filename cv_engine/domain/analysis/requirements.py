@@ -28,7 +28,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from ...util import canonical_json, sha256_text
 from ..facts import FactStore
@@ -110,6 +110,24 @@ class RequirementConceptStore:
         if not self.requirement_cues:
             raise RequirementConceptError(f"{origin}: no requirement cues declared")
         self.responsibility_cues = self._cues(payload, "responsibility_cues")
+        # Which section a *bare* heading opens, keyed on the heading itself.
+        # A line with no colon carries no syntactic evidence that it announces
+        # anything, so it must match a configured marker outright rather than
+        # merely contain one - otherwise "SaaS experience preferred" would be
+        # read as a heading and the requirement in it would disappear.
+        # Later entries win, so the precedence is the same as `_section_of`.
+        self.heading_sections: dict[str, str] = {
+            key: section
+            for markers, section in (
+                (self.responsibility_cues, "responsibilities"),
+                (self.mandatory_markers, "requirements"),
+                (self.block_markers, "requirements"),
+                (self.preferred_markers, "preferred"),
+            )
+            for marker in markers
+            for key in (heading_key(marker),)
+            if key
+        }
         self.concepts: dict[str, RequirementConcept] = {
             name: self._concept(name, body)
             for name, body in (payload.get("concepts") or {}).items()
@@ -228,10 +246,10 @@ SectionKind = Literal["requirements", "preferred", "responsibilities", "other"]
 StatementKind = Literal["requirement", "responsibility"]
 ExtractionState = Literal["parsed", "partial", "unparsed", "absent"]
 
-#: A line that ends in a colon or a question mark announces something rather
-#: than stating it. "What Will Make You Stand Out?" is a heading, not a
-#: requirement, and counting it made the denominator dishonest.
-_ANNOUNCEMENT = re.compile(r"[:?]\s*$")
+#: Decoration a heading may be wrapped in. Stripped from both the line and the
+#: configured marker before they are compared, so `**Requirements**`,
+#: `Requirements:` and `Requirements` are one heading.
+_HEADING_DECORATION = " \t*_#~`-\u2013\u2014\u2022\u2023\u25aa\u25e6:?.!,"
 
 #: Below this a line is a fragment, a bullet glyph, or a label.
 _MIN_STATEMENT = 12
@@ -317,6 +335,38 @@ def _collapse(text: str, base: int) -> tuple[str, tuple[int, ...]]:
         body.pop()
         offsets.pop()
     return "".join(body), tuple(offsets)
+
+
+def heading_key(text: str) -> str:
+    """A heading reduced to what it says, for comparison against a marker."""
+    return _WHITESPACE.sub(" ", text.strip(_HEADING_DECORATION)).strip().casefold()
+
+
+def _heading_section(
+    line: str, stripped: str, concepts: RequirementConceptStore
+) -> SectionKind | None:
+    """Which section this line opens, or `None` if it states something instead.
+
+    A colon announces: the line is a heading whatever it says, and the loose
+    containment match decides which kind.
+
+    Without a colon there is no such evidence, so the line must *be* a
+    configured marker. That is what lets a bare `Responsibilities` close the
+    requirement block - the common case, and the one that left every later
+    bullet inheriting the `Requirements:` above it - without letting a bullet
+    that merely ends in "preferred" swallow itself as a heading. A glyph marks
+    an item rather than a heading, so a bulleted line is never one.
+
+    A question mark alone no longer announces anything. "Do you have 3+ years
+    of sales experience?" is a requirement asked as a question, and discarding
+    it reported a posting that stated requirements as one that stated none.
+    """
+    if stripped.endswith(":"):
+        return _section_of(stripped.casefold(), concepts)
+    if _BULLET.match(line):
+        return None
+    section = concepts.heading_sections.get(heading_key(stripped))
+    return cast("SectionKind | None", section)
 
 
 def _section_of(heading: str, concepts: RequirementConceptStore) -> SectionKind:
@@ -415,11 +465,12 @@ def _segments(text: str, concepts: RequirementConceptStore) -> list[_Span]:
             flush()
             open_ended = False
             continue
-        if _ANNOUNCEMENT.search(stripped):
+        heading = _heading_section(line, stripped, concepts)
+        if heading is not None:
             # The statement above closes under the heading it was written
             # under, so `flush` runs before the section changes.
             flush()
-            section = _section_of(stripped.casefold(), concepts)
+            section = heading
             open_ended = False
             continue
         bullet = _BULLET.match(line)

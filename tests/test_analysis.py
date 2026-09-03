@@ -23,6 +23,7 @@ from cv_engine.domain.analysis.requirements import (
     extraction_confidence,
     extraction_failed,
     extraction_state,
+    heading_key,
     normalize_span,
     requirement_lines,
     statement_lines,
@@ -800,20 +801,27 @@ def test_a_you_will_line_alone_is_never_a_requirement(requirement_concepts) -> N
         assert [item.kind for item in found] == ["responsibility"]
 
 
-def test_a_responsibilities_heading_closes_the_requirement_block(requirement_concepts) -> None:
+@pytest.mark.parametrize("heading", ["Responsibilities:", "Responsibilities"])
+def test_a_responsibilities_heading_closes_the_requirement_block(
+    heading, requirement_concepts
+) -> None:
     """A `Requirements:` heading does not govern the rest of the posting.
 
-    "Own the full sales cycle", printed under `Responsibilities:`, is what the
+    "Own the full sales cycle", printed under `Responsibilities`, is what the
     role does. It was read as a mandatory requirement because the block marker
     above it was still open at that offset and nothing closed it - the section
     was a substring search over everything before the match, not a state the
     posting could leave.
+
+    Punctuated and bare, because postings write it both ways and only the
+    colon was recognised at first - which left the bare form latching the
+    requirements block open and reproducing the whole defect.
     """
     job = (
         "Requirements:\n"
         "3+ years of sales experience (must).\n"
         "\n"
-        "Responsibilities:\n"
+        f"{heading}\n"
         "Own the full sales cycle from lead to close.\n"
     )
     sections = {line.section for line in requirement_lines(job, requirement_concepts)}
@@ -838,12 +846,73 @@ def test_a_requirement_misfiled_under_responsibilities_is_read_but_not_mandatory
         "Requirements:\n"
         "3+ years of sales experience (must).\n"
         "\n"
-        "Responsibilities:\n"
+        "Responsibilities\n"
         "You will need experience owning the full sales cycle.\n"
     )
     extracted = extract_requirements(job, normalized_hash="misfiled", concepts=requirement_concepts)
     cycle = next(item for item in extracted if item.concept == "full-sales-cycle")
     assert cycle.mandatory is False
+
+
+def test_every_configured_heading_works_without_punctuation(requirement_concepts) -> None:
+    """Derived from the vocabulary, so a marker cannot be recognised in one form only.
+
+    Only a colon-terminated line was treated as a heading. `Responsibilities`,
+    `Nice to have` and `What will make you stand out` are routinely written
+    bare, and each one left the section above it latched open: the bullets
+    under a bare `Nice to have` came out mandatory, and the bullets under a
+    bare `Responsibilities` came out as requirements.
+    """
+    for heading, expected in requirement_concepts.heading_sections.items():
+        job = f"About the job.\n\n{heading}\n- Native English speaker\n"
+        under = [
+            line
+            for line in statement_lines(job, requirement_concepts)
+            if line.text == "Native English speaker"
+        ]
+        assert under, f"{heading!r} swallowed the statement under it"
+        assert under[0].section == expected, heading
+
+
+def test_a_bare_heading_must_be_the_marker_rather_than_contain_it(
+    requirement_concepts,
+) -> None:
+    """The loose match is licensed by the colon, and by nothing else.
+
+    Without that, a requirement ending in "preferred" or "is an advantage" is
+    read as a preferred *heading* and disappears from the posting entirely -
+    trading one false green for a worse one.
+    """
+    job = (
+        "Requirements:\n"
+        "Native English speaker (must).\n"
+        "Direct SaaS sales experience is an advantage.\n"
+    )
+    texts = [line.text for line in requirement_lines(job, requirement_concepts)]
+    assert "Direct SaaS sales experience is an advantage." in texts
+    assert heading_key("Direct SaaS sales experience is an advantage.") not in (
+        requirement_concepts.heading_sections
+    )
+
+
+def test_a_requirement_asked_as_a_question_is_not_a_heading(requirement_concepts) -> None:
+    """A question mark alone announces nothing.
+
+    Every `?`-terminated line was discarded as a heading, so a posting that
+    asks "Do you have 3+ years of sales experience?" stated no requirements,
+    missed none, and scored full confidence. A `?` heading is still recognised
+    when it says what the vocabulary knows a heading says.
+    """
+    asked = "Do you have 3+ years of sales experience?\n"
+    assert [line.text for line in requirement_lines(asked, requirement_concepts)] == [asked.strip()]
+    extracted = extract_requirements(asked, normalized_hash="asked", concepts=requirement_concepts)
+    assert [item.concept for item in extracted] == ["sales-closing-experience-years"]
+    assert extraction_state(asked, extracted, requirement_concepts) == "parsed"
+    # Riverside's own "What Will Make You Stand Out?" is configured, so it
+    # stays a heading and stays out of the denominator.
+    assert not any(
+        line.text.endswith("?") for line in statement_lines(RIVERSIDE_JOB, requirement_concepts)
+    )
 
 
 def test_headings_and_closing_copy_are_not_requirements(requirement_concepts) -> None:

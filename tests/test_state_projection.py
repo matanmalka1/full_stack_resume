@@ -1,15 +1,29 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import date
 
 import pytest
 from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB, approve_active_draft
 from sqlalchemy import update
 
-from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
+from cv_engine.application.commands import (
+    AnalyzeCommand,
+    ApplyAnalysisDecisionsCommand,
+    DraftCommand,
+    IngestCommand,
+)
 from cv_engine.application.queries import PreparationState, WorkingDraftState
+from cv_engine.application.state import ProjectionContext, derive_review_reasons
+from cv_engine.domain.analysis.approval import APPROVAL_RESOLVING_OVERRIDES
 from cv_engine.domain.facts import FactStore
-from cv_engine.domain.models import ValidationIssue, ValidationReport, ValidationRunLineage
+from cv_engine.domain.knowledge import Knowledge
+from cv_engine.domain.models import (
+    JobAnalysis,
+    ValidationIssue,
+    ValidationReport,
+    ValidationRunLineage,
+)
 from cv_engine.infrastructure.persistence.tables import applications
 from cv_engine.util import canonical_json, new_id, sha256_text
 
@@ -88,6 +102,155 @@ def test_material_ambiguity_is_a_review_reason_and_blocks_drafting(services) -> 
     blocked = {item.action: item.reasons for item in detail.blocked_actions}
     assert "MATERIAL_CLASSIFICATION_AMBIGUITY" in blocked["create_draft"]
     assert detail.recommended_action == "apply_analysis_decisions"
+
+
+#: Requirements stated in prose that neither the concept vocabulary nor the
+#: legacy gap rules can read. The engine's honest answer is that it did not
+#: understand this posting - which is a blocker no decision settles.
+UNREADABLE_POSTING = (
+    "Account Executive.\n"
+    "You have experience closing complex B2B deals, understand enterprise "
+    "procurement, and negotiate with senior stakeholders.\n"
+)
+
+
+@pytest.fixture
+def knowledge(
+    fact_store,
+    profile_store,
+    policy_store,
+    candidate_context,
+    presentation_store,
+    requirement_concepts,
+) -> Knowledge:
+    """The knowledge surface a projection runs against, without a database."""
+    return Knowledge(
+        facts=fact_store,
+        profiles=profile_store,
+        policies=policy_store,
+        candidate=candidate_context,
+        presentations=presentation_store,
+        requirement_concepts=requirement_concepts,
+    )
+
+
+def _reasons_for(knowledge: Knowledge, analysis: JobAnalysis) -> dict[str, list[str]]:
+    """The review reasons an analysis alone projects, and what each advertises.
+
+    `derive_review_reasons` is pure, so the analysis is handed to it directly.
+    Reaching it through ingest and analyze would test which reasons the
+    classifier produces rather than what the projection does with them.
+    """
+    context = ProjectionContext(
+        application={"current_status": "saved"},
+        active_job_snapshot_id="snapshot",
+        active_analysis_id="analysis",
+        active_analysis=analysis,
+        active_selection_plan=None,
+        draft_selection_plan=None,
+        active_working_draft=None,
+        latest_validation=None,
+        approved_revisions=(),
+        ready_revision_ids=frozenset(),
+        knowledge=knowledge,
+        today=date.today(),
+    )
+    return {
+        reason.code: reason.allowed_resolution_actions
+        for reason in derive_review_reasons(context, [])
+    }
+
+
+def _analysis_needing(reason: str) -> JobAnalysis:
+    return JobAnalysis.model_validate(
+        {
+            "track": "sales",
+            "profile": "account-executive",
+            "emphasis": "new-business",
+            "confidence": 0.4,
+            "rationale": "projection fixture",
+            "fit": "unknown",
+            "gaps": [],
+            "mandatory_requirements": [],
+            "preferred_requirements": [],
+            "keywords": [],
+            "language": "en",
+            "classification_requires_approval": True,
+            "approval_reasons": [reason],
+        }
+    )
+
+
+@pytest.mark.parametrize("reason", sorted(APPROVAL_RESOLVING_OVERRIDES))
+def test_an_approval_reason_an_override_answers_is_offered_that_command(knowledge, reason) -> None:
+    """Derived from the resolution table, so a new reason must register in it."""
+    reasons = _reasons_for(knowledge, _analysis_needing(reason))
+    assert reasons["MATERIAL_CLASSIFICATION_AMBIGUITY"] == ["apply_analysis_decisions"]
+    assert "ANALYSIS_INCOMPLETE" not in reasons
+
+
+def test_an_approval_reason_no_override_answers_is_projected_without_an_action(knowledge) -> None:
+    """`extraction-failed` blocks, and advertises nothing, because nothing resolves it.
+
+    It was projected as a classification ambiguity offering
+    `apply_analysis_decisions`, which cannot close it: naming the Track or
+    Profile does not recover requirements that were never read. The command
+    committed, returned success, and left the same blocker standing.
+    """
+    assert "extraction-failed" not in APPROVAL_RESOLVING_OVERRIDES
+    reasons = _reasons_for(knowledge, _analysis_needing("extraction-failed"))
+    assert reasons["ANALYSIS_INCOMPLETE"] == []
+    assert "MATERIAL_CLASSIFICATION_AMBIGUITY" not in reasons
+
+
+def test_an_unreadable_posting_stays_blocked_after_the_classification_is_decided(
+    services,
+) -> None:
+    """The decidable half is offered once, taken, and does not come back.
+
+    Both reasons stand at first: the confidence a failed extraction produces is
+    a real classification decision, and the failure itself is not. After the
+    decision the classification reason is settled and the analysis is still
+    incomplete - with no action recommended, because there is none.
+    """
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company="Unreadable Posting Co",
+            target_role="Account Executive",
+            job_text=UNREADABLE_POSTING,
+            client="web",
+        )
+    )
+    analysed = services.analysis.analyze(
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+        )
+    )
+    detail = services.queries.application_detail(ingested.application_id)
+    assert detail.preparation_state is PreparationState.NEEDS_REVIEW
+    offered = {reason.code: reason.allowed_resolution_actions for reason in detail.review_reasons}
+    assert offered["ANALYSIS_INCOMPLETE"] == []
+    assert offered["MATERIAL_CLASSIFICATION_AMBIGUITY"] == ["apply_analysis_decisions"]
+
+    services.analysis.apply_analysis_decisions(
+        ApplyAnalysisDecisionsCommand(
+            application_id=ingested.application_id,
+            job_analysis_id=analysed.analysis_id,
+            track_override="sales",
+            profile_override="account-executive",
+        )
+    )
+
+    after = services.queries.application_detail(ingested.application_id)
+    codes = {reason.code for reason in after.review_reasons}
+    assert "MATERIAL_CLASSIFICATION_AMBIGUITY" not in codes
+    assert "ANALYSIS_INCOMPLETE" in codes
+    assert after.preparation_state is PreparationState.NEEDS_REVIEW
+    assert "apply_analysis_decisions" not in after.available_actions
+    assert after.recommended_action is None
+    blocked = {item.action: item.reasons for item in after.blocked_actions}
+    assert "ANALYSIS_INCOMPLETE" in blocked["create_draft"]
 
 
 def test_ready_milestone_survives_a_new_draft_for_the_same_context(ready_application) -> None:

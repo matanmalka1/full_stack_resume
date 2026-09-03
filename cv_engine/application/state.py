@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
-from ..domain.analysis.approval import unresolved_approval_reasons
+from ..domain.analysis.approval import APPROVAL_RESOLVING_OVERRIDES, unresolved_approval_reasons
 from ..domain.analysis.gaps import unaccepted_hard_gaps
 from ..domain.drafts import render_composite_claim, validate_derived_wording
 from ..domain.facts import FactStoreError
@@ -204,13 +204,36 @@ def derive_review_reasons(context: ProjectionContext, stale: list[ReasonView]) -
     plan = context.active_selection_plan
     draft = context.active_working_draft
     reasons: list[ReasonView] = []
-    if analysis is not None and unresolved_approval_reasons(analysis):
+    # An approval reason clears when the user overrides a field that answers
+    # it, so which command resolves a reason is decided by whether any override
+    # answers it at all - derived from the same table `unresolved_approval_reasons`
+    # consults, never listed a second time here.
+    unresolved = unresolved_approval_reasons(analysis) if analysis is not None else []
+    decidable = [reason for reason in unresolved if reason in APPROVAL_RESOLVING_OVERRIDES]
+    undecidable = [reason for reason in unresolved if reason not in APPROVAL_RESOLVING_OVERRIDES]
+    if decidable:
         reasons.append(
             _reason(
                 "MATERIAL_CLASSIFICATION_AMBIGUITY",
                 "The job classification requires an explicit decision.",
                 {"job_analysis_id": context.active_analysis_id or ""},
                 ["apply_analysis_decisions"],
+            )
+        )
+    # `extraction-failed` has no resolving override, so `apply_analysis_decisions`
+    # cannot close it: naming the Track or Profile does not recover requirements
+    # that were never read. Advertising it anyway offered the user a button that
+    # committed a decision, returned success, and left the same blocker standing.
+    # The blocker is unchanged - it is simply reported with no action, because
+    # there is none to take. It clears when a later analysis reads the posting.
+    if undecidable:
+        reasons.append(
+            _reason(
+                "ANALYSIS_INCOMPLETE",
+                "The analysis records "
+                + ", ".join(undecidable)
+                + ", which no review decision resolves.",
+                {"job_analysis_id": context.active_analysis_id or ""},
             )
         )
     if (
@@ -449,6 +472,9 @@ def derive_actions(
             "create_selection_plan",
             "confirm_and_use_fact",
         }:
+            # True of this command specifically: no outstanding decision is one
+            # it takes. A blocker it cannot resolve - `ANALYSIS_INCOMPLETE` -
+            # is reported as its own review reason, not as this action's.
             reasons = ["NO_REVIEW_DECISION_REQUIRED"]
         elif action == "create_draft":
             reasons = review_codes or stale_codes or ["ANALYSIS_OR_SELECTION_PLAN_REQUIRED"]
@@ -477,10 +503,16 @@ def derive_actions(
 
     recommended = {
         PreparationState.NEEDS_ANALYSIS: "analyze",
-        PreparationState.NEEDS_REVIEW: (
-            review[0].allowed_resolution_actions[0]
-            if review and review[0].allowed_resolution_actions
-            else None
+        # The first reason that *has* an action, not the first reason. A blocker
+        # with nothing to advertise must not suppress the recommendation for the
+        # decisions the user can still take.
+        PreparationState.NEEDS_REVIEW: next(
+            (
+                reason.allowed_resolution_actions[0]
+                for reason in review
+                if reason.allowed_resolution_actions
+            ),
+            None,
         ),
         PreparationState.READY_TO_DRAFT: "create_draft",
         PreparationState.DRAFT_IN_PROGRESS: "validate",

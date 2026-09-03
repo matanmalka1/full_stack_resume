@@ -162,12 +162,20 @@ Review reasons are blockers that require an explicit user decision. Initial code
 
 ```text
 MATERIAL_CLASSIFICATION_AMBIGUITY
+ANALYSIS_INCOMPLETE
 LOW_FIT_REQUIRES_ACCEPTANCE
 HARD_GAP_REQUIRES_DECISION
 FACT_SELECTION_UNRESOLVED
 PENDING_FACT_REQUIRES_RESOLUTION
 KNOWLEDGE_RECONCILIATION_REQUIRED
 ```
+
+`ANALYSIS_INCOMPLETE` reports an approval reason that no override answers - today
+`extraction-failed`, requirements the analysis could not read. It blocks like every other
+review reason and carries no resolution action, because none of the commands resolves it:
+naming the Track or Profile does not recover a requirement that was never read. It clears
+when a later analysis reads the posting. A review reason advertises an action only when
+that action can actually close it.
 
 `PENDING_FACT_REQUIRES_RESOLUTION` applies only when the active SelectionPlan, active
 claim, requested selection, or active gap resolution depends on that fact. Pending
