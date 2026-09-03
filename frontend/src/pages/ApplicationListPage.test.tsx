@@ -396,12 +396,12 @@ describe("ApplicationListPage", () => {
     expect(await within(interviews).findByText("3")).toBeInTheDocument();
     expect(await within(ready).findByText("2")).toBeInTheDocument();
     expect(await within(attention).findByText("4")).toBeInTheDocument();
-    const interviewStage = screen.getByRole("button", { name: /ראיונות ומטלות/ });
-    expect(within(interviewStage).getByText("2")).toBeInTheDocument();
+    const interviewStage = screen.getByLabelText("שלב גיוס");
+    expect(within(interviewStage).getByRole("option", { name: "ראיונות ומטלות (2)" })).toBeInTheDocument();
 
-    fireEvent.click(interviewStage);
+    fireEvent.change(interviewStage, { target: { value: "interviews" } });
 
-    await waitFor(() => expect(interviewStage).toHaveAttribute("aria-pressed", "true"));
+    await waitFor(() => expect(interviewStage).toHaveValue("interviews"));
     await waitFor(() =>
       expect(
         fetchMock.mock.calls.some(([url]) => {

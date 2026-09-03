@@ -27,7 +27,6 @@ import { CloseApplicationDialog } from "./application-list/CloseApplicationDialo
 import { DashboardHeader } from "./application-list/DashboardHeader";
 import { MetricsKpiGrid } from "./application-list/MetricsKpiGrid";
 import { ApplicationPipelineView } from "./application-list/ApplicationPipelineView";
-import { PipelineStagesBar } from "./application-list/PipelineStagesBar";
 import { type RecruitmentStageId, recruitmentStages, selectedStage } from "./application-list/recruitmentStages";
 import { UrgentActionHub } from "./application-list/UrgentActionHub";
 import { PAGE_SIZE, paramsFromQuery, queryFromParams } from "./applicationListParams";
@@ -76,14 +75,15 @@ export const ApplicationListPage = () => {
     }),
   );
   const page = listQuery.data;
-  const recruitmentStageCounts = Object.fromEntries(
-    recruitmentStages.map((stage) => [
-      stage.id,
-      page === undefined
-        ? undefined
-        : stage.statuses.reduce((count, status) => count + (page.recruitment_status_counts[status] ?? 0), 0),
-    ]),
-  ) as Partial<Record<RecruitmentStageId, number | undefined>>;
+  const recruitmentStageCounts =
+    page === undefined
+      ? {}
+      : (Object.fromEntries(
+          recruitmentStages.map((stage) => [
+            stage.id,
+            stage.statuses.reduce((count, status) => count + (page.recruitment_status_counts[status] ?? 0), 0),
+          ]),
+        ) as Partial<Record<RecruitmentStageId, number>>);
 
   useWorkflowStage("none");
 
@@ -138,15 +138,6 @@ export const ApplicationListPage = () => {
           readyCount={page?.preset_counts.ready_to_send}
           totalCount={page?.preset_counts.all}
         />
-        <PipelineStagesBar
-          counts={recruitmentStageCounts}
-          filterActive={(query.recruitmentStatuses?.length ?? 0) > 0}
-          onSelectStage={(stageId) => {
-            const stage = recruitmentStages.find((candidate) => candidate.id === stageId);
-            updateQuery({ ...query, recruitmentStatuses: stage?.statuses ?? [] });
-          }}
-          selectedStage={selectedStage(query.recruitmentStatuses)}
-        />
         <UrgentActionHub
           clearingApplicationId={clearNextAction.isPending ? (clearNextAction.variables ?? null) : null}
           items={items}
@@ -190,9 +181,15 @@ export const ApplicationListPage = () => {
                 onPreparationStateChange={(stage) =>
                   updateQuery({ ...query, stages: stage === undefined ? [] : [stage] })
                 }
+                onRecruitmentStageChange={(stageId) => {
+                  const stage = recruitmentStages.find((candidate) => candidate.id === stageId);
+                  updateQuery({ ...query, recruitmentStatuses: stage?.statuses ?? [] });
+                }}
                 onSearchChange={setSearchInput}
                 onSortChange={(sort) => updateQuery({ ...query, sort })}
                 preparationState={query.stages?.[0]}
+                recruitmentStage={selectedStage(query.recruitmentStatuses)}
+                recruitmentStageCounts={recruitmentStageCounts}
                 search={searchInput}
                 sort={query.sort ?? "updated"}
                 stageCounts={page.stage_counts}
