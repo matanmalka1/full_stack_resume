@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { applicationDetailQueryKey, createJobSnapshot } from "../../api/applications";
+import { createJobSnapshot, invalidateApplicationViews } from "../../api/applications";
 import type { ApplicationDetail } from "../../api/contracts";
 import { isTerminalOperation } from "../../api/operations";
 import { ErrorCallout } from "../../app/ErrorCallout";
@@ -72,7 +72,7 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
     /* The projection is what reports the new snapshot, the analysis it superseded, and
        the action now recommended. Nothing from the response is seeded into the cache. */
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
+      await invalidateApplicationViews(queryClient, applicationId);
     },
   });
 

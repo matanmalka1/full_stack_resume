@@ -669,6 +669,56 @@ describe("DraftRenderPanel and RevisionPage", () => {
     });
   });
 
+  it("names a revision already on record as submitted and asks before recording a second one", async () => {
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("decision-markdown")) {
+        return Promise.resolve(
+          json({
+            application_id: "app-1",
+            approved_revision_id: "revision-1",
+            content: "# Decision",
+            content_hash: "decision-hash",
+          }),
+        );
+      }
+      return Promise.resolve(
+        json(
+          url.includes("applications")
+            ? detail({
+                preparation_state: "ready",
+                recruitment_timeline: [
+                  {
+                    id: "event-1",
+                    item_type: "submission",
+                    submission_type: "internal",
+                    approved_revision_id: "revision-1",
+                    artifact_version_id: "pdf-1",
+                    occurred_at: "2026-08-25T09:00:00Z",
+                    actor_type: "user",
+                    client: "web",
+                    from_status: "saved",
+                    to_status: "applied",
+                    reason: "submission recorded",
+                    metadata: {},
+                  },
+                ],
+              })
+            : revision(),
+        ),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "רישום הגשה נוספת" }));
+    expect(await screen.findByText("הגרסה הזו כבר נרשמה כמוגשת")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "אישור ורישום ההגשה" })).toBeDisabled();
+
+    fireEvent.click(screen.getByLabelText("אני מבקש לרשום הגשה נוספת של אותה גרסה"));
+    expect(screen.getByRole("button", { name: "אישור ורישום ההגשה" })).toBeEnabled();
+  });
+
   it("labels the displayed Ready revision historical even when the latest Ready is current", async () => {
     vi.stubGlobal(
       "fetch",

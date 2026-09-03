@@ -78,15 +78,29 @@ export const GapsSection = ({ acceptance, gaps }: { acceptance: GapAcceptance | 
               key={`${gap.severity}:${gap.requirement}`}
             >
               {acceptance !== null && acceptableId !== null ? (
-                /* The label is the gap, so the control reads as a decision about this
-                   requirement rather than as a checkbox with the gap printed beside it.
-                   Its negative padding pulls the primitive's own inset back to the
-                   border, keeping the marked and unmarked lines on one edge. */
+                /* The label is the gap plus what marking it does, so the control reads as
+                   a decision about this requirement rather than as a checkbox with the gap
+                   printed beside it. The decision it takes is named on the control itself:
+                   a bare gap label left the mark looking like "this gap is handled", which
+                   is the opposite of what it records. Its negative padding pulls the
+                   primitive's own inset back to the border, keeping the marked and unmarked
+                   lines on one edge. */
                 <Checkbox
                   checked={acceptance.selected.includes(acceptableId)}
                   className="-ms-3 -my-2.5"
                   disabled={acceptance.disabled}
-                  hint={gap.reason === "" ? undefined : gap.reason}
+                  hint={
+                    <>
+                      <span className="block">
+                        סימון = המשך ביודעין עם הפער. הוא אינו מכסה את הדרישה ואינו מתיר טענה שאין לה עובדה.
+                      </span>
+                      {gap.reason === "" ? null : (
+                        <span className="mt-1 block" dir="auto">
+                          {gap.reason}
+                        </span>
+                      )}
+                    </>
+                  }
                   onChange={() => acceptance.onToggle(acceptableId)}
                 >
                   {heading}

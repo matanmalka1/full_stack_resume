@@ -70,6 +70,32 @@ export const useRevisionPageState = (approvedRevisionId: string) => {
       watch(operation.id);
     },
   });
+  /* Whether this exact revision was already recorded as submitted, taken from the
+     Application's own recruitment timeline rather than from this screen's memory of
+     having sent one: the record is what makes the answer survive a reload and a second
+     tab. The last matching event is the one reported, since the history is append-only
+     and a repeat submission adds an event rather than replacing one. */
+  const recordedSubmissions =
+    revision === undefined
+      ? []
+      : (detail?.recruitment_timeline ?? []).filter(
+          (item) => item.item_type === "submission" && item.approved_revision_id === revision.id,
+        );
+  const submittedAtRecorded = recordedSubmissions.at(-1)?.occurred_at ?? null;
+  /* A second submission of a revision already on record is the exception, not the next
+     step, so it is asked for explicitly. Held here beside the dialog's other state and
+     cleared whenever the dialog closes, so an acknowledgement cannot outlive the
+     submission it was given for. */
+  const [repeatAcknowledged, setRepeatAcknowledged] = useState(false);
+  const openSubmission = () => {
+    setRepeatAcknowledged(false);
+    setSubmissionOpen(true);
+  };
+  const closeSubmission = () => {
+    setRepeatAcknowledged(false);
+    setSubmissionOpen(false);
+  };
+
   const submission = useMutation({
     mutationFn: async () => {
       if (revision === undefined || revision.pdf_artifact_version_id == null) {
@@ -87,7 +113,7 @@ export const useRevisionPageState = (approvedRevisionId: string) => {
       });
     },
     onSuccess: () => {
-      setSubmissionOpen(false);
+      closeSubmission();
       void invalidateApplicationViews(queryClient, revision?.application_id);
     },
   });
@@ -117,21 +143,25 @@ export const useRevisionPageState = (approvedRevisionId: string) => {
 
   return {
     applicationQuery,
+    closeSubmission,
     decisionQuery,
     detail,
     downloadDecision,
     hasSources,
     displayedRevisionWarningCode,
     newDraft,
+    openSubmission,
     operation,
     otherWarnings,
+    repeatAcknowledged,
     revision,
     revisionQuery,
-    setSubmissionOpen,
+    setRepeatAcknowledged,
     setSubmittedAt,
     submission,
     submissionOpen,
     submittedAt,
+    submittedAtRecorded,
     submittedAtValid,
     watch,
   };

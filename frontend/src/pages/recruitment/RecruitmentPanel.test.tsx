@@ -103,6 +103,17 @@ afterEach(() => {
 });
 
 describe("RecruitmentPanel", () => {
+  it("names the first event an opening rather than a transition from a status never held", async () => {
+    const value = detail({
+      recruitment_timeline: [statusEvent({ from_status: null, to_status: "saved", reason: "application created" })],
+    });
+    vi.stubGlobal("fetch", vi.fn(emptyJsonFetch));
+    renderPanel(value);
+
+    expect(screen.getByText("המועמדות נפתחה במצב נשמר")).toBeInTheDocument();
+    expect(screen.queryByText(/עבר מ־נשמר ל־נשמר/)).not.toBeInTheDocument();
+  });
+
   it("sends the exact forward transition and next-action choices from one dialog", async () => {
     const value = detail({ recruitment_timeline: [statusEvent({ reason: "application created" })] });
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>

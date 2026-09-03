@@ -25,6 +25,15 @@ const stages = ["analysis", "draft", "ready"] as const;
 
 type Stage = (typeof stages)[number];
 
+/* How many stages the landmark draws, in words, for the screens that describe the
+   workflow in a sentence rather than drawing it. Derived from `stages` rather than
+   written a second time: Job Detail said "בארבעה שלבים" while the bar drew three, and a
+   sentence that counts by hand is exactly how those two came apart. A count with no
+   Hebrew word falls back to the numeral instead of naming a wrong one. */
+const stageCountWords: Record<number, string> = { 2: "שני", 3: "שלושה", 4: "ארבעה", 5: "חמישה" };
+
+export const workflowStageCountWord = stageCountWords[stages.length] ?? String(stages.length);
+
 const stageLabels: Record<Stage, string> = {
   analysis: "ניתוח",
   draft: "טיוטה ואימות",

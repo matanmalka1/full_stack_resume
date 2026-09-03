@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
-import { applicationDetailQueryKey, startDraftGeneration } from "../../api/applications";
+import { invalidateApplicationViews, startDraftGeneration } from "../../api/applications";
 import type { ApplicationDetail, Operation } from "../../api/contracts";
 import { operationQueryKey } from "../../api/operations";
 import { settingsQueryOptions } from "../../api/settings";
@@ -51,9 +51,7 @@ export const useAutomaticDraft = ({
       sessionStorage.setItem(autoDraftReceiptKey(attempt.triggerOperationId), "accepted");
       queryClient.setQueryData(operationQueryKey(queued.id), queued);
       watch(queued.id);
-      void queryClient.invalidateQueries({
-        queryKey: applicationDetailQueryKey(applicationId),
-      });
+      void invalidateApplicationViews(queryClient, applicationId);
     },
   });
 

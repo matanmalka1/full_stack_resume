@@ -90,7 +90,11 @@ describe("JobDetailsPage", () => {
 
     expect(await screen.findByRole("navigation", { name: "פירורי לחם" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "מועמדויות" })).toHaveAttribute("href", "/");
-    expect(screen.getByText("Acme – Backend Engineer")).toHaveAttribute("aria-current", "page");
+    /* Awaited, not read: the breadcrumb trail renders while the projection is still in
+       flight - with "פרטי משרה" as the current crumb - so the navigation landmark is
+       present one tick before the company is. Reading the company synchronously after it
+       asserted the record's crumb against the loading state. */
+    expect(await screen.findByText("Acme – Backend Engineer")).toHaveAttribute("aria-current", "page");
   });
 
   it("links a Ready application to the exact immutable revision", async () => {

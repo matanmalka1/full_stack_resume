@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
-import { applicationDetailQueryKey } from "../../api/applications";
+import { invalidateApplicationViews } from "../../api/applications";
 import { ApiProblem } from "../../api/client";
 import type { ApplicationDetail, WorkingDraft } from "../../api/contracts";
 import { workingDraftQueryKey } from "../../api/drafts";
@@ -66,12 +66,12 @@ export const DraftApprovalDialog = ({
       return approveWorkingDraft(draft.id, draft.edit_version, validationRunId, approvalKey);
     },
     onSuccess: (result) => {
-      void queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
+      void invalidateApplicationViews(queryClient, applicationId);
       onApproved(result.revision_id);
     },
     onError: (error) => {
       if (error instanceof ApiProblem && error.problem.code === "VALIDATION_STALE") {
-        void queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
+        void invalidateApplicationViews(queryClient, applicationId);
         if (draft !== undefined) {
           void queryClient.invalidateQueries({ queryKey: workingDraftQueryKey(draft.id) });
         }

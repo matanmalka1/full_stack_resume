@@ -6,6 +6,7 @@ import {
   createApplication,
   duplicateCheck,
   duplicateMatchesFromProblem,
+  invalidateApplicationViews,
   startAnalysis,
 } from "../../api/applications";
 import type { ApplicationIntake, DuplicateMatch } from "../../api/contracts";
@@ -115,6 +116,11 @@ export const useApplicationIntake = ({ onCreated }: UseApplicationIntakeOptions)
     },
     onSuccess: (result) => {
       if (result.kind === "created") {
+        /* The board is one of this command's readers, and it was not told. Creating an
+           Application left the list holding the answer it had before the record existed,
+           so returning to it showed the previous count and no row for the job that had
+           just been created. */
+        void invalidateApplicationViews(queryClient, result.applicationId);
         onCreated(result);
       }
     },

@@ -11,9 +11,13 @@ interface RevisionSummaryProps {
   detail: ApplicationDetail | undefined;
   onOpenSubmission: () => void;
   revision: ApprovedRevision;
+  /* When this exact revision is already on record as submitted, and when. `null` is
+     "never submitted", which is the only state in which recording one is the plain next
+     action rather than a repeat. */
+  submittedAt: string | null;
 }
 
-export const RevisionSummary = ({ detail, onOpenSubmission, revision }: RevisionSummaryProps) => {
+export const RevisionSummary = ({ detail, onOpenSubmission, revision, submittedAt }: RevisionSummaryProps) => {
   const recruiterPdfArtifactId = revision.ready_qualified ? revision.pdf_artifact_version_id : null;
 
   return (
@@ -29,7 +33,7 @@ export const RevisionSummary = ({ detail, onOpenSubmission, revision }: Revision
                 {revision.ready_qualified ? "גרסה מוכנה למסירה" : "גרסה מאושרת וקבועה"}
               </h2>
               <StatusBadge tone={revision.ready_qualified ? "success" : "warning"}>
-                {revision.ready_qualified ? "Ready" : "ממתינה לקבצים תקינים"}
+                {revision.ready_qualified ? "מוכן למסירה" : "ממתינה לקבצים תקינים"}
               </StatusBadge>
             </div>
             {detail === undefined ? null : (
@@ -40,6 +44,11 @@ export const RevisionSummary = ({ detail, onOpenSubmission, revision }: Revision
             <p className="mt-1 text-support text-cv-text-muted">
               אושרה {formatDateTime(revision.approved_at, "short")} · גרסה {revision.version_number}
             </p>
+            {submittedAt === null ? null : (
+              <p className="mt-1 text-support font-medium text-cv-success">
+                הוגשה {formatDateTime(submittedAt, "short")}
+              </p>
+            )}
           </div>
         </div>
 
@@ -49,9 +58,13 @@ export const RevisionSummary = ({ detail, onOpenSubmission, revision }: Revision
               <Download aria-hidden="true" className="size-4" />
               הורדת PDF
             </a>
-            <Button onClick={onOpenSubmission} variant="secondary">
+            {/* The button says what pressing it would do next, which is not the same
+                sentence once a submission is on record. It stayed "רישום הגשת הגרסה הזו"
+                after the submission was recorded, so the screen offered the action it had
+                just completed as though nothing had happened. */}
+            <Button onClick={onOpenSubmission} variant={submittedAt === null ? "secondary" : "ghost"}>
               <Send aria-hidden="true" className="size-4" />
-              רישום הגשת הגרסה הזו
+              {submittedAt === null ? "רישום הגשת הגרסה הזו" : "רישום הגשה נוספת"}
             </Button>
           </div>
         )}

@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import {
   applicationDetailQueryKey,
+  invalidateApplicationViews,
   replaceWorkingDraft,
   startAnalysis,
   startDraftGeneration,
@@ -49,9 +50,7 @@ export const useApplicationActionsMutations = (detail: ApplicationDetail, onQueu
     queryClient.setQueryData(operationQueryKey(operation.id), operation);
     setQueuedId(operation.id);
     onQueued(operation.id);
-    void queryClient.invalidateQueries({
-      queryKey: applicationDetailQueryKey(detail.application.id),
-    });
+    void invalidateApplicationViews(queryClient, detail.application.id);
   };
 
   const analyze = useMutation({

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef } from "react";
 
-import { applicationDetailQueryKey } from "../../api/applications";
+import { invalidateApplicationViews } from "../../api/applications";
 import type { WorkingDraft } from "../../api/contracts";
 import { validateWorkingDraft, validationRunQueryOptions } from "../../api/validation";
 import { briefServerFailureDetail, ErrorCallout } from "../../app/ErrorCallout";
@@ -53,7 +53,7 @@ export const DraftValidationPanel = ({
       return validateWorkingDraft(draft.id, draft.edit_version);
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
+      void invalidateApplicationViews(queryClient, applicationId);
     },
   });
 

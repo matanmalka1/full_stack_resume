@@ -7,7 +7,7 @@ import type { ProblemDetails } from "../api/client";
 import type { ApplicationDetail } from "../api/contracts";
 import { appRoutes } from "../app/appRoutes";
 import { useRequiredParam } from "../app/useRequiredParam";
-import { useWorkflowStage } from "../app/WorkflowLandmark";
+import { useWorkflowStage, workflowStageCountWord } from "../app/WorkflowLandmark";
 import { useWatchedOperation } from "../hooks/useWatchedOperation";
 import { buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
@@ -83,9 +83,11 @@ const PreparationGate = ({ detail }: { detail: ApplicationDetail }) => {
             הכנת קורות החיים
           </h2>
           {/* Says how far the door leads, in the same count the landmark keeps on the
-              other side of it. This screen draws no landmark: it is not one of the four. */}
+              other side of it - taken from the landmark rather than restated here, which
+              is what let this sentence claim four stages while the bar drew three. This
+              screen draws no landmark: it is not one of them. */}
           <p className="mt-1 text-support text-cv-text-muted">
-            תהליך נפרד בארבעה שלבים, מניתוח המשרה ועד גרסה מוכנה לשליחה.
+            {`תהליך נפרד ב${workflowStageCountWord} שלבים, מניתוח המשרה ועד גרסה מוכנה לשליחה.`}
           </p>
           <PreparationStatusBadges className="mt-3 flex flex-wrap gap-2" detail={detail} />
         </div>

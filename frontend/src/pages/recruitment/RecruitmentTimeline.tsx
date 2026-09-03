@@ -25,12 +25,28 @@ const descriptionFor = (event: RecruitmentTimelineItem, byId: ReadonlyMap<string
       ? `מצב הגיוס תוקן ל־${target}`
       : `האירוע „${statusEventLabel(corrected)}” תוקן ל־${target}`;
   }
+  /* A first event carries no `from_status`, because there was no status before it. The
+     null was read as "saved" and printed as a transition from a status the record never
+     held - "מצב הגיוס עבר מ־נשמר ל־נשמר" on every Application the moment it was created.
+     An absent origin is now named as the opening it is. */
+  if (event.from_status == null) {
+    return `המועמדות נפתחה במצב ${recruitmentStatusLabel(event.to_status ?? "saved")}`;
+  }
   return `מצב הגיוס עבר מ־${recruitmentStatusLabel(
-    event.from_status ?? "saved",
+    event.from_status,
   )} ל־${recruitmentStatusLabel(event.to_status ?? "saved")}`;
 };
 
-const reasonFor = (reason: string): string => (reason === "application created" ? "המועמדות נוצרה" : reason);
+/* The reasons the engine writes into the immutable event, in Hebrew. The records keep the
+   exact English sentence they were written with; this is presentation over them, and a
+   reason with no entry is shown exactly as recorded rather than guessed at. */
+const engineReasons: Record<string, string> = {
+  "application created": "המועמדות נוצרה",
+  "application closed": "המועמדות נסגרה",
+  "submission recorded": "נרשמה הגשה",
+};
+
+const reasonFor = (reason: string): string => engineReasons[reason] ?? reason;
 
 export const RecruitmentTimeline = ({ items }: { items: RecruitmentTimelineItem[] }) => {
   const byId = useMemo(() => new Map(items.map((event) => [event.id, event])), [items]);

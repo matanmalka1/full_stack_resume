@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 
-import { applicationDetailQueryKey } from "../api/applications";
+import { invalidateApplicationViews } from "../api/applications";
 import type { ApplicationDetail, Operation } from "../api/contracts";
 import { isTerminalOperation, operationQueryOptions } from "../api/operations";
 
@@ -62,11 +62,15 @@ export const useWatchedOperation = (
 
   /* The projection is refreshed once the watched Operation reaches a terminal status:
      what it produced - a new analysis, a draft, the stage that follows - is the
-     projection's to report, and it stopped polling when `active_operation` went null. */
+     projection's to report, and it stopped polling when `active_operation` went null.
+
+     The board is refreshed with it. A finished render is what moves a row to Ready and
+     what the board counts under "מוכנים", so invalidating the detail alone left the
+     numbers on the board reporting the state before the run - until a manual reload. */
   const terminal = operation !== undefined && isTerminalOperation(operation);
   useEffect(() => {
     if (terminal) {
-      void queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
+      void invalidateApplicationViews(queryClient, applicationId);
     }
   }, [applicationId, queryClient, terminal, operation?.id]);
 

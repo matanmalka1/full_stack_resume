@@ -64,6 +64,52 @@ describe("query cache policy", () => {
     ]);
   });
 
+  /* The board reads the same §9 projection the detail screen does, so a command that
+     changes an Application changes both. Most call sites invalidated the detail key
+     alone, which is why creating an Application or finishing a render left the board
+     reporting the counts it held before - "18 מועמדויות" beside nineteen rows.
+
+     Derived rather than listed: the source tree is scanned for the detail key used as an
+     invalidation key, and every file that does so has to be registered below. Adding a
+     new command cannot forget to refresh the board, because forgetting fails here. */
+  it("sends every Application invalidation through the shared helper", () => {
+    const detailOnlyByDesign: Record<string, string> = {
+      "pages/draft-editor/useDraftEditorState.ts":
+        "autosave, which fires per keystroke burst and changes nothing the board shows",
+      "pages/draft-editor/ClaimFactResolution.tsx": "a fact decision, which moves no row on the board",
+      "pages/application/useApplicationActionsMutations.ts":
+        "the version-conflict re-read, which reports a refusal rather than a change",
+    };
+
+    /* The whole source tree, read through the bundler rather than through the filesystem:
+       the same set of files the app is built from, and no Node typings in a browser
+       project to make it possible. */
+    const sources = import.meta.glob("../**/*.{ts,tsx}", {
+      eager: true,
+      import: "default",
+      query: "?raw",
+    }) as Record<string, string>;
+
+    /* Vite keys a glob by the path relative to this file, so a sibling arrives as
+       "./applications.ts" while everything else arrives as "../pages/...". Both are
+       resolved back to a path from `src` here, because the exception list is written in
+       the paths a reader of the repository would type. */
+    const fromSrc = (key: string): string => (key.startsWith("../") ? key.slice(3) : `api/${key.replace("./", "")}`);
+
+    const detailOnly = Object.entries(sources)
+      .map(([file, source]) => ({ file: fromSrc(file), source: source.replace(/\s+/g, " ") }))
+      .filter(({ file }) => !file.includes(".test."))
+      .filter(({ source }) => /invalidateQueries\(\{ queryKey: applicationDetailQueryKey\(/.test(source))
+      .map(({ file }) => file)
+      .filter((file) => file !== "api/applications.ts")
+      .sort();
+
+    expect(detailOnly.filter((file) => !Object.hasOwn(detailOnlyByDesign, file))).toEqual([]);
+    /* An exception that no longer describes anything is a rule nobody is following any
+       more, so it has to be removed rather than left standing. */
+    expect(Object.keys(detailOnlyByDesign).filter((file) => !detailOnly.includes(file))).toEqual([]);
+  });
+
   it("retries reads once and never retries writes", () => {
     const defaults = queryClient.getDefaultOptions();
 

@@ -72,8 +72,9 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
 
             <RevisionSummary
               detail={detail}
-              onOpenSubmission={() => state.setSubmissionOpen(true)}
+              onOpenSubmission={state.openSubmission}
               revision={revision}
+              submittedAt={state.submittedAtRecorded}
             />
             <RevisionRecord
               decision={state.decisionQuery.data}
@@ -118,11 +119,14 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
       ) : null}
 
       <RevisionSubmissionDialog
-        onClose={() => state.setSubmissionOpen(false)}
+        onClose={state.closeSubmission}
+        onRepeatAcknowledgedChange={state.setRepeatAcknowledged}
         onSubmit={() => state.submission.mutate()}
         onSubmittedAtChange={state.setSubmittedAt}
         open={state.submissionOpen}
         pending={state.submission.isPending}
+        previousSubmittedAt={state.submittedAtRecorded}
+        repeatAcknowledged={state.repeatAcknowledged}
         submittedAt={state.submittedAt}
         submittedAtValid={state.submittedAtValid}
       />
