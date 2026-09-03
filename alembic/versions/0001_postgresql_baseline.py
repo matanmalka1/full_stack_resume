@@ -1,8 +1,8 @@
-"""current PostgreSQL schema baseline
+"""initial PostgreSQL schema baseline
 
 Revision ID: 0001
 Revises:
-Create Date: 2026-08-31
+Create Date: 2026-09-03
 """
 
 from collections.abc import Sequence
@@ -365,12 +365,27 @@ def upgrade() -> None:
         sa.Column("auto_generate_when_review_not_required", sa.Boolean(), nullable=False),
         sa.Column("ai_enabled_override", sa.Boolean(), nullable=True),
         sa.Column("default_execution_mode", sa.Text(), nullable=False),
+        sa.Column("default_ai_model", sa.Text(), nullable=True),
+        sa.Column(
+            "default_reasoning_effort",
+            sa.Text(),
+            server_default=sa.text("'medium'"),
+            nullable=False,
+        ),
         sa.Column("ui_density", sa.Text(), nullable=False),
         sa.Column("ui_text_size", sa.Text(), nullable=False),
         sa.Column("updated_at", sa.Text(), nullable=False),
         sa.CheckConstraint(
             "default_execution_mode IN ('deterministic', 'ai')",
             name=op.f("ck_app_settings_default_execution_mode"),
+        ),
+        sa.CheckConstraint(
+            "default_ai_model IS NULL OR default_ai_model IN ('gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol')",
+            name=op.f("ck_app_settings_default_ai_model"),
+        ),
+        sa.CheckConstraint(
+            "default_reasoning_effort IN ('low', 'medium', 'high')",
+            name=op.f("ck_app_settings_default_reasoning_effort"),
         ),
         sa.CheckConstraint(
             "ui_density IN ('comfortable', 'compact')",
@@ -563,6 +578,7 @@ def upgrade() -> None:
         sa.Column("resources_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("provider", sa.Text(), nullable=True),
         sa.Column("model", sa.Text(), nullable=True),
+        sa.Column("reasoning_effort", sa.Text(), nullable=True),
         sa.Column("status", sa.Text(), nullable=False),
         sa.Column("phase", sa.Text(), nullable=False),
         sa.Column("message", sa.Text(), server_default=sa.text("''"), nullable=False),
@@ -584,7 +600,7 @@ def upgrade() -> None:
             name=op.f("ck_operations_terminal_finished_at"),
         ),
         sa.CheckConstraint(
-            "failure_code IS NULL OR failure_code IN ('SOURCE_CHANGED', 'PROVIDER_TIMEOUT', 'PROVIDER_RATE_LIMITED', 'PROVIDER_UNAVAILABLE', 'PROVIDER_REFUSED', 'INVALID_OUTPUT', 'SCHEMA_VIOLATION', 'RENDER_FAILED', 'BROWSER_START_FAILED', 'VALIDATION_EXECUTION_FAILED', 'CANCELLED_BEFORE_ACTIVATION')",
+            "failure_code IS NULL OR failure_code IN ('SOURCE_CHANGED', 'PROVIDER_TIMEOUT', 'PROVIDER_RATE_LIMITED', 'PROVIDER_UNAVAILABLE', 'PROVIDER_REFUSED', 'INVALID_OUTPUT', 'SCHEMA_VIOLATION', 'RENDER_FAILED', 'BROWSER_START_FAILED', 'MISSING_FACT_RENDERING', 'VALIDATION_EXECUTION_FAILED', 'CANCELLED_BEFORE_ACTIVATION')",
             name=op.f("ck_operations_failure_code"),
         ),
         sa.CheckConstraint(
@@ -594,6 +610,10 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "operation_type IN ('analyze_job', 'propose_selection_plan', 'create_draft', 'regenerate_section', 'regenerate_claim', 'render_revision')",
             name=op.f("ck_operations_operation_type"),
+        ),
+        sa.CheckConstraint(
+            "reasoning_effort IS NULL OR reasoning_effort IN ('low', 'medium', 'high')",
+            name=op.f("ck_operations_reasoning_effort"),
         ),
         sa.CheckConstraint(
             "safe_failure_detail IS NULL OR status IN ('failed', 'cancelled')",
@@ -837,6 +857,12 @@ def upgrade() -> None:
         sa.Column(
             "track_emphasis_dependencies_json",
             postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+        ),
+        sa.Column(
+            "accepted_gaps_json",
+            postgresql.JSONB(astext_type=sa.Text()),
+            server_default=sa.text("'[]'::jsonb"),
             nullable=False,
         ),
         sa.Column("created_at", sa.Text(), nullable=False),
