@@ -2,12 +2,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..util import canonical_json, sha256_text
 from .analysis.requirements import RequirementConceptStore
 from .facts import FactStore
 from .models import CandidateContext
 from .presentations import PresentationStore
 from .profiles import ProfileStore
 from .selection import EmphasisPolicyStore
+
+#: Dependencies only the analysis stage reads. The requirement vocabulary
+#: decides what a posting demands; every stage after analysis consumes the
+#: analysis it produced - an immutable record - and never the vocabulary that
+#: produced it.
+ANALYSIS_ONLY_DEPENDENCIES = frozenset({"requirement_concepts"})
 
 
 @dataclass(frozen=True)
@@ -42,3 +49,26 @@ class Knowledge:
             "candidate_context": self.candidate.version_hash,
             "requirement_concepts": self.requirement_concepts.version,
         }
+
+    def document_versions(self) -> dict[str, str]:
+        """The dependencies every stage after analysis actually consumes.
+
+        One hash used to cover all of them, so editing the requirement concepts
+        declared the inputs of a draft, its validation and a render changed -
+        none of which read that file. A submitted draft then failed activation,
+        and a recorded validation stopped describing its own draft, because the
+        vocabulary that had produced an immutable analysis moved afterwards.
+        """
+        return {
+            name: version
+            for name, version in self.versions().items()
+            if name not in ANALYSIS_ONLY_DEPENDENCIES
+        }
+
+    def context_hash(self) -> str:
+        """What an analysis is measured against: everything it may have read."""
+        return sha256_text(canonical_json(self.versions()))
+
+    def document_context_hash(self) -> str:
+        """What every stage after analysis is measured against."""
+        return sha256_text(canonical_json(self.document_versions()))

@@ -570,3 +570,62 @@ def test_ready_integrity_holds_through_an_immaterial_reanalysis(
         "resume_pdf",
         "visual_evidence",
     }
+
+
+def test_the_requirement_vocabulary_stales_an_analysis_and_nothing_after_it(
+    services: Services, project_root: Path
+) -> None:
+    """A draft consumes the analysis, never the vocabulary that produced it.
+
+    One hash covered every dependency, so editing `config/requirements.json`
+    declared the inputs of a draft, its validation, its approval and a render
+    changed - none of which read that file. A submitted draft then failed
+    activation, and a recorded validation stopped describing its own draft,
+    because a file they had never opened moved.
+    """
+    knowledge = services.knowledge.load()
+    before_analysis = knowledge.context_hash()
+    before_document = knowledge.document_context_hash()
+    assert before_analysis != before_document, "the two scopes must not be the same hash"
+    assert set(knowledge.versions()) - set(knowledge.document_versions()) == {
+        "requirement_concepts"
+    }
+
+    concepts = project_root / "config" / "requirements.json"
+    payload = json.loads(concepts.read_text(encoding="utf-8"))
+    payload["policy_version"] = "changed-for-this-test"
+    concepts.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    after = services.knowledge.load()
+    assert after.context_hash() != before_analysis, "the analysis must see the vocabulary move"
+    assert after.document_context_hash() == before_document
+
+
+def test_no_stage_after_analysis_reads_the_requirement_vocabulary(project_root: Path) -> None:
+    """The exclusion is justified by consumption, so consumption is what is checked.
+
+    Derived from the package rather than from a list of stages: a module that
+    starts reading the vocabulary and is not registered here fails, because the
+    document scope would then be excluding a dependency that stage really has.
+    """
+    allowed = {
+        # Where the store is defined, loaded, and reported.
+        Path("cv_engine/domain/knowledge.py"),
+        Path("cv_engine/domain/analysis/requirements.py"),
+        Path("cv_engine/infrastructure/knowledge.py"),
+        Path("cv_engine/api/routers/health.py"),
+        Path("cv_engine/api/schemas/health.py"),
+        Path("cv_engine/application/commands.py"),
+        # The one stage that consumes it.
+        Path("cv_engine/application/services/analysis.py"),
+    }
+    root = Path(__file__).resolve().parents[1]
+    readers = {
+        path.relative_to(root)
+        for path in (root / "cv_engine").rglob("*.py")
+        if "requirement_concepts" in path.read_text(encoding="utf-8")
+    }
+    assert readers <= allowed, (
+        "these read the requirement vocabulary but are excluded from the document "
+        f"knowledge scope: {sorted(str(path) for path in readers - allowed)}"
+    )

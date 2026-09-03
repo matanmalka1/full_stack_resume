@@ -31,7 +31,7 @@ from cv_engine.domain.models import (
     ValidationRunLineage,
 )
 from cv_engine.infrastructure.persistence.tables import applications
-from cv_engine.util import canonical_json, new_id, sha256_text
+from cv_engine.util import new_id, sha256_text
 
 
 def test_application_projection_follows_the_preparation_lifecycle(services) -> None:
@@ -394,7 +394,7 @@ def test_failed_exact_validation_drives_state_and_approve_blocker(drafted_applic
             job_snapshot_id=analysis["job_snapshot_id"],
             job_analysis_id=working.job_analysis_id,
             selection_plan_id=working.selection_plan_id,
-            knowledge_context_hash=sha256_text(canonical_json(knowledge.versions())),
+            knowledge_context_hash=knowledge.document_context_hash(),
             validator_versions={"test": "1"},
         ),
     )

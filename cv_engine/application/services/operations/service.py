@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from ....util import canonical_json, new_id, sha256_text
+from ....util import new_id
 from ...commands import (
     AnalyzeCommand,
     ApprovalResult,
@@ -47,7 +47,11 @@ from ..analysis import AnalysisService
 from ..base import ServiceBase
 from ..drafts import DraftService
 from ..rendering import RenderingService
-from .common import _model_hash, analysis_knowledge_context_hash
+from .common import (
+    _model_hash,
+    analysis_knowledge_context_hash,
+    document_knowledge_context_hash,
+)
 
 
 class OperationService(ServiceBase[OperationRepository]):
@@ -127,7 +131,7 @@ class OperationService(ServiceBase[OperationRepository]):
                     f"approved revision {parent.id} does not belong to application "
                     f"{command.application_id}"
                 )
-        knowledge_hash = sha256_text(canonical_json(draft_service.load_knowledge().versions()))
+        knowledge_hash = document_knowledge_context_hash(draft_service)
         # §14: a replacement freezes the identity of the draft it is replacing, so the
         # runner can re-check at activation that the record is still the one the user
         # meant. Generation with nothing to replace freezes none, and the validator on
@@ -272,9 +276,7 @@ class OperationService(ServiceBase[OperationRepository]):
                 working_draft_id=working.id,
                 working_draft_edit_version=working.edit_version,
                 working_draft_content_hash=working.content_hash,
-                knowledge_context_hash=sha256_text(
-                    canonical_json(draft_service.load_knowledge().versions())
-                ),
+                knowledge_context_hash=document_knowledge_context_hash(draft_service),
                 dependency_hashes={
                     "job_analysis": _model_hash(analysis["analysis"]),
                     "selection_plan": _model_hash(plan),
@@ -412,9 +414,7 @@ class OperationService(ServiceBase[OperationRepository]):
                 job_analysis_id=revision.job_analysis_id,
                 selection_plan_id=revision.selection_plan_id,
                 approved_revision_id=revision.id,
-                knowledge_context_hash=sha256_text(
-                    canonical_json(rendering_service.load_knowledge().versions())
-                ),
+                knowledge_context_hash=document_knowledge_context_hash(rendering_service),
                 dependency_hashes={
                     "approved_revision": _model_hash(revision),
                     "claim_manifest": manifest["content_hash"],

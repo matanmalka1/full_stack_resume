@@ -6,7 +6,7 @@ from ....domain.draft_markdown import serialize_markdown
 from ....domain.drafts import seal_draft
 from ....domain.knowledge import Knowledge
 from ....domain.models import AuditRecord, DecisionRecord, DraftDocument, WorkingDraft
-from ....util import canonical_json, new_id, sha256_text, utc_now
+from ....util import new_id, sha256_text, utc_now
 from ...commands import ApprovalResult, ApproveDraftCommand
 from ...errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
@@ -78,7 +78,7 @@ class DraftApproval(DraftServiceBase):
                 (
                     "knowledge context",
                     lineage.knowledge_context_hash,
-                    sha256_text(canonical_json(knowledge.versions())),
+                    knowledge.document_context_hash(),
                 ),
             )
             if recorded != current

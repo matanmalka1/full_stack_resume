@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from ....util import canonical_json, sha256_text
 from ...commands import (
     AnalyzeCommand,
     DraftCommand,
@@ -43,7 +42,11 @@ from ...ports import (
 from ..analysis import AnalysisService, PreparedAnalysis, PreparedSelectionProposal
 from ..drafts import DraftService, PreparedDraft, PreparedRegeneration
 from ..rendering import ExecutedRender, RenderingService
-from .common import _model_hash, analysis_knowledge_context_hash
+from .common import (
+    _model_hash,
+    analysis_knowledge_context_hash,
+    document_knowledge_context_hash,
+)
 from .failures import failure_code_for, safe_failure_detail_for
 
 
@@ -259,9 +262,7 @@ class DraftOperationHandler(AITaskHandler):
                 or replaced.content_hash != sources.working_draft_content_hash
             ):
                 raise SourceChanged("The working draft changed before the replacement activated.")
-        if sources.knowledge_context_hash != sha256_text(
-            canonical_json(self.service.load_knowledge().versions())
-        ):
+        if sources.knowledge_context_hash != document_knowledge_context_hash(self.service):
             raise SourceChanged("Knowledge changed before draft activation.")
 
     def execute(self, operation, cancellation_requested) -> PreparedOperation:
@@ -324,7 +325,7 @@ class SelectionPlanOperationHandler(AITaskHandler):
             or _model_hash(analysis["analysis"]) != sources.dependency_hashes.get("job_analysis")
         ):
             raise SourceChanged("The analysis changed before the plan proposal activated.")
-        if sources.knowledge_context_hash != analysis_knowledge_context_hash(self.service):
+        if sources.knowledge_context_hash != document_knowledge_context_hash(self.service):
             raise SourceChanged("Knowledge changed before the plan proposal activated.")
 
     def execute(self, operation, cancellation_requested) -> PreparedOperation:
@@ -405,9 +406,7 @@ class RegenerationOperationHandler(AITaskHandler):
             or working.selection_plan_id != sources.selection_plan_id
         ):
             raise SourceChanged("The working draft changed before regeneration activated.")
-        if sources.knowledge_context_hash != sha256_text(
-            canonical_json(self.service.load_knowledge().versions())
-        ):
+        if sources.knowledge_context_hash != document_knowledge_context_hash(self.service):
             raise SourceChanged("Knowledge changed before regeneration activated.")
 
     def execute(self, operation, cancellation_requested) -> PreparedOperation:
@@ -492,7 +491,7 @@ class RenderOperationHandler:
             or manifest["content_hash"] != dependencies.get("claim_manifest")
         ):
             raise SourceChanged("Approved render inputs changed before activation.")
-        current_knowledge = sha256_text(canonical_json(self.service.load_knowledge().versions()))
+        current_knowledge = document_knowledge_context_hash(self.service)
         if sources.knowledge_context_hash != current_knowledge:
             raise SourceChanged("Knowledge changed before render activation.")
 
