@@ -24,5 +24,6 @@ def health(services: Services) -> HealthResponse:
             emphasis_policies=versions.emphasis_policies,
             presentations=versions.presentations,
             candidate_context=versions.candidate_context,
+            requirement_concepts=versions.requirement_concepts,
         ),
     )

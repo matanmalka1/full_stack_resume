@@ -14,15 +14,14 @@ from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB
 from cv_engine.application.commands import DraftCommand
 from cv_engine.application.errors import WorkflowError
 from cv_engine.domain.analysis.approval import merge_classification
-from cv_engine.domain.analysis.classification import classify_job
 from cv_engine.domain.models import Emphasis, FitLevel, Gap, ProfileName, Track
 from cv_engine.domain.profiles import ProfileStore
 
 
 def test_provider_cannot_relax_approval_confidence_or_language(
-    provider_analysis, classification_proposal
+    provider_analysis, classification_proposal, classify
 ) -> None:
-    deterministic = classify_job(AMBIGUOUS_HEBREW_JOB)
+    deterministic = classify(AMBIGUOUS_HEBREW_JOB)
     assert deterministic.classification_requires_approval
     assert deterministic.language == "he"
 
@@ -72,9 +71,9 @@ def test_explicit_user_override_beats_the_provider(
 
 
 def test_deterministic_gaps_survive_and_may_only_be_hardened(
-    profile_store: ProfileStore, classification_proposal
+    profile_store: ProfileStore, classification_proposal, classify
 ) -> None:
-    deterministic = classify_job(AMBIGUOUS_HEBREW_JOB)
+    deterministic = classify(AMBIGUOUS_HEBREW_JOB)
     salesforce = next(gap for gap in deterministic.gaps if gap.requirement == "Salesforce")
     assert salesforce.severity == "warning"
 
@@ -96,9 +95,9 @@ def test_deterministic_gaps_survive_and_may_only_be_hardened(
 
 
 def test_fit_is_derived_from_merged_gaps_and_never_improved(
-    profile_store: ProfileStore, classification_proposal
+    profile_store: ProfileStore, classification_proposal, classify
 ) -> None:
-    clean = classify_job(ACCOUNT_MANAGER_JOB)
+    clean = classify(ACCOUNT_MANAGER_JOB)
     assert clean.fit is FitLevel.HIGH and clean.gaps == []
 
     added = merge_classification(
@@ -111,13 +110,13 @@ def test_fit_is_derived_from_merged_gaps_and_never_improved(
     assert added.fit is FitLevel.LOW
     assert added.mandatory_requirements == ["German"]
 
-    low = classify_job(AMBIGUOUS_HEBREW_JOB)
+    low = classify(AMBIGUOUS_HEBREW_JOB)
     assert low.fit is FitLevel.LOW
     assert merge_classification(low, classification_proposal(), profile_store).fit is FitLevel.LOW
 
 
 def test_emphasis_disagreement_is_an_approval_gate(
-    profile_store: ProfileStore, classification_proposal
+    profile_store: ProfileStore, classification_proposal, classify
 ) -> None:
     """Emphasis selects content, so disagreeing about it materially changes the CV.
 
@@ -127,7 +126,7 @@ def test_emphasis_disagreement_is_an_approval_gate(
     routing as Track and Profile: two classifiers disagreeing means neither is
     authoritative, and only an Emphasis override settles it.
     """
-    deterministic = classify_job("Account Executive closing quota new business")
+    deterministic = classify("Account Executive closing quota new business")
     assert not deterministic.classification_requires_approval
     assert deterministic.emphasis is Emphasis.NEW_BUSINESS
 
@@ -162,7 +161,7 @@ def test_emphasis_disagreement_is_an_approval_gate(
 
     # Only an Emphasis override answers it; a Profile override does not.
     settled = merge_classification(
-        classify_job(
+        classify(
             "Account Executive closing quota new business",
             emphasis_override="tech-consultative-sales",
         ),
@@ -177,9 +176,9 @@ def test_emphasis_disagreement_is_an_approval_gate(
 
 
 def test_inconsistent_proposal_is_rejected_rather_than_applied(
-    profile_store: ProfileStore, classification_proposal
+    profile_store: ProfileStore, classification_proposal, classify
 ) -> None:
-    deterministic = classify_job(ACCOUNT_MANAGER_JOB)
+    deterministic = classify(ACCOUNT_MANAGER_JOB)
 
     merged = merge_classification(
         deterministic,
@@ -192,15 +191,15 @@ def test_inconsistent_proposal_is_rejected_rather_than_applied(
     assert "was not applied" in merged.rationale
 
 
-def test_deterministic_ambiguity_is_resolved_by_choosing_the_classification() -> None:
-    ambiguous = classify_job(AMBIGUOUS_HEBREW_JOB)
+def test_deterministic_ambiguity_is_resolved_by_choosing_the_classification(classify) -> None:
+    ambiguous = classify(AMBIGUOUS_HEBREW_JOB)
     assert ambiguous.approval_reasons == ["ambiguous-signals", "low-confidence"]
     assert ambiguous.classification_requires_approval
 
     # The reasons stay on the record; the override is what marks them answered.
-    resolved = classify_job(AMBIGUOUS_HEBREW_JOB, track_override="sales")
+    resolved = classify(AMBIGUOUS_HEBREW_JOB, track_override="sales")
     assert resolved.approval_reasons == ambiguous.approval_reasons
     assert not resolved.classification_requires_approval
 
-    unrelated = classify_job(AMBIGUOUS_HEBREW_JOB, emphasis_override="balanced-sales")
+    unrelated = classify(AMBIGUOUS_HEBREW_JOB, emphasis_override="balanced-sales")
     assert unrelated.classification_requires_approval

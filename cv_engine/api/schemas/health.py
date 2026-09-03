@@ -16,6 +16,7 @@ class KnowledgeVersions(HttpSchema):
     emphasis_policies: str
     presentations: str
     candidate_context: str
+    requirement_concepts: str
 
 
 class HealthResponse(HttpSchema):

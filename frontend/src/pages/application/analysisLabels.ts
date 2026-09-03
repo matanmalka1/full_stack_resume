@@ -1,4 +1,4 @@
-import { SignalHigh, SignalLow, SignalMedium } from "lucide-react";
+import { HelpCircle, SignalHigh, SignalLow, SignalMedium } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import type { Classification } from "../../api/analyses";
@@ -48,12 +48,13 @@ export const languageLabels: Record<Language, string> = {
    as an opaque object on the wire on purpose. It is therefore declared here and checked
    by membership at the read, which is what makes an unrecognized value render as absent
    rather than as `undefined`. */
-export type FitLevel = "high" | "medium" | "low";
+export type FitLevel = "high" | "medium" | "low" | "unknown";
 
 export const fitLabels: Record<FitLevel, string> = {
   high: "התאמה גבוהה",
   medium: "התאמה בינונית",
   low: "התאמה נמוכה",
+  unknown: "ההתאמה לא נבדקה",
 };
 
 /* The verdict alone is a word with no scale behind it: "high" reads as praise rather
@@ -63,12 +64,14 @@ export const fitDescriptions: Record<FitLevel, string> = {
   high: "המשרה תואמת את פרופיל המועמד. אין חסם התאמה ליצירת טיוטה.",
   medium: "התאמה חלקית. אפשר להמשיך, אך כדאי לעבור על הפערים לפני יצירת טיוטה.",
   low: "התאמה נמוכה מחייבת אישור מפורש לפני יצירת טיוטה.",
+  unknown: "לא ניתן היה לקרוא את דרישות המשרה, ולכן ההתאמה לא נבדקה. נדרשת הכרעה מפורשת לפני יצירת טיוטה.",
 };
 
 export const fitTones: Record<FitLevel, StatusTone> = {
   high: "success",
   medium: "neutral",
   low: "warning",
+  unknown: "warning",
 };
 
 /* Fit is a scale, so its mark is a scale too. The tone's own icons say "warning" and
@@ -78,6 +81,7 @@ export const fitIcons: Record<FitLevel, LucideIcon> = {
   high: SignalHigh,
   medium: SignalMedium,
   low: SignalLow,
+  unknown: HelpCircle,
 };
 
 /* The Application projections carry `fit_level` and `track` as open strings rather than

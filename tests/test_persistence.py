@@ -13,7 +13,6 @@ from cv_engine.application.knowledge_mutations import (
     PrepareKnowledgeMutation,
 )
 from cv_engine.application.settings import UpdateSettings
-from cv_engine.domain.analysis.classification import classify_job
 from cv_engine.domain.models import (
     AuditRecord,
     SelectionManifest,
@@ -466,8 +465,7 @@ def test_immutability_triggers_refuse_real_repository_writes(application_repo) -
 
 
 def test_typed_preparation_records_round_trip_and_refuse_stale_edits(
-    application_repo,
-    draft_factory,
+    application_repo, draft_factory, classify
 ) -> None:
     repository = application_repo
     app_id, snapshot_id = _create_application(
@@ -489,7 +487,7 @@ def test_typed_preparation_records_round_trip_and_refuse_stale_edits(
         "content_hash",
         "prior_snapshot_id",
     }
-    analysis = classify_job("Python backend developer API React")
+    analysis = classify("Python backend developer API React")
     analysis_id, _initial_plan = _save_analysis(repository, app_id, snapshot_id, analysis)
     document = draft_factory(
         "Python backend developer API React",
@@ -561,8 +559,7 @@ def test_typed_preparation_records_round_trip_and_refuse_stale_edits(
 
 
 def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
-    application_repo,
-    draft_factory,
+    application_repo, draft_factory, classify
 ) -> None:
     repository = application_repo
     app_id, snapshot_id = _create_application(
@@ -571,7 +568,7 @@ def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
         target_role="Developer",
         text="Python backend developer API React",
     )
-    analysis = classify_job("Python backend developer API React")
+    analysis = classify("Python backend developer API React")
     analysis_id, _initial_plan = _save_analysis(repository, app_id, snapshot_id, analysis)
     document = draft_factory(
         "Python backend developer API React",
@@ -606,7 +603,7 @@ def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
         repository.create_working_draft(app_id, analysis_id, plan.id, document)
 
 
-def test_only_one_working_draft_per_application_can_be_active(application_repo) -> None:
+def test_only_one_working_draft_per_application_can_be_active(application_repo, classify) -> None:
     """Product invariant 3, enforced by storage rather than by a filesystem path.
 
     Before this boundary "one active draft" was an accident of every draft living
@@ -658,7 +655,7 @@ def test_only_one_working_draft_per_application_can_be_active(application_repo) 
                 content_hash="h",
             )
         )
-    analysis = classify_job("Python backend developer API React")
+    analysis = classify("Python backend developer API React")
     analysis_id, plan = _save_analysis(repository, "a", "s", analysis)
     assert analysis_id == plan.job_analysis_id
     with repository.transaction() as connection:

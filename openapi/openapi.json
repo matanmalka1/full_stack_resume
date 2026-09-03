@@ -3507,6 +3507,10 @@
           "profiles": {
             "title": "Profiles",
             "type": "string"
+          },
+          "requirement_concepts": {
+            "title": "Requirement Concepts",
+            "type": "string"
           }
         },
         "required": [
@@ -3515,7 +3519,8 @@
           "profiles",
           "emphasis_policies",
           "presentations",
-          "candidate_context"
+          "candidate_context",
+          "requirement_concepts"
         ],
         "title": "KnowledgeVersions",
         "type": "object"

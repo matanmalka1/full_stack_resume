@@ -4,7 +4,7 @@ from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING
 
 from ..models import JobAnalysis, JobClassificationProposal, OverrideKey
-from .gaps import FIT_SEVERITY, derive_fit, merge_gaps
+from .gaps import derive_fit, merge_fit, merge_gaps
 
 if TYPE_CHECKING:
     from ..profiles import ProfileStore
@@ -17,6 +17,12 @@ CONFIDENCE_APPROVAL_THRESHOLD = 0.72
 # choosing only a Track leaves the Profile inside it undecided. Each reason is
 # settled only by an override that actually answers it — an unrelated override
 # must not open the gate.
+# `extraction-failed` is deliberately absent. Naming the Track or Profile says
+# what kind of job this is; it does not recover the requirements that could not
+# be read, and letting it unblock drafting would reinstate the very failure the
+# reason exists to catch. It clears one way today - a later analysis that reads
+# the requirements - and a deliberate "proceed despite incomplete analysis"
+# decision has yet to be designed. Until then it stays blocking.
 APPROVAL_RESOLVING_OVERRIDES: dict[str, frozenset[str]] = {
     "ambiguous-signals": frozenset({"track", "profile"}),
     "low-confidence": frozenset({"track", "profile"}),
@@ -100,7 +106,10 @@ def merge_classification(
         reasons.append("low-confidence")
     reasons = list(dict.fromkeys(reasons))
     gaps = merge_gaps(deterministic.gaps, proposal.gaps)
-    fit = max(derive_fit(gaps), deterministic.fit, key=lambda level: FIT_SEVERITY[level])
+    # The deterministic run already decided whether extraction failed; a
+    # proposal cannot re-open that, so Fit is re-derived from the merged gaps
+    # alone and then folded against what the deterministic run concluded.
+    fit = merge_fit(derive_fit(gaps), deterministic.fit)
 
     rationale = proposal.rationale
     if (track, profile) != (proposal.track, proposal.profile):
@@ -111,6 +120,8 @@ def merge_classification(
 
     return JobAnalysis(
         track=track,
+        requirements=deterministic.requirements,
+        extraction_version=deterministic.extraction_version,
         profile=profile,
         emphasis=emphasis,
         confidence=confidence,

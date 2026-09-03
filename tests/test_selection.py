@@ -10,7 +10,6 @@ from __future__ import annotations
 import pytest
 from helpers import PAYME_TECH_SALES_JOB
 
-from cv_engine.domain.analysis.classification import classify_job
 from cv_engine.domain.draft_markdown import serialize_markdown
 from cv_engine.domain.facts import FactStore
 from cv_engine.domain.models import Emphasis, Profile
@@ -101,11 +100,9 @@ def test_job_keywords_cannot_outrank_profile_and_emphasis_semantics(draft_factor
 
 
 def test_a_required_tag_is_rescued_and_the_eviction_is_recorded(
-    profile_store: ProfileStore, policy_store, fact_store
+    profile_store: ProfileStore, policy_store, fact_store, classify
 ) -> None:
     """A Profile invariant outranks the Emphasis that would have dropped it."""
-    from cv_engine.domain.analysis.classification import classify_job
-
     base = profile_store.get("account-manager")
     profile = Profile.model_validate(
         {
@@ -113,7 +110,7 @@ def test_a_required_tag_is_rescued_and_the_eviction_is_recorded(
             "required_tags": ["retention"],
         }
     )
-    analysis = classify_job(
+    analysis = classify(
         ACCOUNT_MANAGER_JOB, profile_override="account-manager", emphasis_override="new-business"
     )
 
@@ -321,8 +318,8 @@ def test_the_headline_reads_for_a_recruiter_and_the_filename_does_not(
 # rather than trimmed to fit.
 
 
-def _account_manager_selection(profile_store, policy_store, fact_store, **overlay):
-    analysis = classify_job(ACCOUNT_MANAGER_JOB, profile_override="account-manager")
+def _account_manager_selection(profile_store, policy_store, fact_store, classify, **overlay):
+    analysis = classify(ACCOUNT_MANAGER_JOB, profile_override="account-manager")
     return build_selection(
         analysis=analysis,
         profile=profile_store.get("account-manager"),
@@ -334,9 +331,9 @@ def _account_manager_selection(profile_store, policy_store, fact_store, **overla
 
 
 def test_selected_fact_without_target_language_rendering_is_refused_before_drafting(
-    profile_store: ProfileStore, policy_store, fact_store: FactStore
+    profile_store: ProfileStore, policy_store, fact_store: FactStore, classify
 ) -> None:
-    analysis = classify_job(ACCOUNT_MANAGER_JOB, profile_override="account-manager")
+    analysis = classify(ACCOUNT_MANAGER_JOB, profile_override="account-manager")
     _sections, baseline = build_selection(
         analysis=analysis,
         profile=profile_store.get("account-manager"),
@@ -373,7 +370,7 @@ def test_selected_fact_without_target_language_rendering_is_refused_before_draft
 
 
 def test_an_overlay_free_build_is_byte_for_byte_the_build_that_ran_before(
-    profile_store: ProfileStore, policy_store, fact_store
+    profile_store: ProfileStore, policy_store, fact_store, classify
 ) -> None:
     """The default path is the old path.
 
@@ -382,11 +379,14 @@ def test_an_overlay_free_build_is_byte_for_byte_the_build_that_ran_before(
     produced without them, so a difference here would be a silent rewrite of
     records that are supposed to be immutable.
     """
-    selected, manifest = _account_manager_selection(profile_store, policy_store, fact_store)
+    selected, manifest = _account_manager_selection(
+        profile_store, policy_store, fact_store, classify
+    )
     with_empty, manifest_empty = _account_manager_selection(
         profile_store,
         policy_store,
         fact_store,
+        classify,
         pinned_fact_ids=frozenset(),
         excluded_fact_ids=frozenset(),
     )
@@ -396,10 +396,10 @@ def test_an_overlay_free_build_is_byte_for_byte_the_build_that_ran_before(
 
 
 def test_a_pinned_fact_survives_the_budget_that_had_omitted_it(
-    profile_store: ProfileStore, policy_store, fact_store
+    profile_store: ProfileStore, policy_store, fact_store, classify
 ) -> None:
     """Explicit inclusion is a hold, which is the only way to say it."""
-    _, before = _account_manager_selection(profile_store, policy_store, fact_store)
+    _, before = _account_manager_selection(profile_store, policy_store, fact_store, classify)
     omitted = next(
         candidate
         for candidate in before.candidates
@@ -410,6 +410,7 @@ def test_a_pinned_fact_survives_the_budget_that_had_omitted_it(
         profile_store,
         policy_store,
         fact_store,
+        classify,
         pinned_fact_ids=frozenset({omitted.fact_id}),
     )
 
@@ -428,7 +429,7 @@ def test_a_pinned_fact_survives_the_budget_that_had_omitted_it(
 
 
 def test_an_excluded_fact_leaves_the_document_and_the_manifest_says_who_removed_it(
-    profile_store: ProfileStore, policy_store, fact_store
+    profile_store: ProfileStore, policy_store, fact_store, classify
 ) -> None:
     """A fact the engine ranked out and one the user removed are different facts.
 
@@ -436,7 +437,7 @@ def test_an_excluded_fact_leaves_the_document_and_the_manifest_says_who_removed_
     still tell them apart, which is what makes the plan evidence of a decision
     rather than of an outcome.
     """
-    _, before = _account_manager_selection(profile_store, policy_store, fact_store)
+    _, before = _account_manager_selection(profile_store, policy_store, fact_store, classify)
     chosen = next(
         candidate
         for candidate in before.candidates
@@ -447,6 +448,7 @@ def test_an_excluded_fact_leaves_the_document_and_the_manifest_says_who_removed_
         profile_store,
         policy_store,
         fact_store,
+        classify,
         excluded_fact_ids=frozenset({chosen.fact_id}),
     )
 
@@ -469,19 +471,20 @@ def test_an_excluded_fact_leaves_the_document_and_the_manifest_says_who_removed_
 
 
 def test_an_overlay_naming_a_fact_the_profile_never_offered_is_refused(
-    profile_store: ProfileStore, policy_store, fact_store
+    profile_store: ProfileStore, policy_store, fact_store, classify
 ) -> None:
     with pytest.raises(SelectionError, match="offers no candidate named"):
         _account_manager_selection(
             profile_store,
             policy_store,
             fact_store,
+            classify,
             pinned_fact_ids=frozenset({"development.stack.python"}),
         )
 
 
 def test_a_fact_named_on_both_sides_of_the_overlay_is_refused(
-    profile_store: ProfileStore, policy_store, fact_store
+    profile_store: ProfileStore, policy_store, fact_store, classify
 ) -> None:
     """Neither reading is safe, so neither is chosen."""
     with pytest.raises(SelectionError, match="pinned and excluded"):
@@ -489,13 +492,14 @@ def test_a_fact_named_on_both_sides_of_the_overlay_is_refused(
             profile_store,
             policy_store,
             fact_store,
+            classify,
             pinned_fact_ids=frozenset({"sales.achievement.retention"}),
             excluded_fact_ids=frozenset({"sales.achievement.retention"}),
         )
 
 
 def test_structure_cannot_be_excluded_as_if_it_were_evidence(
-    profile_store: ProfileStore, policy_store, fact_store
+    profile_store: ProfileStore, policy_store, fact_store, classify
 ) -> None:
     """Removing a heading does not shorten a CV; it orphans what is under it."""
     for fact_id in ("sales.role.leader.title", "sales.role.leader.dates"):
@@ -504,12 +508,13 @@ def test_structure_cannot_be_excluded_as_if_it_were_evidence(
                 profile_store,
                 policy_store,
                 fact_store,
+                classify,
                 excluded_fact_ids=frozenset({fact_id}),
             )
 
 
 def test_an_exclusion_that_costs_a_role_block_its_quantitative_floor_is_refused(
-    profile_store: ProfileStore, policy_store, fact_store
+    profile_store: ProfileStore, policy_store, fact_store, classify
 ) -> None:
     """The invariant is not traded for the user's choice, and neither is dropped.
 
@@ -523,12 +528,13 @@ def test_an_exclusion_that_costs_a_role_block_its_quantitative_floor_is_refused(
             profile_store,
             policy_store,
             fact_store,
+            classify,
             excluded_fact_ids=frozenset({"sales.metric.new_customers"}),
         )
 
 
 def test_an_exclusion_that_empties_a_required_tag_is_refused(
-    profile_store: ProfileStore, policy_store, fact_store
+    profile_store: ProfileStore, policy_store, fact_store, classify
 ) -> None:
     """The rescue refills a required tag from the pool; it cannot refill nothing.
 
@@ -551,5 +557,6 @@ def test_an_exclusion_that_empties_a_required_tag_is_refused(
             profile_store,
             policy_store,
             fact_store,
+            classify,
             excluded_fact_ids=carriers,
         )

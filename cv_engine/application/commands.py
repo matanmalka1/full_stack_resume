@@ -605,6 +605,7 @@ class KnowledgeVersionsResult(BoundaryDTO):
     emphasis_policies: str
     presentations: str
     candidate_context: str
+    requirement_concepts: str
 
 
 class FactEventView(BoundaryDTO):

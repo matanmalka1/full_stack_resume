@@ -36,6 +36,7 @@ from cv_engine.domain.analysis.classification import classify_job
 from cv_engine.domain.models import (
     ClaimProposal,
     DraftProposal,
+    JobAnalysis,
     JobClassificationProposal,
     ProposedClaim,
     SectionProposal,
@@ -681,19 +682,40 @@ def test_a_stale_draft_version_is_refused_before_any_provider_call(
 # --------------------------------------------------------------------------
 
 
+#: What a provider is allowed to speak to at all, taken from the proposal
+#: contract itself rather than restated.
+PROVIDER_OWNED_FIELDS = frozenset(JobClassificationProposal.model_fields)
+
+#: Fields that are neither policy nor proposal: provenance a deterministic run
+#: cannot be expected to reproduce. A deliberate exception list, so a new
+#: `JobAnalysis` field is policy-owned by default and forgetting to register it
+#: fails the guard instead of silently escaping it.
+NON_POLICY_FIELDS = frozenset(
+    {
+        "analysis_version",
+        "confidence",
+        "deterministic_confidence",
+        "proposal_confidence",
+        "rationale",
+        "extraction_version",
+    }
+)
+
 #: Everything the deterministic policy owns. An AI run over the same JobSnapshot
 #: must agree with a deterministic run on every one of them, whatever the job
-#: text tries to say. Listed here rather than asserted inline so the list is one
-#: thing to read and one thing to extend.
-POLICY_OWNED_FIELDS = (
-    "language",
-    "fit",
-    "mandatory_requirements",
-    "preferred_requirements",
-    "classification_requires_approval",
-    "approval_reasons",
-    "gaps",
-    "user_override",
+#: text tries to say. Derived, not listed: adding a field to `JobAnalysis`
+#: protects it here automatically.
+#: Proposable, yet still policy-governed. `merge_gaps` is monotonic - a
+#: proposal may add a gap or raise its severity, never drop or soften one - so
+#: against a proposal that is silent on gaps the deterministic set must survive
+#: intact.
+PROPOSABLE_BUT_POLICY_GOVERNED = frozenset({"gaps"})
+
+POLICY_OWNED_FIELDS = tuple(
+    sorted(
+        (set(JobAnalysis.model_fields) - PROVIDER_OWNED_FIELDS - NON_POLICY_FIELDS)
+        | PROPOSABLE_BUT_POLICY_GOVERNED
+    )
 )
 
 
@@ -724,9 +746,19 @@ def test_injected_job_text_changes_no_policy_owned_result(
         fake_openai.scripts["propose_job_analysis"].clear()
         fake_openai.script("propose_job_analysis", CLASSIFICATION)
         job_text = f"{ACCOUNT_MANAGER_JOB}\n\n{injection}"
-        baseline = classify_job(job_text)
 
         ingested = _ingested(ai_services, f"Injection {injection[:8]}", job_text)
+        # The baseline runs over the same Knowledge and the same snapshot the
+        # service used, so requirement coverage and its identities are
+        # comparable rather than trivially different.
+        knowledge = ai_services.analysis.load_knowledge()
+        snapshot = ai_services.repository.get_snapshot(ingested.job_snapshot_id)
+        baseline = classify_job(
+            job_text,
+            facts=knowledge.facts,
+            concepts=knowledge.requirement_concepts,
+            normalized_hash=snapshot["normalized_hash"],
+        )
         completed = _run(ai_services, _analysis_operation(ai_services, ingested))
         assert completed.status.value == "succeeded", completed.safe_failure_detail
 

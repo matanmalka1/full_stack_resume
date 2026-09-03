@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .analysis.requirements import RequirementConceptStore
 from .facts import FactStore
 from .models import CandidateContext
 from .presentations import PresentationStore
@@ -23,6 +24,7 @@ class Knowledge:
     policies: EmphasisPolicyStore
     candidate: CandidateContext
     presentations: PresentationStore | None
+    requirement_concepts: RequirementConceptStore
 
     def versions(self) -> dict[str, str]:
         """One hash per dependency an artifact can be stale against.
@@ -38,4 +40,5 @@ class Knowledge:
             "emphasis_policies": self.policies.version,
             "presentations": self.presentations.version if self.presentations is not None else "",
             "candidate_context": self.candidate.version_hash,
+            "requirement_concepts": self.requirement_concepts.version,
         }

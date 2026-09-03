@@ -4,9 +4,17 @@ import re
 from collections import Counter
 from typing import cast
 
-from ..models import Emphasis, JobAnalysis, Language, OverrideKey, ProfileName, Track
+from ..facts import FactStore
+from ..models import Emphasis, JobAnalysis, Language, OverrideKey, ProfileName, Requirement, Track
 from .approval import CONFIDENCE_APPROVAL_THRESHOLD, unresolved_reasons
-from .gaps import derive_fit, derive_gaps
+from .gaps import derive_fit, derive_gaps, gaps_from_requirements
+from .requirements import (
+    RequirementConceptStore,
+    cover_requirements,
+    extract_requirements,
+    extraction_confidence,
+    extraction_failed,
+)
 
 HEBREW = re.compile(r"[\u0590-\u05ff]")
 
@@ -88,6 +96,16 @@ SELECTION_CONCEPTS: dict[str, tuple[str, ...]] = {
 }
 
 
+def classification_confidence(top: int, second: int) -> float:
+    """How clearly the profile vocabulary picked one Profile over the next.
+
+    Separated from extraction confidence so a low stored `confidence` can be
+    attributed: a strong score here with a weak one there means the job was
+    recognised but its requirements were not read.
+    """
+    return min(0.98, 0.58 + 0.08 * top + 0.04 * max(0, top - second))
+
+
 def detect_language(text: str) -> Language:
     letters = [char for char in text if char.isalpha()]
     if not letters:
@@ -100,6 +118,9 @@ def detect_language(text: str) -> Language:
 def classify_job(
     text: str,
     *,
+    facts: FactStore,
+    concepts: RequirementConceptStore,
+    normalized_hash: str,
     track_override: str | None = None,
     profile_override: str | None = None,
     emphasis_override: str | None = None,
@@ -163,7 +184,6 @@ def classify_job(
     ranked = scores.most_common(2)
     top = ranked[0][1] if ranked else 0
     second = ranked[1][1] if len(ranked) > 1 else 0
-    confidence = min(0.98, 0.58 + 0.08 * top + 0.04 * max(0, top - second))
     ambiguous = top == second and top > 0
 
     default_emphasis = {
@@ -182,8 +202,48 @@ def classify_job(
     }[profile]
     emphasis = Emphasis(emphasis_override) if emphasis_override else default_emphasis
 
-    gaps = derive_gaps(lowered, track)
-    fit = derive_fit(gaps)
+    # Requirements first, then coverage, then the gaps coverage implies.
+    # Knowledge is required, not optional: a caller that could omit it would
+    # silently produce an analysis with no requirements and `extraction_version`
+    # "0" - indistinguishable from a legacy record, and trusted as one.
+    #
+    # The legacy rule-derived gaps are unioned rather than replaced, so a rule
+    # that fires on wording no concept models yet is not lost.
+    extracted = extract_requirements(text, normalized_hash=normalized_hash, concepts=concepts)
+    requirements: list[Requirement] = cover_requirements(
+        extracted, facts=facts, concepts=concepts
+    )
+    extraction_version = concepts.extraction_version
+
+    # The rules are the other half of requirement understanding while they
+    # still own the concepts they own, so they are computed before extraction
+    # is judged. A posting the rules read is not one the engine failed to read.
+    rule_gaps = derive_gaps(lowered, track)
+    failed_extraction = extraction_failed(
+        text, extracted, concepts, understood_elsewhere=bool(rule_gaps)
+    )
+
+    # Two independently diagnosable scores, multiplied. A strong keyword
+    # classification cannot carry an analysis whose requirements were not
+    # understood, and the stored product alone would not say which half was
+    # weak - so both remain callable on their own.
+    extraction_score = extraction_confidence(
+        text, extracted, concepts, understood_elsewhere=bool(rule_gaps)
+    )
+    classification_score = classification_confidence(top, second)
+    confidence = round(extraction_score * classification_score, 4)
+    boundary_meanings = {
+        fact_id: facts.facts[fact_id].meaning
+        for requirement in requirements
+        for fact_id in requirement.boundary_fact_ids
+        if fact_id in facts.facts
+    }
+    covered_text = {requirement.text for requirement in requirements}
+    gaps = [
+        *gaps_from_requirements(requirements, boundary_meanings=boundary_meanings),
+        *(gap for gap in rule_gaps if gap.requirement not in covered_text),
+    ]
+    fit = derive_fit(gaps, extraction_failed=failed_extraction)
     candidate_overrides: dict[OverrideKey, str | None] = {
         "track": track_override,
         "profile": profile_override,
@@ -200,11 +260,14 @@ def classify_job(
         if any(phrase in lowered for phrase in phrases)
     )
     reasons = [
+        *(["extraction-failed"] if failed_extraction else []),
         *(["ambiguous-signals"] if ambiguous else []),
         *(["low-confidence"] if confidence < CONFIDENCE_APPROVAL_THRESHOLD else []),
     ]
     return JobAnalysis(
         track=track,
+        requirements=requirements,
+        extraction_version=extraction_version,
         profile=profile,
         emphasis=emphasis,
         confidence=confidence,
