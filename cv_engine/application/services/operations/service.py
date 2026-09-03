@@ -13,6 +13,7 @@ from ....util import new_id
 from ...ai_configuration import (
     DEFAULT_AI_MODEL,
     DEFAULT_REASONING_EFFORT,
+    ReasoningEffort,
     normalize_ai_model,
     normalize_reasoning_effort,
 )
@@ -96,6 +97,11 @@ class OperationService(ServiceBase[OperationRepository]):
         )
         return command.model_copy(update={"model": model, "reasoning_effort": effort})
 
+    @staticmethod
+    def _validated_reasoning_effort(value: str | None) -> ReasoningEffort | None:
+        """Keep an absent deterministic effort absent; validate any stored value."""
+        return None if value is None else normalize_reasoning_effort(value)
+
     def submit_analysis(
         self,
         command: AnalyzeCommand,
@@ -129,7 +135,7 @@ class OperationService(ServiceBase[OperationRepository]):
             ),
             provider=command.provider,
             model=command.model,
-            reasoning_effort=command.reasoning_effort,
+            reasoning_effort=self._validated_reasoning_effort(command.reasoning_effort),
         )
         return as_operation_view(self.repo.create_operation(request))
 
@@ -220,7 +226,7 @@ class OperationService(ServiceBase[OperationRepository]):
             # rather than from a second list of AI operation types.
             provider=command.provider,
             model=command.model,
-            reasoning_effort=command.reasoning_effort,
+            reasoning_effort=self._validated_reasoning_effort(command.reasoning_effort),
         )
         return as_operation_view(self.repo.create_operation(request, operation_id=operation_id))
 
@@ -263,7 +269,7 @@ class OperationService(ServiceBase[OperationRepository]):
             ),
             provider="openai",
             model=command.model,
-            reasoning_effort=command.reasoning_effort,
+            reasoning_effort=self._validated_reasoning_effort(command.reasoning_effort),
         )
         return as_operation_view(self.repo.create_operation(request))
 
@@ -331,7 +337,7 @@ class OperationService(ServiceBase[OperationRepository]):
             ),
             provider="openai",
             model=command.model,
-            reasoning_effort=command.reasoning_effort,
+            reasoning_effort=self._validated_reasoning_effort(command.reasoning_effort),
         )
         return as_operation_view(self.repo.create_operation(request))
 

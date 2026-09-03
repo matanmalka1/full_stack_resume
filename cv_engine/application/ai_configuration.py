@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Literal, cast
+from typing import Literal, TypedDict, cast
 
 AIModel = Literal["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]
 ReasoningEffort = Literal["low", "medium", "high"]
@@ -63,6 +63,12 @@ REASONING_EFFORTS: tuple[ReasoningEffort, ...] = ("low", "medium", "high")
 _MODELS_BY_ID = {item.id: item for item in AI_MODELS}
 
 
+class ExecutionCost(TypedDict):
+    input_usd: str
+    output_usd: str
+    total_usd: str
+
+
 def normalize_ai_model(value: str | None) -> AIModel:
     """Resolve the supported legacy alias and reject arbitrary provider slugs."""
     normalized = "gpt-5.6-sol" if value == "gpt-5.6" else value
@@ -92,7 +98,7 @@ def execution_cost(
     input_tokens: int,
     cached_input_tokens: int,
     output_tokens: int,
-) -> dict[str, str]:
+) -> ExecutionCost:
     definition = model_definition(model)
     cached = min(max(cached_input_tokens, 0), max(input_tokens, 0))
     uncached = max(input_tokens, 0) - cached
