@@ -46,7 +46,11 @@ export const CanonicalFactsBrowser = () => {
           loadingLabel="טוען את מאגר העובדות…"
         >
           {items === undefined ? null : (
-            <ul className="max-h-[32rem] divide-y divide-cv-border overflow-y-auto rounded-control border border-cv-border">
+            <ul
+              aria-label="רשימת העובדות הקנוניות"
+              className="max-h-[32rem] divide-y divide-cv-border overflow-y-auto rounded-control border border-cv-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cv-focus"
+              tabIndex={0}
+            >
               {items.map(({ fact, recorded_status: recordedStatus }) => {
                 const label = factLabel(fact);
                 const auditMismatch = recordedStatus !== fact.status;
