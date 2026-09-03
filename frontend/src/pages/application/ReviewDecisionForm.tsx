@@ -17,8 +17,11 @@ export const FIT_REASONS: Record<string, true> = {
   HARD_GAP_REQUIRES_DECISION: true,
 };
 
+export const INCOMPLETE_ANALYSIS_REASON = "ANALYSIS_INCOMPLETE";
+
 export const REVIEW_REASONS_THIS_SCREEN_OWNS: Record<string, true> = {
   [CLASSIFICATION_REASON]: true,
+  [INCOMPLETE_ANALYSIS_REASON]: true,
   ...FIT_REASONS,
 };
 
@@ -28,6 +31,7 @@ export const emptyDecisions: ClassificationDecisions = {
   emphasis_override: null,
   language_override: null,
   accept_low_fit: false,
+  accept_incomplete_analysis: false,
 };
 
 /* The form's own rule, and the only one it keeps: an empty submission is not a
@@ -36,6 +40,7 @@ export const emptyDecisions: ClassificationDecisions = {
    stays the server's and is presented as it arrives. */
 export const hasDecision = (decisions: ClassificationDecisions): boolean =>
   decisions.accept_low_fit ||
+  decisions.accept_incomplete_analysis ||
   decisions.track_override != null ||
   decisions.profile_override != null ||
   decisions.emphasis_override != null ||
@@ -82,6 +87,7 @@ interface ReviewDecisionFormProps {
   onChange: (decisions: ClassificationDecisions) => void;
   showClassification: boolean;
   showFit: boolean;
+  showIncompleteAnalysis: boolean;
 }
 
 export const ReviewDecisionForm = ({
@@ -90,6 +96,7 @@ export const ReviewDecisionForm = ({
   onChange,
   showClassification,
   showFit,
+  showIncompleteAnalysis,
 }: ReviewDecisionFormProps) => (
   <div className="flex flex-col gap-6">
     {showClassification ? (
@@ -124,6 +131,17 @@ export const ReviewDecisionForm = ({
           value={decisions.language_override ?? null}
         />
       </>
+    ) : null}
+
+    {showIncompleteAnalysis ? (
+      <Checkbox
+        checked={decisions.accept_incomplete_analysis}
+        disabled={disabled}
+        hint="הניתוח לא הצליח לקרוא את דרישות המשרה. בחירת מסלול או פרופיל אינה פותרת זאת, ואישור זה נרשם על הניתוח הזה בלבד - ניתוח חדש יחסום שוב."
+        onChange={(event) => onChange({ ...decisions, accept_incomplete_analysis: event.target.checked })}
+      >
+        אני מבין שהדרישות לא נקראו ומבקש להמשיך
+      </Checkbox>
     ) : null}
 
     {showFit ? (

@@ -6,7 +6,7 @@ from ....domain.draft_markdown import serialize_markdown
 from ....domain.drafts import seal_draft
 from ....domain.knowledge import Knowledge
 from ....domain.models import AuditRecord, DecisionRecord, DraftDocument, WorkingDraft
-from ....util import canonical_json, new_id, sha256_text, utc_now
+from ....util import new_id, sha256_text, utc_now
 from ...commands import ApprovalResult, ApproveDraftCommand
 from ...errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
@@ -78,7 +78,7 @@ class DraftApproval(DraftServiceBase):
                 (
                     "knowledge context",
                     lineage.knowledge_context_hash,
-                    sha256_text(canonical_json(knowledge.versions())),
+                    knowledge.document_context_hash(),
                 ),
             )
             if recorded != current
@@ -166,7 +166,18 @@ class DraftApproval(DraftServiceBase):
                 for claim in section.claims
                 if claim.claim_type in {"composite", "derived"}
             ],
+            # Kept as it was for records already written; it never described
+            # per-gap acceptance, which now lives on the SelectionPlan.
             "accepted_warnings_or_gaps": analysis.user_override,
+            # The gaps this CV was knowingly approved despite, with who accepted
+            # each and when. An ApprovedRevision is immutable and is the one
+            # record that cannot be regenerated, so a decision it was built on
+            # has to be legible from the record itself rather than recovered by
+            # joining through whichever plan happens to still be reachable.
+            "accepted_gaps": [
+                accepted.model_dump(mode="json")
+                for accepted in self.repo.selection_plan(working.selection_plan_id).accepted_gaps
+            ],
             "user_overrides": analysis.user_override,
             "fact_store_version": facts.version,
             "job_snapshot_id": draft.job_snapshot_id,

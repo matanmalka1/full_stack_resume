@@ -174,6 +174,7 @@ describe("the review decision, on the Application screen", () => {
     expect(JSON.parse((applyCall as [string, RequestInit])[1].body as string)).toEqual({
       application_id: "app-1",
       accept_low_fit: false,
+      accept_incomplete_analysis: false,
       track_override: "tech-sales",
       emphasis_override: "leadership",
     });

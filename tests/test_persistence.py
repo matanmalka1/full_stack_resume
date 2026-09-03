@@ -4,8 +4,10 @@ import threading
 import time
 
 import pytest
-from sqlalchemy import delete, func, insert, inspect, select, text, update
-from sqlalchemy.exc import IntegrityError, ProgrammingError
+from pydantic import ValidationError
+from sqlalchemy import create_engine, delete, func, insert, inspect, select, text, update
+from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
+from sqlalchemy.pool import NullPool
 
 from cv_engine.application.errors import PreconditionFailed, StateConflict, UnknownRecord
 from cv_engine.application.knowledge_mutations import (
@@ -13,8 +15,8 @@ from cv_engine.application.knowledge_mutations import (
     PrepareKnowledgeMutation,
 )
 from cv_engine.application.settings import UpdateSettings
-from cv_engine.domain.analysis.classification import classify_job
 from cv_engine.domain.models import (
+    AcceptedGap,
     AuditRecord,
     SelectionManifest,
     SelectionPlan,
@@ -23,6 +25,7 @@ from cv_engine.domain.models import (
     WorkingDraft,
 )
 from cv_engine.infrastructure.persistence import Repository
+from cv_engine.infrastructure.persistence.preparation import SqlAlchemyPreparationRepository
 from cv_engine.infrastructure.persistence.tables import (
     app_settings,
     applications,
@@ -466,8 +469,7 @@ def test_immutability_triggers_refuse_real_repository_writes(application_repo) -
 
 
 def test_typed_preparation_records_round_trip_and_refuse_stale_edits(
-    application_repo,
-    draft_factory,
+    application_repo, draft_factory, classify
 ) -> None:
     repository = application_repo
     app_id, snapshot_id = _create_application(
@@ -489,7 +491,7 @@ def test_typed_preparation_records_round_trip_and_refuse_stale_edits(
         "content_hash",
         "prior_snapshot_id",
     }
-    analysis = classify_job("Python backend developer API React")
+    analysis = classify("Python backend developer API React")
     analysis_id, _initial_plan = _save_analysis(repository, app_id, snapshot_id, analysis)
     document = draft_factory(
         "Python backend developer API React",
@@ -561,8 +563,7 @@ def test_typed_preparation_records_round_trip_and_refuse_stale_edits(
 
 
 def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
-    application_repo,
-    draft_factory,
+    application_repo, draft_factory, classify
 ) -> None:
     repository = application_repo
     app_id, snapshot_id = _create_application(
@@ -571,7 +572,7 @@ def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
         target_role="Developer",
         text="Python backend developer API React",
     )
-    analysis = classify_job("Python backend developer API React")
+    analysis = classify("Python backend developer API React")
     analysis_id, _initial_plan = _save_analysis(repository, app_id, snapshot_id, analysis)
     document = draft_factory(
         "Python backend developer API React",
@@ -606,7 +607,7 @@ def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
         repository.create_working_draft(app_id, analysis_id, plan.id, document)
 
 
-def test_only_one_working_draft_per_application_can_be_active(application_repo) -> None:
+def test_only_one_working_draft_per_application_can_be_active(application_repo, classify) -> None:
     """Product invariant 3, enforced by storage rather than by a filesystem path.
 
     Before this boundary "one active draft" was an accident of every draft living
@@ -658,7 +659,7 @@ def test_only_one_working_draft_per_application_can_be_active(application_repo) 
                 content_hash="h",
             )
         )
-    analysis = classify_job("Python backend developer API React")
+    analysis = classify("Python backend developer API React")
     analysis_id, plan = _save_analysis(repository, "a", "s", analysis)
     assert analysis_id == plan.job_analysis_id
     with repository.transaction() as connection:
@@ -682,3 +683,273 @@ def test_only_one_working_draft_per_application_can_be_active(application_repo) 
             ).scalar_one()
             == 2
         )
+
+
+def test_accepted_gaps_round_trip_and_default_empty(application_repo, classify) -> None:
+    """The column is additive: a plan written without acceptance means none.
+
+    `selection_plans` carries the immutability triggers, so acceptance is
+    recorded by writing the next plan version rather than by updating a row.
+    Both shapes have to load.
+    """
+    repository = application_repo
+    app_id, snapshot_id = _create_application(
+        repository,
+        company="Accepted Gaps Co",
+        target_role="Developer",
+        text="Python backend developer API React",
+    )
+    analysis = classify("Python backend developer API React")
+    analysis_id, initial = _save_analysis(repository, app_id, snapshot_id, analysis)
+
+    # The initial plan of a new analysis accepts nothing.
+    assert initial.accepted_gaps == []
+    assert repository.selection_plan(initial.id).accepted_gaps == []
+
+    accepted = AcceptedGap(
+        requirement_id="req-native-english",
+        job_analysis_id=analysis_id,
+        actor="user",
+        accepted_at="2026-09-03T00:00:00+00:00",
+        reason="proceeding without native English",
+    )
+    stored = repository.create_selection_plan(
+        app_id,
+        analysis_id,
+        initial.plan,
+        candidate_context_version="candidate-v1",
+        candidate_context_hash="candidate-hash",
+        profile_version="profile-v1",
+        selection_policy_version=initial.plan.policy_version,
+        track_emphasis_dependencies={},
+        new_acceptances=[accepted],
+    )
+    assert stored.accepted_gaps == [accepted]
+    assert repository.selection_plan(stored.id).accepted_gaps == [accepted]
+    # The earlier version is untouched history, not retroactively accepted.
+    assert repository.selection_plan(initial.id).accepted_gaps == []
+
+
+def test_a_plan_row_without_the_column_value_reads_as_no_acceptance(
+    application_repo, classify
+) -> None:
+    """A pre-migration row means no acceptance, which is what it meant."""
+    repository = application_repo
+    app_id, snapshot_id = _create_application(
+        repository,
+        company="Pre Migration Co",
+        target_role="Developer",
+        text="Python backend developer API React",
+    )
+    analysis = classify("Python backend developer API React")
+    analysis_id, initial = _save_analysis(repository, app_id, snapshot_id, analysis)
+    with repository.read_connection() as connection:
+        default = connection.execute(
+            select(selection_plans.c.accepted_gaps_json).where(selection_plans.c.id == initial.id)
+        ).scalar_one()
+    assert default == []
+
+
+def test_a_stale_acceptance_is_refused_rather_than_silently_rebased(
+    application_repo, classify
+) -> None:
+    """The lost-update path, closed.
+
+    The version number is allocated inside the write, so two writers that read
+    the same plan do not collide: the later one gets a legal new version and
+    its merge silently omits the earlier acceptance. The optimistic check makes
+    that a refusal instead.
+    """
+    repository = application_repo
+    app_id, snapshot_id = _create_application(
+        repository,
+        company="Concurrent Acceptance Co",
+        target_role="Developer",
+        text="Python backend developer API React",
+    )
+    analysis = classify("Python backend developer API React")
+    analysis_id, initial = _save_analysis(repository, app_id, snapshot_id, analysis)
+
+    def acceptance(requirement_id: str) -> AcceptedGap:
+        return AcceptedGap(
+            requirement_id=requirement_id,
+            job_analysis_id=analysis_id,
+            actor="user",
+            accepted_at="2026-09-03T00:00:00+00:00",
+        )
+
+    def write(new: AcceptedGap, expected: str | None):
+        return repository.create_selection_plan(
+            app_id,
+            analysis_id,
+            initial.plan,
+            candidate_context_version="candidate-v1",
+            candidate_context_hash="candidate-hash",
+            profile_version="profile-v1",
+            selection_policy_version=initial.plan.policy_version,
+            track_emphasis_dependencies={},
+            new_acceptances=[new],
+            expected_selection_plan_id=expected,
+        )
+
+    first = write(acceptance("req-a"), initial.id)
+    assert [gap.requirement_id for gap in first.accepted_gaps] == ["req-a"]
+
+    # A second writer that still believes `initial` is active is refused, rather
+    # than writing a new version that drops "req-a".
+    with pytest.raises(StateConflict, match="moved since this decision was made"):
+        write(acceptance("req-b"), initial.id)
+
+    # Reading the plan that is actually active first, it accumulates.
+    second = write(acceptance("req-b"), first.id)
+    assert sorted(gap.requirement_id for gap in second.accepted_gaps) == ["req-a", "req-b"]
+
+
+def test_acceptances_are_never_inherited_across_analyses(application_repo, classify) -> None:
+    """A decision about one analysis's gaps is not a decision about another's."""
+    repository = application_repo
+    app_id, snapshot_id = _create_application(
+        repository,
+        company="Two Analyses Co",
+        target_role="Developer",
+        text="Python backend developer API React",
+    )
+    analysis = classify("Python backend developer API React")
+    first_id, first_plan = _save_analysis(repository, app_id, snapshot_id, analysis)
+    accepted = repository.create_selection_plan(
+        app_id,
+        first_id,
+        first_plan.plan,
+        candidate_context_version="candidate-v1",
+        candidate_context_hash="candidate-hash",
+        profile_version="profile-v1",
+        selection_policy_version=first_plan.plan.policy_version,
+        track_emphasis_dependencies={},
+        new_acceptances=[
+            AcceptedGap(
+                requirement_id="req-a",
+                job_analysis_id=first_id,
+                actor="user",
+                accepted_at="2026-09-03T00:00:00+00:00",
+            )
+        ],
+    )
+    assert accepted.accepted_gaps
+
+    # A second analysis's initial plan starts clean, even though the newest plan
+    # on this application carries an acceptance.
+    second_id, second_plan = _save_analysis(repository, app_id, snapshot_id, analysis)
+    assert second_id != first_id
+    assert second_plan.accepted_gaps == []
+    assert repository.selection_plan(second_plan.id).accepted_gaps == []
+
+
+def test_a_plan_cannot_hold_an_acceptance_from_another_analysis() -> None:
+    """Enforced on the model, so it covers every writer that will ever exist."""
+    with pytest.raises(ValidationError, match="made against another analysis"):
+        SelectionPlan(
+            id="plan-1",
+            application_id="app-1",
+            job_analysis_id="analysis-1",
+            version_number=1,
+            plan=SelectionManifest(
+                policy_version="p", emphasis="new-business", emphasis_policy_version="e"
+            ),
+            accepted_gaps=[
+                AcceptedGap(
+                    requirement_id="req-a",
+                    job_analysis_id="analysis-2",
+                    actor="user",
+                    accepted_at="2026-09-03T00:00:00+00:00",
+                )
+            ],
+            candidate_context_version="c",
+            candidate_context_hash="h",
+            profile_version="p",
+            selection_policy_version="s",
+            track_emphasis_dependencies={},
+            created_at="2026-09-03T00:00:00+00:00",
+        )
+
+
+def test_a_plan_write_blocks_on_the_application_lock(
+    application_repo, database_url, classify
+) -> None:
+    """Deterministic proof that the lock is taken, and taken before the read.
+
+    The earlier version of this raced two threads and asserted the outcome.
+    That was not a regression test: without the lock the threads are still free
+    to interleave harmlessly, so it passed against the broken implementation as
+    often as the fixed one.
+
+    Instead one connection holds the Application row and a second tries to write
+    a plan with a short `lock_timeout`. If the writer takes the lock it cannot
+    proceed and times out; if it does not, it writes happily. The timeout is the
+    assertion.
+    """
+    repository = application_repo
+    app_id, snapshot_id = _create_application(
+        repository,
+        company="Locked Application Co",
+        target_role="Developer",
+        text="Python backend developer API React",
+    )
+    analysis = classify("Python backend developer API React")
+    analysis_id, initial = _save_analysis(repository, app_id, snapshot_id, analysis)
+
+    impatient = create_engine(
+        database_url, connect_args={"options": "-c lock_timeout=250ms"}, poolclass=NullPool
+    )
+    holder = create_engine(database_url, poolclass=NullPool)
+    try:
+        with holder.begin() as held:
+            held.execute(
+                select(applications.c.id).where(applications.c.id == app_id).with_for_update()
+            ).one()
+
+            writer = SqlAlchemyPreparationRepository(impatient)
+            with pytest.raises(OperationalError, match="lock timeout"):
+                writer.create_selection_plan(
+                    app_id,
+                    analysis_id,
+                    initial.plan,
+                    candidate_context_version="candidate-v1",
+                    candidate_context_hash="candidate-hash",
+                    profile_version="profile-v1",
+                    selection_policy_version=initial.plan.policy_version,
+                    track_emphasis_dependencies={},
+                    new_acceptances=[
+                        AcceptedGap(
+                            requirement_id="req-a",
+                            job_analysis_id=analysis_id,
+                            actor="user",
+                            accepted_at="2026-09-03T00:00:00+00:00",
+                        )
+                    ],
+                )
+
+        # The holder committed; the same write now goes through and the version
+        # it allocates is the one after whatever the lock was protecting.
+        after = SqlAlchemyPreparationRepository(impatient).create_selection_plan(
+            app_id,
+            analysis_id,
+            initial.plan,
+            candidate_context_version="candidate-v1",
+            candidate_context_hash="candidate-hash",
+            profile_version="profile-v1",
+            selection_policy_version=initial.plan.policy_version,
+            track_emphasis_dependencies={},
+            new_acceptances=[
+                AcceptedGap(
+                    requirement_id="req-a",
+                    job_analysis_id=analysis_id,
+                    actor="user",
+                    accepted_at="2026-09-03T00:00:00+00:00",
+                )
+            ],
+        )
+        assert [gap.requirement_id for gap in after.accepted_gaps] == ["req-a"]
+        assert after.version_number > initial.version_number
+    finally:
+        impatient.dispose()
+        holder.dispose()

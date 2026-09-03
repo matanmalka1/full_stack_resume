@@ -1139,6 +1139,32 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * AcceptedGap
+         * @description One hard gap the user knowingly proceeded past.
+         *
+         *     Acceptance means only that: it never changes a gap to satisfied, never
+         *     authorizes an unsupported claim, and never touches requirement coverage or
+         *     fact ranking. It is recorded per gap, keyed on the `Requirement` the gap
+         *     projects, so accepting one deficiency cannot dismiss another the user has
+         *     not seen.
+         *
+         *     It lives on the SelectionPlan rather than the JobAnalysis because it is not
+         *     a change to what the requirement *means* - the analysis is untouched and
+         *     stays reusable - only to whether the user proceeds despite it.
+         */
+        AcceptedGap: {
+            /** Accepted At */
+            accepted_at: string;
+            /** Actor */
+            actor: string;
+            /** Job Analysis Id */
+            job_analysis_id: string;
+            /** Reason */
+            reason?: string | null;
+            /** Requirement Id */
+            requirement_id: string;
+        };
+        /**
          * ActivityFilter
          * @description Which side of the recruitment axis the caller is asking about.
          *
@@ -1437,10 +1463,22 @@ export interface components {
          */
         ApplyAnalysisDecisionsRequest: {
             /**
+             * Accept Incomplete Analysis
+             * @default false
+             */
+            accept_incomplete_analysis: boolean;
+            /**
              * Accept Low Fit
              * @default false
              */
             accept_low_fit: boolean;
+            /** Acceptance Reason */
+            acceptance_reason?: string | null;
+            /**
+             * Accepted Requirement Ids
+             * @default []
+             */
+            accepted_requirement_ids: string[];
             /** Application Id */
             application_id: string;
             emphasis_override?: components["schemas"]["Emphasis"] | null;
@@ -1449,6 +1487,8 @@ export interface components {
              * @default []
              */
             excluded_fact_ids: string[];
+            /** Expected Selection Plan Id */
+            expected_selection_plan_id?: string | null;
             /** Language Override */
             language_override?: ("en" | "he") | null;
             /**
@@ -1909,6 +1949,13 @@ export interface components {
          *     router refuses that combination rather than silently preferring one.
          */
         CreateSelectionPlanRequest: {
+            /** Acceptance Reason */
+            acceptance_reason?: string | null;
+            /**
+             * Accepted Requirement Ids
+             * @default []
+             */
+            accepted_requirement_ids: string[];
             /** Application Id */
             application_id: string;
             /**
@@ -1920,6 +1967,8 @@ export interface components {
             expected_candidate_context_hash?: string | null;
             /** Expected Profile Version */
             expected_profile_version?: string | null;
+            /** Expected Selection Plan Id */
+            expected_selection_plan_id?: string | null;
             /** Expected Selection Policy Version */
             expected_selection_policy_version?: string | null;
             /**
@@ -2436,6 +2485,8 @@ export interface components {
             presentations: string;
             /** Profiles */
             profiles: string;
+            /** Requirement Concepts */
+            requirement_concepts: string;
         };
         /**
          * NextActionRequest
@@ -2758,7 +2809,15 @@ export interface components {
          *
          *     Recorded so a later reader can answer not only which policy ran but why
          *     fact A beat fact B: the ranking is the lexicographic tuple
-         *     (gap_substitute, semantic_score, keyword_hits, -pool_index).
+         *     (requirement_rank, semantic_score, keyword_hits, -pool_index).
+         *
+         *     `requirement_rank` is 2 where the fact bears on a mandatory requirement, 1
+         *     for a preferred one, 0 where the posting never asked. `gap_substitute` held
+         *     that slot under policy 1.0.0 and is still recorded: it says something the
+         *     tier does not - that the fact was offered as a stand-in for something
+         *     missing rather than as evidence of something held - and manifests already
+         *     written carry it. Reading either field on an older record means reading
+         *     `policy_version` first.
          */
         SelectionCandidate: {
             /** Emphasis Score */
@@ -2780,6 +2839,11 @@ export interface components {
             profile_score: number;
             /** Reason */
             reason?: ("below_section_budget" | "not_relevant_to_emphasis" | "evicted_by_required_tag_rescue" | "not_in_profile_pool" | "excluded_by_user") | null;
+            /**
+             * Requirement Rank
+             * @default 0
+             */
+            requirement_rank: number;
             /** Section */
             section: string;
             /** Semantic Score */
@@ -2851,6 +2915,11 @@ export interface components {
          * @description One immutable, versioned fact-selection decision for an analysis.
          */
         SelectionPlan: {
+            /**
+             * Accepted Gaps
+             * @default []
+             */
+            accepted_gaps: components["schemas"]["AcceptedGap"][];
             /** Application Id */
             application_id: string;
             /** Candidate Context Hash */
@@ -2877,6 +2946,13 @@ export interface components {
         };
         /** SelectionPlanResponse */
         SelectionPlanResponse: {
+            /**
+             * Accepted Gaps
+             * @default []
+             */
+            accepted_gaps: {
+                [key: string]: unknown;
+            }[];
             /** Application Id */
             application_id: string;
             /** Candidate Context Hash */

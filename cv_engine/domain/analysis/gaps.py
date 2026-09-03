@@ -3,15 +3,119 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 
-from ..models import FitLevel, Gap, Track
+from ..models import FitLevel, Gap, JobAnalysis, Requirement, SelectionPlan, Track
 
+#: Only the three assessed levels are ordered. UNKNOWN is deliberately absent:
+#: it is not a point on the scale, so giving it a number would let it be
+#: compared - and a comparison is exactly what must not happen silently.
 FIT_SEVERITY = {FitLevel.HIGH: 0, FitLevel.MEDIUM: 1, FitLevel.LOW: 2}
 
+#: Why a requirement is not met, when no boundary fact gives the authoritative
+#: account. Deterministic labels rather than generated prose: the reason is
+#: displayed, never matched on.
+_COVERAGE_REASON = {
+    "partial": "Canonical facts cover part of this requirement; the rest is not verified.",
+    "unsupported": "Canonical facts do not verify this requirement.",
+}
 
-def derive_fit(gaps: Sequence[Gap]) -> FitLevel:
+
+def derive_fit(gaps: Sequence[Gap], *, extraction_failed: bool = False) -> FitLevel:
+    """Fit from the gaps, unless the requirements were never readable.
+
+    `extraction_failed` is an explicit signal, never inferred from an empty
+    requirement list. An analysis written before the extractor existed also has
+    no requirements, and it must keep the Fit it was assessed with rather than
+    being reinterpreted as unassessable.
+
+    A hard gap still outranks a failed extraction: evidence of poor Fit is
+    knowledge, and losing it to "we could not tell" would be a downgrade.
+    """
     if any(gap.severity == "hard" for gap in gaps):
         return FitLevel.LOW
+    if extraction_failed:
+        return FitLevel.UNKNOWN
     return FitLevel.MEDIUM if gaps else FitLevel.HIGH
+
+
+def merge_fit(left: FitLevel, right: FitLevel) -> FitLevel:
+    """Combine two Fit judgements without ranking UNKNOWN.
+
+    LOW wins over everything, UNKNOWN included: an identified poor Fit is a
+    finding, and a failed assessment must not erase it. Against HIGH or MEDIUM,
+    UNKNOWN wins instead - a Fit that was never assessed cannot be reported as
+    one that was.
+    """
+    if FitLevel.LOW in (left, right):
+        return FitLevel.LOW
+    if FitLevel.UNKNOWN in (left, right):
+        return FitLevel.UNKNOWN
+    return max(left, right, key=lambda level: FIT_SEVERITY[level])
+
+
+def gaps_from_requirements(
+    requirements: Sequence[Requirement], *, boundary_meanings: dict[str, str] | None = None
+) -> list[Gap]:
+    """Project the unmet requirements as gaps.
+
+    A mandatory requirement produces a hard gap whether its coverage is
+    `partial` or `unsupported`. Partial means relevant evidence exists, not
+    that the requirement is satisfied, so it still demands an explicit decision
+    before drafting.
+
+    `substitute_fact_ids` carries the supporting facts because for a *gap* that
+    is what they are - what may be shown in place of the thing that is missing.
+    The two fields stay distinct on `Requirement`, where they mean different
+    things.
+    """
+    meanings = boundary_meanings or {}
+    gaps: list[Gap] = []
+    for requirement in requirements:
+        if requirement.coverage == "matched":
+            continue
+        authoritative = [
+            meanings[fact_id] for fact_id in requirement.boundary_fact_ids if fact_id in meanings
+        ]
+        gaps.append(
+            Gap(
+                requirement=requirement.text,
+                severity="hard" if requirement.mandatory else "warning",
+                reason=authoritative[0]
+                if authoritative
+                else _COVERAGE_REASON[requirement.coverage],
+                substitute_fact_ids=list(requirement.supporting_fact_ids),
+                requirement_id=requirement.requirement_id,
+            )
+        )
+    return gaps
+
+
+def unaccepted_hard_gaps(
+    analysis: JobAnalysis, plan: SelectionPlan | None, *, job_analysis_id: str | None
+) -> list[Gap]:
+    """The hard gaps still awaiting an explicit decision.
+
+    One function, three consumers: the state projection that reports the
+    blocker, the draft generation that refuses to build past it, and the
+    validation that refuses to pass a draft built past it. They disagreed
+    before - the projection said blocked while generation happily proceeded -
+    because each asked the question in its own words.
+
+    A plan for another analysis contributes nothing: acceptance is a decision
+    about the gaps as *this* analysis stated them.
+    """
+    # `JobAnalysis` does not carry its own id, so the pairing is stated by the
+    # caller rather than assumed. A keyword makes it impossible to pass the
+    # wrong plan by argument order.
+    accepted = (
+        {accepted.requirement_id for accepted in plan.accepted_gaps}
+        if plan is not None and plan.job_analysis_id == job_analysis_id
+        else set()
+    )
+    return [
+        gap
+        for gap in analysis.gaps
+        if gap.severity == "hard" and gap.requirement_id not in accepted
+    ]
 
 
 def merge_gaps(deterministic: Sequence[Gap], proposed: Sequence[Gap]) -> list[Gap]:
@@ -32,6 +136,7 @@ def merge_gaps(deterministic: Sequence[Gap], proposed: Sequence[Gap]) -> list[Ga
                 severity="hard",
                 reason=existing.reason,
                 substitute_fact_ids=existing.substitute_fact_ids,
+                requirement_id=existing.requirement_id,
             )
     return list(merged.values())
 

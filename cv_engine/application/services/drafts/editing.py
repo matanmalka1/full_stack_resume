@@ -56,6 +56,7 @@ class DraftEditing(DraftServiceBase):
             facts,
             profiles.get(updated.profile),
             analysis,
+            plan=self.repo.selection_plan(changed.selection_plan_id),
             policies=policies,
             presentations=knowledge.presentations,
         )

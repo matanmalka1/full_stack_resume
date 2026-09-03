@@ -12,7 +12,6 @@ from ....domain.models import (
     WorkingDraft,
 )
 from ....domain.selection import MissingFactRendering as DomainMissingFactRendering
-from ....util import canonical_json, sha256_text
 from ...errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
@@ -44,7 +43,7 @@ class DraftServiceBase(ServiceBase[DraftRepository]):
             job_snapshot_id=working.source.job_snapshot_id,
             job_analysis_id=working.job_analysis_id,
             selection_plan_id=working.selection_plan_id,
-            knowledge_context_hash=sha256_text(canonical_json(knowledge.versions())),
+            knowledge_context_hash=knowledge.document_context_hash(),
             validator_versions={"draft": "2.0"},
         )
 

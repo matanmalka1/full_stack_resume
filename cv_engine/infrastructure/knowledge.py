@@ -12,6 +12,7 @@ from ..application.knowledge_mutations import (
     StagedKnowledgeFile,
 )
 from ..application.ports import TaskContract, TaskContracts
+from ..domain.analysis.requirements import RequirementConceptError, RequirementConceptStore
 from ..domain.candidate import CANDIDATE_FILE, CandidateContextError, build_candidate_context
 from ..domain.facts import (
     FACT_SOURCE_NAMES,
@@ -145,6 +146,17 @@ def load_emphasis_policies(knowledge_root: Path) -> EmphasisPolicyStore:
     return EmphasisPolicyStore.from_payload(payload, origin=str(path))
 
 
+def load_requirement_concepts(knowledge_root: Path) -> RequirementConceptStore:
+    path = knowledge_root / "config" / "requirements.json"
+    if not path.is_file():
+        raise RequirementConceptError(f"missing requirement concepts: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RequirementConceptError(f"invalid requirement concepts {path}: {exc}") from exc
+    return RequirementConceptStore.from_payload(payload, origin=str(path))
+
+
 def load_presentations(knowledge_root: Path, facts: FactStore) -> PresentationStore:
     path = knowledge_root / "rendering" / "rules" / "presentations.json"
     if not path.is_file():
@@ -227,6 +239,7 @@ class FileKnowledge:
             policies=load_emphasis_policies(self.knowledge_root),
             candidate=load_candidate_context(self.knowledge_root, facts),
             presentations=load_presentations(self.knowledge_root, facts),
+            requirement_concepts=load_requirement_concepts(self.knowledge_root),
         )
 
     def _validate_overrides(self, overrides: dict[Path, str]) -> Knowledge:
@@ -257,6 +270,7 @@ class FileKnowledge:
             policies=load_emphasis_policies(self.knowledge_root),
             candidate=load_candidate_context(self.knowledge_root, facts),
             presentations=load_presentations(self.knowledge_root, facts),
+            requirement_concepts=load_requirement_concepts(self.knowledge_root),
         )
 
     def _stage_validated(

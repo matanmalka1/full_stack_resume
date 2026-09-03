@@ -8,7 +8,11 @@ const blockerResolution = (code: string): string => {
   if (code === "unlinked-claim" || code === "pending-claim") {
     return "חזרו לעריכה וקשרו את הטענה לעובדה מאושרת, השלימו את מחזור אישור העובדה, או הסירו את הטענה; לאחר מכן הריצו אימות מחדש.";
   }
-  if (code === "low-fit" || code === "classification-approval-required") {
+  if (
+    code === "low-fit" ||
+    code === "classification-approval-required" ||
+    code === "incomplete-analysis-not-accepted"
+  ) {
     return "חזרו למסך המועמדות והשלימו את החלטת הסקירה הנדרשת לפני אימות מחדש.";
   }
   return "חזרו לעריכה, תקנו את הבעיה המתוארת והריצו אימות מחדש. האישור נשאר חסום עד לאימות שעובר.";

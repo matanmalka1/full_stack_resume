@@ -1,0 +1,278 @@
+{
+  "policy_version": "1.0.0",
+  "extraction_version": "2",
+  "scales": {
+    "language_proficiency": [
+      "basic",
+      "conversational",
+      "fluent",
+      "native"
+    ]
+  },
+  "requirement_block_markers": [
+    "requirements:",
+    "what will make you stand out",
+    "what you'll need",
+    "what you will need",
+    "you must have",
+    "must have:",
+    "דרישות:",
+    "דרישות התפקיד"
+  ],
+  "mandatory_markers": [
+    "(must)",
+    "must have",
+    "must-have",
+    "required",
+    "a must",
+    "חובה",
+    "נדרש"
+  ],
+  "preferred_markers": [
+    "a plus",
+    "is a plus",
+    "preferred",
+    "nice to have",
+    "advantage",
+    "an advantage",
+    "ideally",
+    "bonus",
+    "יתרון",
+    "רצוי"
+  ],
+  "requirement_cues": {
+    "en": [
+      "must",
+      "required",
+      "requirement",
+      "should have",
+      "need to",
+      "years",
+      "experience",
+      "background in",
+      "track record",
+      "proven",
+      "ability to",
+      "able to",
+      "skills",
+      "proficiency",
+      "proficient",
+      "fluent",
+      "native",
+      "familiarity",
+      "knowledge of",
+      "understanding of",
+      "you have",
+      "you are",
+      "comfortable with",
+      "expertise"
+    ],
+    "he": [
+      "נדרש",
+      "דרישות",
+      "חובה",
+      "ניסיון",
+      "שנות ניסיון",
+      "בעל ניסיון",
+      "שליטה ב",
+      "ידע ב",
+      "היכרות עם",
+      "הכרות עם",
+      "יכולת",
+      "כישורי",
+      "רקע ב",
+      "לפחות",
+      "מיומנות",
+      "בקיאות"
+    ]
+  },
+  "soft_skill_cues": {
+    "en": [
+      "quick learner",
+      "self-starter",
+      "self starter",
+      "detail-oriented",
+      "detail oriented",
+      "team player",
+      "communication skills",
+      "time management",
+      "problem solving",
+      "problem-solving",
+      "analytical",
+      "organized",
+      "organised",
+      "adaptable"
+    ],
+    "he": [
+      "יחסי אנוש",
+      "עבודת צוות",
+      "ראש גדול",
+      "יסודיות",
+      "אנליטי",
+      "למידה מהירה",
+      "יוזמה",
+      "תקשורת בינאישית",
+      "ניהול זמן",
+      "ארגון ותכנון",
+      "עצמאות",
+      "יצירתיות",
+      "אסרטיביות"
+    ]
+  },
+  "responsibility_cues": {
+    "en": [
+      "you will",
+      "you'll",
+      "your role",
+      "day-to-day",
+      "day to day",
+      "responsibilities",
+      "in this role"
+    ],
+    "he": [
+      "התפקיד כולל",
+      "אחריות על",
+      "במסגרת התפקיד",
+      "תחומי אחריות",
+      "התפקיד יכלול",
+      "מה תעשה",
+      "היום יום"
+    ]
+  },
+  "concepts": {
+    "english-proficiency": {
+      "label": "English proficiency",
+      "kind": "threshold",
+      "patterns": [
+        "native english[a-z ]*",
+        "english[^.;]{0,24}native",
+        "fluent english[a-z ]*",
+        "english[^.;]{0,24}fluent"
+      ],
+      "scale": "language_proficiency",
+      "demand_terms": {
+        "native": [
+          "native"
+        ],
+        "fluent": [
+          "fluent"
+        ]
+      },
+      "value_fact_ids": [
+        "common.language.english"
+      ],
+      "value_source": "scale_term",
+      "candidate_fact_ids": [
+        "common.language.english"
+      ]
+    },
+    "sales-closing-experience-years": {
+      "label": "Years of sales closing experience",
+      "kind": "threshold",
+      "patterns": [
+        "\\d+\\+?\\s*years?[^.;]{0,60}(?:sales|closing|quota)",
+        "(?:sales|closing)[^.;]{0,40}\\d+\\+?\\s*years?"
+      ],
+      "scale": "years",
+      "demand_pattern": "(\\d+)\\s*\\+?\\s*years?",
+      "value_fact_ids": [
+        "sales.summary.tenure"
+      ],
+      "value_source": "effective_dates_years",
+      "candidate_fact_ids": [
+        "sales.summary.tenure"
+      ]
+    },
+    "technology-company-sales": {
+      "label": "Sales experience at a technology company",
+      "kind": "compositional",
+      "patterns": [
+        "sales[^.;]{0,120}(?:technology|tech|software|saas)\\s+compan\\w*",
+        "(?:technology|tech|software|saas)\\s+compan\\w*[^.;]{0,120}sales"
+      ],
+      "components": [
+        {
+          "component_id": "sales-experience",
+          "label": "B2B sales experience",
+          "satisfied_by_tags": [
+            "sales"
+          ]
+        },
+        {
+          "component_id": "technology-company-sales-context",
+          "label": "Sales carried out at a technology company",
+          "satisfied_by_fact_ids": [],
+          "satisfied_by_tags": []
+        }
+      ],
+      "boundary_fact_ids": [
+        "sales.tech_sales.boundary"
+      ],
+      "candidate_tags": [
+        "tech-sales"
+      ],
+      "candidate_fact_ids": [
+        "sales.summary.tech",
+        "development.phdigital.role"
+      ]
+    },
+    "european-market-experience": {
+      "label": "Selling into the European or EMEA market",
+      "kind": "presence",
+      "patterns": [
+        "european market",
+        "\\bemea\\b",
+        "european customers",
+        "\\beurope\\b[^.;]{0,30}market"
+      ],
+      "satisfied_by_fact_ids": [],
+      "satisfied_by_tags": [],
+      "candidate_fact_ids": [
+        "common.logistics.nationwide_sales"
+      ]
+    },
+    "full-sales-cycle": {
+      "label": "Full sales cycle ownership",
+      "kind": "presence",
+      "patterns": [
+        "full sales cycle",
+        "entire sales cycle",
+        "lead to close",
+        "from prospecting to close",
+        "prospecting to close"
+      ],
+      "satisfied_by_fact_ids": [
+        "sales.summary.new_business"
+      ],
+      "satisfied_by_tags": [
+        "full-sales-cycle"
+      ],
+      "candidate_tags": [
+        "full-sales-cycle"
+      ]
+    },
+    "quota-attainment": {
+      "label": "Quota attainment record",
+      "kind": "presence",
+      "patterns": [
+        "\\bquota\\b",
+        "exceeding quota",
+        "hitting quota"
+      ],
+      "satisfied_by_fact_ids": [],
+      "satisfied_by_tags": [],
+      "candidate_tags": []
+    },
+    "media-industry-experience": {
+      "label": "Media industry experience",
+      "kind": "presence",
+      "patterns": [
+        "media industry",
+        "media sector"
+      ],
+      "satisfied_by_fact_ids": [],
+      "satisfied_by_tags": [],
+      "candidate_fact_ids": []
+    }
+  }
+}

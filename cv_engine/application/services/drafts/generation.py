@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .... import __version__
-from ....domain.analysis.approval import unresolved_approval_reasons
+from ....domain.analysis.approval import (
+    ANALYSIS_INCOMPLETE,
+    approval_reason,
+    unresolved_approval_reasons,
+)
+from ....domain.analysis.gaps import unaccepted_hard_gaps
 from ....domain.knowledge import Knowledge
 from ....domain.models import DraftDocument, JobAnalysis
 from ....domain.validation import validate_draft as run_draft_validation
@@ -130,11 +135,39 @@ class DraftGeneration(DraftServiceBase):
         analysis = record["analysis"]
         if analysis.fit.value == "low" and analysis.user_override.get("fit") != "accepted-low-fit":
             raise StateConflict("low fit blocks CV generation until --accept-low-fit is recorded")
+        # Split by what actually resolves each reason. Refusing every unresolved
+        # reason with "override the Track/Profile" told a direct API caller to
+        # do the one thing that cannot recover requirements the engine never
+        # read - the same false advertisement the projection stopped making,
+        # left standing in the layer that enforces it.
         unresolved = unresolved_approval_reasons(analysis)
+        incomplete = [
+            reason
+            for reason in unresolved
+            if approval_reason(reason).review_code == ANALYSIS_INCOMPLETE
+        ]
+        if incomplete:
+            raise StateConflict(
+                "the analysis did not read this posting's requirements "
+                f"({', '.join(incomplete)}); a classification decision does not resolve "
+                "this, and generation stays blocked until an incomplete analysis is "
+                "explicitly accepted"
+            )
         if unresolved:
             raise StateConflict(
                 "ambiguous classification requires an explicit Track/Profile override: "
                 f"{unresolved}"
+            )
+        # The same question the state projection answers, asked last for the
+        # same reason it is reported last: not knowing what the job is outranks
+        # not having decided about one of its requirements. This check used to
+        # be absent here, so a direct API call could draft, validate and approve
+        # a CV the projection reported as blocked.
+        blocking = unaccepted_hard_gaps(analysis, plan, job_analysis_id=plan.job_analysis_id)
+        if blocking:
+            raise StateConflict(
+                "hard requirement gaps block CV generation until each is explicitly "
+                f"accepted: {[gap.requirement for gap in blocking]}"
             )
         # The draft is built from the analysis's own snapshot, never from whichever
         # snapshot is newest: a job snapshot added after the analysis describes a
@@ -271,6 +304,7 @@ class DraftGeneration(DraftServiceBase):
             facts,
             profile,
             analysis,
+            plan=repo.selection_plan(prepared.plan_id),
             policies=policies,
             presentations=presentation_rules,
         )

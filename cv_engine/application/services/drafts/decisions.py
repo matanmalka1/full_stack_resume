@@ -36,6 +36,9 @@ class DecisionExport(DraftServiceBase):
         structured = json.loads(decision["structured_json"])
         selected = structured.get("selected_fact_ids") or []
         gaps = structured.get("accepted_warnings_or_gaps") or {}
+        # Absent on records written before per-gap acceptance existed. Those
+        # accepted nothing per gap, which is what an empty list says.
+        accepted_gaps = structured.get("accepted_gaps") or []
         overrides = structured.get("user_overrides") or {}
 
         def value(item: object) -> str:
@@ -77,6 +80,15 @@ class DecisionExport(DraftServiceBase):
                 "## Accepted gaps and overrides",
                 "",
                 f"- Accepted warnings or gaps: {value(gaps)}",
+                *(
+                    [
+                        f"- Accepted gap `{accepted['requirement_id']}` by "
+                        f"{accepted['actor']} at {accepted['accepted_at']}"
+                        + (f": {accepted['reason']}" if accepted.get("reason") else "")
+                        for accepted in accepted_gaps
+                    ]
+                    or ["- Accepted gaps: none"]
+                ),
                 f"- User overrides: {value(overrides)}",
                 "",
                 "## Exact lineage",

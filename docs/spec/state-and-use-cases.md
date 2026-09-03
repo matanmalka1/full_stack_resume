@@ -162,12 +162,27 @@ Review reasons are blockers that require an explicit user decision. Initial code
 
 ```text
 MATERIAL_CLASSIFICATION_AMBIGUITY
+ANALYSIS_INCOMPLETE
 LOW_FIT_REQUIRES_ACCEPTANCE
 HARD_GAP_REQUIRES_DECISION
 FACT_SELECTION_UNRESOLVED
 PENDING_FACT_REQUIRES_RESOLUTION
 KNOWLEDGE_RECONCILIATION_REQUIRED
 ```
+
+`ANALYSIS_INCOMPLETE` reports an approval reason that no classification decision
+answers - today `extraction-failed`, requirements the analysis could not read. Naming the
+Track or Profile does not recover a requirement that was never read, and neither does
+analysing the same snapshot again: the deterministic engine reads the same text under the
+same Knowledge and fails the same way. The only decision that answers it is the explicit
+one to proceed with an incomplete analysis, recorded as the `analysis` override, which
+answers nothing else.
+
+A review reason advertises an action only when that action can actually close it. Which
+overrides answer which reason, and which review reason each is reported as, are one table
+in the domain (`APPROVAL_REASONS`); the table is total, so a reason that resolves to
+nothing states that deliberately and an unregistered reason is a programming error the
+gates catch rather than a blocker reported under the wrong name.
 
 `PENDING_FACT_REQUIRES_RESOLUTION` applies only when the active SelectionPlan, active
 claim, requested selection, or active gap resolution depends on that fact. Pending
@@ -393,6 +408,21 @@ meaning/classification changes, it creates one new immutable JobAnalysis togethe
 that analysis's initial deterministic SelectionPlan. When only selection/accepted-gap
 decisions change, it creates one replacement SelectionPlan. It records overrides and
 never mutates the original analysis or plan.
+
+A gap acceptance may accompany a classification decision, and both land in that one
+write. Requirement identity is keyed on the snapshot text rather than on the
+classification, so an accepted requirement is still stated by the new analysis; it is
+re-checked against that analysis before it is stored, and a requirement whose gap the
+reclassification removed is refused with the whole submission. A *fact* overlay may not
+accompany one: pinned and excluded facts are decided against candidate accounting the
+new analysis has not produced yet, so they stay a second command.
+
+It also carries `accept_incomplete_analysis`, the decision to proceed although the
+analysis read none of the posting's requirements. It records the `analysis` override and
+resolves `ANALYSIS_INCOMPLETE` alone: Fit stays `unknown`, no gap is accepted, and no
+classification question is settled. It is offered only here and never on `analyze`, so a
+client cannot pre-accept a posting nobody has looked at, and a genuinely new analysis -
+another snapshot, or changed Knowledge - starts without it and blocks again.
 
 ### `create_selection_plan`
 

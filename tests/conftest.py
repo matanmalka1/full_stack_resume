@@ -39,6 +39,7 @@ from cv_engine.application.commands import (
     IngestCommand,
 )
 from cv_engine.domain.analysis.classification import classify_job
+from cv_engine.domain.analysis.requirements import RequirementConceptStore
 from cv_engine.domain.candidate import contact_href
 from cv_engine.domain.drafts import build_draft
 from cv_engine.domain.facts import FactStore
@@ -60,6 +61,7 @@ from cv_engine.infrastructure.knowledge import (
     load_fact_store,
     load_presentations,
     load_profile_store,
+    load_requirement_concepts,
     seed_fact_before_project,
 )
 from cv_engine.infrastructure.persistence import (
@@ -72,7 +74,7 @@ from cv_engine.infrastructure.rendering import render_pdf, validate_rendered
 from cv_engine.runtime.composition import Services, build_api_services, build_services
 from cv_engine.runtime.config import resolve_config
 from cv_engine.runtime.paths import AppPaths
-from cv_engine.util import new_id
+from cv_engine.util import new_id, sha256_text
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
 TESTS_DIR = Path(__file__).resolve().parent
@@ -322,6 +324,37 @@ def isolated_database(database_engine: Engine, monkeypatch: pytest.MonkeyPatch) 
 @pytest.fixture
 def fact_store(project_root: Path) -> FactStore:
     return load_fact_store(project_root / "base")
+
+
+@pytest.fixture
+def requirement_concepts(project_root: Path) -> RequirementConceptStore:
+    return load_requirement_concepts(project_root)
+
+
+@pytest.fixture
+def classify(
+    fact_store: FactStore,
+    profile_store: ProfileStore,
+    requirement_concepts: RequirementConceptStore,
+):
+    """`classify_job` bound to this project's Knowledge.
+
+    `classify_job` requires Knowledge rather than defaulting it, so that a
+    caller cannot silently produce an analysis with no requirements. Tests bind
+    it here once instead of each restating the dependency.
+    """
+
+    def _classify(text: str, **overrides):
+        return classify_job(
+            text,
+            facts=fact_store,
+            profiles=profile_store,
+            concepts=requirement_concepts,
+            normalized_hash=sha256_text(text),
+            **overrides,
+        )
+
+    return _classify
 
 
 @pytest.fixture
@@ -689,7 +722,14 @@ def draft_factory(
         write: bool = False,
         **overrides,
     ) -> DraftSetup:
-        analysis = classify_job(job, **overrides)
+        analysis = classify_job(
+            job,
+            facts=fact_store,
+            profiles=profile_store,
+            concepts=load_requirement_concepts(project_root),
+            normalized_hash=sha256_text(job),
+            **overrides,
+        )
         profile = profile_store.get(analysis.profile)
         draft = build_draft(
             application_id=application_id,

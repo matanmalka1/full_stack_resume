@@ -49,6 +49,7 @@ class DraftValidation(DraftServiceBase):
             facts,
             profiles.get(draft.profile),
             analysis,
+            plan=self.repo.selection_plan(working.selection_plan_id),
             policies=policies,
             presentations=knowledge.presentations,
         )

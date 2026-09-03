@@ -461,6 +461,11 @@ class KnowledgeService(KnowledgeMutationEngine):
         ]
         plan_id = new_id()
         plan_created_at = utc_now()
+        # Promoting a fact changes which facts address a requirement, never
+        # whether the user chose to proceed past a gap. This adds no acceptance
+        # of its own; the standing ones are carried by the repository inside the
+        # write, where the analysis they were made against is checked. Reading
+        # them here also let a plan for one analysis inherit another's.
         actions.append(
             {
                 "type": "selection_plan",

@@ -13,6 +13,7 @@ from contextlib import AbstractContextManager
 from typing import Any, Protocol, Self
 
 from ...domain.models import (
+    AcceptedGap,
     ApprovedRevision,
     AuditRecord,
     DraftDocument,
@@ -147,6 +148,8 @@ class KnowledgeAuditRepository(
         profile_version: str,
         selection_policy_version: str,
         track_emphasis_dependencies: dict[str, str],
+        new_acceptances: list[AcceptedGap] | None = ...,
+        expected_selection_plan_id: str | None = ...,
         plan_id: str | None = ...,
         created_at: str | None = ...,
     ) -> SelectionPlan: ...

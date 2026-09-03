@@ -648,3 +648,212 @@ def test_no_test_asserts_a_bare_builtin_from_a_repository() -> None:
                     f"{path.name}:{node.lineno} asserts a bare builtin over {', '.join(called)}"
                 )
     assert not offenders, offenders
+
+
+def test_carry_forward_of_accepted_gaps_has_one_implementation() -> None:
+    """No caller may hand a plan write a whole acceptance list.
+
+    This replaces an earlier guard that required every plan writer to *name*
+    what happens to accepted gaps. That guard matched the old design, where the
+    column defaulted to empty and forgetting silently retracted decisions. The
+    repository now reads, merges and writes the standing acceptances inside the
+    write transaction under the Application lock, so forgetting is the safe
+    default and the old guard would only fail honest callers.
+
+    What is dangerous now is the opposite: a caller that assembles the list and
+    passes it in, bypassing the analysis check and the lock. That is exactly how
+    a plan for one analysis came to inherit another's. A writer may say what it
+    *adds* (`new_acceptances`); it may not say what the plan ends up holding.
+
+    Reading `accepted_gaps` stays free - the gate, the model validator and the
+    decision record all legitimately do - because reading cannot lose a write.
+    """
+    root = Path(__file__).resolve().parents[1] / "cv_engine"
+    offenders: list[str] = []
+    for path in sorted(root.rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        for node in ast.walk(ast.parse(source)):
+            if not isinstance(node, ast.Call):
+                continue
+            name = getattr(node.func, "attr", None) or getattr(node.func, "id", None)
+            if name not in {"create_selection_plan", "_insert_selection_plan"}:
+                continue
+            if any(keyword.arg == "accepted_gaps" for keyword in node.keywords):
+                if path.name == "preparation.py":
+                    continue
+                offenders.append(f"{path.relative_to(root).as_posix()}:{node.lineno}")
+    assert not offenders, (
+        "these hand a plan write its whole acceptance list; only the repository "
+        f"may do that, under the lock and the analysis check: {offenders}"
+    )
+
+
+def test_every_selection_plan_write_takes_the_application_lock_first() -> None:
+    """The lock has to precede the read it protects, in every writer.
+
+    `create_selection_plan` reads the standing acceptances and allocates the
+    version number; both have to happen under the Application row lock, or two
+    writers merge onto the same plan and one acceptance is lost. `save_analysis`
+    inserts a plan too, so it locks as well - a path that skips the lock is not
+    serialized by the others taking it.
+
+    Asserted on the order of statements, not merely on the lock being present
+    somewhere in the function: locking after the read would satisfy a presence
+    check and protect nothing.
+    """
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "cv_engine"
+        / "infrastructure"
+        / "persistence"
+        / "preparation.py"
+    ).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    writers = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+        and node.name != "_insert_selection_plan"
+        and "_insert_selection_plan(" in (ast.get_source_segment(source, node) or "")
+    ]
+    assert {node.name for node in writers} == {"save_analysis", "create_selection_plan"}, (
+        "a new selection-plan writer appeared; it must lock before it reads"
+    )
+    for node in writers:
+        calls = [
+            (inner.lineno, getattr(inner.func, "attr", None) or getattr(inner.func, "id", None))
+            for inner in ast.walk(node)
+            if isinstance(inner, ast.Call)
+        ]
+        lock = next((line for line, name in calls if name == "_lock_application"), None)
+        insert = next((line for line, name in calls if name == "_insert_selection_plan"), None)
+        standing = next((line for line, name in calls if name == "_standing_acceptances"), None)
+        assert lock is not None, f"{node.name} writes a plan without taking the lock"
+        assert insert is not None and lock < insert, f"{node.name} locks after inserting"
+        if standing is not None:
+            assert lock < standing, f"{node.name} reads the standing acceptances before locking"
+        # Every statement, not only the ones named above. The version number was
+        # allocated by a `select(max(...))` before the lock, so under a snapshot
+        # taken before it: the highest version seen was whatever the snapshot
+        # held, and the insert collided on the unique constraint rather than
+        # taking the next number.
+        executed = [line for line, name in calls if name == "execute" and line != lock]
+        assert all(lock < line for line in executed), (
+            f"{node.name} runs a statement before taking the lock; every read it makes "
+            "has to be under the lock, not only the ones this guard could name"
+        )
+
+
+def test_every_operation_records_the_knowledge_scope_its_activation_checks() -> None:
+    """A submission and its re-check must measure the same thing.
+
+    The knowledge context is scoped: an analysis is measured against every
+    dependency, and every stage after it against the dependencies it actually
+    consumes. If a submitter freezes one scope and the handler compares the
+    other, the two can never match, and the operation fails SOURCE_CHANGED on
+    every run with nothing wrong. That is exactly what happened to
+    `propose_selection_plan` when only one side was moved.
+
+    Derived from the composition registry, so a new operation type is paired
+    here the moment it is wired rather than when someone remembers to add it.
+    """
+    root = Path(__file__).resolve().parents[1] / "cv_engine"
+    composition = (root / "runtime" / "composition.py").read_text(encoding="utf-8")
+    handlers_source = (root / "application" / "services" / "operations" / "handlers.py").read_text(
+        encoding="utf-8"
+    )
+    service_source = (root / "application" / "services" / "operations" / "service.py").read_text(
+        encoding="utf-8"
+    )
+
+    def scope(body: str) -> str:
+        if "analysis_knowledge_context_hash" in body:
+            return "analysis"
+        if "document_knowledge_context_hash" in body:
+            return "document"
+        return "none"
+
+    def bodies(source: str, kind) -> dict[str, str]:
+        tree = ast.parse(source)
+        return {
+            f"{outer.name}.{node.name}" if outer is not None else node.name: (
+                ast.get_source_segment(source, node) or ""
+            )
+            for outer in [None, *[n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]]
+            for node in (ast.walk(tree) if outer is None else outer.body)
+            if isinstance(node, kind)
+        }
+
+    # Which handler class serves which operation type, read from the registry.
+    registered = dict(re.findall(r"OperationType\.([A-Z_]+):\s*([A-Za-z]+)\(", composition))
+    assert registered, "the operation registry was not found; fix this guard"
+
+    handler_scopes: dict[str, str] = {}
+    for node in ast.walk(ast.parse(handlers_source)):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        for method in node.body:
+            if isinstance(method, ast.FunctionDef) and method.name == "check_sources":
+                handler_scopes[node.name] = scope(
+                    ast.get_source_segment(handlers_source, method) or ""
+                )
+
+    # Which submitter freezes which scope, matched to a type by the constant it names.
+    submitter_scopes: dict[str, str] = {}
+    for node in ast.walk(ast.parse(service_source)):
+        if not isinstance(node, ast.FunctionDef) or not node.name.startswith("submit_"):
+            continue
+        body = ast.get_source_segment(service_source, node) or ""
+        for operation_type in re.findall(r"OperationType\.([A-Z_]+)", body):
+            submitter_scopes[operation_type] = scope(body)
+
+    disagreements = [
+        (operation_type, submitter_scopes[operation_type], handler_scopes.get(handler))
+        for operation_type, handler in registered.items()
+        if operation_type in submitter_scopes
+        and handler_scopes.get(handler) != "none"
+        and submitter_scopes[operation_type] != handler_scopes.get(handler)
+    ]
+    assert not disagreements, (
+        "these freeze one knowledge scope and re-check another, so activation can never "
+        f"match: {disagreements}"
+    )
+
+
+def test_the_activation_unit_of_work_locks_before_it_reads() -> None:
+    """The runner's snapshot has to begin where the lock does.
+
+    A unit of work runs at REPEATABLE READ, so its first statement fixes its
+    snapshot. Activation used to read the Operation, write two phase rows and
+    run the source checks before the write it was all leading to took the
+    Application lock - so the lock was taken under a snapshot that predated it.
+    A writer that waited then found the row updated by whoever held the lock and
+    failed to serialize, having already done the work.
+
+    Asserted on the first statement of the block rather than on the call being
+    present somewhere in it, for the same reason the repository guard is: a lock
+    taken after the read satisfies a presence check and protects nothing.
+    """
+    source = (
+        Path(__file__).resolve().parents[1] / "cv_engine" / "application" / "operation_runner.py"
+    ).read_text(encoding="utf-8")
+    blocks = [
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.With)
+        and "unit_of_work()" in (ast.get_source_segment(source, node) or "")
+    ]
+    assert blocks, "the activation unit of work was not found; fix this guard"
+    for block in blocks:
+        names = [
+            getattr(inner.func, "attr", None) or getattr(inner.func, "id", None)
+            for statement in block.body
+            for inner in ast.walk(statement)
+            if isinstance(inner, ast.Call)
+        ]
+        taken = names.index("lock_application") if "lock_application" in names else None
+        assert taken is not None, "the activation unit of work never takes the Application lock"
+        assert taken == 0 or names[:taken] == ["bind"], (
+            "the activation unit of work reads before it locks, so its snapshot is fixed "
+            f"before the lock: {names[: taken + 1]}"
+        )

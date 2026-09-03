@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ...domain.analysis.approval import merge_classification
+from ...domain.analysis.approval import ACCEPTED_INCOMPLETE_ANALYSIS, merge_classification
 from ...domain.analysis.classification import classify_job
 from ...domain.models import (
+    AcceptedGap,
     JobAnalysis,
     OverrideKey,
     Profile,
@@ -14,6 +15,7 @@ from ...domain.models import (
 from ...domain.profiles import ProfileStore
 from ...domain.selection import MissingFactRendering as DomainMissingFactRendering
 from ...domain.selection import build_selection
+from ...util import utc_now
 from ..commands import (
     AnalysisDecisionsResult,
     AnalysisResult,
@@ -77,6 +79,11 @@ class PreparedSelectionProposal:
     command: CreateSelectionPlanCommand
     proposal: SelectionProposal
     evidence: ProviderEvidence
+
+
+#: Single-user product: there is one actor, and the record says so plainly
+#: rather than inventing an identity the system does not have.
+ACCEPTANCE_ACTOR = "user"
 
 
 class AnalysisService(ServiceBase[PreparationRepository]):
@@ -170,9 +177,15 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             )
         except (OSError, ValueError) as exc:
             raise InfrastructureFailure(f"could not read job snapshot payload: {exc}") from exc
+        knowledge = self.load_knowledge()
+        profiles = knowledge.profiles
         try:
             deterministic = classify_job(
                 job_text,
+                facts=knowledge.facts,
+                profiles=profiles,
+                concepts=knowledge.requirement_concepts,
+                normalized_hash=snapshot["normalized_hash"],
                 track_override=command.track_override,
                 profile_override=command.profile_override,
                 emphasis_override=command.emphasis_override,
@@ -182,8 +195,6 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             raise PreconditionFailed(f"invalid analysis request: {exc}") from exc
         result = deterministic
         used_provider, used_model = "deterministic", "rules-v1"
-        knowledge = self.load_knowledge()
-        profiles = knowledge.profiles
         evidence: ProviderEvidence | None = None
         if command.provider == "openai":
             if operation_id is None:
@@ -218,10 +229,18 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         elif command.provider != "deterministic":
             raise DependencyUnavailable(f"unsupported provider: {command.provider}")
 
-        if command.accept_low_fit:
+        accepted: dict[str, str] = {
+            **({"fit": "accepted-low-fit"} if command.accept_low_fit else {}),
+            **(
+                {"analysis": ACCEPTED_INCOMPLETE_ANALYSIS}
+                if command.accept_incomplete_analysis
+                else {}
+            ),
+        }
+        if accepted:
             # Rebuilt through validation rather than model_copy(update=...), which
             # would skip the model validators that guard this state.
-            overrides = {**result.user_override, "fit": "accepted-low-fit"}
+            overrides = {**result.user_override, **accepted}
             result = JobAnalysis.model_validate(
                 {**result.model_dump(mode="json"), "user_override": overrides}
             )
@@ -291,6 +310,21 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             # actually be compared against.
             selection_policy_version=prepared.selection_policy_version,
             track_emphasis_dependencies=prepared.track_emphasis_dependencies,
+            # Validated against the analysis about to be written, not the one
+            # the user decided on: a Track change can remove a rule-derived gap,
+            # and an id that no longer names one is refused rather than stored.
+            accepted_requirement_ids=sorted(
+                set(
+                    self._acceptable_requirement_ids(
+                        list(command.accepted_requirement_ids),
+                        prepared.result,
+                        command.expected_selection_plan_id,
+                    )
+                )
+            ),
+            acceptance_actor=ACCEPTANCE_ACTOR,
+            acceptance_reason=command.acceptance_reason,
+            expected_selection_plan_id=command.expected_selection_plan_id,
         )
         repo.set_normalized_role(command.application_id, prepared.normalized_role)
         return AnalysisResult(
@@ -354,6 +388,8 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                 "track": analysis.track.value,
                 "emphasis": analysis.emphasis.value,
             },
+            new_acceptances=self._new_acceptances(command, analysis),
+            expected_selection_plan_id=command.expected_selection_plan_id,
         )
         return SelectionPlanResult(
             application_id=command.application_id,
@@ -361,6 +397,78 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             selection_plan_id=plan.id,
             plan=plan,
         )
+
+    def _acceptable_requirement_ids(
+        self,
+        requirement_ids: list[str],
+        analysis: JobAnalysis,
+        expected_selection_plan_id: str | None,
+    ) -> list[str]:
+        """The submitted ids, refused unless each names a hard gap of this analysis.
+
+        The analysis checked against is the one the decision will be recorded
+        on. When a classification decision creates a new one, that is the new
+        analysis: requirement identity is keyed on the snapshot text, so an
+        extracted requirement keeps its id across a reclassification, while a
+        rule-derived gap can disappear when the Track moves. Validating against
+        the analysis being written is what keeps an id that no longer names a
+        gap from being stored as a decision about nothing.
+        """
+        if not requirement_ids:
+            return []
+        if expected_selection_plan_id is None:
+            # Optional in general - most plan writes accept nothing - but an
+            # acceptance without it is a decision applied to whatever plan is
+            # active now rather than the one the user was shown, which is the
+            # rebase the check exists to prevent.
+            raise PreconditionFailed(
+                "accepting a gap requires expected_selection_plan_id: the plan the "
+                "decision was made against"
+            )
+        hard = {
+            gap.requirement_id
+            for gap in analysis.gaps
+            if gap.severity == "hard" and gap.requirement_id is not None
+        }
+        unknown = sorted(set(requirement_ids) - hard)
+        if unknown:
+            raise PreconditionFailed(
+                f"no hard gap to accept for requirement(s): {', '.join(unknown)}"
+            )
+        return list(requirement_ids)
+
+    def _new_acceptances(
+        self, command: CreateSelectionPlanCommand, analysis: JobAnalysis
+    ) -> list[AcceptedGap]:
+        """The acceptances this submission adds, and nothing else.
+
+        Carrying the standing ones forward is the repository's job, done inside
+        the write transaction: doing it here meant reading a plan that could be
+        overtaken before the write, which dropped an acceptance silently.
+
+        Only a requirement that actually has a hard gap may be accepted. A
+        requirement id naming no hard gap is refused rather than stored: a
+        recorded decision about nothing would later read as a decision about
+        something.
+        """
+        accepted = self._acceptable_requirement_ids(
+            list(command.accepted_requirement_ids),
+            analysis,
+            command.expected_selection_plan_id,
+        )
+        if not accepted:
+            return []
+        now = utc_now()
+        return [
+            AcceptedGap(
+                requirement_id=requirement_id,
+                job_analysis_id=command.job_analysis_id,
+                actor=ACCEPTANCE_ACTOR,
+                accepted_at=now,
+                reason=command.acceptance_reason,
+            )
+            for requirement_id in sorted(set(accepted))
+        ]
 
     def prepare_selection_proposal(
         self,
@@ -508,10 +616,17 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         touches the analysis or plan the user decided against; both remain
         readable history.
 
-        Accepting a low Fit or a hard gap is a meaning decision, not a selection
-        one: the acceptance is recorded as the analysis override that the state
-        projection already reads to clear `LOW_FIT_REQUIRES_ACCEPTANCE` and
-        `HARD_GAP_REQUIRES_DECISION`. There is no second place that records it.
+        Accepting a hard gap is a *selection* decision, not a meaning one. It
+        does not change what the requirement means, what it covers, or how it
+        is classified - only that the user proceeds despite it - so it creates
+        a replacement SelectionPlan and leaves the JobAnalysis alone. That also
+        keeps one acceptance from re-deriving an analysis the user never asked
+        to change.
+
+        Accepting a low Fit is still an analysis-level override, and it now
+        clears `LOW_FIT_REQUIRES_ACCEPTANCE` alone. It used to clear every hard
+        gap with it, so one checkbox dismissed deficiencies the user had never
+        been shown.
 
         Decisions accumulate. The submission is merged over the overrides the
         source analysis already carried, so a second decision does not silently
@@ -531,15 +646,25 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         }
         if command.accept_low_fit:
             submitted["fit"] = "accepted-low-fit"
+        if command.accept_incomplete_analysis:
+            submitted["analysis"] = ACCEPTED_INCOMPLETE_ANALYSIS
         merged = {**analysis.user_override, **submitted}
         changes_meaning = merged != dict(analysis.user_override)
-        has_overlay = bool(command.pinned_fact_ids or command.excluded_fact_ids)
+        has_fact_overlay = bool(command.pinned_fact_ids or command.excluded_fact_ids)
+        has_overlay = bool(has_fact_overlay or command.accepted_requirement_ids)
 
-        if changes_meaning and has_overlay:
+        if changes_meaning and has_fact_overlay:
             # A classification decision produces a *new* analysis whose initial
-            # plan is the deterministic one for that classification. Applying
-            # this overlay to it would silently attach decisions the user made
+            # plan is the deterministic one for that classification. Applying a
+            # *fact* overlay to it would silently attach decisions the user made
             # about the old candidate accounting to a new one they have not seen.
+            #
+            # A gap acceptance is not that. It names a requirement rather than a
+            # fact, requirement identity is keyed on the snapshot text rather
+            # than on the classification, and it is re-checked against the new
+            # analysis before it is stored - so it rides along, in the same
+            # write, instead of being refused and re-submitted against a record
+            # the user never asked to create.
             raise PreconditionFailed(
                 "a classification decision creates a new analysis with its own initial "
                 "SelectionPlan; apply the fact overlay to that analysis in a second command"
@@ -558,6 +683,18 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                     emphasis_override=merged.get("emphasis"),
                     language_override=merged.get("language"),
                     accept_low_fit=merged.get("fit") == "accepted-low-fit",
+                    # Carried across a decision the user takes on this same
+                    # posting, because a classification decision changes
+                    # neither the text nor what was read from it. A genuinely
+                    # new analysis - another snapshot, or changed Knowledge -
+                    # is reached through `analyze`, which never sets this, so
+                    # the acceptance does not survive one.
+                    accept_incomplete_analysis=(
+                        merged.get("analysis") == ACCEPTED_INCOMPLETE_ANALYSIS
+                    ),
+                    accepted_requirement_ids=list(command.accepted_requirement_ids),
+                    acceptance_reason=command.acceptance_reason,
+                    expected_selection_plan_id=command.expected_selection_plan_id,
                 )
             )
             return AnalysisDecisionsResult(
@@ -581,6 +718,9 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                 job_analysis_id=command.job_analysis_id,
                 pinned_fact_ids=list(command.pinned_fact_ids),
                 excluded_fact_ids=list(command.excluded_fact_ids),
+                accepted_requirement_ids=list(command.accepted_requirement_ids),
+                acceptance_reason=command.acceptance_reason,
+                expected_selection_plan_id=command.expected_selection_plan_id,
             )
         )
         return AnalysisDecisionsResult(

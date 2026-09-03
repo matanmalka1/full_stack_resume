@@ -6,7 +6,7 @@ from helpers import PAYME_TECH_SALES_JOB, claim_by_id, store_draft
 
 from cv_engine.domain.draft_markdown import serialize_markdown
 from cv_engine.domain.drafts import register_linked_claim
-from cv_engine.domain.models import ClaimLine
+from cv_engine.domain.models import ClaimLine, JobAnalysis
 from cv_engine.domain.validation import validate_draft
 from cv_engine.util import sha256_text
 
@@ -259,3 +259,36 @@ def test_a_project_heading_is_not_mistaken_for_a_demoted_job_title(draft_factory
 
     report = validate_draft(draft, markdown.read_text(encoding="utf-8"), facts, profile, analysis)
     assert not any(i.code == "historical-title-placement" for i in report.issues)
+
+
+def test_an_unread_posting_is_its_own_validation_finding(draft_factory) -> None:
+    """A stored report must not call an unreadable posting a classification ambiguity.
+
+    The issue code is written into an immutable validation report, so the wrong
+    name outlives the run that produced it - and it named a decision that
+    cannot resolve the finding.
+    """
+    facts, profile, analysis, draft, markdown = draft_factory(
+        "Account Manager retention portfolio customer relationships", write=True
+    )
+    unread = JobAnalysis.model_validate(
+        {
+            **analysis.model_dump(mode="json"),
+            "classification_requires_approval": True,
+            "approval_reasons": ["extraction-failed"],
+        }
+    )
+    report = validate_draft(draft, markdown.read_text(encoding="utf-8"), facts, profile, unread)
+    codes = {issue.code for issue in report.issues}
+    assert "incomplete-analysis-not-accepted" in codes
+    assert "classification-approval-required" not in codes
+
+    ambiguous = JobAnalysis.model_validate(
+        {
+            **analysis.model_dump(mode="json"),
+            "classification_requires_approval": True,
+            "approval_reasons": ["low-confidence"],
+        }
+    )
+    other = validate_draft(draft, markdown.read_text(encoding="utf-8"), facts, profile, ambiguous)
+    assert "classification-approval-required" in {issue.code for issue in other.issues}

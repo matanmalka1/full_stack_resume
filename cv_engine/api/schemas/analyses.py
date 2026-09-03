@@ -68,6 +68,16 @@ class SelectionOverlayRequest(HttpSchema):
 
     pinned_fact_ids: list[str] = []
     excluded_fact_ids: list[str] = []
+    #: Requirement IDs whose hard gaps the user knowingly proceeds past, named
+    #: one at a time. Acceptance records that the user proceeds; it never marks
+    #: a gap satisfied and never authorizes an unsupported claim.
+    accepted_requirement_ids: list[str] = []
+    acceptance_reason: str | None = Field(default=None, max_length=500)
+    #: The plan the client had in front of it when the user decided. Optional
+    #: for a submission that accepts nothing; **required** as soon as
+    #: `accepted_requirement_ids` is non-empty, because without it the decision
+    #: is applied to whatever plan is active now rather than the one shown.
+    expected_selection_plan_id: str | None = None
 
 
 class CreateSelectionPlanRequest(SelectionOverlayRequest):
@@ -99,6 +109,12 @@ class ApplyAnalysisDecisionsRequest(SelectionOverlayRequest, ClassificationOverr
     """
 
     application_id: str
+    #: Deliberately here and not on `ClassificationOverrides`, which
+    #: `CreateAnalysisRequest` also uses: accepting an analysis that read
+    #: nothing is a decision about an analysis the user has seen. Offering it
+    #: on the analyze endpoint would let a client pre-accept a posting before
+    #: anyone had looked at what the engine made of it.
+    accept_incomplete_analysis: bool = False
 
 
 class SelectionPlanResponse(HttpSchema):
@@ -112,6 +128,7 @@ class SelectionPlanResponse(HttpSchema):
     profile_version: str
     selection_policy_version: str
     track_emphasis_dependencies: dict[str, str]
+    accepted_gaps: list[dict[str, Any]] = []
     created_at: str
 
 

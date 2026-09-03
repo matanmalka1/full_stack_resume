@@ -24,7 +24,12 @@ import {
    copy of a server rule. */
 export type ClassificationDecisions = Pick<
   ApplyAnalysisDecisionsRequest,
-  "track_override" | "profile_override" | "emphasis_override" | "language_override" | "accept_low_fit"
+  | "track_override"
+  | "profile_override"
+  | "emphasis_override"
+  | "language_override"
+  | "accept_low_fit"
+  | "accept_incomplete_analysis"
 >;
 
 const applyDecisionsPath = (analysisId: string): ApiPath =>
@@ -47,10 +52,16 @@ export const applyAnalysisDecisions = async (
 ): Promise<AnalysisDecisions> => {
   /* The overlay fields are omitted by type, not merely left unset: naming them in the
      `Omit` is what makes adding one here a compile error rather than a quiet change of
-     what this screen commits. */
-  const body: Omit<ApplyAnalysisDecisionsRequest, "pinned_fact_ids" | "excluded_fact_ids"> = {
+     what this screen commits. `accepted_requirement_ids` is one of them - accepting a
+     hard gap is a decision about a specific requirement, and this screen has no control
+     that names one. */
+  const body: Omit<
+    ApplyAnalysisDecisionsRequest,
+    "pinned_fact_ids" | "excluded_fact_ids" | "accepted_requirement_ids"
+  > = {
     application_id: applicationId,
     accept_low_fit: decisions.accept_low_fit,
+    accept_incomplete_analysis: decisions.accept_incomplete_analysis,
     ...(decisions.track_override == null ? {} : { track_override: decisions.track_override }),
     ...(decisions.profile_override == null ? {} : { profile_override: decisions.profile_override }),
     ...(decisions.emphasis_override == null ? {} : { emphasis_override: decisions.emphasis_override }),

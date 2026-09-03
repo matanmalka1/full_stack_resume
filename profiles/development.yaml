@@ -22,6 +22,9 @@
     "development": 100,
     "technical": 80
   },
+  "omitted_roles": {
+    "sales.role.field.title": "The earliest sales role predates the engineering history this CV argues and would only lengthen its head."
+  },
   "sections": [
     {
       "name_en": "Professional Summary",

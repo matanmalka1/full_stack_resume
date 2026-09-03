@@ -74,6 +74,16 @@ class AnalyzeCommand(BoundaryDTO):
     emphasis_override: str | None = None
     language_override: str | None = None
     accept_low_fit: bool = False
+    #: Set only by an explicit acceptance submission, never by the analyze
+    #: endpoint. That is what keeps the decision from surviving a re-analysis:
+    #: a fresh analyze of a new snapshot starts with it unset and blocks again.
+    accept_incomplete_analysis: bool = False
+    #: Gap acceptances submitted with the decision that creates this analysis.
+    #: Set only by an explicit decision submission; the analyze endpoint never
+    #: carries them, so a plain re-analysis starts with nothing accepted.
+    accepted_requirement_ids: list[str] = []
+    acceptance_reason: str | None = None
+    expected_selection_plan_id: str | None = None
     provider: str = "deterministic"
     model: str = "rules-v1"
 
@@ -102,6 +112,16 @@ class CreateSelectionPlanCommand(SelectionOverlay):
 
     application_id: str
     job_analysis_id: str
+    #: Requirement IDs whose hard gaps the user knowingly proceeds past. Named
+    #: one by one: accepting a deficiency the user has seen must never dismiss
+    #: one they have not.
+    accepted_requirement_ids: list[str] = []
+    acceptance_reason: str | None = None
+    #: The plan the user was looking at when they decided. Set, and the active
+    #: plan has moved on, the command is refused rather than quietly rebased
+    #: onto a plan the user never saw - which is how an acceptance went missing
+    #: with no error at all.
+    expected_selection_plan_id: str | None = None
     expected_candidate_context_hash: str | None = None
     expected_profile_version: str | None = None
     expected_selection_policy_version: str | None = None
@@ -120,7 +140,19 @@ class ApplyAnalysisDecisionsCommand(SelectionOverlay):
     profile_override: str | None = None
     emphasis_override: str | None = None
     language_override: str | None = None
+    #: Clears `LOW_FIT_REQUIRES_ACCEPTANCE` and nothing else. It used to clear
+    #: every hard gap along with it, so one checkbox dismissed deficiencies the
+    #: user had never been shown.
     accept_low_fit: bool = False
+    #: Clears `ANALYSIS_INCOMPLETE` and nothing else: the user proceeds knowing
+    #: the engine did not read this posting's requirements. It answers neither
+    #: low Fit nor any hard gap, for the same reason low Fit no longer answers
+    #: a gap.
+    accept_incomplete_analysis: bool = False
+    #: Requirement IDs whose hard gaps the user knowingly proceeds past.
+    accepted_requirement_ids: list[str] = []
+    acceptance_reason: str | None = None
+    expected_selection_plan_id: str | None = None
 
 
 class ProposeSelectionPlanCommand(SelectionOverlay):
@@ -605,6 +637,7 @@ class KnowledgeVersionsResult(BoundaryDTO):
     emphasis_policies: str
     presentations: str
     candidate_context: str
+    requirement_concepts: str
 
 
 class FactEventView(BoundaryDTO):

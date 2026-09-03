@@ -278,6 +278,30 @@ def test_the_review_journey_resolves_once_and_reaches_ready(
     assert resolved["created_analysis"] is True
     assert resolved["job_analysis_id"] != original["job_analysis"]
     assert resolved["selection_plan_id"] != original["selection_plan"]
+
+    # Two decisions, because they answer two different questions: what this job
+    # is, and whether to proceed past each deficiency. Accepting low Fit no
+    # longer dismisses the hard gaps along with it.
+    state = _get(api_worker, f"/applications/{application_id}").json()
+    assert {reason["code"] for reason in state["review_reasons"]} == {"HARD_GAP_REQUIRES_DECISION"}
+    analysis = api_worker.services.repository.get_analysis(resolved["job_analysis_id"])["analysis"]
+    accepted = _post(
+        api_worker,
+        f"/analyses/{resolved['job_analysis_id']}/apply-decisions",
+        {
+            "application_id": application_id,
+            "accepted_requirement_ids": [
+                gap.requirement_id for gap in analysis.gaps if gap.severity == "hard"
+            ],
+            # The plan the user was looking at. Required once anything is
+            # accepted, so the decision cannot be rebased onto a plan they
+            # never saw.
+            "expected_selection_plan_id": resolved["selection_plan_id"],
+        },
+    )
+    assert accepted.status_code == 201, accepted.text
+    resolved = {**resolved, "selection_plan_id": accepted.json()["selection_plan_id"]}
+
     state = _get(api_worker, f"/applications/{application_id}").json()
     assert state["review_reasons"] == []
     assert state["preparation_state"] == "ready_to_draft"

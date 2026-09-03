@@ -77,6 +77,8 @@ class OperationRunnerRepository(OperationRepository, Protocol):
 
     def bind(self, uow: UnitOfWork) -> OperationRunnerRepository: ...
 
+    def lock_application(self, application_id: str) -> None: ...
+
 
 class OperationRunner:
     def __init__(
@@ -319,6 +321,14 @@ class OperationRunner:
         try:
             with self.repository.unit_of_work() as uow:
                 bound = self.repository.bind(uow)
+                # First statement, before any read. A unit of work runs at
+                # REPEATABLE READ, so this is what fixes its snapshot: taken
+                # here, everything the activation reads and writes is decided
+                # under the lock. Taken where the write happens - several reads
+                # and two phase writes later - the snapshot predates the lock,
+                # and a writer that waited for it then fails to serialize
+                # instead of proceeding with what the other writer left.
+                bound.lock_application(operation.application_id)
                 operation = bound.operation(operation_id)
                 bound.set_operation_phase(
                     operation_id,

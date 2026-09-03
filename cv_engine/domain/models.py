@@ -51,6 +51,11 @@ class FitLevel(StrEnum):
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
+    #: Requirements could not be read, so Fit was never assessed. Distinct from
+    #: MEDIUM, which claims an assessment was made and landed in the middle.
+    #: Only a *new* analysis run whose extraction failed may carry it; analyses
+    #: stored before the extractor existed keep the Fit they were written with.
+    UNKNOWN = "unknown"
 
 
 class ApplicationStatus(StrEnum):
@@ -227,6 +232,13 @@ class Profile(StrictModel):
     headline: str | None = None
     required_tags: list[str] = []
     tag_weights: dict[str, int] = {}
+    # The dated roles this Profile deliberately does not offer, each against the
+    # reason it does not. Employment-history coverage is checked against the
+    # fact store, so a dated role that is neither offered nor named here fails
+    # the profile set instead of quietly vanishing from the CV. A waiver records
+    # a decision about the head or tail of the timeline; it cannot buy off a
+    # hole between two roles the Profile does offer.
+    omitted_roles: dict[str, str] = {}
     sections: list[ResumeSectionSpec]
     allow_two_pages: bool = False
 
@@ -238,6 +250,22 @@ class Profile(StrictModel):
             raise ValueError("headline must be one of the safe headlines")
         if self.normalized_role not in self.safe_headlines:
             raise ValueError("normalized role must be a safe headline")
+        return self
+
+    @model_validator(mode="after")
+    def validate_omitted_role_reasons(self) -> Profile:
+        """A declined role states why, so the waiver records a decision.
+
+        Without this the reason is decoration: `{"role": ""}` would satisfy the
+        coverage rule and leave the omission as unexplained as never declaring
+        it. An empty string is what an absent-minded edit produces, which is
+        precisely the case the waiver list exists to catch.
+        """
+        blank = sorted(
+            fact_id for fact_id, reason in self.omitted_roles.items() if not reason.strip()
+        )
+        if blank:
+            raise ValueError(f"omitted roles need a reason: {', '.join(blank)}")
         return self
 
 
@@ -296,14 +324,62 @@ class CandidateContext(StrictModel):
         return self.link_schemes.get(fact_id, "text")
 
 
+RequirementKind = Literal["threshold", "compositional", "presence"]
+Coverage = Literal["matched", "partial", "unsupported"]
+
+
+class MissingComponent(StrictModel):
+    """One named part of a requirement canonical Knowledge cannot establish.
+
+    Structured rather than a prose sentence: what is missing is matched on and
+    reasoned about, so it must not become free text the engine later depends on
+    parsing. Human-readable explanation is rendered from `label` at the edge,
+    and from a boundary fact's own `meaning` where one gives the authoritative
+    account.
+    """
+
+    component_id: str
+    label: str
+    demanded: str | None = None
+
+
+class Requirement(StrictModel):
+    """One thing the employer asked for, and what we can truthfully show for it.
+
+    `coverage` is about the requirement being met. `supporting_fact_ids` is
+    about evidence existing. They are independent: a demanded proficiency the
+    candidate falls short of is `unsupported` and still lists the canonical
+    fact carrying the lower value.
+
+    `supporting_fact_ids` records evidence. It never licenses a merged or
+    strengthened claim - a fact listed here because it is adjacent to the
+    requirement must not be drafted as if it satisfied it. `boundary_fact_ids`
+    names the canonical facts that say so explicitly.
+    """
+
+    requirement_id: str
+    text: str
+    kind: RequirementKind
+    concept: str | None = None
+    mandatory: bool
+    coverage: Coverage
+    supporting_fact_ids: list[str] = []
+    boundary_fact_ids: list[str] = []
+    missing_components: list[MissingComponent] = []
+
+
 class Gap(StrictModel):
     requirement: str
     severity: Literal["warning", "hard"]
     reason: str
     substitute_fact_ids: list[str] = []
+    #: The `Requirement` this gap projects, when one produced it. Absent on
+    #: analyses written before requirement coverage existed, whose stored gaps
+    #: stay authoritative exactly as recorded.
+    requirement_id: str | None = None
 
 
-OverrideKey = Literal["track", "profile", "emphasis", "language", "fit"]
+OverrideKey = Literal["track", "profile", "emphasis", "language", "fit", "analysis"]
 Language = Literal["en", "he"]
 
 
@@ -337,6 +413,14 @@ class JobAnalysis(StrictModel):
     rationale: str
     fit: FitLevel
     gaps: list[Gap]
+    #: The complete requirement picture, matched requirements included. `gaps`
+    #: is its unmet projection. Defaulted so analyses stored before requirement
+    #: coverage existed - including those bound to approved and submitted
+    #: revisions - keep deserializing unchanged.
+    requirements: list[Requirement] = []
+    #: Which extractor produced `requirements`. "0" marks a legacy analysis
+    #: whose stored `gaps` are authoritative and are never re-derived.
+    extraction_version: str = "0"
     mandatory_requirements: list[str]
     preferred_requirements: list[str]
     keywords: list[str]
@@ -407,7 +491,15 @@ class SelectionCandidate(StrictModel):
 
     Recorded so a later reader can answer not only which policy ran but why
     fact A beat fact B: the ranking is the lexicographic tuple
-    (gap_substitute, semantic_score, keyword_hits, -pool_index).
+    (requirement_rank, semantic_score, keyword_hits, -pool_index).
+
+    `requirement_rank` is 2 where the fact bears on a mandatory requirement, 1
+    for a preferred one, 0 where the posting never asked. `gap_substitute` held
+    that slot under policy 1.0.0 and is still recorded: it says something the
+    tier does not - that the fact was offered as a stand-in for something
+    missing rather than as evidence of something held - and manifests already
+    written carry it. Reading either field on an older record means reading
+    `policy_version` first.
     """
 
     fact_id: str
@@ -418,6 +510,13 @@ class SelectionCandidate(StrictModel):
     semantic_score: int
     keyword_hits: int
     gap_substitute: bool
+    #: Defaulted so manifests written under policy 1.0.0, including those bound
+    #: to approved and submitted revisions, keep deserializing unchanged, and
+    #: bounded because the tier is an enumeration the ranking reads, not a
+    #: score: a value outside 0..2 would sort against every real tier while
+    #: describing nothing, and the published schema would promise an unbounded
+    #: integer no reader of a manifest could interpret.
+    requirement_rank: int = Field(default=0, ge=0, le=2)
     outcome: SelectionOutcome
     reason: OmissionReason | None = None
 
@@ -440,6 +539,39 @@ class SelectionManifest(StrictModel):
     superseded_by_manual_edit: bool = False
 
 
+class AcceptedGap(StrictModel):
+    """One hard gap the user knowingly proceeded past.
+
+    Acceptance means only that: it never changes a gap to satisfied, never
+    authorizes an unsupported claim, and never touches requirement coverage or
+    fact ranking. It is recorded per gap, keyed on the `Requirement` the gap
+    projects, so accepting one deficiency cannot dismiss another the user has
+    not seen.
+
+    It lives on the SelectionPlan rather than the JobAnalysis because it is not
+    a change to what the requirement *means* - the analysis is untouched and
+    stays reusable - only to whether the user proceeds despite it.
+    """
+
+    requirement_id: str
+    job_analysis_id: str
+    actor: str
+    accepted_at: str
+    reason: str | None = None
+
+
+def merge_accepted_gaps(previous: list[AcceptedGap], new: list[AcceptedGap]) -> list[AcceptedGap]:
+    """Carry the standing acceptances forward and add the new ones.
+
+    Accumulating rather than replacing is what makes a second decision not a
+    silent retraction of the first. A requirement already accepted keeps its
+    original record: the acceptance happened when it happened, and re-stamping
+    it would lose that.
+    """
+    already = {accepted.requirement_id for accepted in previous}
+    return [*previous, *(item for item in new if item.requirement_id not in already)]
+
+
 class SelectionPlan(StrictModel):
     """One immutable, versioned fact-selection decision for an analysis."""
 
@@ -448,6 +580,36 @@ class SelectionPlan(StrictModel):
     job_analysis_id: str
     version_number: int
     plan: SelectionManifest
+    #: The gaps the user knowingly proceeded past, as of this plan version.
+    #: Defaulted so plans stored before per-gap acceptance existed - including
+    #: those bound to approved and submitted revisions - keep loading unchanged.
+    accepted_gaps: list[AcceptedGap] = []
+
+    @model_validator(mode="after")
+    def acceptances_belong_to_this_analysis(self) -> SelectionPlan:
+        """An acceptance names the analysis it was made against, and it must be
+        this one.
+
+        Acceptance is a decision about *these* gaps, as this analysis stated
+        them. A plan carrying an acceptance made against a different analysis
+        would report a decision the user never made about the requirements it
+        actually holds. Enforced on the model rather than in the writer, so it
+        covers every path that has ever written a plan and every one that will.
+        """
+        foreign = sorted(
+            {
+                accepted.requirement_id
+                for accepted in self.accepted_gaps
+                if accepted.job_analysis_id != self.job_analysis_id
+            }
+        )
+        if foreign:
+            raise ValueError(
+                f"selection plan for analysis {self.job_analysis_id} carries acceptances "
+                f"made against another analysis: {', '.join(foreign)}"
+            )
+        return self
+
     candidate_context_version: str
     candidate_context_hash: str
     profile_version: str

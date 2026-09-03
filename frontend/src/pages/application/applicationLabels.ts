@@ -122,6 +122,7 @@ const blockedReasonLabels: Record<string, string> = {
   VALIDATION_STALE: "הטיוטה השתנתה מאז האימות.",
   DRAFT_EDITED_AFTER_VALIDATION: "הטיוטה השתנתה מאז האימות.",
   MATERIAL_CLASSIFICATION_AMBIGUITY: "צריך להכריע את סיווג המשרה.",
+  ANALYSIS_INCOMPLETE: "הניתוח לא הצליח לקרוא את דרישות המשרה.",
   LOW_FIT_REQUIRES_ACCEPTANCE: "צריך לאשר התאמה נמוכה.",
   HARD_GAP_REQUIRES_DECISION: "צריך להכריע פער חוסם.",
   PENDING_FACT_REQUIRES_RESOLUTION: "יש טענה בלי עובדה מאושרת מאחוריה.",
@@ -167,6 +168,7 @@ export const blockedReasonLabel = (reason: string): string | null => blockedReas
    missing translation shown to the wrong audience. */
 const reasonTitles: Record<string, string> = {
   MATERIAL_CLASSIFICATION_AMBIGUITY: "סיווג המשרה לא חד־משמעי",
+  ANALYSIS_INCOMPLETE: "הניתוח לא קרא את דרישות המשרה",
   LOW_FIT_REQUIRES_ACCEPTANCE: "ההתאמה למשרה נמוכה",
   HARD_GAP_REQUIRES_DECISION: "יש פער חוסם מול הדרישות",
   PENDING_FACT_REQUIRES_RESOLUTION: "טענה בלי עובדה מאושרת",

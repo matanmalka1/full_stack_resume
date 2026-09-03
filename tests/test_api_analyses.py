@@ -170,6 +170,20 @@ def test_a_classification_decision_creates_a_new_analysis_and_its_initial_plan(
     state = _state(api_worker, application_id)
     assert state["active_analysis_id"] == body["job_analysis_id"]
     assert state["active_selection_plan_id"] == body["selection_plan_id"]
+
+    # The classification is settled, but the hard gap is a separate decision and
+    # is deliberately still standing: `accepted-low-fit` answers low Fit alone.
+    # It used to clear every hard gap with it.
+    assert {reason["code"] for reason in state["review_reasons"]} == {"HARD_GAP_REQUIRES_DECISION"}
+    accepted = _accept(
+        api_worker,
+        application_id,
+        body["job_analysis_id"],
+        _hard_gap_requirement_ids(api_worker, body["job_analysis_id"]),
+        expected_selection_plan_id=body["selection_plan_id"],
+    )
+    assert accepted.status_code == 201, accepted.text
+    state = _state(api_worker, application_id)
     assert state["review_reasons"] == []
     assert state["preparation_state"] == "ready_to_draft"
 
@@ -347,3 +361,189 @@ def test_an_overlay_the_engine_cannot_honour_is_refused_rather_than_trimmed(api_
 
     assert response.status_code == 412, response.text
     assert response.json()["code"] == "PRECONDITION_FAILED"
+
+
+def _hard_gap_requirement_ids(api_worker, analysis_id: str) -> list[str]:
+    analysis = api_worker.services.repository.get_analysis(analysis_id)["analysis"]
+    return [
+        gap.requirement_id
+        for gap in analysis.gaps
+        if gap.severity == "hard" and gap.requirement_id is not None
+    ]
+
+
+def _active_plan_id(api_worker, application_id: str) -> str:
+    return api_worker.services.repository.latest_selection_plan(application_id).id
+
+
+def _accept(api_worker, application_id, analysis_id, requirement_ids, **extra):
+    """Accept gaps the way a client must: naming the plan the user was shown.
+
+    `expected_selection_plan_id` is required once anything is accepted, so a
+    helper that omitted it would only ever exercise the refusal.
+    """
+    body = {
+        "application_id": application_id,
+        "accepted_requirement_ids": list(requirement_ids),
+        **extra,
+    }
+    body.setdefault("expected_selection_plan_id", _active_plan_id(api_worker, application_id))
+    return api_worker.client.post(
+        f"{API_PREFIX}/analyses/{analysis_id}/apply-decisions",
+        json=body,
+        headers=MUTATION_HEADERS,
+    )
+
+
+RIVERSIDE_POSTING = (
+    "About the job\n"
+    "Riverside built an AI-powered platform for content creators.\n\n"
+    "Requirements:\n\n"
+    "1+ years of sales closing experience in the market at a technology company, "
+    "with a track record of top performance (must).\n"
+    "Native English speaker (multiple languages are a plus).\n"
+)
+
+
+def test_accepting_a_gap_creates_a_plan_and_never_a_new_analysis(api_worker) -> None:
+    """Acceptance is a selection decision, so the analysis stays reusable.
+
+    It does not change what the requirement means, what covers it, or how the
+    job is classified - only that the user proceeds despite it.
+    """
+    application_id = _application(api_worker.services, "Riverside", job_text=RIVERSIDE_POSTING)
+    outputs = _outputs(_analyze(api_worker, application_id))
+    analysis_id = outputs["job_analysis"]
+    hard = _hard_gap_requirement_ids(api_worker, analysis_id)
+    assert len(hard) >= 2, "the posting must produce more than one hard gap"
+
+    response = _accept(api_worker, application_id, analysis_id, hard[:1], acceptance_reason="ok")
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["created_analysis"] is False
+    assert body["job_analysis_id"] == analysis_id
+    assert body["selection_plan_id"] != outputs["selection_plan"]
+
+    plan = api_worker.services.repository.selection_plan(body["selection_plan_id"])
+    assert [gap.requirement_id for gap in plan.accepted_gaps] == hard[:1]
+    assert plan.accepted_gaps[0].job_analysis_id == analysis_id
+    assert plan.accepted_gaps[0].actor
+    assert plan.accepted_gaps[0].accepted_at
+    assert plan.accepted_gaps[0].reason == "ok"
+
+
+def test_accepting_one_gap_leaves_the_others_unresolved(api_worker) -> None:
+    """The failure this stage exists to remove: one decision clearing all of them."""
+    application_id = _application(api_worker.services, "Riverside Two", job_text=RIVERSIDE_POSTING)
+    outputs = _outputs(_analyze(api_worker, application_id))
+    analysis_id = outputs["job_analysis"]
+    hard = _hard_gap_requirement_ids(api_worker, analysis_id)
+
+    _accept(api_worker, application_id, analysis_id, hard[:1])
+    state = _state(api_worker, application_id)
+    codes = {reason["code"] for reason in state["review_reasons"]}
+    assert "HARD_GAP_REQUIRES_DECISION" in codes, "the remaining gap still needs a decision"
+
+    _accept(api_worker, application_id, analysis_id, hard[1:])
+    state = _state(api_worker, application_id)
+    codes = {reason["code"] for reason in state["review_reasons"]}
+    assert "HARD_GAP_REQUIRES_DECISION" not in codes
+
+
+def test_acceptance_accumulates_rather_than_replacing(api_worker) -> None:
+    """A second decision must not silently retract the first."""
+    application_id = _application(
+        api_worker.services, "Riverside Three", job_text=RIVERSIDE_POSTING
+    )
+    outputs = _outputs(_analyze(api_worker, application_id))
+    analysis_id = outputs["job_analysis"]
+    hard = _hard_gap_requirement_ids(api_worker, analysis_id)
+
+    _accept(api_worker, application_id, analysis_id, hard[:1])
+    second = _accept(api_worker, application_id, analysis_id, hard[1:])
+    plan = api_worker.services.repository.selection_plan(second.json()["selection_plan_id"])
+    assert sorted(gap.requirement_id for gap in plan.accepted_gaps) == sorted(hard)
+
+
+def test_accepted_low_fit_no_longer_clears_a_hard_gap(api_worker) -> None:
+    """One checkbox used to dismiss every deficiency, seen or not."""
+    application_id = _application(api_worker.services, "Riverside Four", job_text=RIVERSIDE_POSTING)
+    outputs = _outputs(_analyze(api_worker, application_id))
+    response = api_worker.client.post(
+        f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
+        json={"application_id": application_id, "accept_low_fit": True},
+        headers=MUTATION_HEADERS,
+    )
+    assert response.status_code == 201, response.text
+    state = _state(api_worker, application_id)
+    codes = {reason["code"] for reason in state["review_reasons"]}
+    assert "LOW_FIT_REQUIRES_ACCEPTANCE" not in codes
+    assert "HARD_GAP_REQUIRES_DECISION" in codes
+
+
+def test_a_requirement_with_no_hard_gap_cannot_be_accepted(api_worker) -> None:
+    """A recorded decision about nothing would later read as one about something."""
+    application_id = _application(api_worker.services, "Riverside Five", job_text=RIVERSIDE_POSTING)
+    outputs = _outputs(_analyze(api_worker, application_id))
+    response = _accept(api_worker, application_id, outputs["job_analysis"], ["not-a-requirement"])
+    assert response.status_code == 412, response.text
+    assert "no hard gap to accept" in response.text
+
+
+def test_accepting_without_naming_the_plan_is_refused(api_worker) -> None:
+    """A decision has to name the plan it was made against.
+
+    Without it the acceptance is applied to whatever plan is active at the
+    moment it arrives, which is the silent rebase the field exists to prevent.
+    Optional in general, because most submissions accept nothing.
+    """
+    application_id = _application(
+        api_worker.services, "Unnamed Plan Co", job_text=RIVERSIDE_POSTING
+    )
+    outputs = _outputs(_analyze(api_worker, application_id))
+    analysis_id = outputs["job_analysis"]
+    hard = _hard_gap_requirement_ids(api_worker, analysis_id)
+
+    refused = api_worker.client.post(
+        f"{API_PREFIX}/analyses/{analysis_id}/apply-decisions",
+        json={"application_id": application_id, "accepted_requirement_ids": hard[:1]},
+        headers=MUTATION_HEADERS,
+    )
+    assert refused.status_code == 412, refused.text
+    assert "expected_selection_plan_id" in refused.text
+
+    # A submission that accepts nothing still does not need it.
+    overlay = api_worker.client.post(
+        f"{API_PREFIX}/analyses/{analysis_id}/apply-decisions",
+        json={
+            "application_id": application_id,
+            "pinned_fact_ids": [
+                api_worker.services.repository.selection_plan(
+                    outputs["selection_plan"]
+                ).plan.selected_fact_ids[0]
+            ],
+        },
+        headers=MUTATION_HEADERS,
+    )
+    assert overlay.status_code == 201, overlay.text
+
+
+def test_naming_a_plan_that_has_been_replaced_is_refused(api_worker) -> None:
+    """The decision was made against a plan that is no longer active."""
+    application_id = _application(api_worker.services, "Moved Plan Co", job_text=RIVERSIDE_POSTING)
+    outputs = _outputs(_analyze(api_worker, application_id))
+    analysis_id = outputs["job_analysis"]
+    hard = _hard_gap_requirement_ids(api_worker, analysis_id)
+
+    first = _accept(api_worker, application_id, analysis_id, hard[:1])
+    assert first.status_code == 201, first.text
+
+    stale = _accept(
+        api_worker,
+        application_id,
+        analysis_id,
+        hard[1:],
+        expected_selection_plan_id=outputs["selection_plan"],
+    )
+    assert stale.status_code == 409, stale.text
+    assert "moved since this decision was made" in stale.text

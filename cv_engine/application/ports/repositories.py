@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any, Protocol, Self, runtime_checkable
 
 from ...domain.models import (
+    AcceptedGap,
     DecisionRecord,
     SelectionManifest,
     SelectionPlan,
@@ -121,6 +122,10 @@ class JobStore(Protocol):
         profile_version: str,
         selection_policy_version: str,
         track_emphasis_dependencies: dict[str, str],
+        accepted_requirement_ids: list[str] | None = ...,
+        acceptance_actor: str = ...,
+        acceptance_reason: str | None = ...,
+        expected_selection_plan_id: str | None = ...,
     ) -> tuple[str, SelectionPlan]: ...
 
     def get_analysis(self, analysis_id: str) -> dict[str, Any]: ...
@@ -140,9 +145,13 @@ class JobStore(Protocol):
         profile_version: str,
         selection_policy_version: str,
         track_emphasis_dependencies: dict[str, str],
+        new_acceptances: list[AcceptedGap] | None = None,
+        expected_selection_plan_id: str | None = None,
         plan_id: str | None = None,
         created_at: str | None = None,
     ) -> SelectionPlan: ...
+
+    def lock_application(self, application_id: str) -> None: ...
 
     def selection_plan(self, selection_plan_id: str) -> SelectionPlan: ...
 
