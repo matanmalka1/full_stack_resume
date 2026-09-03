@@ -9,7 +9,8 @@ import { SectionHeader } from "../../ui/SectionHeader";
 import { StatusBadge } from "../../ui/StatusBadge";
 import { formatDate } from "../../ui/formatDateTime";
 import { recruitmentStatusLabel } from "../application/applicationLabels";
-import { RecruitmentExceptionalActions } from "./RecruitmentExceptionalActions";
+import { ExternalSubmissionAction } from "./ExternalSubmissionAction";
+import { RecruitmentCorrectionAction } from "./RecruitmentCorrectionAction";
 import { RecruitmentTimeline } from "./RecruitmentTimeline";
 import { RecruitmentUpdateDialog } from "./RecruitmentUpdateDialog";
 
@@ -59,8 +60,8 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
           <details className="relative text-support">
             <summary className={buttonClasses("secondary", "cursor-pointer list-none")}>פעולות נוספות</summary>
             <div className="absolute end-0 z-10 mt-2 flex w-56 flex-col gap-2 rounded-control border border-cv-border bg-cv-surface p-2 shadow-floating">
-              <RecruitmentExceptionalActions detail={detail} kind="external-submission" onChanged={refresh} />
-              <RecruitmentExceptionalActions detail={detail} kind="correction" onChanged={refresh} />
+              <ExternalSubmissionAction detail={detail} onChanged={refresh} />
+              <RecruitmentCorrectionAction detail={detail} onChanged={refresh} />
             </div>
           </details>
         </div>
