@@ -247,7 +247,7 @@ describe("DraftEditorPage", () => {
     expect(await screen.findByText("Owned the CRM migration.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "Core Skills" })).toBeInTheDocument();
     expect(screen.getAllByText("מבוסס עובדה").length).toBeGreaterThan(0);
-    expect(screen.getByText("Account Manager")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Account Manager")).toBeInTheDocument();
   });
 
   it("names the facts behind a claim by their text, never by their identifier", async () => {

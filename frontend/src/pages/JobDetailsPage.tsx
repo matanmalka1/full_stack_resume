@@ -15,7 +15,6 @@ import { Callout } from "../ui/Callout";
 import { Card } from "../ui/Card";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
-import { StatusBadge } from "../ui/StatusBadge";
 import { SummaryList } from "../ui/SummaryList";
 import { dateTimesMatch, formatDateTime } from "../ui/formatDateTime";
 import { ActiveOperationPanel } from "./ActiveOperationPanel";
@@ -23,7 +22,7 @@ import { ArtifactsPanel } from "./application/ArtifactsPanel";
 import { ApplicationNotes } from "./application/ApplicationNotes";
 import { JobSnapshotPanel } from "./application/JobSnapshotPanel";
 import { PreparationStatusBadges } from "./application/PreparationStatusBadges";
-import { recruitmentStatusIcon, recruitmentStatusLabel, recruitmentStatusTone } from "./application/applicationLabels";
+import { recruitmentStatusLabel } from "./application/applicationLabels";
 import { RecruitmentPanel } from "./recruitment/RecruitmentPanel";
 
 const sourceLabel = (source: string): string => (source === "manual" ? "הזנה ידנית" : source);
@@ -141,17 +140,9 @@ export const JobDetailsPage = () => {
     <PageShell
       actions={
         detail === undefined ? null : (
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <StatusBadge
-              icon={recruitmentStatusIcon(detail.recruitment_status)}
-              tone={recruitmentStatusTone(detail.recruitment_status)}
-            >
-              {recruitmentStatusLabel(detail.recruitment_status)}
-            </StatusBadge>
-            <a className={buttonClasses("primary")} href="#recruitment-heading">
-              עדכון מעקב הגיוס
-            </a>
-          </div>
+          <a className={buttonClasses("primary")} href="#recruitment-heading">
+            עדכון מעקב הגיוס
+          </a>
         )
       }
       navigation={

@@ -115,7 +115,7 @@ describe("RecruitmentPanel", () => {
 
     expect(screen.getByText("המועמדות נוצרה")).toBeInTheDocument();
     expect(screen.queryByText("application created")).not.toBeInTheDocument();
-    expect(screen.getByText("לא נקבע צעד הבא")).not.toBeInTheDocument();
+    expect(screen.queryByText("לא נקבע צעד הבא")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("מעבר לשלב הבא (רשות)")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימה" }));
@@ -179,8 +179,10 @@ describe("RecruitmentPanel", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderPanel();
 
-    expect(screen.queryByRole("button", { name: "רישום הגשה חיצונית" })).not.toBeInTheDocument();
+    const additionalActions = screen.getByText("פעולות נוספות").closest("details");
+    expect(additionalActions).not.toHaveAttribute("open");
     fireEvent.click(screen.getByText("פעולות נוספות"));
+    expect(additionalActions).toHaveAttribute("open");
 
     fireEvent.click(screen.getByRole("button", { name: "תיקון אירוע שנרשם" }));
     fireEvent.change(screen.getByLabelText("המצב הנכון"), {

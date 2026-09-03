@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, ReactNode } from "react";
+import { type InputHTMLAttributes, type ReactNode, useId } from "react";
 
 import { cx } from "./cx";
 
@@ -9,7 +9,22 @@ interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "typ
 
 /* A.5: every control carries a visible Hebrew label, so the label is a required child
    rather than an optional prop. */
-export const Checkbox = ({ children, className, hint, ...rest }: CheckboxProps) => {
+export const Checkbox = ({
+  "aria-describedby": describedBy,
+  "aria-labelledby": labelledBy,
+  children,
+  className,
+  hint,
+  id,
+  ...rest
+}: CheckboxProps) => {
+  const generatedId = useId();
+  const inputId = id ?? generatedId;
+  const labelId = `${inputId}-label`;
+  const hintId = `${inputId}-hint`;
+  const descriptionIds = [describedBy, hint === undefined ? undefined : hintId].filter(Boolean).join(" ") || undefined;
+  const labelIds = [labelledBy, labelId].filter(Boolean).join(" ");
+
   return (
     <label
       className={cx(
@@ -18,13 +33,20 @@ export const Checkbox = ({ children, className, hint, ...rest }: CheckboxProps) 
       )}
     >
       <input
+        aria-describedby={descriptionIds}
+        aria-labelledby={labelIds}
         className="mt-1 size-5 shrink-0 rounded-control border-cv-border-strong accent-cv-accent"
+        id={inputId}
         type="checkbox"
         {...rest}
       />
       <span className="flex flex-col gap-1">
-        <span>{children}</span>
-        {hint === undefined ? null : <span className="text-support text-cv-text-muted">{hint}</span>}
+        <span id={labelId}>{children}</span>
+        {hint === undefined ? null : (
+          <span className="text-support text-cv-text-muted" id={hintId}>
+            {hint}
+          </span>
+        )}
       </span>
     </label>
   );
