@@ -21,11 +21,7 @@ export const ApplicationPage = () => {
 
   const query = useQuery(applicationDetailQueryOptions(applicationId));
   const detail = query.data;
-  const {
-    operation: watched,
-    operationId: watchedId,
-    watch,
-  } = useWatchedOperation(applicationId, detail);
+  const { operation: watched, operationId: watchedId, watch } = useWatchedOperation(applicationId, detail);
   /* The same narrow read the review screen uses, and the same guard: it answers `null`
      unless the analysis on record is the active one, so a superseded analysis is named
      as superseded rather than shown as the classification in force. */

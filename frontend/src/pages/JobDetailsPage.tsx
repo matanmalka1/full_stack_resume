@@ -181,9 +181,8 @@ export const JobDetailsPage = () => {
                  controls with the same destination one above the other made the reader
                  choose between identical doors. */
               <Callout role="alert" title="המועמדות נוצרה, אך הניתוח לא הופעל" tone="warning">
-                {createdApplication.analysisProblem?.detail ??
-                  "ניתן להפעיל את הניתוח ממסך הכנת קורות החיים."}{" "}
-                המועמדות שכבר נוצרה לא תיווצר שוב.
+                {createdApplication.analysisProblem?.detail ?? "ניתן להפעיל את הניתוח ממסך הכנת קורות החיים."} המועמדות
+                שכבר נוצרה לא תיווצר שוב.
               </Callout>
             )}
             <PreparationGate detail={detail} />

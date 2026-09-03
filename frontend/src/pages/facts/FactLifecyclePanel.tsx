@@ -47,7 +47,11 @@ export const FactLifecyclePanel = ({ profile, sections }: { profile: string | nu
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Field label="עובדה להצגה">
           {(control) => (
-            <Select {...control} onChange={(event) => setSelectedId(event.target.value || null)} value={selectedId ?? ""}>
+            <Select
+              {...control}
+              onChange={(event) => setSelectedId(event.target.value || null)}
+              value={selectedId ?? ""}
+            >
               {(factsQuery.data?.items.length ?? 0) === 0 ? <option value="">אין עדיין עובדות</option> : null}
               {factsQuery.data?.items.map(({ fact }) => (
                 <option key={fact.fact_id} value={fact.fact_id}>
@@ -71,7 +75,12 @@ export const FactLifecyclePanel = ({ profile, sections }: { profile: string | nu
       </div>
 
       {detailQuery.data === undefined ? null : (
-        <FactHistoryActions detail={detailQuery.data} key={detailQuery.data.fact.fact_id} profile={profile} sections={sections} />
+        <FactHistoryActions
+          detail={detailQuery.data}
+          key={detailQuery.data.fact.fact_id}
+          profile={profile}
+          sections={sections}
+        />
       )}
 
       <details className="mt-5 rounded-control border border-cv-border bg-cv-surface p-4">

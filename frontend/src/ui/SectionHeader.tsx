@@ -58,9 +58,7 @@ export const SectionHeader = ({
     headingLevel,
     {
       className:
-        headingSize === "section"
-          ? "text-heading-sm font-bold text-cv-text"
-          : "text-body font-semibold text-cv-text",
+        headingSize === "section" ? "text-heading-sm font-bold text-cv-text" : "text-body font-semibold text-cv-text",
       id: headingId,
     },
     title,

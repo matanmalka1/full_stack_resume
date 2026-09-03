@@ -124,170 +124,172 @@ export const DraftEditorPage = () => {
       {renderRevisionId === null && draft === undefined && workingDraftId !== null && draftQuery.error === null ? (
         <QueryState loading loadingLabel="טוען את הטיוטה…" />
       ) : null}
-      {renderRevisionId !== null || draft === undefined ? null : (() => {
-        /* The five props every `DraftClaimCard` on this screen needs, bundled once: one
+      {renderRevisionId !== null || draft === undefined
+        ? null
+        : (() => {
+            /* The five props every `DraftClaimCard` on this screen needs, bundled once: one
            draft, one facts read, one blur/edit/regenerate/remove policy for every claim,
            whichever section it sits in. */
-        const claimHandlers: ClaimHandlers = {
-          draft,
-          facts,
-          onBlur: autosave.flush,
-          onEdit: editClaim,
-          onRegenerate: (claim) => regeneration.mutate({ claimId: claim.claim_id }),
-          onRemove: removeClaim,
-          unsaved: regenerationDisabled,
-        };
+            const claimHandlers: ClaimHandlers = {
+              draft,
+              facts,
+              onBlur: autosave.flush,
+              onEdit: editClaim,
+              onRegenerate: (claim) => regeneration.mutate({ claimId: claim.claim_id }),
+              onRemove: removeClaim,
+              unsaved: regenerationDisabled,
+            };
 
-        return (
-        <>
-          <EditorLayout
-            editor={
+            return (
               <>
-                <Card
-                  aria-labelledby="draft-structure-heading"
-                  className="flex flex-col gap-4 bg-cv-surface p-4 shadow-surface sm:p-5"
-                >
-                  <SectionHeader
-                    actions={<span className="text-support text-cv-text-muted">מבוססים על הקשר המועמד</span>}
-                    align="center"
-                    gap="tight"
-                    headingId="draft-structure-heading"
-                    icon={FileText}
-                    iconPresentation="inline"
-                    title="כותרת ופרטי קשר"
-                  />
+                <EditorLayout
+                  editor={
+                    <>
+                      <Card
+                        aria-labelledby="draft-structure-heading"
+                        className="flex flex-col gap-4 bg-cv-surface p-4 shadow-surface sm:p-5"
+                      >
+                        <SectionHeader
+                          actions={<span className="text-support text-cv-text-muted">מבוססים על הקשר המועמד</span>}
+                          align="center"
+                          gap="tight"
+                          headingId="draft-structure-heading"
+                          icon={FileText}
+                          iconPresentation="inline"
+                          title="כותרת ופרטי קשר"
+                        />
 
-                  <ul className="flex flex-col divide-y divide-cv-border">
-                    <DraftClaimCard {...claimHandlers} claim={draft.outline.headline} />
-                    {draft.outline.contacts.map((contact) => (
-                      <DraftClaimCard {...claimHandlers} claim={contact} key={contact.claim_id} />
-                    ))}
-                  </ul>
-                </Card>
+                        <ul className="flex flex-col divide-y divide-cv-border">
+                          <DraftClaimCard {...claimHandlers} claim={draft.outline.headline} />
+                          {draft.outline.contacts.map((contact) => (
+                            <DraftClaimCard {...claimHandlers} claim={contact} key={contact.claim_id} />
+                          ))}
+                        </ul>
+                      </Card>
 
-                {draft.outline.sections.map((section, sectionIndex) => (
-                  <DraftSectionCard
-                    applicationId={applicationId}
-                    claimHandlers={claimHandlers}
-                    detail={detail}
-                    key={section.name}
-                    onRegenerateSection={() => regeneration.mutate({ section: section.name })}
-                    regenerationDisabled={regenerationDisabled}
-                    section={section}
-                    sectionIndex={sectionIndex}
-                  />
-                ))}
+                      {draft.outline.sections.map((section, sectionIndex) => (
+                        <DraftSectionCard
+                          applicationId={applicationId}
+                          claimHandlers={claimHandlers}
+                          detail={detail}
+                          key={section.name}
+                          onRegenerateSection={() => regeneration.mutate({ section: section.name })}
+                          regenerationDisabled={regenerationDisabled}
+                          section={section}
+                          sectionIndex={sectionIndex}
+                        />
+                      ))}
 
-                {regenerationAvailable || settingsPending ? null : (
-                  <Callout title="יצירה מחדש באמצעות AI אינה זמינה" tone="neutral">
-                    יש להגדיר ספק ולהפעיל AI במסך ההגדרות. לא יתבצע מעבר דטרמיניסטי שקט.
-                    <div className="mt-3">
-                      <Link className={buttonClasses("secondary")} to={appRoutes.settings}>
-                        מעבר להגדרות
-                      </Link>
-                    </div>
-                  </Callout>
-                )}
+                      {regenerationAvailable || settingsPending ? null : (
+                        <Callout title="יצירה מחדש באמצעות AI אינה זמינה" tone="neutral">
+                          יש להגדיר ספק ולהפעיל AI במסך ההגדרות. לא יתבצע מעבר דטרמיניסטי שקט.
+                          <div className="mt-3">
+                            <Link className={buttonClasses("secondary")} to={appRoutes.settings}>
+                              מעבר להגדרות
+                            </Link>
+                          </div>
+                        </Callout>
+                      )}
 
-                {regeneration.error === null ? null : (
-                  <ErrorCallout
-                    error={regeneration.error}
-                    fallbackDetail="לא ניתן היה להפעיל יצירה מחדש. הטיוטה נשמרה כפי שהיא."
-                    fallbackTitle="היצירה מחדש לא הופעלה"
-                  />
-                )}
+                      {regeneration.error === null ? null : (
+                        <ErrorCallout
+                          error={regeneration.error}
+                          fallbackDetail="לא ניתן היה להפעיל יצירה מחדש. הטיוטה נשמרה כפי שהיא."
+                          fallbackTitle="היצירה מחדש לא הופעלה"
+                        />
+                      )}
 
-                {unsaved ? (
-                  <p className="text-support leading-6 text-cv-text-muted">
-                    יצירה מחדש מוקפאת על הגרסה השמורה של הטיוטה, ולכן היא זמינה רק אחרי שהשמירה הסתיימה.
-                  </p>
-                ) : null}
+                      {unsaved ? (
+                        <p className="text-support leading-6 text-cv-text-muted">
+                          יצירה מחדש מוקפאת על הגרסה השמורה של הטיוטה, ולכן היא זמינה רק אחרי שהשמירה הסתיימה.
+                        </p>
+                      ) : null}
 
-                {selection.error === null ? null : (
-                  <ErrorCallout
-                    error={selection.error}
-                    fallbackDetail="לא ניתן היה לשנות את בחירת העובדות. הטיוטה נשמרה כפי שהיא."
-                    fallbackTitle="שינוי הבחירה לא בוצע"
-                  />
-                )}
+                      {selection.error === null ? null : (
+                        <ErrorCallout
+                          error={selection.error}
+                          fallbackDetail="לא ניתן היה לשנות את בחירת העובדות. הטיוטה נשמרה כפי שהיא."
+                          fallbackTitle="שינוי הבחירה לא בוצע"
+                        />
+                      )}
 
-                <DraftFactPanel busy={selection.isPending} facts={facts} onInclude={includeFact} />
+                      <DraftFactPanel busy={selection.isPending} facts={facts} onInclude={includeFact} />
 
-                <FactLifecyclePanel
-                  profile={detail?.application.profile ?? null}
-                  sections={draft.outline.sections.map((section) => section.name)}
-                />
+                      <FactLifecyclePanel
+                        profile={detail?.application.profile ?? null}
+                        sections={draft.outline.sections.map((section) => section.name)}
+                      />
 
-                <div>
-                  <Link className={buttonClasses("secondary")} to={preparationHref}>
-                    <ArrowRight aria-hidden="true" className="size-4" />
-                    חזרה להכנת קורות החיים
-                  </Link>
-                </div>
-              </>
-            }
-            preview={
-              <>
-                {/* The right pane is the document and everything said about it: the live
+                      <div>
+                        <Link className={buttonClasses("secondary")} to={preparationHref}>
+                          <ArrowRight aria-hidden="true" className="size-4" />
+                          חזרה להכנת קורות החיים
+                        </Link>
+                      </div>
+                    </>
+                  }
+                  preview={
+                    <>
+                      {/* The right pane is the document and everything said about it: the live
                       preview, the validation result for the exact version shown, and the
                       approval that follows from it. Those last two were screens; reaching
                       them meant leaving the text they describe. */}
-                <DraftPreview draft={draft} />
+                      <DraftPreview draft={draft} />
 
-                {/* One surface for the result and the decision it gates. The sentence
+                      {/* One surface for the result and the decision it gates. The sentence
                       beside the button says only what the button cannot: why it is shut.
                       The panel's own heading already says whether the run passed, so the
                       second card that repeated it is gone. */}
-                <DraftValidationPanel
-                  applicationId={applicationId}
-                  approval={
-                    <>
-                      {exactPassingRunId === null ? (
-                        <p className="me-auto text-support leading-6 text-cv-text-muted">
-                          האישור נפתח אחרי אימות שעבר על הגרסה המוצגת.
-                        </p>
-                      ) : null}
-                      <Button disabled={exactPassingRunId === null} onClick={() => setApprovalOpen(true)}>
-                        אישור הגרסה
-                      </Button>
+                      <DraftValidationPanel
+                        applicationId={applicationId}
+                        approval={
+                          <>
+                            {exactPassingRunId === null ? (
+                              <p className="me-auto text-support leading-6 text-cv-text-muted">
+                                האישור נפתח אחרי אימות שעבר על הגרסה המוצגת.
+                              </p>
+                            ) : null}
+                            <Button disabled={exactPassingRunId === null} onClick={() => setApprovalOpen(true)}>
+                              אישור הגרסה
+                            </Button>
+                          </>
+                        }
+                        draft={draft}
+                        onExactPassingRun={onExactPassingRun}
+                        stale={validationStale}
+                      />
                     </>
                   }
+                />
+
+                <DraftApprovalDialog
+                  applicationId={applicationId}
+                  detail={detail}
                   draft={draft}
-                  onExactPassingRun={onExactPassingRun}
-                  stale={validationStale}
+                  onApproved={(revisionId) => {
+                    setApprovalOpen(false);
+                    setApprovedRevisionId(revisionId);
+                  }}
+                  onClose={() => setApprovalOpen(false)}
+                  onStale={() => {
+                    setApprovalOpen(false);
+                    setValidationStale(true);
+                  }}
+                  open={approvalOpen}
+                  validationRunId={exactPassingRunId}
+                />
+
+                <DraftConflictDialog
+                  current={draft}
+                  onDiscardLocal={autosave.discardLocal}
+                  onReapplyLocal={autosave.reapplyLocal}
+                  open={autosave.status === "conflict"}
+                  pending={autosave.pending}
+                  pendingRemovals={autosave.pendingRemovals}
                 />
               </>
-            }
-          />
-
-          <DraftApprovalDialog
-            applicationId={applicationId}
-            detail={detail}
-            draft={draft}
-            onApproved={(revisionId) => {
-              setApprovalOpen(false);
-              setApprovedRevisionId(revisionId);
-            }}
-            onClose={() => setApprovalOpen(false)}
-            onStale={() => {
-              setApprovalOpen(false);
-              setValidationStale(true);
-            }}
-            open={approvalOpen}
-            validationRunId={exactPassingRunId}
-          />
-
-          <DraftConflictDialog
-            current={draft}
-            onDiscardLocal={autosave.discardLocal}
-            onReapplyLocal={autosave.reapplyLocal}
-            open={autosave.status === "conflict"}
-            pending={autosave.pending}
-            pendingRemovals={autosave.pendingRemovals}
-          />
-        </>
-        );
-      })()}
+            );
+          })()}
     </PageShell>
   );
 };

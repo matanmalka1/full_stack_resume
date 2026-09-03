@@ -4,5 +4,4 @@ import { cx } from "./cx";
    element remains the caller's choice. This keeps articles, forms, disclosures,
    dialogs, and document previews semantically intact instead of forcing them through
    the section-based Card component. */
-export const surfaceClasses = (className?: string): string =>
-  cx("rounded-surface border border-cv-border", className);
+export const surfaceClasses = (className?: string): string => cx("rounded-surface border border-cv-border", className);

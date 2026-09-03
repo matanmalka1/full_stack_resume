@@ -197,8 +197,7 @@ export const RecruitmentExceptionalActions = ({ detail, kind, onChanged }: Recru
                   {...control}
                   {...externalForm.register("submittedAt", {
                     required: "יש להזין מועד הגשה.",
-                    validate: (value) =>
-                      isoFromLocalDateTimeInput(value) !== null || "יש להזין מועד הגשה תקין.",
+                    validate: (value) => isoFromLocalDateTimeInput(value) !== null || "יש להזין מועד הגשה תקין.",
                   })}
                   required
                   type="datetime-local"

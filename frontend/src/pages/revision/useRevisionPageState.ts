@@ -1,7 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
-import { applicationDetailQueryOptions, invalidateApplicationViews, startDraftGeneration } from "../../api/applications";
+import {
+  applicationDetailQueryOptions,
+  invalidateApplicationViews,
+  startDraftGeneration,
+} from "../../api/applications";
 import { operationQueryKey } from "../../api/operations";
 import { approvedRevisionQueryOptions, decisionMarkdownQueryOptions } from "../../api/revisions";
 import { recordInternalSubmission } from "../../api/tracking";
