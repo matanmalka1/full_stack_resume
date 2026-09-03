@@ -19,15 +19,10 @@ from ..models import (
 from ..profiles import ProfileStore
 from .approval import CONFIDENCE_APPROVAL_THRESHOLD, unresolved_reasons
 from .gaps import derive_fit, derive_gaps, gaps_from_requirements
-from .requirements import (
-    RequirementConceptStore,
-    cover_requirements,
-    extract_requirements,
-    extraction_confidence,
-    extraction_failed,
-    normalize_span,
-    requirement_id,
-)
+from .requirements.concepts import RequirementConceptStore
+from .requirements.confidence import extraction_confidence, extraction_failed
+from .requirements.coverage import cover_requirements
+from .requirements.extraction import extract_requirements, normalize_span, requirement_id
 
 HEBREW = re.compile(r"[\u0590-\u05ff]")
 

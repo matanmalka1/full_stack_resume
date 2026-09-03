@@ -620,7 +620,6 @@ def test_no_stage_after_analysis_reads_the_requirement_vocabulary(project_root: 
     allowed = {
         # Where the store is defined, loaded, and reported.
         Path("cv_engine/domain/knowledge.py"),
-        Path("cv_engine/domain/analysis/requirements.py"),
         Path("cv_engine/infrastructure/knowledge.py"),
         Path("cv_engine/api/routers/health.py"),
         Path("cv_engine/api/schemas/health.py"),

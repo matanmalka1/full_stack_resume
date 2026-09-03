@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..util import canonical_json, sha256_text
-from .analysis.requirements import RequirementConceptStore
+from .analysis.requirements.concepts import RequirementConceptStore
 from .facts import FactStore
 from .models import CandidateContext
 from .presentations import PresentationStore

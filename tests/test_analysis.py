@@ -21,18 +21,24 @@ from cv_engine.domain.analysis.classification import (
     requirement_profile_scores,
 )
 from cv_engine.domain.analysis.gaps import FIT_SEVERITY, derive_fit, derive_gaps, merge_fit
-from cv_engine.domain.analysis.requirements import (
+from cv_engine.domain.analysis.requirements.concepts import (
     RequirementConceptError,
     RequirementConceptStore,
+    heading_key,
+)
+from cv_engine.domain.analysis.requirements.confidence import (
     concept_classification_completeness,
-    cover_requirements,
-    extract_requirements,
     extraction_completeness,
     extraction_confidence,
     extraction_failed,
     extraction_state,
-    heading_key,
+)
+from cv_engine.domain.analysis.requirements.coverage import cover_requirements
+from cv_engine.domain.analysis.requirements.extraction import (
+    extract_requirements,
     normalize_span,
+)
+from cv_engine.domain.analysis.requirements.segmentation import (
     requirement_lines,
     statement_lines,
 )
@@ -1400,7 +1406,7 @@ def test_only_canonical_facts_are_reported_as_supporting_evidence(fact_store) ->
     So the fact is moved through pending, confirmed and canonical and the
     question is asked again at each.
     """
-    from cv_engine.domain.analysis.requirements import _candidate_fact_ids
+    from cv_engine.domain.analysis.requirements.coverage import _candidate_fact_ids
     from cv_engine.domain.facts import FactStore
 
     concept = RequirementConceptStore.from_payload(

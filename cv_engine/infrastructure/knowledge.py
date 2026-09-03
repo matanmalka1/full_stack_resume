@@ -12,7 +12,10 @@ from ..application.knowledge_mutations import (
     StagedKnowledgeFile,
 )
 from ..application.ports import TaskContract, TaskContracts
-from ..domain.analysis.requirements import RequirementConceptError, RequirementConceptStore
+from ..domain.analysis.requirements.concepts import (
+    RequirementConceptError,
+    RequirementConceptStore,
+)
 from ..domain.candidate import CANDIDATE_FILE, CandidateContextError, build_candidate_context
 from ..domain.facts import (
     FACT_SOURCE_NAMES,

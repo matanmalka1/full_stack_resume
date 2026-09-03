@@ -39,7 +39,7 @@ from cv_engine.application.commands import (
     IngestCommand,
 )
 from cv_engine.domain.analysis.classification import classify_job
-from cv_engine.domain.analysis.requirements import RequirementConceptStore
+from cv_engine.domain.analysis.requirements.concepts import RequirementConceptStore
 from cv_engine.domain.candidate import contact_href
 from cv_engine.domain.drafts import build_draft
 from cv_engine.domain.facts import FactStore
