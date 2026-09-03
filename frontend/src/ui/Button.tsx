@@ -1,3 +1,4 @@
+import { LoaderCircle } from "lucide-react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 import { type ClassValue, cx } from "./cx";
@@ -50,6 +51,7 @@ export const Button = ({
       type={type ?? "button"}
       {...rest}
     >
+      {pending ? <LoaderCircle aria-hidden="true" className="size-4 shrink-0 animate-spin" /> : null}
       {pending && pendingLabel !== undefined ? pendingLabel : children}
     </button>
   );

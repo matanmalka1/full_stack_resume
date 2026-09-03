@@ -254,6 +254,31 @@ describe("NewApplicationPage", () => {
     ]);
   });
 
+  it("shows a spinner and an explicit label while checking for duplicates", async () => {
+    let resolveCheck: (response: Response) => void = () => {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveCheck = resolve;
+          }),
+      ),
+    );
+    renderPage();
+
+    fillIntake();
+    submitForm();
+
+    const pendingButton = await screen.findByRole("button", { name: "בודק כפילויות…" });
+    expect(pendingButton).toBeDisabled();
+    expect(pendingButton).toHaveAttribute("aria-busy", "true");
+    expect(pendingButton.querySelector("svg.animate-spin")).toHaveAttribute("aria-hidden", "true");
+
+    resolveCheck(jsonResponse({ matches: [match()] }));
+    expect(await screen.findByText("נמצאה מועמדות דומה")).toBeInTheDocument();
+  });
+
   it("offers the existing application and an explicit override instead of creating", async () => {
     const calls = stubFetch({
       [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [match({ matched_on: ["source_url", "company_title"] })] })],
