@@ -8,6 +8,7 @@ import { SummaryList } from "../../ui/SummaryList";
 import { formatDateTime } from "../../ui/formatDateTime";
 import { JobPostingUpdate } from "./JobPostingUpdate";
 import { JobTextDisclosure } from "./JobTextDisclosure";
+import { sourceHostname } from "./applicationPresentation";
 
 /* The active posting on Job Detail. The projection already carries `latest_snapshot`, so
    the source remains readable before analysis and after the preparation workflow ends.
@@ -16,14 +17,6 @@ import { JobTextDisclosure } from "./JobTextDisclosure";
    the same source reads the same way under both conclusions.
 
    `latest_snapshot` is the newest immutable snapshot of the Application. */
-const sourceHostname = (value: string): string => {
-  try {
-    return new URL(value).hostname.replace(/^www\./, "");
-  } catch {
-    return "המקור השמור";
-  }
-};
-
 export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
   const snapshot = detail.latest_snapshot;
 
@@ -59,7 +52,7 @@ export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
                         title={snapshot.source_url}
                       >
                         פתיחת מודעת המקור
-                        <LtrText>({sourceHostname(snapshot.source_url)})</LtrText>
+                        <LtrText>({sourceHostname(snapshot.source_url) ?? "המקור השמור"})</LtrText>
                         <ExternalLink aria-hidden="true" className="size-3.5 shrink-0" />
                       </a>
                     ),

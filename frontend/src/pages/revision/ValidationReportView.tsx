@@ -2,6 +2,7 @@ import { CircleCheck, ShieldAlert, TriangleAlert } from "lucide-react";
 
 import type { ValidationReport } from "../../api/contracts";
 import { Callout } from "../../ui/Callout";
+import { StatusBadge } from "../../ui/StatusBadge";
 
 const blockerResolution = (code: string): string => {
   if (code === "unlinked-claim" || code === "pending-claim") {
@@ -21,25 +22,6 @@ const blockerResolution = (code: string): string => {
    summary of the list under them, not findings of their own: a chip is the right size for
    a summary. The icons stay, so the three counts are still separable without colour
    (A.2). */
-const Count = ({
-  className,
-  icon: Icon,
-  label,
-  value,
-}: {
-  className: string;
-  icon: typeof CircleCheck;
-  label: string;
-  value: number;
-}) => (
-  <span
-    className={`inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-1 text-support font-semibold ${className}`}
-  >
-    <Icon aria-hidden="true" className="size-3.5" />
-    {value} {label}
-  </span>
-);
-
 export const ValidationReportView = ({ report }: { report: ValidationReport }) => {
   const hard = report.issues.filter((issue) => issue.hard);
   const warnings = report.issues.filter((issue) => !issue.hard);
@@ -48,24 +30,15 @@ export const ValidationReportView = ({ report }: { report: ValidationReport }) =
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap gap-2">
-        <Count
-          className="border-cv-success/25 bg-cv-success-soft text-cv-success"
-          icon={CircleCheck}
-          label="קבוצות עברו"
-          value={passedGroups}
-        />
-        <Count
-          className="border-cv-blocker/25 bg-cv-blocker-soft text-cv-blocker"
-          icon={ShieldAlert}
-          label="חסימות"
-          value={hard.length}
-        />
-        <Count
-          className="border-cv-warning/25 bg-cv-warning-soft text-cv-warning"
-          icon={TriangleAlert}
-          label="אזהרות"
-          value={warnings.length}
-        />
+        <StatusBadge className="gap-1.5 px-2.5" icon={CircleCheck} tone="success">
+          {passedGroups} קבוצות עברו
+        </StatusBadge>
+        <StatusBadge className="gap-1.5 px-2.5" icon={ShieldAlert} tone="blocker">
+          {hard.length} חסימות
+        </StatusBadge>
+        <StatusBadge className="gap-1.5 px-2.5" icon={TriangleAlert} tone="warning">
+          {warnings.length} אזהרות
+        </StatusBadge>
       </div>
 
       {/* Blockers in full: each is a thing to go and fix, and its resolution line is the

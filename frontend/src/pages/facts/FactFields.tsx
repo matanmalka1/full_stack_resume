@@ -92,7 +92,7 @@ export const FactFields = ({
         </Field>
       ) : null}
       {includeHebrew ? (
-        <Field label="ניסוח בעברית (רשות)" optional>
+        <Field label="ניסוח בעברית" optional>
           {(control) => <TextArea {...control} {...register("hebrew")} />}
         </Field>
       ) : null}

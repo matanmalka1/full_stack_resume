@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { Reason } from "../../api/contracts";
 import { buttonClasses } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
+import { Disclosure } from "../../ui/Disclosure";
 import { actionDestination } from "./actionDestinations";
 import { actionLabel, reasonTitle } from "./applicationLabels";
 
@@ -44,14 +45,9 @@ export const ReasonCallout = ({
       title={reasonTitle(reason.code, fallbackTitle)}
       tone={tone}
     >
-      <details>
-        <summary className="w-fit cursor-pointer font-semibold text-cv-text-muted hover:text-cv-text">
-          פרטי הסיבה
-        </summary>
-        <p className="mt-2 leading-6 text-cv-text-muted" dir="auto">
-          {reason.message}
-        </p>
-      </details>
+      <Disclosure summary="פרטי הסיבה">
+        <p dir="auto">{reason.message}</p>
+      </Disclosure>
     </Callout>
   );
 };

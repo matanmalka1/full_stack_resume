@@ -97,7 +97,9 @@ export const ExternalSubmissionAction = ({ detail, onChanged }: ExternalSubmissi
               />
             )}
           </Field>
-          <Field label="הערה (רשות)">{(control) => <TextArea {...control} {...form.register("note")} />}</Field>
+          <Field label="הערה" optional>
+            {(control) => <TextArea {...control} {...form.register("note")} />}
+          </Field>
         </form>
       </Dialog>
     </>

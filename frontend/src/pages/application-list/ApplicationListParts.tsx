@@ -8,7 +8,8 @@ import { StatusBadge } from "../../ui/StatusBadge";
 import { cx } from "../../ui/cx";
 import { trackLabel } from "../application/analysisLabels";
 import { preparationStateIcons, preparationStateLabels, preparationStateTones } from "../application/applicationLabels";
-import { formatApplicationDate, isNextActionOverdue, sourceHost } from "./applicationListPresentation";
+import { sourceHostname } from "../application/applicationPresentation";
+import { formatApplicationDate, isNextActionOverdue } from "./applicationListPresentation";
 
 export type ApplicationListViewVariant = "card" | "pipeline" | "row";
 
@@ -31,7 +32,7 @@ export const ApplicationProvenance = ({
   item: ApplicationListItem;
   linkSource?: boolean;
 }) => {
-  const host = sourceHost(item.source_url);
+  const host = sourceHostname(item.source_url);
   const origin = host ?? (item.source === "manual" ? null : item.source);
 
   if (item.track == null && origin == null) {

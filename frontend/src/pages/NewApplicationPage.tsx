@@ -19,13 +19,10 @@ import { surfaceClasses } from "../ui/Surface";
 import { cx } from "../ui/cx";
 import { formatBytes } from "../ui/formatBytes";
 import { JobTextFileField } from "./application/JobTextFileField";
+import { LABEL_MAX_CHARACTERS, SOURCE_URL_MAX_CHARACTERS } from "./application/applicationInput";
 import { paramsFromQuery, queryFromParams } from "./applicationListParams";
 import { DuplicateChoices } from "./new-application/DuplicateChoices";
-import {
-  LABEL_MAX_CHARACTERS,
-  SOURCE_URL_MAX_CHARACTERS,
-  useApplicationIntake,
-} from "./new-application/useApplicationIntake";
+import { useApplicationIntake } from "./new-application/useApplicationIntake";
 
 /* The snapshot limit the server enforces is a byte budget, not a character count, so the
    counter measures the same thing the refusal will. It stays a quiet character count

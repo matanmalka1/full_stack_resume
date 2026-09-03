@@ -206,7 +206,7 @@ describe("RecruitmentPanel", () => {
     fireEvent.change(screen.getByLabelText("מועד ההגשה"), {
       target: { value: "2026-09-01T12:30" },
     });
-    fireEvent.change(screen.getByLabelText("הערה (רשות)"), {
+    fireEvent.change(screen.getByLabelText(/הערה/), {
       target: { value: " Submitted by email " },
     });
     fireEvent.click(screen.getByRole("button", { name: "רישום ההגשה החיצונית" }));

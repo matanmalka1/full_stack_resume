@@ -12,10 +12,7 @@ import { Dialog } from "../../ui/Dialog";
 import { Field } from "../../ui/Field";
 import { TextArea, TextInput } from "../../ui/TextInput";
 import { JobTextFileField } from "./JobTextFileField";
-
-/* Native input affordance, not a second validation policy - the server stays the
-   authority on the URL, exactly as it is on the intake screen. */
-const SOURCE_URL_MAX_CHARACTERS = 2048;
+import { SOURCE_URL_MAX_CHARACTERS } from "./applicationInput";
 
 interface PostingFields {
   job_text: string;
@@ -176,7 +173,8 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
 
           <Field
             hint="נשמרת כתיעוד מקור בלבד, המערכת אינה פותחת את הכתובת או מייבאת ממנה טקסט."
-            label="כתובת המשרה — אופציונלי"
+            label="כתובת המשרה"
+            optional
           >
             {(control) => (
               /* A.3: a URL is an LTR island even inside the RTL shell. */

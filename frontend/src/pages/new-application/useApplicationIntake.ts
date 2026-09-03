@@ -13,11 +13,6 @@ import { ApiProblem, type ProblemDetails } from "../../api/client";
 import { executionProvider, settingsQueryOptions } from "../../api/settings";
 import { useAppForm } from "../../forms/useAppForm";
 
-/* Native input affordances, not a second validation policy: they stop the user typing
-   past a limit the server would refuse anyway. The refusal itself stays the server's. */
-export const LABEL_MAX_CHARACTERS = 500;
-export const SOURCE_URL_MAX_CHARACTERS = 2048;
-
 export interface ApplicationIntakeFields {
   company: string;
   target_role: string;

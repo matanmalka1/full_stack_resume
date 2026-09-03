@@ -1,19 +1,11 @@
 import type { ApplicationDetail } from "../../api/contracts";
 import { Callout } from "../../ui/Callout";
 import { Card } from "../../ui/Card";
+import { Disclosure } from "../../ui/Disclosure";
 import { resolvedByDecisionForm } from "./ReviewDecisionPanel";
 import { actionLabel, blockedReasonLabel, warningTitle } from "./applicationLabels";
 import { ReasonCallout } from "./ReasonCallout";
 import { actionIsOnPreparationScreen } from "./actionDestinations";
-
-const WarningDetail = ({ message }: { message: string }) => (
-  <details>
-    <summary className="w-fit cursor-pointer font-semibold text-cv-text-muted hover:text-cv-text">פרטי האזהרה</summary>
-    <p className="mt-2 leading-6 text-cv-text-muted" dir="auto">
-      {message}
-    </p>
-  </details>
-);
 
 /* One alert backdrop with a fixed severity/order: failed automatic start, review
    blockers, stale sources, general warnings, then the informational newer-draft note.
@@ -77,7 +69,9 @@ export const PreparationAlerts = ({ detail }: { detail: ApplicationDetail }) => 
 
       {detail.warnings.map((warning) => (
         <Callout key={warning.code} title={warningTitle(warning.code)} tone="warning">
-          <WarningDetail message={warning.message} />
+          <Disclosure summary="פרטי האזהרה">
+            <p dir="auto">{warning.message}</p>
+          </Disclosure>
         </Callout>
       ))}
 
