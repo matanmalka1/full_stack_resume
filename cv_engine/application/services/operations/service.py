@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from ....util import canonical_json, new_id, sha256_text
+from ....util import new_id
 from ...ai_configuration import (
     DEFAULT_AI_MODEL,
     DEFAULT_REASONING_EFFORT,

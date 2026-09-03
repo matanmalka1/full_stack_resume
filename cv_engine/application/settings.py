@@ -43,7 +43,7 @@ class SettingsView(BoundaryDTO):
     default_execution_mode: ExecutionMode
     default_ai_model: AIModel
     default_reasoning_effort: ReasoningEffort
-    available_ai_models: list["AIModelOption"]
+    available_ai_models: list[AIModelOption]
     ui_density: UiDensity
     ui_text_size: UiTextSize
     provider_configured: bool
