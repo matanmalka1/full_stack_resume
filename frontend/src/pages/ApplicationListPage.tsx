@@ -20,12 +20,13 @@ import { EmptyState } from "../ui/EmptyState";
 import { QueryState } from "../ui/QueryState";
 import { ViewSwitch } from "../ui/ViewSwitch";
 import { ApplicationListFilters } from "./application-list/ApplicationListFilters";
-import { ApplicationCardsView, ApplicationPipelineView } from "./application-list/ApplicationAlternativeViews";
+import { ApplicationCardsView } from "./application-list/ApplicationCardsView";
 import { ApplicationListPagination } from "./application-list/ApplicationListPagination";
 import { ApplicationListTable } from "./application-list/ApplicationListTable";
 import { CloseApplicationDialog } from "./application-list/CloseApplicationDialog";
 import { DashboardHeader } from "./application-list/DashboardHeader";
 import { MetricsKpiGrid } from "./application-list/MetricsKpiGrid";
+import { ApplicationPipelineView } from "./application-list/ApplicationPipelineView";
 import { PipelineStagesBar } from "./application-list/PipelineStagesBar";
 import { QuickIntakeDialog } from "./application-list/QuickIntakeDialog";
 import { type RecruitmentStageId, recruitmentStages, selectedStage } from "./application-list/recruitmentStages";
@@ -245,11 +246,7 @@ export const ApplicationListPage = () => {
                     onRequestUpdate={setUpdatingApplication}
                   />
                 ) : viewMode === "pipeline" ? (
-                  <ApplicationPipelineView
-                    items={items}
-                    onRequestClose={setClosingApplication}
-                    onRequestUpdate={setUpdatingApplication}
-                  />
+                  <ApplicationPipelineView items={items} onRequestUpdate={setUpdatingApplication} />
                 ) : (
                   <ApplicationListTable
                     items={items}

@@ -10,7 +10,7 @@ import { trackLabel } from "../application/analysisLabels";
 import { preparationStateIcons, preparationStateLabels, preparationStateTones } from "../application/applicationLabels";
 import { formatApplicationDate, isNextActionOverdue, sourceHost } from "./applicationListPresentation";
 
-type ListViewVariant = "card" | "pipeline" | "row";
+export type ApplicationListViewVariant = "card" | "pipeline" | "row";
 
 export const CompanyMark = ({ company, variant }: { company: string; variant: "card" | "row" }) => (
   <span
@@ -71,7 +71,7 @@ export const ApplicationIdentity = ({
   afterCompany?: ReactNode;
   ambiguous?: boolean;
   item: ApplicationListItem;
-  variant: ListViewVariant;
+  variant: ApplicationListViewVariant;
 }) => {
   const href = appRoutes.application(item.id);
 
@@ -131,7 +131,7 @@ export const ApplicationPreparationBadge = ({
   variant,
 }: {
   item: ApplicationListItem;
-  variant: ListViewVariant;
+  variant: ApplicationListViewVariant;
 }) => (
   <StatusBadge
     className={variant === "row" ? "gap-1.5 px-2.5 text-start" : variant === "card" ? "px-2.5 py-0.5" : "px-2 py-0.5"}
@@ -149,7 +149,7 @@ export const ApplicationNextAction = ({
 }: {
   closed?: boolean;
   item: ApplicationListItem;
-  variant: ListViewVariant;
+  variant: ApplicationListViewVariant;
 }) => {
   if (variant === "row") {
     if (item.next_action == null) {
