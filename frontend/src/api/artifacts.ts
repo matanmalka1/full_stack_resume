@@ -9,8 +9,8 @@ import type { ArtifactVersionDetail, ArtifactVersions } from "./contracts";
 const artifactPath = (artifactVersionId: string): ApiPath =>
   `/api/v1/artifacts/${encodeURIComponent(artifactVersionId)}`;
 
-export const applicationArtifactsQueryKey = (applicationId: string) => ["artifacts", applicationId] as const;
-export const artifactVersionQueryKey = (artifactVersionId: string) => ["artifact", artifactVersionId] as const;
+const applicationArtifactsQueryKey = (applicationId: string) => ["artifacts", applicationId] as const;
+const artifactVersionQueryKey = (artifactVersionId: string) => ["artifact", artifactVersionId] as const;
 
 /* Every artifact registered for one Application, newest first is the server's order
    question rather than this client's - the rows arrive as registered and are ordered
