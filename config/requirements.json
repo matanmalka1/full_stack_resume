@@ -1,6 +1,6 @@
 {
   "policy_version": "1.0.0",
-  "extraction_version": "1",
+  "extraction_version": "2",
   "scales": {
     "language_proficiency": [
       "basic",

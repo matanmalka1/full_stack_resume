@@ -16,6 +16,11 @@ the arguments they refuse.
 Coverage is deliberately not tag-overlap alone. Tags find *candidate* evidence;
 a concept-specific, typed rule decides whether that evidence is sufficient.
 Otherwise posting-keyword brittleness is only traded for fact-tag brittleness.
+
+Both questions are asked of one segmentation of the posting rather than of the
+raw text: `_segments` reads it once into typed spans that know their section
+and carry their offsets, and extraction and the completeness denominator are
+two views of that same reading.
 """
 
 from __future__ import annotations
@@ -98,6 +103,12 @@ class RequirementConceptStore:
             str(value).casefold() for value in payload.get("preferred_markers") or ()
         )
         self.requirement_cues = self._cues(payload, "requirement_cues", "soft_skill_cues")
+        # A store with no requirement cues reads every posting as requiring
+        # nothing - `absent`, the flattering answer, with full confidence. That
+        # is a configuration error rather than a finding, so it is refused here
+        # instead of being reported as a result.
+        if not self.requirement_cues:
+            raise RequirementConceptError(f"{origin}: no requirement cues declared")
         self.responsibility_cues = self._cues(payload, "responsibility_cues")
         self.concepts: dict[str, RequirementConcept] = {
             name: self._concept(name, body)
@@ -193,6 +204,269 @@ class RequirementConceptStore:
 
 
 # --------------------------------------------------------------------------
+# Segmentation: one reading of the posting, before anything is asked of it
+# --------------------------------------------------------------------------
+#
+# The posting is read once into typed spans that carry their own offsets, and
+# every later question is asked of those spans rather than of the raw text.
+# Three defects came from asking the text directly, and they were one layer
+# missing three ways:
+#
+# - which section a statement sits in decides what is required by default, so
+#   a `Responsibilities` heading closes the requirement block instead of every
+#   later match inheriting the `Requirements:` heading above it;
+# - a statement is one statement whether or not the posting punctuates its
+#   bullets, so a list of unpunctuated items is a list rather than one long
+#   sentence that any single concept can make look understood;
+# - a concept reports where it matched, so coverage is decided by offset
+#   overlap instead of by searching the raw text for a span that whitespace
+#   normalization has already changed - a search that returned -1 for every
+#   requirement the posting happened to wrap across a line.
+
+
+SectionKind = Literal["requirements", "preferred", "responsibilities", "other"]
+StatementKind = Literal["requirement", "responsibility"]
+ExtractionState = Literal["parsed", "partial", "unparsed", "absent"]
+
+#: A line that ends in a colon or a question mark announces something rather
+#: than stating it. "What Will Make You Stand Out?" is a heading, not a
+#: requirement, and counting it made the denominator dishonest.
+_ANNOUNCEMENT = re.compile(r"[:?]\s*$")
+
+#: Below this a line is a fragment, a bullet glyph, or a label.
+_MIN_STATEMENT = 12
+
+#: A list glyph or an enumerator. It opens an item and is never part of it.
+#: `\d{1,2}[.)]` deliberately does not match `1+`, which opens "1+ years of
+#: sales closing experience" - an enumerator is punctuated, a quantity is not.
+_BULLET = re.compile(r"^\s*(?:[-–—*•·‣▪◦]|\(?\d{1,2}[.)])\s+")
+
+#: What ends a statement rather than wrapping it.
+_TERMINAL = (".", "!", "?", ":", ";")
+
+_WHITESPACE = re.compile(r"\s+")
+_SENTENCE = re.compile(r"[.;\n]")
+_ASIDE = re.compile(r"\([^)]*\)")
+
+
+@dataclass(frozen=True)
+class StatementLine:
+    """One statement the posting makes, which kind, and where it sits.
+
+    The kind is load-bearing. A requirement is a candidate qualification; a
+    responsibility is what the role does. Only requirements enter the
+    completeness denominator, so a posting with a long responsibilities
+    section cannot look better understood for having one.
+    """
+
+    start: int
+    end: int
+    text: str
+    kind: StatementKind
+    section: SectionKind
+
+
+@dataclass(frozen=True)
+class _Span:
+    """A statement together with the map back to where its text came from.
+
+    `offsets[i]` is where `text[i]` sits in the posting. Whitespace collapsing
+    happens here, once, so a match found in `text` can still say where in the
+    posting it was found. `text.find(span)` could not: the span it was handed
+    had already been normalized and no longer occurred in the posting, and the
+    failed search was read as "this requirement was never mentioned".
+    """
+
+    start: int
+    end: int
+    text: str
+    offsets: tuple[int, ...]
+    section: SectionKind
+    list_item: bool
+    kind: StatementKind | None
+
+    def origin(self, start: int, end: int) -> tuple[int, int]:
+        """Where a match inside this statement sits in the posting."""
+        return self.offsets[start], self.offsets[end - 1] + 1
+
+
+def _collapse(text: str, base: int) -> tuple[str, tuple[int, ...]]:
+    """One statement's text with whitespace runs collapsed, and its offsets.
+
+    A collapsed run maps to where the run began, so a match that crosses the
+    line break a posting wrapped its requirement at still resolves to a span
+    of the original text.
+    """
+    body: list[str] = []
+    offsets: list[int] = []
+    index = 0
+    while index < len(text):
+        if text[index].isspace():
+            run = index
+            while run < len(text) and text[run].isspace():
+                run += 1
+            if body:
+                body.append(" ")
+                offsets.append(base + index)
+            index = run
+            continue
+        body.append(text[index])
+        offsets.append(base + index)
+        index += 1
+    while body and body[-1] == " ":
+        body.pop()
+        offsets.pop()
+    return "".join(body), tuple(offsets)
+
+
+def _section_of(heading: str, concepts: RequirementConceptStore) -> SectionKind:
+    """Which block this heading opens.
+
+    Preferred is tested first: "Preferred requirements:" names both
+    vocabularies and opens a preferred block, not a mandatory one.
+
+    A heading matching nothing opens `other`, which is how `Benefits:` closes
+    the requirement block above it. Leaving the block open to the end of the
+    posting is what made a responsibility mandatory for having been printed
+    below a `Requirements:` heading.
+    """
+    if any(marker in heading for marker in concepts.preferred_markers):
+        return "preferred"
+    if any(marker in heading for marker in concepts.block_markers):
+        return "requirements"
+    if any(marker in heading for marker in concepts.mandatory_markers):
+        return "requirements"
+    if any(cue in heading for cue in concepts.responsibility_cues):
+        return "responsibilities"
+    return "other"
+
+
+def _statement_kind(
+    text: str,
+    section: SectionKind,
+    list_item: bool,
+    concepts: RequirementConceptStore,
+) -> StatementKind | None:
+    """Whether this statement asks something of the candidate.
+
+    Cue-driven and explicit. There is deliberately no "this sentence has many
+    adjectives, so it must be a requirement" heuristic: missing a rare soft
+    skill costs a little denominator, whereas promoting marketing copy into a
+    requirement would make the metric lie in the flattering direction.
+
+    A list item under a requirements heading is a requirement even with no cue
+    word in it, because the heading already said so. Prose under that heading
+    is not - a posting's closing pitch is printed below its requirement
+    bullets and is still a pitch.
+
+    A cue outranks the section, in both directions. "You must have five years"
+    under `Responsibilities` is a requirement that happens to be misfiled; a
+    responsibility cue alone is never enough to make a line a requirement,
+    since "You will manage the full sales cycle" describes the job rather than
+    the candidate.
+    """
+    lowered = text.casefold()
+    if any(cue in lowered for cue in concepts.requirement_cues):
+        return "requirement"
+    if list_item and section in {"requirements", "preferred"}:
+        return "requirement"
+    if any(cue in lowered for cue in concepts.responsibility_cues):
+        return "responsibility"
+    if list_item and section == "responsibilities":
+        return "responsibility"
+    return None
+
+
+def _segments(text: str, concepts: RequirementConceptStore) -> list[_Span]:
+    """Read the posting once into typed, offset-carrying statements."""
+    found: list[_Span] = []
+    section: SectionKind = "other"
+    buffered: list[tuple[int, int]] = []
+    list_item = False
+    open_ended = False
+
+    def flush() -> None:
+        nonlocal buffered
+        if not buffered:
+            return
+        start, end = buffered[0][0], buffered[-1][1]
+        buffered = []
+        body, offsets = _collapse(text[start:end], start)
+        if len(body) < _MIN_STATEMENT:
+            return
+        found.append(
+            _Span(
+                start=start,
+                end=end,
+                text=body,
+                offsets=offsets,
+                section=section,
+                list_item=list_item,
+                kind=_statement_kind(body, section, list_item, concepts),
+            )
+        )
+
+    offset = 0
+    for line in text.split("\n"):
+        start = offset
+        offset += len(line) + 1
+        stripped = line.strip()
+        if not stripped:
+            flush()
+            open_ended = False
+            continue
+        if _ANNOUNCEMENT.search(stripped):
+            # The statement above closes under the heading it was written
+            # under, so `flush` runs before the section changes.
+            flush()
+            section = _section_of(stripped.casefold(), concepts)
+            open_ended = False
+            continue
+        bullet = _BULLET.match(line)
+        lead = bullet.end() if bullet else len(line) - len(line.lstrip())
+        content = (start + lead, start + len(line.rstrip()))
+        if content[0] >= content[1]:
+            continue
+        # A line continues the statement above it only on positive evidence:
+        # that statement stopped mid-sentence and this line resumes in lower
+        # case. Everything else opens a statement, including every line of a
+        # script that has no case, such as Hebrew.
+        #
+        # The bias is deliberate. Splitting a wrapped statement costs
+        # denominator and reads as less understood; merging two bullets hides
+        # one requirement inside a statement that another requirement already
+        # accounted for, and reads as more understood than the posting was.
+        continues = bool(buffered) and bullet is None and open_ended and text[content[0]].islower()
+        if not continues:
+            flush()
+            list_item = bullet is not None
+        buffered.append(content)
+        open_ended = not stripped.endswith(_TERMINAL)
+    flush()
+    return found
+
+
+def statement_lines(text: str, concepts: RequirementConceptStore) -> list[StatementLine]:
+    """Every statement that states a qualification or a responsibility."""
+    return [
+        StatementLine(
+            start=span.start,
+            end=span.end,
+            text=span.text,
+            kind=span.kind,
+            section=span.section,
+        )
+        for span in _segments(text, concepts)
+        if span.kind is not None
+    ]
+
+
+def requirement_lines(text: str, concepts: RequirementConceptStore) -> list[StatementLine]:
+    """The requirement-bearing statements alone - the completeness denominator."""
+    return [line for line in statement_lines(text, concepts) if line.kind == "requirement"]
+
+
+# --------------------------------------------------------------------------
 # Extraction: what does the employer require?
 # --------------------------------------------------------------------------
 
@@ -201,8 +475,10 @@ class RequirementConceptStore:
 class ExtractedRequirement:
     """One requirement span, before any fact is consulted.
 
-    `span` is the verbatim posting text. `identity_span` is the same text under
-    the conservative normalization the ID is built from.
+    `span` is the posting text under whitespace collapsing; `identity_span` is
+    the same text under the conservative normalization the ID is built from.
+    `start` and `end` are where the match sits in the posting, which is how
+    coverage of a statement is decided without searching for the span again.
     """
 
     requirement_id: str
@@ -213,11 +489,8 @@ class ExtractedRequirement:
     ordinal: int
     mandatory: bool
     demanded: str | None
-
-
-_WHITESPACE = re.compile(r"\s+")
-_SENTENCE = re.compile(r"[.;\n]")
-_ASIDE = re.compile(r"\([^)]*\)")
+    start: int
+    end: int
 
 
 def normalize_span(text: str) -> str:
@@ -257,20 +530,6 @@ def _clause_around(text: str, start: int, end: int) -> str:
     return _ASIDE.sub(" ", text[left:right])
 
 
-def _line_around(text: str, start: int) -> str:
-    left = text.rfind("\n", 0, start) + 1
-    right = text.find("\n", start)
-    return text[left : right if right != -1 else len(text)]
-
-
-def _in_requirement_block(lowered: str, start: int, markers: tuple[str, ...]) -> bool:
-    return any(
-        position != -1 and position < start
-        for marker in markers
-        for position in (lowered.find(marker),)
-    )
-
-
 def _demanded_level(concept: RequirementConcept, span: str) -> str | None:
     lowered = span.casefold()
     if concept.demand_pattern is not None:
@@ -288,56 +547,73 @@ def extract_requirements(
     normalized_hash: str,
     concepts: RequirementConceptStore,
 ) -> list[ExtractedRequirement]:
-    """Find what the posting requires. Deliberately given no `FactStore`."""
-    lowered = text.casefold()
+    """Find what the posting requires. Deliberately given no `FactStore`.
+
+    Concepts run inside requirement statements and nowhere else. A concept
+    matching the day-to-day paragraph has matched a description of the job,
+    not a demand on the candidate; reading it as a requirement is how "Own the
+    full sales cycle" became a mandatory requirement under a
+    `Responsibilities` heading.
+    """
     seen: dict[str, int] = {}
     found: list[ExtractedRequirement] = []
-    for concept in concepts.concepts.values():
-        for pattern in concept.patterns:
-            for match in pattern.finditer(text):
-                span = match.group(0)
-                identity = normalize_span(span)
-                if not identity:
-                    continue
-                demanded = _demanded_level(concept, span)
-                # A posting restating one requirement in different words
-                # ("full sales cycle", "lead to close", "prospecting to
-                # close") states one requirement, not five. Distinctness is
-                # per concept, except for thresholds, where a different
-                # demanded value is a genuinely different requirement.
-                if any(
-                    item.concept == concept.concept and item.demanded == demanded for item in found
-                ):
-                    continue
-                ordinal = seen.get(identity, 0)
-                seen[identity] = ordinal + 1
-                clause = _clause_around(text, match.start(), match.end()).casefold()
-                line = _line_around(text, match.start()).casefold()
-                preferred = any(marker in clause for marker in concepts.preferred_markers)
-                mandatory_marked = any(marker in line for marker in concepts.mandatory_markers)
-                in_block = _in_requirement_block(lowered, match.start(), concepts.block_markers)
-                # The clause wins over the line. "(ideally European market)"
-                # inside a bullet ending "(must)" makes the European market
-                # preferred and leaves the rest of the bullet mandatory, which
-                # is what the posting actually says.
-                mandatory = (not preferred) and (mandatory_marked or in_block)
-                found.append(
-                    ExtractedRequirement(
-                        requirement_id=requirement_id(
-                            normalized_hash=normalized_hash,
-                            extraction_version=concepts.extraction_version,
+    for span in _segments(text, concepts):
+        if span.kind != "requirement":
+            continue
+        statement = span.text.casefold()
+        # The statement is the unit a mandatory marker governs. It was the
+        # physical line, which meant a marker on one wrapped half did not
+        # reach the other, and a marker anywhere in a run of unpunctuated
+        # bullets reached all of them.
+        marked = any(marker in statement for marker in concepts.mandatory_markers)
+        for concept in concepts.concepts.values():
+            for pattern in concept.patterns:
+                for match in pattern.finditer(span.text):
+                    matched = match.group(0)
+                    identity = normalize_span(matched)
+                    if not identity:
+                        continue
+                    demanded = _demanded_level(concept, matched)
+                    # A posting restating one requirement in different words
+                    # ("full sales cycle", "lead to close", "prospecting to
+                    # close") states one requirement, not five. Distinctness
+                    # is per concept, except for thresholds, where a different
+                    # demanded value is a genuinely different requirement.
+                    if any(
+                        item.concept == concept.concept and item.demanded == demanded
+                        for item in found
+                    ):
+                        continue
+                    ordinal = seen.get(identity, 0)
+                    seen[identity] = ordinal + 1
+                    clause = _clause_around(span.text, match.start(), match.end()).casefold()
+                    preferred = any(marker in clause for marker in concepts.preferred_markers)
+                    start, end = span.origin(match.start(), match.end())
+                    # The clause wins over the statement, and the statement
+                    # over the section. "(ideally European market)" inside a
+                    # bullet ending "(must)" makes the European market
+                    # preferred and leaves the rest of the bullet mandatory,
+                    # which is what the posting actually says.
+                    mandatory = (not preferred) and (marked or span.section == "requirements")
+                    found.append(
+                        ExtractedRequirement(
+                            requirement_id=requirement_id(
+                                normalized_hash=normalized_hash,
+                                extraction_version=concepts.extraction_version,
+                                identity_span=identity,
+                                ordinal=ordinal,
+                            ),
+                            concept=concept.concept,
+                            kind=concept.kind,
+                            span=_WHITESPACE.sub(" ", matched).strip(),
                             identity_span=identity,
                             ordinal=ordinal,
-                        ),
-                        concept=concept.concept,
-                        kind=concept.kind,
-                        span=_WHITESPACE.sub(" ", span).strip(),
-                        identity_span=identity,
-                        ordinal=ordinal,
-                        mandatory=mandatory,
-                        demanded=demanded,
+                            mandatory=mandatory,
+                            demanded=demanded,
+                            start=start,
+                            end=end,
+                        )
                     )
-                )
     return sorted(found, key=lambda item: (item.concept, item.ordinal))
 
 
@@ -367,121 +643,17 @@ def requirement_id(
     )[:16]
 
 
-#: A line that ends in a colon or a question mark announces something rather
-#: than stating it. "What Will Make You Stand Out?" is a heading, not a
-#: requirement, and counting it made the denominator dishonest.
-_ANNOUNCEMENT = re.compile(r"[:?]\s*$")
+def _understood(lines: list[StatementLine], extracted: list[ExtractedRequirement]) -> int:
+    """How many stated requirements had something read inside them.
 
-#: Below this a line is a fragment, a bullet glyph, or a label.
-_MIN_STATEMENT = 12
-
-StatementKind = Literal["requirement", "responsibility"]
-ExtractionState = Literal["parsed", "partial", "unparsed", "absent"]
-
-
-@dataclass(frozen=True)
-class StatementLine:
-    """One line of the posting that states something, and which kind.
-
-    The distinction is load-bearing. A requirement is a candidate
-    qualification; a responsibility is what the role does. Only requirements
-    enter the completeness denominator, so a posting with a long
-    responsibilities section cannot look better understood for having one.
+    Offset overlap, not `text.find`. The extracted span carries normalized
+    text that a posting wrapping the requirement across a line no longer
+    contains, so the search failed and the statement was counted unread.
     """
-
-    start: int
-    end: int
-    text: str
-    kind: StatementKind
-
-
-def has_requirement_structure(text: str, concepts: RequirementConceptStore) -> bool:
-    """Whether the posting *formats* its requirements as a block.
-
-    A strengthening signal only. Its absence never means there is nothing to
-    extract - plenty of postings state their requirements in prose - so it must
-    not decide whether extraction succeeded.
-    """
-    lowered = text.casefold()
-    return any(marker in lowered for marker in concepts.block_markers) or any(
-        marker in lowered for marker in concepts.mandatory_markers
-    )
-
-
-def _statements(text: str) -> list[tuple[int, int, str]]:
-    """Join wrapped lines into whole statements, with their offsets.
-
-    A requirement that wraps across two lines is one requirement. Counting the
-    continuation separately inflated the denominator and made a posting look
-    less understood purely for how its text was hard-wrapped.
-
-    A statement ends at terminal punctuation or a blank line; anything else is
-    a continuation of the statement above it.
-    """
-    out: list[tuple[int, int, str]] = []
-    parts: list[str] = []
-    begin: int | None = None
-    offset = 0
-    for line in text.split("\n"):
-        stripped = line.strip()
-        if not stripped:
-            if parts and begin is not None:
-                out.append((begin, offset, " ".join(parts)))
-            parts, begin = [], None
-            offset += len(line) + 1
-            continue
-        if begin is None:
-            begin = offset
-        parts.append(stripped)
-        if stripped.endswith((".", "!", "?", ":")):
-            out.append((begin, offset + len(line), " ".join(parts)))
-            parts, begin = [], None
-        offset += len(line) + 1
-    if parts and begin is not None:
-        out.append((begin, offset, " ".join(parts)))
-    return out
-
-
-def statement_lines(text: str, concepts: RequirementConceptStore) -> list[StatementLine]:
-    """Every line that states a qualification or a responsibility.
-
-    Cue-driven and explicit. There is deliberately no "this sentence has many
-    adjectives, so it must be a requirement" heuristic: missing a rare soft
-    skill costs a little denominator, whereas promoting marketing copy into a
-    requirement would make the metric lie in the flattering direction.
-
-    A responsibility cue alone is never enough to make a line a requirement.
-    "You will manage the full sales cycle" describes the job, not the
-    candidate; it is kept as a responsibility so the signal is not lost.
-    """
-    found: list[StatementLine] = []
-    for start, end, statement in _statements(text):
-        lowered = statement.casefold()
-        if len(statement) < _MIN_STATEMENT or _ANNOUNCEMENT.search(statement):
-            continue
-        if any(cue in lowered for cue in concepts.requirement_cues):
-            kind: StatementKind = "requirement"
-        elif any(cue in lowered for cue in concepts.responsibility_cues):
-            kind = "responsibility"
-        else:
-            continue
-        found.append(StatementLine(start=start, end=end, text=statement, kind=kind))
-    return found
-
-
-def requirement_lines(text: str, concepts: RequirementConceptStore) -> list[StatementLine]:
-    """The requirement-bearing lines alone - the completeness denominator."""
-    return [line for line in statement_lines(text, concepts) if line.kind == "requirement"]
-
-
-def _understood(
-    lines: list[StatementLine], extracted: list[ExtractedRequirement], text: str
-) -> int:
-    positions = [(text.find(item.span), item.span) for item in extracted]
     return sum(
         1
         for line in lines
-        if any(at != -1 and line.start <= at < line.end for at, _ in positions)
+        if any(item.start < line.end and line.start < item.end for item in extracted)
     )
 
 
@@ -502,7 +674,7 @@ def extraction_completeness(
     lines = requirement_lines(text, concepts)
     if not lines:
         return None
-    return _understood(lines, extracted, text) / len(lines)
+    return _understood(lines, extracted) / len(lines)
 
 
 def concept_classification_completeness(extracted: list[ExtractedRequirement]) -> float:

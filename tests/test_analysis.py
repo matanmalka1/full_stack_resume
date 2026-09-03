@@ -14,6 +14,7 @@ from cv_engine.domain.analysis.approval import (
 from cv_engine.domain.analysis.classification import classification_confidence, classify_job
 from cv_engine.domain.analysis.gaps import FIT_SEVERITY, derive_fit, derive_gaps, merge_fit
 from cv_engine.domain.analysis.requirements import (
+    RequirementConceptError,
     RequirementConceptStore,
     concept_classification_completeness,
     cover_requirements,
@@ -324,6 +325,7 @@ def _concept_store(payload_concept: dict) -> RequirementConceptStore:
             "requirement_block_markers": ["requirements:"],
             "mandatory_markers": ["(must)"],
             "preferred_markers": ["a plus"],
+            "requirement_cues": {"en": ["experience", "native"]},
             "concepts": {"subject": payload_concept},
         },
         origin="boundary regression",
@@ -428,6 +430,7 @@ def test_a_boundary_fact_cannot_meet_a_threshold(fact_store) -> None:
             "requirement_block_markers": ["requirements:"],
             "mandatory_markers": ["(must)"],
             "preferred_markers": ["a plus"],
+            "requirement_cues": {"en": ["experience", "native"]},
             "concepts": {"subject": threshold},
         },
         origin="boundary threshold",
@@ -797,6 +800,52 @@ def test_a_you_will_line_alone_is_never_a_requirement(requirement_concepts) -> N
         assert [item.kind for item in found] == ["responsibility"]
 
 
+def test_a_responsibilities_heading_closes_the_requirement_block(requirement_concepts) -> None:
+    """A `Requirements:` heading does not govern the rest of the posting.
+
+    "Own the full sales cycle", printed under `Responsibilities:`, is what the
+    role does. It was read as a mandatory requirement because the block marker
+    above it was still open at that offset and nothing closed it - the section
+    was a substring search over everything before the match, not a state the
+    posting could leave.
+    """
+    job = (
+        "Requirements:\n"
+        "3+ years of sales experience (must).\n"
+        "\n"
+        "Responsibilities:\n"
+        "Own the full sales cycle from lead to close.\n"
+    )
+    sections = {line.section for line in requirement_lines(job, requirement_concepts)}
+    assert sections == {"requirements"}
+    extracted = extract_requirements(job, normalized_hash="sections", concepts=requirement_concepts)
+    assert [(item.concept, item.mandatory) for item in extracted] == [
+        ("sales-closing-experience-years", True)
+    ]
+
+
+def test_a_requirement_misfiled_under_responsibilities_is_read_but_not_mandatory(
+    requirement_concepts,
+) -> None:
+    """The cue outranks the section; the section still decides what is demanded.
+
+    A qualification stated under the wrong heading is still a qualification,
+    so losing it would be the flattering error. It is simply not mandatory for
+    having been printed there - only an explicit marker or a requirements
+    heading can do that.
+    """
+    job = (
+        "Requirements:\n"
+        "3+ years of sales experience (must).\n"
+        "\n"
+        "Responsibilities:\n"
+        "You will need experience owning the full sales cycle.\n"
+    )
+    extracted = extract_requirements(job, normalized_hash="misfiled", concepts=requirement_concepts)
+    cycle = next(item for item in extracted if item.concept == "full-sales-cycle")
+    assert cycle.mandatory is False
+
+
 def test_headings_and_closing_copy_are_not_requirements(requirement_concepts) -> None:
     """The denominator must be statements, not lines.
 
@@ -864,6 +913,55 @@ def test_a_wrapped_requirement_counts_once(requirement_concepts) -> None:
     assert requirement_lines(wrapped, requirement_concepts)[0].text == (
         "Native English speaker with excellent communication skills."
     )
+
+
+def test_unpunctuated_bullets_are_separate_requirements(requirement_concepts) -> None:
+    """A list is a list even when the posting does not punctuate its items.
+
+    Merged into one statement, a run of bullets was one denominator entry that
+    any single understood concept satisfied - so a posting stating three
+    requirements the vocabulary reads one of scored fully understood. The
+    glyph opens the item and is not part of it.
+    """
+    listed = (
+        "Requirements:\n"
+        "- Native English speaker\n"
+        "- Deep familiarity with programmatic ad tech ecosystems\n"
+        "- Comfortable with board-level negotiation\n"
+    )
+    assert [line.text for line in requirement_lines(listed, requirement_concepts)] == [
+        "Native English speaker",
+        "Deep familiarity with programmatic ad tech ecosystems",
+        "Comfortable with board-level negotiation",
+    ]
+    extracted = extract_requirements(
+        listed, normalized_hash="bullets", concepts=requirement_concepts
+    )
+    assert [item.concept for item in extracted] == ["english-proficiency"]
+    assert extraction_completeness(listed, extracted, requirement_concepts) == pytest.approx(1 / 3)
+
+
+def test_a_requirement_wrapped_across_a_line_is_counted_as_read(requirement_concepts) -> None:
+    """Coverage is offset overlap, not a search for the normalized span.
+
+    Riverside wraps its technology-company requirement across a line. The
+    extracted span had that newline collapsed, so searching the posting for it
+    found nothing and the requirement it had just been read from was counted
+    unread. The bias was conservative and never produced a false green, but it
+    understated every posting that hard-wraps a requirement.
+    """
+    extracted = extract_requirements(
+        RIVERSIDE_JOB, normalized_hash="riverside", concepts=requirement_concepts
+    )
+    technology = next(item for item in extracted if item.concept == "technology-company-sales")
+    assert RIVERSIDE_JOB.find(technology.span) == -1, "the span is normalized; the posting is not"
+    assert "\n" in RIVERSIDE_JOB[technology.start : technology.end]
+    statement = next(
+        line
+        for line in requirement_lines(RIVERSIDE_JOB, requirement_concepts)
+        if line.start <= technology.start < line.end
+    )
+    assert statement.text.startswith("1+ years of sales closing experience")
 
 
 def test_the_fixture_denominator_matches_production(requirement_concepts) -> None:
@@ -1034,6 +1132,25 @@ def test_cue_vocabularies_cover_every_supported_language(requirement_concepts) -
             assert payload[key][language], f"{key}.{language} is empty"
 
 
+def test_a_store_with_no_requirement_cues_is_refused() -> None:
+    """A vocabulary that cannot read a requirement must not report `absent`.
+
+    With no cues, every posting states nothing, misses nothing and scores full
+    confidence - the flattering answer, produced by a store that is simply
+    misconfigured. Refusing it at construction is why no caller has to guess
+    whether `absent` means "required nothing" or "read nothing".
+    """
+    with pytest.raises(RequirementConceptError, match="no requirement cues"):
+        RequirementConceptStore.from_payload(
+            {
+                "policy_version": "t",
+                "extraction_version": "t",
+                "concepts": {"subject": {"kind": "presence", "patterns": ["widget selling"]}},
+            },
+            origin="cue-less",
+        )
+
+
 def test_english_and_hebrew_cues_are_unioned_not_selected(requirement_concepts) -> None:
     """A mixed-language posting is the normal case, not the exception."""
     mixed = "דרישות:\nניסיון עם Salesforce - חובה.\nNative English speaker required.\n"
@@ -1060,6 +1177,7 @@ def test_only_canonical_facts_are_reported_as_supporting_evidence(fact_store) ->
             "requirement_block_markers": ["requirements:"],
             "mandatory_markers": ["(must)"],
             "preferred_markers": ["a plus"],
+            "requirement_cues": {"en": ["experience", "native"]},
             "concepts": {
                 "subject": {
                     "label": "Subject",
