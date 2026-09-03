@@ -29,6 +29,11 @@ import { useApplicationIntake } from "./new-application/useApplicationIntake";
    until the text is close enough to the ceiling for the budget to be the useful fact. */
 const JOB_TEXT_BUDGET_NOTICE_RATIO = 0.8;
 
+/* A placeholder cannot wrap its LTR example in a <bdi> element. Unicode isolates give
+   the English example the same boundary without letting it reorder the Hebrew prefix
+   or its colon. */
+const examplePlaceholder = (example: string) => `לדוגמה: \u2066${example}\u2069`;
+
 const SectionTitle = ({ icon: Icon, children }: { children: string; icon: LucideIcon }) => (
   <span className="inline-flex items-center gap-2">
     <Icon aria-hidden="true" className="size-4 text-cv-accent" />
@@ -122,10 +127,10 @@ export const NewApplicationPage = () => {
                       validate: (value) => value.trim() !== "" || "יש להזין את שם החברה.",
                     })}
                     autoComplete="organization"
-                    className="ps-10"
+                    className="rtl-placeholder ps-10"
                     dir="auto"
                     maxLength={LABEL_MAX_CHARACTERS}
-                    placeholder="לדוגמה: Stripe"
+                    placeholder={examplePlaceholder("Stripe")}
                   />
                 </IconField>
               )}
@@ -139,10 +144,10 @@ export const NewApplicationPage = () => {
                     {...register("target_role", {
                       validate: (value) => value.trim() !== "" || "יש להזין את תפקיד היעד.",
                     })}
-                    className="ps-10"
+                    className="rtl-placeholder ps-10"
                     dir="auto"
                     maxLength={LABEL_MAX_CHARACTERS}
-                    placeholder="לדוגמה: Senior Solutions Architect"
+                    placeholder={examplePlaceholder("Senior Solutions Architect")}
                   />
                 </IconField>
               )}
@@ -222,7 +227,7 @@ export const NewApplicationPage = () => {
                 })}
                 /* A long paste scrolls inside the field instead of moving the form's
                    actions below the fold. The user can still resize it when useful. */
-                className="h-64 max-h-[55vh]"
+                className="rtl-placeholder h-64 max-h-[55vh]"
                 dir="auto"
                 placeholder="הדבק כאן את תיאור המשרה…"
               />

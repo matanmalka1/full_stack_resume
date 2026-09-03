@@ -170,6 +170,15 @@ pre {
   letter-spacing: normal;
 }
 
+/* `dir="auto"` follows the value once a user types, but an empty input does not
+   reliably use its mixed Hebrew/English placeholder to choose a direction. Keep the
+   empty state anchored to the RTL edge; the rule stops applying as soon as it has a
+   value, and `dir="auto"` takes over again. */
+.rtl-placeholder:placeholder-shown {
+  direction: rtl;
+  text-align: right;
+}
+
 .mono-code {
   direction: ltr;
   text-align: left;
