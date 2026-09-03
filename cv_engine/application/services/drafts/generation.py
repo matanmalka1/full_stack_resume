@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from .... import __version__
 from ....domain.analysis.approval import unresolved_approval_reasons
+from ....domain.analysis.gaps import unaccepted_hard_gaps
 from ....domain.knowledge import Knowledge
 from ....domain.models import DraftDocument, JobAnalysis
 from ....domain.validation import validate_draft as run_draft_validation
@@ -135,6 +136,17 @@ class DraftGeneration(DraftServiceBase):
             raise StateConflict(
                 "ambiguous classification requires an explicit Track/Profile override: "
                 f"{unresolved}"
+            )
+        # The same question the state projection answers, asked last for the
+        # same reason it is reported last: not knowing what the job is outranks
+        # not having decided about one of its requirements. This check used to
+        # be absent here, so a direct API call could draft, validate and approve
+        # a CV the projection reported as blocked.
+        blocking = unaccepted_hard_gaps(analysis, plan, job_analysis_id=plan.job_analysis_id)
+        if blocking:
+            raise StateConflict(
+                "hard requirement gaps block CV generation until each is explicitly "
+                f"accepted: {[gap.requirement for gap in blocking]}"
             )
         # The draft is built from the analysis's own snapshot, never from whichever
         # snapshot is newest: a job snapshot added after the analysis describes a
@@ -271,6 +283,7 @@ class DraftGeneration(DraftServiceBase):
             facts,
             profile,
             analysis,
+            plan=repo.selection_plan(prepared.plan_id),
             policies=policies,
             presentations=presentation_rules,
         )

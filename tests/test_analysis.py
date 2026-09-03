@@ -26,7 +26,7 @@ from cv_engine.domain.analysis.requirements import (
     requirement_lines,
     statement_lines,
 )
-from cv_engine.domain.models import FitLevel, Gap, JobAnalysis, Language, Track
+from cv_engine.domain.models import FactStatus, FitLevel, Gap, JobAnalysis, Language, Track
 
 
 def test_direct_saas_requirement_is_hard_gap(classify) -> None:
@@ -1039,3 +1039,97 @@ def test_english_and_hebrew_cues_are_unioned_not_selected(requirement_concepts) 
     mixed = "דרישות:\nניסיון עם Salesforce - חובה.\nNative English speaker required.\n"
     kinds = [line.kind for line in statement_lines(mixed, requirement_concepts)]
     assert kinds == ["requirement", "requirement"]
+
+
+def test_only_canonical_facts_are_reported_as_supporting_evidence(fact_store) -> None:
+    """The same fact, at each status, and only canonical is evidence.
+
+    Asserting that everything returned happens to be canonical proves nothing
+    when every candidate in the shipped vocabulary already is - the old code,
+    which re-added named facts regardless of status, would have passed it too.
+    So the fact is moved through pending, confirmed and canonical and the
+    question is asked again at each.
+    """
+    from cv_engine.domain.analysis.requirements import _candidate_fact_ids
+    from cv_engine.domain.facts import FactStore
+
+    concept = RequirementConceptStore.from_payload(
+        {
+            "policy_version": "t",
+            "extraction_version": "t",
+            "requirement_block_markers": ["requirements:"],
+            "mandatory_markers": ["(must)"],
+            "preferred_markers": ["a plus"],
+            "concepts": {
+                "subject": {
+                    "label": "Subject",
+                    "kind": "presence",
+                    "patterns": ["widget selling"],
+                    "satisfied_by_fact_ids": [],
+                    "satisfied_by_tags": [],
+                    # Named outright *and* reachable by tag: the old bug lived
+                    # in the named branch, so both have to be exercised.
+                    "candidate_fact_ids": ["sales.tool.priority"],
+                    "candidate_tags": ["widget"],
+                }
+            },
+        },
+        origin="status regression",
+    ).concepts["subject"]
+
+    named = fact_store.get("sales.tool.priority")
+    tagged = fact_store.get("sales.tool.excel").model_copy(
+        update={"fact_id": "sales.tool.widget", "tags": ["widget"]}
+    )
+    for status in (FactStatus.PENDING, FactStatus.CONFIRMED, FactStatus.CANONICAL):
+        store = FactStore(
+            facts={
+                "sales.tool.priority": named.model_copy(update={"status": status}),
+                "sales.tool.widget": tagged.model_copy(update={"status": status}),
+            },
+            source_versions={"sales.md": "v1"},
+        )
+        found = _candidate_fact_ids(concept, store)
+        if status is FactStatus.CANONICAL:
+            assert found == ["sales.tool.priority", "sales.tool.widget"], status
+        else:
+            assert found == [], f"{status.value} facts are not evidence"
+
+
+def test_the_three_hard_gap_gates_ask_one_question() -> None:
+    """State, generation and validation must not be able to disagree.
+
+    They did: the projection reported the blocker while generation drafted past
+    it, because each phrased the check itself.
+
+    The guard is deliberately narrow. Filtering gaps by severity is ordinary and
+    appears in several honest places - deriving the mandatory requirement list,
+    checking that an id names a hard gap. What must exist only once is the
+    *combination*: severity together with acceptance. Any module that reads both
+    is asking this question, and it must ask it through the one function.
+    """
+    import ast
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "cv_engine"
+    callers: set[str] = set()
+    second_opinions: list[str] = []
+    for path in sorted(root.rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        name = path.relative_to(root).as_posix()
+        if "unaccepted_hard_gaps" in source:
+            callers.add(name)
+            continue
+        if '== "hard"' in source and "accepted_gaps" in source:
+            second_opinions.append(name)
+        ast.parse(source)
+    assert not second_opinions, (
+        "these combine gap severity with acceptance themselves instead of using "
+        f"unaccepted_hard_gaps: {second_opinions}"
+    )
+    assert {
+        "application/state.py",
+        "application/services/drafts/generation.py",
+        "domain/validation.py",
+        "domain/analysis/gaps.py",
+    } <= callers

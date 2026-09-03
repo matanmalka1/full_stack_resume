@@ -560,3 +560,19 @@ def test_an_exclusion_that_empties_a_required_tag_is_refused(
             classify,
             excluded_fact_ids=carriers,
         )
+
+
+def test_acceptance_is_not_an_input_to_selection(
+    profile_store, policy_store, fact_store, classify
+) -> None:
+    """Proceeding past a gap is a decision about the gap, not about the facts.
+
+    `build_selection` is never given the acceptances, so an accepted gap cannot
+    move a fact up or down the ranking. Asserted on the signature rather than
+    on one output, because a future caller could otherwise thread them in
+    without any test noticing.
+    """
+    import inspect
+
+    parameters = set(inspect.signature(build_selection).parameters)
+    assert not parameters & {"accepted_gaps", "accepted_requirement_ids"}

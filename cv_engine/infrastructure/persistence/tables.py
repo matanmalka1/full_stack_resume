@@ -178,6 +178,10 @@ selection_plans = Table(
     Column("profile_version", Text, nullable=False),
     Column("selection_policy_version", Text, nullable=False),
     Column("track_emphasis_dependencies_json", JSONB, nullable=False),
+    # A user decision, not an engine one: the manifest inside `plan_json` is
+    # what the selection policy decided, and folding acceptance into it would
+    # put a human choice inside the engine's own audit record.
+    Column("accepted_gaps_json", JSONB, nullable=False, server_default="[]"),
     Column("created_at", Text, nullable=False),
     CheckConstraint("version_number > 0", name="version_number_positive"),
     UniqueConstraint("application_id", "version_number"),

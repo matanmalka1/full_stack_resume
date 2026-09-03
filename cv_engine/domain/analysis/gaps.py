@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 
-from ..models import FitLevel, Gap, Requirement, Track
+from ..models import FitLevel, Gap, JobAnalysis, Requirement, SelectionPlan, Track
 
 #: Only the three assessed levels are ordered. UNKNOWN is deliberately absent:
 #: it is not a point on the scale, so giving it a number would let it be
@@ -87,6 +87,35 @@ def gaps_from_requirements(
             )
         )
     return gaps
+
+
+def unaccepted_hard_gaps(
+    analysis: JobAnalysis, plan: SelectionPlan | None, *, job_analysis_id: str | None
+) -> list[Gap]:
+    """The hard gaps still awaiting an explicit decision.
+
+    One function, three consumers: the state projection that reports the
+    blocker, the draft generation that refuses to build past it, and the
+    validation that refuses to pass a draft built past it. They disagreed
+    before - the projection said blocked while generation happily proceeded -
+    because each asked the question in its own words.
+
+    A plan for another analysis contributes nothing: acceptance is a decision
+    about the gaps as *this* analysis stated them.
+    """
+    # `JobAnalysis` does not carry its own id, so the pairing is stated by the
+    # caller rather than assumed. A keyword makes it impossible to pass the
+    # wrong plan by argument order.
+    accepted = (
+        {accepted.requirement_id for accepted in plan.accepted_gaps}
+        if plan is not None and plan.job_analysis_id == job_analysis_id
+        else set()
+    )
+    return [
+        gap
+        for gap in analysis.gaps
+        if gap.severity == "hard" and gap.requirement_id not in accepted
+    ]
 
 
 def merge_gaps(deterministic: Sequence[Gap], proposed: Sequence[Gap]) -> list[Gap]:

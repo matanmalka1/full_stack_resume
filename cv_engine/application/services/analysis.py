@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from ...domain.analysis.approval import merge_classification
 from ...domain.analysis.classification import classify_job
 from ...domain.models import (
+    AcceptedGap,
     JobAnalysis,
     OverrideKey,
     Profile,
@@ -14,6 +15,7 @@ from ...domain.models import (
 from ...domain.profiles import ProfileStore
 from ...domain.selection import MissingFactRendering as DomainMissingFactRendering
 from ...domain.selection import build_selection
+from ...util import utc_now
 from ..commands import (
     AnalysisDecisionsResult,
     AnalysisResult,
@@ -77,6 +79,11 @@ class PreparedSelectionProposal:
     command: CreateSelectionPlanCommand
     proposal: SelectionProposal
     evidence: ProviderEvidence
+
+
+#: Single-user product: there is one actor, and the record says so plainly
+#: rather than inventing an identity the system does not have.
+ACCEPTANCE_ACTOR = "user"
 
 
 class AnalysisService(ServiceBase[PreparationRepository]):
@@ -357,6 +364,8 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                 "track": analysis.track.value,
                 "emphasis": analysis.emphasis.value,
             },
+            new_acceptances=self._new_acceptances(command, analysis),
+            expected_selection_plan_id=command.expected_selection_plan_id,
         )
         return SelectionPlanResult(
             application_id=command.application_id,
@@ -364,6 +373,53 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             selection_plan_id=plan.id,
             plan=plan,
         )
+
+    def _new_acceptances(
+        self, command: CreateSelectionPlanCommand, analysis: JobAnalysis
+    ) -> list[AcceptedGap]:
+        """The acceptances this submission adds, and nothing else.
+
+        Carrying the standing ones forward is the repository's job, done inside
+        the write transaction: doing it here meant reading a plan that could be
+        overtaken before the write, which dropped an acceptance silently.
+
+        Only a requirement that actually has a hard gap may be accepted. A
+        requirement id naming no hard gap is refused rather than stored: a
+        recorded decision about nothing would later read as a decision about
+        something.
+        """
+        if not command.accepted_requirement_ids:
+            return []
+        if command.expected_selection_plan_id is None:
+            # Optional in general - most plan writes accept nothing - but an
+            # acceptance without it is a decision applied to whatever plan is
+            # active now rather than the one the user was shown, which is the
+            # rebase the check exists to prevent.
+            raise PreconditionFailed(
+                "accepting a gap requires expected_selection_plan_id: the plan the "
+                "decision was made against"
+            )
+        hard = {
+            gap.requirement_id
+            for gap in analysis.gaps
+            if gap.severity == "hard" and gap.requirement_id is not None
+        }
+        unknown = sorted(set(command.accepted_requirement_ids) - hard)
+        if unknown:
+            raise PreconditionFailed(
+                f"no hard gap to accept for requirement(s): {', '.join(unknown)}"
+            )
+        now = utc_now()
+        return [
+            AcceptedGap(
+                requirement_id=requirement_id,
+                job_analysis_id=command.job_analysis_id,
+                actor=ACCEPTANCE_ACTOR,
+                accepted_at=now,
+                reason=command.acceptance_reason,
+            )
+            for requirement_id in sorted(set(command.accepted_requirement_ids))
+        ]
 
     def prepare_selection_proposal(
         self,
@@ -511,10 +567,17 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         touches the analysis or plan the user decided against; both remain
         readable history.
 
-        Accepting a low Fit or a hard gap is a meaning decision, not a selection
-        one: the acceptance is recorded as the analysis override that the state
-        projection already reads to clear `LOW_FIT_REQUIRES_ACCEPTANCE` and
-        `HARD_GAP_REQUIRES_DECISION`. There is no second place that records it.
+        Accepting a hard gap is a *selection* decision, not a meaning one. It
+        does not change what the requirement means, what it covers, or how it
+        is classified - only that the user proceeds despite it - so it creates
+        a replacement SelectionPlan and leaves the JobAnalysis alone. That also
+        keeps one acceptance from re-deriving an analysis the user never asked
+        to change.
+
+        Accepting a low Fit is still an analysis-level override, and it now
+        clears `LOW_FIT_REQUIRES_ACCEPTANCE` alone. It used to clear every hard
+        gap with it, so one checkbox dismissed deficiencies the user had never
+        been shown.
 
         Decisions accumulate. The submission is merged over the overrides the
         source analysis already carried, so a second decision does not silently
@@ -536,7 +599,11 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             submitted["fit"] = "accepted-low-fit"
         merged = {**analysis.user_override, **submitted}
         changes_meaning = merged != dict(analysis.user_override)
-        has_overlay = bool(command.pinned_fact_ids or command.excluded_fact_ids)
+        has_overlay = bool(
+            command.pinned_fact_ids
+            or command.excluded_fact_ids
+            or command.accepted_requirement_ids
+        )
 
         if changes_meaning and has_overlay:
             # A classification decision produces a *new* analysis whose initial
@@ -584,6 +651,9 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                 job_analysis_id=command.job_analysis_id,
                 pinned_fact_ids=list(command.pinned_fact_ids),
                 excluded_fact_ids=list(command.excluded_fact_ids),
+                accepted_requirement_ids=list(command.accepted_requirement_ids),
+                acceptance_reason=command.acceptance_reason,
+                expected_selection_plan_id=command.expected_selection_plan_id,
             )
         )
         return AnalysisDecisionsResult(

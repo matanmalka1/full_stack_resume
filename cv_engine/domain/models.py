@@ -501,6 +501,41 @@ class SelectionManifest(StrictModel):
     superseded_by_manual_edit: bool = False
 
 
+class AcceptedGap(StrictModel):
+    """One hard gap the user knowingly proceeded past.
+
+    Acceptance means only that: it never changes a gap to satisfied, never
+    authorizes an unsupported claim, and never touches requirement coverage or
+    fact ranking. It is recorded per gap, keyed on the `Requirement` the gap
+    projects, so accepting one deficiency cannot dismiss another the user has
+    not seen.
+
+    It lives on the SelectionPlan rather than the JobAnalysis because it is not
+    a change to what the requirement *means* - the analysis is untouched and
+    stays reusable - only to whether the user proceeds despite it.
+    """
+
+    requirement_id: str
+    job_analysis_id: str
+    actor: str
+    accepted_at: str
+    reason: str | None = None
+
+
+def merge_accepted_gaps(
+    previous: list[AcceptedGap], new: list[AcceptedGap]
+) -> list[AcceptedGap]:
+    """Carry the standing acceptances forward and add the new ones.
+
+    Accumulating rather than replacing is what makes a second decision not a
+    silent retraction of the first. A requirement already accepted keeps its
+    original record: the acceptance happened when it happened, and re-stamping
+    it would lose that.
+    """
+    already = {accepted.requirement_id for accepted in previous}
+    return [*previous, *(item for item in new if item.requirement_id not in already)]
+
+
 class SelectionPlan(StrictModel):
     """One immutable, versioned fact-selection decision for an analysis."""
 
@@ -509,6 +544,35 @@ class SelectionPlan(StrictModel):
     job_analysis_id: str
     version_number: int
     plan: SelectionManifest
+    #: The gaps the user knowingly proceeded past, as of this plan version.
+    #: Defaulted so plans stored before per-gap acceptance existed - including
+    #: those bound to approved and submitted revisions - keep loading unchanged.
+    accepted_gaps: list[AcceptedGap] = []
+
+    @model_validator(mode="after")
+    def acceptances_belong_to_this_analysis(self) -> SelectionPlan:
+        """An acceptance names the analysis it was made against, and it must be
+        this one.
+
+        Acceptance is a decision about *these* gaps, as this analysis stated
+        them. A plan carrying an acceptance made against a different analysis
+        would report a decision the user never made about the requirements it
+        actually holds. Enforced on the model rather than in the writer, so it
+        covers every path that has ever written a plan and every one that will.
+        """
+        foreign = sorted(
+            {
+                accepted.requirement_id
+                for accepted in self.accepted_gaps
+                if accepted.job_analysis_id != self.job_analysis_id
+            }
+        )
+        if foreign:
+            raise ValueError(
+                f"selection plan for analysis {self.job_analysis_id} carries acceptances "
+                f"made against another analysis: {', '.join(foreign)}"
+            )
+        return self
     candidate_context_version: str
     candidate_context_hash: str
     profile_version: str

@@ -13,9 +13,11 @@ from ...application.errors import (
 )
 from ...application.ports import UnitOfWork
 from ...domain.models import (
+    AcceptedGap,
     JobAnalysis,
     SelectionManifest,
     SelectionPlan,
+    merge_accepted_gaps,
 )
 from ...util import canonical_json, new_id, utc_now
 from .applications import SqlAlchemyApplicationRepository
@@ -305,6 +307,7 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                     (func.coalesce(func.max(job_analyses.c.version_number), 0) + 1).label("version")
                 ).where(job_analyses.c.application_id == application_id)
             ).scalar_one()
+            self._lock_application(connection, application_id)
             connection.execute(
                 insert(job_analyses).values(
                     id=analysis_id,
@@ -329,6 +332,9 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                 selection_policy_version,
                 track_emphasis_dependencies,
                 now,
+                # A new analysis inherits nothing: the carry is keyed on the
+                # analysis id, and this one did not exist a moment ago.
+                accepted_gaps=[],
             )
             connection.execute(
                 update(applications)
@@ -363,12 +369,27 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         profile_version: str,
         selection_policy_version: str,
         track_emphasis_dependencies: dict[str, str],
+        new_acceptances: list[AcceptedGap] | None = None,
+        expected_selection_plan_id: str | None = None,
         plan_id: str | None = None,
         created_at: str | None = None,
     ) -> SelectionPlan:
         selection_plan_id = plan_id or new_id()
         now = created_at or utc_now()
         with self.transaction() as connection:
+            # The standing acceptances are read, merged and written inside one
+            # transaction. Reading them outside it let a later writer compute a
+            # legal new version from a plan it had already been overtaken on,
+            # dropping an acceptance with no error and no trace: the version
+            # number is allocated here, so the unique constraint never fires.
+            self._lock_application(connection, application_id)
+            carried = self._standing_acceptances(
+                connection,
+                application_id,
+                job_analysis_id,
+                expected_selection_plan_id,
+            )
+            accepted_gaps = merge_accepted_gaps(carried, list(new_acceptances or []))
             existing = (
                 connection.execute(
                     select(selection_plans).where(selection_plans.c.id == selection_plan_id)
@@ -387,6 +408,7 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                     "profile_version": profile_version,
                     "selection_policy_version": selection_policy_version,
                     "track_emphasis_dependencies": track_emphasis_dependencies,
+                    "accepted_gaps": accepted_gaps,
                     "created_at": now,
                 }
                 actual = {key: getattr(stored, key) for key in expected}
@@ -405,6 +427,7 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                 selection_policy_version,
                 track_emphasis_dependencies,
                 now,
+                accepted_gaps=accepted_gaps,
             )
             row = (
                 connection.execute(
@@ -414,6 +437,66 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                 .one_or_none()
             )
         return self._selection_plan_record(row)
+
+    @staticmethod
+    def _lock_application(connection: Connection, application_id: str) -> None:
+        """Serialize every plan write for one Application.
+
+        Reading the standing acceptances inside the transaction is not enough:
+        the default isolation is READ COMMITTED, so two transactions can both
+        read version 3, both pass the expected-plan check, and then write
+        versions 4 and 5 - the later one merging onto a plan that no longer
+        exists and dropping the earlier acceptance with no error.
+
+        The version number is allocated here too, so the unique constraint never
+        fires. `FOR UPDATE` on the owning Application row is what actually makes
+        read, merge and allocate one atomic step, and every writer must take it
+        - a path that skips the lock is not serialized by the others taking it.
+        """
+        connection.execute(
+            select(applications.c.id).where(applications.c.id == application_id).with_for_update()
+        ).one_or_none()
+
+    def _standing_acceptances(
+        self,
+        connection: Connection,
+        application_id: str,
+        job_analysis_id: str,
+        expected_selection_plan_id: str | None,
+    ) -> list[AcceptedGap]:
+        """The acceptances the next plan version inherits, read under the write.
+
+        Inherited only from a plan for the *same* analysis. An acceptance is a
+        decision about the gaps as one analysis stated them, so carrying it
+        onto a plan for a different analysis would report a decision the user
+        never made.
+
+        `expected_selection_plan_id` is the optimistic check: it is the plan the
+        user was looking at when they decided. If the active plan has moved on,
+        the command is refused rather than quietly rebased onto something the
+        user never saw.
+        """
+        row = (
+            connection.execute(
+                select(selection_plans)
+                .where(selection_plans.c.application_id == application_id)
+                .order_by(selection_plans.c.version_number.desc())
+                .limit(1)
+            )
+            .mappings()
+            .one_or_none()
+        )
+        latest = self._selection_plan_record(row) if row is not None else None
+        if expected_selection_plan_id is not None and (
+            latest is None or latest.id != expected_selection_plan_id
+        ):
+            raise StateConflict(
+                "the active SelectionPlan moved since this decision was made: expected "
+                f"{expected_selection_plan_id}, found {latest.id if latest else 'none'}"
+            )
+        if latest is None or latest.job_analysis_id != job_analysis_id:
+            return []
+        return list(latest.accepted_gaps)
 
     @staticmethod
     def _insert_selection_plan(
@@ -428,6 +511,8 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         selection_policy_version: str,
         track_emphasis_dependencies: dict[str, str],
         created_at: str,
+        *,
+        accepted_gaps: list[AcceptedGap],
     ) -> None:
         analysis = (
             connection.execute(
@@ -457,6 +542,7 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                 profile_version=profile_version,
                 selection_policy_version=selection_policy_version,
                 track_emphasis_dependencies_json=track_emphasis_dependencies,
+                accepted_gaps_json=[gap.model_dump(mode="json") for gap in accepted_gaps],
                 created_at=created_at,
             )
         )
@@ -477,6 +563,9 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
             profile_version=record["profile_version"],
             selection_policy_version=record["selection_policy_version"],
             track_emphasis_dependencies=record["track_emphasis_dependencies_json"],
+            accepted_gaps=[
+                AcceptedGap.model_validate(gap) for gap in record.get("accepted_gaps_json") or []
+            ],
             created_at=record["created_at"],
         )
 

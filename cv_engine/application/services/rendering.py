@@ -134,6 +134,9 @@ class RenderingService(ServiceBase[ReadinessRepository]):
             facts,
             profile,
             analysis,
+            plan=self.repo.selection_plan(
+                self.repo.approved_revision(command.approved_revision_id).selection_plan_id
+            ),
             policies=policies,
             presentations=knowledge.presentations,
         )

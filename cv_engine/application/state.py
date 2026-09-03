@@ -11,6 +11,7 @@ from datetime import date
 from typing import Any
 
 from ..domain.analysis.approval import unresolved_approval_reasons
+from ..domain.analysis.gaps import unaccepted_hard_gaps
 from ..domain.drafts import render_composite_claim, validate_derived_wording
 from ..domain.facts import FactStoreError
 from ..domain.knowledge import Knowledge
@@ -225,10 +226,12 @@ def derive_review_reasons(context: ProjectionContext, stale: list[ReasonView]) -
                 ["apply_analysis_decisions"],
             )
         )
-    if (
-        analysis is not None
-        and any(gap.severity == "hard" for gap in analysis.gaps)
-        and (analysis.user_override.get("fit") != "accepted-low-fit")
+    # One shared question, asked here, in draft generation and in validation.
+    # The analysis-level `accepted-low-fit` override is deliberately not part
+    # of it: that answers low Fit, and letting it answer this too meant one
+    # checkbox dismissed every hard gap at once, including unseen ones.
+    if analysis is not None and unaccepted_hard_gaps(
+        analysis, plan, job_analysis_id=context.active_analysis_id
     ):
         reasons.append(
             _reason(

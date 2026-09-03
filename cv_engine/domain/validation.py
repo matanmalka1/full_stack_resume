@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from ..util import sha256_text
 from .analysis.approval import unresolved_approval_reasons
+from .analysis.gaps import unaccepted_hard_gaps
 from .draft_markdown import serialize_markdown
 from .drafts import render_composite_claim, validate_derived_wording
 from .facts import FactStore, FactStoreError
@@ -14,6 +15,7 @@ from .models import (
     DraftDocument,
     JobAnalysis,
     Profile,
+    SelectionPlan,
     ValidationIssue,
     ValidationReport,
 )
@@ -58,6 +60,11 @@ class _ValidationContext:
     facts: FactStore
     profile: Profile
     analysis: JobAnalysis
+    #: The plan the draft was built from, so validation can see the decisions
+    #: recorded against it. Optional only so a caller with no plan in hand -
+    #: none in the product today - degrades to reporting the gap rather than
+    #: crashing.
+    plan: SelectionPlan | None
     policies: EmphasisPolicyStore | None
     presentations: PresentationStore | None
     issues: list[ValidationIssue] = field(default_factory=list)
@@ -289,6 +296,21 @@ def _profile_matches(context: _ValidationContext) -> None:
         and context.analysis.user_override.get("fit") != "accepted-low-fit"
     ):
         context.add_issue("profile", "low-fit", "Low fit requires an explicit recorded override.")
+    # The draft names the analysis it was built from, so that is what the plan
+    # has to match. Passing the plan's own id compared it with itself and proved
+    # nothing.
+    blocking = unaccepted_hard_gaps(
+        context.analysis,
+        context.plan,
+        job_analysis_id=context.draft.job_analysis_id,
+    )
+    if blocking:
+        context.add_issue(
+            "profile",
+            "hard-gap-not-accepted",
+            f"Each hard requirement gap requires an explicit acceptance: "
+            f"{[gap.requirement for gap in blocking]}",
+        )
     unresolved = unresolved_approval_reasons(context.analysis)
     if unresolved:
         context.add_issue(
@@ -448,6 +470,7 @@ def validate_draft(
     profile: Profile,
     analysis: JobAnalysis,
     *,
+    plan: SelectionPlan | None = None,
     policies: EmphasisPolicyStore | None = None,
     presentations: PresentationStore | None = None,
 ) -> ValidationReport:
@@ -469,6 +492,7 @@ def validate_draft(
         facts=facts,
         profile=profile,
         analysis=analysis,
+        plan=plan,
         policies=policies,
         presentations=presentations,
     )

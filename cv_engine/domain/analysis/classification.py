@@ -5,7 +5,16 @@ from collections import Counter
 from typing import cast
 
 from ..facts import FactStore
-from ..models import Emphasis, JobAnalysis, Language, OverrideKey, ProfileName, Requirement, Track
+from ..models import (
+    Emphasis,
+    Gap,
+    JobAnalysis,
+    Language,
+    OverrideKey,
+    ProfileName,
+    Requirement,
+    Track,
+)
 from .approval import CONFIDENCE_APPROVAL_THRESHOLD, unresolved_reasons
 from .gaps import derive_fit, derive_gaps, gaps_from_requirements
 from .requirements import (
@@ -14,6 +23,8 @@ from .requirements import (
     extract_requirements,
     extraction_confidence,
     extraction_failed,
+    normalize_span,
+    requirement_id,
 )
 
 HEBREW = re.compile(r"[\u0590-\u05ff]")
@@ -94,6 +105,37 @@ SELECTION_CONCEPTS: dict[str, tuple[str, ...]] = {
     "technical": ("software provider", "tech-related", "product knowledge", "platform"),
     "onboarding": ("onboarding", "onboard"),
 }
+
+
+def _identified(
+    gaps: list[Gap], normalized_hash: str, concepts: RequirementConceptStore
+) -> list[Gap]:
+    """Give each rule-derived gap the same kind of identity a requirement has.
+
+    A hard gap is cleared by accepting it, and acceptance is keyed on the
+    requirement id the gap projects. A rule gap without one is therefore a
+    blocker nothing can ever clear - the user is told a decision is required
+    and given no way to record it.
+
+    The id is built on the same scheme as a requirement's, from the immutable
+    snapshot and the gap's own wording, so it is stable across re-analysis of
+    the same posting and distinct between postings.
+    """
+    return [
+        gap.model_copy(
+            update={
+                "requirement_id": requirement_id(
+                    normalized_hash=normalized_hash,
+                    extraction_version=concepts.extraction_version,
+                    identity_span=normalize_span(gap.requirement),
+                    ordinal=ordinal,
+                )
+            }
+        )
+        if gap.requirement_id is None
+        else gap
+        for ordinal, gap in enumerate(gaps)
+    ]
 
 
 def classification_confidence(top: int, second: int) -> float:
@@ -218,7 +260,7 @@ def classify_job(
     # The rules are the other half of requirement understanding while they
     # still own the concepts they own, so they are computed before extraction
     # is judged. A posting the rules read is not one the engine failed to read.
-    rule_gaps = derive_gaps(lowered, track)
+    rule_gaps = _identified(derive_gaps(lowered, track), normalized_hash, concepts)
     failed_extraction = extraction_failed(
         text, extracted, concepts, understood_elsewhere=bool(rule_gaps)
     )

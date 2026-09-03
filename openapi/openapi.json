@@ -1,6 +1,47 @@
 {
   "components": {
     "schemas": {
+      "AcceptedGap": {
+        "additionalProperties": false,
+        "description": "One hard gap the user knowingly proceeded past.\n\nAcceptance means only that: it never changes a gap to satisfied, never\nauthorizes an unsupported claim, and never touches requirement coverage or\nfact ranking. It is recorded per gap, keyed on the `Requirement` the gap\nprojects, so accepting one deficiency cannot dismiss another the user has\nnot seen.\n\nIt lives on the SelectionPlan rather than the JobAnalysis because it is not\na change to what the requirement *means* - the analysis is untouched and\nstays reusable - only to whether the user proceeds despite it.",
+        "properties": {
+          "accepted_at": {
+            "title": "Accepted At",
+            "type": "string"
+          },
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "job_analysis_id": {
+            "title": "Job Analysis Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "requirement_id": {
+            "title": "Requirement Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requirement_id",
+          "job_analysis_id",
+          "actor",
+          "accepted_at"
+        ],
+        "title": "AcceptedGap",
+        "type": "object"
+      },
       "ActivityFilter": {
         "description": "Which side of the recruitment axis the caller is asking about.\n\nOPEN is the default the list screen uses: a finished process stays stored and\nreachable, but it is not what a board of live work is asking about.",
         "enum": [
@@ -1000,6 +1041,26 @@
             "title": "Accept Low Fit",
             "type": "boolean"
           },
+          "acceptance_reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acceptance Reason"
+          },
+          "accepted_requirement_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Accepted Requirement Ids",
+            "type": "array"
+          },
           "application_id": {
             "title": "Application Id",
             "type": "string"
@@ -1021,6 +1082,17 @@
             },
             "title": "Excluded Fact Ids",
             "type": "array"
+          },
+          "expected_selection_plan_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Selection Plan Id"
           },
           "language_override": {
             "anyOf": [
@@ -2242,6 +2314,26 @@
         "additionalProperties": false,
         "description": "What `POST /analyses/{id}/selection-plans` accepts, in both modes.\n\n`mode` is what makes the route answer `201` or `202`. It is explicit and has\nno `auto` value (§12): the deterministic form commits a plan inside the\nrequest, the AI form queues an Operation, and a client is never left\nguessing which of the two it got.\n\nThe overlay lists are the user's own decisions and belong to the\ndeterministic form. In AI mode the provider proposes the overlay, so\nsending both would be two answers to the same question - which is why the\nrouter refuses that combination rather than silently preferring one.",
         "properties": {
+          "acceptance_reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acceptance Reason"
+          },
+          "accepted_requirement_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Accepted Requirement Ids",
+            "type": "array"
+          },
           "application_id": {
             "title": "Application Id",
             "type": "string"
@@ -2275,6 +2367,17 @@
               }
             ],
             "title": "Expected Profile Version"
+          },
+          "expected_selection_plan_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Selection Plan Id"
           },
           "expected_selection_policy_version": {
             "anyOf": [
@@ -4445,6 +4548,14 @@
         "additionalProperties": false,
         "description": "One immutable, versioned fact-selection decision for an analysis.",
         "properties": {
+          "accepted_gaps": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AcceptedGap"
+            },
+            "title": "Accepted Gaps",
+            "type": "array"
+          },
           "application_id": {
             "title": "Application Id",
             "type": "string"
@@ -4511,6 +4622,15 @@
       "SelectionPlanResponse": {
         "additionalProperties": false,
         "properties": {
+          "accepted_gaps": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Accepted Gaps",
+            "type": "array"
+          },
           "application_id": {
             "title": "Application Id",
             "type": "string"

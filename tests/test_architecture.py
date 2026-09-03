@@ -648,3 +648,87 @@ def test_no_test_asserts_a_bare_builtin_from_a_repository() -> None:
                     f"{path.name}:{node.lineno} asserts a bare builtin over {', '.join(called)}"
                 )
     assert not offenders, offenders
+
+
+def test_carry_forward_of_accepted_gaps_has_one_implementation() -> None:
+    """No caller may hand a plan write a whole acceptance list.
+
+    This replaces an earlier guard that required every plan writer to *name*
+    what happens to accepted gaps. That guard matched the old design, where the
+    column defaulted to empty and forgetting silently retracted decisions. The
+    repository now reads, merges and writes the standing acceptances inside the
+    write transaction under the Application lock, so forgetting is the safe
+    default and the old guard would only fail honest callers.
+
+    What is dangerous now is the opposite: a caller that assembles the list and
+    passes it in, bypassing the analysis check and the lock. That is exactly how
+    a plan for one analysis came to inherit another's. A writer may say what it
+    *adds* (`new_acceptances`); it may not say what the plan ends up holding.
+
+    Reading `accepted_gaps` stays free - the gate, the model validator and the
+    decision record all legitimately do - because reading cannot lose a write.
+    """
+    root = Path(__file__).resolve().parents[1] / "cv_engine"
+    offenders: list[str] = []
+    for path in sorted(root.rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        for node in ast.walk(ast.parse(source)):
+            if not isinstance(node, ast.Call):
+                continue
+            name = getattr(node.func, "attr", None) or getattr(node.func, "id", None)
+            if name not in {"create_selection_plan", "_insert_selection_plan"}:
+                continue
+            if any(keyword.arg == "accepted_gaps" for keyword in node.keywords):
+                if path.name == "preparation.py":
+                    continue
+                offenders.append(f"{path.relative_to(root).as_posix()}:{node.lineno}")
+    assert not offenders, (
+        "these hand a plan write its whole acceptance list; only the repository "
+        f"may do that, under the lock and the analysis check: {offenders}"
+    )
+
+
+def test_every_selection_plan_write_takes_the_application_lock_first() -> None:
+    """The lock has to precede the read it protects, in every writer.
+
+    `create_selection_plan` reads the standing acceptances and allocates the
+    version number; both have to happen under the Application row lock, or two
+    writers merge onto the same plan and one acceptance is lost. `save_analysis`
+    inserts a plan too, so it locks as well - a path that skips the lock is not
+    serialized by the others taking it.
+
+    Asserted on the order of statements, not merely on the lock being present
+    somewhere in the function: locking after the read would satisfy a presence
+    check and protect nothing.
+    """
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "cv_engine"
+        / "infrastructure"
+        / "persistence"
+        / "preparation.py"
+    ).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    writers = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+        and node.name != "_insert_selection_plan"
+        and "_insert_selection_plan(" in (ast.get_source_segment(source, node) or "")
+    ]
+    assert {node.name for node in writers} == {"save_analysis", "create_selection_plan"}, (
+        "a new selection-plan writer appeared; it must lock before it reads"
+    )
+    for node in writers:
+        calls = [
+            (inner.lineno, getattr(inner.func, "attr", None) or getattr(inner.func, "id", None))
+            for inner in ast.walk(node)
+            if isinstance(inner, ast.Call)
+        ]
+        lock = next((line for line, name in calls if name == "_lock_application"), None)
+        insert = next((line for line, name in calls if name == "_insert_selection_plan"), None)
+        standing = next((line for line, name in calls if name == "_standing_acceptances"), None)
+        assert lock is not None, f"{node.name} writes a plan without taking the lock"
+        assert insert is not None and lock < insert, f"{node.name} locks after inserting"
+        if standing is not None:
+            assert lock < standing, f"{node.name} reads the standing acceptances before locking"

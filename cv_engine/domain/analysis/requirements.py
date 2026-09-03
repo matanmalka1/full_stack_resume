@@ -614,7 +614,6 @@ def _candidate_fact_ids(concept: RequirementConcept, facts: FactStore) -> list[s
         for fact in _canonical(facts)
         if concept.candidate_tags & set(fact.tags) or fact.fact_id in concept.candidate_fact_ids
     }
-    found |= {fact_id for fact_id in concept.candidate_fact_ids if fact_id in facts.facts}
     return sorted(found - concept.boundary_fact_ids)
 
 
