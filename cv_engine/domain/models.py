@@ -491,7 +491,15 @@ class SelectionCandidate(StrictModel):
 
     Recorded so a later reader can answer not only which policy ran but why
     fact A beat fact B: the ranking is the lexicographic tuple
-    (gap_substitute, semantic_score, keyword_hits, -pool_index).
+    (requirement_rank, semantic_score, keyword_hits, -pool_index).
+
+    `requirement_rank` is 2 where the fact bears on a mandatory requirement, 1
+    for a preferred one, 0 where the posting never asked. `gap_substitute` held
+    that slot under policy 1.0.0 and is still recorded: it says something the
+    tier does not - that the fact was offered as a stand-in for something
+    missing rather than as evidence of something held - and manifests already
+    written carry it. Reading either field on an older record means reading
+    `policy_version` first.
     """
 
     fact_id: str
@@ -502,6 +510,13 @@ class SelectionCandidate(StrictModel):
     semantic_score: int
     keyword_hits: int
     gap_substitute: bool
+    #: Defaulted so manifests written under policy 1.0.0, including those bound
+    #: to approved and submitted revisions, keep deserializing unchanged, and
+    #: bounded because the tier is an enumeration the ranking reads, not a
+    #: score: a value outside 0..2 would sort against every real tier while
+    #: describing nothing, and the published schema would promise an unbounded
+    #: integer no reader of a manifest could interpret.
+    requirement_rank: int = Field(default=0, ge=0, le=2)
     outcome: SelectionOutcome
     reason: OmissionReason | None = None
 

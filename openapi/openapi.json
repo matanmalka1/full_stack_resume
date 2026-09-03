@@ -4365,7 +4365,7 @@
       },
       "SelectionCandidate": {
         "additionalProperties": false,
-        "description": "One fact's full accounting in the selection decision.\n\nRecorded so a later reader can answer not only which policy ran but why\nfact A beat fact B: the ranking is the lexicographic tuple\n(gap_substitute, semantic_score, keyword_hits, -pool_index).",
+        "description": "One fact's full accounting in the selection decision.\n\nRecorded so a later reader can answer not only which policy ran but why\nfact A beat fact B: the ranking is the lexicographic tuple\n(requirement_rank, semantic_score, keyword_hits, -pool_index).\n\n`requirement_rank` is 2 where the fact bears on a mandatory requirement, 1\nfor a preferred one, 0 where the posting never asked. `gap_substitute` held\nthat slot under policy 1.0.0 and is still recorded: it says something the\ntier does not - that the fact was offered as a stand-in for something\nmissing rather than as evidence of something held - and manifests already\nwritten carry it. Reading either field on an older record means reading\n`policy_version` first.",
         "properties": {
           "emphasis_score": {
             "title": "Emphasis Score",
@@ -4418,6 +4418,13 @@
               }
             ],
             "title": "Reason"
+          },
+          "requirement_rank": {
+            "default": 0,
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Requirement Rank",
+            "type": "integer"
           },
           "section": {
             "title": "Section",

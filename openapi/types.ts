@@ -2809,7 +2809,15 @@ export interface components {
          *
          *     Recorded so a later reader can answer not only which policy ran but why
          *     fact A beat fact B: the ranking is the lexicographic tuple
-         *     (gap_substitute, semantic_score, keyword_hits, -pool_index).
+         *     (requirement_rank, semantic_score, keyword_hits, -pool_index).
+         *
+         *     `requirement_rank` is 2 where the fact bears on a mandatory requirement, 1
+         *     for a preferred one, 0 where the posting never asked. `gap_substitute` held
+         *     that slot under policy 1.0.0 and is still recorded: it says something the
+         *     tier does not - that the fact was offered as a stand-in for something
+         *     missing rather than as evidence of something held - and manifests already
+         *     written carry it. Reading either field on an older record means reading
+         *     `policy_version` first.
          */
         SelectionCandidate: {
             /** Emphasis Score */
@@ -2831,6 +2839,11 @@ export interface components {
             profile_score: number;
             /** Reason */
             reason?: ("below_section_budget" | "not_relevant_to_emphasis" | "evicted_by_required_tag_rescue" | "not_in_profile_pool" | "excluded_by_user") | null;
+            /**
+             * Requirement Rank
+             * @default 0
+             */
+            requirement_rank: number;
             /** Section */
             section: string;
             /** Semantic Score */

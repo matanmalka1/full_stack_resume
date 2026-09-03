@@ -9,10 +9,18 @@ from __future__ import annotations
 
 import pytest
 from helpers import PAYME_TECH_SALES_JOB
+from pydantic import ValidationError
 
 from cv_engine.domain.draft_markdown import serialize_markdown
 from cv_engine.domain.facts import FactStore
-from cv_engine.domain.models import Emphasis, Profile
+from cv_engine.domain.models import (
+    Coverage,
+    Emphasis,
+    Gap,
+    Profile,
+    Requirement,
+    SelectionCandidate,
+)
 from cv_engine.domain.profiles import ProfileStore
 from cv_engine.domain.selection import (
     STRUCTURAL_STYLES,
@@ -308,6 +316,227 @@ def test_the_headline_reads_for_a_recruiter_and_the_filename_does_not(
     assert normalized_role_filename(profile.normalized_role, setup.candidate) == (
         "Matan Malka - Tech Sales - CV.pdf"
     )
+
+
+# --- M3 Stage F: the posting's requirements rank the evidence ----------------
+#
+# `requirement_rank` took the slot `gap_substitute` held. No posting in the
+# corpus exercises the reordering - every one either extracts no requirements at
+# all, or its supporting facts land on structure and uncontended sections - so
+# these drive the ordering directly rather than through a job text that cannot
+# reach it. `Professional Summary` for `account-manager` is the bed: three
+# contenders for one claim, decided by a semantic score of 200 against 20 and 0.
+
+
+def _requirement(requirement_id: str, *, mandatory: bool, coverage: Coverage, supports: list[str]):
+    return Requirement(
+        requirement_id=requirement_id,
+        text="stated in the posting",
+        kind="presence",
+        mandatory=mandatory,
+        coverage=coverage,
+        supporting_fact_ids=supports,
+    )
+
+
+def _summary_selection(
+    profile_store, policy_store, fact_store, classify, *, requirements=(), gaps=()
+):
+    analysis = classify(ACCOUNT_MANAGER_JOB, profile_override="account-manager")
+    analysis = analysis.model_copy(update={"requirements": list(requirements), "gaps": list(gaps)})
+    selected, manifest = build_selection(
+        analysis=analysis,
+        profile=profile_store.get("account-manager"),
+        policy=policy_store.get(analysis.emphasis),
+        policy_store_version=policy_store.version,
+        facts=fact_store,
+    )
+    return selected["Professional Summary"], manifest
+
+
+@pytest.mark.parametrize("rank", [-1, 3, 99])
+def test_a_manifest_cannot_record_a_tier_the_ranking_has_no_meaning_for(rank: int) -> None:
+    """The tier is an enumeration, not a score.
+
+    Mandatory, preferred and unasked are the whole vocabulary. A value outside
+    them would still sort - above every real tier, or below all of them - while
+    describing nothing a reader of the manifest could interpret.
+    """
+    with pytest.raises(ValidationError):
+        SelectionCandidate(
+            fact_id="sales.summary.tech",
+            section="Professional Summary",
+            pool_index=0,
+            profile_score=0,
+            emphasis_score=0,
+            semantic_score=0,
+            keyword_hits=0,
+            gap_substitute=False,
+            requirement_rank=rank,
+            outcome="selected",
+        )
+
+
+def test_a_manifest_written_before_the_tier_existed_still_reads() -> None:
+    """Policy 1.0.0 wrote no tier, and those manifests are records."""
+    candidate = SelectionCandidate(
+        fact_id="sales.summary.tech",
+        section="Professional Summary",
+        pool_index=0,
+        profile_score=0,
+        emphasis_score=0,
+        semantic_score=0,
+        keyword_hits=0,
+        gap_substitute=True,
+        outcome="selected",
+    )
+    assert candidate.requirement_rank == 0
+
+
+def test_a_mandatory_requirement_outranks_a_stronger_semantic_score(
+    profile_store: ProfileStore, policy_store, fact_store: FactStore, classify
+) -> None:
+    """What the employer demanded decides before what the Profile prefers.
+
+    `sales.summary.account` takes this section on semantics alone, 200 against
+    0. Naming `sales.summary.tech` as evidence for a mandatory requirement has
+    to be enough to reverse that, or the authority order is not an authority
+    order.
+    """
+    baseline, _ = _summary_selection(profile_store, policy_store, fact_store, classify)
+    assert baseline == ["sales.summary.account"]
+
+    selected, _ = _summary_selection(
+        profile_store,
+        policy_store,
+        fact_store,
+        classify,
+        requirements=[
+            _requirement(
+                "r-mand", mandatory=True, coverage="matched", supports=["sales.summary.tech"]
+            )
+        ],
+    )
+    assert selected == ["sales.summary.tech"]
+
+
+def test_evidence_for_a_met_requirement_carries_authority_a_substitute_never_had(
+    profile_store: ProfileStore, policy_store, fact_store: FactStore, classify
+) -> None:
+    """The widening `gap_substitute` could not express.
+
+    A substitute stands in for something the candidate lacks, so under policy
+    1.0.0 the only facts with authority in this slot were the ones answering a
+    failure. Evidence that a demanded thing is genuinely held ranked level with
+    a fact the posting never mentioned - even though it is the better thing to
+    put on the page.
+    """
+    matched = _requirement(
+        "r-met", mandatory=True, coverage="matched", supports=["sales.summary.tech"]
+    )
+    selected, manifest = _summary_selection(
+        profile_store, policy_store, fact_store, classify, requirements=[matched]
+    )
+    assert selected == ["sales.summary.tech"]
+    winner = next(c for c in manifest.candidates if c.fact_id == "sales.summary.tech")
+    assert (winner.requirement_rank, winner.gap_substitute) == (2, False)
+
+
+def test_a_mandatory_requirement_outranks_a_preferred_one(
+    profile_store: ProfileStore, policy_store, fact_store: FactStore, classify
+) -> None:
+    """Between two answered asks, the one the employer made a condition wins."""
+    selected, _ = _summary_selection(
+        profile_store,
+        policy_store,
+        fact_store,
+        classify,
+        requirements=[
+            _requirement(
+                "r-pref", mandatory=False, coverage="matched", supports=["sales.summary.tech"]
+            ),
+            _requirement(
+                "r-mand",
+                mandatory=True,
+                coverage="matched",
+                supports=["sales.summary.new_business"],
+            ),
+        ],
+    )
+    assert selected == ["sales.summary.new_business"]
+
+
+def test_a_gap_takes_the_necessity_of_the_requirement_it_projects(
+    profile_store: ProfileStore, policy_store, fact_store: FactStore, classify
+) -> None:
+    """A substitute is ranked by what it stands in for, not by being a substitute."""
+    requirements = [
+        _requirement("r-mand", mandatory=True, coverage="unsupported", supports=[]),
+        _requirement("r-pref", mandatory=False, coverage="unsupported", supports=[]),
+    ]
+    gaps = [
+        Gap(
+            requirement="preferred ask",
+            severity="warning",
+            reason="not held",
+            substitute_fact_ids=["sales.summary.account"],
+            requirement_id="r-pref",
+        ),
+        Gap(
+            requirement="mandatory ask",
+            severity="hard",
+            reason="not held",
+            substitute_fact_ids=["sales.summary.tech"],
+            requirement_id="r-mand",
+        ),
+    ]
+    selected, _ = _summary_selection(
+        profile_store, policy_store, fact_store, classify, requirements=requirements, gaps=gaps
+    )
+    # `sales.summary.account` substitutes too, and outscores the winner 200 to 0.
+    assert selected == ["sales.summary.tech"]
+
+
+def test_an_analysis_without_requirements_ranks_as_policy_1_0_0_did(
+    profile_store: ProfileStore, policy_store, fact_store: FactStore, classify
+) -> None:
+    """Gaps from before requirement extraction stay on one tier.
+
+    Such an analysis has no requirements, so nothing reaches the mandatory tier
+    and every substitute sits together above every non-substitute - which is
+    exactly `int(gap_substitute)`. Splitting them by severity here would rerank
+    stored analyses the rework promised to leave alone.
+    """
+    gaps = [
+        Gap(
+            requirement="hard ask",
+            severity="hard",
+            reason="not held",
+            substitute_fact_ids=["sales.summary.tech"],
+        ),
+        Gap(
+            requirement="soft ask",
+            severity="warning",
+            reason="not held",
+            substitute_fact_ids=["sales.summary.new_business"],
+        ),
+    ]
+    selected, manifest = _summary_selection(
+        profile_store, policy_store, fact_store, classify, gaps=gaps
+    )
+    # Both substitute, so severity must not separate them: the semantic score
+    # decides, 20 against 0, exactly as it did under `int(gap_substitute)`.
+    assert selected == ["sales.summary.new_business"]
+    tiers = {
+        candidate.fact_id: candidate.requirement_rank
+        for candidate in manifest.candidates
+        if candidate.section == "Professional Summary"
+    }
+    assert tiers == {
+        "sales.summary.account": 0,
+        "sales.summary.new_business": 1,
+        "sales.summary.tech": 1,
+    }
 
 
 # --- M3 Stage D: one user's pin/exclude overlay -----------------------------

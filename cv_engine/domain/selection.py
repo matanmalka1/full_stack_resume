@@ -5,7 +5,7 @@ every fact a Profile named reached the document, so Emphasis, job text, keywords
 and gaps could not change what the CV said. Selection now happens here, once,
 under an explicit authority order:
 
-    pinned > required-tag rescue > gap substitute > Profile/Emphasis semantics > job keywords
+    pinned > required-tag rescue > requirement support > Profile/Emphasis semantics > job keywords
 
 The last three are a lexicographic ranking, not a weighted sum. That is what
 keeps the order an authority order: no amount of keyword overlap in a job
@@ -36,7 +36,7 @@ from .models import (
     SelectionOutcome,
 )
 
-SELECTION_POLICY_VERSION = "1.0.0"
+SELECTION_POLICY_VERSION = "1.1.0"
 
 # Headings, dates and contact lines are structure, not evidence. They never
 # compete with bullets for a section budget.
@@ -125,6 +125,7 @@ class _Scored:
     emphasis_score: int
     keyword_hits: int
     gap_substitute: bool
+    requirement_rank: int
     structural: bool
     pinned: bool
     tags: frozenset[str]
@@ -141,11 +142,46 @@ class _Scored:
         produce the same document.
         """
         return (
-            int(self.gap_substitute),
+            self.requirement_rank,
             self.semantic_score,
             self.keyword_hits,
             -self.pool_index,
         )
+
+
+def _requirement_ranks(analysis: JobAnalysis) -> dict[str, int]:
+    """How directly each fact answers what the posting demanded.
+
+    2 for evidence bearing on a mandatory requirement, 1 for a preferred one,
+    0 for a fact the posting never asked about. This occupies the slot
+    `gap_substitute` used to hold, and widens it: a substitute stands in for
+    something the candidate lacks, so under the old key the only facts with any
+    authority here were the ones answering a *failure*. Evidence that a demanded
+    thing is genuinely held carried none, and a mandatory ask ranked level with
+    a nice-to-have.
+
+    A gap takes the necessity of the requirement it projects. Gaps from an
+    analysis written before requirement extraction carry no `requirement_id`
+    and stay on one tier, exactly as they ranked before: such an analysis has no
+    requirements, so nothing reaches tier 2 and its selection is unchanged.
+    """
+    necessity = {
+        requirement.requirement_id: 2 if requirement.mandatory else 1
+        for requirement in analysis.requirements
+    }
+    ranks: dict[str, int] = {}
+
+    def hold(fact_id: str, level: int) -> None:
+        ranks[fact_id] = max(ranks.get(fact_id, 0), level)
+
+    for requirement in analysis.requirements:
+        for fact_id in requirement.supporting_fact_ids:
+            hold(fact_id, necessity[requirement.requirement_id])
+    for gap in analysis.gaps:
+        level = necessity.get(gap.requirement_id, 1) if gap.requirement_id else 1
+        for fact_id in gap.substitute_fact_ids:
+            hold(fact_id, level)
+    return ranks
 
 
 def _keyword_hits(fact: Fact, keywords: list[str]) -> int:
@@ -163,6 +199,7 @@ def _score(
     policy: EmphasisPolicy,
     analysis: JobAnalysis,
     gap_substitutes: frozenset[str],
+    requirement_ranks: dict[str, int],
     extra_pinned: frozenset[str],
 ) -> _Scored:
     tags = frozenset(fact.tags)
@@ -174,6 +211,7 @@ def _score(
         emphasis_score=sum(policy.tag_weights.get(tag, 0) for tag in tags),
         keyword_hits=_keyword_hits(fact, analysis.keywords),
         gap_substitute=fact.fact_id in gap_substitutes,
+        requirement_rank=requirement_ranks.get(fact.fact_id, 0),
         structural=fact.resume_style in STRUCTURAL_STYLES,
         pinned=fact.fact_id in set(spec.pinned_fact_ids) or fact.fact_id in extra_pinned,
         tags=tags,
@@ -400,6 +438,7 @@ def build_selection(
     gap_substitutes = frozenset(
         fact_id for gap in analysis.gaps for fact_id in gap.substitute_fact_ids
     )
+    requirement_ranks = _requirement_ranks(analysis)
 
     # `pools` is every candidate the Profile offered, and is what the manifest
     # accounts for; `scored` is what the engine may still choose from. They are
@@ -423,6 +462,7 @@ def build_selection(
                 policy=policy,
                 analysis=analysis,
                 gap_substitutes=gap_substitutes,
+                requirement_ranks=requirement_ranks,
                 extra_pinned=pinned_fact_ids,
             )
             for index, fact_id in enumerate(spec.fact_ids)
@@ -528,6 +568,7 @@ def build_selection(
             semantic_score=item.semantic_score,
             keyword_hits=item.keyword_hits,
             gap_substitute=item.gap_substitute,
+            requirement_rank=item.requirement_rank,
             outcome=outcomes[item.fact_id],
             reason=reasons.get(item.fact_id),
         )
