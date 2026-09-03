@@ -128,10 +128,7 @@ export const ApplicationListPage = () => {
 
   return (
     <section aria-labelledby="route-heading" className="page-frame">
-      <DashboardHeader
-        newApplicationTo={newApplicationTo}
-        totalCount={page?.total}
-      />
+      <DashboardHeader newApplicationTo={newApplicationTo} totalCount={page?.total} />
       <div className="mt-6 flex flex-col gap-6">
         <MetricsKpiGrid
           activeInterviewsCount={page?.preset_counts.active_interviews}
