@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB
 
-from cv_engine.application.commands import DraftCommand
+from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
 from cv_engine.application.errors import WorkflowError
 from cv_engine.domain.analysis.approval import merge_classification
 from cv_engine.domain.models import Emphasis, FitLevel, Gap, ProfileName, Track
@@ -203,3 +203,48 @@ def test_deterministic_ambiguity_is_resolved_by_choosing_the_classification(clas
 
     unrelated = classify(AMBIGUOUS_HEBREW_JOB, emphasis_override="balanced-sales")
     assert unrelated.classification_requires_approval
+
+
+#: Requirements stated in prose that neither the concept vocabulary nor the
+#: legacy gap rules read.
+UNREADABLE_POSTING = (
+    "Account Executive.\n"
+    "You have experience closing complex B2B deals, understand enterprise "
+    "procurement, and negotiate with senior stakeholders.\n"
+)
+
+
+def test_generation_refuses_an_unread_posting_in_its_own_terms(services) -> None:
+    """The refusal must not name a decision that cannot resolve it.
+
+    Every unresolved approval reason was refused with "requires an explicit
+    Track/Profile override". For a posting the engine could not read that is
+    the one thing that cannot help, and a direct API caller was told to do it -
+    the same false advertisement the projection stopped making, still standing
+    in the layer that enforces it.
+    """
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company="Unread Generation Co",
+            target_role="Account Executive",
+            job_text=UNREADABLE_POSTING,
+            client="web",
+        )
+    )
+    analysed = services.analysis.analyze(
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+        )
+    )
+    with pytest.raises(WorkflowError) as refusal:
+        services.drafts.draft(
+            DraftCommand(
+                application_id=ingested.application_id,
+                job_analysis_id=analysed.analysis_id,
+                selection_plan_id=analysed.selection_plan_id,
+            )
+        )
+    message = str(refusal.value)
+    assert "did not read this posting's requirements" in message
+    assert "Track/Profile" not in message

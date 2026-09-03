@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from ..util import sha256_text
-from .analysis.approval import unresolved_approval_reasons
+from .analysis.approval import ANALYSIS_INCOMPLETE, approval_reason, unresolved_approval_reasons
 from .analysis.gaps import unaccepted_hard_gaps
 from .draft_markdown import serialize_markdown
 from .drafts import render_composite_claim, validate_derived_wording
@@ -311,12 +311,30 @@ def _profile_matches(context: _ValidationContext) -> None:
             f"Each hard requirement gap requires an explicit acceptance: "
             f"{[gap.requirement for gap in blocking]}",
         )
+    # Two different findings, because two different decisions answer them. A
+    # posting the engine could not read was reported as a classification
+    # ambiguity, which named a decision that cannot resolve it - and the wrong
+    # name was written into an immutable validation report.
     unresolved = unresolved_approval_reasons(context.analysis)
-    if unresolved:
+    incomplete = [
+        reason
+        for reason in unresolved
+        if approval_reason(reason).review_code == ANALYSIS_INCOMPLETE
+    ]
+    ambiguous = [reason for reason in unresolved if reason not in incomplete]
+    if incomplete:
+        context.add_issue(
+            "profile",
+            "incomplete-analysis-not-accepted",
+            "The analysis did not read this posting's requirements "
+            f"({', '.join(incomplete)}); proceeding requires accepting an incomplete "
+            "analysis.",
+        )
+    if ambiguous:
         context.add_issue(
             "profile",
             "classification-approval-required",
-            f"Material classification ambiguity is unresolved: {', '.join(unresolved)}",
+            f"Material classification ambiguity is unresolved: {', '.join(ambiguous)}",
         )
 
 

@@ -5,7 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .... import __version__
-from ....domain.analysis.approval import unresolved_approval_reasons
+from ....domain.analysis.approval import (
+    ANALYSIS_INCOMPLETE,
+    approval_reason,
+    unresolved_approval_reasons,
+)
 from ....domain.analysis.gaps import unaccepted_hard_gaps
 from ....domain.knowledge import Knowledge
 from ....domain.models import DraftDocument, JobAnalysis
@@ -131,7 +135,24 @@ class DraftGeneration(DraftServiceBase):
         analysis = record["analysis"]
         if analysis.fit.value == "low" and analysis.user_override.get("fit") != "accepted-low-fit":
             raise StateConflict("low fit blocks CV generation until --accept-low-fit is recorded")
+        # Split by what actually resolves each reason. Refusing every unresolved
+        # reason with "override the Track/Profile" told a direct API caller to
+        # do the one thing that cannot recover requirements the engine never
+        # read - the same false advertisement the projection stopped making,
+        # left standing in the layer that enforces it.
         unresolved = unresolved_approval_reasons(analysis)
+        incomplete = [
+            reason
+            for reason in unresolved
+            if approval_reason(reason).review_code == ANALYSIS_INCOMPLETE
+        ]
+        if incomplete:
+            raise StateConflict(
+                "the analysis did not read this posting's requirements "
+                f"({', '.join(incomplete)}); a classification decision does not resolve "
+                "this, and generation stays blocked until an incomplete analysis is "
+                "explicitly accepted"
+            )
         if unresolved:
             raise StateConflict(
                 "ambiguous classification requires an explicit Track/Profile override: "
