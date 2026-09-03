@@ -176,9 +176,7 @@ class DraftApproval(DraftServiceBase):
             # joining through whichever plan happens to still be reachable.
             "accepted_gaps": [
                 accepted.model_dump(mode="json")
-                for accepted in self.repo.selection_plan(
-                    working.selection_plan_id
-                ).accepted_gaps
+                for accepted in self.repo.selection_plan(working.selection_plan_id).accepted_gaps
             ],
             "user_overrides": analysis.user_override,
             "fact_store_version": facts.version,

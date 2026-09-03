@@ -387,9 +387,7 @@ def _accept(api_worker, application_id, analysis_id, requirement_ids, **extra):
         "accepted_requirement_ids": list(requirement_ids),
         **extra,
     }
-    body.setdefault(
-        "expected_selection_plan_id", _active_plan_id(api_worker, application_id)
-    )
+    body.setdefault("expected_selection_plan_id", _active_plan_id(api_worker, application_id))
     return api_worker.client.post(
         f"{API_PREFIX}/analyses/{analysis_id}/apply-decisions",
         json=body,
@@ -499,7 +497,9 @@ def test_accepting_without_naming_the_plan_is_refused(api_worker) -> None:
     moment it arrives, which is the silent rebase the field exists to prevent.
     Optional in general, because most submissions accept nothing.
     """
-    application_id = _application(api_worker.services, "Unnamed Plan Co", job_text=RIVERSIDE_POSTING)
+    application_id = _application(
+        api_worker.services, "Unnamed Plan Co", job_text=RIVERSIDE_POSTING
+    )
     outputs = _outputs(_analyze(api_worker, application_id))
     analysis_id = outputs["job_analysis"]
     hard = _hard_gap_requirement_ids(api_worker, analysis_id)

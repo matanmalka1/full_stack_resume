@@ -252,9 +252,7 @@ def classify_job(
     # The legacy rule-derived gaps are unioned rather than replaced, so a rule
     # that fires on wording no concept models yet is not lost.
     extracted = extract_requirements(text, normalized_hash=normalized_hash, concepts=concepts)
-    requirements: list[Requirement] = cover_requirements(
-        extracted, facts=facts, concepts=concepts
-    )
+    requirements: list[Requirement] = cover_requirements(extracted, facts=facts, concepts=concepts)
     extraction_version = concepts.extraction_version
 
     # The rules are the other half of requirement understanding while they
