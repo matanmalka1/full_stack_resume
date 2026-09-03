@@ -1,4 +1,4 @@
-import { PlusCircle, ShieldCheck, Sparkles, UserCheck, Zap } from "lucide-react";
+import { PlusCircle, ShieldCheck, Sparkles, UserCheck } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Link, type To } from "react-router-dom";
 
@@ -7,11 +7,10 @@ import { surfaceClasses } from "../../ui/Surface";
 
 interface DashboardHeaderProps {
   newApplicationTo: To;
-  onOpenQuickIntake: () => void;
   totalCount: number | undefined;
 }
 
-export const DashboardHeader = ({ newApplicationTo, onOpenQuickIntake, totalCount }: DashboardHeaderProps) => {
+export const DashboardHeader = ({ newApplicationTo, totalCount }: DashboardHeaderProps) => {
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -60,15 +59,6 @@ export const DashboardHeader = ({ newApplicationTo, onOpenQuickIntake, totalCoun
         </div>
 
         <div className="flex w-full shrink-0 flex-wrap items-center gap-2.5 sm:w-auto">
-          <button
-            className={buttonClasses("secondary", "flex-1 sm:flex-none")}
-            onClick={onOpenQuickIntake}
-            title="הזנה מהירה של פרטי משרה"
-            type="button"
-          >
-            <Zap aria-hidden="true" className="size-4 text-cv-accent" />
-            קליטה מהירה
-          </button>
           <Link className={buttonClasses("primary", "flex-1 sm:flex-none")} to={newApplicationTo}>
             <PlusCircle aria-hidden="true" className="size-4" />
             קליטת משרה חדשה

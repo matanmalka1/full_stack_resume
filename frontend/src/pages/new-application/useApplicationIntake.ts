@@ -25,7 +25,7 @@ export interface ApplicationIntakeFields {
   job_text: string;
 }
 
-export const emptyIntakeFields: ApplicationIntakeFields = {
+const emptyIntakeFields: ApplicationIntakeFields = {
   company: "",
   target_role: "",
   source_url: "",
@@ -51,7 +51,7 @@ interface SubmitInput {
   intake: ApplicationIntake;
 }
 
-export type ApplicationIntakeResult =
+type ApplicationIntakeResult =
   | { kind: "duplicates"; matches: DuplicateMatch[] }
   | {
       kind: "created";
@@ -64,9 +64,8 @@ interface UseApplicationIntakeOptions {
   onCreated: (result: Extract<ApplicationIntakeResult, { kind: "created" }>) => void;
 }
 
-/* Shared intake policy behind the full-page NewApplicationPage and the board's
-   QuickIntakeDialog: the mutation, the idempotency key, duplicate handling, and
-   stale-answer detection. Only the surrounding JSX legitimately differs between them. */
+/* Intake policy for the canonical NewApplicationPage: the mutation, the idempotency
+   key, duplicate handling, and stale-answer detection stay outside its JSX. */
 export const useApplicationIntake = ({ onCreated }: UseApplicationIntakeOptions) => {
   const queryClient = useQueryClient();
   const form = useAppForm<ApplicationIntakeFields>({ defaultValues: emptyIntakeFields });

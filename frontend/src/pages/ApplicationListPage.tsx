@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Kanban, LayoutGrid, Table2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import {
   type ApplicationListQuery,
@@ -28,7 +28,6 @@ import { DashboardHeader } from "./application-list/DashboardHeader";
 import { MetricsKpiGrid } from "./application-list/MetricsKpiGrid";
 import { ApplicationPipelineView } from "./application-list/ApplicationPipelineView";
 import { PipelineStagesBar } from "./application-list/PipelineStagesBar";
-import { QuickIntakeDialog } from "./application-list/QuickIntakeDialog";
 import { type RecruitmentStageId, recruitmentStages, selectedStage } from "./application-list/recruitmentStages";
 import { UrgentActionHub } from "./application-list/UrgentActionHub";
 import { PAGE_SIZE, paramsFromQuery, queryFromParams } from "./applicationListParams";
@@ -43,12 +42,10 @@ const viewOptions: readonly { icon: typeof Table2; label: string; value: ViewMod
 ];
 
 export const ApplicationListPage = () => {
-  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const query = queryFromParams(params);
   const queryClient = useQueryClient();
   const [viewMode, setViewMode] = useState<ViewMode>("table");
-  const [quickIntakeOpen, setQuickIntakeOpen] = useState(false);
   const [updatingApplication, setUpdatingApplication] = useState<ApplicationListItem | null>(null);
   /* Typing owns a local buffer so a keystroke is never lost waiting on a URL round-trip;
      the buffer is what gets debounced, and only the settled value is written to the URL.
@@ -133,7 +130,6 @@ export const ApplicationListPage = () => {
     <section aria-labelledby="route-heading" className="page-frame">
       <DashboardHeader
         newApplicationTo={newApplicationTo}
-        onOpenQuickIntake={() => setQuickIntakeOpen(true)}
         totalCount={page?.total}
       />
       <div className="mt-6 flex flex-col gap-6">
@@ -278,17 +274,6 @@ export const ApplicationListPage = () => {
             }
           }}
           pending={close.isPending}
-        />
-        <QuickIntakeDialog
-          onClose={() => setQuickIntakeOpen(false)}
-          onCreated={(applicationId, analysisQueued, analysisProblem) => {
-            setQuickIntakeOpen(false);
-            void invalidateApplicationViews(queryClient);
-            void navigate(appRoutes.application(applicationId), {
-              state: { createdApplication: { analysisProblem, analysisQueued } },
-            });
-          }}
-          open={quickIntakeOpen}
         />
         <RecruitmentUpdateDialog application={updatingApplication} onClose={() => setUpdatingApplication(null)} />
       </div>

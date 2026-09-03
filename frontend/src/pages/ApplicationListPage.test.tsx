@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { applicationDetailQueryOptions, applicationListQueryOptions } from "../api/applications";
 import type { ApplicationDetail, ApplicationListItem, ApplicationListResponse, Reason } from "../api/contracts";
-import { settingsQueryKey } from "../api/settings";
 import { ApplicationListPage } from "./ApplicationListPage";
 
 const item = (overrides: Partial<ApplicationListItem> = {}): ApplicationListItem => {
@@ -215,6 +214,7 @@ describe("ApplicationListPage", () => {
     expect(screen.getByText("בדיקת עובדות לפני אישור")).toBeInTheDocument();
     expect(await screen.findByText("2 מועמדויות במערכת")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "קליטת משרה חדשה" })).toHaveAttribute("href", "/applications/new");
+    expect(screen.queryByRole("button", { name: "קליטה מהירה" })).not.toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Acme" })).toHaveAttribute("href", "/applications/app-1");
     expect(screen.getByRole("link", { name: "Binat" })).toHaveAttribute("href", "/applications/app-2");
     /* Preparation and recruitment are independent axes and the board shows both: one says
@@ -425,87 +425,6 @@ describe("ApplicationListPage", () => {
         }),
       ).toBe(true),
     );
-  });
-
-  it("requires explicit acknowledgement before quick intake creates a duplicate", async () => {
-    const fetchMock = vi.fn(async (url: unknown, options?: RequestInit) => {
-      const path = String(url);
-
-      if (path === "/api/v1/applications/duplicate-check") {
-        return jsonResponse({
-          matches: [
-            {
-              application_id: "app-existing",
-              company: "Acme",
-              target_role: "Backend Engineer",
-              matched_on: ["company_title"],
-            },
-          ],
-        });
-      }
-      if (path === "/api/v1/applications" && options?.method === "POST") {
-        return jsonResponse({ application_id: "app-new", job_snapshot_id: "snapshot-new", duplicate_matches: [] }, 201);
-      }
-      if (path === "/api/v1/applications/app-new/analyses") {
-        return jsonResponse(
-          {
-            id: "operation-new",
-            application_id: "app-new",
-            operation_type: "analyze_job",
-            status: "queued",
-            is_terminal: false,
-            phase: "queued",
-            message: "",
-            created_at: "2026-09-02T07:00:00Z",
-            outputs: [],
-            available_actions: ["cancel"],
-          },
-          202,
-          { Location: "/api/v1/operations/operation-new" },
-        );
-      }
-
-      return jsonResponse(listBody([item()]));
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    queryClient.setQueryData(settingsQueryKey, {
-      settings: {
-        default_execution_mode: "deterministic",
-        provider_configured: false,
-        ai_enabled: false,
-      },
-      etag: null,
-    });
-
-    renderPage({ queryClient });
-
-    fireEvent.click(await screen.findByRole("button", { name: "קליטה מהירה" }));
-    expect(screen.getByRole("dialog", { name: "קליטת משרה מהירה" })).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("שם החברה"), { target: { value: " Acme " } });
-    fireEvent.change(screen.getByLabelText("תפקיד היעד"), { target: { value: "Backend Engineer" } });
-    fireEvent.change(screen.getByLabelText("טקסט המשרה"), { target: { value: "Exact job text" } });
-    fireEvent.click(screen.getByRole("button", { name: "קליטת משרה" }));
-
-    expect(await screen.findByText("נמצאה מועמדות דומה")).toBeInTheDocument();
-    expect(
-      fetchMock.mock.calls.filter(
-        ([url, options]) => String(url) === "/api/v1/applications" && options?.method === "POST",
-      ),
-    ).toHaveLength(0);
-
-    fireEvent.click(screen.getByRole("button", { name: "יצירת מועמדות נוספת" }));
-
-    expect(await screen.findByRole("heading", { name: "מסך המועמדות" })).toBeInTheDocument();
-    const createCall = fetchMock.mock.calls.find(
-      ([url, options]) => String(url) === "/api/v1/applications" && options?.method === "POST",
-    );
-    expect(JSON.parse(String(createCall?.[1]?.body))).toMatchObject({
-      acknowledged_duplicates: true,
-      company: "Acme",
-      job_text: "Exact job text",
-      target_role: "Backend Engineer",
-    });
   });
 
   it("loads allowed transitions before quick status updates and sends each changed field to its owner", async () => {
