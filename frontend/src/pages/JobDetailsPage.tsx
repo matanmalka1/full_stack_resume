@@ -138,13 +138,6 @@ export const JobDetailsPage = () => {
 
   return (
     <PageShell
-      actions={
-        detail === undefined ? null : (
-          <a className={buttonClasses("primary")} href="#recruitment-heading">
-            עדכון מעקב הגיוס
-          </a>
-        )
-      }
       navigation={
         <BackLink label="חזרה ללוח המועמדויות" to={appRoutes.home}>
           לוח המועמדויות

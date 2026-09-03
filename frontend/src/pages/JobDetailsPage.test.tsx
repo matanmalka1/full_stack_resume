@@ -109,7 +109,6 @@ describe("JobDetailsPage", () => {
 
     expect(await screen.findByText("שיחת מגייס")).toBeInTheDocument();
     expect(screen.getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "עדכון מעקב הגיוס" })).toHaveAttribute("href", "#recruitment-heading");
   });
 
   it("captures an amended posting as a new immutable snapshot from Job Detail", async () => {
