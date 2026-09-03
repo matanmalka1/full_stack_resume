@@ -2,13 +2,13 @@ import type { ReactNode } from "react";
 
 import type { Classification } from "../../api/analyses";
 import type { ApplicationDetail } from "../../api/contracts";
+import { Callout } from "../../ui/Callout";
 import { surfaceClasses } from "../../ui/Surface";
 import { ApplicationActions } from "./ApplicationActions";
 import { AutomaticDraftNotice } from "./AutomaticDraftNotice";
 import { PreparationAlerts } from "./PreparationAlerts";
 import { ReviewDecisionPanel, resolvedByDecisionForm } from "./ReviewDecisionPanel";
 import { AnalysisPanel } from "./analysis/AnalysisPanel";
-import { SupersededAnalysisNote } from "./analysis/SupersededAnalysisNote";
 
 export const PreparationView = ({
   classification,
@@ -46,7 +46,16 @@ export const PreparationView = ({
 
       {classification === null ? null : <AnalysisPanel classification={classification} detail={detail} />}
 
-      {supersededAnalysis ? <SupersededAnalysisNote /> : null}
+      {/* A superseded analysis is not shown as if it were the one in force: the reader is
+          told the analysis on record belongs to an older snapshot and that a new one is
+          what the workflow is waiting on. The projection's stale and review reasons carry
+          the action. */}
+      {supersededAnalysis ? (
+        <Callout title="הניתוח שעל המסך אינו הניתוח הפעיל" tone="warning">
+          הניתוח האחרון שנשמר נעשה מול תצלום משרה קודם, ולכן אינו מוצג כאן. ניתוח חדש מול התצלום הפעיל הוא מה שיציג את
+          הסיווג העדכני.
+        </Callout>
+      ) : null}
 
       {/* The decision stays directly under the analysis it answers. Together with the
           projected next action it gets a distinct surface, so the way forward does not
