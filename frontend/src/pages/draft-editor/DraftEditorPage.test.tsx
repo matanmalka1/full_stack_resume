@@ -285,10 +285,89 @@ describe("DraftEditorPage", () => {
 
     renderPage();
 
-    expect(await screen.findAllByText("Delivered 30% growth.")).toHaveLength(2);
+    expect(await screen.findAllByDisplayValue("Delivered 30% growth.")).toHaveLength(2);
     expect(screen.getByText("ללא ביסוס")).toBeInTheDocument();
     expect(screen.getByText("no canonical fact authorizes this wording")).toBeInTheDocument();
     expect(screen.getByText("הפיכת הטקסט לעובדה מאושרת")).toBeInTheDocument();
+  });
+
+  it("uses the canonical Hebrew lifecycle labels for a claim fact and its history", async () => {
+    const pendingDraft = draft({
+      sections: [
+        {
+          name: "Core Skills",
+          claims: [
+            {
+              claim_id: "c-1",
+              style: "bullet",
+              text: "Delivered 30% growth.",
+              claim_type: "pending",
+              fact_ids: [],
+              pending_reason: "הטענה עדיין אינה מבוססת.",
+            },
+          ],
+        },
+      ],
+    });
+    const lifecycleEvent = {
+      application_id: "app-1",
+      claim_id: "c-1",
+      created_at: "2026-08-24T07:05:00Z",
+      event_type: "confirmed",
+      fact_hash: "fact-hash",
+      fact_id: "f-captured",
+      facts_version: "facts-2",
+      from_status: "pending",
+      id: "event-1",
+      lifecycle_version: "lifecycle-2",
+      reason: "explicit confirmation",
+      source: "sales.md",
+      to_status: "confirmed",
+    };
+    const fetchMock = vi.fn((input: unknown) => {
+      const url = String(input);
+      if (url === "/api/v1/facts/history") {
+        return Promise.resolve(jsonResponse({ events: [lifecycleEvent] }));
+      }
+      if (url === "/api/v1/facts/f-captured") {
+        return Promise.resolve(
+          jsonResponse({
+            events: [lifecycleEvent],
+            fact: {
+              confirmed_at: "2026-08-24T07:05:00Z",
+              effective_dates: null,
+              fact_id: "f-captured",
+              link_target: null,
+              meaning: "Delivered measurable growth.",
+              provenance: "Candidate confirmation",
+              renderings: { en: "Delivered 30% growth." },
+              replaces: null,
+              resume_style: "bullet",
+              source: "sales.md",
+              status: "confirmed",
+              tags: ["growth"],
+            },
+          }),
+        );
+      }
+      if (url === "/api/v1/facts") {
+        return Promise.resolve(jsonResponse({ items: [] }));
+      }
+      if (url.startsWith(`${DRAFT_PATH}/facts`)) {
+        return Promise.resolve(jsonResponse(facts()));
+      }
+      if (url.startsWith(DRAFT_PATH)) {
+        return Promise.resolve(jsonResponse(pendingDraft));
+      }
+      return Promise.resolve(jsonResponse(detail()));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+
+    expect(await screen.findByText("מצב: אושרה")).toBeInTheDocument();
+    expect(screen.getByText("ממתינה לאישור ← אושרה · explicit confirmation")).toBeInTheDocument();
+    expect(screen.queryByText(/\bpending\b|\bconfirmed\b/)).not.toBeInTheDocument();
   });
 
   it("keeps fact creation and lifecycle management inside the draft context", async () => {

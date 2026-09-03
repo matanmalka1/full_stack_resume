@@ -1,42 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { createPendingFact, factsQueryPrefix } from "../../api/facts";
-import type { CreateFactRequest } from "../../api/contracts";
 import { ErrorCallout } from "../../app/ErrorCallout";
 import { useAppForm } from "../../forms/useAppForm";
 import { Button } from "../../ui/Button";
-import { Field } from "../../ui/Field";
-import { Select } from "../../ui/Select";
-import { TextArea, TextInput } from "../../ui/TextInput";
-
-type FactSource = CreateFactRequest["source"];
-type FactStyle = CreateFactRequest["resume_style"];
-
-const sourceLabels: Record<FactSource, string> = {
-  "common.md": "עובדות משותפות",
-  "sales.md": "ניסיון במכירות",
-  "development.md": "ניסיון בפיתוח",
-  "situational_skills.md": "כישורים מצביים",
-};
-
-const styleLabels: Record<FactStyle, string> = {
-  bullet: "שורת ניסיון",
-  item: "פריט",
-  paragraph: "פסקה",
-  heading: "כותרת",
-  date: "תאריך",
-  contact: "פרט קשר",
-};
-
-interface CreatePendingFactFields {
-  english: string;
-  hebrew: string;
-  meaning: string;
-  provenance: string;
-  source: FactSource;
-  style: FactStyle;
-  tags: string;
-}
+import { defaultFactSource, FactFields, type FactFormFields, parseFactTags } from "./FactFields";
 
 interface CreatePendingFactFormProps {
   onCreated: (factId: string) => void;
@@ -49,13 +17,13 @@ interface CreatePendingFactFormProps {
    too. */
 export const CreatePendingFactForm = ({ onCreated, profile }: CreatePendingFactFormProps) => {
   const queryClient = useQueryClient();
-  const form = useAppForm<CreatePendingFactFields>({
+  const form = useAppForm<FactFormFields>({
     defaultValues: {
       english: "",
       hebrew: "",
       meaning: "",
       provenance: "",
-      source: profile === "development" ? "development.md" : "sales.md",
+      source: defaultFactSource(profile),
       style: "bullet",
       tags: "",
     },
@@ -67,7 +35,7 @@ export const CreatePendingFactForm = ({ onCreated, profile }: CreatePendingFactF
   } = form;
 
   const create = useMutation({
-    mutationFn: (fields: CreatePendingFactFields) =>
+    mutationFn: (fields: FactFormFields) =>
       createPendingFact({
         source: fields.source,
         meaning: fields.meaning.trim(),
@@ -75,10 +43,7 @@ export const CreatePendingFactForm = ({ onCreated, profile }: CreatePendingFactF
           en: fields.english.trim(),
           ...(fields.hebrew.trim() === "" ? {} : { he: fields.hebrew.trim() }),
         },
-        tags: fields.tags
-          .split(",")
-          .map((tag) => tag.trim())
-          .filter(Boolean),
+        tags: parseFactTags(fields.tags),
         provenance: fields.provenance.trim(),
         resume_style: fields.style,
         reason: "created from the contextual draft fact panel",
@@ -101,68 +66,7 @@ export const CreatePendingFactForm = ({ onCreated, profile }: CreatePendingFactF
         />
       )}
 
-      <Field label="מקור הידע">
-        {(control) => (
-          <Select {...control} {...register("source")}>
-            {Object.entries(sourceLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </Select>
-        )}
-      </Field>
-      <Field label="סוג הצגה">
-        {(control) => (
-          <Select {...control} {...register("style")}>
-            {Object.entries(styleLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </Select>
-        )}
-      </Field>
-      <Field className="lg:col-span-2" error={errors.meaning?.message} label="משמעות">
-        {(control) => (
-          <TextArea
-            {...control}
-            {...register("meaning", { validate: (value) => value.trim() !== "" || "יש להזין משמעות." })}
-            dir="auto"
-          />
-        )}
-      </Field>
-      <Field error={errors.english?.message} label="ניסוח באנגלית">
-        {(control) => (
-          <TextArea
-            {...control}
-            {...register("english", { validate: (value) => value.trim() !== "" || "יש להזין ניסוח באנגלית." })}
-            dir="ltr"
-          />
-        )}
-      </Field>
-      <Field label="ניסוח בעברית (רשות)" optional>
-        {(control) => <TextArea {...control} {...register("hebrew")} />}
-      </Field>
-      <Field error={errors.tags?.message} hint="יש להפריד תגיות בפסיקים." label="תגיות">
-        {(control) => (
-          <TextInput
-            {...control}
-            {...register("tags", {
-              validate: (value) => value.split(",").some((tag) => tag.trim() !== "") || "יש להזין תגית אחת לפחות.",
-            })}
-          />
-        )}
-      </Field>
-      <Field error={errors.provenance?.message} label="מקור ואימות העובדה">
-        {(control) => (
-          <TextArea
-            {...control}
-            {...register("provenance", { validate: (value) => value.trim() !== "" || "יש להזין מקור ואימות." })}
-            dir="auto"
-          />
-        )}
-      </Field>
+      <FactFields errors={errors} includeHebrew includeStyle register={register} twoColumn />
       <Button className="lg:col-span-2" pending={create.isPending} pendingLabel="יוצר…" type="submit">
         יצירת עובדה ממתינה
       </Button>

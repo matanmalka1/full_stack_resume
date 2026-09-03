@@ -2,14 +2,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { attachFact, factDetailQueryKey, factsQueryPrefix, transitionFact } from "../../api/facts";
-import type { FactDetail, FactStatus } from "../../api/contracts";
+import type { FactDetail } from "../../api/contracts";
 import { ErrorCallout } from "../../app/ErrorCallout";
 import { Button } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 import { Checkbox } from "../../ui/Checkbox";
 import { Field } from "../../ui/Field";
 import { Select } from "../../ui/Select";
-import { factStatusLabels } from "./factLabels";
+import { FactEventHistory } from "./FactEventHistory";
 
 interface FactHistoryActionsProps {
   detail: FactDetail;
@@ -70,16 +70,7 @@ export const FactHistoryActions = ({ detail, profile, sections }: FactHistoryAct
         />
       )}
 
-      <ol className="flex flex-col gap-2">
-        {detail.events.map((event) => (
-          <li className="border-s-2 border-cv-border ps-3 text-support text-cv-text-muted" key={event.id}>
-            {event.from_status == null
-              ? "נוצרה כממתינה"
-              : `${factStatusLabels[event.from_status as FactStatus] ?? event.from_status} ← ${factStatusLabels[event.to_status as FactStatus] ?? event.to_status}`}
-            {event.reason === "" ? "" : ` · ${event.reason}`}
-          </li>
-        ))}
-      </ol>
+      <FactEventHistory events={detail.events} />
 
       {selected.status === "pending" || selected.status === "confirmed" ? (
         <div className="flex flex-col gap-3 rounded-control border border-cv-border bg-cv-surface p-4">
