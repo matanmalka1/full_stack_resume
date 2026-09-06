@@ -115,10 +115,15 @@ export const FactSelectionList = ({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-        <p className="text-support text-cv-text-muted">
-          {totals.total} עובדות בסך הכול · {totals.included} נכללות · {totals.excluded} לא נכללות · {totals.locked}{" "}
-          רכיבים קבועים
-        </p>
+        <div>
+          <p className="text-support text-cv-text-muted">
+            {totals.total} עובדות בסך הכול · {totals.included} נכללות · {totals.excluded} לא נכללות · {totals.locked}{" "}
+            רכיבים קבועים
+          </p>
+          <p className="mt-0.5 text-support text-cv-text-muted">
+            קיבוע והחרגה כאן ניתנים לשינוי גם בעורך הטיוטה - בכרטיס "ביסוס עובדתי" ובפאנל "מחזור חיי העובדות".
+          </p>
+        </div>
 
         <div className="relative">
           <label className="sr-only" htmlFor={searchId}>

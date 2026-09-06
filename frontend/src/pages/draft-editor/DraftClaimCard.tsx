@@ -133,12 +133,22 @@ export const DraftClaimCard = ({
 
       {/* The facts behind the line, as a note under it rather than a tinted box inside a
           box. The green mark on each fact is what says these are the confirmed backing;
-          a full panel with its own heading said it a second time, once per row. */}
+          a full panel with its own heading said it a second time, once per row.
+
+          Sixty rows once each carried the full sentence "N עובדות שמאחורי השורה" - the
+          same words repeated down every row of a section long enough that the repetition
+          was most of what filled the screen. The tag now says only the count; the
+          sentence moves to `title`, read on hover or by a screen reader's accessible
+          name, once per row rather than printed once per row. */}
       {linked.length === 0 ? null : (
         <details className="mt-1.5 px-2">
-          <summary className="inline-flex cursor-pointer items-center gap-1.5 text-support text-cv-text-muted">
+          <summary
+            aria-label={linked.length === 1 ? "העובדה שמאחורי השורה" : `${linked.length} עובדות שמאחורי השורה`}
+            className="inline-flex w-fit cursor-pointer list-none items-center gap-1 rounded-pill border border-cv-border px-1.5 py-0.5 text-support text-cv-text-muted [&::-webkit-details-marker]:hidden"
+            title={linked.length === 1 ? "העובדה שמאחורי השורה" : `${linked.length} עובדות שמאחורי השורה`}
+          >
             <Database aria-hidden="true" className="size-3.5 text-cv-success" />
-            {linked.length === 1 ? "העובדה שמאחורי השורה" : `${linked.length} עובדות שמאחורי השורה`}
+            <span aria-hidden="true">{linked.length}</span>
           </summary>
           <ul className="mt-1.5 flex flex-col gap-1.5">{linked.map(factRow)}</ul>
         </details>

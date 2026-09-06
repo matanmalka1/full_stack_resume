@@ -9,7 +9,16 @@ import { Callout } from "../../ui/Callout";
 import { Checkbox } from "../../ui/Checkbox";
 import { Field } from "../../ui/Field";
 import { Select } from "../../ui/Select";
+import { defaultFactSource } from "./FactFields";
 import { FactEventHistory } from "./FactEventHistory";
+import { factSourceLabel } from "./factLabels";
+
+/* A.4's fact-lifecycle attach can reach across the whole canonical pool, including facts
+   captured under a different career track's Profile than the one active on this
+   application. Attaching one is not forbidden - a shared or situational fact is meant to
+   cross tracks - but a track-specific fact from the other track rarely belongs, and
+   nothing else on this screen names the mismatch before the write happens. */
+const TRACK_NEUTRAL_SOURCES = new Set(["common.md", "situational_skills.md"]);
 
 interface FactHistoryActionsProps {
   detail: FactDetail;
@@ -30,6 +39,11 @@ export const FactHistoryActions = ({ detail, profile, sections }: FactHistoryAct
   const [explicitlyConfirmed, setExplicitlyConfirmed] = useState(false);
   const [section, setSection] = useState(sections[0] ?? "");
   const [pin, setPin] = useState(false);
+  const [crossTrackConfirmed, setCrossTrackConfirmed] = useState(false);
+
+  const expectedSource = profile === null ? null : defaultFactSource(profile);
+  const crossTrack =
+    expectedSource !== null && !TRACK_NEUTRAL_SOURCES.has(selected.source) && selected.source !== expectedSource;
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: factsQueryPrefix });
@@ -107,10 +121,34 @@ export const FactHistoryActions = ({ detail, profile, sections }: FactHistoryAct
               </Select>
             )}
           </Field>
-          <Checkbox checked={pin} onChange={(event) => setPin(event.currentTarget.checked)}>
+          <Checkbox
+            checked={pin}
+            hint="מקבילה ל'קיבוע העובדה' בהכנת קורות החיים, ולהכללת עובדה בכרטיס 'ביסוס עובדתי' בעורך הטיוטה."
+            onChange={(event) => setPin(event.currentTarget.checked)}
+          >
             קיבוע העובדה בתוכנית הבחירה הבאה
           </Checkbox>
-          <Button onClick={() => attachment.mutate()} pending={attachment.isPending}>
+          {crossTrack ? (
+            <Callout title="עובדה זו נלקחה ממסלול קריירה אחר" tone="warning">
+              <p>
+                מקור העובדה: {factSourceLabel(selected.source)}. הצירוף עלול שלא להתאים למסלול או לדגש הפעיל. להמשיך בכל
+                זאת?
+              </p>
+              <div className="mt-2.5">
+                <Checkbox
+                  checked={crossTrackConfirmed}
+                  onChange={(event) => setCrossTrackConfirmed(event.currentTarget.checked)}
+                >
+                  מודע/ת שהעובדה שייכת למסלול אחר ומאשר/ת צירוף בכל זאת
+                </Checkbox>
+              </div>
+            </Callout>
+          ) : null}
+          <Button
+            disabled={crossTrack && !crossTrackConfirmed}
+            onClick={() => attachment.mutate()}
+            pending={attachment.isPending}
+          >
             צירוף העובדה לסעיף
           </Button>
           {attachment.isSuccess ? (

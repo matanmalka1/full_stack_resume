@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 
 import { factDetailQueryOptions, factsQueryOptions } from "../../api/facts";
 import { ErrorCallout } from "../../app/ErrorCallout";
+import { Disclosure } from "../../ui/Disclosure";
 import { Field } from "../../ui/Field";
 import { Select } from "../../ui/Select";
 import { CreatePendingFactForm } from "./CreatePendingFactForm";
@@ -33,7 +34,8 @@ export const FactLifecyclePanel = ({ profile, sections }: { profile: string | nu
         מחזור חיי העובדות
       </h2>
       <p className="mt-1 text-support text-cv-text-muted">
-        העובדות מוצגות בהקשר של הטיוטה. יצירה וקידום כאן משנים את מקור הידע הקבוע.
+        העובדות מוצגות בהקשר של הטיוטה. יצירה וקידום כאן משנים את מקור הידע הקבוע. זהו כלי מתקדם, מחוץ לזרימת הבחירה
+        הרגילה - כולל צירוף עובדות ממסלולי קריירה אחרים - ולכן כדאי להשתמש בו רק כשצריך לתקן או לקדם עובדה ספציפית.
       </p>
       {error === null ? null : (
         <ErrorCallout
@@ -44,49 +46,51 @@ export const FactLifecyclePanel = ({ profile, sections }: { profile: string | nu
         />
       )}
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <Field label="עובדה להצגה">
-          {(control) => (
-            <Select
-              {...control}
-              onChange={(event) => setSelectedId(event.target.value || null)}
-              value={selectedId ?? ""}
-            >
-              {(factsQuery.data?.items.length ?? 0) === 0 ? <option value="">אין עדיין עובדות</option> : null}
-              {factsQuery.data?.items.map(({ fact }) => (
-                <option key={fact.fact_id} value={fact.fact_id}>
-                  {factLabel(fact)} · {factStatusLabels[fact.status]}
-                </option>
-              ))}
-            </Select>
+      <Disclosure className="mt-4" summary="פתיחת הכלי המתקדם">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Field label="עובדה להצגה">
+            {(control) => (
+              <Select
+                {...control}
+                onChange={(event) => setSelectedId(event.target.value || null)}
+                value={selectedId ?? ""}
+              >
+                {(factsQuery.data?.items.length ?? 0) === 0 ? <option value="">אין עדיין עובדות</option> : null}
+                {factsQuery.data?.items.map(({ fact }) => (
+                  <option key={fact.fact_id} value={fact.fact_id}>
+                    {factLabel(fact)} · {factStatusLabels[fact.status]}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          {selected === undefined ? null : (
+            <div className="border-s-2 border-cv-border ps-3">
+              <p className="font-semibold text-cv-text" dir="auto">
+                {factLabel(selected)}
+              </p>
+              <p className="mt-1 text-support text-cv-text-muted">{factStatusLabels[selected.status]}</p>
+              <p className="mt-2 text-support text-cv-text-muted" dir="auto">
+                {selected.meaning}
+              </p>
+            </div>
           )}
-        </Field>
-        {selected === undefined ? null : (
-          <div className="border-s-2 border-cv-border ps-3">
-            <p className="font-semibold text-cv-text" dir="auto">
-              {factLabel(selected)}
-            </p>
-            <p className="mt-1 text-support text-cv-text-muted">{factStatusLabels[selected.status]}</p>
-            <p className="mt-2 text-support text-cv-text-muted" dir="auto">
-              {selected.meaning}
-            </p>
-          </div>
+        </div>
+
+        {detailQuery.data === undefined ? null : (
+          <FactHistoryActions
+            detail={detailQuery.data}
+            key={detailQuery.data.fact.fact_id}
+            profile={profile}
+            sections={sections}
+          />
         )}
-      </div>
 
-      {detailQuery.data === undefined ? null : (
-        <FactHistoryActions
-          detail={detailQuery.data}
-          key={detailQuery.data.fact.fact_id}
-          profile={profile}
-          sections={sections}
-        />
-      )}
-
-      <details className="mt-5 rounded-control border border-cv-border bg-cv-surface p-4">
-        <summary className="cursor-pointer font-semibold text-cv-text">יצירת עובדה ממתינה חדשה</summary>
-        <CreatePendingFactForm onCreated={setSelectedId} profile={profile} />
-      </details>
+        <details className="mt-5 rounded-control border border-cv-border bg-cv-surface p-4">
+          <summary className="cursor-pointer font-semibold text-cv-text">יצירת עובדה ממתינה חדשה</summary>
+          <CreatePendingFactForm onCreated={setSelectedId} profile={profile} />
+        </details>
+      </Disclosure>
     </section>
   );
 };

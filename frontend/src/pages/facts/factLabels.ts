@@ -43,3 +43,5 @@ export const factStatusIcons: Record<FactStatus, LucideIcon> = {
 export const factLabel = (fact: Fact): string => fact.renderings.he ?? fact.renderings.en ?? fact.meaning;
 
 export const factStatusLabel = (status: string): string => factStatusLabels[status as FactStatus] ?? status;
+
+export const factSourceLabel = (source: string): string => factSourceLabels[source as FactSource] ?? source;
