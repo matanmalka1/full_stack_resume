@@ -30,16 +30,22 @@ export const Field = ({ children, className, error, hint, label, optional = fals
 
   return (
     <div className={cx("flex flex-col gap-1.5", className)}>
-      <label className="flex flex-wrap items-baseline gap-x-2 text-support font-medium text-cv-text" htmlFor={id}>
-        {label}
+      <div className="flex flex-wrap items-baseline gap-x-2">
+        <label className="text-support font-medium text-cv-text" htmlFor={id}>
+          {label}
+        </label>
         {optional ? (
-          /* A chip rather than more label text: at the label's own size and weight it
-             read as part of the field's name instead of as a note about it. */
+          /* A chip rather than more label text - and, deliberately, a sibling of the
+             label rather than a child of it. Nested inside, its own text became part of
+             the label's accessible name ("דגש" read as "דגש אופציונלי"), which is a real
+             control name a reader or a test can no longer address by the field's own
+             name alone. As a sibling it stays exactly where it was drawn - same row,
+             same gap - without joining the name the label puts on the control. */
           <span className="rounded-pill bg-cv-surface-sunken px-2 py-0.5 text-[0.75rem] font-normal text-cv-text-muted">
             אופציונלי
           </span>
         ) : null}
-      </label>
+      </div>
       {hint === undefined ? null : (
         <p className="text-support text-cv-text-muted" id={hintId}>
           {hint}
