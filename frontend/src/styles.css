@@ -292,3 +292,18 @@ dialog::backdrop {
   background-position: center;
   background-size: 6px 4px;
 }
+
+/* The workflow rail's one decorative beacon: a soft ring breathing behind the current
+   stage's mark. `prefers-reduced-motion` above already collapses every animation on the
+   page to a single, near-instant frame, so this needs no separate opt-out. */
+@keyframes cv-beacon {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+}

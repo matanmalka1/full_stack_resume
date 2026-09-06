@@ -44,7 +44,12 @@ const trackClasses: Record<WorkflowStepState, string> = {
 
 const markClasses: Record<WorkflowStepState, string> = {
   complete: "border-cv-success bg-cv-success-soft text-cv-success",
-  current: "border-cv-accent bg-cv-accent text-cv-on-accent shadow-surface",
+  /* Current carries a second, wider ring on top of its own border. The ring is what
+     makes this the one mark the eye lands on first in a row of otherwise same-size
+     circles - the accent fill alone read as "different colour" before it read as
+     "here". */
+  current:
+    "border-cv-accent bg-cv-accent text-cv-on-accent shadow-surface ring-2 ring-cv-accent-soft ring-offset-2 ring-offset-cv-surface",
   upcoming: "border-cv-border bg-cv-canvas text-cv-text-muted",
 };
 
@@ -61,23 +66,38 @@ const railClasses = surfaceClasses("w-full min-w-0 bg-cv-surface px-3 py-2.5 sha
 /* Complete is a check while current and upcoming retain their ordinal. The mark therefore
    communicates state without colour and keeps the compact rail readable as a sequence. */
 const StepMark = ({ index, state }: { index: number; state: WorkflowStepState }) => {
-  if (state === "complete") {
-    return (
+  const mark =
+    state === "complete" ? (
       <span
         aria-hidden="true"
-        className={`flex size-8 shrink-0 items-center justify-center rounded-pill border ${markClasses[state]}`}
+        className={`relative flex size-9 shrink-0 items-center justify-center rounded-pill border transition-colors duration-200 ${markClasses[state]}`}
       >
         <CheckCircle2 className="size-4" />
       </span>
+    ) : (
+      <span
+        aria-hidden="true"
+        className={`relative flex size-9 shrink-0 items-center justify-center rounded-pill border text-support font-bold transition-colors duration-200 ${markClasses[state]}`}
+      >
+        {index + 1}
+      </span>
     );
+
+  if (state !== "current") {
+    return mark;
   }
 
   return (
-    <span
-      aria-hidden="true"
-      className={`flex size-8 shrink-0 items-center justify-center rounded-pill border text-support font-bold ${markClasses[state]}`}
-    >
-      {index + 1}
+    <span className="relative inline-flex shrink-0">
+      {/* Decorative only: the mark's own ring and fill already say "current" without it
+          (A.2, colour is never the only signal). This is the one moment of motion in
+          the rail, spent on the single fact worth noticing at a glance - which of the
+          three stops the work is standing on right now. */}
+      <span
+        aria-hidden="true"
+        className="absolute inset-0 rounded-pill bg-cv-accent-soft motion-safe:animate-[cv-beacon_2.4s_ease-in-out_infinite]"
+      />
+      {mark}
     </span>
   );
 };
@@ -93,12 +113,16 @@ const StepBody = ({
 }) => (
   <span
     className={cx(
-      "flex min-w-0 items-center gap-2 rounded-control px-2 py-1.5 text-start",
+      "flex min-w-0 items-center gap-2 rounded-control px-2 py-1.5 text-start transition-[background-color,box-shadow,transform] duration-200",
       step.here === true ? "bg-cv-accent-soft/70" : "",
+      /* The lift is the click affordance: text-underline-on-hover said "this is a link"
+         only to someone already reading closely, so the whole chip now answers a
+         pointer resting on it, not just the label under it. */
+      step.href === undefined ? "" : "group-hover:shadow-surface motion-safe:group-hover:-translate-y-0.5",
     )}
   >
     <StepMark index={index} state={step.state} />
-    <span className="flex min-w-0 flex-col">
+    <span className="flex min-w-0 flex-col gap-0.5">
       <span
         className={cx(
           "whitespace-nowrap text-support",
@@ -108,7 +132,11 @@ const StepBody = ({
       >
         {step.label}
       </span>
-      {step.here === true ? <span className="text-[0.75rem] text-cv-text-muted">העמוד הפתוח</span> : null}
+      {step.here === true ? (
+        <span className="inline-flex w-fit items-center rounded-pill bg-cv-surface px-1.5 py-0.5 text-[0.75rem] font-medium text-cv-text-muted">
+          העמוד הפתוח
+        </span>
+      ) : null}
     </span>
   </span>
 );
@@ -219,7 +247,13 @@ export const WorkflowSteps = ({ hint, label, steps }: WorkflowStepsProps) => {
                 </Link>
               )}
               {next === undefined ? null : (
-                <span aria-hidden="true" className={cx("h-0.5 min-w-6 flex-1", trackClasses[next.state])} />
+                <span
+                  aria-hidden="true"
+                  className={cx(
+                    "h-1 min-w-6 flex-1 rounded-pill transition-colors duration-200",
+                    trackClasses[next.state],
+                  )}
+                />
               )}
             </Fragment>
           );
