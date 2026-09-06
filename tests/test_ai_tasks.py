@@ -281,10 +281,20 @@ def test_selection_proposal_refuses_to_replace_a_plan_that_moved_while_ai_ran(
     )
 
 
+@pytest.mark.parametrize("change_composite", [False, True])
 def test_draft_resume_commits_wording_its_facts_support(
-    ai_services, fake_openai: FakeOpenAI
+    ai_services, fake_openai: FakeOpenAI, change_composite: bool
 ) -> None:
-    ingested, analysed = _analyzed(ai_services, "Draft Co")
+    ingested = _ingested(ai_services, "Draft Co")
+    analysed = ai_services.analysis.analyze(
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+            track_override="tech-sales",
+            profile_override="tech-sales",
+            emphasis_override="tech-consultative-sales",
+        )
+    )
     # The deterministic document first, so the proposal can echo wording that is
     # known to be supported; the AI run then rebuilds the same draft.
     ai_services.drafts.draft(
@@ -295,7 +305,12 @@ def test_draft_resume_commits_wording_its_facts_support(
         )
     )
     working = ai_services.repository.active_working_draft(ingested.application_id)
-    section, claim = _canonical_claim(working)
+    composite = next(
+        claim
+        for section in working.source.sections
+        for claim in section.claims
+        if claim.claim_type == "composite"
+    )
     fake_openai.script(
         "draft_resume",
         DraftProposal(
@@ -303,9 +318,15 @@ def test_draft_resume_commits_wording_its_facts_support(
                 ProposedClaim(
                     section=section.name,
                     claim_id=claim.claim_id,
-                    text=claim.text,
+                    text=(
+                        claim.text + " Consistently exceeded every quota by 400%."
+                        if change_composite and claim.claim_id == composite.claim_id
+                        else claim.text
+                    ),
                     fact_ids=list(claim.fact_ids),
                 )
+                for section in working.source.sections
+                for claim in section.claims
             ],
             rationale="r",
         ),
@@ -322,8 +343,17 @@ def test_draft_resume_commits_wording_its_facts_support(
         draft_service=ai_services.drafts,
     )
     completed = _run(ai_services, queued)
+    if change_composite:
+        assert completed.status.value == "failed"
+        assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
+        actual = ai_services.repository.active_working_draft(ingested.application_id)
+        assert actual.content_hash == working.content_hash
+        assert actual.edit_version == working.edit_version
+        return
     assert completed.status.value == "succeeded", completed.safe_failure_detail
     assert fake_openai.calls_for("draft_resume")
+    actual = ai_services.repository.active_working_draft(ingested.application_id)
+    assert actual.source.sections == working.source.sections
 
 
 def _regenerate_section(services, ingested, analysed, working, section, claims):

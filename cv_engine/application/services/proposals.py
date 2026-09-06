@@ -148,7 +148,8 @@ def apply_proposed_claims(
     proposed_ids = {fact_id for claim in proposed for fact_id in claim.fact_ids}
     refuse_facts_outside_the_pool(proposed_ids, allowed, task=task)
 
-    known = {claim.claim_id for claim in draft_claims(draft)}
+    original = {claim.claim_id: claim for claim in draft_claims(draft)}
+    known = set(original)
     unknown = sorted({str(claim.claim_id) for claim in proposed if claim.claim_id not in known})
     if unknown:
         raise ProposalRejected(
@@ -165,6 +166,19 @@ def apply_proposed_claims(
                 f"{task} proposed a claim with no supporting fact: {claim.claim_id}",
                 unsupported=[str(claim.claim_id)],
             )
+        current = next(line for line in draft_claims(updated) if line.claim_id == claim.claim_id)
+        if (
+            current.claim_type != "pending"
+            and current == original[str(claim.claim_id)]
+            and claim.text == current.text
+            and list(claim.fact_ids) == current.fact_ids
+        ):
+            # Echoing an engine-composed line preserves its existing proof,
+            # including presentation/composite contracts. Reclassifying the
+            # same bytes as a free-text edit would discard that proof and
+            # reject even an unchanged multi-fact line. Changed wording or
+            # links must still pass the edit validator below.
+            continue
         try:
             updated = apply_claim_edit(
                 updated,

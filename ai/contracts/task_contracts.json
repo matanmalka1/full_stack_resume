@@ -1,8 +1,8 @@
 {
   "version": "2.0.0",
   "prompt": {
-    "version": "system-v2",
-    "file": "ai/prompts/system-v2.md"
+    "version": "system-v3",
+    "file": "ai/prompts/system-v3.md"
   },
   "tasks": {
     "propose_job_analysis": {
