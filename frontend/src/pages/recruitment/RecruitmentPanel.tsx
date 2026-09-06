@@ -8,6 +8,7 @@ import { Card } from "../../ui/Card";
 import { SectionHeader } from "../../ui/SectionHeader";
 import { StatusBadge } from "../../ui/StatusBadge";
 import { formatDate } from "../../ui/formatDateTime";
+import { ApplicationNotes } from "../application/ApplicationNotes";
 import { recruitmentStatusLabel } from "../application/applicationLabels";
 import { ExternalSubmissionAction } from "./ExternalSubmissionAction";
 import { RecruitmentCorrectionAction } from "./RecruitmentCorrectionAction";
@@ -66,6 +67,8 @@ export const RecruitmentPanel = ({ detail }: { detail: ApplicationDetail }) => {
           </details>
         </div>
       </div>
+
+      <ApplicationNotes detail={detail} />
 
       <RecruitmentUpdateDialog
         application={updateOpen ? detail.application : null}

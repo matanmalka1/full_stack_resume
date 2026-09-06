@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -121,6 +121,18 @@ describe("JobDetailsPage", () => {
 
     expect(await screen.findByText("שיחת מגייס")).toBeInTheDocument();
     expect(screen.getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
+  });
+
+  it("keeps sparse record metadata compact and places notes with recruitment", async () => {
+    renderPage();
+
+    const metadata = (await screen.findByText("פרטים נוספים על המועמדות")).closest("details");
+    expect(metadata).not.toHaveAttribute("open");
+
+    const recruitment = screen.getByRole("heading", { name: "מעקב גיוס" }).closest("section");
+    expect(recruitment).not.toBeNull();
+    expect(within(recruitment as HTMLElement).getByText("Referral from a former colleague")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "פרטי המועמדות" })).not.toBeInTheDocument();
   });
 
   it("captures an amended posting as a new immutable snapshot from Job Detail", async () => {

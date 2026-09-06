@@ -12,13 +12,13 @@ import { useWatchedOperation } from "../hooks/useWatchedOperation";
 import { buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { Card } from "../ui/Card";
+import { Disclosure } from "../ui/Disclosure";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
 import { SummaryList } from "../ui/SummaryList";
 import { dateTimesMatch, formatDateTime } from "../ui/formatDateTime";
 import { ActiveOperationPanel } from "./ActiveOperationPanel";
 import { ArtifactsPanel } from "./application/ArtifactsPanel";
-import { ApplicationNotes } from "./application/ApplicationNotes";
 import { ApplicationBreadcrumbs } from "./application/ApplicationBreadcrumbs";
 import { JobSnapshotPanel } from "./application/JobSnapshotPanel";
 import { PreparationStatusBadges } from "./application/PreparationStatusBadges";
@@ -31,33 +31,30 @@ const sourceLabel = (source: string): string => (source === "manual" ? "הזנה
    not a stage of the CV workflow: the job record is what the reader opens on the day
    they apply and on the day they hear back, long after the document is done. Preparation
    is represented here only by its server-owned projection and the door into it. */
-const JobOverview = ({ detail }: { detail: ApplicationDetail }) => {
+const ApplicationMetadata = ({ detail }: { detail: ApplicationDetail }) => {
   const application = detail.application;
 
   return (
-    <Card aria-labelledby="job-overview-heading" className="bg-cv-surface p-4 shadow-surface sm:p-5">
-      <h2 className="text-body font-semibold text-cv-text" id="job-overview-heading">
-        פרטי המועמדות
-      </h2>
-      <div className="mt-4">
-        <SummaryList
-          items={[
-            { term: "מקור המועמדות", value: sourceLabel(application.source) },
-            ...(detail.terminal_outcome == null
-              ? []
-              : [{ term: "תוצאת התהליך", value: recruitmentStatusLabel(detail.terminal_outcome) }]),
-            ...(application.last_contact_date == null
-              ? []
-              : [{ term: "קשר אחרון", value: formatDateTime(application.last_contact_date) }]),
-            { term: "נוצרה", value: formatDateTime(application.created_at) },
-            ...(dateTimesMatch(application.created_at, application.updated_at)
-              ? []
-              : [{ term: "עודכנה לאחרונה", value: formatDateTime(application.updated_at) }]),
-          ]}
-        />
-      </div>
-      <ApplicationNotes detail={detail} />
-    </Card>
+    /* Record metadata remains available without giving two timestamps and a source the
+       same visual weight as the recruitment work and the posting itself. */
+    <Disclosure className="px-1" summary="פרטים נוספים על המועמדות">
+      <SummaryList
+        className="mt-3"
+        items={[
+          { term: "מקור המועמדות", value: sourceLabel(application.source) },
+          ...(detail.terminal_outcome == null
+            ? []
+            : [{ term: "תוצאת התהליך", value: recruitmentStatusLabel(detail.terminal_outcome) }]),
+          ...(application.last_contact_date == null
+            ? []
+            : [{ term: "קשר אחרון", value: formatDateTime(application.last_contact_date) }]),
+          { term: "נוצרה", value: formatDateTime(application.created_at) },
+          ...(dateTimesMatch(application.created_at, application.updated_at)
+            ? []
+            : [{ term: "עודכנה לאחרונה", value: formatDateTime(application.updated_at) }]),
+        ]}
+      />
+    </Disclosure>
   );
 };
 
@@ -175,9 +172,9 @@ export const JobDetailsPage = () => {
               </Callout>
             )}
             <PreparationGate detail={detail} />
+            <ApplicationMetadata detail={detail} />
             <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
               <div className="flex min-w-0 flex-col gap-6">
-                <JobOverview detail={detail} />
                 <RecruitmentPanel detail={detail} />
               </div>
               <div className="min-w-0 lg:self-start">
