@@ -13,7 +13,7 @@ import { SelectionPlanPanel } from "./SelectionPlanPanel";
 import { AnalysisPanel } from "./analysis/AnalysisPanel";
 import { GapsSection } from "./analysis/GapsSection";
 import { openDecisionCount, openDecisions, resolvedByDecisionForm } from "./ReviewDecisionForm";
-import { applicationActionPlan } from "./applicationActionPlan";
+import { applicationActionPlan, hasApplicationActionsContent } from "./applicationActionPlan";
 import { AnalysisStatusBanner } from "./preparation/AnalysisStatusBanner";
 import {
   type PreparationTab,
@@ -46,7 +46,8 @@ export const PreparationView = ({
   const open = openDecisions(detail);
   const decisionCount = openDecisionCount(open);
   const hasRecommendation = detail.review_reasons.some(resolvedByDecisionForm) || detail.recommended_action != null;
-  const hasActionSurface = hasRecommendation || detail.available_actions.length > 0;
+  const actionPlan = applicationActionPlan(detail);
+  const hasActionSurface = hasApplicationActionsContent(actionPlan);
 
   /* Which hard gaps the reader has marked as knowingly accepted. It lives here because the
      mark is taken on the gap beside the decision panel and sent from that panel - two
@@ -72,7 +73,7 @@ export const PreparationView = ({
   /* The same plan the fact tab reads, asked for by the same key: React Query answers both
      from one request. It is read here only to count what the tab's badge announces - the
      panel below still owns every command against it. */
-  const selectionPlanAction = applicationActionPlan(detail).createSelectionPlan;
+  const selectionPlanAction = actionPlan.createSelectionPlan;
   const activePlanId = selectionPlanAction?.selectionPlanId ?? null;
   const planQuery = useQuery({
     ...selectionPlanQueryOptions(activePlanId ?? ""),

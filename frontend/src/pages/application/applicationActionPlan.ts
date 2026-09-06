@@ -48,6 +48,19 @@ export interface ApplicationActionPlan {
   unbuiltRecommendation: string | null;
 }
 
+/* Whether `ApplicationActions` has anything to put inside its surface. Some actions are
+   deliberately handled elsewhere on the preparation screen: review decisions in their
+   decision panel, fact selection in its tab, and re-analysis beside the diagnostics.
+   Treating those as content here leaves an emphasized but empty card behind. */
+export const hasApplicationActionsContent = (plan: ApplicationActionPlan): boolean =>
+  (plan.analyze !== null && !plan.analyze.reanalysis) ||
+  plan.createDraft !== null ||
+  plan.replaceDraft !== null ||
+  plan.archiveDraft !== null ||
+  plan.draftScreen !== null ||
+  plan.readyRevision !== null ||
+  plan.unbuiltRecommendation !== null;
+
 export const applicationActionPlan = (detail: ApplicationDetail): ApplicationActionPlan => {
   const applicationId = detail.application.id;
   const recommended = detail.recommended_action ?? null;

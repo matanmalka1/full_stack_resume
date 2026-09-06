@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ApplicationDetail, Reason } from "../../api/contracts";
-import { applicationActionPlan } from "./applicationActionPlan";
+import { applicationActionPlan, hasApplicationActionsContent } from "./applicationActionPlan";
 
 /* §14. The two stale-draft commands are the only actions this screen sends that are
    addressed to a specific version of a specific record, and the only ones whose wrong
@@ -134,6 +134,22 @@ describe("the way out of a stale draft (§14)", () => {
 });
 
 describe("recommended action destinations", () => {
+  it("does not reserve an empty action surface for a review decision handled by its own panel", () => {
+    const plan = applicationActionPlan(
+      staleDetail({
+        preparation_state: "needs_review",
+        working_draft_state: "none",
+        stale_reasons: [],
+        active_working_draft_id: null,
+        available_actions: ["apply_analysis_decisions"],
+        recommended_action: "apply_analysis_decisions",
+      }),
+    );
+
+    expect(plan.reviewHandledHere).toBe(true);
+    expect(hasApplicationActionsContent(plan)).toBe(false);
+  });
+
   it("handles fact selection on the preparation screen even when no plan exists yet", () => {
     const plan = applicationActionPlan(
       staleDetail({
