@@ -60,7 +60,7 @@ export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
                     ),
                   },
                 ]),
-            { term: "נלכד", value: formatDateTime(snapshot.captured_at, "short") },
+            { term: "נשמר", value: formatDateTime(snapshot.captured_at, "short") },
           ]}
         />
 
