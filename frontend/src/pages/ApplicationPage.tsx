@@ -12,6 +12,7 @@ import { ApplicationBreadcrumbs } from "./application/ApplicationBreadcrumbs";
 import { PreparationStatusBadges } from "./application/PreparationStatusBadges";
 import { PreparationView } from "./application/PreparationView";
 import { useAutomaticDraft } from "./application/useAutomaticDraft";
+import { RecruitmentManagerButton } from "./recruitment/RecruitmentManagerButton";
 
 /* The CV preparation screen for one Application. It renders the §9 projection and offers
    only the document-workflow actions the backend reports. */
@@ -50,11 +51,10 @@ export const ApplicationPage = () => {
     <PageShell
       actions={
         detail === undefined ? null : (
-          <PreparationStatusBadges
-            className="flex flex-wrap items-center gap-2"
-            detail={detail}
-            hideStageImpliedStatus
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <PreparationStatusBadges detail={detail} hideStageImpliedStatus />
+            <RecruitmentManagerButton application={detail.application} />
+          </div>
         )
       }
       navigation={

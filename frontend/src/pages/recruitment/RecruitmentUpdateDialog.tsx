@@ -15,9 +15,11 @@ import { Callout } from "../../ui/Callout";
 import { Dialog } from "../../ui/Dialog";
 import { Field } from "../../ui/Field";
 import { Select } from "../../ui/Select";
+import { StatusBadge } from "../../ui/StatusBadge";
 import { TextArea, TextInput } from "../../ui/TextInput";
 import { recruitmentStatusLabel } from "../application/applicationLabels";
 import { useServerSyncedField } from "../useServerSyncedField";
+import { RecruitmentHistoryPanel } from "./RecruitmentHistoryPanel";
 
 interface RecruitmentUpdateFields {
   nextAction: string;
@@ -42,7 +44,7 @@ interface RecruitmentUpdateDialogProps {
   onClose: () => void;
 }
 
-/* Dashboard and Application Detail intentionally share this command surface. A status
+/* Every Application screen and the dashboard share this command surface. A status
    transition, next action, and notes are one ordinary update from the user's point of
    view even though each value still goes to the application command that owns it. */
 export const RecruitmentUpdateDialog = ({ application, onClose }: RecruitmentUpdateDialogProps) => {
@@ -103,6 +105,12 @@ export const RecruitmentUpdateDialog = ({ application, onClose }: RecruitmentUpd
     detail !== undefined && selectedStatus !== "" && !detail.allowed_recruitment_transitions.includes(selectedStatus)
       ? [selectedStatus, ...detail.allowed_recruitment_transitions]
       : (detail?.allowed_recruitment_transitions ?? []);
+
+  const refresh = () => {
+    if (application !== null) {
+      void invalidateApplicationViews(queryClient, application.id);
+    }
+  };
 
   const save = useMutation({
     mutationFn: async (values: RecruitmentUpdateFields) => {
@@ -177,7 +185,8 @@ export const RecruitmentUpdateDialog = ({ application, onClose }: RecruitmentUpd
       headingId="recruitment-update-heading"
       onClose={onClose}
       open={application !== null}
-      title={application === null ? "עדכון מועמדות" : `עדכון סטטוס ומשימות: ${application.company}`}
+      size="wide"
+      title={application === null ? "ניהול מועמדות" : `ניהול מועמדות: ${application.company}`}
     >
       {application === null ? null : (
         <>
@@ -193,58 +202,67 @@ export const RecruitmentUpdateDialog = ({ application, onClose }: RecruitmentUpd
               fallbackTitle="טעינת פרטי המועמדות נכשלה"
             />
           ) : detail === undefined ? null : (
-            <form
-              className="flex flex-col gap-4"
-              id="recruitment-update-form"
-              onSubmit={form.handleSubmit((values) => save.mutate(values))}
-            >
-              {save.error === null ? null : (
-                <ErrorCallout
-                  error={save.error}
-                  fallbackDetail="ייתכן שחלק מהשינויים נשמרו. הערכים נטענו מחדש מהשרת; יש לבדוק אותם לפני ניסיון נוסף."
-                  fallbackTitle="לא ניתן להשלים את העדכון"
-                />
-              )}
-              {statusChangedOnServer || actionChangedOnServer || dateChangedOnServer || notesChangedOnServer ? (
-                <Callout role="status" title="פרטי המועמדות השתנו בשרת" tone="warning">
-                  הערכים שהקלדת נשמרו בטופס ולא הוחלפו. כדאי לבדוק אותם לפני השמירה.
-                </Callout>
-              ) : null}
-
-              <Field label="מעבר לשלב הבא" optional>
-                {(control) => (
-                  <Select {...control} {...form.register("targetStatus")} value={fields.targetStatus}>
-                    <option value="">ללא שינוי בשלב</option>
-                    {statusOptions.map((status) => (
-                      <option key={status} value={status}>
-                        {recruitmentStatusLabel(status)}
-                        {status === selectedStatus && !detail.allowed_recruitment_transitions.includes(status)
-                          ? " · הבחירה שלך"
-                          : ""}
-                      </option>
-                    ))}
-                  </Select>
+            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.85fr)]">
+              <form
+                className="flex min-w-0 flex-col gap-4"
+                id="recruitment-update-form"
+                onSubmit={form.handleSubmit((values) => save.mutate(values))}
+              >
+                <div>
+                  <p className="text-support font-semibold text-cv-text-muted">השלב הנוכחי</p>
+                  <StatusBadge className="mt-2 px-3 py-1" tone="neutral">
+                    {recruitmentStatusLabel(detail.recruitment_status)}
+                  </StatusBadge>
+                </div>
+                {save.error === null ? null : (
+                  <ErrorCallout
+                    error={save.error}
+                    fallbackDetail="ייתכן שחלק מהשינויים נשמרו. הערכים נטענו מחדש מהשרת; יש לבדוק אותם לפני ניסיון נוסף."
+                    fallbackTitle="לא ניתן להשלים את העדכון"
+                  />
                 )}
-              </Field>
+                {statusChangedOnServer || actionChangedOnServer || dateChangedOnServer || notesChangedOnServer ? (
+                  <Callout role="status" title="פרטי המועמדות השתנו בשרת" tone="warning">
+                    הערכים שהקלדת נשמרו בטופס ולא הוחלפו. כדאי לבדוק אותם לפני השמירה.
+                  </Callout>
+                ) : null}
 
-              {fields.targetStatus === "" ? null : (
-                <Field label="סיבת המעבר" optional>
-                  {(control) => <TextInput {...control} {...form.register("reason")} />}
+                <Field label="מעבר לשלב הבא" optional>
+                  {(control) => (
+                    <Select {...control} {...form.register("targetStatus")} value={fields.targetStatus}>
+                      <option value="">ללא שינוי בשלב</option>
+                      {statusOptions.map((status) => (
+                        <option key={status} value={status}>
+                          {recruitmentStatusLabel(status)}
+                          {status === selectedStatus && !detail.allowed_recruitment_transitions.includes(status)
+                            ? " · הבחירה שלך"
+                            : ""}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
                 </Field>
-              )}
 
-              <Field label="הצעד הבא" optional>
-                {(control) => <TextInput {...control} {...form.register("nextAction")} dir="auto" />}
-              </Field>
-              <Field label="תאריך יעד" optional>
-                {(control) => (
-                  <TextInput {...control} {...form.register("nextActionDate")} className="ltr-island" type="date" />
+                {fields.targetStatus === "" ? null : (
+                  <Field label="סיבת המעבר" optional>
+                    {(control) => <TextInput {...control} {...form.register("reason")} />}
+                  </Field>
                 )}
-              </Field>
-              <Field label="הערות" optional>
-                {(control) => <TextArea {...control} {...form.register("notes")} className="min-h-28" dir="auto" />}
-              </Field>
-            </form>
+
+                <Field label="הצעד הבא" optional>
+                  {(control) => <TextInput {...control} {...form.register("nextAction")} dir="auto" />}
+                </Field>
+                <Field label="תאריך יעד" optional>
+                  {(control) => (
+                    <TextInput {...control} {...form.register("nextActionDate")} className="ltr-island" type="date" />
+                  )}
+                </Field>
+                <Field label="הערות" optional>
+                  {(control) => <TextArea {...control} {...form.register("notes")} className="min-h-28" dir="auto" />}
+                </Field>
+              </form>
+              <RecruitmentHistoryPanel detail={detail} onChanged={refresh} />
+            </div>
           )}
         </>
       )}

@@ -581,6 +581,7 @@ describe("DraftRenderPanel and RevisionPage", () => {
     );
     renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
     const frame = await screen.findByTitle("תצוגה מאושרת של קורות החיים");
+    expect(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "גרסה מוכנה למסירה" })).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "פרטי הגרסה והאימות" })).toBeInTheDocument();
     expect(screen.getByText("draft-hash")).toBeInTheDocument();

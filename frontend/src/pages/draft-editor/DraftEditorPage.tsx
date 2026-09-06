@@ -13,6 +13,7 @@ import { SectionHeader } from "../../ui/SectionHeader";
 import { reasonTitle } from "../application/applicationLabels";
 import { ApplicationBreadcrumbs } from "../application/ApplicationBreadcrumbs";
 import { FactLifecyclePanel } from "../facts/FactLifecyclePanel";
+import { RecruitmentManagerButton } from "../recruitment/RecruitmentManagerButton";
 import { ActiveOperationPanel } from "../ActiveOperationPanel";
 import { DraftApprovalDialog } from "./DraftApprovalDialog";
 import { DraftClaimCard } from "./DraftClaimCard";
@@ -64,6 +65,7 @@ export const DraftEditorPage = () => {
 
   return (
     <PageShell
+      actions={detail === undefined ? null : <RecruitmentManagerButton application={detail.application} />}
       description={detail === undefined ? undefined : `תפקיד היעד: ${detail.application.target_role}`}
       eyebrow="סביבת עריכה"
       navigation={

@@ -457,7 +457,7 @@ describe("ApplicationListPage", () => {
     renderPage();
 
     fireEvent.click(await screen.findByRole("button", { name: "עדכון סטטוס ומשימות עבור Acme" }));
-    expect(await screen.findByRole("dialog", { name: "עדכון סטטוס ומשימות: Acme" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "ניהול מועמדות: Acme" })).toBeInTheDocument();
     /* The dialog opens before its own detail fetch settles - it shows a loading line
        until then - so the form's fields exist only once that resolves. */
     const status = await screen.findByLabelText(/מעבר לשלב הבא/);
@@ -471,7 +471,7 @@ describe("ApplicationListPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "שמירת שינויים" }));
 
     await waitFor(() =>
-      expect(screen.queryByRole("dialog", { name: "עדכון סטטוס ומשימות: Acme" })).not.toBeInTheDocument(),
+      expect(screen.queryByRole("dialog", { name: "ניהול מועמדות: Acme" })).not.toBeInTheDocument(),
     );
     expect(calls).toEqual(
       expect.arrayContaining([

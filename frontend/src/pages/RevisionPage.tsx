@@ -9,6 +9,7 @@ import { QueryState } from "../ui/QueryState";
 import { ActiveOperationPanel } from "./ActiveOperationPanel";
 import { ApplicationBreadcrumbs } from "./application/ApplicationBreadcrumbs";
 import { warningDetail, warningTitle } from "./application/applicationLabels";
+import { RecruitmentManagerButton } from "./recruitment/RecruitmentManagerButton";
 import { RevisionRecord } from "./revision/RevisionRecord";
 import { RevisionSubmissionDialog } from "./revision/RevisionSubmissionDialog";
 import { RevisionSummary } from "./revision/RevisionSummary";
@@ -22,6 +23,7 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
 
   return (
     <PageShell
+      actions={detail === undefined ? null : <RecruitmentManagerButton application={detail.application} />}
       description="הגרסה המאושרת נשארת זמינה גם כאשר העבודה על המועמדות ממשיכה."
       navigation={
         <ApplicationBreadcrumbs

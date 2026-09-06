@@ -11,13 +11,23 @@ interface DialogProps {
   headingId: string;
   onClose: () => void;
   open: boolean;
+  size?: "default" | "wide";
   title: ReactNode;
 }
 
 /* Native <dialog> owns the focus trap, the inert background, and focus restoration to
    the invoker, so no dialog dependency is warranted here. Focus is moved to the dialog
    heading on open, as A.5 requires. */
-export const Dialog = ({ children, dismissible = true, footer, headingId, onClose, open, title }: DialogProps) => {
+export const Dialog = ({
+  children,
+  dismissible = true,
+  footer,
+  headingId,
+  onClose,
+  open,
+  size = "default",
+  title,
+}: DialogProps) => {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
@@ -43,7 +53,9 @@ export const Dialog = ({ children, dismissible = true, footer, headingId, onClos
     <dialog
       aria-labelledby={headingId}
       className={surfaceClasses(
-        "w-full max-w-xl bg-cv-surface p-0 text-cv-text shadow-overlay backdrop:transition-opacity",
+        `max-h-[calc(100dvh-2rem)] w-full ${
+          size === "wide" ? "max-w-4xl" : "max-w-xl"
+        } overflow-hidden bg-cv-surface p-0 text-cv-text shadow-overlay backdrop:transition-opacity`,
       )}
       onCancel={(event) => {
         if (!dismissible) {
@@ -53,8 +65,8 @@ export const Dialog = ({ children, dismissible = true, footer, headingId, onClos
       onClose={onClose}
       ref={dialogRef}
     >
-      <div dir="rtl">
-        <div className="flex items-start justify-between gap-4 border-b border-cv-border px-6 py-5">
+      <div className="flex max-h-[calc(100dvh-2rem)] flex-col" dir="rtl">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-cv-border px-6 py-5">
           <h2
             className="text-heading-md font-semibold tracking-tight text-cv-text"
             id={headingId}
@@ -76,9 +88,11 @@ export const Dialog = ({ children, dismissible = true, footer, headingId, onClos
             </button>
           ) : null}
         </div>
-        <div className="px-6 py-5 text-body leading-7">{children}</div>
+        <div className="min-h-0 overflow-y-auto px-6 py-5 text-body leading-7">{children}</div>
         {footer === undefined ? null : (
-          <div className="flex flex-wrap justify-end gap-3 border-t border-cv-border px-6 py-4">{footer}</div>
+          <div className="flex shrink-0 flex-wrap justify-end gap-3 border-t border-cv-border px-6 py-4">
+            {footer}
+          </div>
         )}
       </div>
     </dialog>

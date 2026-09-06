@@ -23,14 +23,13 @@ import { ApplicationBreadcrumbs } from "./application/ApplicationBreadcrumbs";
 import { JobSnapshotPanel } from "./application/JobSnapshotPanel";
 import { PreparationStatusBadges } from "./application/PreparationStatusBadges";
 import { recruitmentStatusLabel } from "./application/applicationLabels";
-import { RecruitmentPanel } from "./recruitment/RecruitmentPanel";
+import { RecruitmentManagerButton } from "./recruitment/RecruitmentManagerButton";
 
 const sourceLabel = (source: string): string => (source === "manual" ? "הזנה ידנית" : source);
 
-/* Job Detail owns the job and recruitment facts. It is the entrance to an Application,
-   not a stage of the CV workflow: the job record is what the reader opens on the day
-   they apply and on the day they hear back, long after the document is done. Preparation
-   is represented here only by its server-owned projection and the door into it. */
+/* Job Detail owns the posting and remains the entrance to an Application. Recruitment
+   management is available from its masthead through the same dialog used elsewhere,
+   without competing with the pre-submission analysis work in the page body. */
 const ApplicationMetadata = ({ detail }: { detail: ApplicationDetail }) => {
   const application = detail.application;
 
@@ -137,6 +136,7 @@ export const JobDetailsPage = () => {
 
   return (
     <PageShell
+      actions={detail === undefined ? null : <RecruitmentManagerButton application={detail.application} />}
       navigation={
         <ApplicationBreadcrumbs
           applicationId={applicationId}
@@ -173,17 +173,8 @@ export const JobDetailsPage = () => {
             )}
             <PreparationGate detail={detail} />
             <ApplicationMetadata detail={detail} />
-            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
-              <div className="flex min-w-0 flex-col gap-6">
-                <RecruitmentPanel detail={detail} />
-              </div>
-              <div className="min-w-0 lg:self-start">
-                <JobSnapshotPanel detail={detail} />
-              </div>
-              <div className="min-w-0 lg:col-span-2">
-                <ArtifactsPanel applicationId={applicationId} />
-              </div>
-            </div>
+            <JobSnapshotPanel detail={detail} />
+            <ArtifactsPanel applicationId={applicationId} />
           </>
         )}
       </QueryState>

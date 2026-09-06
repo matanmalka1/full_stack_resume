@@ -179,6 +179,7 @@ describe("ApplicationPage", () => {
       "/applications/app-1",
     );
     expect(screen.getByText("הכנת קורות החיים", { selector: "[aria-current='page']" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" })).toBeInTheDocument();
   });
 
   /* The Web automation opt-in, which moved here with the flow: queueing no longer

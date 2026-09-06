@@ -17,8 +17,9 @@ import { RouteErrorBoundary } from "./RouteErrorBoundary";
    started a new Application instead of going home, and a saved one was reachable only by
    its URL or the back button.
 
-   Job Detail owns recruitment tracking and the posting. CV preparation is a separate
-   destination under the same Application and continues to own the document workflow.
+   Job Detail owns the posting. Recruitment tracking is one shared dialog reachable from
+   every existing-Application screen, while CV preparation remains a separate destination
+   under the same Application and continues to own the document workflow.
 
    Six screens carry the workflow: the list, intake, Job Detail, CV preparation, the
    draft editor, and Ready.
@@ -67,8 +68,9 @@ export const router = createBrowserRouter([
         element: <NewApplicationPage />,
       },
       {
-        /* The stable destination for an existing Application: its job facts, recruitment
-           history, preparation summary, and immutable outputs. */
+        /* The stable destination for an existing Application: its job facts, preparation
+           summary, and immutable outputs. Recruitment remains available in the shared
+           manager rather than occupying this pre-submission screen. */
         path: "applications/:applicationId",
         element: <JobDetailsPage />,
       },
@@ -78,7 +80,8 @@ export const router = createBrowserRouter([
         element: <ApplicationPage />,
       },
       {
-        /* Recruitment now lives on Job Detail. The path remains for old bookmarks. */
+        /* Recruitment is opened in place from each Application screen. The old path
+           still lands on the stable Job Detail record for existing bookmarks. */
         path: "applications/:applicationId/tracking",
         element: <TrackingRedirect />,
       },

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { applicationDetailQueryKey } from "../../api/applications";
 import type { ApplicationDetail, RecruitmentTimelineItem } from "../../api/contracts";
 import { formatDate } from "../../ui/formatDateTime";
-import { RecruitmentPanel } from "./RecruitmentPanel";
+import { RecruitmentManagerButton } from "./RecruitmentManagerButton";
 
 const statusEvent = (overrides: Partial<RecruitmentTimelineItem> = {}): RecruitmentTimelineItem => ({
   id: "status-1",
@@ -79,18 +79,18 @@ const renderPanel = (value: ApplicationDetail = detail()) => {
   });
   client.setQueryData(applicationDetailQueryKey(value.application.id), value);
 
-  const panel = (next: ApplicationDetail) => (
+  const manager = (next: ApplicationDetail) => (
     <QueryClientProvider client={client}>
-      <RecruitmentPanel detail={next} />
+      <RecruitmentManagerButton application={next.application} />
     </QueryClientProvider>
   );
-  const rendered = render(panel(value));
+  const rendered = render(manager(value));
 
   return {
     ...rendered,
     rerenderPanel: (next: ApplicationDetail) => {
       client.setQueryData(applicationDetailQueryKey(next.application.id), next);
-      rendered.rerender(panel(next));
+      rendered.rerender(manager(next));
     },
   };
 };
@@ -102,7 +102,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("RecruitmentPanel", () => {
+describe("RecruitmentManagerButton", () => {
   it("names the first event an opening rather than a transition from a status never held", async () => {
     const value = detail({
       recruitment_timeline: [statusEvent({ from_status: null, to_status: "saved", reason: "application created" })],
@@ -110,6 +110,7 @@ describe("RecruitmentPanel", () => {
     vi.stubGlobal("fetch", vi.fn(emptyJsonFetch));
     renderPanel(value);
 
+    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
     expect(screen.getByText("המועמדות נפתחה במצב נשמר")).toBeInTheDocument();
     expect(screen.queryByText(/עבר מ־נשמר ל־נשמר/)).not.toBeInTheDocument();
   });
@@ -124,13 +125,13 @@ describe("RecruitmentPanel", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderPanel(value);
 
+    expect(screen.queryByLabelText("מעבר לשלב הבא (רשות)")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
+    expect(await screen.findByRole("dialog", { name: "ניהול מועמדות: Acme" })).toBeInTheDocument();
     expect(screen.getByText("המועמדות נוצרה")).toBeInTheDocument();
     expect(screen.queryByText("application created")).not.toBeInTheDocument();
     expect(screen.queryByText("לא נקבע צעד הבא")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("מעבר לשלב הבא (רשות)")).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימה" }));
-    expect(await screen.findByRole("dialog", { name: "עדכון סטטוס ומשימות: Acme" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "שמירת שינויים" })).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText(/מעבר לשלב הבא/), { target: { value: "closed" } });
@@ -172,7 +173,7 @@ describe("RecruitmentPanel", () => {
     renderPanel(value);
 
     expect(screen.queryByRole("button", { name: "הסרת התזכורת" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימה" }));
+    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
     fireEvent.change(await screen.findByLabelText(/הצעד הבא/), { target: { value: "" } });
     fireEvent.change(screen.getByLabelText(/תאריך יעד/), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "שמירת שינויים" }));
@@ -190,6 +191,7 @@ describe("RecruitmentPanel", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderPanel();
 
+    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
     const additionalActions = screen.getByText("פעולות נוספות").closest("details");
     expect(additionalActions).not.toHaveAttribute("open");
     fireEvent.click(screen.getByText("פעולות נוספות"));
@@ -246,6 +248,7 @@ describe("RecruitmentPanel", () => {
       }),
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
     expect(screen.getByText(new RegExp(formatDate("2026-09-10")))).toBeInTheDocument();
     expect(screen.queryByText(/2026-09-10/)).not.toBeInTheDocument();
   });
@@ -274,7 +277,7 @@ describe("RecruitmentPanel", () => {
     );
     renderPanel(value);
 
-    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימה" }));
+    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
     fireEvent.change(await screen.findByLabelText(/הצעד הבא/), { target: { value: "Try again tomorrow" } });
     fireEvent.click(screen.getByRole("button", { name: "שמירת שינויים" }));
 
@@ -286,7 +289,7 @@ describe("RecruitmentPanel", () => {
     vi.stubGlobal("fetch", vi.fn(emptyJsonFetch));
     const { rerenderPanel } = renderPanel();
 
-    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימה" }));
+    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
     expect(await screen.findByLabelText(/הצעד הבא/)).toHaveValue("Follow up");
 
     rerenderPanel(
@@ -308,7 +311,7 @@ describe("RecruitmentPanel", () => {
     vi.stubGlobal("fetch", vi.fn(emptyJsonFetch));
     const { rerenderPanel } = renderPanel();
 
-    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימה" }));
+    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
     fireEvent.change(await screen.findByLabelText(/הצעד הבא/), {
       target: { value: "My unsaved follow-up" },
     });
@@ -336,6 +339,7 @@ describe("RecruitmentPanel", () => {
     const currentEvent = statusEvent({ id: "status-current", to_status: "recruiter_screen" });
     const { rerenderPanel } = renderPanel(detail({ recruitment_timeline: [olderEvent, currentEvent] }));
 
+    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
     fireEvent.click(screen.getByText("פעולות נוספות"));
     fireEvent.click(screen.getByRole("button", { name: "תיקון אירוע שנרשם" }));
     fireEvent.change(screen.getByLabelText("האירוע השגוי"), {

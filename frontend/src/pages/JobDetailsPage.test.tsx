@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -119,19 +119,23 @@ describe("JobDetailsPage", () => {
   it("presents recruitment status separately from the CV preparation state", async () => {
     renderPage();
 
-    expect(await screen.findByText("שיחת מגייס")).toBeInTheDocument();
-    expect(screen.getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
+    expect(await screen.findByText("ממתין לניתוח המשרה")).toBeInTheDocument();
+    expect(screen.queryByText("שיחת מגייס")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
+    expect(await screen.findByRole("dialog", { name: "ניהול מועמדות: Acme" })).toBeInTheDocument();
+    expect(screen.getByText("שיחת מגייס")).toBeInTheDocument();
   });
 
-  it("keeps sparse record metadata compact and places notes with recruitment", async () => {
+  it("keeps sparse record metadata compact and moves recruitment notes into the manager", async () => {
     renderPage();
 
     const metadata = (await screen.findByText("פרטים נוספים על המועמדות")).closest("details");
     expect(metadata).not.toHaveAttribute("open");
 
-    const recruitment = screen.getByRole("heading", { name: "מעקב גיוס" }).closest("section");
-    expect(recruitment).not.toBeNull();
-    expect(within(recruitment as HTMLElement).getByText("Referral from a former colleague")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "מעקב גיוס" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
+    expect(await screen.findByLabelText(/הערות/)).toHaveValue("Referral from a former colleague");
     expect(screen.queryByRole("heading", { name: "פרטי המועמדות" })).not.toBeInTheDocument();
   });
 
