@@ -118,12 +118,12 @@ export const UrgentActionHub = ({
   return (
     <section
       aria-labelledby="urgent-action-heading"
-      className="rounded-surface border border-cv-warning/30 bg-gradient-to-l from-cv-warning-soft/70 via-cv-surface to-cv-accent-soft/40 p-4 shadow-surface sm:p-5"
+      className="rounded-surface border border-cv-warning/30 bg-gradient-to-l from-cv-warning-soft/70 via-cv-surface to-cv-accent-soft/40 p-2.5 shadow-surface sm:p-3"
     >
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-cv-warning/25 pb-3">
-        <div className="flex items-start gap-2.5">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-cv-warning text-cv-on-accent">
-            <Sparkles aria-hidden="true" className="size-4" />
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-cv-warning/25 pb-1.5">
+        <div className="flex items-center gap-1.5">
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-control bg-cv-warning text-cv-on-accent">
+            <Sparkles aria-hidden="true" className="size-3" />
           </span>
           <div>
             <h2 className="font-extrabold text-cv-text" id="urgent-action-heading">
@@ -134,19 +134,19 @@ export const UrgentActionHub = ({
             </p>
           </div>
         </div>
-        <StatusBadge className="px-2.5 py-0.5" tone="warning">
+        <StatusBadge className="px-2 py-0.5" tone="warning">
           לטיפול קרוב
         </StatusBadge>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-2 md:grid-cols-3">
         {displayItems.map((item) => (
           <article
-            className="flex min-h-44 flex-col justify-between rounded-control border border-cv-border bg-cv-surface p-3.5 shadow-surface transition-colors hover:border-cv-border-strong"
+            className="flex min-h-32 flex-col justify-between rounded-control border border-cv-border bg-cv-surface p-2.5 shadow-surface transition-colors hover:border-cv-border-strong"
             key={`${item.application.id}-${item.type}`}
           >
             <div>
-              <div className="mb-2 flex items-start justify-between gap-2">
+              <div className="mb-1 flex items-start justify-between gap-2">
                 <StatusBadge className="px-2 py-0.5" tone={item.tone}>
                   {item.label}
                 </StatusBadge>
@@ -154,15 +154,15 @@ export const UrgentActionHub = ({
                   {item.application.company}
                 </span>
               </div>
-              <h3 className="line-clamp-2 text-support font-bold text-cv-text" dir="auto">
+              <h3 className="line-clamp-1 text-support font-bold text-cv-text" dir="auto">
                 {item.title}
               </h3>
-              <p className="mt-1 line-clamp-2 text-support leading-5 text-cv-text-muted" dir="auto">
+              <p className="mt-0.5 line-clamp-1 text-support leading-5 text-cv-text-muted" dir="auto">
                 {item.subtitle}
               </p>
             </div>
 
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-cv-border pt-3">
+            <div className="mt-1.5 flex flex-wrap items-center justify-between gap-1.5 border-t border-cv-border pt-1.5">
               {item.type === "overdue" || item.type === "due_today" ? (
                 <Button
                   className="min-h-8 px-1.5 text-cv-text-muted hover:text-cv-success"
