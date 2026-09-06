@@ -120,23 +120,55 @@ describe("JobDetailsPage", () => {
     renderPage();
 
     expect(await screen.findByText("ממתין לניתוח המשרה")).toBeInTheDocument();
-    expect(screen.queryByText("שיחת מגייס")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "מעקב גיוס" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
     expect(await screen.findByRole("dialog", { name: "ניהול מועמדות: Acme" })).toBeInTheDocument();
     expect(screen.getByText("שיחת מגייס")).toBeInTheDocument();
   });
 
-  it("keeps sparse record metadata compact and moves recruitment notes into the manager", async () => {
+  it("keeps recruitment details in the manager without duplicating application metadata", async () => {
     renderPage();
 
-    const metadata = (await screen.findByText("פרטים נוספים על המועמדות")).closest("details");
-    expect(metadata).not.toHaveAttribute("open");
+    const jobHeading = await screen.findByRole("heading", { name: "מודעת המשרה" });
+    const updateButton = screen.getByRole("button", { name: "עדכון נוסח המשרה" });
+    const textDisclosure = screen.getByText("הצגת נוסח המשרה השמור");
+    expect(jobHeading.compareDocumentPosition(updateButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(updateButton.compareDocumentPosition(textDisclosure) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByText("פרטים נוספים על המועמדות")).not.toBeInTheDocument();
+    expect(screen.queryByText("מקור המועמדות")).not.toBeInTheDocument();
 
     expect(screen.queryByRole("heading", { name: "מעקב גיוס" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
-    expect(await screen.findByLabelText(/הערות/)).toHaveValue("Referral from a former colleague");
+    expect(await screen.findByLabelText("תוכן ההערה")).toHaveValue("Referral from a former colleague");
     expect(screen.queryByRole("heading", { name: "פרטי המועמדות" })).not.toBeInTheDocument();
+  });
+
+  it("copies the complete stored job text from inside its disclosure", async () => {
+    const storedText = "Senior Backend Engineer\n\nResponsibilities:\nBuild reliable services.";
+    const writeText = vi.fn(() => Promise.resolve());
+    vi.stubGlobal("navigator", {
+      clipboard: { writeText },
+      userAgent: window.navigator.userAgent,
+    });
+    renderPage((input) =>
+      Promise.resolve(
+        String(input).endsWith("/artifacts")
+          ? jsonResponse({ items: [] })
+          : jsonResponse({
+              ...detail(),
+              latest_snapshot: { ...detail().latest_snapshot, job_text: storedText },
+            }),
+      ),
+    );
+
+    fireEvent.click(await screen.findByText("הצגת נוסח המשרה השמור"));
+    const copyButton = screen.getByRole("button", { name: "העתקת נוסח המשרה" });
+    expect(copyButton.querySelector(".lucide-copy")).not.toBeNull();
+    fireEvent.click(copyButton);
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(storedText));
+    expect(screen.getByText("נוסח המשרה הועתק")).toBeInTheDocument();
   });
 
   it("captures an amended posting as a new immutable snapshot from Job Detail", async () => {

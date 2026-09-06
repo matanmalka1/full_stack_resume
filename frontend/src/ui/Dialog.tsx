@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useRef } from "react";
 
 import { surfaceClasses } from "./Surface";
+import { cx } from "./cx";
 
 interface DialogProps {
   children: ReactNode;
@@ -30,6 +31,7 @@ export const Dialog = ({
 }: DialogProps) => {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const heightClass = size === "wide" ? "max-h-[85dvh]" : "max-h-[calc(100dvh-2rem)]";
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -53,8 +55,8 @@ export const Dialog = ({
     <dialog
       aria-labelledby={headingId}
       className={surfaceClasses(
-        `max-h-[calc(100dvh-2rem)] w-full ${
-          size === "wide" ? "max-w-4xl" : "max-w-xl"
+        `${heightClass} w-full ${
+          size === "wide" ? "max-w-3xl" : "max-w-xl"
         } overflow-hidden bg-cv-surface p-0 text-cv-text shadow-overlay backdrop:transition-opacity`,
       )}
       onCancel={(event) => {
@@ -65,7 +67,7 @@ export const Dialog = ({
       onClose={onClose}
       ref={dialogRef}
     >
-      <div className="flex max-h-[calc(100dvh-2rem)] flex-col" dir="rtl">
+      <div className={cx("flex flex-col", heightClass)} dir="rtl">
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-cv-border px-6 py-5">
           <h2
             className="text-heading-md font-semibold tracking-tight text-cv-text"
@@ -90,9 +92,7 @@ export const Dialog = ({
         </div>
         <div className="min-h-0 overflow-y-auto px-6 py-5 text-body leading-7">{children}</div>
         {footer === undefined ? null : (
-          <div className="flex shrink-0 flex-wrap justify-end gap-3 border-t border-cv-border px-6 py-4">
-            {footer}
-          </div>
+          <div className="flex shrink-0 flex-wrap justify-end gap-3 border-t border-cv-border px-6 py-4">{footer}</div>
         )}
       </div>
     </dialog>

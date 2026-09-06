@@ -12,50 +12,14 @@ import { useWatchedOperation } from "../hooks/useWatchedOperation";
 import { buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
 import { Card } from "../ui/Card";
-import { Disclosure } from "../ui/Disclosure";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
-import { SummaryList } from "../ui/SummaryList";
-import { dateTimesMatch, formatDateTime } from "../ui/formatDateTime";
 import { ActiveOperationPanel } from "./ActiveOperationPanel";
 import { ArtifactsPanel } from "./application/ArtifactsPanel";
 import { ApplicationBreadcrumbs } from "./application/ApplicationBreadcrumbs";
 import { JobSnapshotPanel } from "./application/JobSnapshotPanel";
 import { PreparationStatusBadges } from "./application/PreparationStatusBadges";
-import { recruitmentStatusLabel } from "./application/applicationLabels";
 import { RecruitmentManagerButton } from "./recruitment/RecruitmentManagerButton";
-
-const sourceLabel = (source: string): string => (source === "manual" ? "הזנה ידנית" : source);
-
-/* Job Detail owns the posting and remains the entrance to an Application. Recruitment
-   management is available from its masthead through the same dialog used elsewhere,
-   without competing with the pre-submission analysis work in the page body. */
-const ApplicationMetadata = ({ detail }: { detail: ApplicationDetail }) => {
-  const application = detail.application;
-
-  return (
-    /* Record metadata remains available without giving two timestamps and a source the
-       same visual weight as the recruitment work and the posting itself. */
-    <Disclosure className="px-1" summary="פרטים נוספים על המועמדות">
-      <SummaryList
-        className="mt-3"
-        items={[
-          { term: "מקור המועמדות", value: sourceLabel(application.source) },
-          ...(detail.terminal_outcome == null
-            ? []
-            : [{ term: "תוצאת התהליך", value: recruitmentStatusLabel(detail.terminal_outcome) }]),
-          ...(application.last_contact_date == null
-            ? []
-            : [{ term: "קשר אחרון", value: formatDateTime(application.last_contact_date) }]),
-          { term: "נוצרה", value: formatDateTime(application.created_at) },
-          ...(dateTimesMatch(application.created_at, application.updated_at)
-            ? []
-            : [{ term: "עודכנה לאחרונה", value: formatDateTime(application.updated_at) }]),
-        ]}
-      />
-    </Disclosure>
-  );
-};
 
 /* The one door on this screen, and the only place the two halves of an Application meet.
 
@@ -111,6 +75,9 @@ const PreparationGate = ({ detail }: { detail: ApplicationDetail }) => {
   );
 };
 
+/* Job Detail owns the posting and remains the entrance to an Application. Recruitment
+   management is available from its masthead through the same dialog used elsewhere,
+   without competing with the pre-submission analysis work in the page body. */
 export const JobDetailsPage = () => {
   const applicationId = useRequiredParam("applicationId");
   const location = useLocation();
@@ -172,7 +139,6 @@ export const JobDetailsPage = () => {
               </Callout>
             )}
             <PreparationGate detail={detail} />
-            <ApplicationMetadata detail={detail} />
             <JobSnapshotPanel detail={detail} />
             <ArtifactsPanel applicationId={applicationId} />
           </>

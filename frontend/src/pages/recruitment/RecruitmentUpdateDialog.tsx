@@ -1,33 +1,30 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   applicationDetailQueryOptions,
   invalidateApplicationViews,
   updateApplicationNotes,
 } from "../../api/applications";
-import type { ApplicationListItem, TransitionableRecruitmentStatus } from "../../api/contracts";
+import type { ApplicationListItem } from "../../api/contracts";
 import { setNextAction, transitionRecruitmentStatus } from "../../api/tracking";
 import { ErrorCallout } from "../../app/ErrorCallout";
 import { useAppForm } from "../../forms/useAppForm";
 import { Button } from "../../ui/Button";
-import { Callout } from "../../ui/Callout";
 import { Dialog } from "../../ui/Dialog";
-import { Field } from "../../ui/Field";
-import { Select } from "../../ui/Select";
-import { StatusBadge } from "../../ui/StatusBadge";
-import { TextArea, TextInput } from "../../ui/TextInput";
-import { recruitmentStatusLabel } from "../application/applicationLabels";
+import { ViewSwitch } from "../../ui/ViewSwitch";
+import { cx } from "../../ui/cx";
 import { useServerSyncedField } from "../useServerSyncedField";
 import { RecruitmentHistoryPanel } from "./RecruitmentHistoryPanel";
+import { RecruitmentSummary } from "./RecruitmentSummary";
+import { type RecruitmentUpdateFields, RecruitmentUpdateForm } from "./RecruitmentUpdateForm";
 
-interface RecruitmentUpdateFields {
-  nextAction: string;
-  nextActionDate: string;
-  notes: string;
-  reason: string;
-  targetStatus: TransitionableRecruitmentStatus | "";
-}
+const managerViews = [
+  { label: "עדכון", value: "update" },
+  { label: "היסטוריה", value: "history" },
+] as const;
+
+type ManagerView = (typeof managerViews)[number]["value"];
 
 const emptyFields: RecruitmentUpdateFields = {
   nextAction: "",
@@ -58,13 +55,16 @@ export const RecruitmentUpdateDialog = ({ application, onClose }: RecruitmentUpd
   const form = useAppForm<RecruitmentUpdateFields>({ defaultValues: emptyFields });
   const fields = form.watch();
   const initializedApplicationId = useRef<string | null>(null);
+  const [view, setView] = useState<ManagerView>("update");
 
   useEffect(() => {
     if (application === null) {
       initializedApplicationId.current = null;
       form.reset(emptyFields);
+      setView("update");
     } else if (detail !== undefined && initializedApplicationId.current !== applicationId) {
       initializedApplicationId.current = applicationId;
+      setView("update");
       form.reset({
         nextAction: detail.application.next_action ?? "",
         nextActionDate: detail.application.next_action_date ?? "",
@@ -202,66 +202,30 @@ export const RecruitmentUpdateDialog = ({ application, onClose }: RecruitmentUpd
               fallbackTitle="טעינת פרטי המועמדות נכשלה"
             />
           ) : detail === undefined ? null : (
-            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.85fr)]">
-              <form
-                className="flex min-w-0 flex-col gap-4"
-                id="recruitment-update-form"
-                onSubmit={form.handleSubmit((values) => save.mutate(values))}
-              >
-                <div>
-                  <p className="text-support font-semibold text-cv-text-muted">השלב הנוכחי</p>
-                  <StatusBadge className="mt-2 px-3 py-1" tone="neutral">
-                    {recruitmentStatusLabel(detail.recruitment_status)}
-                  </StatusBadge>
-                </div>
-                {save.error === null ? null : (
-                  <ErrorCallout
-                    error={save.error}
-                    fallbackDetail="ייתכן שחלק מהשינויים נשמרו. הערכים נטענו מחדש מהשרת; יש לבדוק אותם לפני ניסיון נוסף."
-                    fallbackTitle="לא ניתן להשלים את העדכון"
-                  />
-                )}
-                {statusChangedOnServer || actionChangedOnServer || dateChangedOnServer || notesChangedOnServer ? (
-                  <Callout role="status" title="פרטי המועמדות השתנו בשרת" tone="warning">
-                    הערכים שהקלדת נשמרו בטופס ולא הוחלפו. כדאי לבדוק אותם לפני השמירה.
-                  </Callout>
-                ) : null}
-
-                <Field label="מעבר לשלב הבא" optional>
-                  {(control) => (
-                    <Select {...control} {...form.register("targetStatus")} value={fields.targetStatus}>
-                      <option value="">ללא שינוי בשלב</option>
-                      {statusOptions.map((status) => (
-                        <option key={status} value={status}>
-                          {recruitmentStatusLabel(status)}
-                          {status === selectedStatus && !detail.allowed_recruitment_transitions.includes(status)
-                            ? " · הבחירה שלך"
-                            : ""}
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                </Field>
-
-                {fields.targetStatus === "" ? null : (
-                  <Field label="סיבת המעבר" optional>
-                    {(control) => <TextInput {...control} {...form.register("reason")} />}
-                  </Field>
-                )}
-
-                <Field label="הצעד הבא" optional>
-                  {(control) => <TextInput {...control} {...form.register("nextAction")} dir="auto" />}
-                </Field>
-                <Field label="תאריך יעד" optional>
-                  {(control) => (
-                    <TextInput {...control} {...form.register("nextActionDate")} className="ltr-island" type="date" />
-                  )}
-                </Field>
-                <Field label="הערות" optional>
-                  {(control) => <TextArea {...control} {...form.register("notes")} className="min-h-28" dir="auto" />}
-                </Field>
-              </form>
-              <RecruitmentHistoryPanel detail={detail} onChanged={refresh} />
+            <div className="flex flex-col gap-5">
+              <RecruitmentSummary detail={detail} />
+              <div className="lg:hidden">
+                <ViewSwitch label="בחירת אזור בניהול המועמדות" onChange={setView} options={managerViews} value={view} />
+              </div>
+              <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(19rem,0.9fr)]">
+                <RecruitmentUpdateForm
+                  detail={detail}
+                  fields={fields}
+                  form={form}
+                  onSubmit={form.handleSubmit((values) => save.mutate(values))}
+                  saveError={save.error}
+                  serverChanged={
+                    statusChangedOnServer || actionChangedOnServer || dateChangedOnServer || notesChangedOnServer
+                  }
+                  statusOptions={statusOptions}
+                  visible={view === "update"}
+                />
+                <RecruitmentHistoryPanel
+                  className={cx(view === "history" ? "block" : "hidden", "lg:block")}
+                  detail={detail}
+                  onChanged={refresh}
+                />
+              </div>
             </div>
           )}
         </>

@@ -460,19 +460,17 @@ describe("ApplicationListPage", () => {
     expect(await screen.findByRole("dialog", { name: "ניהול מועמדות: Acme" })).toBeInTheDocument();
     /* The dialog opens before its own detail fetch settles - it shows a loading line
        until then - so the form's fields exist only once that resolves. */
-    const status = await screen.findByLabelText(/מעבר לשלב הבא/);
+    const status = await screen.findByLabelText("עדכון שלב");
     expect(within(status).getByRole("option", { name: "סגור" })).toBeInTheDocument();
     expect(within(status).queryByRole("option", { name: "הוגש" })).not.toBeInTheDocument();
 
     fireEvent.change(status, { target: { value: "closed" } });
-    fireEvent.change(screen.getByLabelText(/הצעד הבא/), { target: { value: "Send follow-up" } });
+    fireEvent.change(screen.getByLabelText("הפעולה הבאה"), { target: { value: "Send follow-up" } });
     fireEvent.change(screen.getByLabelText(/תאריך יעד/), { target: { value: "2026-09-10" } });
-    fireEvent.change(screen.getByLabelText(/הערות/), { target: { value: "Interview notes" } });
+    fireEvent.change(screen.getByLabelText("תוכן ההערה"), { target: { value: "Interview notes" } });
     fireEvent.click(screen.getByRole("button", { name: "שמירת שינויים" }));
 
-    await waitFor(() =>
-      expect(screen.queryByRole("dialog", { name: "ניהול מועמדות: Acme" })).not.toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "ניהול מועמדות: Acme" })).not.toBeInTheDocument());
     expect(calls).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

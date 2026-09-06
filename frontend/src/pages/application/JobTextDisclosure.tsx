@@ -1,4 +1,8 @@
+import { Copy } from "lucide-react";
+import { useState } from "react";
+
 import type { ApplicationDetail } from "../../api/contracts";
+import { Button } from "../../ui/Button";
 import { Disclosure } from "../../ui/Disclosure";
 
 /* The stored posting text, collapsed. One component because two screens need the same
@@ -9,14 +13,38 @@ import { Disclosure } from "../../ui/Disclosure";
    It stays collapsed everywhere. A posting is longer than anything around it, it is input
    rather than conclusion, and opening it is a deliberate act of checking. */
 export const JobTextDisclosure = ({ detail, summary }: { detail: ApplicationDetail; summary: string }) => {
-  const jobText = typeof detail.latest_snapshot.job_text === "string" ? detail.latest_snapshot.job_text.trim() : "";
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const jobText = typeof detail.latest_snapshot.job_text === "string" ? detail.latest_snapshot.job_text : "";
 
-  if (jobText === "") {
+  if (jobText.trim() === "") {
     return <p className="text-support leading-6 text-cv-text-muted">תצלום המשרה לא כולל טקסט שמור.</p>;
   }
 
+  const copyJobText = async () => {
+    try {
+      await navigator.clipboard.writeText(jobText);
+      setCopyState("copied");
+    } catch {
+      setCopyState("failed");
+    }
+  };
+
   return (
     <Disclosure summary={summary}>
+      <div className="mb-2 flex items-center justify-end gap-2">
+        <span aria-live="polite" className="text-support text-cv-text-muted">
+          {copyState === "copied" ? "נוסח המשרה הועתק" : copyState === "failed" ? "לא ניתן להעתיק" : null}
+        </span>
+        <Button
+          aria-label="העתקת נוסח המשרה"
+          className="w-11 !px-0"
+          onClick={() => void copyJobText()}
+          title="העתקת נוסח המשרה"
+          variant="ghost"
+        >
+          <Copy aria-hidden="true" className="size-5 shrink-0" />
+        </Button>
+      </div>
       {/* Backend-stored source text, in whatever language the posting was written in: it
           picks its own direction, and `whitespace-pre-wrap` keeps the posting's own line
           breaks rather than reflowing it into one block.

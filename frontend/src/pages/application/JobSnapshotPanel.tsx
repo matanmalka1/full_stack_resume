@@ -32,6 +32,8 @@ export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
         title="מודעת המשרה"
       />
 
+      <JobPostingUpdate detail={detail} />
+
       <div className="mt-4 flex flex-col gap-4">
         <SummaryList
           items={[
@@ -63,8 +65,6 @@ export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
         />
 
         <JobTextDisclosure detail={detail} summary="הצגת נוסח המשרה השמור" />
-
-        <JobPostingUpdate detail={detail} />
       </div>
     </Card>
   );

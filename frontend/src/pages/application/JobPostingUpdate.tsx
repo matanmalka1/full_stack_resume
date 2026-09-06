@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Pencil } from "lucide-react";
 import { useState } from "react";
 
 import { createJobSnapshot, invalidateApplicationViews } from "../../api/applications";
@@ -79,7 +80,7 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
   const closeDialog = () => setOpen(false);
 
   return (
-    <div className="border-t border-cv-border pt-4">
+    <div className="mt-3">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <div className="min-w-0">
           <h3 className="text-support font-semibold text-cv-text">המודעה השתנתה?</h3>
@@ -88,14 +89,17 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
           </p>
         </div>
         <Button
+          aria-label="עדכון נוסח המשרה"
           aria-expanded={open}
+          className="w-11 !px-0"
           onClick={() => {
             create.reset();
             setOpen(true);
           }}
-          variant="secondary"
+          title="עדכון נוסח המשרה"
+          variant="ghost"
         >
-          עדכון נוסח המשרה
+          <Pencil aria-hidden="true" className="size-5 shrink-0" />
         </Button>
       </div>
 

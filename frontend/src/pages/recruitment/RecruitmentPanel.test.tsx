@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { applicationDetailQueryKey } from "../../api/applications";
@@ -125,7 +125,7 @@ describe("RecruitmentManagerButton", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderPanel(value);
 
-    expect(screen.queryByLabelText("מעבר לשלב הבא (רשות)")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("עדכון שלב")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
     expect(await screen.findByRole("dialog", { name: "ניהול מועמדות: Acme" })).toBeInTheDocument();
@@ -133,12 +133,16 @@ describe("RecruitmentManagerButton", () => {
     expect(screen.queryByText("application created")).not.toBeInTheDocument();
     expect(screen.queryByText("לא נקבע צעד הבא")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "שמירת שינויים" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "עדכון" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "היסטוריה" }));
+    expect(screen.getByRole("button", { name: "היסטוריה" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "עדכון" }));
 
-    fireEvent.change(screen.getByLabelText(/מעבר לשלב הבא/), { target: { value: "closed" } });
-    fireEvent.change(screen.getByLabelText(/סיבת המעבר/), {
+    fireEvent.change(screen.getByLabelText("עדכון שלב"), { target: { value: "closed" } });
+    fireEvent.change(screen.getByLabelText("סיבת השינוי"), {
       target: { value: "Position filled" },
     });
-    fireEvent.change(screen.getByLabelText(/הצעד הבא/), {
+    fireEvent.change(screen.getByLabelText("הפעולה הבאה"), {
       target: { value: " Send portfolio " },
     });
     fireEvent.change(screen.getByLabelText(/תאריך יעד/), { target: { value: "2026-09-10" } });
@@ -174,7 +178,7 @@ describe("RecruitmentManagerButton", () => {
 
     expect(screen.queryByRole("button", { name: "הסרת התזכורת" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
-    fireEvent.change(await screen.findByLabelText(/הצעד הבא/), { target: { value: "" } });
+    fireEvent.change(await screen.findByLabelText("הפעולה הבאה"), { target: { value: "" } });
     fireEvent.change(screen.getByLabelText(/תאריך יעד/), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "שמירת שינויים" }));
 
@@ -192,9 +196,10 @@ describe("RecruitmentManagerButton", () => {
     renderPanel();
 
     fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
-    const additionalActions = screen.getByText("פעולות נוספות").closest("details");
+    const additionalActions = screen.getByText("תיקון היסטוריה").closest("details");
     expect(additionalActions).not.toHaveAttribute("open");
-    fireEvent.click(screen.getByText("פעולות נוספות"));
+    expect(screen.getByRole("button", { name: "רישום הגשה חיצונית" })).toBeInTheDocument();
+    fireEvent.click(screen.getByText("תיקון היסטוריה"));
     expect(additionalActions).toHaveAttribute("open");
 
     fireEvent.click(screen.getByRole("button", { name: "תיקון אירוע שנרשם" }));
@@ -253,6 +258,29 @@ describe("RecruitmentManagerButton", () => {
     expect(screen.queryByText(/2026-09-10/)).not.toBeInTheDocument();
   });
 
+  it("uses the recruitment status presentation and initially keeps a long history compact", () => {
+    const timeline = Array.from({ length: 6 }, (_, index) =>
+      statusEvent({
+        id: `next-${index}`,
+        item_type: "next_action",
+        next_action: `Action ${index}`,
+        occurred_at: `2026-08-${String(18 + index).padStart(2, "0")}T07:00:00Z`,
+      }),
+    );
+    vi.stubGlobal("fetch", vi.fn(emptyJsonFetch));
+    renderPanel(detail({ recruitment_status: "offer", recruitment_timeline: timeline }));
+
+    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
+    const summary = screen.getByRole("region", { name: "מצב המועמדות" });
+    expect(within(summary).getByText("הצעה").closest("span")).toHaveClass("text-cv-success");
+    expect(screen.getByText("Action 5")).toBeInTheDocument();
+    expect(screen.queryByText("Action 0")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "הצגת כל ההיסטוריה (6)" }));
+    expect(screen.getByText("Action 0")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "הצגת פחות אירועים" })).toBeInTheDocument();
+  });
+
   it("surfaces a safe server refusal instead of swallowing it", async () => {
     const value = detail();
     vi.stubGlobal(
@@ -278,7 +306,7 @@ describe("RecruitmentManagerButton", () => {
     renderPanel(value);
 
     fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
-    fireEvent.change(await screen.findByLabelText(/הצעד הבא/), { target: { value: "Try again tomorrow" } });
+    fireEvent.change(await screen.findByLabelText("הפעולה הבאה"), { target: { value: "Try again tomorrow" } });
     fireEvent.click(screen.getByRole("button", { name: "שמירת שינויים" }));
 
     expect(await screen.findByText("Invalid next action")).toBeInTheDocument();
@@ -290,7 +318,7 @@ describe("RecruitmentManagerButton", () => {
     const { rerenderPanel } = renderPanel();
 
     fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
-    expect(await screen.findByLabelText(/הצעד הבא/)).toHaveValue("Follow up");
+    expect(await screen.findByLabelText("הפעולה הבאה")).toHaveValue("Follow up");
 
     rerenderPanel(
       detail({
@@ -302,7 +330,7 @@ describe("RecruitmentManagerButton", () => {
       }),
     );
 
-    await waitFor(() => expect(screen.getByLabelText(/הצעד הבא/)).toHaveValue("Schedule interview"));
+    await waitFor(() => expect(screen.getByLabelText("הפעולה הבאה")).toHaveValue("Schedule interview"));
     expect(screen.getByLabelText(/תאריך יעד/)).toHaveValue("2026-09-12");
     expect(screen.queryByText("פרטי המועמדות השתנו בשרת")).not.toBeInTheDocument();
   });
@@ -312,10 +340,10 @@ describe("RecruitmentManagerButton", () => {
     const { rerenderPanel } = renderPanel();
 
     fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
-    fireEvent.change(await screen.findByLabelText(/הצעד הבא/), {
+    fireEvent.change(await screen.findByLabelText("הפעולה הבאה"), {
       target: { value: "My unsaved follow-up" },
     });
-    fireEvent.change(screen.getByLabelText(/מעבר לשלב הבא/), { target: { value: "closed" } });
+    fireEvent.change(screen.getByLabelText("עדכון שלב"), { target: { value: "closed" } });
     rerenderPanel(
       detail({
         allowed_recruitment_transitions: ["withdrawn"],
@@ -327,8 +355,8 @@ describe("RecruitmentManagerButton", () => {
       }),
     );
 
-    expect(screen.getByLabelText(/הצעד הבא/)).toHaveValue("My unsaved follow-up");
-    expect(screen.getByLabelText(/מעבר לשלב הבא/)).toHaveValue("closed");
+    expect(screen.getByLabelText("הפעולה הבאה")).toHaveValue("My unsaved follow-up");
+    expect(screen.getByLabelText("עדכון שלב")).toHaveValue("closed");
     await waitFor(() => expect(screen.getByLabelText(/תאריך יעד/)).toHaveValue("2026-09-12"));
     expect(await screen.findByText("פרטי המועמדות השתנו בשרת")).toBeInTheDocument();
   });
@@ -340,7 +368,7 @@ describe("RecruitmentManagerButton", () => {
     const { rerenderPanel } = renderPanel(detail({ recruitment_timeline: [olderEvent, currentEvent] }));
 
     fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
-    fireEvent.click(screen.getByText("פעולות נוספות"));
+    fireEvent.click(screen.getByText("תיקון היסטוריה"));
     fireEvent.click(screen.getByRole("button", { name: "תיקון אירוע שנרשם" }));
     fireEvent.change(screen.getByLabelText("האירוע השגוי"), {
       target: { value: "status-older" },
