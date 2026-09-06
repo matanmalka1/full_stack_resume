@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { ApplicationDetail } from "../api/contracts";
+import type { ApplicationDetail, ArtifactVersion } from "../api/contracts";
 import { JobDetailsPage } from "./JobDetailsPage";
 
 const detail = (): ApplicationDetail =>
@@ -44,6 +44,27 @@ const detail = (): ApplicationDetail =>
       content_hash: "hash-1",
     },
   }) as ApplicationDetail;
+
+const artifact = (overrides: Partial<ArtifactVersion>): ArtifactVersion => ({
+  approved_at: null,
+  artifact_id: "artifact-1",
+  artifact_type: "resume_pdf",
+  content_hash: "hash",
+  created_at: "2026-09-06T08:00:00Z",
+  emphasis: null,
+  facts_version: null,
+  id: "artifact-version-1",
+  job_snapshot_id: "snap-1",
+  lifecycle_status: "rendered",
+  logical_name: "resume.pdf",
+  metadata: {},
+  profile: null,
+  revision_id: "revision-2",
+  submitted_at: null,
+  track: null,
+  version_number: 1,
+  ...overrides,
+});
 
 const jsonResponse = (body: unknown): Response =>
   new Response(JSON.stringify(body), {
@@ -142,6 +163,56 @@ describe("JobDetailsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
     expect(await screen.findByLabelText("תוכן ההערה")).toHaveValue("Referral from a former colleague");
     expect(screen.queryByRole("heading", { name: "פרטי המועמדות" })).not.toBeInTheDocument();
+  });
+
+  it("keeps artifact files and previous CV revisions collapsed until requested", async () => {
+    const artifacts = [
+      artifact({ id: "latest-pdf", artifact_id: "latest-pdf", artifact_type: "resume_pdf" }),
+      artifact({
+        id: "latest-html",
+        artifact_id: "latest-html",
+        artifact_type: "resume_html",
+        logical_name: "resume.html",
+      }),
+      artifact({
+        id: "previous-markdown",
+        artifact_id: "previous-markdown",
+        artifact_type: "resume_markdown",
+        created_at: "2026-09-05T08:00:00Z",
+        logical_name: "resume.md",
+        revision_id: "revision-1",
+      }),
+      artifact({
+        id: "previous-visual",
+        artifact_id: "previous-visual",
+        artifact_type: "visual_evidence",
+        created_at: "2026-09-05T08:00:00Z",
+        logical_name: "resume.png",
+        revision_id: "revision-1",
+      }),
+    ];
+    renderPage((input) =>
+      Promise.resolve(
+        String(input).endsWith("/artifacts") ? jsonResponse({ items: artifacts }) : jsonResponse(detail()),
+      ),
+    );
+
+    expect(await screen.findByText("הגרסה האחרונה")).toBeInTheDocument();
+    expect(screen.queryByText("גרסה קודמת")).not.toBeInTheDocument();
+    expect(screen.queryByText("קובץ PDF של קורות החיים")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "הצגת הקבצים (2)" }));
+    expect(screen.getByText("קובץ PDF של קורות החיים")).toBeInTheDocument();
+    expect(screen.getByText("קובץ HTML של קורות החיים")).toBeInTheDocument();
+    expect(screen.queryByText("קורות החיים ב־Markdown")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "הצגת גרסאות קודמות (1)" }));
+    expect(screen.getByText("גרסה קודמת")).toBeInTheDocument();
+    expect(screen.queryByText("קורות החיים ב־Markdown")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "הצגת הקבצים (2)" }));
+    expect(screen.getByText("קורות החיים ב־Markdown")).toBeInTheDocument();
+    expect(screen.getByText("צילום מסך של התצוגה")).toBeInTheDocument();
   });
 
   it("copies the complete stored job text from inside its disclosure", async () => {
