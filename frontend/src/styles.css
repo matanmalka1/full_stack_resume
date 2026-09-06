@@ -25,9 +25,14 @@
   --color-cv-surface-raised: #ffffff;
   --color-cv-surface-sunken: #eceff4;
   --color-cv-border: #e2e6ee;
-  /* Control edges use the strong token; the lighter border stays decorative and is
-     reserved for cards and separators rather than being a control's only boundary. */
+  /* Strong edges remain available for checkboxes and multiline editors. */
   --color-cv-border-strong: #5b6577;
+  /* Input/select reference: Main.dc.html. */
+  --color-cv-field-border: #e3e8ef;
+  --color-cv-field-background: #f8fafc;
+  --color-cv-field-focus: #2f6fed;
+  --text-field-input: 0.78125rem;
+  --text-field-select: 0.8125rem;
   --color-cv-text: #111827;
   --color-cv-text-muted: #5b6577;
   --color-cv-accent: #1d4ed8;
@@ -169,6 +174,8 @@ select {
 }
 
 [data-text-size="large"] {
+  --text-field-input: 0.90625rem;
+  --text-field-select: 0.9375rem;
   --text-support: 1rem;
   --text-body: 1.125rem;
   --text-heading-sm: 1.375rem;
@@ -186,6 +193,42 @@ optgroup,
 textarea,
 select {
   font: inherit;
+}
+
+.cv-field {
+  border-color: var(--color-cv-field-border);
+  color: var(--color-cv-text);
+  line-height: normal;
+}
+
+.cv-field-input {
+  background: var(--color-cv-field-background);
+  font-size: var(--text-field-input);
+}
+
+.cv-field-select {
+  background: var(--color-cv-surface);
+  font-size: var(--text-field-select);
+}
+
+.cv-field::placeholder {
+  color: var(--color-cv-text-muted);
+}
+
+.cv-field:focus {
+  outline: 2px solid var(--color-cv-field-focus);
+  outline-offset: 1px;
+}
+
+.cv-field[aria-invalid="true"] {
+  border-color: var(--color-cv-blocker);
+  box-shadow: 0 0 0 2px var(--color-cv-blocker-soft);
+}
+
+.cv-field:disabled {
+  cursor: not-allowed;
+  background: var(--color-cv-surface-muted);
+  color: var(--color-cv-text-muted);
 }
 
 /* A.2: 2px focus ring with 2px offset on every interactive element.

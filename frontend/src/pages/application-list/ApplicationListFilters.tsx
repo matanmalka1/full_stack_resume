@@ -20,7 +20,7 @@ const sortLabels: Record<ApplicationSort, string> = {
   stage: "לפי מצב קורות החיים",
 };
 
-const toolbarControlClasses = "mt-1 min-h-9 rounded-xl py-1.5";
+const toolbarControlClasses = "mt-1";
 
 interface ApplicationListFiltersProps {
   activity: ActivityFilter;
