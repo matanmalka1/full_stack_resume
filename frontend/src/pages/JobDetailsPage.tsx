@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { FileCheck2 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
 import { applicationDetailQueryOptions } from "../api/applications";
@@ -52,12 +51,6 @@ const PreparationGate = ({ detail }: { detail: ApplicationDetail }) => {
           <PreparationStatusBadges className="mt-3 flex flex-wrap gap-2" detail={detail} />
         </div>
         <div className="flex flex-wrap gap-2">
-          {detail.latest_ready_revision_id == null ? null : (
-            <Link className={buttonClasses("primary")} to={appRoutes.revision(detail.latest_ready_revision_id)}>
-              <FileCheck2 aria-hidden="true" className="size-4" />
-              צפייה בגרסה המוכנה
-            </Link>
-          )}
           <Link
             className={buttonClasses(detail.latest_ready_revision_id == null ? "primary" : "secondary")}
             to={appRoutes.preparation(applicationId)}
