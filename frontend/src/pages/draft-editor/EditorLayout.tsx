@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 
-import { Card } from "../../ui/Card";
 import { cx } from "../../ui/cx";
 import { ViewSwitch } from "../../ui/ViewSwitch";
 
@@ -29,13 +28,12 @@ interface EditorLayoutProps {
    where the preview pane never sits beside anything. */
 export const EditorLayout = ({ editor, mode, onModeChange, preview }: EditorLayoutProps) => (
   <div className="flex flex-col gap-6">
-    <Card className="flex flex-wrap items-center justify-between gap-3 bg-cv-surface px-4 py-3 shadow-surface">
-      <div>
-        <p className="text-support font-bold text-cv-text">סביבת העבודה</p>
-        <p className="mt-0.5 text-support text-cv-text-muted">
-          אפשר לקרוא ולאשר, לתקן שורה בעזרת אייקון העריכה שלה, או לראות את המסמך המלא.
-        </p>
-      </div>
+    {/* The switch alone, on its own line. It used to sit in a titled card explaining what
+        the two options do - a heading, a sentence, and a surface, all above the document,
+        to caption a control whose two labels already say it. On a screen that already
+        spends its first six hundred pixels on breadcrumbs, a stepper, a heading and a
+        header card, that was one band of furniture the reader scrolled past every visit. */}
+    <div className="flex justify-end">
       <ViewSwitch
         label="בחירת תצוגת סביבת העבודה"
         onChange={onModeChange}
@@ -45,7 +43,7 @@ export const EditorLayout = ({ editor, mode, onModeChange, preview }: EditorLayo
         ]}
         value={mode}
       />
-    </Card>
+    </div>
 
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8 xl:gap-10">
       <div className={cx("min-w-0 flex-col gap-6", mode === "document" ? "hidden" : "flex lg:flex-1 lg:basis-7/12")}>

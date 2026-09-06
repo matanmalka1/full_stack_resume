@@ -80,7 +80,8 @@ export const DraftEditorPage = () => {
   return (
     <PageShell
       actions={detail === undefined ? null : <RecruitmentManagerButton application={detail.application} />}
-      description={detail === undefined ? undefined : `תפקיד היעד: ${detail.application.target_role}`}
+      /* No description: `DraftHeaderCard` below names the company and the target role
+         together, and the heading repeated the role on its own a line above it. */
       eyebrow="סביבת האישור"
       navigation={
         <ApplicationBreadcrumbs

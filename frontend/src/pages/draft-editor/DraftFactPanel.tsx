@@ -61,10 +61,20 @@ export const DraftFactPanel = ({ busy, facts, onInclude }: DraftFactPanelProps) 
                   <p className="text-body text-cv-text" dir="auto">
                     {fact.text ?? "לא ניתן לקרוא את העובדה הזו מהידע."}
                   </p>
+                  {/* Joined from whatever resolved, rather than concatenated blind. Both label
+                      maps are keyed by unions derived from the generated contract, so they are
+                      exhaustive against the schema this build was compiled against - and say
+                      nothing about a server that has since learned a sixth omission reason.
+                      Indexed straight, that row read "undefined" to the user; dropped, the row
+                      says the part it does know. */}
                   <p className="mt-0.5 text-support text-cv-text-muted">
-                    {selectionOutcomeLabels[fact.outcome ?? "omitted"]}
-                    {fact.reason === null || fact.reason === undefined ? "" : ` · ${omissionReasonLabels[fact.reason]}`}
-                    {fact.section === null || fact.section === undefined ? "" : ` · ${fact.section}`}
+                    {[
+                      selectionOutcomeLabels[fact.outcome ?? "omitted"],
+                      fact.reason === null || fact.reason === undefined ? undefined : omissionReasonLabels[fact.reason],
+                      fact.section ?? undefined,
+                    ]
+                      .filter((part): part is string => part !== undefined && part !== "")
+                      .join(" · ")}
                   </p>
                 </div>
                 <Button
