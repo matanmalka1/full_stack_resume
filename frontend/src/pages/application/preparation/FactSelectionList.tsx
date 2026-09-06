@@ -126,10 +126,10 @@ export const FactSelectionList = ({
           </label>
           <Search
             aria-hidden="true"
-            className="pointer-events-none absolute end-3.5 top-1/2 size-4 -translate-y-1/2 text-cv-text-muted"
+            className="pointer-events-none absolute start-3.5 top-1/2 size-4 -translate-y-1/2 text-cv-text-muted"
           />
           <TextInput
-            className="rtl-placeholder w-64 max-w-full pe-10"
+            className="rtl-placeholder w-64 max-w-full ps-10"
             dir="auto"
             id={searchId}
             onChange={(event) => setQuery(event.target.value)}
@@ -173,7 +173,7 @@ export const FactSelectionList = ({
                       )}
                     />
                     <LtrText className="text-support font-semibold text-cv-text">{group.section}</LtrText>
-                    <span className="rounded-pill bg-cv-surface px-2.5 py-0.5 text-support text-cv-text-muted">
+                    <span className="rounded-pill bg-cv-surface-sunken px-2.5 py-0.5 text-support text-cv-text-muted">
                       {group.included} מתוך {group.total} נכללות
                     </span>
                   </button>

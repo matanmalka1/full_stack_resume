@@ -41,9 +41,16 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
   } = useApplicationActionsMutations(detail, onQueued);
 
   /* Keyed because the bar renders them from an array: with more than one secondary
-     action, React needs each to be identifiable across renders. */
+     action, React needs each to be identifiable across renders.
+
+     Re-analysis is not offered here. Once an analysis is already in force this button
+     would sit beside "יצירת טיוטה" - the actual next step - competing with it for a press
+     that is rarely the one worth making; `ReanalyzeCard` offers the same command instead
+     where the analysis it re-runs is on screen, in the diagnostics tab. The first analyze
+     of an Application that has none stays exactly here: there is no analysis yet for a
+     diagnostics tab to show. */
   const analyzeButton =
-    plan.analyze === null ? null : (
+    plan.analyze === null || plan.analyze.reanalysis ? null : (
       <Button
         disabled={settings === undefined}
         key="analyze"
@@ -52,7 +59,7 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
         pendingLabel="מפעיל ניתוח…"
         variant={plan.analyze.emphasized ? "primary" : "secondary"}
       >
-        {plan.analyze.reanalysis ? "ניתוח מחדש של המשרה" : "ניתוח המשרה"}
+        ניתוח המשרה
       </Button>
     );
 
@@ -193,18 +200,7 @@ export const ApplicationActions = ({ detail, onQueued }: ApplicationActionsProps
       )}
 
       {/* Why the secondary actions are on offer at all, below the row that offers them.
-
-          Re-analysis destroys nothing: the existing JobAnalysis and any active draft are
-          immutable records that stay exactly as they are. What changes is which analysis
-          is active - stated, not confirmed away, and stated differently depending on
-          whether there is a draft for it to mark stale. */}
-      {plan.analyze?.reanalysis !== true ? null : (
-        <p className="text-support leading-6 text-cv-text-muted">
-          {plan.draftWouldReplace
-            ? "ניתוח מחדש יוצר ניתוח חדש ונפרד לאותו תצלום משרה. הטיוטה הפעילה נשמרת כפי שהיא, אך תסומן כלא מעודכנת מולו."
-            : "ניתוח מחדש כדאי רק אם הסיווג שלמעלה נראה שגוי. הוא יוצר ניתוח חדש ונפרד לאותו תצלום משרה, ואינו מושך נוסח משרה מעודכן."}
-        </p>
-      )}
+          Re-analysis is explained beside its own button now, in `ReanalyzeCard`. */}
 
       {/* What separates the two stale-draft commands. They appear only beside a stale-draft
           alert, so the reader has already been told the draft is out of date; what they

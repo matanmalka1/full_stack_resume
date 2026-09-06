@@ -7,6 +7,7 @@ import { surfaceClasses } from "../../ui/Surface";
 import { ApplicationActions } from "./ApplicationActions";
 import { AutomaticDraftNotice } from "./AutomaticDraftNotice";
 import { PreparationAlerts } from "./PreparationAlerts";
+import { ReanalyzeCard } from "./ReanalyzeCard";
 import { ReviewDecisionPanel } from "./ReviewDecisionPanel";
 import { SelectionPlanPanel } from "./SelectionPlanPanel";
 import { AnalysisPanel } from "./analysis/AnalysisPanel";
@@ -165,6 +166,7 @@ export const PreparationView = ({
       {classification === null ? null : (
         <PreparationTabPanel active={activeTab === "analysis"} tab="analysis">
           <AnalysisPanel classification={classification} detail={detail} showGaps={!open.gaps} />
+          <ReanalyzeCard detail={detail} onQueued={onQueued} />
         </PreparationTabPanel>
       )}
     </div>
