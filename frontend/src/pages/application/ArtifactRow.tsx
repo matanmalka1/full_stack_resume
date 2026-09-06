@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { File, FileCode2, FileText, Image as ImageIcon, type LucideIcon } from "lucide-react";
+import { File, FileCode2, FileText, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 
 import { artifactDownloadHref, artifactVersionQueryOptions } from "../../api/artifacts";
@@ -16,7 +16,6 @@ const artifactIcons: Record<string, LucideIcon> = {
   resume_html: FileCode2,
   resume_markdown: FileText,
   resume_pdf: FileText,
-  visual_evidence: ImageIcon,
 };
 
 const metadataValue = (value: unknown): string =>

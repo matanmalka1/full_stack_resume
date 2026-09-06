@@ -549,7 +549,7 @@ specific resolution may reach this command as a warning.
 ### `render_revision(approved_revision_id)`
 
 Asynchronous and idempotent. It validates the exact approved source, writes temp HTML,
-renders with Playwright Chromium, generates screenshot/PDF, validates render geometry,
+renders with Playwright Chromium, generates a PDF, validates render geometry,
 page count, PDF/ATS text, links, direction, filename metadata and integrity, then
 registers immutable artifacts.
 

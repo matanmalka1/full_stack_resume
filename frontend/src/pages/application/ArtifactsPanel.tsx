@@ -142,7 +142,11 @@ export const ArtifactsPanel = ({ applicationId }: { applicationId: string }) => 
   const [showInternal, setShowInternal] = useState(false);
   /* Newest first, which is the order the reader is asking about. The server's answer is
      never narrowed here - both groups below are rendered, one behind a press. */
-  const ordered = [...(query.data?.items ?? [])].sort((left, right) => right.created_at.localeCompare(left.created_at));
+  // Old records are immutable, but the retired render image is no longer part
+  // of the product surface and must not reappear for historical revisions.
+  const ordered = [...(query.data?.items ?? [])]
+    .filter((artifact) => artifact.artifact_type !== "visual_evidence")
+    .sort((left, right) => right.created_at.localeCompare(left.created_at));
   const deliverables = ordered.filter((artifact) => isDeliverableArtifact(artifact.artifact_type));
   const internal = ordered.filter((artifact) => !isDeliverableArtifact(artifact.artifact_type));
 

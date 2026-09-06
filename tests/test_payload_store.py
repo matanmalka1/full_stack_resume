@@ -37,17 +37,18 @@ def test_approved_payload_layouts(payload_store: PayloadStore) -> None:
         "resume.json",
     )
     assert payload_store.revision_path("app", "revision", format="md").name == "resume.md"
-    for suffix in ("html", ".pdf", "png"):
+    for suffix in ("html", ".pdf"):
         assert (
             payload_store.output_path("app", "revision", "artifact", suffix=suffix).suffix
             == f".{suffix.lstrip('.')}"
         )
+    with pytest.raises(ValueError, match="unsupported output suffix"):
+        payload_store.output_path("app", "revision", "artifact", suffix="png")
     targets = payload_store.render_targets(
-        "app", "revision", "html-id", "pdf-id", "screenshot-id", "Recruiter CV.pdf"
+        "app", "revision", "html-id", "pdf-id", "Recruiter CV.pdf"
     )
     assert targets.html.parts[-4:] == ("outputs", "app", "revision", "html-id.html")
     assert targets.pdf.name == "pdf-id.pdf"
-    assert targets.screenshot.name == "screenshot-id.png"
     assert targets.recruiter_pdf_filename == "Recruiter CV.pdf"
     assert payload_store.provider_path("app", "operation", "artifact").parts[-4:] == (
         "provider",
@@ -235,7 +236,7 @@ def test_ingest_render_output_matches_the_reference_the_registry_records(
     the previous `ArtifactStore.relative(path)` produced.
     """
     targets = payload_store.render_targets(
-        "app", "revision", "html-id", "pdf-id", "screenshot-id", "Recruiter CV.pdf"
+        "app", "revision", "html-id", "pdf-id", "Recruiter CV.pdf"
     )
     content = b"<html>rendered</html>"
     targets.html.parent.mkdir(parents=True, exist_ok=True)

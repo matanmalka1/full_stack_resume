@@ -271,7 +271,6 @@ The key layout is the same either way:
   drafts/{application_id}/{working_draft_id}-v{edit_version}.json
   outputs/{application_id}/{revision_id}/{artifact_id}.html
   outputs/{application_id}/{revision_id}/{artifact_id}.pdf
-  outputs/{application_id}/{revision_id}/{artifact_id}.png
   provider/{application_id}/{operation_id}/{artifact_id}.json
   manifests/{manifest_id}.json
 ```
@@ -308,7 +307,7 @@ JobSnapshot source is the exact text accepted by the backend. PostgreSQL keeps p
 hash, normalized dedupe hash, URL/provenance, timestamp, and prior-snapshot reference.
 
 ApprovedRevision content includes immutable structured JSON and Markdown projection.
-HTML, PDF, screenshot, claim manifest, decision/provenance export, and sanitized
+HTML, PDF, claim manifest, decision/provenance export, and sanitized
 provider response are separate registered artifacts where applicable.
 
 ### 6.3 Knowledge files
@@ -399,7 +398,7 @@ fact IDs/hashes, Profile, selection policy, and Track/Emphasis dependencies. An
 unrelated fact change does not invalidate every draft.
 
 Ready is computed, never stored as a second revision type. An ApprovedRevision becomes
-`ready_qualified` when its exact HTML/PDF/visual artifacts exist, render/PDF/ATS
+`ready_qualified` when its exact HTML/PDF artifacts exist, render/PDF/ATS
 validation passes, and current integrity verification passes. This projection is
 independent of the active context but may become false if registered artifacts are
 missing or corrupt. `PreparationState=ready` additionally requires compatibility with

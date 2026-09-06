@@ -173,10 +173,8 @@ def test_ready_integrity_rejects_missing_or_tampered_registered_artifacts(
         ("resume_markdown", "approved", "tamper", "approved-markdown-tampered", "approved_source"),
         ("claim_manifest", "approved", "tamper", "approved-manifest-tampered", "approved_source"),
         ("resume_html", "rendered", "tamper", "html-tampered", "rendered_artifacts"),
-        ("visual_evidence", "rendered", "tamper", "visual-tampered", "rendered_artifacts"),
         ("resume_pdf", "rendered", "missing", "pdf-missing", "rendered_artifacts"),
         ("resume_html", "rendered", "missing", "html-missing", "rendered_artifacts"),
-        ("visual_evidence", "rendered", "missing", "visual-missing", "rendered_artifacts"),
     ]
     for index, (artifact_type, state, mutation, issue_code, issue_group) in enumerate(cases):
         services, app_id = ready_application(f"Artifact Integrity {index}")

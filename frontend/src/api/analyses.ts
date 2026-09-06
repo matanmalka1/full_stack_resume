@@ -176,6 +176,30 @@ const isEmphasis = memberOf<Emphasis>(emphasisLabels);
 const isLanguage = memberOf<Language>(languageLabels);
 const isFitLevel = memberOf<FitLevel>(fitLabels);
 
+export type RequirementCoverage = "matched" | "partial" | "unsupported";
+
+export interface MissingComponent {
+  componentId: string;
+  label: string;
+  demanded: string | null;
+}
+
+/* One thing the employer asked for, and what the canonical facts can truthfully show
+   for it - the mirror of the backend's `Requirement`. `coverage` is whether it is met;
+   `supportingFactIds` is whether evidence exists; the two are read independently so a
+   demanded proficiency the candidate falls short of can still list the fact carrying
+   the lower value. `boundaryFactIds` names facts that explicitly cap coverage - they
+   are never additional support, only the reason coverage stops short of `matched`. */
+export interface Requirement {
+  requirementId: string;
+  text: string;
+  mandatory: boolean;
+  coverage: RequirementCoverage;
+  supportingFactIds: string[];
+  boundaryFactIds: string[];
+  missingComponents: MissingComponent[];
+}
+
 interface AnalysisGap {
   requirement: string;
   severity: "hard" | "warning";
@@ -209,6 +233,11 @@ export interface Classification {
   keywords: string[];
   mandatoryRequirements: string[];
   preferredRequirements: string[];
+  /* The complete requirement picture, matched requirements included - `gaps` above is
+     its unmet projection. Empty for an analysis stored before requirement coverage
+     existed, whose stored `gaps` stay the authoritative account and are not re-derived
+     from this list. */
+  requirements: Requirement[];
   /* Why the classification still needs a decision, as the analysis recorded it. The
      backend clears a reason only when an override that actually answers it is applied,
      so this list is what remains open rather than everything ever raised. */
@@ -243,6 +272,55 @@ const gapsFrom = (value: unknown): AnalysisGap[] => {
           },
         ]
       : [];
+  });
+};
+
+const isRequirementCoverage = (value: unknown): value is RequirementCoverage =>
+  value === "matched" || value === "partial" || value === "unsupported";
+
+const missingComponentsFrom = (value: unknown): MissingComponent[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((component) => {
+    if (!isRecord(component) || typeof component.component_id !== "string" || typeof component.label !== "string") {
+      return [];
+    }
+    return [
+      {
+        componentId: component.component_id,
+        label: component.label,
+        demanded: typeof component.demanded === "string" ? component.demanded : null,
+      },
+    ];
+  });
+};
+
+const requirementsFrom = (value: unknown): Requirement[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((requirement) => {
+    if (
+      !isRecord(requirement) ||
+      typeof requirement.requirement_id !== "string" ||
+      typeof requirement.text !== "string" ||
+      typeof requirement.mandatory !== "boolean" ||
+      !isRequirementCoverage(requirement.coverage)
+    ) {
+      return [];
+    }
+    return [
+      {
+        requirementId: requirement.requirement_id,
+        text: requirement.text,
+        mandatory: requirement.mandatory,
+        coverage: requirement.coverage,
+        supportingFactIds: stringsFrom(requirement.supporting_fact_ids),
+        boundaryFactIds: stringsFrom(requirement.boundary_fact_ids),
+        missingComponents: missingComponentsFrom(requirement.missing_components),
+      },
+    ];
   });
 };
 
@@ -283,6 +361,7 @@ export const classificationFromAnalysis = (detail: ApplicationDetail): Classific
     keywords: stringsFrom(analysis.keywords),
     mandatoryRequirements: stringsFrom(analysis.mandatory_requirements),
     preferredRequirements: stringsFrom(analysis.preferred_requirements),
+    requirements: requirementsFrom(analysis.requirements),
     /* The full recorded list, read as it arrives. Which of these are still unresolved is
        the domain's rule - a reason clears when an override that answers it is applied -
        and that rule is deliberately not copied here: the projection already publishes the

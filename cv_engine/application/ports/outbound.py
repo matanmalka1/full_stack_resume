@@ -140,14 +140,13 @@ class RevisionPayloadStore(SnapshotPayloadStore, Protocol):
         revision_id: str,
         html_artifact_version_id: str,
         pdf_artifact_version_id: str,
-        screenshot_artifact_version_id: str,
         recruiter_pdf_filename: str,
     ) -> RenderTargets: ...
 
     def ingest_render_output(self, path: Path) -> SnapshotPayload:
         """Take one rendered output into storage and describe what was stored.
 
-        Rendered HTML, PDF and screenshots are immutable payloads like any
+        Rendered HTML and PDF are immutable payloads like any
         other, but they cannot be handed over as bytes: Chromium writes real
         files to the real paths `render_targets` hands it, so they arrive as a
         location rather than a value. This is the one place a `Path` travels
@@ -237,9 +236,7 @@ class Renderer(Protocol):
 
     def preview_html(self, draft: DraftDocument, candidate: CandidateContext) -> str: ...
 
-    def render_pdf(
-        self, html_path: Path, pdf_path: Path, screenshot_path: Path
-    ) -> dict[str, Any]: ...
+    def render_pdf(self, html_path: Path, pdf_path: Path) -> dict[str, Any]: ...
 
     def validate_rendered(
         self,
@@ -247,7 +244,6 @@ class Renderer(Protocol):
         profile: Profile,
         html_path: Path,
         pdf_path: Path,
-        screenshot_path: Path,
         geometry: dict[str, Any],
         candidate: CandidateContext,
         delivered_pdf_filename: str | None = None,

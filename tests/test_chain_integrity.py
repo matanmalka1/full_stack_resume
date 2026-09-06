@@ -577,7 +577,6 @@ def test_ready_integrity_holds_through_an_immaterial_reanalysis(
         "claim_manifest",
         "resume_html",
         "resume_pdf",
-        "visual_evidence",
     }
 
 

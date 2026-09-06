@@ -183,11 +183,11 @@ describe("JobDetailsPage", () => {
         revision_id: "revision-1",
       }),
       artifact({
-        id: "previous-visual",
-        artifact_id: "previous-visual",
+        id: "legacy-render-image",
+        artifact_id: "legacy-render-image",
         artifact_type: "visual_evidence",
         created_at: "2026-09-05T08:00:00Z",
-        logical_name: "resume.png",
+        logical_name: "retired.png",
         revision_id: "revision-1",
       }),
     ];
@@ -205,14 +205,14 @@ describe("JobDetailsPage", () => {
     expect(screen.getByText("קובץ PDF של קורות החיים")).toBeInTheDocument();
     expect(screen.getByText("קובץ HTML של קורות החיים")).toBeInTheDocument();
     expect(screen.queryByText("קורות החיים ב־Markdown")).not.toBeInTheDocument();
+    expect(screen.queryByText("visual_evidence")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "הצגת גרסאות קודמות (1)" }));
     expect(screen.getByText("גרסה קודמת")).toBeInTheDocument();
     expect(screen.queryByText("קורות החיים ב־Markdown")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "הצגת הקבצים (2)" }));
+    fireEvent.click(screen.getByRole("button", { name: "הצגת הקבצים (1)" }));
     expect(screen.getByText("קורות החיים ב־Markdown")).toBeInTheDocument();
-    expect(screen.getByText("צילום מסך של התצוגה")).toBeInTheDocument();
   });
 
   it("copies the complete stored job text from inside its disclosure", async () => {

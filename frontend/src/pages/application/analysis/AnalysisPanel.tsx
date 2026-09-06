@@ -8,6 +8,7 @@ import { ApprovalReasonsSection } from "./ApprovalReasonsSection";
 import { ClassificationSummary } from "./ClassificationSummary";
 import { type GapAcceptance, GapsSection } from "./GapsSection";
 import { RationaleSection } from "./RationaleSection";
+import { RequirementCoverageSection } from "./RequirementCoverageSection";
 import { RequirementsSection } from "./RequirementsSection";
 
 /* What the analysis concluded, on the Application screen rather than behind a route of
@@ -55,8 +56,18 @@ export const AnalysisPanel = ({
         <Disclosure summary="פרטי הניתוח והמקור">
           <div className="flex flex-col divide-y divide-cv-border [&>section]:py-4 [&>section:first-child]:pt-1">
             <RationaleSection rationale={classification.rationale} />
-            <RequirementsSection items={classification.mandatoryRequirements} title="דרישות חובה שזוהו" />
-            <RequirementsSection items={classification.preferredRequirements} title="דרישות מועדפות שזוהו" />
+            {/* The full requirement picture - matched requirements included - once the
+                analysis carries one. An analysis stored before requirement coverage
+                existed carries no `requirements` at all, and falls back to the plain
+                mandatory/preferred term lists it always had. */}
+            {classification.requirements.length > 0 ? (
+              <RequirementCoverageSection requirements={classification.requirements} />
+            ) : (
+              <>
+                <RequirementsSection items={classification.mandatoryRequirements} title="דרישות חובה שזוהו" />
+                <RequirementsSection items={classification.preferredRequirements} title="דרישות מועדפות שזוהו" />
+              </>
+            )}
             <RequirementsSection items={classification.keywords} title="מילות מפתח מהמשרה" />
             <section>
               <JobTextDisclosure detail={detail} summary="הצגת נוסח המשרה שנותח" />

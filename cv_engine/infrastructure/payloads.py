@@ -74,7 +74,8 @@ class StoredPayload:
 class PayloadStore:
     """Immutable v2 payload storage, independent of database registration."""
 
-    _OUTPUT_SUFFIXES = {".html", ".pdf", ".png"}
+    _OUTPUT_SUFFIXES = {".html", ".pdf"}
+    _READABLE_LEGACY_OUTPUT_SUFFIXES = {".png"}
     #: Read size for streaming a payload outward. Bounded so a download
     #: never holds a whole artifact in memory the way a `read_bytes` would.
     _STREAM_CHUNK_BYTES = 64 * 1024
@@ -201,7 +202,6 @@ class PayloadStore:
         revision_id: str,
         html_artifact_version_id: str,
         pdf_artifact_version_id: str,
-        screenshot_artifact_version_id: str,
         recruiter_pdf_filename: str,
     ) -> RenderTargets:
         return RenderTargets(
@@ -212,11 +212,6 @@ class PayloadStore:
             ),
             pdf=self._render_location(
                 self.output_path(application_id, revision_id, pdf_artifact_version_id, suffix="pdf")
-            ),
-            screenshot=self._render_location(
-                self.output_path(
-                    application_id, revision_id, screenshot_artifact_version_id, suffix="png"
-                )
             ),
             recruiter_pdf_filename=recruiter_pdf_filename,
         )
@@ -234,7 +229,7 @@ class PayloadStore:
     def ingest_render_output(self, path: Path) -> SnapshotPayload:
         """Take one rendered output into storage, keyed by where it belongs.
 
-        The three rendered outputs are the one payload family that cannot go
+        The rendered outputs are the one payload family that cannot go
         through `commit`: Chromium writes them itself, to the paths
         `render_targets` hands it, so they exist as files before the store ever
         sees them. Everything else about them is the same - they are immutable,
@@ -340,7 +335,8 @@ class PayloadStore:
             and parts[3] in {"resume.json", "resume.md"}
             or len(parts) == 4
             and parts[0] == "outputs"
-            and Path(parts[3]).suffix in self._OUTPUT_SUFFIXES
+            and Path(parts[3]).suffix
+            in self._OUTPUT_SUFFIXES | self._READABLE_LEGACY_OUTPUT_SUFFIXES
             or len(parts) == 4
             and parts[0] == "provider"
             and parts[3].endswith(".json")
@@ -489,7 +485,7 @@ class PayloadStore:
         makes the guarantee hold, and it collapses two reads into one.
 
         The buffer is the whole payload. That is affordable because artifacts
-        here are one-page CV documents, screenshots and manifests that this
+        here are one-page CV documents and manifests that this
         system produced itself - architecture §14 admits no file uploads and no
         arbitrary paths, so there is no route by which an unbounded payload
         reaches this method.

@@ -1050,7 +1050,7 @@ def test_a_render_stopped_between_the_phases_keeps_registered_inactive_outputs(
     Parameterized rather than written twice because the property is one
     property; the two interferences are only the two ways of reaching the
     window. `artifact_version` raises `UnknownRecord` for an ID registered
-    nowhere, so resolving all three *is* the assertion.
+    nowhere, so resolving both *is* the assertion.
     """
     setup = ready_application(f"Stopped Render {expected_status.value}")
     operation = _render_operation(setup, f"stopped-render-{expected_status.value}")
@@ -1070,9 +1070,9 @@ def test_a_render_stopped_between_the_phases_keeps_registered_inactive_outputs(
     outputs = [
         output
         for output in stopped.outputs
-        if output.output_type in {"resume_html", "resume_pdf", "visual_evidence"}
+        if output.output_type in {"resume_html", "resume_pdf"}
     ]
-    assert len(outputs) == 3
+    assert len(outputs) == 2
     assert all(not output.active for output in outputs)
     for output in outputs:
         registered = setup.services.repository.artifact_version(output.output_id)
@@ -1092,10 +1092,10 @@ def test_a_render_stopped_between_the_phases_keeps_registered_inactive_outputs(
 def test_a_failure_partway_through_registration_leaves_no_artifact_at_all(
     ready_application, monkeypatch
 ) -> None:
-    """Three artifacts are one render: all of them are registered, or none is.
+    """Both artifacts are one render: both are registered, or neither is.
 
     The first repair moved registration into `execute` so the rows survive a
-    cancellation. Left as three independent writes that would have bought the
+    cancellation. Left as independent writes that would have bought the
     opposite bug: a failure on the third leaves two rows committed while
     `execute` raises, so the runner records no Operation output at all and the
     Application carries registered artifacts belonging to a render that never
@@ -1117,24 +1117,24 @@ def test_a_failure_partway_through_registration_leaves_no_artifact_at_all(
     original = type(repository).register_artifact_version
     calls = 0
 
-    def fail_on_the_third(self, *args, **kwargs):
+    def fail_on_the_second(self, *args, **kwargs):
         nonlocal calls
         calls += 1
-        if calls == 3:
+        if calls == 2:
             raise InfrastructureFailure("injected registry failure")
         return original(self, *args, **kwargs)
 
-    monkeypatch.setattr(type(repository), "register_artifact_version", fail_on_the_third)
+    monkeypatch.setattr(type(repository), "register_artifact_version", fail_on_the_second)
     failed = foreground_executor(setup.services).execute(operation.id)
 
     assert failed.status is OperationStatus.FAILED
-    assert calls == 3, "the injected failure never reached the code under test"
+    assert calls == 2, "the injected failure never reached the code under test"
     after = {row["id"] for row in repository.artifact_versions(setup.application_id)}
     assert after == before, "a partial render registration survived"
     assert not [
         output
         for output in failed.outputs
-        if output.output_type in {"resume_html", "resume_pdf", "visual_evidence"}
+        if output.output_type in {"resume_html", "resume_pdf"}
     ]
 
 

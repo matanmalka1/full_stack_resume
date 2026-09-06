@@ -528,7 +528,7 @@ class RenderOperationHandler:
         outputs = tuple(
             OperationOutputReference(output_type=output_type, output_id=output_id, active=False)
             for output_type, output_id in zip(
-                ("resume_html", "resume_pdf", "visual_evidence"),
+                ("resume_html", "resume_pdf"),
                 prepared.artifact_ids,
                 strict=True,
             )

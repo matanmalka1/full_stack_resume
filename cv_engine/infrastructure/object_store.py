@@ -54,7 +54,7 @@ class ObjectStore(Protocol):
     """Keys and bytes. No `Path`, no directories, no temp staging.
 
     The unit is a whole payload, because every immutable payload in this system
-    is one document that the system produced itself - a CV, a screenshot, a
+    is one document that the system produced itself - a CV, a
     manifest, a sanitized provider response. Architecture §14 admits no
     uploads and no arbitrary paths, so there is no route by which an unbounded
     payload reaches an implementation of this protocol.
@@ -100,7 +100,7 @@ class ObjectStore(Protocol):
         """Store the contents of a local file under `key`.
 
         The one method that admits a `Path`, and it admits one inward only.
-        Chromium writes rendered HTML, PDFs and screenshots to real paths
+        Chromium writes rendered HTML and PDFs to real paths
         because it cannot write to an object store, so those payloads reach
         storage as a location rather than as bytes. Nothing carrying a `Path`
         comes back.

@@ -260,7 +260,7 @@ def qualify_ready_revision(
                 )
 
     html_version: dict[str, Any] | None = None
-    for artifact_type, label in (("resume_html", "html"), ("visual_evidence", "visual")):
+    for artifact_type, label in (("resume_html", "html"),):
         try:
             version = repo.artifact_version_for_revision(revision.id, artifact_type, "rendered")
         except UnknownRecord:

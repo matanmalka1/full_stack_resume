@@ -48,9 +48,6 @@ class RenderEvidence:
     page_count: int
     extracted_text: str
     pdf_sha256: str | None
-    screenshot_path: str
-    screenshot_exists: bool
-    screenshot_size: int
     geometry: RenderGeometry
 
 
@@ -141,16 +138,6 @@ def validate_render_evidence(
                 message=str(evidence.geometry.offenders),
             )
         )
-    if not evidence.screenshot_exists or evidence.screenshot_size == 0:
-        groups["visual"] = False
-        issues.append(
-            ValidationIssue(
-                group="visual",
-                code="screenshot-missing",
-                message=evidence.screenshot_path,
-            )
-        )
-
     expected_dir = "rtl" if draft.language == "he" else "ltr"
     if evidence.geometry.direction != expected_dir:
         groups["direction"] = False
@@ -189,7 +176,6 @@ def validate_render_evidence(
             "page_count": evidence.page_count,
             "ats_claim_coverage": coverage,
             "pdf_sha256": evidence.pdf_sha256,
-            "screenshot": evidence.screenshot_path,
             "geometry": evidence.geometry.raw,
         },
     )

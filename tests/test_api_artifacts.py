@@ -154,7 +154,6 @@ def test_every_rendered_artifact_type_downloads_as_what_it_is(
     expected = {
         "resume_html": "text/html; charset=utf-8",
         "resume_pdf": "application/pdf",
-        "visual_evidence": "image/png",
     }
     for artifact_type, media_type in expected.items():
         artifact_version_id = outputs[artifact_type]

@@ -47,7 +47,7 @@ class PreparedRender:
     analysis: JobAnalysis
     source_report: ValidationReport
     manifest_record: dict[str, Any]
-    artifact_ids: tuple[str, str, str]
+    artifact_ids: tuple[str, str]
     targets: RenderTargets
 
 
@@ -149,14 +149,13 @@ class RenderingService(ServiceBase[ReadinessRepository]):
                 source_report,
             )
         candidate = knowledge.candidate
-        artifact_ids = (new_id(), new_id(), new_id())
+        artifact_ids = (new_id(), new_id())
         recruiter_pdf_filename = self.renderer.filename_for(profile.normalized_role, candidate)
         targets = self.revision_payloads.render_targets(
             command.application_id,
             command.approved_revision_id,
             artifact_ids[0],
             artifact_ids[1],
-            artifact_ids[2],
             recruiter_pdf_filename,
         )
         return PreparedRender(
@@ -175,16 +174,15 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         draft = prepared.draft
         candidate = prepared.knowledge.candidate
         targets = prepared.targets
-        html_path, pdf_path, screenshot_path = targets.html, targets.pdf, targets.screenshot
+        html_path, pdf_path = targets.html, targets.pdf
         try:
             self.renderer.render_html(draft, html_path, candidate)
-            geometry = self.renderer.render_pdf(html_path, pdf_path, screenshot_path)
+            geometry = self.renderer.render_pdf(html_path, pdf_path)
             report = self.renderer.validate_rendered(
                 draft,
                 prepared.profile,
                 html_path,
                 pdf_path,
-                screenshot_path,
                 geometry,
                 candidate,
                 targets.recruiter_pdf_filename,
@@ -199,14 +197,14 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         return ExecutedRender(prepared=prepared, report=report)
 
     def _register_outputs(self, prepared: PreparedRender, report: ValidationReport) -> None:
-        """Register the three rendered artifacts, in the execute phase.
+        """Register the two rendered artifacts, in the execute phase.
 
-        **Not at activation.** The Operation runner records this render's three
+        **Not at activation.** The Operation runner records this render's two
         outputs as soon as `execute` returns and *before* it re-checks
         cancellation, using the IDs `prepare` reserved. Registering the matching
         `artifact_versions` rows inside the activation transaction meant that a
         render cancelled - or overtaken by a source change - in the window
-        between the two phases ended with three Operation outputs naming rows
+        between the two phases ended with Operation outputs naming rows
         that were never written. `operation_outputs.output_id` carries no
         foreign key, so nothing in the schema refused it and nothing reading the
         Operation could tell the dangling references from real ones.
@@ -229,9 +227,9 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         - Not the activation transaction, because a row committed only alongside
           the outcome does not exist when there is no outcome. That is the
           orphan this repair exists to remove.
-        - Still one transaction, because three artifacts are one render. Left as
-          three independent writes, a failure on the second or third would leave
-          one or two rows committed while `execute` raised - so the runner would
+        - Still one transaction, because both artifacts are one render. Left as
+          independent writes, a failure on the second would leave one row
+          committed while `execute` raised - so the runner would
           record no Operation output at all, and the Application would carry
           registered artifacts belonging to a render that never reported. Half a
           render's evidence is not evidence, and "it survives cancellation" is a
@@ -248,7 +246,6 @@ class RenderingService(ServiceBase[ReadinessRepository]):
             for artifact_version_id, artifact_type, path in [
                 (prepared.artifact_ids[0], "resume_html", targets.html),
                 (prepared.artifact_ids[1], "resume_pdf", targets.pdf),
-                (prepared.artifact_ids[2], "visual_evidence", targets.screenshot),
             ]:
                 metadata: dict[str, Any] = {"validation_passed": report.passed}
                 if artifact_type == "resume_pdf":
@@ -291,7 +288,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         command = prepared.command
         report = executed.report
         artifact_ids = prepared.artifact_ids
-        # The three artifact versions already exist: `execute` registered them
+        # Both artifact versions already exist: `execute` registered them
         # beside the files they point at, so a cancellation between the phases
         # leaves inactive evidence rather than dangling references. What belongs
         # here is only what activation means - the post-render ValidationRun that
@@ -328,7 +325,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         existed.
 
         Ready qualification is deliberately not required. This serves the HTML
-        preview, the screenshot, the approved Markdown, and the archived draft
+        preview, the approved Markdown, and the archived draft
         snapshots - none of which are the Ready PDF, and none of which become
         readable only once a revision qualifies. The one export that does
         require qualification is `export_recruiter_pdf`, and it says so.

@@ -320,6 +320,67 @@ describe("ApplicationPage", () => {
     expect(screen.queryByText("The posting is a backend role.")).not.toBeInTheDocument();
   });
 
+  it("shows requirement coverage, resolving supporting facts by id, once the analysis carries requirements", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      if (String(input).includes("/facts")) {
+        return Promise.resolve(jsonResponse({ items: [{ fact: { fact_id: "fact-1", meaning: "5 years building backend systems in Python" } }] }));
+      }
+      return Promise.resolve(
+        jsonResponse(
+          analyzed_detail({
+            latest_analysis: {
+              id: "analysis-1",
+              application_id: "app-1",
+              job_snapshot_id: "snap-1",
+              version_number: 1,
+              analysis: {
+                track: "development",
+                profile: "development",
+                emphasis: "development-backend",
+                language: "en",
+                fit: "medium",
+                confidence: 0.82,
+                rationale: "The posting is a backend role.",
+                keywords: ["FastAPI"],
+                mandatory_requirements: ["5 years of Python"],
+                preferred_requirements: [],
+                gaps: [],
+                requirements: [
+                  {
+                    requirement_id: "req-1",
+                    text: "5 years of Python",
+                    kind: "threshold",
+                    mandatory: true,
+                    coverage: "matched",
+                    supporting_fact_ids: ["fact-1"],
+                    boundary_fact_ids: [],
+                    missing_components: [],
+                  },
+                ],
+                approval_reasons: [],
+                user_override: {},
+              },
+              provider: "deterministic",
+              model: "rules-v1",
+              created_at: "2026-08-24T07:00:00Z",
+            },
+          }),
+        ),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+
+    expect(await screen.findByText("5 years of Python")).toBeInTheDocument();
+    expect(screen.getByText("מכוסה")).toBeInTheDocument();
+    expect(await screen.findByText(/5 years building backend systems in Python/)).toBeInTheDocument();
+    /* Coverage supersedes the plain mandatory/preferred term lists once an analysis
+       carries `requirements` - they would otherwise show the same requirement twice,
+       once with its coverage and once as a bare string. */
+    expect(screen.queryByText("דרישות חובה שזוהו")).not.toBeInTheDocument();
+  });
+
   it("keeps the projected warning explanation available behind its alert disclosure", async () => {
     vi.stubGlobal(
       "fetch",

@@ -123,7 +123,7 @@ Retain and expand v1 coverage for:
 - percentages, dates, B2B, email, phone, systems, and technical terms
 - source/artifact hashes and Ready integrity
 
-Use focused visual screenshots where useful, not broad pixel-perfect PDF comparisons.
+Use focused geometry assertions where useful, not broad pixel-perfect PDF comparisons.
 
 ### 2.7 Database lifecycle and object-store tests
 

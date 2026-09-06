@@ -54,7 +54,6 @@ class RenderTargets:
 
     html: Path
     pdf: Path
-    screenshot: Path
     recruiter_pdf_filename: str
 
 

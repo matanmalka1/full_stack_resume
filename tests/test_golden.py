@@ -121,8 +121,7 @@ def test_golden_outputs_pass_render_validation(
         )
 
         pdf = target / normalized_role_filename(profile.normalized_role, candidate)
-        screenshot = target / "visual.png"
-        _geometry, report = render_validator(draft, profile, html, pdf, screenshot, candidate)
+        _geometry, report = render_validator(draft, profile, html, pdf, candidate)
         assert report.passed, f"{fixture.stem}: {report.model_dump()}"
         assert report.evidence["page_count"] in {1, 2}
 

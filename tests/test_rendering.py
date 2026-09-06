@@ -52,14 +52,11 @@ def test_render_findings_keep_their_existing_failed_groups(
     setup = draft_factory("Account Manager retention portfolio customer relationships")
     html = tmp_path / "resume.html"
     pdf = tmp_path / "resume.pdf"
-    screenshot = tmp_path / "resume.png"
-
     early = validate_rendered(
         setup.draft,
         setup.profile,
         html,
         pdf,
-        screenshot,
         {},
         setup.candidate,
     )
@@ -72,7 +69,6 @@ def test_render_findings_keep_their_existing_failed_groups(
     assert early.groups["pdf"] is False
 
     html.write_text('<html lang="en" dir="ltr"></html>', encoding="utf-8")
-    screenshot.write_bytes(b"visual evidence")
     writer = PdfWriter()
     writer.add_blank_page(width=595, height=842)
     with pdf.open("wb") as handle:
@@ -83,7 +79,6 @@ def test_render_findings_keep_their_existing_failed_groups(
         setup.profile,
         html,
         pdf,
-        screenshot,
         {"dir": "ltr", "links": [], "scrollWidth": 100, "clientWidth": 100},
         setup.candidate,
     )

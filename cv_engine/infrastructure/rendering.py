@@ -243,15 +243,14 @@ def _chrome_path() -> str | None:
     return str(next((path for path in candidates if path.is_file()), "")) or None
 
 
-def render_pdf(html_path: Path, pdf_path: Path, screenshot_path: Path) -> dict[str, Any]:
+def render_pdf(html_path: Path, pdf_path: Path) -> dict[str, Any]:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
         raise RuntimeError("Playwright is required for PDF rendering") from exc
     pdf_path.parent.mkdir(parents=True, exist_ok=True)
-    screenshot_path.parent.mkdir(parents=True, exist_ok=True)
-    if pdf_path.exists() or screenshot_path.exists():
-        raise FileExistsError("refusing to overwrite rendered PDF or screenshot")
+    if pdf_path.exists():
+        raise FileExistsError("refusing to overwrite rendered PDF")
     with sync_playwright() as playwright:
         launch_options: dict[str, Any] = {"headless": True}
         chrome = _chrome_path()
@@ -274,7 +273,6 @@ def render_pdf(html_path: Path, pdf_path: Path, screenshot_path: Path) -> dict[s
                   offenders, dir: document.documentElement.dir,
                   links: [...document.querySelectorAll('a')].map(a => a.href)};
         }""")
-        page.screenshot(path=str(screenshot_path), full_page=True)
         page.pdf(path=str(pdf_path), format="A4", print_background=True, prefer_css_page_size=True)
         browser.close()
     return geometry
@@ -285,7 +283,6 @@ def validate_rendered(
     profile: Profile,
     html_path: Path,
     pdf_path: Path,
-    screenshot_path: Path,
     geometry: dict[str, Any],
     candidate: CandidateContext,
     delivered_pdf_filename: str | None = None,
@@ -295,7 +292,6 @@ def validate_rendered(
         profile,
         html_path,
         pdf_path,
-        screenshot_path,
         geometry,
         candidate,
         delivered_pdf_filename,
@@ -308,7 +304,6 @@ def collect_render_evidence(
     _profile: Profile,
     html_path: Path,
     pdf_path: Path,
-    screenshot_path: Path,
     geometry: dict[str, Any],
     _candidate: CandidateContext,
     delivered_pdf_filename: str | None = None,
@@ -317,8 +312,6 @@ def collect_render_evidence(
     html_size = html_path.stat().st_size if html_exists else 0
     pdf_exists = pdf_path.is_file()
     pdf_size = pdf_path.stat().st_size if pdf_exists else 0
-    screenshot_exists = screenshot_path.is_file()
-    screenshot_size = screenshot_path.stat().st_size if screenshot_exists else 0
     page_count = 0
     extracted = ""
     pdf_error = None
@@ -347,9 +340,6 @@ def collect_render_evidence(
         page_count=page_count,
         extracted_text=extracted,
         pdf_sha256=pdf_sha256,
-        screenshot_path=str(screenshot_path),
-        screenshot_exists=screenshot_exists,
-        screenshot_size=screenshot_size,
         geometry=RenderGeometry(
             scroll_width=geometry.get("scrollWidth", 0),
             client_width=geometry.get("clientWidth", 0),
@@ -387,8 +377,8 @@ class PlaywrightRenderer:
         """
         return compose_html(draft, self.knowledge_root, candidate)
 
-    def render_pdf(self, html_path: Path, pdf_path: Path, screenshot_path: Path) -> dict[str, Any]:
-        return render_pdf(html_path, pdf_path, screenshot_path)
+    def render_pdf(self, html_path: Path, pdf_path: Path) -> dict[str, Any]:
+        return render_pdf(html_path, pdf_path)
 
     def validate_rendered(
         self,
@@ -396,7 +386,6 @@ class PlaywrightRenderer:
         profile: Profile,
         html_path: Path,
         pdf_path: Path,
-        screenshot_path: Path,
         geometry: dict[str, Any],
         candidate: CandidateContext,
         delivered_pdf_filename: str | None = None,
@@ -406,7 +395,6 @@ class PlaywrightRenderer:
             profile,
             html_path,
             pdf_path,
-            screenshot_path,
             geometry,
             candidate,
             delivered_pdf_filename,

@@ -606,11 +606,8 @@ def deterministic_renderer(monkeypatch: pytest.MonkeyPatch) -> None:
     `render_validator` fixture instead and are browser-marked by collection.
     """
 
-    def render_without_browser(
-        html_path: Path, pdf_path: Path, screenshot_path: Path
-    ) -> dict[str, Any]:
+    def render_without_browser(html_path: Path, pdf_path: Path) -> dict[str, Any]:
         pdf_path.write_bytes(b"%PDF-1.4\n% deterministic integrity-test artifact\n")
-        screenshot_path.write_bytes(b"deterministic integrity-test visual evidence\n")
         html = html_path.read_text(encoding="utf-8")
         direction = "rtl" if '<html lang="he" dir="rtl">' in html else "ltr"
         return {
@@ -628,7 +625,6 @@ def deterministic_renderer(monkeypatch: pytest.MonkeyPatch) -> None:
         _profile,
         html_path,
         pdf_path,
-        screenshot_path,
         geometry,
         candidate,
         delivered_pdf_filename=None,
@@ -659,9 +655,6 @@ def deterministic_renderer(monkeypatch: pytest.MonkeyPatch) -> None:
             page_count=1,
             extracted_text=extracted_text,
             pdf_sha256="deterministic-integrity-double",
-            screenshot_path=str(screenshot_path),
-            screenshot_exists=True,
-            screenshot_size=screenshot_path.stat().st_size,
             geometry=RenderGeometry(
                 scroll_width=complete_geometry["scrollWidth"],
                 client_width=complete_geometry["clientWidth"],
@@ -840,9 +833,9 @@ def provider_analysis(ai_services: Services, fake_openai: FakeOpenAI):
 
 @pytest.fixture
 def render_validator():
-    def validate(draft, profile, html: Path, pdf: Path, screenshot: Path, candidate):
-        geometry = render_pdf(html, pdf, screenshot)
-        report = validate_rendered(draft, profile, html, pdf, screenshot, geometry, candidate)
+    def validate(draft, profile, html: Path, pdf: Path, candidate):
+        geometry = render_pdf(html, pdf)
+        report = validate_rendered(draft, profile, html, pdf, geometry, candidate)
         return geometry, report
 
     return validate

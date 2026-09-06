@@ -535,7 +535,6 @@ revisions/{application_id}/{revision_id}/resume.md
 drafts/{application_id}/{working_draft_id}-v{edit_version}.json
 outputs/{application_id}/{revision_id}/{artifact_id}.html
 outputs/{application_id}/{revision_id}/{artifact_id}.pdf
-outputs/{application_id}/{revision_id}/{artifact_id}.png
 provider/{application_id}/{operation_id}/{artifact_id}.json
 manifests/{manifest_id}.json
 ```

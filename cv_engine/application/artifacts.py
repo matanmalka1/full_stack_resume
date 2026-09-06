@@ -41,11 +41,13 @@ ARTIFACT_MEDIA_TYPES: dict[str, str] = {
     "resume_pdf": "application/pdf",
     "resume_html": "text/html; charset=utf-8",
     "resume_markdown": "text/markdown; charset=utf-8",
-    "visual_evidence": "image/png",
     "claim_manifest": "application/json",
     "working_draft_snapshot": "application/json",
     "job_snapshot": "text/plain; charset=utf-8",
     "provider_response": "application/json",
+    # Historical immutable records remain downloadable after new renders stop
+    # producing this retired artifact type.
+    "visual_evidence": "image/png",
 }
 
 DEFAULT_MEDIA_TYPE = "application/octet-stream"
