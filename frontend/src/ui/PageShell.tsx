@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { WorkflowLandmarkSteps } from "../app/WorkflowLandmark";
 import { PageHeading } from "./PageHeading";
 import { cx } from "./cx";
 
@@ -34,6 +35,9 @@ export const PageShell = ({
       className={cx("page-frame", measure === "form" ? "[--page-measure:48rem]" : undefined)}
     >
       {navigation === undefined ? null : <div className="mb-5">{navigation}</div>}
+      <div className="mb-5 empty:hidden">
+        <WorkflowLandmarkSteps />
+      </div>
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 border-b border-cv-border pb-2">
         <div className="min-w-0">
           <PageHeading description={description} eyebrow={eyebrow} id="route-heading">
