@@ -63,17 +63,11 @@ export const AnalysisHeader = ({
         ניתוח המשרה
       </h2>
 
-      {classification.fit === null && classification.confidence === null ? null : (
-        <div className="flex flex-wrap items-center gap-2">
-          {classification.fit === null ? null : (
-            <StatusBadge tone={fitTones[classification.fit]}>{fitLabels[classification.fit]}</StatusBadge>
-          )}
-          {classification.confidence === null ? null : (
-            <span className="text-support text-cv-text-muted">
-              ברמת ביטחון {confidenceText(classification.confidence)}
-            </span>
-          )}
-        </div>
+      {/* Confidence is read with the classification tiles below, not here: the two are
+          reported independently by the analysis, but a number repeated beside the fit
+          badge and again in its own tile a few lines down is one figure shown twice. */}
+      {classification.fit === null ? null : (
+        <StatusBadge tone={fitTones[classification.fit]}>{fitLabels[classification.fit]}</StatusBadge>
       )}
     </div>
 

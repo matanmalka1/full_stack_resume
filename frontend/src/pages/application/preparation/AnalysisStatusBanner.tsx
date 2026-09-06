@@ -58,9 +58,13 @@ const bannerContent = (
   return {
     body: decisionCount === 0 ? explanation : `${explanation} ${decisionSentence(decisionCount)}`,
     title: confidencePart === null ? fitPart : `${fitPart} · ${confidencePart}`,
-    /* A blocking decision outranks the fit's own tone: the screen is stopped, and that is
-       what the banner is reporting. With nothing open, the tone is the verdict's. */
-    tone: decisionCount > 0 ? "blocker" : classification.fit === null ? "neutral" : fitTones[classification.fit],
+    /* Warning, not blocker, while a decision is open: `needs_review` is the same state
+       `preparationStateTones` already reports as "warning" everywhere else on this
+       screen - the stepper, the header badge - and a decision here is always answerable
+       from the form directly below, never a dead end. Blocker is reserved for what a
+       reader cannot act their way out of, which is not this. With nothing open, the tone
+       is the verdict's own. */
+    tone: decisionCount > 0 ? "warning" : classification.fit === null ? "neutral" : fitTones[classification.fit],
   };
 };
 

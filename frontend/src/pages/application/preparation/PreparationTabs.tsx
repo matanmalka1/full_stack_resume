@@ -64,60 +64,86 @@ export const PreparationTabs = ({
     refs.current.get(target.id)?.focus();
   };
 
-  return (
-    <div
-      aria-label="חלקי מסך ההכנה"
-      className="flex flex-wrap gap-1 rounded-surface border border-cv-border bg-cv-surface-muted p-1"
-      role="tablist"
-    >
-      {tabs.map((tab) => {
-        const selected = tab.id === active;
+  /* The tab that carries no decision splits off from the pair that does. Item ii asked
+     for a quieter style on that tab, and same-row, dimmer text left it reading as one more
+     option in the same choice - a reader scanning the row still had to work out which of
+     three equally-shaped buttons was the one asking nothing of them. Standing apart, in
+     its own outlined button beside the segmented pair rather than inside it, the shape
+     itself says "not one of the two things to decide between" before the label is read.
+     Both groups stay inside one `role="tablist"`, so arrow keys and the tab order still
+     move through every tab as one set regardless of how they are laid out. */
+  const primary = tabs.filter((tab) => tab.secondary !== true);
+  const secondary = tabs.filter((tab) => tab.secondary === true);
 
-        return (
-          <button
-            aria-controls={tabPanelId(tab.id)}
-            aria-selected={selected}
+  const renderTab = (tab: PreparationTabSpec, className: string) => {
+    const selected = tab.id === active;
+
+    return (
+      <button
+        aria-controls={tabPanelId(tab.id)}
+        aria-selected={selected}
+        className={cx(
+          "flex min-h-11 items-center justify-center gap-2 rounded-control text-support font-semibold transition-colors duration-200",
+          className,
+        )}
+        id={tabId(tab.id)}
+        key={tab.id}
+        onClick={() => onSelect(tab.id)}
+        onKeyDown={onKeyDown}
+        ref={(node) => {
+          if (node === null) {
+            refs.current.delete(tab.id);
+          } else {
+            refs.current.set(tab.id, node);
+          }
+        }}
+        role="tab"
+        tabIndex={selected ? 0 : -1}
+        type="button"
+      >
+        <span>{tab.label}</span>
+        {tab.badge === null ? null : (
+          <span
             className={cx(
-              "flex min-h-11 flex-1 items-center justify-center gap-2 rounded-control px-4 text-support font-semibold transition-colors duration-200",
-              selected
-                ? "bg-cv-surface text-cv-accent shadow-surface"
-                : tab.secondary === true
-                  ? "text-cv-text-muted hover:bg-cv-surface/60"
-                  : "text-cv-text hover:bg-cv-surface/60",
+              "rounded-pill px-2 py-0.5 text-support font-bold",
+              tab.badge === 0
+                ? "bg-cv-surface-sunken text-cv-text-muted"
+                : selected
+                  ? "bg-cv-accent text-cv-on-accent"
+                  : "bg-cv-accent-soft text-cv-accent",
             )}
-            id={tabId(tab.id)}
-            key={tab.id}
-            onClick={() => onSelect(tab.id)}
-            onKeyDown={onKeyDown}
-            ref={(node) => {
-              if (node === null) {
-                refs.current.delete(tab.id);
-              } else {
-                refs.current.set(tab.id, node);
-              }
-            }}
-            role="tab"
-            tabIndex={selected ? 0 : -1}
-            type="button"
           >
-            <span>{tab.label}</span>
-            {tab.badge === null ? null : (
-              <span
-                className={cx(
-                  "rounded-pill px-2 py-0.5 text-support font-bold",
-                  tab.badge === 0
-                    ? "bg-cv-surface-sunken text-cv-text-muted"
-                    : selected
-                      ? "bg-cv-accent text-cv-on-accent"
-                      : "bg-cv-accent-soft text-cv-accent",
-                )}
-              >
-                {tab.badge}
-              </span>
-            )}
-          </button>
-        );
-      })}
+            {tab.badge}
+          </span>
+        )}
+      </button>
+    );
+  };
+
+  return (
+    <div aria-label="חלקי מסך ההכנה" className="flex flex-wrap items-center justify-between gap-3" role="tablist">
+      <div className="flex flex-1 gap-1 rounded-surface border border-cv-border bg-cv-surface-muted p-1">
+        {primary.map((tab) =>
+          renderTab(
+            tab,
+            cx(
+              "flex-1 px-4",
+              tab.id === active ? "bg-cv-surface text-cv-accent shadow-surface" : "text-cv-text hover:bg-cv-surface/60",
+            ),
+          ),
+        )}
+      </div>
+      {secondary.map((tab) =>
+        renderTab(
+          tab,
+          cx(
+            "border px-4",
+            tab.id === active
+              ? "border-cv-border-strong bg-cv-surface text-cv-text shadow-surface"
+              : "border-cv-border bg-cv-surface text-cv-text-muted hover:bg-cv-surface-muted",
+          ),
+        ),
+      )}
     </div>
   );
 };
