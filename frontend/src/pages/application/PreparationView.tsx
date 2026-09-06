@@ -83,13 +83,13 @@ export const PreparationView = ({
     const factCount = planQuery.data?.candidates.length ?? null;
 
     return [
-      { badge: decisionCount, id: "decisions", label: "החלטות נדרשות" },
+      { badge: decisionCount, badgeTone: "warning", id: "decisions", label: "החלטות נדרשות" },
       ...(selectionPlanAction === null
         ? []
         : [{ badge: factCount, id: "facts", label: "עובדות לקורות החיים" } satisfies PreparationTabSpec]),
       ...(classification === null
         ? []
-        : [{ badge: null, id: "analysis", label: "פרטי ניתוח ואבחון", secondary: true } satisfies PreparationTabSpec]),
+        : [{ badge: null, id: "analysis", label: "פרטי ניתוח ואבחון" } satisfies PreparationTabSpec]),
     ];
   }, [classification, decisionCount, planQuery.data, selectionPlanAction]);
 

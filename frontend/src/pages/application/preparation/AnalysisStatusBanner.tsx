@@ -87,11 +87,12 @@ export const AnalysisStatusBanner = ({
     <Callout
       action={
         onShowDiagnostics === null ? undefined : (
-          <Button onClick={onShowDiagnostics} variant="ghost">
-            לפרטי האבחון המלאים
+          <Button className="min-h-0! px-0! underline underline-offset-2" onClick={onShowDiagnostics} variant="ghost">
+            לפרטי האבחון המלאים ←
           </Button>
         )
       }
+      emphasis="banner"
       title={title}
       tone={tone}
     >
