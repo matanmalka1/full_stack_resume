@@ -1,10 +1,11 @@
 import { ArrowRight, FileText } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { ErrorCallout } from "../../app/ErrorCallout";
 import { appRoutes } from "../../app/appRoutes";
 import { useRequiredParam } from "../../app/useRequiredParam";
-import { Button, buttonClasses } from "../../ui/Button";
+import { buttonClasses } from "../../ui/Button";
 import { Callout } from "../../ui/Callout";
 import { Card } from "../../ui/Card";
 import { PageShell } from "../../ui/PageShell";
@@ -15,6 +16,7 @@ import { ApplicationBreadcrumbs } from "../application/ApplicationBreadcrumbs";
 import { FactLifecyclePanel } from "../facts/FactLifecyclePanel";
 import { RecruitmentManagerButton } from "../recruitment/RecruitmentManagerButton";
 import { ActiveOperationPanel } from "../ActiveOperationPanel";
+import { DraftApprovalBar } from "./DraftApprovalBar";
 import { DraftApprovalDialog } from "./DraftApprovalDialog";
 import { DraftClaimCard } from "./DraftClaimCard";
 import { DraftConflictDialog } from "./DraftConflictDialog";
@@ -24,7 +26,7 @@ import { DraftPreview } from "./DraftPreview";
 import { DraftRenderPanel } from "./DraftRenderPanel";
 import { type ClaimHandlers, DraftSectionCard } from "./DraftSectionCard";
 import { DraftValidationPanel } from "./DraftValidationPanel";
-import { EditorLayout } from "./EditorLayout";
+import { type EditorMode, EditorLayout } from "./EditorLayout";
 import { useDraftEditorState } from "./useDraftEditorState";
 
 /* A.4 frame 3: the editor pane. Data and commands live in `useDraftEditorState`; what is
@@ -61,13 +63,25 @@ export const DraftEditorPage = () => {
     workingDraftId,
   } = useDraftEditorState(applicationId);
 
+  /* Reading is what this screen is for: the user arrives to see what was written, what
+     stands behind each line, and what the validation said, and signs. A line that needs
+     changing is edited where it sits. */
+  const [mode, setMode] = useState<EditorMode>("read");
+
+  /* Hiding the rows must not strand text still sitting in the buffer, so the document
+     view settles it first. */
+  const changeMode = (next: EditorMode) => {
+    if (next === "document") autosave.flush();
+    setMode(next);
+  };
+
   const preparationHref = appRoutes.preparation(applicationId);
 
   return (
     <PageShell
       actions={detail === undefined ? null : <RecruitmentManagerButton application={detail.application} />}
       description={detail === undefined ? undefined : `תפקיד היעד: ${detail.application.target_role}`}
-      eyebrow="סביבת עריכה"
+      eyebrow="סביבת האישור"
       navigation={
         <ApplicationBreadcrumbs
           applicationId={applicationId}
@@ -76,7 +90,7 @@ export const DraftEditorPage = () => {
           targetRole={detail?.application.target_role}
         />
       }
-      title="עריכה, אימות ואישור"
+      title="קריאה, אימות ואישור"
     >
       <QueryState
         error={applicationQuery.error}
@@ -148,6 +162,8 @@ export const DraftEditorPage = () => {
             return (
               <>
                 <EditorLayout
+                  mode={mode}
+                  onModeChange={changeMode}
                   editor={
                     <>
                       <Card
@@ -245,26 +261,23 @@ export const DraftEditorPage = () => {
                       beside the button says only what the button cannot: why it is shut.
                       The panel's own heading already says whether the run passed, so the
                       second card that repeated it is gone. */}
+                      {/* No approval footer here: the decision the report gates is pinned
+                          to the screen instead, in one place across all three modes. */}
                       <DraftValidationPanel
                         applicationId={applicationId}
-                        approval={
-                          <>
-                            {exactPassingRunId === null ? (
-                              <p className="me-auto text-support leading-6 text-cv-text-muted">
-                                האישור נפתח אחרי אימות שעבר על הגרסה המוצגת.
-                              </p>
-                            ) : null}
-                            <Button disabled={exactPassingRunId === null} onClick={() => setApprovalOpen(true)}>
-                              אישור הגרסה
-                            </Button>
-                          </>
-                        }
                         draft={draft}
                         onExactPassingRun={onExactPassingRun}
                         stale={validationStale}
                       />
                     </>
                   }
+                />
+
+                <DraftApprovalBar
+                  exactPassingRunId={exactPassingRunId}
+                  onApprove={() => setApprovalOpen(true)}
+                  reviewBlocked={(detail?.review_reasons ?? []).length > 0}
+                  stale={validationStale}
                 />
 
                 <DraftApprovalDialog

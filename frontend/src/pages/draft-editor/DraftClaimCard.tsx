@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from "react";
-import { Database, RefreshCw, Trash2 } from "lucide-react";
+import { Check, Database, Pencil, RefreshCw, Trash2 } from "lucide-react";
 
 import type { DraftClaim, DraftFact, WorkingDraft, WorkingDraftFacts } from "../../api/contracts";
 import { Button } from "../../ui/Button";
@@ -53,6 +53,10 @@ export const DraftClaimCard = ({
   const linked = (facts?.facts ?? []).filter((fact) => claim.fact_ids.includes(fact.fact_id));
   const removal = removability(claim, draft, facts);
   const [text, setText] = useState(claim.text);
+  /* Per row, because that is the size of the decision. The screen is for reading a
+     document and signing it; changing one line does not need the whole page to turn into
+     a form, and the pencil is on every row so it is never somewhere else. */
+  const [editing, setEditing] = useState(false);
 
   /* The server's text wins whenever it changes underneath: a regeneration, a rebuilt
      selection, or the version the user kept after a conflict. Local typing is not lost by
@@ -69,47 +73,80 @@ export const DraftClaimCard = ({
     <li className="group py-3 first:pt-0">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <StatusBadge tone={claimTypeTones[claim.claim_type]}>{claimTypeLabels[claim.claim_type]}</StatusBadge>
-        {/* Held out of the flow until the row is touched, so a page of rows is a page of
-            text. Focus-within keeps them reachable by keyboard, where hover is not. */}
-        <div className="flex gap-1 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100">
+        <div className="flex items-center gap-1">
+          {/* The pencil is always drawn. It is the way into changing a line, and a control
+              that only appears under the pointer is a control the reader has to know is
+              there. The two beside it act on a line already being worked on, so they stay
+              held out of the flow until the row is touched; focus-within keeps them
+              reachable by keyboard, where hover is not. */}
           <Button
-            aria-label="יצירה מחדש של השורה"
+            aria-label={editing ? "סיום עריכת השורה" : "עריכת השורה"}
             className={rowActionClasses}
-            disabled={unsaved}
-            onClick={() => onRegenerate(claim)}
-            title="יצירה מחדש של השורה"
+            onClick={() => {
+              /* Closing the field settles what is buffered, the way a blur does, so the
+                   line the reader returns to is the line they typed. */
+              if (editing) onBlur();
+              setEditing(!editing);
+            }}
+            title={editing ? "סיום עריכת השורה" : "עריכת השורה"}
             variant="ghost"
           >
-            <RefreshCw aria-hidden="true" className="size-4" />
+            {editing ? (
+              <Check aria-hidden="true" className="size-4" />
+            ) : (
+              <Pencil aria-hidden="true" className="size-4 text-cv-text-muted" />
+            )}
           </Button>
-          {removal.route === "none" ? null : (
+          <div className="flex gap-1 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100">
             <Button
-              aria-label="הסרת השורה"
+              aria-label="יצירה מחדש של השורה"
               className={rowActionClasses}
-              onClick={() => onRemove(claim)}
-              title="הסרת השורה"
+              disabled={unsaved}
+              onClick={() => onRegenerate(claim)}
+              title="יצירה מחדש של השורה"
               variant="ghost"
             >
-              <Trash2 aria-hidden="true" className="size-4" />
+              <RefreshCw aria-hidden="true" className="size-4" />
             </Button>
-          )}
+            {removal.route === "none" ? null : (
+              <Button
+                aria-label="הסרת השורה"
+                className={rowActionClasses}
+                onClick={() => onRemove(claim)}
+                title="הסרת השורה"
+                variant="ghost"
+              >
+                <Trash2 aria-hidden="true" className="size-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* The label is what names the control for a screen reader, and printed above every
           row it was a sixth repeated string down the page. It stays in the accessibility
           tree and leaves the layout. */}
-      <TextArea
-        aria-label="טקסט השורה"
-        className="mt-2 min-h-16 resize-y border-transparent bg-transparent px-2 py-1.5 shadow-none hover:border-cv-border focus:border-cv-accent"
-        dir="auto"
-        onBlur={onBlur}
-        onChange={(event) => {
-          setText(event.target.value);
-          onEdit(claim, event.target.value);
-        }}
-        value={text}
-      />
+      {/* `text` rather than `claim.text` in both branches: an edit still sitting in the
+          autosave buffer is what the user last typed, and a reading mode that reverted to
+          the server's copy would show a line the user did not write and is about to
+          approve something else. */}
+      {editing ? (
+        <TextArea
+          aria-label="טקסט השורה"
+          className="mt-2 min-h-16 resize-y border-transparent bg-transparent px-2 py-1.5 shadow-none hover:border-cv-border focus:border-cv-accent"
+          dir="auto"
+          onBlur={onBlur}
+          onChange={(event) => {
+            setText(event.target.value);
+            onEdit(claim, event.target.value);
+          }}
+          value={text}
+        />
+      ) : (
+        <p className="mt-2 px-2 leading-7 text-cv-text" dir="auto">
+          {text}
+        </p>
+      )}
 
       {/* The badge above already names the claim type in a word, and the facts panel
           below shows what backs it. Printed under all sixty-odd cards, this sentence
@@ -141,17 +178,16 @@ export const DraftClaimCard = ({
           sentence moves to `title`, read on hover or by a screen reader's accessible
           name, once per row rather than printed once per row. */}
       {linked.length === 0 ? null : (
-        <details className="mt-1.5 px-2">
-          <summary
-            aria-label={linked.length === 1 ? "העובדה שמאחורי השורה" : `${linked.length} עובדות שמאחורי השורה`}
-            className="inline-flex w-fit cursor-pointer list-none items-center gap-1 rounded-pill border border-cv-border px-1.5 py-0.5 text-support text-cv-text-muted [&::-webkit-details-marker]:hidden"
-            title={linked.length === 1 ? "העובדה שמאחורי השורה" : `${linked.length} עובדות שמאחורי השורה`}
-          >
+        /* Approval is a signature on every line, so the evidence for a line is not
+           something the reader should have to go looking for one row at a time. Folded
+           away it is a count; open it is the reason the sentence is allowed to stand. */
+        <div className="mt-1.5 px-2">
+          <span className="inline-flex w-fit items-center gap-1 rounded-pill border border-cv-border px-1.5 py-0.5 text-support text-cv-text-muted">
             <Database aria-hidden="true" className="size-3.5 text-cv-success" />
-            <span aria-hidden="true">{linked.length}</span>
-          </summary>
+            <span>{linked.length === 1 ? "העובדה שמאחורי השורה" : `${linked.length} עובדות שמאחורי השורה`}</span>
+          </span>
           <ul className="mt-1.5 flex flex-col gap-1.5">{linked.map(factRow)}</ul>
-        </details>
+        </div>
       )}
 
       {/* Both lines describe the removal control, so they appear where it does: with the

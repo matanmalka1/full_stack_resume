@@ -111,8 +111,3 @@ Report what passed, what failed, and what remains. Never claim completion with
 - One agent at a time per worktree.
 
 ## Keeping this file small
-
-Every rule here was added because something went wrong once, so without a counterweight
-this file only grows. The counterweight: when closing a milestone, name one control that
-was retired, or state that none was retirable and why. A guard that has never fired since
-it was added is a candidate for merging into a derived check.

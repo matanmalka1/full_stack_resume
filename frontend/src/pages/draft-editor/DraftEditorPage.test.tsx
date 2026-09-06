@@ -227,6 +227,12 @@ const renderPage = (aiEnabled = true) => {
   );
 };
 
+/* The screen shows the draft as text; a line becomes a field when its own pencil is
+   pressed. Tests that type into a line open that line first, the way a user does. */
+const editRow = async (index = 0) => {
+  fireEvent.click((await screen.findAllByRole("button", { name: "עריכת השורה" }))[index]!);
+};
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -298,6 +304,7 @@ describe("DraftEditorPage", () => {
     });
 
     renderPage();
+    await editRow();
 
     expect(await screen.findAllByDisplayValue("Delivered 30% growth.")).toHaveLength(2);
     expect(screen.getByText("ללא ביסוס")).toBeInTheDocument();
@@ -659,7 +666,7 @@ describe("DraftEditorPage regeneration", () => {
 
     /* The panel, not the route: the editor's own heading is still on screen beside it. */
     expect(await screen.findByRole("heading", { name: "הרצת יצירה מחדש של טענה" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "עריכה, אימות ואישור" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "קריאה, אימות ואישור" })).toBeInTheDocument();
     const call = fetchMock.mock.calls.find((entry) => String(entry[0]).endsWith("/regenerate-claim"));
     /* All three parts of the draft's identity: that is what makes a save landing mid
        flight fail as SOURCE_CHANGED instead of overwriting the user's edit. */
@@ -678,6 +685,7 @@ describe("DraftEditorPage regeneration", () => {
     stubReads({});
 
     renderPage();
+    await editRow();
     const editors = await screen.findAllByLabelText("טקסט השורה");
     fireEvent.change(editors[0]!, { target: { value: "typed but not saved" } });
 
@@ -704,20 +712,36 @@ describe("DraftEditorPage preview", () => {
     expect(screen.getByText("טיוטה")).toBeInTheDocument();
   });
 
-  it("keeps both panes mounted so switching views does not discard unsaved text", async () => {
+  it("opens on the draft as text, with the facts behind each line already open", async () => {
     stubReads({});
 
     renderPage();
-    const editors = await screen.findAllByLabelText("טקסט השורה");
-    fireEvent.change(editors[0]!, { target: { value: "typed then switched away" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "תצוגה ואישור" }));
-
-    expect(screen.getAllByLabelText("טקסט השורה")[0]).toHaveValue("typed then switched away");
+    expect(await screen.findByText("Owned the CRM migration.")).toBeInTheDocument();
+    /* No field until a line is opened, and the evidence for the line is not folded away:
+       this is a page to read and sign, and the pencil is what turns one line into a
+       field. */
+    expect(screen.queryByLabelText("טקסט השורה")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "עריכת השורה" }).length).toBeGreaterThan(0);
+    expect(screen.getByText("Owned the CRM migration end to end.")).toBeInTheDocument();
     expect(screen.getByTitle("תצוגה מקדימה של הטיוטה")).toBeInTheDocument();
+    /* The decision the screen exists for, pinned rather than left at the foot of a
+       column - and shut, with the reason beside it, until a run describes this version. */
+    expect(screen.getByRole("button", { name: "אישור הגרסה" })).toBeDisabled();
+    expect(screen.getByText("האישור נפתח אחרי אימות שעבר על הגרסה המוצגת.")).toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: "עריכה בלבד" }));
-    expect(screen.getAllByLabelText("טקסט השורה")[0]).toHaveValue("typed then switched away");
-    expect(screen.getByRole("button", { name: "עריכה ותצוגה" })).toBeInTheDocument();
+  it("shows the text just typed when the line is closed, not the version on the server", async () => {
+    stubReads({});
+
+    renderPage();
+    await editRow();
+    const editors = await screen.findAllByLabelText("טקסט השורה");
+    fireEvent.change(editors[0]!, { target: { value: "typed then closed" } });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "סיום עריכת השורה" })[0]!);
+
+    expect(screen.getByText("typed then closed")).toBeInTheDocument();
+    expect(screen.queryByLabelText("טקסט השורה")).not.toBeInTheDocument();
   });
 });

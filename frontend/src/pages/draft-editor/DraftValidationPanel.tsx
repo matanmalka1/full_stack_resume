@@ -13,11 +13,11 @@ import { ValidationReportView } from "../revision/ValidationReportView";
 
 interface DraftValidationPanelProps {
   applicationId: string;
-  /* The approval control, rendered inside this panel's own footer. Approval is the one
-     thing a passing run is for, and it used to sit in a second surface below - two cards
-     saying one thing, the lower one repeating in a sentence what the upper one had just
-     reported. */
-  approval: ReactNode;
+  /* An approval control rendered inside this panel's own footer, for a caller that has
+     nowhere better to put one. The editor does: it pins approval to the screen rather
+     than leaving it at the foot of a column, so it passes nothing here and the footer
+     does not appear. */
+  approval?: ReactNode;
   draft: WorkingDraft | undefined;
   /* Approval is the editor's own dialog, so the panel reports the exact passing run
      upward rather than linking to a screen for it. */
@@ -118,7 +118,7 @@ export const DraftValidationPanel = ({
         <ValidationReportView report={run.report} />
       )}
 
-      <ActionBar className="border-t border-cv-border pt-3" primary={approval} />
+      {approval === undefined ? null : <ActionBar className="border-t border-cv-border pt-3" primary={approval} />}
 
       <LiveRegion>
         {validation.data === undefined
