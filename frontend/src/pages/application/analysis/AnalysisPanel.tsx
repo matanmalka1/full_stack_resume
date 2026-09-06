@@ -1,5 +1,6 @@
 import type { Classification } from "../../../api/analyses";
 import type { ApplicationDetail } from "../../../api/contracts";
+import { Disclosure } from "../../../ui/Disclosure";
 import { surfaceClasses } from "../../../ui/Surface";
 import { JobTextDisclosure } from "../JobTextDisclosure";
 import { AnalysisHeader } from "./AnalysisHeader";
@@ -48,23 +49,20 @@ export const AnalysisPanel = ({
 
       <ApprovalReasonsSection reasons={classification.approvalReasons} />
 
-      <RationaleSection rationale={classification.rationale} />
-
-      <RequirementsSection items={classification.mandatoryRequirements} title="דרישות חובה שזוהו" />
-
-      <RequirementsSection items={classification.preferredRequirements} title="דרישות מועדפות שזוהו" />
-
-      <RequirementsSection items={classification.keywords} title="מילות מפתח מהמשרה" />
-
       <GapsSection acceptance={gapAcceptance} gaps={classification.gaps} />
 
-      {/* The text the classification was drawn from, under the classification itself.
-          Everything above is conclusion; without the posting on the same screen the
-          only way to check a verdict against its source was to leave the screen the
-          decision is taken on. Collapsed, because it is the source and not the
-          finding. */}
       <section>
-        <JobTextDisclosure detail={detail} summary="הצגת נוסח המשרה שנותח" />
+        <Disclosure summary="פרטי הניתוח והמקור">
+          <div className="flex flex-col divide-y divide-cv-border [&>section]:py-4 [&>section:first-child]:pt-1">
+            <RationaleSection rationale={classification.rationale} />
+            <RequirementsSection items={classification.mandatoryRequirements} title="דרישות חובה שזוהו" />
+            <RequirementsSection items={classification.preferredRequirements} title="דרישות מועדפות שזוהו" />
+            <RequirementsSection items={classification.keywords} title="מילות מפתח מהמשרה" />
+            <section>
+              <JobTextDisclosure detail={detail} summary="הצגת נוסח המשרה שנותח" />
+            </section>
+          </div>
+        </Disclosure>
       </section>
     </div>
   </section>

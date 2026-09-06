@@ -7,6 +7,7 @@ import type { ApplicationDetail, Reason } from "../../api/contracts";
 import { ErrorCallout } from "../../app/ErrorCallout";
 import { ActionBar } from "../../ui/ActionBar";
 import { Button } from "../../ui/Button";
+import { Disclosure } from "../../ui/Disclosure";
 import {
   CLASSIFICATION_REASON,
   FIT_REASON,
@@ -73,6 +74,19 @@ export const ReviewDecisionPanel = ({
   /* The marks are the gap list's state, so they are merged in at the submission rather
      than copied into this panel's - one value, read where it is sent. */
   const submitted = { ...decisions, accepted_requirement_ids: showGapAcceptance ? [...acceptedRequirementIds] : [] };
+  const decisionCount = [showClassification, showIncompleteAnalysis, showFit, showGapAcceptance].filter(Boolean).length;
+  const classificationReady =
+    !showClassification || decisions.track_override !== null || decisions.profile_override !== null;
+  const incompleteAnalysisReady = !showIncompleteAnalysis || decisions.accept_incomplete_analysis;
+  const fitReady = !showFit || decisions.accept_low_fit;
+  const gapsReady = !showGapAcceptance || acceptedRequirementIds.length > 0;
+  const decisionReady =
+    analysisId !== null &&
+    hasDecision(submitted) &&
+    classificationReady &&
+    incompleteAnalysisReady &&
+    fitReady &&
+    gapsReady;
 
   const apply = useMutation({
     mutationFn: async () => {
@@ -98,11 +112,14 @@ export const ReviewDecisionPanel = ({
   return (
     <section
       aria-labelledby="review-decision-heading"
-      className="rounded-surface border border-cv-blocker/30 bg-cv-blocker/5 p-5"
+      className="rounded-surface border border-cv-border bg-cv-surface p-5 shadow-surface"
     >
       <h2 className="text-body font-semibold text-cv-text" id="review-decision-heading">
-        ההחלטה שנדרשת
+        {decisionCount === 1 ? "נדרשת החלטה כדי להמשיך" : `נדרשות ${decisionCount} החלטות כדי להמשיך`}
       </h2>
+      <p className="mt-1 text-support leading-6 text-cv-text-muted">
+        הניתוח נעצר לבדיקה אנושית. בחרו רק במה שצריך לשנות ואשרו במפורש את הסיכונים שמופיעים כאן.
+      </p>
 
       <div className="mt-4 flex flex-col gap-5">
         <ReviewDecisionForm
@@ -122,11 +139,12 @@ export const ReviewDecisionPanel = ({
             new analysis, while a gap acceptance alone is recorded on a new SelectionPlan
             for the analysis on screen - so the sentence names both rather than promising
             the one that happens to be more common. */}
-        <p className="text-support leading-6 text-cv-text-muted" dir="auto">
-          כל ההחלטות נשלחות יחד בפעולה אחת. שינוי סיווג יוצר ניתוח חדש ובלתי משתנה יחד עם תוכנית הבחירה ההתחלתית שלו,
-          וקבלת פער נרשמת בתוכנית בחירה חדשה עבור אותו ניתוח. הניתוח והתוכנית שעליהם הוחלט נשמרים בדיוק כפי שהם. החלטות
-          מצטברות: השארת שדה ריק שומרת על החלטה קודמת ואינה מבטלת אותה.
-        </p>
+        <Disclosure summary="מה יישמר לאחר האישור?">
+          <p dir="auto">
+            כל ההחלטות נשלחות יחד. שינוי סיווג יוצר ניתוח ותוכנית בחירה חדשים; קבלת פער נרשמת בתוכנית בחירה חדשה.
+            הרשומות הקודמות נשמרות, ושדה שלא שונה אינו מבטל החלטה קודמת.
+          </p>
+        </Disclosure>
 
         {apply.error === null ? null : (
           <ErrorCallout
@@ -136,19 +154,26 @@ export const ReviewDecisionPanel = ({
           />
         )}
 
-        <ActionBar
-          align="start"
-          primary={
-            <Button
-              disabled={!hasDecision(submitted) || analysisId === null}
-              onClick={() => apply.mutate()}
-              pending={apply.isPending}
-              pendingLabel="מחיל את ההחלטות…"
-            >
-              החלת כל ההחלטות
-            </Button>
-          }
-        />
+        <div className="flex flex-col gap-2">
+          {!decisionReady ? (
+            <p className="text-support font-medium text-cv-blocker">
+              יש להשלים את כל ההחלטות שמופיעות בכרטיס לפני שאפשר לשמור.
+            </p>
+          ) : null}
+          <ActionBar
+            align="start"
+            primary={
+              <Button
+                disabled={!decisionReady}
+                onClick={() => apply.mutate()}
+                pending={apply.isPending}
+                pendingLabel="שומר את ההחלטות…"
+              >
+                שמירת ההחלטות
+              </Button>
+            }
+          />
+        </div>
       </div>
     </section>
   );

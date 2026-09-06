@@ -62,6 +62,39 @@ export const PreparationView = ({
       ? []
       : classification.gaps.filter((gap) => gap.severity === "hard" && gap.requirementId !== null);
 
+  const analysisPanel =
+    classification === null ? null : (
+      <AnalysisPanel
+        classification={classification}
+        detail={detail}
+        gapAcceptance={
+          gapDecisionOpen ? { disabled: false, onToggle: toggleAcceptance, selected: acceptedRequirementIds } : null
+        }
+      />
+    );
+
+  const actionSurface = hasActionSurface ? (
+    <section
+      aria-label={hasRecommendation ? "הפעולה המומלצת" : "פעולות זמינות"}
+      className={
+        hasRecommendation
+          ? "rounded-surface border-2 border-cv-accent/25 bg-cv-accent-soft/40 p-5 shadow-surface"
+          : surfaceClasses("bg-cv-surface p-5")
+      }
+    >
+      <div className="flex flex-col gap-5">
+        <ReviewDecisionPanel
+          acceptableGapCount={acceptableGaps.length}
+          acceptedRequirementIds={acceptedRequirementIds}
+          detail={detail}
+          onAcceptancesApplied={clearAcceptances}
+        />
+        <SelectionPlanPanel detail={detail} onQueued={onQueued} />
+        <ApplicationActions detail={detail} onQueued={onQueued} />
+      </div>
+    </section>
+  ) : null;
+
   return (
     <div className="flex flex-col gap-5">
       {/* Live work is reported before the alert backdrop, beside the workflow it is
@@ -72,15 +105,11 @@ export const PreparationView = ({
 
       <PreparationAlerts detail={detail} />
 
-      {classification === null ? null : (
-        <AnalysisPanel
-          classification={classification}
-          detail={detail}
-          gapAcceptance={
-            gapDecisionOpen ? { disabled: false, onToggle: toggleAcceptance, selected: acceptedRequirementIds } : null
-          }
-        />
-      )}
+      {/* Most review decisions lead: they are the reason this screen needs the reader.
+          A hard-gap decision is the exception because its checkbox sits on the exact gap
+          in the analysis; in that case the evidence remains immediately before submit. */}
+      {gapDecisionOpen ? analysisPanel : actionSurface}
+      {gapDecisionOpen ? null : analysisPanel}
 
       {/* A superseded analysis is not shown as if it were the one in force: the reader is
           told the analysis on record belongs to an older snapshot and that a new one is
@@ -96,27 +125,7 @@ export const PreparationView = ({
       {/* The decision stays directly under the analysis it answers. Together with the
           projected next action it gets a distinct surface, so the way forward does not
           read as one more alert in the backdrop above. */}
-      {hasActionSurface ? (
-        <section
-          aria-label={hasRecommendation ? "הפעולה המומלצת" : "פעולות זמינות"}
-          className={
-            hasRecommendation
-              ? "rounded-surface border-2 border-cv-accent/25 bg-cv-accent-soft/40 p-5 shadow-surface"
-              : surfaceClasses("bg-cv-surface p-5")
-          }
-        >
-          <div className="flex flex-col gap-5">
-            <ReviewDecisionPanel
-              acceptableGapCount={acceptableGaps.length}
-              acceptedRequirementIds={acceptedRequirementIds}
-              detail={detail}
-              onAcceptancesApplied={clearAcceptances}
-            />
-            <SelectionPlanPanel detail={detail} onQueued={onQueued} />
-            <ApplicationActions detail={detail} onQueued={onQueued} />
-          </div>
-        </section>
-      ) : null}
+      {gapDecisionOpen ? actionSurface : null}
     </div>
   );
 };

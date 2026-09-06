@@ -116,6 +116,48 @@ afterEach(() => {
 });
 
 describe("the review decision, on the Application screen", () => {
+  it("leads with the local decision and does not repeat it as an alert", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(jsonResponse(detail()))),
+    );
+
+    renderPage();
+
+    const decision = await screen.findByRole("heading", { name: "נדרשת החלטה כדי להמשיך" });
+    const analysis = screen.getByRole("heading", { name: "ניתוח המשרה" });
+    expect(decision.compareDocumentPosition(analysis) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "התראות" })).not.toBeInTheDocument();
+    expect(screen.getByText(/יש להשלים את כל ההחלטות/)).toBeInTheDocument();
+  });
+
+  it("requires every displayed decision before enabling the single commit", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve(
+          jsonResponse(
+            detail({
+              review_reasons: [
+                reason("MATERIAL_CLASSIFICATION_AMBIGUITY"),
+                reason("ANALYSIS_INCOMPLETE"),
+              ],
+            }),
+          ),
+        ),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "נדרשות 2 החלטות כדי להמשיך" })).toBeInTheDocument();
+    const save = screen.getByRole("button", { name: "שמירת ההחלטות" });
+    fireEvent.change(screen.getByLabelText("מסלול"), { target: { value: "tech-sales" } });
+    expect(save).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: /הדרישות לא נקראו/ }));
+    expect(save).toBeEnabled();
+  });
+
   /* The decision a hard gap takes is per requirement and is recorded on the SelectionPlan.
      The fit acceptance is recorded on the analysis and answers low fit alone, so offering
      it here left the reader with a control that could not close the blocker: it re-derived
@@ -187,7 +229,7 @@ describe("the review decision, on the Application screen", () => {
 
     fireEvent.click(await screen.findByRole("checkbox", { name: /5 years of Kubernetes/ }));
     fireEvent.change(screen.getByLabelText(/סיבת הקבלה/), { target: { value: "נסגר בראיון" } });
-    fireEvent.click(screen.getByRole("button", { name: "החלת כל ההחלטות" }));
+    fireEvent.click(screen.getByRole("button", { name: "שמירת ההחלטות" }));
 
     expect(await screen.findByText("מוכן ליצירת טיוטה")).toBeInTheDocument();
 
@@ -240,12 +282,12 @@ describe("the review decision, on the Application screen", () => {
 
     fireEvent.change(await screen.findByLabelText("מסלול"), { target: { value: "tech-sales" } });
     fireEvent.change(screen.getByLabelText("דגש"), { target: { value: "leadership" } });
-    fireEvent.click(screen.getByRole("button", { name: "החלת כל ההחלטות" }));
+    fireEvent.click(screen.getByRole("button", { name: "שמירת ההחלטות" }));
 
     /* The refreshed projection reports the state that follows - here, that the reason
        closed - on the screen the user never left. */
     expect(await screen.findByText("מוכן ליצירת טיוטה")).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "ההחלטה שנדרשת" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /החלט.*כדי להמשיך/ })).not.toBeInTheDocument();
 
     const applyCall = fetchMock.mock.calls.find((call) => call[0] === APPLY_PATH);
     expect(applyCall).toBeDefined();
@@ -275,7 +317,7 @@ describe("the review decision, on the Application screen", () => {
     renderPage();
 
     fireEvent.change(await screen.findByLabelText("מסלול"), { target: { value: "tech-sales" } });
-    fireEvent.click(screen.getByRole("button", { name: "החלת כל ההחלטות" }));
+    fireEvent.click(screen.getByRole("button", { name: "שמירת ההחלטות" }));
 
     expect(await screen.findByText("the submitted decisions change nothing")).toBeInTheDocument();
     /* Still on the screen, with the decision still selected: nothing safe was lost. */

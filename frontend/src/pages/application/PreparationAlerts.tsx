@@ -12,6 +12,10 @@ import { actionIsOnPreparationScreen } from "./actionDestinations";
    Keeping this region visually quiet lets the action surface beside it remain the clear
    place to continue the workflow. */
 export const PreparationAlerts = ({ detail }: { detail: ApplicationDetail }) => {
+  /* A reason resolved by the decision form is presented with its control instead of
+     once here as an alert and once again below as a decision. Reasons owned elsewhere
+     keep their callout and resolution route. */
+  const reviewReasons = detail.review_reasons.filter((reason) => !resolvedByDecisionForm(reason));
   const statedReasonCodes = new Set([...detail.review_reasons, ...detail.stale_reasons].map((reason) => reason.code));
   /* `blocked_actions` contains the normal future workflow as well as exceptional
      blockers. Only translated exceptions are useful here, and a reason already stated
@@ -29,7 +33,7 @@ export const PreparationAlerts = ({ detail }: { detail: ApplicationDetail }) => 
     return reasons.length === 0 ? [] : [{ action: blocked.action, reasons: [...new Set(reasons)] }];
   });
   const hasAlerts =
-    detail.review_reasons.length > 0 ||
+    reviewReasons.length > 0 ||
     detail.stale_reasons.length > 0 ||
     detail.warnings.length > 0 ||
     exceptionalBlockedActions.length > 0 ||
@@ -43,7 +47,7 @@ export const PreparationAlerts = ({ detail }: { detail: ApplicationDetail }) => 
     <Card aria-label="התראות" className="flex flex-col gap-3 bg-cv-surface-muted p-3">
       {/* A review reason whose control is in the decision panel states the requirement
           and stops there. Other reasons retain the action that resolves them. */}
-      {detail.review_reasons.map((reason) => (
+      {reviewReasons.map((reason) => (
         <ReasonCallout
           applicationId={detail.application.id}
           fallbackTitle="נדרשת החלטה לפני המשך"

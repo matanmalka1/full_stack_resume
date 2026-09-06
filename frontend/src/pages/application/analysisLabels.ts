@@ -123,6 +123,7 @@ const approvalReasonLabels: Record<string, string> = {
   "profile-disagreement": "המודל הציע פרופיל אחר מזה שהחוקים קבעו.",
   "emphasis-disagreement": "המודל הציע דגש אחר מזה שהחוקים קבעו.",
   "inconsistent-proposal": "הצעת המודל לא הייתה עקבית עם עצמה.",
+  "extraction-failed": "לא ניתן היה לחלץ את דרישות המשרה מהנוסח שנשמר.",
   "unspecified-ambiguity": "הניתוח נשמר לפני שנרשמה סיבת ההחלטה.",
 };
 

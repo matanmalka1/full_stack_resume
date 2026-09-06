@@ -1,5 +1,6 @@
 import type { ClassificationDecisions } from "../../api/analyses";
 import { Checkbox } from "../../ui/Checkbox";
+import { Disclosure } from "../../ui/Disclosure";
 import { Field } from "../../ui/Field";
 import { Select } from "../../ui/Select";
 import { TextArea } from "../../ui/TextInput";
@@ -68,11 +69,20 @@ interface OverrideFieldProps<T extends string> {
   label: string;
   labels: Record<T, string>;
   onSelect: (value: T | null) => void;
+  optional?: boolean;
   value: T | null;
 }
 
-const OverrideField = <T extends string>({ disabled, hint, label, labels, onSelect, value }: OverrideFieldProps<T>) => (
-  <Field hint={hint} label={label}>
+const OverrideField = <T extends string>({
+  disabled,
+  hint,
+  label,
+  labels,
+  onSelect,
+  optional,
+  value,
+}: OverrideFieldProps<T>) => (
+  <Field hint={hint} label={label} optional={optional}>
     {(control) => (
       <Select
         {...control}
@@ -80,7 +90,7 @@ const OverrideField = <T extends string>({ disabled, hint, label, labels, onSele
         onChange={(event) => onSelect(event.target.value === NO_OVERRIDE ? null : (event.target.value as T))}
         value={value ?? NO_OVERRIDE}
       >
-        <option value={NO_OVERRIDE}>ללא שינוי</option>
+        <option value={NO_OVERRIDE}>השארת הבחירה הנוכחית</option>
         {optionsFrom(labels).map(([option, optionLabel]) => (
           <option key={option} value={option}>
             {optionLabel}
@@ -161,39 +171,54 @@ export const ReviewDecisionForm = ({
   showFit,
   showIncompleteAnalysis,
 }: ReviewDecisionFormProps) => (
-  <div className="flex flex-col gap-6">
+  <div className="flex flex-col gap-5">
     {showClassification ? (
-      <>
-        <OverrideField
-          disabled={disabled}
-          hint="בחירה במסלול או בפרופיל היא ההחלטה שפותרת אי־בהירות בסיווג."
-          label="מסלול"
-          labels={trackLabels}
-          onSelect={(track_override) => onChange({ ...decisions, track_override })}
-          value={decisions.track_override ?? null}
-        />
-        <OverrideField
-          disabled={disabled}
-          label="פרופיל"
-          labels={profileLabels}
-          onSelect={(profile_override) => onChange({ ...decisions, profile_override })}
-          value={decisions.profile_override ?? null}
-        />
-        <OverrideField
-          disabled={disabled}
-          label="דגש"
-          labels={emphasisLabels}
-          onSelect={(emphasis_override) => onChange({ ...decisions, emphasis_override })}
-          value={decisions.emphasis_override ?? null}
-        />
-        <OverrideField
-          disabled={disabled}
-          label="שפת קורות החיים"
-          labels={languageLabels}
-          onSelect={(language_override) => onChange({ ...decisions, language_override })}
-          value={decisions.language_override ?? null}
-        />
-      </>
+      <div className="flex flex-col gap-4">
+        <div>
+          <h3 className="text-support font-semibold text-cv-text">בחירת סוג קורות החיים</h3>
+          <p className="mt-1 text-support leading-6 text-cv-text-muted">
+            כדי לפתור את אי־הבהירות יש לשנות לפחות את המסלול או את הפרופיל. שדות שלא ישונו יישארו כפי שנקבעו בניתוח.
+          </p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <OverrideField
+            disabled={disabled}
+            label="מסלול"
+            labels={trackLabels}
+            onSelect={(track_override) => onChange({ ...decisions, track_override })}
+            value={decisions.track_override ?? null}
+          />
+          <OverrideField
+            disabled={disabled}
+            label="פרופיל"
+            labels={profileLabels}
+            onSelect={(profile_override) => onChange({ ...decisions, profile_override })}
+            value={decisions.profile_override ?? null}
+          />
+        </div>
+
+        <Disclosure summary="אפשרויות נוספות: דגש ושפת קורות החיים">
+          <div className="grid gap-4 md:grid-cols-2">
+            <OverrideField
+              disabled={disabled}
+              label="דגש"
+              labels={emphasisLabels}
+              onSelect={(emphasis_override) => onChange({ ...decisions, emphasis_override })}
+              optional
+              value={decisions.emphasis_override ?? null}
+            />
+            <OverrideField
+              disabled={disabled}
+              label="שפת קורות החיים"
+              labels={languageLabels}
+              onSelect={(language_override) => onChange({ ...decisions, language_override })}
+              optional
+              value={decisions.language_override ?? null}
+            />
+          </div>
+        </Disclosure>
+      </div>
     ) : null}
 
     {showIncompleteAnalysis ? (
