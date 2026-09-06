@@ -12,7 +12,6 @@ import { Callout } from "../../ui/Callout";
 import { Dialog } from "../../ui/Dialog";
 import { Field } from "../../ui/Field";
 import { TextArea, TextInput } from "../../ui/TextInput";
-import { JobTextFileField } from "./JobTextFileField";
 import { SOURCE_URL_MAX_CHARACTERS } from "./applicationInput";
 
 interface PostingFields {
@@ -156,10 +155,6 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
             הנוסח נשמר כתצלום חדש ובלתי משתנה. התצלום הקודם, הניתוחים שנעשו עליו והגרסאות שאושרו נשמרים כפי שהם. טיוטה
             פעילה תסומן כלא מעודכנת, וניתוח מחדש נשאר פעולה נפרדת.
           </p>
-
-          <JobTextFileField
-            onText={(text) => setValue("job_text", text, { shouldDirty: true, shouldValidate: true })}
-          />
 
           <Field error={errors.job_text?.message} label="טקסט המשרה">
             {(control) => (

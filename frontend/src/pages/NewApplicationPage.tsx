@@ -18,7 +18,6 @@ import { TextArea, TextInput } from "../ui/TextInput";
 import { surfaceClasses } from "../ui/Surface";
 import { cx } from "../ui/cx";
 import { formatBytes } from "../ui/formatBytes";
-import { JobTextFileField } from "./application/JobTextFileField";
 import { LABEL_MAX_CHARACTERS, SOURCE_URL_MAX_CHARACTERS } from "./application/applicationInput";
 import { paramsFromQuery, queryFromParams } from "./applicationListParams";
 import { DuplicateChoices } from "./new-application/DuplicateChoices";
@@ -174,10 +173,6 @@ export const NewApplicationPage = () => {
           divided={false}
           title={<SectionTitle icon={FileText}>תיאור המשרה</SectionTitle>}
         >
-          <JobTextFileField
-            onText={(text) => setValue("job_text", text, { shouldDirty: true, shouldValidate: true })}
-          />
-
           <Field
             error={errors.job_text?.message}
             label={

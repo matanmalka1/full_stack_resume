@@ -154,15 +154,6 @@ const fillIntake = (jobText = "Job description text") => {
   fireEvent.change(jobTextArea(), { target: { value: jobText } });
 };
 
-const chooseFile = (file: File) => {
-  const input = screen.getByLabelText("טעינה מקובץ txt");
-
-  /* jsdom keeps `files` read-only, so the selection is defined rather than assigned
-     through the event, which would silently do nothing. */
-  Object.defineProperty(input, "files", { configurable: true, value: [file] });
-  fireEvent.change(input);
-};
-
 const jobTextArea = () => screen.getByRole("textbox", { name: /^טקסט המשרה/ });
 
 const submitForm = () => {
@@ -179,28 +170,6 @@ describe("NewApplicationPage", () => {
 
     expect(screen.getByRole("link", { name: "מועמדויות" })).toHaveAttribute("href", "/?activity=all&stage=approved");
     expect(screen.getByText("משרה חדשה")).toHaveAttribute("aria-current", "page");
-  });
-
-  it("reads a chosen .txt file into the job text area without sending it anywhere", async () => {
-    const calls = stubFetch({});
-    renderPage();
-
-    chooseFile(new File(["Senior Backend Engineer\nTel Aviv"], "job.txt", { type: "text/plain" }));
-
-    await waitFor(() => {
-      expect(jobTextArea()).toHaveValue("Senior Backend Engineer\nTel Aviv");
-    });
-    expect(screen.getByRole("status")).toHaveTextContent("job.txt");
-    expect(calls).toEqual([]);
-  });
-
-  it("refuses a file that is not a text file and leaves the job text untouched", async () => {
-    renderPage();
-
-    chooseFile(new File(["%PDF-1.7"], "job.pdf", { type: "application/pdf" }));
-
-    expect(await screen.findByText("ניתן לבחור קובץ טקסט בלבד, עם סיומת txt.")).toBeInTheDocument();
-    expect(jobTextArea()).toHaveValue("");
   });
 
   it("creates the application and queues its analysis when the precheck finds nothing", async () => {
