@@ -238,6 +238,7 @@ export interface Classification {
      existed, whose stored `gaps` stay the authoritative account and are not re-derived
      from this list. */
   requirements: Requirement[];
+  unreadableRequirementCount: number;
   /* Why the classification still needs a decision, as the analysis recorded it. The
      backend clears a reason only when an override that actually answers it is applied,
      so this list is what remains open rather than everything ever raised. */
@@ -296,20 +297,27 @@ const missingComponentsFrom = (value: unknown): MissingComponent[] => {
   });
 };
 
-const requirementsFrom = (value: unknown): Requirement[] => {
+const requirementsFrom = (value: unknown): { items: Requirement[]; unreadableCount: number } => {
   if (!Array.isArray(value)) {
-    return [];
+    return { items: [], unreadableCount: 0 };
   }
-  return value.flatMap((requirement) => {
+  const seenIds = new Set<string>();
+  let unreadableCount = 0;
+  const items = value.flatMap((requirement) => {
     if (
       !isRecord(requirement) ||
       typeof requirement.requirement_id !== "string" ||
+      requirement.requirement_id.trim() === "" ||
+      seenIds.has(requirement.requirement_id) ||
       typeof requirement.text !== "string" ||
+      requirement.text.trim() === "" ||
       typeof requirement.mandatory !== "boolean" ||
       !isRequirementCoverage(requirement.coverage)
     ) {
+      unreadableCount += 1;
       return [];
     }
+    seenIds.add(requirement.requirement_id);
     return [
       {
         requirementId: requirement.requirement_id,
@@ -322,13 +330,15 @@ const requirementsFrom = (value: unknown): Requirement[] => {
       },
     ];
   });
+  return { items, unreadableCount };
 };
 
 /* A narrow read of the analysis document, which is carried as an opaque object on the
    wire on purpose: it is a versioned domain document, and a hand-written HTTP copy of
    its schema could only drift. The scalars, the gap list, and the descriptive fields the
    analysis screen shows are read here so the user can see both what they are deciding
-   about and what the analysis concluded; anything unreadable is reported as absent.
+   about and what the analysis concluded. Unreadable requirements are counted so a
+   partially malformed list cannot look complete; other unreadable fields stay absent.
 
    It answers `null` unless the latest analysis *is* the active one. `latest_analysis` is
    the newest analysis of any snapshot, while `active_analysis_id` is the newest for the
@@ -345,6 +355,7 @@ export const classificationFromAnalysis = (detail: ApplicationDetail): Classific
 
   const analysis = record.analysis;
   const override = isRecord(analysis.user_override) ? analysis.user_override : {};
+  const parsedRequirements = requirementsFrom(analysis.requirements);
 
   return {
     track: isTrack(analysis.track) ? analysis.track : null,
@@ -361,7 +372,8 @@ export const classificationFromAnalysis = (detail: ApplicationDetail): Classific
     keywords: stringsFrom(analysis.keywords),
     mandatoryRequirements: stringsFrom(analysis.mandatory_requirements),
     preferredRequirements: stringsFrom(analysis.preferred_requirements),
-    requirements: requirementsFrom(analysis.requirements),
+    requirements: parsedRequirements.items,
+    unreadableRequirementCount: parsedRequirements.unreadableCount,
     /* The full recorded list, read as it arrives. Which of these are still unresolved is
        the domain's rule - a reason clears when an override that answers it is applied -
        and that rule is deliberately not copied here: the projection already publishes the

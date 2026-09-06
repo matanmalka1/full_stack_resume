@@ -8,7 +8,7 @@ import { ApprovalReasonsSection } from "./ApprovalReasonsSection";
 import { ClassificationSummary } from "./ClassificationSummary";
 import { type GapAcceptance, GapsSection } from "./GapsSection";
 import { RationaleSection } from "./RationaleSection";
-import { RequirementCoverageSection } from "./RequirementCoverageSection";
+import { RequirementCoverageSection, RequirementCoverageSummary } from "./RequirementCoverageSection";
 import { RequirementsSection } from "./RequirementsSection";
 
 /* What the analysis concluded, on the Application screen rather than behind a route of
@@ -48,6 +48,13 @@ export const AnalysisPanel = ({
     <div className="flex flex-col divide-y divide-cv-border [&>section]:py-5 [&>section:last-child]:pb-0">
       <ClassificationSummary classification={classification} />
 
+      {classification.requirements.length === 0 && classification.unreadableRequirementCount === 0 ? null : (
+        <RequirementCoverageSummary
+          requirements={classification.requirements}
+          unreadableRequirementCount={classification.unreadableRequirementCount}
+        />
+      )}
+
       <ApprovalReasonsSection reasons={classification.approvalReasons} />
 
       <GapsSection acceptance={gapAcceptance} gaps={classification.gaps} />
@@ -60,8 +67,11 @@ export const AnalysisPanel = ({
                 analysis carries one. An analysis stored before requirement coverage
                 existed carries no `requirements` at all, and falls back to the plain
                 mandatory/preferred term lists it always had. */}
-            {classification.requirements.length > 0 ? (
-              <RequirementCoverageSection requirements={classification.requirements} />
+            {classification.requirements.length > 0 || classification.unreadableRequirementCount > 0 ? (
+              <RequirementCoverageSection
+                requirements={classification.requirements}
+                unreadableRequirementCount={classification.unreadableRequirementCount}
+              />
             ) : (
               <>
                 <RequirementsSection items={classification.mandatoryRequirements} title="דרישות חובה שזוהו" />
