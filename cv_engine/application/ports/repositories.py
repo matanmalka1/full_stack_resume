@@ -149,6 +149,7 @@ class JobStore(Protocol):
         track_emphasis_dependencies: dict[str, str],
         new_acceptances: list[AcceptedGap] | None = None,
         expected_selection_plan_id: str | None = None,
+        enforce_expected_selection_plan: bool = False,
         plan_id: str | None = None,
         created_at: str | None = None,
     ) -> SelectionPlan: ...

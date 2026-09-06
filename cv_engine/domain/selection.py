@@ -578,6 +578,8 @@ def build_selection(
         emphasis_policy_version=policy_store_version,
         candidates=candidates,
         selected_fact_ids=sorted(selected_ids),
+        pinned_fact_ids=sorted(pinned_fact_ids),
+        excluded_fact_ids=sorted(excluded_fact_ids),
         required_tag_coverage=_coverage(profile.required_tags, scored, selected_ids),
         preferred_tag_coverage=_coverage(policy.preferred_tags, scored, selected_ids),
     )

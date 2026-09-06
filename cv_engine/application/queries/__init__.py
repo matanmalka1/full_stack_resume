@@ -10,6 +10,7 @@ from .mappers import (
     draft_facts_view,
     draft_outline_view,
     recruitment_timeline_view,
+    selection_plan_detail_view,
     snapshot_view,
 )
 from .narrowing import (
@@ -44,6 +45,8 @@ from .views import (
     ReasonView,
     RecruitmentStatus,
     RecruitmentTimelineItemView,
+    SelectionPlanCandidateView,
+    SelectionPlanDetailView,
     ValidationRunView,
     WarningView,
     WorkingDraftFactsView,
@@ -79,6 +82,8 @@ __all__ = (
     "ReasonView",
     "RecruitmentStatus",
     "RecruitmentTimelineItemView",
+    "SelectionPlanCandidateView",
+    "SelectionPlanDetailView",
     "ValidationRunView",
     "WarningView",
     "WorkingDraftFactsView",
@@ -95,5 +100,6 @@ __all__ = (
     "draft_outline_view",
     "narrow_application_list",
     "recruitment_timeline_view",
+    "selection_plan_detail_view",
     "snapshot_view",
 )

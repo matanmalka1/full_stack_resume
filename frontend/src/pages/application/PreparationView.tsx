@@ -8,6 +8,7 @@ import { ApplicationActions } from "./ApplicationActions";
 import { AutomaticDraftNotice } from "./AutomaticDraftNotice";
 import { PreparationAlerts } from "./PreparationAlerts";
 import { ReviewDecisionPanel, resolvedByDecisionForm } from "./ReviewDecisionPanel";
+import { SelectionPlanPanel } from "./SelectionPlanPanel";
 import { AnalysisPanel } from "./analysis/AnalysisPanel";
 import { GAP_REASON } from "./ReviewDecisionForm";
 
@@ -111,6 +112,7 @@ export const PreparationView = ({
               detail={detail}
               onAcceptancesApplied={clearAcceptances}
             />
+            <SelectionPlanPanel detail={detail} onQueued={onQueued} />
             <ApplicationActions detail={detail} onQueued={onQueued} />
           </div>
         </section>

@@ -49,7 +49,9 @@ export const PreparationAlerts = ({ detail }: { detail: ApplicationDetail }) => 
           fallbackTitle="נדרשת החלטה לפני המשך"
           key={reason.code}
           reason={reason}
-          resolvedHere={resolvedByDecisionForm(reason)}
+          resolvedHere={
+            resolvedByDecisionForm(reason) || reason.allowed_resolution_actions.includes("create_selection_plan")
+          }
           tone="blocker"
         />
       ))}

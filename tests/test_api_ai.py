@@ -13,6 +13,7 @@ which is what makes a `202` mean anything.
 
 from __future__ import annotations
 
+import pytest
 from api_harness import MUTATION_HEADERS
 from fake_provider import FakeOpenAI
 from helpers import ACCOUNT_MANAGER_JOB
@@ -129,15 +130,22 @@ def test_ai_selection_plan_mode_is_202_with_a_location_on_the_same_route(
     assert any(output["output_type"] == "selection_plan" for output in finished["outputs"])
 
 
-def test_ai_selection_plan_mode_refuses_a_user_overlay_in_the_same_request(
-    ai_api_worker,
+@pytest.mark.parametrize(
+    "user_decision",
+    [
+        {"pinned_fact_ids": ["a.b"]},
+        {"acceptance_reason": "I accept this gap"},
+    ],
+)
+def test_ai_selection_plan_mode_refuses_a_user_decision_in_the_same_request(
+    ai_api_worker, user_decision: dict
 ) -> None:
     application_id = _application(ai_api_worker.services, "Both Answers Co")
     sources = _analyze(ai_api_worker, application_id)
     response = _post(
         ai_api_worker,
         f"/analyses/{sources['job_analysis']}/selection-plans",
-        {"application_id": application_id, "mode": "ai", "pinned_fact_ids": ["a.b"]},
+        {"application_id": application_id, "mode": "ai", **user_decision},
     )
     assert response.status_code == 412, response.text
 

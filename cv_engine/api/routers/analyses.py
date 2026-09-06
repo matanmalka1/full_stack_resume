@@ -57,9 +57,13 @@ def apply_analysis_decisions(
 
 @router.post(
     "/{analysis_id}/selection-plans",
-    response_model=CreateSelectionPlanResponse | OperationResponse,
+    response_model=None,
     status_code=status.HTTP_201_CREATED,
     summary="Create a replacement SelectionPlan for an analysis",
+    responses={
+        201: {"model": CreateSelectionPlanResponse, "description": "SelectionPlan created."},
+        202: {"model": OperationResponse, "description": "AI proposal Operation accepted."},
+    },
 )
 def create_selection_plan(
     analysis_id: str,
@@ -101,13 +105,31 @@ def create_selection_plan(
                 "accepting a gap is a user decision; submit it through the "
                 "deterministic mode instead"
             )
+        if overlay["acceptance_reason"] is not None:
+            raise PreconditionFailed(
+                "acceptance_reason accompanies a user's gap decision and is not accepted in AI mode"
+            )
         queued = services.operations.submit_selection_plan_proposal(
-            ProposeSelectionPlanCommand(job_analysis_id=analysis_id, **body),
+            ProposeSelectionPlanCommand(
+                job_analysis_id=analysis_id,
+                expected_selection_plan_id=overlay["expected_selection_plan_id"],
+                enforce_expected_selection_plan=(
+                    "expected_selection_plan_id" in request.model_fields_set
+                ),
+                **body,
+            ),
             idempotency_key=idempotency_key or new_id(),
             analysis_service=services.analysis,
         )
         return accepted_operation(response, queued)
     result = services.analysis.create_selection_plan(
-        CreateSelectionPlanCommand(job_analysis_id=analysis_id, **overlay, **body)
+        CreateSelectionPlanCommand(
+            job_analysis_id=analysis_id,
+            enforce_expected_selection_plan=(
+                "expected_selection_plan_id" in request.model_fields_set
+            ),
+            **overlay,
+            **body,
+        )
     )
     return CreateSelectionPlanResponse.model_validate(result.model_dump(mode="json"))

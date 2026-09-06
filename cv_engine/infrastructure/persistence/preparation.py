@@ -399,6 +399,7 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         track_emphasis_dependencies: dict[str, str],
         new_acceptances: list[AcceptedGap] | None = None,
         expected_selection_plan_id: str | None = None,
+        enforce_expected_selection_plan: bool = False,
         plan_id: str | None = None,
         created_at: str | None = None,
     ) -> SelectionPlan:
@@ -411,11 +412,32 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
             # dropping an acceptance with no error and no trace: the version
             # number is allocated here, so the unique constraint never fires.
             self._lock_application(connection, application_id)
+            active_snapshot_id = connection.execute(
+                select(job_snapshots.c.id)
+                .where(job_snapshots.c.application_id == application_id)
+                .order_by(job_snapshots.c.version_number.desc())
+                .limit(1)
+            ).scalar_one_or_none()
+            active_analysis_id = connection.execute(
+                select(job_analyses.c.id)
+                .where(
+                    job_analyses.c.application_id == application_id,
+                    job_analyses.c.job_snapshot_id == active_snapshot_id,
+                )
+                .order_by(job_analyses.c.version_number.desc())
+                .limit(1)
+            ).scalar_one_or_none()
+            if active_analysis_id != job_analysis_id:
+                raise StateConflict(
+                    "the active JobAnalysis moved before the SelectionPlan was created: "
+                    f"expected {job_analysis_id}, found {active_analysis_id or 'none'}"
+                )
             carried = self._standing_acceptances(
                 connection,
                 application_id,
                 job_analysis_id,
                 expected_selection_plan_id,
+                enforce_expected_selection_plan,
             )
             accepted_gaps = merge_accepted_gaps(carried, list(new_acceptances or []))
             existing = (
@@ -503,6 +525,8 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         connection: Connection,
         application_id: str,
         expected_selection_plan_id: str | None,
+        enforce_expected_selection_plan: bool = False,
+        compatible_job_analysis_id: str | None = None,
     ) -> SelectionPlan | None:
         """The active plan, refusing if it moved since the decision was made.
 
@@ -510,7 +534,8 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         user was looking at when they decided. If the active plan has moved on,
         the command is refused rather than quietly rebased onto something the
         user never saw. One implementation, because both plan writers make the
-        same promise about it.
+        same promise about it. A replacement plan compares only with a plan for
+        its analysis; an older analysis's historical plan is not active for it.
         """
         row = (
             connection.execute(
@@ -523,12 +548,23 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
             .one_or_none()
         )
         latest = self._selection_plan_record(row) if row is not None else None
-        if expected_selection_plan_id is not None and (
-            latest is None or latest.id != expected_selection_plan_id
+        guarded_latest = (
+            latest
+            if latest is not None
+            and (
+                compatible_job_analysis_id is None
+                or latest.job_analysis_id == compatible_job_analysis_id
+            )
+            else None
+        )
+        if (enforce_expected_selection_plan or expected_selection_plan_id is not None) and (
+            (guarded_latest.id if guarded_latest is not None else None)
+            != expected_selection_plan_id
         ):
             raise StateConflict(
                 "the active SelectionPlan moved since this decision was made: expected "
-                f"{expected_selection_plan_id}, found {latest.id if latest else 'none'}"
+                f"{expected_selection_plan_id}, found "
+                f"{guarded_latest.id if guarded_latest else 'none'}"
             )
         return latest
 
@@ -538,6 +574,7 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         application_id: str,
         job_analysis_id: str,
         expected_selection_plan_id: str | None,
+        enforce_expected_selection_plan: bool = False,
     ) -> list[AcceptedGap]:
         """The acceptances the next plan version inherits, read under the write.
 
@@ -546,7 +583,13 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         onto a plan for a different analysis would report a decision the user
         never made.
         """
-        latest = self._active_plan(connection, application_id, expected_selection_plan_id)
+        latest = self._active_plan(
+            connection,
+            application_id,
+            expected_selection_plan_id,
+            enforce_expected_selection_plan,
+            compatible_job_analysis_id=job_analysis_id,
+        )
         if latest is None or latest.job_analysis_id != job_analysis_id:
             return []
         return list(latest.accepted_gaps)

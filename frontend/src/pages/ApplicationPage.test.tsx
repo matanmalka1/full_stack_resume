@@ -167,7 +167,10 @@ afterEach(() => {
 
 describe("ApplicationPage", () => {
   it("shows the complete hierarchy above CV preparation", async () => {
-    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(jsonResponse(detail()))));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(jsonResponse(detail()))),
+    );
 
     renderPage();
 

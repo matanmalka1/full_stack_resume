@@ -394,6 +394,7 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             },
             new_acceptances=self._new_acceptances(command, analysis),
             expected_selection_plan_id=command.expected_selection_plan_id,
+            enforce_expected_selection_plan=command.enforce_expected_selection_plan,
         )
         return SelectionPlanResult(
             application_id=command.application_id,
@@ -535,8 +536,11 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                 pinned_fact_ids=list(proposal.pinned_fact_ids),
                 excluded_fact_ids=list(proposal.excluded_fact_ids),
                 expected_candidate_context_hash=command.expected_candidate_context_hash,
+                expected_facts_version=command.expected_facts_version,
                 expected_profile_version=command.expected_profile_version,
                 expected_selection_policy_version=command.expected_selection_policy_version,
+                expected_selection_plan_id=command.expected_selection_plan_id,
+                enforce_expected_selection_plan=command.enforce_expected_selection_plan,
             ),
             proposal=proposal,
             evidence=evidence,
@@ -597,6 +601,7 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                 command.expected_candidate_context_hash,
                 knowledge.candidate.version_hash,
             ),
+            ("Facts store", command.expected_facts_version, knowledge.facts.version),
             ("Profile store", command.expected_profile_version, knowledge.profiles.version),
             (
                 "selection policy",

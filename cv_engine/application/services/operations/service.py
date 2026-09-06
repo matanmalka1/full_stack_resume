@@ -254,6 +254,29 @@ class OperationService(ServiceBase[OperationRepository]):
                 f"job analysis {command.job_analysis_id} does not belong to application "
                 f"{command.application_id}"
             )
+        # A caller that omitted an expectation gets the current compatible pointer frozen
+        # here. An HTTP client that stated one - including explicit `null` for no plan -
+        # keeps exactly that expectation. Deferring a mismatch to the Operation's source
+        # check preserves idempotent replay: the same key and payload can still return its
+        # original terminal Operation after that Operation itself changed the active plan.
+        expected_plan_id = command.expected_selection_plan_id
+        if not command.enforce_expected_selection_plan:
+            try:
+                latest_plan = preparation.latest_selection_plan(command.application_id)
+            except UnknownRecord:
+                latest_plan = None
+            expected_plan_id = (
+                latest_plan.id
+                if latest_plan is not None
+                and latest_plan.job_analysis_id == command.job_analysis_id
+                else None
+            )
+        command = command.model_copy(
+            update={
+                "expected_selection_plan_id": expected_plan_id,
+                "enforce_expected_selection_plan": True,
+            }
+        )
         request = CreateOperation(
             application_id=command.application_id,
             operation_type=OperationType.PROPOSE_SELECTION_PLAN,

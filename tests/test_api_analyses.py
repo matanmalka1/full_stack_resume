@@ -316,13 +316,42 @@ def test_the_deterministic_plan_endpoint_returns_the_plan_itself(api_worker) -> 
         candidate["fact_id"]: candidate["outcome"]
         for candidate in body["plan"]["plan"]["candidates"]
     }[pinned] == "pinned"
+    detail = api_worker.client.get(f"{API_PREFIX}/selection-plans/{body['selection_plan_id']}")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["pinned_fact_ids"] == [pinned]
+    assert detail.json()["excluded_fact_ids"] == []
     assert (
         _state(api_worker, application_id)["active_selection_plan_id"]
         == (body["selection_plan_id"])
     )
 
 
-def test_a_plan_built_against_knowledge_that_has_moved_is_refused(api_worker) -> None:
+def test_selection_plan_detail_returns_readable_candidate_accounting(api_worker) -> None:
+    application_id = _application(api_worker.services, "Selection Detail Co")
+    outputs = _outputs(_analyze(api_worker, application_id))
+
+    response = api_worker.client.get(f"{API_PREFIX}/selection-plans/{outputs['selection_plan']}")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["id"] == outputs["selection_plan"]
+    assert body["job_analysis_id"] == outputs["job_analysis"]
+    assert body["candidates"]
+    assert all(candidate["text"] for candidate in body["candidates"])
+    assert any(candidate["user_selectable"] for candidate in body["candidates"])
+    assert any(not candidate["user_selectable"] for candidate in body["candidates"])
+
+
+@pytest.mark.parametrize(
+    ("expected_field", "expected_source"),
+    [
+        ("expected_facts_version", "Facts store"),
+        ("expected_profile_version", "Profile store"),
+    ],
+)
+def test_a_plan_built_against_knowledge_that_has_moved_is_refused(
+    api_worker, expected_field: str, expected_source: str
+) -> None:
     """The optimistic check: the candidate accounting the user decided against
     is no longer the one this plan would contain."""
     application_id = _application(api_worker.services, "Moved Knowledge Co")
@@ -332,13 +361,32 @@ def test_a_plan_built_against_knowledge_that_has_moved_is_refused(api_worker) ->
         f"{API_PREFIX}/analyses/{analysis_id}/selection-plans",
         json={
             "application_id": application_id,
-            "expected_profile_version": "a-version-that-never-existed",
+            expected_field: "a-version-that-never-existed",
         },
         headers=MUTATION_HEADERS,
     )
 
     assert response.status_code == 412, response.text
-    assert "Profile store" in response.json()["detail"]
+    assert expected_source in response.json()["detail"]
+
+
+def test_a_selection_plan_cannot_make_a_historical_analysis_active_by_accident(
+    api_worker,
+) -> None:
+    application_id = _application(api_worker.services, "Historical Analysis Co")
+    original = _outputs(_analyze(api_worker, application_id))
+    replacement = _outputs(_analyze(api_worker, application_id))
+
+    response = api_worker.client.post(
+        f"{API_PREFIX}/analyses/{original['job_analysis']}/selection-plans",
+        json={"application_id": application_id},
+        headers=MUTATION_HEADERS,
+    )
+
+    assert response.status_code == 409, response.text
+    state = _state(api_worker, application_id)
+    assert state["active_analysis_id"] == replacement["job_analysis"]
+    assert state["active_selection_plan_id"] == replacement["selection_plan"]
 
 
 def test_an_overlay_the_engine_cannot_honour_is_refused_rather_than_trimmed(api_worker) -> None:

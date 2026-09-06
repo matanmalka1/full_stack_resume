@@ -127,8 +127,14 @@ class CreateSelectionPlanCommand(SelectionOverlay):
     #: with no error at all.
     expected_selection_plan_id: str | None = None
     expected_candidate_context_hash: str | None = None
+    expected_facts_version: str | None = None
     expected_profile_version: str | None = None
     expected_selection_policy_version: str | None = None
+    #: Internal optimistic guard used by asynchronous selection proposals. Unlike the
+    #: public optional ID, this also distinguishes "there was no active plan" from "the
+    #: caller did not state an expectation", so a plan created while AI is running cannot
+    #: be silently replaced at activation.
+    enforce_expected_selection_plan: bool = False
 
 
 class ApplyAnalysisDecisionsCommand(SelectionOverlay):
@@ -176,8 +182,11 @@ class ProposeSelectionPlanCommand(SelectionOverlay):
     application_id: str
     job_analysis_id: str
     expected_candidate_context_hash: str | None = None
+    expected_facts_version: str | None = None
     expected_profile_version: str | None = None
     expected_selection_policy_version: str | None = None
+    expected_selection_plan_id: str | None = None
+    enforce_expected_selection_plan: bool = False
     model: str | None = None
     reasoning_effort: str | None = None
 

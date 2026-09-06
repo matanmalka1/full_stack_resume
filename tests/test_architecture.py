@@ -450,23 +450,30 @@ def test_validation_report_has_one_in_package_construction_authority() -> None:
     offenders = [
         f"{path.relative_to(ENGINE)}:{line} constructs ValidationReport directly"
         for path in sorted(ENGINE.rglob("*.py"))
-        if path != ENGINE / "domain/models.py"
         for line in _direct_validation_report_calls(path)
     ]
 
     assert not offenders, offenders
-    models_tree = ast.parse((ENGINE / "domain/models.py").read_text(encoding="utf-8"))
-    report_class = next(
-        node
-        for node in models_tree.body
-        if isinstance(node, ast.ClassDef) and node.name == "ValidationReport"
-    )
-    factory = next(
+    definitions: list[tuple[Path, ast.ClassDef]] = []
+    for path in sorted(ENGINE.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        definitions.extend(
+            (path, node)
+            for node in tree.body
+            if isinstance(node, ast.ClassDef) and node.name == "ValidationReport"
+        )
+    assert len(definitions) == 1, [
+        str(path.relative_to(ENGINE)) for path, _definition in definitions
+    ]
+    _report_path, report_class = definitions[0]
+    factories = [
         node
         for node in report_class.body
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
         and node.name == "from_findings"
-    )
+    ]
+    assert len(factories) == 1, "ValidationReport must define one from_findings factory"
+    factory = factories[0]
     assert any(
         isinstance(decorator, ast.Name) and decorator.id == "classmethod"
         for decorator in factory.decorator_list

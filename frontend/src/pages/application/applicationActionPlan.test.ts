@@ -134,6 +134,27 @@ describe("the way out of a stale draft (§14)", () => {
 });
 
 describe("recommended action destinations", () => {
+  it("handles fact selection on the preparation screen even when no plan exists yet", () => {
+    const plan = applicationActionPlan(
+      staleDetail({
+        preparation_state: "needs_review",
+        working_draft_state: "none",
+        stale_reasons: [],
+        active_selection_plan_id: null,
+        active_working_draft_id: null,
+        available_actions: ["create_selection_plan"],
+        recommended_action: "create_selection_plan",
+      }),
+    );
+
+    expect(plan.createSelectionPlan).toEqual({
+      analysisId: "analysis-1",
+      emphasized: true,
+      selectionPlanId: null,
+    });
+    expect(plan.unbuiltRecommendation).toBeNull();
+  });
+
   it("routes rendering back to the editor that recovers the exact approved revision", () => {
     const plan = applicationActionPlan(
       staleDetail({

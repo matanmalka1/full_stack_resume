@@ -448,6 +448,15 @@ def test_the_committed_openapi_schema_matches_the_application() -> None:
         "code",
         "detail",
     }
+    selection_responses = schema["paths"][f"{API_PREFIX}/analyses/{{analysis_id}}/selection-plans"][
+        "post"
+    ]["responses"]
+    assert selection_responses["201"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/CreateSelectionPlanResponse"
+    }
+    assert selection_responses["202"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/OperationResponse"
+    }
     assert OUTPUT.is_file(), (
         "openapi/openapi.json is missing; run `python openapi/generate_openapi.py`"
     )

@@ -7,8 +7,10 @@ from typing import Any
 
 from ...domain.contracts.drafts import DraftDocument
 from ...domain.contracts.records import ApprovedRevision
+from ...domain.contracts.selection import SelectionPlan
 from ...domain.drafts import draft_claims
 from ...domain.facts import FactStore
+from ...domain.selection import ROLE_BLOCK_TAG, STRUCTURAL_STYLES
 from .narrowing import application_is_closed
 from .views import (
     ApplicationListItemView,
@@ -24,6 +26,8 @@ from .views import (
     JobAnalysisView,
     JobSnapshotView,
     RecruitmentTimelineItemView,
+    SelectionPlanCandidateView,
+    SelectionPlanDetailView,
     WorkingDraftFactsView,
 )
 
@@ -102,6 +106,45 @@ def draft_facts_view(
             )
             for fact_id in sorted(set(linked) | set(candidates))
         ],
+    )
+
+
+def selection_plan_detail_view(
+    plan: SelectionPlan,
+    facts: FactStore,
+    language: str,
+) -> SelectionPlanDetailView:
+    """Pair the frozen ranking with readable current canonical fact renderings."""
+
+    candidates: list[SelectionPlanCandidateView] = []
+    for candidate in plan.plan.candidates:
+        try:
+            fact = facts.get(candidate.fact_id, canonical_only=True)
+            text = facts.rendering(candidate.fact_id, language)
+            user_selectable = (
+                fact.resume_style not in STRUCTURAL_STYLES and ROLE_BLOCK_TAG not in fact.tags
+            )
+        except (KeyError, ValueError):
+            text = None
+            user_selectable = False
+        candidates.append(
+            SelectionPlanCandidateView(
+                fact_id=candidate.fact_id,
+                text=text,
+                section=candidate.section,
+                outcome=candidate.outcome,
+                reason=candidate.reason,
+                user_selectable=user_selectable,
+            )
+        )
+
+    return SelectionPlanDetailView(
+        **plan.model_dump(mode="json"),
+        language=language,
+        facts_version=facts.version,
+        pinned_fact_ids=list(plan.plan.pinned_fact_ids),
+        excluded_fact_ids=list(plan.plan.excluded_fact_ids),
+        candidates=candidates,
     )
 
 

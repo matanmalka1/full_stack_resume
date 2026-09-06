@@ -645,6 +645,7 @@ def test_a_pinned_fact_survives_the_budget_that_had_omitted_it(
 
     outcomes = {candidate.fact_id: candidate for candidate in after.candidates}
     assert outcomes[omitted.fact_id].outcome == "pinned"
+    assert after.pinned_fact_ids == [omitted.fact_id]
     assert omitted.fact_id in after.selected_fact_ids
     assert omitted.fact_id in selected["Core Skills"]
     # The budget did not grow to accommodate it: something it outranked left.
@@ -685,6 +686,7 @@ def test_an_excluded_fact_leaves_the_document_and_the_manifest_says_who_removed_
     assert outcomes[chosen.fact_id].outcome == "omitted"
     assert outcomes[chosen.fact_id].reason == "excluded_by_user"
     assert chosen.fact_id not in after.selected_fact_ids
+    assert after.excluded_fact_ids == [chosen.fact_id]
     assert chosen.fact_id not in selected["Core Skills"]
     # Still accounted for. Dropping it from the manifest would leave no record
     # that the fact was ever a candidate.

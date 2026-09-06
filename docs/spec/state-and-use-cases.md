@@ -433,12 +433,20 @@ another snapshot, or changed Knowledge - starts without it and blocks again.
 The deterministic form is synchronous and returns the immutable plan directly. It
 receives an explicit analysis ID, candidate context, selected/excluded/pinned facts,
 accepted gaps, and policy versions, validates Profile/Track/Emphasis and allowed-fact
-constraints, then creates an immutable plan and frozen candidate context.
+constraints, verifies under the Application lock that the named analysis is still active,
+then creates an immutable plan and frozen candidate context.
 
 When AI `propose_selection_plan` mode is requested, the command creates an asynchronous,
 idempotent Operation. The provider output is only a Proposal; activation repeats the
 same deterministic validations and optimistic source checks before committing the new
 plan. No provider call occurs inside a synchronous HTTP request.
+
+Before a WorkingDraft exists, `create_selection_plan` remains available for an active
+analysis even when its initial deterministic plan already exists. This is the explicit
+entry to reviewing/replacing that plan or requesting the optional AI proposal;
+`create_draft` remains the recommendation when no review decision is outstanding. Once
+a WorkingDraft exists, fact-selection changes use `apply_selection_change` so plan and
+draft move atomically.
 
 ## 14. Draft commands
 
@@ -719,6 +727,7 @@ GET    /api/v1/applications/{id}/decision
 POST   /api/v1/applications/{id}/close
 POST   /api/v1/analyses/{id}/apply-decisions
 POST   /api/v1/analyses/{id}/selection-plans
+GET    /api/v1/selection-plans/{id}
 POST   /api/v1/applications/{id}/working-draft/generate
 POST   /api/v1/applications/{id}/working-draft/replace
 GET    /api/v1/working-drafts/{id}

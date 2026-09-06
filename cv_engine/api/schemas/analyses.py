@@ -25,6 +25,7 @@ from typing import Any, Literal
 from pydantic import Field
 
 from ...domain.contracts.analysis import Language
+from ...domain.contracts.selection import OmissionReason, SelectionOutcome
 from ...domain.contracts.taxonomy import (
     Emphasis,
     ProfileName,
@@ -101,6 +102,7 @@ class CreateSelectionPlanRequest(SelectionOverlayRequest):
     application_id: str
     mode: Literal["deterministic", "ai"] = "deterministic"
     expected_candidate_context_hash: str | None = None
+    expected_facts_version: str | None = None
     expected_profile_version: str | None = None
     expected_selection_policy_version: str | None = None
 
@@ -134,6 +136,23 @@ class SelectionPlanResponse(HttpSchema):
     track_emphasis_dependencies: dict[str, str]
     accepted_gaps: list[dict[str, Any]] = []
     created_at: str
+
+
+class SelectionPlanCandidateResponse(HttpSchema):
+    fact_id: str
+    text: str | None = None
+    section: str
+    outcome: SelectionOutcome
+    reason: OmissionReason | None = None
+    user_selectable: bool
+
+
+class SelectionPlanDetailResponse(SelectionPlanResponse):
+    language: str
+    facts_version: str
+    pinned_fact_ids: list[str]
+    excluded_fact_ids: list[str]
+    candidates: list[SelectionPlanCandidateResponse]
 
 
 class CreateSelectionPlanResponse(HttpSchema):

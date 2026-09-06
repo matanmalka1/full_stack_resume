@@ -445,6 +445,12 @@ def derive_actions(
     available: set[str] = {"analyze"}
     for reason in review:
         available.update(reason.allowed_resolution_actions)
+    # Before a draft exists, fact selection remains an explicit preparation choice: the
+    # current deterministic plan may be reviewed/replaced or an AI proposal may create a
+    # new immutable version. Once editing starts, selection changes belong to the draft's
+    # atomic `apply_selection_change` path instead.
+    if context.active_analysis is not None and draft is None:
+        available.add("create_selection_plan")
     if (
         context.active_analysis is not None
         and context.active_selection_plan is not None

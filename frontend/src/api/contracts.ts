@@ -70,6 +70,11 @@ export type WorkingDraftState = ApiSchemas["WorkingDraftState"];
 export type Reason = ApiSchemas["ReasonResponse"];
 
 export type CreateAnalysisRequest = ApiSchemas["CreateAnalysisRequest"];
+export type CreateSelectionPlanRequest = ApiSchemas["CreateSelectionPlanRequest"];
+export type CreatedSelectionPlan = ApiSchemas["CreateSelectionPlanResponse"];
+export type SelectionPlan = ApiSchemas["SelectionPlanResponse"];
+export type SelectionPlanDetail = ApiSchemas["SelectionPlanDetailResponse"];
+export type SelectionPlanCandidate = ApiSchemas["SelectionPlanCandidateResponse"];
 export type GenerateWorkingDraftRequest = ApiSchemas["GenerateWorkingDraftRequest"];
 export type WorkingDraftVersionRequest = ApiSchemas["WorkingDraftVersionRequest"];
 /* §14 the two ways out of a stale draft. `keep_previous` on the replacement is the Keep

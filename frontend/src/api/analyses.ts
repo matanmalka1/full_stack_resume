@@ -1,13 +1,20 @@
-import { type ApiPath, apiRequest } from "./client";
+import { queryOptions } from "@tanstack/react-query";
+
+import { type ApiPath, type ApiResponse, apiRequest } from "./client";
 import type {
   AnalysisDecisions,
   ApplicationDetail,
   ApplyAnalysisDecisionsRequest,
+  CreatedSelectionPlan,
+  CreateSelectionPlanRequest,
   Emphasis,
   Language,
   ProfileName,
+  Operation,
+  SelectionPlanDetail,
   Track,
 } from "./contracts";
+import { type QueuedOperation, queuedOperation } from "./operations";
 import {
   type FitLevel,
   emphasisLabels,
@@ -19,10 +26,10 @@ import {
 
 /* What this screen may submit: the four classification decisions, the two acceptances
    recorded on the analysis, and the per-gap acceptance recorded on the SelectionPlan.
-   The fact overlay is deliberately absent: no endpoint exposes the candidate fact pool
-   to the browser, and the backend refuses a submission carrying a fact overlay together
-   with a classification decision. Omitting the fields makes that refusal unreachable
-   from here by construction rather than by a client-side copy of a server rule.
+   The fact overlay is deliberately absent from this classification form. It has its own
+   SelectionPlan query and command: the backend refuses a submission carrying a fact
+   overlay together with a classification decision, so omitting the fields makes that
+   refusal unreachable here by construction rather than by a client-side copy of a rule.
 
    A gap acceptance carries no such restriction and rides along with a classification
    decision in the same commit: it names a requirement rather than a fact, and the server
@@ -41,6 +48,46 @@ export type ClassificationDecisions = Pick<
 
 const applyDecisionsPath = (analysisId: string): ApiPath =>
   `/api/v1/analyses/${encodeURIComponent(analysisId)}/apply-decisions`;
+
+const selectionPlansPath = (analysisId: string): ApiPath =>
+  `/api/v1/analyses/${encodeURIComponent(analysisId)}/selection-plans`;
+
+const selectionPlanPath = (selectionPlanId: string): ApiPath =>
+  `/api/v1/selection-plans/${encodeURIComponent(selectionPlanId)}`;
+
+export const selectionPlanQueryKey = (selectionPlanId: string) => ["selection-plan", selectionPlanId] as const;
+
+export const selectionPlanQueryOptions = (selectionPlanId: string) =>
+  queryOptions({
+    queryKey: selectionPlanQueryKey(selectionPlanId),
+    queryFn: async ({ signal }): Promise<SelectionPlanDetail> => {
+      const response = await apiRequest<SelectionPlanDetail>(selectionPlanPath(selectionPlanId), { signal });
+      return response.data;
+    },
+  });
+
+export type SelectionPlanCreation =
+  { kind: "created"; result: CreatedSelectionPlan } | { kind: "queued"; operation: Operation };
+
+export const createSelectionPlan = async (
+  analysisId: string,
+  request: CreateSelectionPlanRequest,
+  idempotencyKey?: string,
+): Promise<SelectionPlanCreation> => {
+  const response = await apiRequest<CreatedSelectionPlan | Operation>(selectionPlansPath(analysisId), {
+    method: "POST",
+    body: request,
+    ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+  });
+  if (response.status === 201 && request.mode === "deterministic") {
+    return { kind: "created", result: response.data as CreatedSelectionPlan };
+  }
+  if (response.status === 202 && request.mode === "ai") {
+    const queued: QueuedOperation = queuedOperation(response as ApiResponse<Operation>);
+    return { kind: "queued", operation: queued.operation };
+  }
+  throw new Error("SelectionPlan creation returned an unexpected status");
+};
 
 /* The gap acceptance, with the plan id it is only ever valid against. The two travel
    together because the server refuses them apart: an acceptance without

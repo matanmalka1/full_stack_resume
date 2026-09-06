@@ -23,6 +23,7 @@ from helpers import ACCOUNT_MANAGER_JOB
 from cv_engine.application.commands import (
     AnalyzeCommand,
     CreateJobSnapshotCommand,
+    CreateSelectionPlanCommand,
     DraftCommand,
     IngestCommand,
     ProposeSelectionPlanCommand,
@@ -234,6 +235,50 @@ def test_propose_selection_plan_commits_the_proposed_overlay(
     committed = ai_services.repository.selection_plan(plans[0].output_id)
     assert committed.id != analysed.selection_plan_id
     assert set(pinned) <= set(committed.plan.selected_fact_ids)
+
+
+def test_selection_proposal_refuses_to_replace_a_plan_that_moved_while_ai_ran(
+    ai_services, fake_openai: FakeOpenAI, monkeypatch
+) -> None:
+    ingested, analysed = _analyzed(ai_services, "Selection Race Co")
+    original_plan = ai_services.repository.selection_plan(analysed.selection_plan_id)
+    fake_openai.script(
+        "propose_selection_plan",
+        SelectionProposal(pinned_fact_ids=[], excluded_fact_ids=[], rationale="r"),
+    )
+    queued = ai_services.operations.submit_selection_plan_proposal(
+        ProposeSelectionPlanCommand(
+            application_id=ingested.application_id,
+            job_analysis_id=analysed.analysis_id,
+            expected_selection_plan_id=original_plan.id,
+        ),
+        idempotency_key=new_id(),
+        analysis_service=ai_services.analysis,
+    )
+    prepare = ai_services.analysis.prepare_selection_proposal
+    replacement_id: str | None = None
+
+    def prepare_then_replace(command, *, operation_id):
+        nonlocal replacement_id
+        prepared = prepare(command, operation_id=operation_id)
+        replacement = ai_services.analysis.create_selection_plan(
+            CreateSelectionPlanCommand(
+                application_id=ingested.application_id,
+                job_analysis_id=analysed.analysis_id,
+                expected_selection_plan_id=original_plan.id,
+            )
+        )
+        replacement_id = replacement.selection_plan_id
+        return prepared
+
+    monkeypatch.setattr(ai_services.analysis, "prepare_selection_proposal", prepare_then_replace)
+    completed = _run(ai_services, queued)
+
+    assert completed.status.value == "failed"
+    assert completed.failure_code is OperationFailureCode.SOURCE_CHANGED
+    assert (
+        ai_services.repository.latest_selection_plan(ingested.application_id).id == replacement_id
+    )
 
 
 def test_draft_resume_commits_wording_its_facts_support(

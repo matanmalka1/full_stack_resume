@@ -151,7 +151,7 @@ const fillIntake = (jobText = "Job description text") => {
   fireEvent.change(screen.getByLabelText("תפקיד היעד"), {
     target: { value: "Backend Engineer" },
   });
-  fireEvent.change(screen.getByLabelText("טקסט המשרה"), { target: { value: jobText } });
+  fireEvent.change(jobTextArea(), { target: { value: jobText } });
 };
 
 const chooseFile = (file: File) => {
@@ -162,6 +162,8 @@ const chooseFile = (file: File) => {
   Object.defineProperty(input, "files", { configurable: true, value: [file] });
   fireEvent.change(input);
 };
+
+const jobTextArea = () => screen.getByRole("textbox", { name: /^טקסט המשרה/ });
 
 const submitForm = () => {
   fireEvent.click(screen.getByRole("button", { name: "יצירת מועמדות" }));
@@ -175,10 +177,7 @@ describe("NewApplicationPage", () => {
   it("returns to the board the user left, dropping what the board would not have asked", () => {
     renderPage("/?activity=all&stage=approved&limit=9&nonsense=x");
 
-    expect(screen.getByRole("link", { name: "מועמדויות" })).toHaveAttribute(
-      "href",
-      "/?activity=all&stage=approved",
-    );
+    expect(screen.getByRole("link", { name: "מועמדויות" })).toHaveAttribute("href", "/?activity=all&stage=approved");
     expect(screen.getByText("משרה חדשה")).toHaveAttribute("aria-current", "page");
   });
 
@@ -189,7 +188,7 @@ describe("NewApplicationPage", () => {
     chooseFile(new File(["Senior Backend Engineer\nTel Aviv"], "job.txt", { type: "text/plain" }));
 
     await waitFor(() => {
-      expect(screen.getByLabelText("טקסט המשרה")).toHaveValue("Senior Backend Engineer\nTel Aviv");
+      expect(jobTextArea()).toHaveValue("Senior Backend Engineer\nTel Aviv");
     });
     expect(screen.getByRole("status")).toHaveTextContent("job.txt");
     expect(calls).toEqual([]);
@@ -201,7 +200,7 @@ describe("NewApplicationPage", () => {
     chooseFile(new File(["%PDF-1.7"], "job.pdf", { type: "application/pdf" }));
 
     expect(await screen.findByText("ניתן לבחור קובץ טקסט בלבד, עם סיומת txt.")).toBeInTheDocument();
-    expect(screen.getByLabelText("טקסט המשרה")).toHaveValue("");
+    expect(jobTextArea()).toHaveValue("");
   });
 
   it("creates the application and queues its analysis when the precheck finds nothing", async () => {
@@ -399,7 +398,7 @@ describe("NewApplicationPage", () => {
     fillIntake();
     submitForm();
 
-    fireEvent.change(screen.getByLabelText("טקסט המשרה"), {
+    fireEvent.change(jobTextArea(), {
       target: { value: "A completely different posting" },
     });
     answer(jsonResponse({ matches: [match()] }));
@@ -423,12 +422,12 @@ describe("NewApplicationPage", () => {
     fillIntake();
     submitForm();
 
-    fireEvent.change(screen.getByLabelText("טקסט המשרה"), { target: { value: "Second text" } });
+    fireEvent.change(jobTextArea(), { target: { value: "Second text" } });
     answer(jsonResponse({ matches: [match()] }));
 
     expect(await screen.findByText("הקלט השתנה מאז הבדיקה")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("טקסט המשרה"), { target: { value: "Third text" } });
+    fireEvent.change(jobTextArea(), { target: { value: "Third text" } });
 
     await waitFor(() => {
       expect(screen.queryByText("הקלט השתנה מאז הבדיקה")).not.toBeInTheDocument();
@@ -446,7 +445,7 @@ describe("NewApplicationPage", () => {
 
     expect(await screen.findByText("נמצאה מועמדות דומה")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("טקסט המשרה"), {
+    fireEvent.change(jobTextArea(), {
       target: { value: "A different posting" },
     });
 

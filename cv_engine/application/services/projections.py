@@ -26,6 +26,7 @@ from ..queries import (
     ArtifactVersionsView,
     DecisionRecordView,
     DraftPreviewView,
+    SelectionPlanDetailView,
     ValidationRunView,
     WorkingDraftFactsView,
     WorkingDraftView,
@@ -39,6 +40,7 @@ from ..queries import (
     draft_outline_view,
     narrow_application_list,
     recruitment_timeline_view,
+    selection_plan_detail_view,
     snapshot_view,
 )
 from ..ready import qualify_ready_revision
@@ -268,6 +270,23 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
             latest_validation_run_id=exact["id"] if exact else None,
             latest_validation_passed=exact["report"].passed if exact else None,
         )
+
+    def selection_plan(self, selection_plan_id: str) -> SelectionPlanDetailView:
+        """§20: one immutable plan plus every fact candidate the decision ranked."""
+
+        try:
+            plan = self.repo.selection_plan(selection_plan_id)
+            analysis_record = self.repo.get_analysis(plan.job_analysis_id)
+        except UnknownRecord as exc:
+            raise UnknownRecord(f"unknown selection plan: {selection_plan_id}") from exc
+        try:
+            return selection_plan_detail_view(
+                plan,
+                self.fact_store(),
+                analysis_record["analysis"].language,
+            )
+        except (TypeError, ValueError) as exc:
+            raise InfrastructureFailure(f"stored selection plan detail is invalid: {exc}") from exc
 
     def validation_run(self, validation_run_id: str) -> ValidationRunView:
         record = self.repo.validation_run(validation_run_id)

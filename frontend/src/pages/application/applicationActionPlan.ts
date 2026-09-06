@@ -13,6 +13,7 @@ import { actionDestination } from "./actionDestinations";
 export interface ApplicationActionPlan {
   /* `analyze` is offered as re-analysis once an analysis is already in force. */
   analyze: { emphasized: boolean; reanalysis: boolean } | null;
+  createSelectionPlan: { analysisId: string; emphasized: boolean; selectionPlanId: string | null } | null;
   /* The generate command, with the two ids it must carry. */
   createDraft: { analysisId: string; emphasized: boolean; selectionPlanId: string } | null;
   /* §14: generate writes over the one active WorkingDraft. With one in hand, discarding it
@@ -57,6 +58,15 @@ export const applicationActionPlan = (detail: ApplicationDetail): ApplicationAct
 
   const canAnalyze = available("analyze");
   const analyze = canAnalyze ? { emphasized: recommended === "analyze", reanalysis: recommended !== "analyze" } : null;
+
+  const createSelectionPlan =
+    available("create_selection_plan") && analysisId !== null
+      ? {
+          analysisId,
+          emphasized: recommended === "create_selection_plan",
+          selectionPlanId,
+        }
+      : null;
 
   const createDraft =
     available("create_draft") && analysisId !== null && selectionPlanId !== null && !draftWouldReplace
@@ -119,6 +129,7 @@ export const applicationActionPlan = (detail: ApplicationDetail): ApplicationAct
   const handledHere = new Set(
     [
       analyze === null ? null : "analyze",
+      createSelectionPlan === null ? null : "create_selection_plan",
       createDraft === null ? null : "create_draft",
       replaceDraft === null ? null : "replace_working_draft",
       archiveDraft === null ? null : "archive_working_draft",
@@ -139,6 +150,7 @@ export const applicationActionPlan = (detail: ApplicationDetail): ApplicationAct
     analyze,
     archiveDraft,
     createDraft,
+    createSelectionPlan,
     draftWouldReplace,
     replaceDraft,
     draftScreen,

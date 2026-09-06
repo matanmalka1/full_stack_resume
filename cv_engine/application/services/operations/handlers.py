@@ -310,6 +310,7 @@ class SelectionPlanOperationHandler(AITaskHandler):
         return ProposeSelectionPlanCommand.model_validate(operation.payload)
 
     def check_sources(self, operation: PersistedOperation, repository: OperationRepository) -> None:
+        command = self._command(operation)
         sources = operation.sources
         if sources.job_analysis_id is None:
             raise SourceChanged("Selection Operation has no frozen analysis identity.")
@@ -317,16 +318,31 @@ class SelectionPlanOperationHandler(AITaskHandler):
         try:
             analysis = preparation.get_analysis(sources.job_analysis_id)
             active_analysis_id, _ = preparation.latest_analysis(operation.application_id)
+            active_snapshot = preparation.latest_snapshot(operation.application_id)
         except UnknownRecord as exc:
-            raise SourceChanged("The job analysis no longer exists.") from exc
+            raise SourceChanged("The selection plan source no longer exists.") from exc
         if (
             analysis["application_id"] != operation.application_id
             or active_analysis_id != sources.job_analysis_id
+            or active_snapshot["id"] != analysis["job_snapshot_id"]
             or _model_hash(analysis["analysis"]) != sources.dependency_hashes.get("job_analysis")
         ):
             raise SourceChanged("The analysis changed before the plan proposal activated.")
         if sources.knowledge_context_hash != document_knowledge_context_hash(self.service):
             raise SourceChanged("Knowledge changed before the plan proposal activated.")
+        try:
+            latest_plan = preparation.latest_selection_plan(operation.application_id)
+        except UnknownRecord:
+            latest_plan = None
+        active_plan_id = (
+            latest_plan.id
+            if latest_plan is not None and latest_plan.job_analysis_id == sources.job_analysis_id
+            else None
+        )
+        if command.enforce_expected_selection_plan and (
+            active_plan_id != command.expected_selection_plan_id
+        ):
+            raise SourceChanged("The active SelectionPlan changed before the proposal activated.")
 
     def execute(self, operation, cancellation_requested) -> PreparedOperation:
         if cancellation_requested():

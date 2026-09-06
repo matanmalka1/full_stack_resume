@@ -374,6 +374,39 @@ class WorkingDraftFactsView(BoundaryDTO):
     facts: list[DraftFactView]
 
 
+class SelectionPlanCandidateView(BoundaryDTO):
+    """One candidate in an immutable SelectionPlan, with safe display text."""
+
+    fact_id: str
+    text: str | None = None
+    section: str
+    outcome: SelectionOutcome
+    reason: OmissionReason | None = None
+    user_selectable: bool
+
+
+class SelectionPlanDetailView(BoundaryDTO):
+    """§20 SelectionPlan detail and its complete candidate accounting."""
+
+    id: str
+    application_id: str
+    job_analysis_id: str
+    version_number: int
+    plan: dict[str, Any]
+    candidate_context_version: str
+    candidate_context_hash: str
+    profile_version: str
+    selection_policy_version: str
+    track_emphasis_dependencies: dict[str, str]
+    accepted_gaps: list[dict[str, Any]] = []
+    created_at: str
+    language: str
+    facts_version: str
+    pinned_fact_ids: list[str]
+    excluded_fact_ids: list[str]
+    candidates: list[SelectionPlanCandidateView]
+
+
 class DraftPreviewView(BoundaryDTO):
     """The HTML for one exact draft version.
 

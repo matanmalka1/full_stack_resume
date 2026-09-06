@@ -31,14 +31,7 @@ export const SettingsPage = () => {
       }
       description="מדיניות ביצוע, תצוגת הממשק ובדיקות התקינות של מאגר הידע והתוצרים."
       measure="form"
-      navigation={
-        <Breadcrumbs
-          items={[
-            { label: "מועמדויות", to: appRoutes.home },
-            { label: "הגדרות" },
-          ]}
-        />
-      }
+      navigation={<Breadcrumbs items={[{ label: "מועמדויות", to: appRoutes.home }, { label: "הגדרות" }]} />}
       title={
         <span className="inline-flex items-center gap-2">
           <Settings aria-hidden="true" className="size-6 text-cv-accent" />

@@ -72,6 +72,10 @@ class SelectionManifest(StrictModel):
     emphasis_policy_version: str
     candidates: list[SelectionCandidate] = []
     selected_fact_ids: list[str] = []
+    #: The user's overlay, distinct from Profile-owned pins and policy outcomes. Defaults
+    #: preserve manifests written before the Web selection editor existed.
+    pinned_fact_ids: list[str] = []
+    excluded_fact_ids: list[str] = []
     required_tag_coverage: dict[str, list[str]] = {}
     preferred_tag_coverage: dict[str, list[str]] = {}
     superseded_by_manual_edit: bool = False

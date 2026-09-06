@@ -154,6 +154,7 @@ class KnowledgeAuditRepository(
         track_emphasis_dependencies: dict[str, str],
         new_acceptances: list[AcceptedGap] | None = ...,
         expected_selection_plan_id: str | None = ...,
+        enforce_expected_selection_plan: bool = ...,
         plan_id: str | None = ...,
         created_at: str | None = ...,
     ) -> SelectionPlan: ...

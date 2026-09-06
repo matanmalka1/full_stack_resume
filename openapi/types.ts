@@ -869,6 +869,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/selection-plans/{selection_plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one SelectionPlan and its candidate accounting */
+        get: operations["selection_plan_detail_api_v1_selection_plans__selection_plan_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings": {
         parameters: {
             query?: never;
@@ -1983,6 +2000,8 @@ export interface components {
             excluded_fact_ids: string[];
             /** Expected Candidate Context Hash */
             expected_candidate_context_hash?: string | null;
+            /** Expected Facts Version */
+            expected_facts_version?: string | null;
             /** Expected Profile Version */
             expected_profile_version?: string | null;
             /** Expected Selection Plan Id */
@@ -2917,6 +2936,16 @@ export interface components {
             emphasis: components["schemas"]["Emphasis"];
             /** Emphasis Policy Version */
             emphasis_policy_version: string;
+            /**
+             * Excluded Fact Ids
+             * @default []
+             */
+            excluded_fact_ids: string[];
+            /**
+             * Pinned Fact Ids
+             * @default []
+             */
+            pinned_fact_ids: string[];
             /** Policy Version */
             policy_version: string;
             /**
@@ -2967,6 +2996,70 @@ export interface components {
             /** Job Analysis Id */
             job_analysis_id: string;
             plan: components["schemas"]["SelectionManifest"];
+            /** Profile Version */
+            profile_version: string;
+            /** Selection Policy Version */
+            selection_policy_version: string;
+            /** Track Emphasis Dependencies */
+            track_emphasis_dependencies: {
+                [key: string]: string;
+            };
+            /** Version Number */
+            version_number: number;
+        };
+        /** SelectionPlanCandidateResponse */
+        SelectionPlanCandidateResponse: {
+            /** Fact Id */
+            fact_id: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "pinned" | "selected" | "rescued" | "omitted";
+            /** Reason */
+            reason?: ("below_section_budget" | "not_relevant_to_emphasis" | "evicted_by_required_tag_rescue" | "not_in_profile_pool" | "excluded_by_user") | null;
+            /** Section */
+            section: string;
+            /** Text */
+            text?: string | null;
+            /** User Selectable */
+            user_selectable: boolean;
+        };
+        /** SelectionPlanDetailResponse */
+        SelectionPlanDetailResponse: {
+            /**
+             * Accepted Gaps
+             * @default []
+             */
+            accepted_gaps: {
+                [key: string]: unknown;
+            }[];
+            /** Application Id */
+            application_id: string;
+            /** Candidate Context Hash */
+            candidate_context_hash: string;
+            /** Candidate Context Version */
+            candidate_context_version: string;
+            /** Candidates */
+            candidates: components["schemas"]["SelectionPlanCandidateResponse"][];
+            /** Created At */
+            created_at: string;
+            /** Excluded Fact Ids */
+            excluded_fact_ids: string[];
+            /** Facts Version */
+            facts_version: string;
+            /** Id */
+            id: string;
+            /** Job Analysis Id */
+            job_analysis_id: string;
+            /** Language */
+            language: string;
+            /** Pinned Fact Ids */
+            pinned_fact_ids: string[];
+            /** Plan */
+            plan: {
+                [key: string]: unknown;
+            };
             /** Profile Version */
             profile_version: string;
             /** Selection Policy Version */
@@ -3435,13 +3528,22 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description SelectionPlan created. */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CreateSelectionPlanResponse"] | components["schemas"]["OperationResponse"];
+                    "application/json": components["schemas"]["CreateSelectionPlanResponse"];
+                };
+            };
+            /** @description AI proposal Operation accepted. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationResponse"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -4743,6 +4845,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperationResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    selection_plan_detail_api_v1_selection_plans__selection_plan_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                selection_plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SelectionPlanDetailResponse"];
                 };
             };
             /** @description The request did not match the API contract. */

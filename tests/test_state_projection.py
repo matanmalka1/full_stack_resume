@@ -63,6 +63,7 @@ def test_application_projection_follows_the_preparation_lifecycle(services) -> N
     assert detail.active_analysis_id == analysed.analysis_id
     assert detail.active_selection_plan_id == analysed.selection_plan_id
     assert detail.recommended_action == "create_draft"
+    assert "create_selection_plan" in detail.available_actions
 
     drafted = services.drafts.draft(
         DraftCommand(
@@ -77,6 +78,7 @@ def test_application_projection_follows_the_preparation_lifecycle(services) -> N
     assert detail.active_working_draft_id == drafted.working_draft_id
     assert detail.recommended_action == "approve"
     assert "approve" in detail.available_actions
+    assert "create_selection_plan" not in detail.available_actions
 
     approved = approve_active_draft(services, ingested.application_id)
     detail = services.queries.application_detail(ingested.application_id)
@@ -105,6 +107,7 @@ def test_material_ambiguity_is_a_review_reason_and_blocks_drafting(services) -> 
     detail = services.queries.application_detail(ingested.application_id)
     assert detail.preparation_state is PreparationState.NEEDS_REVIEW
     assert "MATERIAL_CLASSIFICATION_AMBIGUITY" in {reason.code for reason in detail.review_reasons}
+    assert "create_selection_plan" in detail.available_actions
     blocked = {item.action: item.reasons for item in detail.blocked_actions}
     assert "MATERIAL_CLASSIFICATION_AMBIGUITY" in blocked["create_draft"]
     assert detail.recommended_action == "apply_analysis_decisions"
@@ -185,6 +188,11 @@ def _analysis_needing(reason: str) -> JobAnalysis:
             "approval_reasons": [reason],
         }
     )
+
+
+def test_a_missing_selection_plan_offers_the_command_that_creates_it(knowledge) -> None:
+    reasons = _reasons_for(knowledge, _analysis_needing("classification-ambiguous"))
+    assert reasons["FACT_SELECTION_UNRESOLVED"] == ["create_selection_plan"]
 
 
 @pytest.mark.parametrize(

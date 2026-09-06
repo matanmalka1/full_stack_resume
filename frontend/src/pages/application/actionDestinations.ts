@@ -15,6 +15,7 @@ const destinations: Record<string, (applicationId: string) => string> = {
      alerts therefore address the preparation screen that owns these controls. */
   analyze: appRoutes.preparation,
   apply_analysis_decisions: appRoutes.preparation,
+  create_selection_plan: appRoutes.preparation,
   create_draft: appRoutes.preparation,
   archive_working_draft: appRoutes.preparation,
   replace_working_draft: appRoutes.preparation,

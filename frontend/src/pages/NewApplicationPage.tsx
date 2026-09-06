@@ -24,9 +24,7 @@ import { paramsFromQuery, queryFromParams } from "./applicationListParams";
 import { DuplicateChoices } from "./new-application/DuplicateChoices";
 import { useApplicationIntake } from "./new-application/useApplicationIntake";
 
-
 const JOB_TEXT_BUDGET_NOTICE_RATIO = 0.8;
-
 
 const examplePlaceholder = (example: string) => `לדוגמה: \u2066${example}\u2069`;
 
@@ -155,7 +153,6 @@ export const NewApplicationPage = () => {
             optional
           >
             {(control) => (
-              
               <IconField icon={Link2}>
                 <TextInput
                   {...control}
@@ -173,7 +170,6 @@ export const NewApplicationPage = () => {
         </FormSection>
 
         <FormSection
-          
           description="הטקסט יישמר בתצלום המשרה בדיוק כפי שהוזן."
           divided={false}
           title={<SectionTitle icon={FileText}>תיאור המשרה</SectionTitle>}
