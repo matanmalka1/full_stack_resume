@@ -13,6 +13,9 @@ Binding on what the product does. Changes by an approved decision.
 
 ## State and process
 
+- [Tailoring behavior change](tailoring-behavior-change.md) — Hebrew discussion draft for
+  development and sales tailoring; proposed behavior, open decisions, and implementation
+  sequence. Not a binding specification or authorization to change runtime behavior.
 - `m5-remaining.md` — M5 closure status and only the work explicitly carried forward.
 - `process/execution-protocol.md` — how work is split across parallel agents.
 
