@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { ApplicationDetail } from "../../api/contracts";
 import { Button } from "../../ui/Button";
 import { Disclosure } from "../../ui/Disclosure";
+import { surfaceClasses } from "../../ui/Surface";
 
 /* The stored posting text, collapsed. One component because two screens need the same
    source under two different conclusions - the snapshot record on Job Detail, and the
@@ -47,17 +48,21 @@ export const JobTextDisclosure = ({ detail, summary }: { detail: ApplicationDeta
       </div>
       {/* Backend-stored source text, in whatever language the posting was written in: it
           picks its own direction, and `whitespace-pre-wrap` keeps the posting's own line
-          breaks rather than reflowing it into one block.
+          breaks rather than reflowing it into one block - the record stays byte-identical
+          to what was captured, only its container is styled.
 
           Capped and scrollable - a full posting is longer than the analysis above it, and
           left unbounded it would push every action on the screen off the fold the moment
-          the section is opened. */}
-      <p
-        className="max-h-96 overflow-y-auto whitespace-pre-wrap rounded-control bg-cv-surface-muted p-3 leading-6 text-cv-text"
+          the section is opened. The card spans the full width like its neighbours; only
+          the text line inside is capped, so a source line does not stretch so wide that
+          its own short, hard-wrapped lines read as empty gaps rather than paragraph
+          breaks - capping the card itself just left a dead gap beside it. */}
+      <blockquote
+        className={surfaceClasses("max-h-96 overflow-y-auto bg-cv-surface-muted py-3 ps-4 pe-3 text-cv-text")}
         dir="auto"
       >
-        {jobText}
-      </p>
+        <p className="max-w-[75ch] text-body leading-7 whitespace-pre-wrap">{jobText}</p>
+      </blockquote>
     </Disclosure>
   );
 };
