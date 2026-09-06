@@ -12,7 +12,7 @@ import type { SummaryItem } from "../../ui/SummaryList";
 export const trackLabels: Record<Track, string> = {
   development: "פיתוח",
   sales: "מכירות",
-  "tech-sales": "מכירות טכניות",
+  "tech-sales": "מכירות טכנולוגיות",
 };
 
 export const profileLabels: Record<ProfileName, string> = {
@@ -24,7 +24,7 @@ export const profileLabels: Record<ProfileName, string> = {
   "account-executive": "סוגר עסקאות",
   "business-development": "פיתוח עסקי",
   "sales-management": "ניהול מכירות",
-  "tech-sales": "מכירות טכניות",
+  "tech-sales": "מכירות טכנולוגיות",
   "pre-sales-solutions-consultant": "יועץ פתרונות טרום־מכירה",
 };
 
