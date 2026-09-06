@@ -30,11 +30,7 @@ export const Breadcrumbs = ({ items }: BreadcrumbsProps) => (
               <ChevronLeft aria-hidden="true" className="mx-1 size-4 shrink-0 text-cv-text-muted" />
             )}
             {current ? (
-              <span
-                aria-current="page"
-                className="max-w-[min(28rem,70vw)] truncate px-1 font-semibold text-cv-text"
-                dir={item.dir}
-              >
+              <span aria-current="page" className="px-1 font-semibold text-cv-text" dir={item.dir}>
                 {item.label}
               </span>
             ) : item.to === undefined ? (
@@ -44,7 +40,7 @@ export const Breadcrumbs = ({ items }: BreadcrumbsProps) => (
             ) : (
               <Link
                 className={cx(
-                  "inline-flex min-h-11 max-w-[min(28rem,70vw)] items-center truncate rounded-control px-1",
+                  "inline-flex min-h-11 items-center rounded-control px-1",
                   "font-semibold text-cv-text-muted transition-colors duration-200 hover:text-cv-text",
                 )}
                 dir={item.dir}
