@@ -129,6 +129,15 @@ const approvalReasonLabels: Record<string, string> = {
 
 export const approvalReasonLabel = (reason: string): string => approvalReasonLabels[reason] ?? reason;
 
+/* Confidence is a 0..1 float in the document and a percentage to a reader.
+
+   The sign is the Hebrew-side one and the whole value is written into the sentence rather
+   than wrapped in an A.3 LTR island. An island is for a Latin run that must not be
+   reordered - an id, a code, a filename. A percentage is a number in a Hebrew sentence,
+   and isolating it pushed the run to the end of the line, so "58%" arrived on screen
+   reading "%58". */
+export const confidenceText = (confidence: number): string => `${Math.round(confidence * 100)}%`;
+
 export const gapSeverityLabels: Record<"hard" | "warning", string> = {
   hard: "פער חוסם",
   warning: "פער לתשומת לב",

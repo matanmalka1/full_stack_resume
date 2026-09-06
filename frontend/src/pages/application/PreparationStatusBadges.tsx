@@ -10,11 +10,14 @@ import {
 } from "./applicationLabels";
 
 export const PreparationStatusBadges = ({
-  className,
+  /* `contents` by default: the badges become direct children of whatever row the caller
+     already lays out, so a call site that has its own flex row does not have to restate
+     its gap here. A caller that owns no such row passes one. */
+  className = "contents",
   detail,
   hideStageImpliedStatus = false,
 }: {
-  className: string;
+  className?: string;
   detail: ApplicationDetail;
   hideStageImpliedStatus?: boolean;
 }) => (

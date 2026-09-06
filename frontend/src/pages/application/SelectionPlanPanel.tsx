@@ -3,23 +3,21 @@ import { useEffect, useMemo, useState } from "react";
 
 import { createSelectionPlan, selectionPlanQueryOptions } from "../../api/analyses";
 import { invalidateApplicationViews } from "../../api/applications";
-import type { ApplicationDetail, CreateSelectionPlanRequest, SelectionPlanCandidate } from "../../api/contracts";
+import type { ApplicationDetail, CreateSelectionPlanRequest } from "../../api/contracts";
 import { isTerminalOperation, operationQueryKey, operationQueryOptions } from "../../api/operations";
 import { aiRegenerationAvailable } from "../../api/settings";
 import { useSettings } from "../../api/useSettings";
 import { ErrorCallout } from "../../app/ErrorCallout";
-import { ActionBar } from "../../ui/ActionBar";
 import { Button } from "../../ui/Button";
-import { Checkbox } from "../../ui/Checkbox";
-import { Disclosure } from "../../ui/Disclosure";
 import { QueryState } from "../../ui/QueryState";
-import { omissionReasonLabels, selectionOutcomeLabels } from "../draft-editor/draftLabels";
+import { surfaceClasses } from "../../ui/Surface";
 import { applicationActionPlan } from "./applicationActionPlan";
+import { FactSelectionList } from "./preparation/FactSelectionList";
+import { PreparationActionBar } from "./preparation/PreparationActionBar";
+import { factTotals } from "./preparation/factGroups";
 
 const sameMembers = (left: readonly string[], right: readonly string[]): boolean =>
   left.length === right.length && left.every((item) => right.includes(item));
-
-const factLabel = (candidate: SelectionPlanCandidate): string => candidate.text ?? "לא ניתן לקרוא את העובדה הזו מהידע.";
 
 export const SelectionPlanPanel = ({
   detail,
@@ -113,6 +111,23 @@ export const SelectionPlanPanel = ({
     if (checked) setPinned((current) => current.filter((id) => id !== factId));
   };
 
+  /* A whole section at once, expressed in the same two overrides a row uses.
+
+     Lifting the reader's own exclusion is enough for a fact the engine had chosen -
+     the plan goes back to selecting it. A fact the engine itself left out needs the pin,
+     or the rebuilt plan would omit it again for the reason it already recorded. The
+     omission reason is what tells the two apart, so neither is over-decided: this never
+     pins a fact that was only excluded by hand. */
+  const includeAll = (factIds: readonly string[]) => {
+    const engineOmitted = new Set(
+      (planQuery.data?.candidates ?? [])
+        .filter((candidate) => factIds.includes(candidate.fact_id) && candidate.reason !== "excluded_by_user")
+        .map((candidate) => candidate.fact_id),
+    );
+    setExcluded((current) => current.filter((id) => !factIds.includes(id)));
+    setPinned((current) => [...new Set([...current, ...[...engineOmitted]])]);
+  };
+
   const deterministicLabel = activePlanId === null ? "יצירת בחירה דטרמיניסטית" : "שמירת בחירת העובדות";
   const deterministicButton = (
     <Button
@@ -137,83 +152,75 @@ export const SelectionPlanPanel = ({
     </Button>
   ) : null;
 
+  const totals = factTotals(planQuery.data?.candidates ?? [], pinned, excluded);
+
   return (
-    <section aria-labelledby="selection-plan-heading" className="flex flex-col gap-4 border-b border-cv-border pb-5">
-      <div>
-        <h2 className="text-body font-semibold text-cv-text" id="selection-plan-heading">
-          בחירת העובדות לקורות החיים
-        </h2>
-        <p className="mt-1 text-support leading-6 text-cv-text-muted">
-          {activePlanId === null
-            ? "לניתוח הפעיל אין תוכנית בחירה. אפשר ליצור את בחירת ברירת המחדל או לבקש מ־AI להציע אחת."
-            : "התוכנית הדטרמיניסטית פעילה. אפשר לקבע או להחריג עובדות לפני יצירת הטיוטה, או לבקש הצעת AI חלופית."}
+    <>
+      <section
+        aria-labelledby="selection-plan-heading"
+        className={surfaceClasses("flex flex-col gap-4 bg-cv-surface p-5")}
+      >
+        <div>
+          <h2 className="text-body font-semibold text-cv-text" id="selection-plan-heading">
+            בחירת העובדות לקורות החיים
+          </h2>
+          <p className="mt-1 text-support leading-6 text-cv-text-muted">
+            {activePlanId === null
+              ? "לניתוח הפעיל אין תוכנית בחירה. אפשר ליצור את בחירת ברירת המחדל או לבקש מ־AI להציע אחת."
+              : "התוכנית הדטרמיניסטית פעילה. אפשר לקבע או להחריג עובדות לפני יצירת הטיוטה, או לבקש הצעת AI חלופית."}
+          </p>
+        </div>
+
+        {activePlanId === null ? null : (
+          <QueryState
+            error={planQuery.error}
+            fallbackDetail="לא ניתן לקרוא את העובדות שהתוכנית שקלה. התוכנית הפעילה לא השתנתה."
+            fallbackTitle="בחירת העובדות לא נטענה"
+            loading={planQuery.data === undefined}
+            loadingLabel="טוען את בחירת העובדות…"
+          >
+            {planQuery.data === undefined ? null : (
+              <FactSelectionList
+                busy={busy}
+                candidates={planQuery.data.candidates}
+                excluded={excluded}
+                onIncludeAll={includeAll}
+                onToggleExcluded={toggleExcluded}
+                onTogglePinned={togglePinned}
+                pinned={pinned}
+              />
+            )}
+          </QueryState>
+        )}
+
+        {mutationError === null ? null : (
+          <ErrorCallout
+            error={mutationError}
+            fallbackDetail="תוכנית הבחירה הפעילה לא השתנתה. אפשר לרענן ולנסות שוב."
+            fallbackTitle="בחירת העובדות לא נשמרה"
+          />
+        )}
+
+        {!aiAvailable && settings !== undefined ? (
+          <p className="text-support text-cv-text-muted">הצעת AI זמינה לאחר הפעלת AI והגדרת ספק במסך ההגדרות.</p>
+        ) : null}
+      </section>
+
+      <PreparationActionBar
+        primary={
+          <>
+            {aiButton}
+            {deterministicButton}
+          </>
+        }
+      >
+        <p className="text-support font-medium text-cv-text-muted">
+          {planQuery.data === undefined
+            ? "בחירת העובדות עדיין נטענת."
+            : `${totals.included} מתוך ${totals.total} עובדות ייכנסו לטיוטה.`}
+          {changed ? " יש שינוי שטרם נשמר." : ""}
         </p>
-      </div>
-
-      {activePlanId === null ? null : (
-        <QueryState
-          error={planQuery.error}
-          fallbackDetail="לא ניתן לקרוא את העובדות שהתוכנית שקלה. התוכנית הפעילה לא השתנתה."
-          fallbackTitle="בחירת העובדות לא נטענה"
-          loading={planQuery.data === undefined}
-          loadingLabel="טוען את בחירת העובדות…"
-        >
-          {planQuery.data === undefined ? null : (
-            <Disclosure summary={`בדיקת ${planQuery.data.candidates.length} העובדות שהתוכנית שקלה`}>
-              <ul className="flex flex-col divide-y divide-cv-border">
-                {planQuery.data.candidates.map((candidate) => (
-                  <li className="flex flex-col gap-2 py-3" key={candidate.fact_id}>
-                    <div>
-                      <p className="text-body text-cv-text" dir="auto">
-                        {factLabel(candidate)}
-                      </p>
-                      <p className="text-support text-cv-text-muted">
-                        {selectionOutcomeLabels[candidate.outcome]}
-                        {candidate.reason == null ? "" : ` · ${omissionReasonLabels[candidate.reason]}`}
-                        {` · ${candidate.section}`}
-                      </p>
-                    </div>
-                    {candidate.user_selectable ? (
-                      <div className="flex flex-wrap gap-2">
-                        <Checkbox
-                          checked={pinned.includes(candidate.fact_id)}
-                          disabled={busy || candidate.text == null}
-                          onChange={(event) => togglePinned(candidate.fact_id, event.target.checked)}
-                        >
-                          קיבוע העובדה
-                        </Checkbox>
-                        <Checkbox
-                          checked={excluded.includes(candidate.fact_id)}
-                          disabled={busy || candidate.text == null}
-                          onChange={(event) => toggleExcluded(candidate.fact_id, event.target.checked)}
-                        >
-                          החרגת העובדה
-                        </Checkbox>
-                      </div>
-                    ) : (
-                      <p className="text-support text-cv-text-muted">רכיב מבני שנשמר לפי כללי המסמך.</p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </Disclosure>
-          )}
-        </QueryState>
-      )}
-
-      {mutationError === null ? null : (
-        <ErrorCallout
-          error={mutationError}
-          fallbackDetail="תוכנית הבחירה הפעילה לא השתנתה. אפשר לרענן ולנסות שוב."
-          fallbackTitle="בחירת העובדות לא נשמרה"
-        />
-      )}
-
-      {!aiAvailable && settings !== undefined ? (
-        <p className="text-support text-cv-text-muted">הצעת AI זמינה לאחר הפעלת AI והגדרת ספק במסך ההגדרות.</p>
-      ) : null}
-
-      <ActionBar align="start" primary={deterministicButton} secondary={aiButton ?? undefined} />
-    </section>
+      </PreparationActionBar>
+    </>
   );
 };

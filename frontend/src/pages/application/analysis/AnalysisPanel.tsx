@@ -6,7 +6,7 @@ import { JobTextDisclosure } from "../JobTextDisclosure";
 import { AnalysisHeader } from "./AnalysisHeader";
 import { ApprovalReasonsSection } from "./ApprovalReasonsSection";
 import { ClassificationSummary } from "./ClassificationSummary";
-import { type GapAcceptance, GapsSection } from "./GapsSection";
+import { GapsSection } from "./GapsSection";
 import { RationaleSection } from "./RationaleSection";
 import { RequirementCoverageSection, RequirementCoverageSummary } from "./RequirementCoverageSection";
 import { RequirementsSection } from "./RequirementsSection";
@@ -33,14 +33,15 @@ import { RequirementsSection } from "./RequirementsSection";
 export const AnalysisPanel = ({
   classification,
   detail,
-  gapAcceptance,
+  showGaps,
 }: {
   classification: Classification;
   detail: ApplicationDetail;
-  /* Passed through untouched. The panel still offers no decision of its own: this is the
-     decision panel's control, placed on the gap it is about because that is where the
-     reader is when they take it. */
-  gapAcceptance: GapAcceptance | null;
+  /* False while the projection is asking for a gap decision. The gaps are then shown
+     with their acceptance controls beside the decision they answer, and drawing them
+     here as well would be the same finding in two places - one of them read-only and
+     one of them a control, which is worse than either alone. */
+  showGaps: boolean;
 }) => (
   <section aria-labelledby="analysis-heading" className={surfaceClasses("p-5")}>
     <AnalysisHeader classification={classification} record={detail.latest_analysis ?? null} />
@@ -57,7 +58,7 @@ export const AnalysisPanel = ({
 
       <ApprovalReasonsSection reasons={classification.approvalReasons} />
 
-      <GapsSection acceptance={gapAcceptance} gaps={classification.gaps} />
+      {showGaps ? <GapsSection acceptance={null} gaps={classification.gaps} /> : null}
 
       <section>
         <Disclosure summary="פרטי הניתוח והמקור">

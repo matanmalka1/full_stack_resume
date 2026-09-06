@@ -116,7 +116,7 @@ afterEach(() => {
 });
 
 describe("the review decision, on the Application screen", () => {
-  it("leads with the local decision and does not repeat it as an alert", async () => {
+  it("opens on the decision and keeps the diagnosis behind its own tab", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(() => Promise.resolve(jsonResponse(detail()))),
@@ -124,11 +124,39 @@ describe("the review decision, on the Application screen", () => {
 
     renderPage();
 
-    const decision = await screen.findByRole("heading", { name: "נדרשת החלטה כדי להמשיך" });
-    const analysis = screen.getByRole("heading", { name: "ניתוח המשרה" });
-    expect(decision.compareDocumentPosition(analysis) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    /* The screen opens on what it needs from the reader. The analysis it is about is
+       still one press away rather than a scroll below every decision card, and the
+       diagnosis is not read as a second thing to act on. */
+    expect(await screen.findByRole("heading", { name: "נדרשת החלטה כדי להמשיך" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /החלטות נדרשות/ })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "פרטי ניתוח ואבחון" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.queryByRole("heading", { name: "ניתוח המשרה" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "פרטי ניתוח ואבחון" }));
+    expect(screen.getByRole("heading", { name: "ניתוח המשרה" })).toBeInTheDocument();
+
     expect(screen.queryByRole("region", { name: "התראות" })).not.toBeInTheDocument();
     expect(screen.getByText(/יש להשלים את כל ההחלטות/)).toBeInTheDocument();
+  });
+
+  /* The verdict the decisions are about is stated before them, not under them: the banner
+     carries the fit and the confidence the analysis recorded, and says how many decisions
+     are open. */
+  it("states the analysis verdict above the decisions it explains", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(jsonResponse(detail()))),
+    );
+
+    renderPage();
+
+    /* The fit sentence is anchored on here because it is now said in exactly one place:
+       it used to stand in the analysis masthead and in the decision panel's preamble as
+       well, three copies of one explanation on one screen. */
+    const banner = await screen.findByText(/התאמה נמוכה מחייבת אישור מפורש/);
+    const decision = screen.getByRole("heading", { name: "נדרשת החלטה כדי להמשיך" });
+    expect(banner.compareDocumentPosition(decision) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(banner).toHaveTextContent("נדרשת החלטה אחת לפני שאפשר להמשיך.");
   });
 
   it("requires every displayed decision before enabling the single commit", async () => {
@@ -138,10 +166,7 @@ describe("the review decision, on the Application screen", () => {
         Promise.resolve(
           jsonResponse(
             detail({
-              review_reasons: [
-                reason("MATERIAL_CLASSIFICATION_AMBIGUITY"),
-                reason("ANALYSIS_INCOMPLETE"),
-              ],
+              review_reasons: [reason("MATERIAL_CLASSIFICATION_AMBIGUITY"), reason("ANALYSIS_INCOMPLETE")],
             }),
           ),
         ),
@@ -154,7 +179,7 @@ describe("the review decision, on the Application screen", () => {
     const save = screen.getByRole("button", { name: "שמירת ההחלטות" });
     fireEvent.change(screen.getByLabelText("מסלול"), { target: { value: "tech-sales" } });
     expect(save).toBeDisabled();
-    fireEvent.click(screen.getByRole("checkbox", { name: /הדרישות לא נקראו/ }));
+    fireEvent.click(screen.getByRole("switch", { name: /הדרישות לא נקראו/ }));
     expect(save).toBeEnabled();
   });
 
@@ -171,7 +196,7 @@ describe("the review decision, on the Application screen", () => {
     renderPage();
 
     expect(await screen.findByRole("checkbox", { name: /5 years of Kubernetes/ })).toBeInTheDocument();
-    expect(screen.queryByRole("checkbox", { name: /ההתאמה הנמוכה/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: /ההתאמה הנמוכה/ })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("מסלול")).not.toBeInTheDocument();
   });
 

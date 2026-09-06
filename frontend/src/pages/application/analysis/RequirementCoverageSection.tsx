@@ -98,8 +98,7 @@ export const RequirementCoverageSection = ({
     return null;
   }
 
-  const factLabel = (factId: string): string =>
-    factMeanings.get(factId) ?? `העובדה ${factId} אינה קיימת במאגר הנוכחי.`;
+  const factLabel = (factId: string): string => factMeanings.get(factId) ?? `העובדה ${factId} אינה קיימת במאגר הנוכחי.`;
 
   return (
     <AnalysisSection title="דרישות המשרה וכיסויין">
@@ -166,7 +165,9 @@ export const RequirementCoverageSection = ({
               <p className="mt-1 text-support text-cv-text-muted" dir="auto">
                 מה חסר:{" "}
                 {requirement.missingComponents
-                  .map((component) => (component.demanded === null ? component.label : `${component.label} (נדרש: ${component.demanded})`))
+                  .map((component) =>
+                    component.demanded === null ? component.label : `${component.label} (נדרש: ${component.demanded})`,
+                  )
                   .join(" · ")}
               </p>
             )}

@@ -2,7 +2,7 @@ import type { ApplicationDetail } from "../../api/contracts";
 import { Callout } from "../../ui/Callout";
 import { Card } from "../../ui/Card";
 import { Disclosure } from "../../ui/Disclosure";
-import { resolvedByDecisionForm } from "./ReviewDecisionPanel";
+import { resolvedByDecisionForm } from "./ReviewDecisionForm";
 import { actionLabel, blockedReasonLabel, warningTitle } from "./applicationLabels";
 import { ReasonCallout } from "./ReasonCallout";
 import { actionIsOnPreparationScreen } from "./actionDestinations";

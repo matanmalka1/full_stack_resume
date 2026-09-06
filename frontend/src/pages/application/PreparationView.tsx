@@ -1,16 +1,25 @@
-import { type ReactNode, useCallback, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
 
-import type { Classification } from "../../api/analyses";
+import { type Classification, selectionPlanQueryOptions } from "../../api/analyses";
 import type { ApplicationDetail } from "../../api/contracts";
-import { Callout } from "../../ui/Callout";
 import { surfaceClasses } from "../../ui/Surface";
 import { ApplicationActions } from "./ApplicationActions";
 import { AutomaticDraftNotice } from "./AutomaticDraftNotice";
 import { PreparationAlerts } from "./PreparationAlerts";
-import { ReviewDecisionPanel, resolvedByDecisionForm } from "./ReviewDecisionPanel";
+import { ReviewDecisionPanel } from "./ReviewDecisionPanel";
 import { SelectionPlanPanel } from "./SelectionPlanPanel";
 import { AnalysisPanel } from "./analysis/AnalysisPanel";
-import { GAP_REASON } from "./ReviewDecisionForm";
+import { GapsSection } from "./analysis/GapsSection";
+import { openDecisionCount, openDecisions, resolvedByDecisionForm } from "./ReviewDecisionForm";
+import { applicationActionPlan } from "./applicationActionPlan";
+import { AnalysisStatusBanner } from "./preparation/AnalysisStatusBanner";
+import {
+  type PreparationTab,
+  type PreparationTabSpec,
+  PreparationTabPanel,
+  PreparationTabs,
+} from "./preparation/PreparationTabs";
 
 export const PreparationView = ({
   classification,
@@ -33,13 +42,15 @@ export const PreparationView = ({
      both, so an Application with three permitted actions and no recommendation got an
      emphasized panel promising guidance the projection had not given. The panel still
      appears - the actions have to live somewhere - it just says which of the two it is. */
+  const open = openDecisions(detail);
+  const decisionCount = openDecisionCount(open);
   const hasRecommendation = detail.review_reasons.some(resolvedByDecisionForm) || detail.recommended_action != null;
   const hasActionSurface = hasRecommendation || detail.available_actions.length > 0;
 
   /* Which hard gaps the reader has marked as knowingly accepted. It lives here because the
-     mark is taken on the gap in the analysis panel and sent from the decision panel below
-     it - two siblings, one decision, so the state belongs to the parent they share rather
-     than being duplicated into each.
+     mark is taken on the gap beside the decision panel and sent from that panel - two
+     siblings, one decision, so the state belongs to the parent they share rather than
+     being duplicated into each.
 
      Cleared on a successful commit, in the same beat the form clears: what was accepted is
      then part of the new SelectionPlan the refreshed projection reports, and leaving the
@@ -52,26 +63,41 @@ export const PreparationView = ({
   }, []);
   const clearAcceptances = useCallback(() => setAcceptedRequirementIds([]), []);
 
-  /* Offered only while the projection is asking for that decision, and only against the
-     plan the acceptance would be recorded on. Anything else - a gap the reader is merely
-     reading, an analysis with no active plan - keeps the section read-only. */
-  const gapDecisionOpen =
-    detail.active_selection_plan_id != null && detail.review_reasons.some((reason) => reason.code === GAP_REASON);
   const acceptableGaps =
     classification === null
       ? []
       : classification.gaps.filter((gap) => gap.severity === "hard" && gap.requirementId !== null);
 
-  const analysisPanel =
-    classification === null ? null : (
-      <AnalysisPanel
-        classification={classification}
-        detail={detail}
-        gapAcceptance={
-          gapDecisionOpen ? { disabled: false, onToggle: toggleAcceptance, selected: acceptedRequirementIds } : null
-        }
-      />
-    );
+  /* The same plan the fact tab reads, asked for by the same key: React Query answers both
+     from one request. It is read here only to count what the tab's badge announces - the
+     panel below still owns every command against it. */
+  const selectionPlanAction = applicationActionPlan(detail).createSelectionPlan;
+  const activePlanId = selectionPlanAction?.selectionPlanId ?? null;
+  const planQuery = useQuery({
+    ...selectionPlanQueryOptions(activePlanId ?? ""),
+    enabled: selectionPlanAction !== null && activePlanId !== null,
+  });
+
+  const tabs = useMemo((): PreparationTabSpec[] => {
+    const factCount = planQuery.data?.candidates.length ?? null;
+
+    return [
+      { badge: decisionCount, id: "decisions", label: "החלטות נדרשות" },
+      ...(selectionPlanAction === null
+        ? []
+        : [{ badge: factCount, id: "facts", label: "עובדות לקורות החיים" } satisfies PreparationTabSpec]),
+      ...(classification === null
+        ? []
+        : [{ badge: null, id: "analysis", label: "פרטי ניתוח ואבחון", secondary: true } satisfies PreparationTabSpec]),
+    ];
+  }, [classification, decisionCount, planQuery.data, selectionPlanAction]);
+
+  const [requestedTab, setRequestedTab] = useState<PreparationTab>("decisions");
+  /* The tabs follow the projection, so one can disappear under the reader - an analysis
+     that becomes superseded takes the diagnostics tab with it. The active tab is therefore
+     derived rather than stored: a tab that is gone falls back to the first that remains
+     instead of leaving the screen with no visible panel. */
+  const activeTab = tabs.some((tab) => tab.id === requestedTab) ? requestedTab : (tabs[0]?.id ?? "decisions");
 
   const actionSurface = hasActionSurface ? (
     <section
@@ -82,50 +108,65 @@ export const PreparationView = ({
           : surfaceClasses("bg-cv-surface p-5")
       }
     >
-      <div className="flex flex-col gap-5">
-        <ReviewDecisionPanel
-          acceptableGapCount={acceptableGaps.length}
-          acceptedRequirementIds={acceptedRequirementIds}
-          detail={detail}
-          onAcceptancesApplied={clearAcceptances}
-        />
-        <SelectionPlanPanel detail={detail} onQueued={onQueued} />
-        <ApplicationActions detail={detail} onQueued={onQueued} />
-      </div>
+      <ApplicationActions detail={detail} onQueued={onQueued} />
     </section>
   ) : null;
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Live work is reported before the alert backdrop, beside the workflow it is
-          changing rather than on a separate screen. */}
+      {/* Live work is reported before everything else, beside the workflow it is changing
+          rather than on a separate screen. */}
       {operationPanel}
 
       <AutomaticDraftNotice detail={detail} />
 
-      <PreparationAlerts detail={detail} />
+      {/* The verdict the whole screen is about, stated once and first. */}
+      <AnalysisStatusBanner
+        classification={classification}
+        decisionCount={decisionCount}
+        onShowDiagnostics={tabs.some((tab) => tab.id === "analysis") ? () => setRequestedTab("analysis") : null}
+        supersededAnalysis={supersededAnalysis}
+      />
 
-      {/* Most review decisions lead: they are the reason this screen needs the reader.
-          A hard-gap decision is the exception because its checkbox sits on the exact gap
-          in the analysis; in that case the evidence remains immediately before submit. */}
-      {gapDecisionOpen ? analysisPanel : actionSurface}
-      {gapDecisionOpen ? null : analysisPanel}
+      <PreparationTabs active={activeTab} onSelect={setRequestedTab} tabs={tabs} />
 
-      {/* A superseded analysis is not shown as if it were the one in force: the reader is
-          told the analysis on record belongs to an older snapshot and that a new one is
-          what the workflow is waiting on. The projection's stale and review reasons carry
-          the action. */}
-      {supersededAnalysis ? (
-        <Callout title="הניתוח שעל המסך אינו הניתוח הפעיל" tone="warning">
-          הניתוח האחרון שנשמר נעשה מול תצלום משרה קודם, ולכן אינו מוצג כאן. ניתוח חדש מול התצלום הפעיל הוא מה שיציג את
-          הסיווג העדכני.
-        </Callout>
-      ) : null}
+      <PreparationTabPanel active={activeTab === "decisions"} tab="decisions">
+        <PreparationAlerts detail={detail} />
 
-      {/* The decision stays directly under the analysis it answers. Together with the
-          projected next action it gets a distinct surface, so the way forward does not
-          read as one more alert in the backdrop above. */}
-      {gapDecisionOpen ? actionSurface : null}
+        {/* A hard-gap decision is taken on the exact gap it is about, so while the
+            projection is asking for one the gaps stand with the decision panel rather than
+            in the diagnostics tab. */}
+        {open.gaps && classification !== null ? (
+          <section aria-label="פערים להכרעה" className={surfaceClasses("bg-cv-surface p-5")}>
+            <GapsSection
+              acceptance={{ disabled: false, onToggle: toggleAcceptance, selected: acceptedRequirementIds }}
+              gaps={classification.gaps}
+            />
+          </section>
+        ) : null}
+
+        <ReviewDecisionPanel
+          acceptableGapCount={acceptableGaps.length}
+          acceptedRequirementIds={acceptedRequirementIds}
+          classification={classification}
+          detail={detail}
+          onAcceptancesApplied={clearAcceptances}
+        />
+
+        {actionSurface}
+      </PreparationTabPanel>
+
+      {selectionPlanAction === null ? null : (
+        <PreparationTabPanel active={activeTab === "facts"} tab="facts">
+          <SelectionPlanPanel detail={detail} onQueued={onQueued} />
+        </PreparationTabPanel>
+      )}
+
+      {classification === null ? null : (
+        <PreparationTabPanel active={activeTab === "analysis"} tab="analysis">
+          <AnalysisPanel classification={classification} detail={detail} showGaps={!open.gaps} />
+        </PreparationTabPanel>
+      )}
     </div>
   );
 };

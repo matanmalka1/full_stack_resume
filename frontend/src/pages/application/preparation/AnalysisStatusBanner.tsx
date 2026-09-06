@@ -1,0 +1,97 @@
+import type { Classification } from "../../../api/analyses";
+import { Button } from "../../../ui/Button";
+import { Callout } from "../../../ui/Callout";
+import type { StatusTone } from "../../../ui/status";
+import { confidenceText, fitDescriptions, fitLabels, fitTones } from "../analysisLabels";
+
+/* The state of the analysis, above everything this screen offers.
+
+   It used to be readable only at the foot of the page, under every decision card: the
+   reader was asked to choose a track and to accept a risk before being told that the
+   requirements had not been read at all and that the confidence behind the classification
+   was zero. The verdict is what those decisions are about, so it is stated first.
+
+   It is the one place the verdict is explained. The same sentence stood in the analysis
+   masthead, in the decision panel's own preamble, and again on the control that accepts
+   it; here it is said once and the full diagnosis is a link away rather than a repeat. */
+const decisionSentence = (count: number): string =>
+  count === 1 ? "נדרשת החלטה אחת לפני שאפשר להמשיך." : `נדרשות ${count} החלטות לפני שאפשר להמשיך.`;
+
+interface BannerContent {
+  body: string;
+  title: string;
+  tone: StatusTone;
+}
+
+const bannerContent = (
+  classification: Classification | null,
+  decisionCount: number,
+  supersededAnalysis: boolean,
+): BannerContent => {
+  if (supersededAnalysis) {
+    return {
+      body: "הניתוח האחרון שנשמר נעשה מול תצלום משרה קודם, ולכן אינו מוצג כאן. ניתוח חדש מול התצלום הפעיל הוא מה שיציג את הסיווג העדכני.",
+      title: "הניתוח שעל המסך אינו הניתוח הפעיל",
+      tone: "warning",
+    };
+  }
+
+  if (classification === null) {
+    return {
+      body: "אין ניתוח פעיל למשרה הזו. ניתוח המשרה הוא מה שקובע את הסיווג, את הפערים ואת העובדות שייכנסו לקורות החיים.",
+      title: "המשרה טרם נותחה",
+      tone: "neutral",
+    };
+  }
+
+  /* Fit and confidence are recorded independently - a classification may carry one
+     without the other - so the headline states whichever exists rather than a sentence
+     that would be wrong when only one is present. */
+  const fitPart = classification.fit === null ? "הניתוח הושלם" : fitLabels[classification.fit];
+  const confidencePart =
+    classification.confidence === null ? null : `רמת ביטחון ${confidenceText(classification.confidence)}`;
+  const explanation =
+    classification.fit === null
+      ? "הניתוח נשמר ללא דירוג התאמה. פרטי האבחון המלאים מראים מה כן נקרא מהמשרה."
+      : fitDescriptions[classification.fit];
+
+  return {
+    body: decisionCount === 0 ? explanation : `${explanation} ${decisionSentence(decisionCount)}`,
+    title: confidencePart === null ? fitPart : `${fitPart} · ${confidencePart}`,
+    /* A blocking decision outranks the fit's own tone: the screen is stopped, and that is
+       what the banner is reporting. With nothing open, the tone is the verdict's. */
+    tone: decisionCount > 0 ? "blocker" : classification.fit === null ? "neutral" : fitTones[classification.fit],
+  };
+};
+
+export const AnalysisStatusBanner = ({
+  classification,
+  decisionCount,
+  onShowDiagnostics,
+  supersededAnalysis,
+}: {
+  classification: Classification | null;
+  decisionCount: number;
+  /* Absent when there is no diagnosis to show - an Application with no active analysis
+     has no diagnostics tab, and a link to an empty region is worse than none. */
+  onShowDiagnostics: (() => void) | null;
+  supersededAnalysis: boolean;
+}) => {
+  const { body, title, tone } = bannerContent(classification, decisionCount, supersededAnalysis);
+
+  return (
+    <Callout
+      action={
+        onShowDiagnostics === null ? undefined : (
+          <Button onClick={onShowDiagnostics} variant="ghost">
+            לפרטי האבחון המלאים
+          </Button>
+        )
+      }
+      title={title}
+      tone={tone}
+    >
+      {body}
+    </Callout>
+  );
+};

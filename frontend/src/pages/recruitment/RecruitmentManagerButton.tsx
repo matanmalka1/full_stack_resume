@@ -7,11 +7,7 @@ import { RecruitmentUpdateDialog } from "./RecruitmentUpdateDialog";
 
 type RecruitmentManagerTarget = Pick<ApplicationListItem, "company" | "id" | "target_role">;
 
-export const RecruitmentManagerButton = ({
-  application,
-}: {
-  application: RecruitmentManagerTarget;
-}) => {
+export const RecruitmentManagerButton = ({ application }: { application: RecruitmentManagerTarget }) => {
   const [open, setOpen] = useState(false);
 
   return (

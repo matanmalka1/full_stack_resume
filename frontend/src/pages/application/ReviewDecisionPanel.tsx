@@ -1,29 +1,22 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import type { Classification } from "../../api/analyses";
 import { applyAnalysisDecisions } from "../../api/analyses";
 import { invalidateApplicationViews } from "../../api/applications";
-import type { ApplicationDetail, Reason } from "../../api/contracts";
+import type { ApplicationDetail } from "../../api/contracts";
 import { ErrorCallout } from "../../app/ErrorCallout";
-import { ActionBar } from "../../ui/ActionBar";
 import { Button } from "../../ui/Button";
 import { Disclosure } from "../../ui/Disclosure";
+import { surfaceClasses } from "../../ui/Surface";
 import {
-  CLASSIFICATION_REASON,
-  FIT_REASON,
-  GAP_REASON,
-  INCOMPLETE_ANALYSIS_REASON,
-  REVIEW_REASONS_THIS_SCREEN_OWNS,
   ReviewDecisionForm,
   emptyDecisions,
   hasDecision,
+  openDecisions,
+  resolvedByDecisionForm,
 } from "./ReviewDecisionForm";
-
-/* Which review reasons this form resolves. Asked of the same table the standalone screen
-   asks, so "this decision has a control" stays one fact in one place. */
-export const resolvedByDecisionForm = (reason: Reason): boolean =>
-  reason.allowed_resolution_actions.includes("apply_analysis_decisions") &&
-  Object.hasOwn(REVIEW_REASONS_THIS_SCREEN_OWNS, reason.code);
+import { type ChecklistEntry, PreparationActionBar, PreparationChecklist } from "./preparation/PreparationActionBar";
 
 /* The classification decision, on the Application screen and directly under the analysis
    it is about.
@@ -42,6 +35,7 @@ export const resolvedByDecisionForm = (reason: Reason): boolean =>
 export const ReviewDecisionPanel = ({
   acceptableGapCount,
   acceptedRequirementIds,
+  classification,
   detail,
   onAcceptancesApplied,
 }: {
@@ -50,6 +44,8 @@ export const ReviewDecisionPanel = ({
      is about to be sent and sends it. */
   acceptableGapCount: number;
   acceptedRequirementIds: readonly string[];
+  /* Read only to name the values the override selects would replace. */
+  classification: Classification | null;
   detail: ApplicationDetail;
   onAcceptancesApplied: () => void;
 }) => {
@@ -66,15 +62,17 @@ export const ReviewDecisionPanel = ({
      `FACT_SELECTION_UNRESOLVED`, which is a different reason with a different action. */
   const selectionPlanId = detail.active_selection_plan_id ?? null;
   const mine = detail.review_reasons.filter(resolvedByDecisionForm);
-  const showClassification = mine.some((reason) => reason.code === CLASSIFICATION_REASON);
-  const showFit = mine.some((reason) => reason.code === FIT_REASON);
-  const showGapAcceptance = selectionPlanId !== null && mine.some((reason) => reason.code === GAP_REASON);
-  const showIncompleteAnalysis = mine.some((reason) => reason.code === INCOMPLETE_ANALYSIS_REASON);
+  const open = openDecisions(detail);
+  const showClassification = open.classification;
+  const showFit = open.fit;
+  const showGapAcceptance = open.gaps;
+  const showIncompleteAnalysis = open.incompleteAnalysis;
 
   /* The marks are the gap list's state, so they are merged in at the submission rather
      than copied into this panel's - one value, read where it is sent. */
   const submitted = { ...decisions, accepted_requirement_ids: showGapAcceptance ? [...acceptedRequirementIds] : [] };
   const decisionCount = [showClassification, showIncompleteAnalysis, showFit, showGapAcceptance].filter(Boolean).length;
+
   const classificationReady =
     !showClassification || decisions.track_override !== null || decisions.profile_override !== null;
   const incompleteAnalysisReady = !showIncompleteAnalysis || decisions.accept_incomplete_analysis;
@@ -109,72 +107,78 @@ export const ReviewDecisionPanel = ({
     return null;
   }
 
+  /* The live state of every decision the projection is asking for, in the bar that
+     commits them. What stood here was a single sentence saying something was missing,
+     under the button and out of sight on a long form. */
+  const checklist: ChecklistEntry[] = [
+    ...(showClassification ? [{ done: classificationReady, label: "בחירת מסלול או פרופיל" }] : []),
+    ...(showIncompleteAnalysis ? [{ done: incompleteAnalysisReady, label: "אישור שהדרישות לא נקראו" }] : []),
+    ...(showFit ? [{ done: fitReady, label: "אישור ההתאמה הנמוכה" }] : []),
+    ...(showGapAcceptance ? [{ done: gapsReady, label: "סימון פער חוסם לקבלה" }] : []),
+  ];
+
   return (
-    <section
-      aria-labelledby="review-decision-heading"
-      className="rounded-surface border border-cv-border bg-cv-surface p-5 shadow-surface"
-    >
-      <h2 className="text-body font-semibold text-cv-text" id="review-decision-heading">
-        {decisionCount === 1 ? "נדרשת החלטה כדי להמשיך" : `נדרשות ${decisionCount} החלטות כדי להמשיך`}
-      </h2>
-      <p className="mt-1 text-support leading-6 text-cv-text-muted">
-        הניתוח נעצר לבדיקה אנושית. בחרו רק במה שצריך לשנות ואשרו במפורש את הסיכונים שמופיעים כאן.
-      </p>
+    <>
+      <section aria-labelledby="review-decision-heading" className={surfaceClasses("bg-cv-surface p-5 shadow-surface")}>
+        <h2 className="text-body font-semibold text-cv-text" id="review-decision-heading">
+          {decisionCount === 1 ? "נדרשת החלטה כדי להמשיך" : `נדרשות ${decisionCount} החלטות כדי להמשיך`}
+        </h2>
 
-      <div className="mt-4 flex flex-col gap-5">
-        <ReviewDecisionForm
-          decisions={decisions}
-          disabled={apply.isPending}
-          gapAcceptance={
-            showGapAcceptance ? { acceptable: acceptableGapCount, marked: acceptedRequirementIds.length } : null
-          }
-          onChange={setDecisions}
-          showClassification={showClassification}
-          showFit={showFit}
-          showIncompleteAnalysis={showIncompleteAnalysis}
-        />
-
-        {/* §13: what the commit does, and the two things the controls cannot say. What
-            it writes depends on what was decided - a classification decision derives a
-            new analysis, while a gap acceptance alone is recorded on a new SelectionPlan
-            for the analysis on screen - so the sentence names both rather than promising
-            the one that happens to be more common. */}
-        <Disclosure summary="מה יישמר לאחר האישור?">
-          <p dir="auto">
-            כל ההחלטות נשלחות יחד. שינוי סיווג יוצר ניתוח ותוכנית בחירה חדשים; קבלת פער נרשמת בתוכנית בחירה חדשה.
-            הרשומות הקודמות נשמרות, ושדה שלא שונה אינו מבטל החלטה קודמת.
-          </p>
-        </Disclosure>
-
-        {apply.error === null ? null : (
-          <ErrorCallout
-            error={apply.error}
-            fallbackDetail="הפנייה לשרת נכשלה. שום החלטה לא נרשמה ואפשר לנסות שוב."
-            fallbackTitle="ההחלטות לא הוחלו"
-          />
-        )}
-
-        <div className="flex flex-col gap-2">
-          {!decisionReady ? (
-            <p className="text-support font-medium text-cv-blocker">
-              יש להשלים את כל ההחלטות שמופיעות בכרטיס לפני שאפשר לשמור.
-            </p>
-          ) : null}
-          <ActionBar
-            align="start"
-            primary={
-              <Button
-                disabled={!decisionReady}
-                onClick={() => apply.mutate()}
-                pending={apply.isPending}
-                pendingLabel="שומר את ההחלטות…"
-              >
-                שמירת ההחלטות
-              </Button>
+        <div className="mt-4 flex flex-col gap-5">
+          <ReviewDecisionForm
+            classification={classification}
+            decisions={decisions}
+            disabled={apply.isPending}
+            gapAcceptance={
+              showGapAcceptance ? { acceptable: acceptableGapCount, marked: acceptedRequirementIds.length } : null
             }
+            onChange={setDecisions}
+            showClassification={showClassification}
+            showFit={showFit}
+            showIncompleteAnalysis={showIncompleteAnalysis}
           />
+
+          {/* §13: what the commit does, and the two things the controls cannot say. What
+              it writes depends on what was decided - a classification decision derives a
+              new analysis, while a gap acceptance alone is recorded on a new SelectionPlan
+              for the analysis on screen - so the sentence names both rather than promising
+              the one that happens to be more common. */}
+          <Disclosure summary="מה יישמר לאחר האישור?">
+            <p dir="auto">
+              כל ההחלטות נשלחות יחד. שינוי סיווג יוצר ניתוח ותוכנית בחירה חדשים; קבלת פער נרשמת בתוכנית בחירה חדשה.
+              הרשומות הקודמות נשמרות, ושדה שלא שונה אינו מבטל החלטה קודמת.
+            </p>
+          </Disclosure>
+
+          {apply.error === null ? null : (
+            <ErrorCallout
+              error={apply.error}
+              fallbackDetail="הפנייה לשרת נכשלה. שום החלטה לא נרשמה ואפשר לנסות שוב."
+              fallbackTitle="ההחלטות לא הוחלו"
+            />
+          )}
         </div>
-      </div>
-    </section>
+      </section>
+
+      <PreparationActionBar
+        primary={
+          <Button
+            disabled={!decisionReady}
+            onClick={() => apply.mutate()}
+            pending={apply.isPending}
+            pendingLabel="שומר את ההחלטות…"
+          >
+            שמירת ההחלטות
+          </Button>
+        }
+      >
+        <PreparationChecklist entries={checklist} label="ההחלטות הנדרשות" />
+        {decisionReady ? null : (
+          <p className="text-support font-medium text-cv-blocker">
+            יש להשלים את כל ההחלטות שמופיעות בכרטיס לפני שאפשר לשמור.
+          </p>
+        )}
+      </PreparationActionBar>
+    </>
   );
 };

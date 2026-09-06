@@ -1,8 +1,9 @@
-import type { ClassificationDecisions } from "../../api/analyses";
-import { Checkbox } from "../../ui/Checkbox";
+import type { Classification, ClassificationDecisions } from "../../api/analyses";
+import type { ApplicationDetail, Reason } from "../../api/contracts";
 import { Disclosure } from "../../ui/Disclosure";
 import { Field } from "../../ui/Field";
 import { Select } from "../../ui/Select";
+import { Switch } from "../../ui/Switch";
 import { TextArea } from "../../ui/TextInput";
 import { emphasisLabels, languageLabels, optionsFrom, profileLabels, trackLabels } from "./analysisLabels";
 
@@ -32,6 +33,39 @@ export const REVIEW_REASONS_THIS_SCREEN_OWNS: Record<string, true> = {
   [FIT_REASON]: true,
   [GAP_REASON]: true,
 };
+
+/* Which review reasons this form resolves. Asked of the table above, so "this decision
+   has a control" stays one fact in one place. */
+export const resolvedByDecisionForm = (reason: Reason): boolean =>
+  reason.allowed_resolution_actions.includes("apply_analysis_decisions") &&
+  Object.hasOwn(REVIEW_REASONS_THIS_SCREEN_OWNS, reason.code);
+
+export interface OpenDecisions {
+  classification: boolean;
+  fit: boolean;
+  gaps: boolean;
+  incompleteAnalysis: boolean;
+}
+
+/* Which decisions the projection is asking for right now.
+
+   Derived here rather than in each of the three places that need it - the tab badge, the
+   panel's own heading, and the checklist in the action bar - because a count that is
+   worked out twice is a count that eventually disagrees with the controls it describes.
+   A gap decision needs the plan it would be recorded against: with no active
+   SelectionPlan the projection is asking for a different reason with a different action. */
+export const openDecisions = (detail: ApplicationDetail): OpenDecisions => {
+  const mine = detail.review_reasons.filter(resolvedByDecisionForm);
+
+  return {
+    classification: mine.some((reason) => reason.code === CLASSIFICATION_REASON),
+    fit: mine.some((reason) => reason.code === FIT_REASON),
+    gaps: detail.active_selection_plan_id != null && mine.some((reason) => reason.code === GAP_REASON),
+    incompleteAnalysis: mine.some((reason) => reason.code === INCOMPLETE_ANALYSIS_REASON),
+  };
+};
+
+export const openDecisionCount = (open: OpenDecisions): number => Object.values(open).filter(Boolean).length;
 
 export const emptyDecisions: ClassificationDecisions = {
   track_override: null,
@@ -64,6 +98,11 @@ const NO_OVERRIDE = "";
    absent decision and `""` its representation in the DOM; they are converted here so no
    call site has to remember that a blank select means "withhold", not "clear". */
 interface OverrideFieldProps<T extends string> {
+  /* What the analysis decided, named. The withhold option used to read "השארת הבחירה
+     הנוכחית" beside the values it was sitting among, so the one option that is not a
+     value looked like one - and which value it would leave in place was nowhere on
+     screen. */
+  current: string | null;
   disabled: boolean;
   hint?: string;
   label: string;
@@ -74,6 +113,7 @@ interface OverrideFieldProps<T extends string> {
 }
 
 const OverrideField = <T extends string>({
+  current,
   disabled,
   hint,
   label,
@@ -82,7 +122,7 @@ const OverrideField = <T extends string>({
   optional,
   value,
 }: OverrideFieldProps<T>) => (
-  <Field hint={hint} label={label} optional={optional}>
+  <Field hint={hint ?? (current === null ? undefined : `כרגע: ${current}`)} label={label} optional={optional}>
     {(control) => (
       <Select
         {...control}
@@ -90,7 +130,9 @@ const OverrideField = <T extends string>({
         onChange={(event) => onSelect(event.target.value === NO_OVERRIDE ? null : (event.target.value as T))}
         value={value ?? NO_OVERRIDE}
       >
-        <option value={NO_OVERRIDE}>השארת הבחירה הנוכחית</option>
+        <option value={NO_OVERRIDE}>
+          {current === null ? "השארת הבחירה הנוכחית" : `השארת הבחירה הנוכחית — ${current}`}
+        </option>
         {optionsFrom(labels).map(([option, optionLabel]) => (
           <option key={option} value={option}>
             {optionLabel}
@@ -99,6 +141,29 @@ const OverrideField = <T extends string>({
       </Select>
     )}
   </Field>
+);
+
+/* An acknowledgement of a stated risk, drawn as one. A row of plain checkboxes made
+   "I understand the requirements were never read" look like an option among options; the
+   amber card and the switch say that turning it on is the decision itself. */
+const RiskAcknowledgement = ({
+  checked,
+  children,
+  description,
+  disabled,
+  onChange,
+}: {
+  checked: boolean;
+  children: string;
+  description: string;
+  disabled: boolean;
+  onChange: (checked: boolean) => void;
+}) => (
+  <div className="rounded-control border border-cv-warning/40 border-s-2 border-s-cv-warning bg-cv-warning-soft/60 p-4">
+    <Switch checked={checked} description={description} disabled={disabled} onChange={onChange}>
+      {children}
+    </Switch>
+  </div>
 );
 
 /* What the submission will carry from the gap list above, and the reason recorded with
@@ -150,6 +215,8 @@ const GapAcceptanceFields = ({
 );
 
 interface ReviewDecisionFormProps {
+  /* The analysis under decision, read only to name what each control would replace. */
+  classification: Classification | null;
   decisions: ClassificationDecisions;
   disabled: boolean;
   /* How many hard gaps are marked, and whether there is any gap that can be marked at
@@ -163,6 +230,7 @@ interface ReviewDecisionFormProps {
 }
 
 export const ReviewDecisionForm = ({
+  classification,
   decisions,
   disabled,
   gapAcceptance,
@@ -170,81 +238,98 @@ export const ReviewDecisionForm = ({
   showClassification,
   showFit,
   showIncompleteAnalysis,
-}: ReviewDecisionFormProps) => (
-  <div className="flex flex-col gap-5">
-    {showClassification ? (
-      <div className="flex flex-col gap-4">
-        <div>
-          <h3 className="text-support font-semibold text-cv-text">בחירת סוג קורות החיים</h3>
-          <p className="mt-1 text-support leading-6 text-cv-text-muted">
-            כדי לפתור את אי־הבהירות יש לשנות לפחות את המסלול או את הפרופיל. שדות שלא ישונו יישארו כפי שנקבעו בניתוח.
-          </p>
-        </div>
+}: ReviewDecisionFormProps) => {
+  /* The four terms as the analysis recorded them, read through the same label maps the
+     analysis summary uses, so "leave as it is" names the value the reader saw rather than
+     a second wording of it. A term the analysis never recorded has nothing to name and
+     leaves the option as the bare sentence it always was. */
+  const current = {
+    emphasis: classification?.emphasis == null ? null : emphasisLabels[classification.emphasis],
+    language: classification?.language == null ? null : languageLabels[classification.language],
+    profile: classification?.profile == null ? null : profileLabels[classification.profile],
+    track: classification?.track == null ? null : trackLabels[classification.track],
+  };
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <OverrideField
-            disabled={disabled}
-            label="מסלול"
-            labels={trackLabels}
-            onSelect={(track_override) => onChange({ ...decisions, track_override })}
-            value={decisions.track_override ?? null}
-          />
-          <OverrideField
-            disabled={disabled}
-            label="פרופיל"
-            labels={profileLabels}
-            onSelect={(profile_override) => onChange({ ...decisions, profile_override })}
-            value={decisions.profile_override ?? null}
-          />
-        </div>
+  return (
+    <div className="flex flex-col gap-5">
+      {showClassification ? (
+        <div className="flex flex-col gap-4">
+          <div>
+            <h3 className="text-support font-semibold text-cv-text">בחירת סוג קורות החיים</h3>
+            <p className="mt-1 text-support leading-6 text-cv-text-muted">
+              כדי לפתור את אי־הבהירות יש לשנות לפחות את המסלול או את הפרופיל. שדות שלא ישונו יישארו כפי שנקבעו בניתוח.
+            </p>
+          </div>
 
-        <Disclosure summary="אפשרויות נוספות: דגש ושפת קורות החיים">
           <div className="grid gap-4 md:grid-cols-2">
             <OverrideField
+              current={current.track}
               disabled={disabled}
-              label="דגש"
-              labels={emphasisLabels}
-              onSelect={(emphasis_override) => onChange({ ...decisions, emphasis_override })}
-              optional
-              value={decisions.emphasis_override ?? null}
+              label="מסלול"
+              labels={trackLabels}
+              onSelect={(track_override) => onChange({ ...decisions, track_override })}
+              value={decisions.track_override ?? null}
             />
             <OverrideField
+              current={current.profile}
               disabled={disabled}
-              label="שפת קורות החיים"
-              labels={languageLabels}
-              onSelect={(language_override) => onChange({ ...decisions, language_override })}
-              optional
-              value={decisions.language_override ?? null}
+              label="פרופיל"
+              labels={profileLabels}
+              onSelect={(profile_override) => onChange({ ...decisions, profile_override })}
+              value={decisions.profile_override ?? null}
             />
           </div>
-        </Disclosure>
-      </div>
-    ) : null}
 
-    {showIncompleteAnalysis ? (
-      <Checkbox
-        checked={decisions.accept_incomplete_analysis}
-        disabled={disabled}
-        hint="הניתוח לא הצליח לקרוא את דרישות המשרה. בחירת מסלול או פרופיל אינה פותרת זאת, ואישור זה נרשם על הניתוח הזה בלבד - ניתוח חדש יחסום שוב."
-        onChange={(event) => onChange({ ...decisions, accept_incomplete_analysis: event.target.checked })}
-      >
-        אני מבין שהדרישות לא נקראו ומבקש להמשיך
-      </Checkbox>
-    ) : null}
+          <Disclosure summary="אפשרויות נוספות: דגש ושפת קורות החיים">
+            <div className="grid gap-4 md:grid-cols-2">
+              <OverrideField
+                current={current.emphasis}
+                disabled={disabled}
+                label="דגש"
+                labels={emphasisLabels}
+                onSelect={(emphasis_override) => onChange({ ...decisions, emphasis_override })}
+                optional
+                value={decisions.emphasis_override ?? null}
+              />
+              <OverrideField
+                current={current.language}
+                disabled={disabled}
+                label="שפת קורות החיים"
+                labels={languageLabels}
+                onSelect={(language_override) => onChange({ ...decisions, language_override })}
+                optional
+                value={decisions.language_override ?? null}
+              />
+            </div>
+          </Disclosure>
+        </div>
+      ) : null}
 
-    {showFit ? (
-      <Checkbox
-        checked={decisions.accept_low_fit}
-        disabled={disabled}
-        hint="אישור זה נרשם על הניתוח עצמו ופותר את ההתאמה הנמוכה בלבד. פער חוסם נדרש להכרעה נפרדת, על הפער עצמו."
-        onChange={(event) => onChange({ ...decisions, accept_low_fit: event.target.checked })}
-      >
-        אני מאשר את ההתאמה הנמוכה ומבקש להמשיך
-      </Checkbox>
-    ) : null}
+      {showIncompleteAnalysis ? (
+        <RiskAcknowledgement
+          checked={decisions.accept_incomplete_analysis}
+          description="הניתוח לא הצליח לקרוא את דרישות המשרה. בחירת מסלול או פרופיל אינה פותרת זאת, ואישור זה נרשם על הניתוח הזה בלבד - ניתוח חדש יחסום שוב."
+          disabled={disabled}
+          onChange={(accept_incomplete_analysis) => onChange({ ...decisions, accept_incomplete_analysis })}
+        >
+          אני מבין שהדרישות לא נקראו ומבקש להמשיך
+        </RiskAcknowledgement>
+      ) : null}
 
-    {gapAcceptance === null ? null : (
-      <GapAcceptanceFields acceptance={gapAcceptance} decisions={decisions} disabled={disabled} onChange={onChange} />
-    )}
-  </div>
-);
+      {showFit ? (
+        <RiskAcknowledgement
+          checked={decisions.accept_low_fit}
+          description="אישור זה נרשם על הניתוח עצמו ופותר את ההתאמה הנמוכה בלבד. פער חוסם נדרש להכרעה נפרדת, על הפער עצמו."
+          disabled={disabled}
+          onChange={(accept_low_fit) => onChange({ ...decisions, accept_low_fit })}
+        >
+          אני מאשר את ההתאמה הנמוכה ומבקש להמשיך
+        </RiskAcknowledgement>
+      ) : null}
+
+      {gapAcceptance === null ? null : (
+        <GapAcceptanceFields acceptance={gapAcceptance} decisions={decisions} disabled={disabled} onChange={onChange} />
+      )}
+    </div>
+  );
+};
