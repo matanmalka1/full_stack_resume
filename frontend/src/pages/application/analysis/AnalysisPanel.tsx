@@ -43,7 +43,7 @@ export const AnalysisPanel = ({
      one of them a control, which is worse than either alone. */
   showGaps: boolean;
 }) => (
-  <section aria-labelledby="analysis-heading" className={surfaceClasses("p-5")}>
+  <section aria-labelledby="analysis-heading" className={surfaceClasses("bg-cv-surface p-5")}>
     <AnalysisHeader classification={classification} record={detail.latest_analysis ?? null} />
 
     <div className="flex flex-col divide-y divide-cv-border [&>section]:py-5 [&>section:last-child]:pb-0">
