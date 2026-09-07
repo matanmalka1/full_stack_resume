@@ -6,6 +6,7 @@ import { isTerminalOperation } from "../../api/operations";
 import { appRoutes } from "../../app/appRoutes";
 import { Button } from "../../ui/Button";
 import { StatusBadge } from "../../ui/StatusBadge";
+import { Tooltip } from "../../ui/Tooltip";
 import { actionDestination } from "../application/actionDestinations";
 import { actionLabel } from "../application/applicationLabels";
 import { operationTypeLabels, statusLabels, statusTones } from "../operationLabels";
@@ -88,25 +89,27 @@ export const ApplicationRecordActions = ({
   onRequestUpdate: (item: ApplicationListItem) => void;
 }) => (
   <div className="flex shrink-0 items-center gap-0.5">
-    <button
-      aria-label={`עדכון סטטוס ומשימות עבור ${item.company}`}
-      className="inline-flex min-h-9 items-center rounded-control px-2 text-cv-text-muted transition-colors hover:bg-cv-surface-muted hover:text-cv-text"
-      onClick={() => onRequestUpdate(item)}
-      title="עדכון סטטוס ומשימות"
-      type="button"
-    >
-      <SlidersHorizontal aria-hidden="true" className="size-4" />
-    </button>
-    {item.is_closed ? null : (
-      <Button
-        aria-label={`סגירת המועמדות ${item.company}`}
-        className="min-h-9 px-2 text-cv-text-muted hover:text-cv-blocker"
-        onClick={() => onRequestClose(item)}
-        title="סגירת מועמדות"
-        variant="ghost"
+    <Tooltip label="עדכון סטטוס ומשימות">
+      <button
+        aria-label={`עדכון סטטוס ומשימות עבור ${item.company}`}
+        className="inline-flex min-h-9 items-center rounded-control px-2 text-cv-text-muted transition-colors hover:bg-cv-surface-muted hover:text-cv-text"
+        onClick={() => onRequestUpdate(item)}
+        type="button"
       >
-        <Archive aria-hidden="true" className="size-4" />
-      </Button>
+        <SlidersHorizontal aria-hidden="true" className="size-4" />
+      </button>
+    </Tooltip>
+    {item.is_closed ? null : (
+      <Tooltip label="סגירת מועמדות · הרשומה וההיסטוריה נשמרות, לא נמחקות">
+        <Button
+          aria-label={`סגירת המועמדות ${item.company}`}
+          className="min-h-9 px-2 text-cv-text-muted hover:text-cv-blocker"
+          onClick={() => onRequestClose(item)}
+          variant="ghost"
+        >
+          <Archive aria-hidden="true" className="size-4" />
+        </Button>
+      </Tooltip>
     )}
   </div>
 );
