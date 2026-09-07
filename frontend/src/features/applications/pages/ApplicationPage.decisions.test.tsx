@@ -345,8 +345,11 @@ describe("the review decision, on the Application screen", () => {
     fireEvent.click(screen.getByRole("button", { name: "שמירת ההחלטות" }));
 
     expect(await screen.findByText("the submitted decisions change nothing")).toBeInTheDocument();
-    /* Still on the screen, with the decision still selected: nothing safe was lost. */
-    expect(screen.getByRole("heading", { level: 1, name: "הכנת קורות החיים" })).toBeInTheDocument();
+    /* Still on the screen, with the decision still selected: nothing safe was lost. The
+       heading names the Application, not the workflow - preparation is a tab of this
+       screen rather than a screen of its own. */
+    expect(screen.getByRole("heading", { level: 1, name: "Backend Engineer" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /החלטות נדרשות/ })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByLabelText("מסלול")).toHaveValue("tech-sales");
   });
 

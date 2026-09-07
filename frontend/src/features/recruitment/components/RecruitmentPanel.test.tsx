@@ -273,11 +273,13 @@ describe("RecruitmentManagerButton", () => {
     fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
     const summary = screen.getByRole("region", { name: "מצב הגיוס" });
     expect(within(summary).getByText("הצעה").closest("span")).toHaveClass("text-cv-success");
-    expect(screen.getByText("Action 5")).toBeInTheDocument();
-    expect(screen.queryByText("Action 0")).not.toBeInTheDocument();
+    /* The timeline states what the event was, not the bare value it carried, so the
+       newest entry is matched inside its sentence. */
+    expect(screen.getByText(/הפעולה הבאה נקבעה: Action 5/)).toBeInTheDocument();
+    expect(screen.queryByText(/Action 0/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "הצגת כל ההיסטוריה (6)" }));
-    expect(screen.getByText("Action 0")).toBeInTheDocument();
+    expect(screen.getByText(/הפעולה הבאה נקבעה: Action 0/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "הצגת פחות אירועים" })).toBeInTheDocument();
   });
 
