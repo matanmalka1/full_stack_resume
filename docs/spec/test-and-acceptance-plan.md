@@ -241,6 +241,33 @@ Create
 
 ## 6. AI tests
 
+### D1 acceptance amendment — 2026-09-06
+
+Extend the nearest existing claim/proposal/application tests for material uncovered
+failures. Required behavior includes:
+
+- Fully covered positive semantic review plus passing hard checks permits new wording
+  without individual user confirmation; final document approval remains explicit.
+- A positive review cannot override a hard contradiction, omitted assertion coverage,
+  outside-pool fact, unsupported assertion, or unresolved uncertainty.
+- Review errors/cancellation/stale completion cannot authorize wording or trigger
+  silent fallback. Uncertainty is a review outcome rather than a technical failure.
+- A relevant wording/source/attribution change makes evidence ineligible; an unrelated
+  change need not discard claim evidence but still invalidates document validation.
+- API and worker application paths enforce the same approval conditions, including
+  chained flows. Prior approved records retain their evidence and artifacts unchanged.
+- The no-key deterministic pipeline still reaches Ready without semantic-review calls
+  or fabricated review metadata.
+
+The [Connecteam and WeDev cases](../tailoring-acceptance-cases.md) supply factual and
+editorial acceptance examples, including HubSpot fabrication, personal-project
+misattribution, and annualized metrics. Mock review outputs prove policy enforcement,
+not real model accuracy. Manual live evaluation must inspect both supported new
+wording and deliberately unsupported variants from both tracks before release.
+No new passing evidence is asserted by this specification amendment.
+
+### Provider and integration coverage
+
 Automated provider tests use fake HTTP/provider responses and validate:
 
 - strict schema generation

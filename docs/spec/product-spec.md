@@ -61,6 +61,31 @@ migration risk, or weakened factual boundary requires an explicit decision.
 
 ## 2. Product goal
 
+### Approved tailoring direction — 2026-09-06
+
+The user approved development and sales as equal tailoring targets, with rephrasing,
+shortening, and combining information from canonical facts without changing their
+meaning. Every claim retains source links; dates, numbers, historical roles, and
+experience levels require separate checks. Semantic review is assistance rather than
+absolute proof. Unresolved support requires claim-specific clarification; general CV
+approval cannot bypass it. New candidate information follows the fact lifecycle,
+separately from wording requests.
+
+Decision D1 was explicitly approved on 2026-09-06: new wording may proceed without
+claim-by-claim user confirmation when hard checks pass, semantic review covers every
+factual assertion and finds support, and no contradiction or unresolved uncertainty
+remains. Only uncertainty requires focused user clarification. Final CV approval
+remains explicit. This is a policy for accepting reviewed evidence, not a claim that
+AI proves meaning or cannot miss an error.
+
+Sections 10–12 and the companion specifications define the amended acceptance
+contract. [Wording validation design](../tailoring-wording-validation.md) retains
+supporting design details; proposed storage/UI mechanics there are not automatically
+approved by D1. The current extractive-only implementation does not yet implement this
+amendment. No runtime or existing record changes as a result of this documentation edit.
+
+### Current product contract
+
 > A single candidate can create a job application, analyze the job, resolve only the
 > decisions that require human judgment, produce and edit a fact-linked CV, validate and
 > explicitly approve one exact revision, render a valid and ATS-readable PDF, understand
@@ -124,7 +149,7 @@ The product includes:
 - A Ready projection over a qualifying ApprovedRevision.
 - Contextual fact inspection and the pending -> confirmed -> canonical -> attached
   lifecycle without a general Knowledge Manager.
-- OpenAI Responses API integration for the five AI tasks through strict structured
+- OpenAI Responses API integration for the six AI tasks through strict structured
   Proposal contracts.
 - A deterministic offline flow through Ready when no OpenAI key is configured.
 - A Dashboard, Application Detail, unified timeline, recruitment tracking, next action,
@@ -147,7 +172,9 @@ The following are not part of the product:
 - Additional AI providers or a provider selector.
 - Cover letters, LinkedIn messages, recruiter emails, or other document types.
 - AI-generated decision explanations.
-- AI extraction/linking of arbitrary edited claims.
+- Autonomous AI extraction/linking of arbitrary edited claims. Review of wording
+  against explicitly supplied canonical fact links is in scope under §10–12; review
+  does not create canonical facts or grant access to facts outside the allowed pool.
 - Arbitrary user prompts, arbitrary provider model IDs, or per-operation model selection.
 - A general Knowledge Manager or Web editing of Profiles, policies, prompts, or rules.
 - A general WYSIWYG editor, section reordering, or drag-and-drop.
@@ -310,9 +337,41 @@ semantic or rewording change creates the new plan and then runs a regeneration
 Operation.
 
 Free-text edits are preserved even when unsupported. They become pending or unlinked,
-are immediately visible as unsafe, and block approval until linked through an allowed
-deterministic path, converted into a canonical fact lifecycle, or removed. The application
-does not use AI to extract and authorize such claims.
+are immediately visible as unsafe, and block approval until supported through an
+allowed deterministic proof or the reviewed-evidence path below, resolved through the
+canonical fact lifecycle, or removed. Unlinked text requires explicit allowed fact
+links before semantic review. A provider cannot autonomously turn edited text into
+canonical facts or authorize its own wording.
+
+### 10.1 Reviewed wording — D1 amendment, 2026-09-06
+
+Wording may paraphrase, shorten, or combine information from multiple canonical facts
+without changing meaning. Each fact retains its identity; a combined sentence must
+not invent a relationship, causal claim, employer, time period, or experience level.
+
+Existing canonical/extractive/presentation proofs remain valid paths and need no AI
+review. New wording requires hard checks and a separate semantic review against exact
+sources and document context. The review must account for every factual assertion,
+including protected values and attribution. Mere fact-ID presence, matching words,
+an aggregate confidence score, or lack of a detected error is insufficient evidence.
+
+Acceptance requires all hard checks to pass, complete positive review evidence, and
+no known contradiction or unresolved uncertainty. Such wording needs no individual
+user confirmation. Its provenance identifies semantic review rather than deterministic
+proof. Known contradictions override positive review. Unsupported or strengthened
+claims remain blockers; uncertainty requires focused clarification with the exact
+sentence, context, and sources. General CV approval and accepted job gaps resolve neither.
+
+A clarification that supplies new candidate information follows the fact lifecycle.
+It cannot silently become wording evidence. Claim-specific human evidence must record
+what was clarified against which sources and cannot override a known contradiction.
+The precise clarification command and proposal-presentation lifecycle remain design
+work; no generic acknowledgement endpoint is authorized as a bypass.
+
+Review failure, cancellation, invalid output, missing assertion coverage, or stale
+evidence cannot make wording eligible. Provider failure remains explicit, with no
+silent fallback. The deterministic no-key path continues through Ready using its own
+proofs and without inventing provider-review metadata.
 
 Autosave uses debounce/blur and optimistic concurrency. A stale save returns a conflict
 and does not overwrite. The UI shows the user's text and the current text for an
@@ -330,6 +389,15 @@ only after an ApprovedRevision is rendered.
 
 A failed ValidationRun is a successful domain result with `passed=false` and structured
 issues. An exception is reserved for a validator that could not run.
+
+Under D1, pre-approval validation deterministically checks eligibility and currency of
+the exact proof/review evidence for every claim. It does not call AI. Evidence binds
+wording, language, supporting sources and their content, contextual attribution,
+allowed-fact scope, and review-policy versions. Relevant edits invalidate eligibility
+without rewriting historical evidence. An unrelated edit may preserve claim evidence,
+but any draft edit still requires a new exact ValidationRun before approval.
+An ApprovedRevision freezes the evidence actually used. Old immutable records are
+not rewritten or assigned review evidence they never carried.
 
 Warnings are visible and non-blocking. Approval may require one general confirmation
 that warnings remain. Any item requiring a specific business decision is a blocker or
@@ -364,13 +432,21 @@ the later tracking milestone, not the first vertical slice.
 
 The application implements one OpenAI adapter behind the provider-neutral `AIProvider`
 protocol.
-The five AI tasks are:
+The six AI tasks are:
 
 - `propose_job_analysis`
 - `propose_selection_plan`
 - `draft_resume`
 - `regenerate_section`
 - `regenerate_claim`
+- `assess_claim_support` — separate semantic review of wording against supplied
+  canonical sources and contextual attribution, returning evidence proposals only.
+
+The support reviewer runs separately from the writer and does not use the writer's
+self-assessment as evidence. Separation of calls is not a guarantee of independent
+judgment. Structured results distinguish support found, uncertainty, and unsupported
+assertions; execution failure is separate. Application policy, not the provider,
+decides whether the evidence satisfies §10.1.
 
 Each task has explicit input/output schemas, semantic contract version, prompt version
 and hash, and structured output validation. Calls are stateless and do not depend on a
@@ -681,7 +757,10 @@ v2.0 is Release Ready only when all of the following are demonstrably true:
 - [ ] The central failure paths are exercised through the same slice.
 - [ ] Review is exception-based and every review reason is explicit and resolvable.
 - [ ] The deterministic offline workflow completes through Ready.
-- [ ] The five AI tasks return Proposals and cannot bypass deterministic policy.
+- [ ] The six AI tasks return Proposals and cannot bypass deterministic policy.
+- [ ] D1 accepts fully reviewed supported wording without individual confirmation,
+      blocks uncertainty/contradiction, preserves evidence attribution and staleness,
+      and passes the Connecteam and WeDev acceptance scenarios.
 - [ ] Unsupported or unlinked edits are preserved but cannot pass approval.
 - [ ] Approval is bound to one exact WorkingDraft, validation, knowledge context,
       snapshot, analysis, and SelectionPlan.

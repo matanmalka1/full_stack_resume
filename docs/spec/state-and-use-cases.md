@@ -450,6 +450,28 @@ draft move atomically.
 
 ## 14. Draft commands
 
+### D1 wording evidence amendment — 2026-09-06
+
+The following acceptance rules amend generation, regeneration, editing, validation,
+and approval; they are required target behavior, not a claim of current implementation.
+Canonical/extractive/presentation proof or complete eligible reviewed evidence under
+product-spec §10.1 may establish claim support. Positive reviewed evidence needs no
+individual user confirmation. Uncertainty cannot be downgraded to a warning; known
+contradiction or unsupported content cannot be overridden by general approval.
+
+Review execution uses persisted Operations and exact source preconditions. A provider
+result with uncertainty is a domain review outcome, not a transport failure, and does
+not authorize activation as supported content. Unsupported AI wording remains refused;
+unsupported manual text remains savable as pending/unlinked. Evidence cannot be
+activated after cancellation or against a newer draft/source context.
+
+A missing/stale review or unresolved clarification blocks approval through both action
+policy and application services. Claim-level evidence may remain reusable after an
+unrelated edit only when its actual dependencies still match. No previous document
+ValidationRun becomes reusable as a consequence. Proposal presentation, clarification
+and acceptance command/HTTP DTOs must be specified before implementation; this
+amendment does not silently add routes or PreparationState enum values.
+
 ### `create_draft(application_id, job_analysis_id, selection_plan_id, provider)`
 
 Asynchronous and idempotent for generation. The deterministic path constructs the v1
@@ -514,6 +536,11 @@ Validation records:
 - validator versions
 - issues/groups/evidence
 
+For D1 wording, evidence includes exact review/proof references and their dependency
+context. Validation checks hard-rule results, full assertion coverage, permitted
+evidence kind, no unresolved contradiction/uncertainty, and current source/context
+matches. It does not call a provider or infer success from a missing review.
+
 ### `approve_draft(working_draft_id, expected_edit_version, validation_run_id)`
 
 Synchronous and idempotent. It requires:
@@ -524,6 +551,7 @@ validation.edit_version == draft.edit_version
 validation.content_hash == draft.content_hash
 validation.passed == true
 all analysis/selection/knowledge/validator contexts match
+all required claim proof/review evidence is eligible for the exact content and context
 no unresolved blocker or review reason exists
 ```
 

@@ -469,14 +469,33 @@ temporary browser-startup failures.
 
 ## 11. AI adapter
 
-The existing provider-neutral protocol is retained and expanded only for the five
-tasks. The OpenAI adapter uses the Responses API and strict Structured Outputs. It
+The existing provider-neutral protocol is retained and expanded for the six tasks
+defined in product-spec §12, including `assess_claim_support` under D1 (2026-09-06).
+The OpenAI adapter uses the Responses API and strict Structured Outputs. It
 returns task-specific Proposal DTOs and provider provenance; it cannot save domain
 state.
 
 Each task receives minimal allowed context. Provider text and fact IDs pass schema and
 semantic support validation. A valid ID paired with strengthened wording fails. Claims
 are not silently dropped.
+
+The domain owns reviewed-evidence eligibility and staleness; the application freezes
+inputs, orchestrates writer/reviewer calls through the Operation runner, preserves
+evidence and commits only against matching preconditions. Review is a separate call
+from generation. Neither provider nor router can declare a claim approved.
+
+Evidence binds exact wording, language, claim attribution/structural context, consumed
+fact content, allowed scope, and policy versions. Dependencies are derived from actual
+inputs. Structured review records and focused human decisions require immutable
+history and explicit references from validation/approval; raw provider payloads use
+the existing object-store boundary. The detailed schema and command DTOs remain to be
+designed before coding, rather than inferred from this conceptual record description.
+Any new immutable records receive the existing derived trigger protections.
+
+Pre-approval validation remains synchronous and deterministic over stored evidence;
+it starts no AI work. A separate asynchronous review supplies evidence in advance.
+Historical records retain their original semantics and missing metadata; the amendment
+does not synthesize past reviews, rewrite approved artifacts, or alter their paths.
 
 Calls are stateless. The settings query exposes a closed backend-owned model catalog;
 the selected default model and reasoning effort are frozen when the Operation is

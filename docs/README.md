@@ -13,9 +13,15 @@ Binding on what the product does. Changes by an approved decision.
 
 ## State and process
 
-- [Tailoring behavior change](tailoring-behavior-change.md) — Hebrew discussion draft for
-  development and sales tailoring; proposed behavior, open decisions, and implementation
-  sequence. Not a binding specification or authorization to change runtime behavior.
+- [Tailoring behavior change](tailoring-behavior-change.md) — approved tailoring principles
+  and remaining design work for development and sales.
+- [Acceptance cases](tailoring-acceptance-cases.md) — Connecteam SDR and WeDev Junior
+  Fullstack: source mappings, proposed outputs, and editing scenarios.
+- [Wording validation design](tailoring-wording-validation.md) — approved acceptance
+  decision D1 and evidence/staleness design; storage and command details remain to be completed.
+- [Analysis contract extension](tailoring-analysis-contract.md) — proposed only, nothing
+  approved: requirement extraction, interpretation, completeness, identity, analysis
+  correction, and selection authority ahead of the wording work.
 - `m5-remaining.md` — M5 closure status and only the work explicitly carried forward.
 - `process/execution-protocol.md` — how work is split across parallel agents.
 
