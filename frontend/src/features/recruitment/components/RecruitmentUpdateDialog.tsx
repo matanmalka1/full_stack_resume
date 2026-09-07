@@ -3,7 +3,7 @@ import { type ReactNode, useState } from "react";
 
 import { applicationDetailQueryOptions, invalidateApplicationViews } from "@/api/applications";
 import type { ApplicationDetail } from "@/api/contracts";
-import { ErrorCallout } from "@/app/ErrorCallout";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
 import { ViewSwitch } from "@/ui/ViewSwitch";

@@ -2,14 +2,14 @@ import { FilePlus2 } from "lucide-react";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 
-import { ErrorCallout } from "@/app/ErrorCallout";
-import { useWorkflowStage, workflowDestinations } from "@/app/WorkflowLandmark";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
 import { ActiveOperationPanel } from "@/features/applications/components/ActiveOperationPanel";
 import { ApplicationBreadcrumbs } from "@/features/applications/components/ApplicationBreadcrumbs";
+import { WorkflowLandmark } from "@/features/applications/components/WorkflowLandmark";
 import { warningDetail, warningTitle } from "@/features/applications/model/applicationLabels";
 import { RecruitmentManagerButton } from "@/features/recruitment";
 import { RevisionRecord } from "../components/RevisionRecord";
@@ -35,15 +35,11 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
   } = useRevisionData(approvedRevisionId);
   const { canCreate, createDraft, operation, watch } = useRevisionDraftGeneration(revision, detail);
 
-  useWorkflowStage(
-    detail === undefined ? "unknown" : detail.preparation_state,
-    revision === undefined ? undefined : workflowDestinations(revision.application_id, detail),
-  );
-
   return (
     <PageShell
       actions={detail === undefined ? null : <RecruitmentManagerButton application={detail.application} />}
       description="הגרסה המאושרת נשארת זמינה גם כאשר העבודה על המועמדות ממשיכה."
+      landmark={<WorkflowLandmark applicationId={revision?.application_id} detail={detail} />}
       navigation={
         <ApplicationBreadcrumbs
           applicationId={revision?.application_id}

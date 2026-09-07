@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { ErrorCallout } from "@/app/ErrorCallout";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Disclosure } from "@/ui/Disclosure";
 import { Field } from "@/ui/Field";
 import { Select } from "@/ui/Select";

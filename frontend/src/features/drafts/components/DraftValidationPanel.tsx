@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-import { briefServerFailureDetail, ErrorCallout } from "@/app/ErrorCallout";
+import { briefServerFailureDetail, ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { LiveRegion } from "@/ui/LiveRegion";

@@ -6,7 +6,7 @@ import { ApiProblem } from "@/api/client";
 import type { ApplicationDetail, WorkingDraft } from "@/api/contracts";
 import { workingDraftQueryKey } from "@/api/drafts";
 import { approveWorkingDraft, validationRunQueryOptions } from "@/api/validation";
-import { briefServerFailureDetail, ErrorCallout } from "@/app/ErrorCallout";
+import { briefServerFailureDetail, ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Checkbox } from "@/ui/Checkbox";

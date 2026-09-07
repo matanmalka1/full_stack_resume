@@ -11,7 +11,7 @@ import {
   factsQueryPrefix,
 } from "@/api/facts";
 import { workingDraftFactsQueryKey } from "@/api/drafts";
-import { ErrorCallout } from "@/app/ErrorCallout";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import {
   emptyFactForm,
   FactCoreFields,

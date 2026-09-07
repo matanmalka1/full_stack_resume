@@ -3,8 +3,7 @@ import { Settings, ShieldCheck } from "lucide-react";
 
 import { settingsQueryOptions } from "@/api/settings";
 import { FactPoolBrowser } from "@/features/facts";
-import { appRoutes } from "@/app/appRoutes";
-import { useWorkflowStage } from "@/app/WorkflowLandmark";
+import { routePaths } from "@/app/routePaths";
 import { Breadcrumbs } from "@/ui/Breadcrumbs";
 import { Card } from "@/ui/Card";
 import { PageShell } from "@/ui/PageShell";
@@ -14,16 +13,13 @@ import { ReconciliationPanel } from "../components/ReconciliationPanel";
 import { SettingsForm } from "../components/SettingsForm";
 
 export const SettingsPage = () => {
-  /* Settings stands outside the workflow, so it reports no stage rather than leaving the
-     landmark showing whichever one the previous screen published. */
-  useWorkflowStage("none");
   const query = useQuery(settingsQueryOptions);
 
   return (
     <PageShell
       description="מדיניות ביצוע, תצוגת הממשק ובדיקות התקינות של מאגר הידע והתוצרים."
       measure="form"
-      navigation={<Breadcrumbs items={[{ label: "מועמדויות", to: appRoutes.home }, { label: "הגדרות" }]} />}
+      navigation={<Breadcrumbs items={[{ label: "מועמדויות", to: routePaths.home }, { label: "הגדרות" }]} />}
       title={
         <span className="inline-flex items-center gap-2">
           <Settings aria-hidden="true" className="size-6 text-cv-accent" />

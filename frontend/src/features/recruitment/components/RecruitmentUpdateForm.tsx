@@ -3,7 +3,7 @@ import type { FormEventHandler } from "react";
 import type { UseFormReturn } from "react-hook-form";
 
 import type { ApplicationDetail, TransitionableRecruitmentStatus } from "@/api/contracts";
-import { ErrorCallout } from "@/app/ErrorCallout";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Callout } from "@/ui/Callout";
 import { Field } from "@/ui/Field";
 import { Select } from "@/ui/Select";

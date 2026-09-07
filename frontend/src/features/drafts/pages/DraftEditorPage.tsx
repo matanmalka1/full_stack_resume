@@ -2,9 +2,8 @@ import { ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import { appRoutes } from "@/app/appRoutes";
+import { routePaths } from "@/app/routePaths";
 import { useRequiredParam } from "@/app/useRequiredParam";
-import { useWorkflowStage, workflowDestinations } from "@/app/WorkflowLandmark";
 import { buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { PageShell } from "@/ui/PageShell";
@@ -12,6 +11,7 @@ import { QueryState } from "@/ui/QueryState";
 import { reasonTitle } from "@/features/applications/model/applicationLabels";
 import { ActiveOperationPanel } from "@/features/applications/components/ActiveOperationPanel";
 import { ApplicationBreadcrumbs } from "@/features/applications/components/ApplicationBreadcrumbs";
+import { WorkflowLandmark } from "@/features/applications/components/WorkflowLandmark";
 import { FactLifecyclePanel } from "@/features/facts";
 import { RecruitmentManagerButton } from "@/features/recruitment";
 import { DraftApprovalBar } from "../components/DraftApprovalBar";
@@ -51,11 +51,6 @@ export const DraftEditorPage = () => {
   });
   const validation = useDraftValidation(applicationId, draft);
 
-  useWorkflowStage(
-    detail === undefined ? "unknown" : detail.preparation_state,
-    workflowDestinations(applicationId, detail),
-  );
-
   const [mode, setMode] = useState<DraftWorkspaceMode>("read");
   const [approvalOpen, setApprovalOpen] = useState(false);
   /* The revision this editor just approved. Held here rather than read from the projection
@@ -79,7 +74,7 @@ export const DraftEditorPage = () => {
     setMode(next);
   };
 
-  const preparationHref = appRoutes.preparation(applicationId);
+  const preparationHref = routePaths.preparation(applicationId);
 
   return (
     <PageShell
@@ -87,6 +82,7 @@ export const DraftEditorPage = () => {
       /* No description: `DraftHeaderCard` below names the company and the target role
          together, and the heading repeated the role on its own a line above it. */
       eyebrow="סביבת האישור"
+      landmark={<WorkflowLandmark applicationId={applicationId} detail={detail} />}
       navigation={
         <ApplicationBreadcrumbs
           applicationId={applicationId}

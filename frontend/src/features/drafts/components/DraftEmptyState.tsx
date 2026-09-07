@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-import { appRoutes } from "@/app/appRoutes";
+import { routePaths } from "@/app/routePaths";
 import { buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 
@@ -10,7 +10,7 @@ import { Callout } from "@/ui/Callout";
 export const DraftEmptyState = ({ applicationId }: { applicationId: string }) => (
   <Callout
     action={
-      <Link className={buttonClasses("primary")} to={appRoutes.preparation(applicationId)}>
+      <Link className={buttonClasses("primary")} to={routePaths.preparation(applicationId)}>
         חזרה להכנת קורות החיים
       </Link>
     }

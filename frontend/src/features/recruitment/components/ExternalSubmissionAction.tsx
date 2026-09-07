@@ -3,7 +3,7 @@ import { useState } from "react";
 
 import type { ApplicationDetail } from "@/api/contracts";
 import { recordExternalSubmission } from "@/api/tracking";
-import { ErrorCallout } from "@/app/ErrorCallout";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { useAppForm } from "@/forms/useAppForm";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";

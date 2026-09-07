@@ -2,7 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { RotateCcw } from "lucide-react";
 
 import { reconcile } from "@/api/maintenance";
-import { ErrorCallout } from "@/app/ErrorCallout";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 import { Card } from "@/ui/Card";
 import { SectionHeader } from "@/ui/SectionHeader";

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { invalidateApplicationViews } from "@/api/applications";
 import type { ApprovedRevision } from "@/api/contracts";
 import { recordInternalSubmission } from "@/api/tracking";
-import { ErrorCallout } from "@/app/ErrorCallout";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { useAppForm } from "@/forms/useAppForm";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";

@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 
-import { ErrorCallout } from "@/app/ErrorCallout";
-import { appRoutes } from "@/app/appRoutes";
+import { ErrorCallout } from "@/ui/ErrorCallout";
+import { routePaths } from "@/app/routePaths";
 import { buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 
@@ -32,7 +32,7 @@ export const DraftEditorNotices = ({
       <Callout title="יצירה מחדש באמצעות AI אינה זמינה" tone="neutral">
         יש להגדיר ספק ולהפעיל AI במסך ההגדרות. לא יתבצע מעבר דטרמיניסטי שקט.
         <div className="mt-3">
-          <Link className={buttonClasses("secondary")} to={appRoutes.settings}>
+          <Link className={buttonClasses("secondary")} to={routePaths.settings}>
             מעבר להגדרות
           </Link>
         </div>

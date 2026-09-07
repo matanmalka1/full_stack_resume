@@ -1,4 +1,4 @@
-import { ErrorCallout } from "@/app/ErrorCallout";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { useAppForm } from "@/forms/useAppForm";
 import { Button } from "@/ui/Button";
 import { useCreatePendingFact } from "../api/factMutations";

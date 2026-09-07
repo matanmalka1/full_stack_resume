@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import type { Fact } from "@/api/contracts";
-import { ErrorCallout } from "@/app/ErrorCallout";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 import { Checkbox } from "@/ui/Checkbox";
 import { useTransitionFact } from "../api/factMutations";
