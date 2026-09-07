@@ -5,7 +5,6 @@ import { classificationFromAnalysis } from "@/api/analyses";
 import { applicationDetailQueryOptions } from "@/api/applications";
 import type { ProblemDetails } from "@/api/client";
 import { useRequiredParam } from "@/app/useRequiredParam";
-import { useWorkflowStage, workflowDestinations } from "@/app/WorkflowLandmark";
 import { useWatchedOperation } from "@/hooks/useWatchedOperation";
 import { Callout } from "@/ui/Callout";
 import { PageShell } from "@/ui/PageShell";
@@ -18,6 +17,7 @@ import { JobSnapshotPanel } from "../components/JobSnapshotPanel";
 import { PreparationStatusBadges } from "../components/PreparationStatusBadges";
 import { PreparationView } from "../components/PreparationView";
 import { openDecisionCount, openDecisions } from "../components/ReviewDecisionForm";
+import { WorkflowLandmark } from "../components/WorkflowLandmark";
 import { useAutomaticDraft } from "../components/useAutomaticDraft";
 import { RecruitmentManagerButton } from "@/features/recruitment";
 
@@ -74,11 +74,6 @@ export const JobDetailsPage = () => {
     } | null
   )?.createdApplication;
 
-  useWorkflowStage(
-    detail === undefined ? "unknown" : detail.preparation_state,
-    workflowDestinations(applicationId, detail),
-  );
-
   const openDecisionsCount = detail === undefined ? 0 : openDecisionCount(openDecisions(detail));
 
   return (
@@ -92,6 +87,7 @@ export const JobDetailsPage = () => {
         )
       }
       eyebrow={detail === undefined ? undefined : <span dir="auto">{detail.application.company}</span>}
+      landmark={<WorkflowLandmark applicationId={applicationId} detail={detail} />}
       navigation={
         <ApplicationBreadcrumbs
           applicationId={applicationId}

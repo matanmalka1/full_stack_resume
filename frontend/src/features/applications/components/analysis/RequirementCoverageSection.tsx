@@ -3,7 +3,7 @@ import { useMemo } from "react";
 
 import type { Requirement, RequirementCoverage } from "@/api/analyses";
 import { factsQueryOptions } from "@/api/facts";
-import { ErrorCallout } from "@/app/ErrorCallout";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Callout } from "@/ui/Callout";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { cx } from "@/ui/cx";

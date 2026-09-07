@@ -7,7 +7,7 @@ import type { ApplicationDetail, CreateSelectionPlanRequest } from "@/api/contra
 import { isTerminalOperation, operationQueryKey, operationQueryOptions } from "@/api/operations";
 import { aiRegenerationAvailable } from "@/api/settings";
 import { useSettings } from "@/api/useSettings";
-import { ErrorCallout } from "@/app/ErrorCallout";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 import { QueryState } from "@/ui/QueryState";
 import { surfaceClasses } from "@/ui/Surface";

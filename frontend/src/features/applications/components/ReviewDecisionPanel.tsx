@@ -5,7 +5,7 @@ import type { Classification } from "@/api/analyses";
 import { applyAnalysisDecisions } from "@/api/analyses";
 import { invalidateApplicationViews } from "@/api/applications";
 import type { ApplicationDetail } from "@/api/contracts";
-import { ErrorCallout } from "@/app/ErrorCallout";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 import { Disclosure } from "@/ui/Disclosure";
 import { surfaceClasses } from "@/ui/Surface";

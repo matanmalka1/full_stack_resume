@@ -1,4 +1,4 @@
-import { appRoutes } from "@/app/appRoutes";
+import { routePaths } from "@/app/routePaths";
 
 /* Which backend action names this frontend has actually built a screen for.
 
@@ -13,30 +13,30 @@ import { appRoutes } from "@/app/appRoutes";
 const destinations: Record<string, (applicationId: string) => string> = {
   /* Job Detail summarizes preparation but does not execute it. Board recommendations and
      alerts therefore address the preparation screen that owns these controls. */
-  analyze: appRoutes.preparation,
-  apply_analysis_decisions: appRoutes.preparation,
-  create_selection_plan: appRoutes.preparation,
-  create_draft: appRoutes.preparation,
-  archive_working_draft: appRoutes.preparation,
-  replace_working_draft: appRoutes.preparation,
+  analyze: routePaths.preparation,
+  apply_analysis_decisions: routePaths.preparation,
+  create_selection_plan: routePaths.preparation,
+  create_draft: routePaths.preparation,
+  archive_working_draft: routePaths.preparation,
+  replace_working_draft: routePaths.preparation,
   /* The Draft Editor is where the patch is issued, so the three commands it carries all
      lead to it. `apply_selection_change` and the removal path are controls on that
      screen rather than screens of their own: they act on the claim the user is looking
      at, and a separate destination would ask them to find it twice. */
-  update_working_draft: appRoutes.draft,
+  update_working_draft: routePaths.draft,
   /* Validation and approval are states of the draft editor, not screens beside it.
      Both act on the exact draft the editor is holding, so they resolve to that one
      destination: the panel that reports the result and the dialog that approves it are
      already there when the user arrives. */
-  validate: appRoutes.draft,
-  approve: appRoutes.draft,
+  validate: routePaths.draft,
+  approve: routePaths.draft,
   /* After approval the editor recovers the exact latest approved revision from the
      projection and renders its explicit render panel, including after a reload. */
-  render: appRoutes.draft,
+  render: routePaths.draft,
 };
 
 export const actionDestination = (action: string, applicationId: string): string | null =>
   destinations[action]?.(applicationId) ?? null;
 
 export const actionIsOnPreparationScreen = (action: string, applicationId: string): boolean =>
-  actionDestination(action, applicationId) === appRoutes.preparation(applicationId);
+  actionDestination(action, applicationId) === routePaths.preparation(applicationId);

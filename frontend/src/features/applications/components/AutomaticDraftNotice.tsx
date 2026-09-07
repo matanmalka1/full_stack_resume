@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 import type { ApplicationDetail } from "@/api/contracts";
 import { useSettings } from "@/api/useSettings";
-import { appRoutes } from "@/app/appRoutes";
+import { routePaths } from "@/app/routePaths";
 import { Callout } from "@/ui/Callout";
 import { autoDraftIsAnticipated } from "./autoDraft";
 
@@ -21,7 +21,7 @@ export const AutomaticDraftNotice = ({ detail }: { detail: ApplicationDetail }) 
   return (
     <Callout title="טיוטה תיווצר אוטומטית בסיום הניתוח" tone="neutral">
       אם הניתוח לא יעלה נושא שדורש החלטה, יצירת הטיוטה תתחיל מיד עם סיומו בלי לחיצה נוספת. ההגדרה נמצאת ב
-      <Link className="text-cv-accent hover:underline" to={appRoutes.settings}>
+      <Link className="text-cv-accent hover:underline" to={routePaths.settings}>
         הגדרות
       </Link>
       .

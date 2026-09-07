@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 
 import { applicationArtifactsQueryOptions } from "@/api/artifacts";
 import type { ArtifactVersion } from "@/api/contracts";
-import { appRoutes } from "@/app/appRoutes";
+import { routePaths } from "@/app/routePaths";
 import { Button, buttonClasses } from "@/ui/Button";
 import { Card } from "@/ui/Card";
 import { QueryState } from "@/ui/QueryState";
@@ -66,7 +66,7 @@ const ArtifactGroupCard = ({ group, latest }: { group: ArtifactGroup; latest: bo
         </div>
         <div className="flex flex-wrap items-center gap-1">
           {group.revisionId === null ? null : (
-            <Link className={buttonClasses("ghost", "min-h-9 px-2.5")} to={appRoutes.revision(group.revisionId)}>
+            <Link className={buttonClasses("ghost", "min-h-9 px-2.5")} to={routePaths.revision(group.revisionId)}>
               פתיחת הגרסה
             </Link>
           )}

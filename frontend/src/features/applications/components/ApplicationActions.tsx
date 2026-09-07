@@ -2,7 +2,7 @@ import { type ReactElement } from "react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationDetail } from "@/api/contracts";
-import { ErrorCallout } from "@/app/ErrorCallout";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { ActionBar } from "@/ui/ActionBar";
 import { Button, buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";

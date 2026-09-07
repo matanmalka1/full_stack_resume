@@ -1,4 +1,4 @@
-import { appRoutes } from "@/app/appRoutes";
+import { routePaths } from "@/app/routePaths";
 import { Breadcrumbs, type BreadcrumbItem } from "@/ui/Breadcrumbs";
 
 type ApplicationBreadcrumbPage = "job" | "preparation" | "draft" | "revision";
@@ -30,17 +30,17 @@ export const ApplicationBreadcrumbs = ({
   revisionLabel = "גרסה מוכנה",
   targetRole,
 }: ApplicationBreadcrumbsProps) => {
-  const items: BreadcrumbItem[] = [{ label: "מועמדויות", to: appRoutes.home }];
+  const items: BreadcrumbItem[] = [{ label: "מועמדויות", to: routePaths.home }];
 
   if (applicationId !== undefined) {
     items.push({
       dir: "auto",
       label: applicationLabel(company, targetRole),
-      ...(page === "job" ? {} : { to: appRoutes.application(applicationId) }),
+      ...(page === "job" ? {} : { to: routePaths.application(applicationId) }),
     });
 
     if (page === "draft" || page === "revision") {
-      items.push({ label: "הכנת קורות החיים", to: appRoutes.preparation(applicationId) });
+      items.push({ label: "הכנת קורות החיים", to: routePaths.preparation(applicationId) });
     } else if (page === "preparation") {
       items.push({ label: "הכנת קורות החיים" });
     }

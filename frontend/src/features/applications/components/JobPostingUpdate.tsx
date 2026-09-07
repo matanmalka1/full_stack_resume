@@ -5,7 +5,7 @@ import { useState } from "react";
 import { createJobSnapshot, invalidateApplicationViews } from "@/api/applications";
 import type { ApplicationDetail } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
-import { ErrorCallout } from "@/app/ErrorCallout";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { useAppForm } from "@/forms/useAppForm";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";

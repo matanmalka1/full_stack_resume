@@ -1,5 +1,4 @@
 import type { ApplicationDetail } from "@/api/contracts";
-import { preparationStateIsImpliedByStage } from "@/app/WorkflowLandmark";
 import { StatusBadge } from "@/ui/StatusBadge";
 import {
   draftStateIsImplied,
@@ -8,6 +7,7 @@ import {
   workingDraftStateLabels,
   workingDraftStateTones,
 } from "@/features/applications/model/applicationLabels";
+import { preparationStateIsImpliedByStage } from "@/features/applications/model/workflowStages";
 
 export const PreparationStatusBadges = ({
   /* `contents` by default: the badges become direct children of whatever row the caller

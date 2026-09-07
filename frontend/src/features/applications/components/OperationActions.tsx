@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import type { Operation } from "@/api/contracts";
 import { cancelOperation, operationQueryKey, retryOperation } from "@/api/operations";
-import { ErrorCallout } from "@/app/ErrorCallout";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 
 interface OperationActionsProps {
