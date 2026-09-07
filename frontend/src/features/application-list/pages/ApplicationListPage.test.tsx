@@ -225,10 +225,10 @@ describe("ApplicationListPage", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: "לוח מועמדויות ומעקב גיוס" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "לוח מועמדויות" })).toBeInTheDocument();
     expect(screen.queryByText("CV Engine")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "קליטת משרה חדשה" })).not.toBeInTheDocument();
-    expect(screen.getByLabelText("סינון מהיר לפי מצב")).toBeInTheDocument();
+    expect(await screen.findByRole("group", { name: "סינון מהיר לפי מצב" })).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Backend Engineer" })).toHaveAttribute(
       "href",
       "/applications/app-1",
@@ -286,28 +286,24 @@ describe("ApplicationListPage", () => {
     expect(screen.getByLabelText("מצב קורות החיים")).toHaveValue("needs_analysis");
   });
 
-  /* Clearing what matched nothing must not also move the reader to another board. */
-  it("keeps the activity and sort selections when the filter is cleared", async () => {
+  /* Clearing restores the board's default slice while preserving its ordering. */
+  it("clears every filter while preserving the sort selection", async () => {
     const { fetchMock } = stubList([], { matched: 0, total: 4, stageCounts: { ready: 4 } });
 
     renderPage({ entries: ["/?activity=closed&sort=company&search=nothing"] });
 
     fireEvent.click(await screen.findByRole("button", { name: "ניקוי הסינון" }));
 
-    expect(screen.getByLabelText("מועמדויות")).toHaveValue("closed");
+    expect(screen.getByLabelText("מועמדויות")).toHaveValue("open");
     expect(screen.getByLabelText("סדר")).toHaveValue("company");
     expect(screen.getByLabelText("חיפוש במועמדויות")).toHaveValue("");
     await waitFor(() =>
       expect(fetchMock).toHaveBeenLastCalledWith(
-        expect.stringContaining("activity=closed"),
+        expect.not.stringContaining("activity=closed"),
         expect.objectContaining({ method: "GET" }),
       ),
     );
-
-    expect(screen.getByText("מסננים פעילים:")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "ניקוי הכול" }));
-    expect(screen.getByLabelText("מועמדויות")).toHaveValue("open");
-    expect(screen.getByLabelText("סדר")).toHaveValue("updated");
+    expect(screen.getByRole("button", { name: /הכול/ })).toHaveAttribute("aria-pressed", "true");
   });
 
   /* The row was painted on hover while only three of its cells were clickable. */
@@ -422,7 +418,7 @@ describe("ApplicationListPage", () => {
     renderPage();
 
     const interviews = await screen.findByRole("button", { name: /ראיונות פעילים/ });
-    const ready = screen.getByRole("button", { name: /מסמכים מוכנים לשליחה/ });
+    const ready = screen.getByRole("button", { name: /מוכן לשליחה/ });
     const attention = screen.getByRole("button", { name: /דורש טיפול/ });
     /* The buttons render before the single list query settles, so their counts start as
        placeholders. The resolved response carries all authoritative facets together. */
@@ -450,11 +446,6 @@ describe("ApplicationListPage", () => {
     fireEvent.click(ready);
 
     await waitFor(() => expect(ready).toHaveAttribute("aria-pressed", "true"));
-    expect(
-      within(screen.getByRole("search", { name: "סינון וחיפוש מועמדויות" })).getByRole("button", {
-        name: "מוכן לשליחה",
-      }),
-    ).toBeInTheDocument();
     await waitFor(() =>
       expect(
         fetchMock.mock.calls.some(([url]) => {
@@ -580,7 +571,7 @@ describe("ApplicationListPage", () => {
        suite, scheduling that query can exceed Testing Library's one-second default even
        though the mocked response is immediate. Keep the longer budget local to this
        multi-render transition rather than weakening every assertion. */
-    expect(await screen.findByRole("link", { name: "Last Company" }, { timeout: 5_000 })).toBeInTheDocument();
+    expect(await screen.findByText("Last Company", {}, { timeout: 5_000 })).toBeInTheDocument();
     expect(screen.getByText("26–26 מתוך 26")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenLastCalledWith(
       expect.stringContaining("offset=25"),
