@@ -31,6 +31,13 @@ class ApplicationError(RuntimeError):
     def __init__(self, message: str, *, code: str | None = None):
         super().__init__(message)
         self.code = code or _default_code(type(self))
+        # Provider evidence already preserved by earlier steps of the same
+        # command, attached by a caller that catches a later step's failure
+        # (analysis.py's multi-step provider flow). Declared here, not just
+        # assigned at the raise site, so `getattr(error, "completed_evidence",
+        # ())` in the Operation handler has a real attribute to fall back to
+        # rather than a name that only some subclasses happen to carry.
+        self.completed_evidence: tuple[Any, ...] = ()
 
 
 class UnknownRecord(ApplicationError):
@@ -150,6 +157,11 @@ class ProviderFailure(InfrastructureFailure):
     ):
         super().__init__(message, code=code)
         self.provenance = provenance
+        # Set by a caller that already preserved a response this failure is
+        # about (analysis.py, mirroring `evidence_attached` for
+        # `ProposalRejected`), so the Operation handler can register it as
+        # inactive evidence instead of leaving an orphaned payload behind.
+        self.evidence: Any = None
 
 
 class ProviderTimeout(ProviderFailure):
