@@ -90,16 +90,21 @@ export const ApplicationIdentity = ({
         <Link
           className={
             row
-              ? "block truncate text-support font-bold text-cv-text hover:underline"
+              ? "block truncate text-body font-bold text-cv-text transition-colors group-hover:text-cv-accent hover:underline"
               : "block truncate font-extrabold text-cv-text transition-colors group-hover:text-cv-accent hover:underline"
           }
           dir="auto"
+          title={row ? item.target_role : item.company}
           to={href}
         >
-          {item.company}
+          {row ? item.target_role : item.company}
         </Link>
-        <p className="truncate text-support text-cv-text-muted" dir="auto" title={row ? undefined : item.target_role}>
-          {item.target_role}
+        <p
+          className="truncate text-support font-medium text-cv-text-muted"
+          dir="auto"
+          title={row ? item.company : item.target_role}
+        >
+          {row ? item.company : item.target_role}
         </p>
         <ApplicationProvenance item={item} linkSource={row} />
         {row && ambiguous ? (

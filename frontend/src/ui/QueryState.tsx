@@ -13,6 +13,7 @@ interface QueryStateProps {
   fallbackTitle?: string;
   loading?: boolean;
   loadingLabel?: ReactNode;
+  loadingState?: ReactNode;
 }
 
 /* Query-backed regions always resolve in the same order and place: a failure replaces
@@ -29,6 +30,7 @@ export const QueryState = ({
   fallbackTitle,
   loading = false,
   loadingLabel,
+  loadingState,
 }: QueryStateProps) => {
   const errorState =
     error !== null && error !== undefined && fallbackTitle !== undefined ? (
@@ -36,7 +38,9 @@ export const QueryState = ({
     ) : null;
 
   if (loading) {
-    return errorState ?? <p className={cx("text-body text-cv-text-muted", className)}>{loadingLabel}</p>;
+    return (
+      errorState ?? loadingState ?? <p className={cx("text-body text-cv-text-muted", className)}>{loadingLabel}</p>
+    );
   }
 
   const content = empty ? emptyState : children;

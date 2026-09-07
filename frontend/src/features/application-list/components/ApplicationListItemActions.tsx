@@ -1,4 +1,5 @@
-import { Archive, ArrowLeft, FileCheck2, SlidersHorizontal } from "lucide-react";
+import { Archive, ArrowLeft, Ellipsis, FileCheck2, SlidersHorizontal } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
@@ -87,29 +88,96 @@ export const ApplicationRecordActions = ({
   item: ApplicationListItem;
   onRequestClose: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
-}) => (
-  <div className="flex shrink-0 items-center gap-0.5 max-sm:[&_[role=tooltip]]:hidden">
-    <Tooltip label="עדכון סטטוס ומשימות">
-      <button
-        aria-label={`עדכון סטטוס ומשימות עבור ${item.company}`}
-        className="inline-flex min-h-9 items-center rounded-control px-2 text-cv-text-muted transition-colors hover:bg-cv-surface-muted hover:text-cv-text"
-        onClick={() => onRequestUpdate(item)}
-        type="button"
-      >
-        <SlidersHorizontal aria-hidden="true" className="size-4" />
-      </button>
-    </Tooltip>
-    {item.is_closed ? null : (
-      <Tooltip label="סגירת מועמדות · הרשומה וההיסטוריה נשמרות, לא נמחקות">
-        <Button
-          aria-label={`סגירת המועמדות ${item.company}`}
-          className="min-h-9 px-2 text-cv-text-muted hover:text-cv-blocker"
-          onClick={() => onRequestClose(item)}
-          variant="ghost"
+}) => {
+  const [open, setOpen] = useState(false);
+  const menuId = `application-actions-${item.id}`;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    containerRef.current?.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus();
+    const closeFromOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !containerRef.current?.contains(event.target)) setOpen(false);
+    };
+    const closeFromKeyboard = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      triggerRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", closeFromOutside);
+    document.addEventListener("keydown", closeFromKeyboard);
+    return () => {
+      document.removeEventListener("pointerdown", closeFromOutside);
+      document.removeEventListener("keydown", closeFromKeyboard);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative z-10 shrink-0" ref={containerRef}>
+      <Tooltip label="פעולות נוספות">
+        <button
+          aria-controls={menuId}
+          aria-expanded={open}
+          aria-haspopup="menu"
+          aria-label={`פעולות נוספות עבור ${item.company}`}
+          className="inline-flex size-9 items-center justify-center rounded-control text-cv-text-muted transition-colors hover:bg-cv-surface-muted hover:text-cv-text"
+          onClick={() => setOpen((current) => !current)}
+          ref={triggerRef}
+          type="button"
         >
-          <Archive aria-hidden="true" className="size-4" />
-        </Button>
+          <Ellipsis aria-hidden="true" className="size-4" />
+        </button>
       </Tooltip>
-    )}
-  </div>
-);
+      {open ? (
+        <div
+          className="absolute end-0 top-full z-20 mt-1 min-w-52 rounded-control border border-cv-border bg-cv-surface-raised p-1 shadow-floating"
+          id={menuId}
+          onKeyDown={(event) => {
+            if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+            event.preventDefault();
+            const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("[role=menuitem]")];
+            const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+            const nextIndex =
+              event.key === "Home"
+                ? 0
+                : event.key === "End"
+                  ? items.length - 1
+                  : (currentIndex + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+            items[nextIndex]?.focus();
+          }}
+          role="menu"
+        >
+          <button
+            className="flex min-h-9 w-full items-center gap-2 rounded-control px-3 text-start text-support font-medium text-cv-text hover:bg-cv-surface-muted"
+            onClick={() => {
+              setOpen(false);
+              onRequestUpdate(item);
+            }}
+            role="menuitem"
+            type="button"
+          >
+            <SlidersHorizontal aria-hidden="true" className="size-4 text-cv-text-muted" />
+            עדכון סטטוס ומשימות
+          </button>
+          {item.is_closed ? null : (
+            <Button
+              aria-label={`סגירת המועמדות ${item.company}`}
+              className="min-h-9 w-full justify-start rounded-control px-3 text-cv-blocker hover:bg-cv-blocker-soft"
+              onClick={() => {
+                setOpen(false);
+                onRequestClose(item);
+              }}
+              role="menuitem"
+              variant="ghost"
+            >
+              <Archive aria-hidden="true" className="size-4" />
+              סגירת מועמדות
+            </Button>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+};

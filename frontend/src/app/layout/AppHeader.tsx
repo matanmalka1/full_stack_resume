@@ -48,7 +48,6 @@ export const AppHeader = () => (
       <div className="flex items-center gap-2 sm:gap-3">
         <GlobalSearch />
 
-        <Tooltip label="קליטת משרה חדשה">
           <Link
             aria-label="קליטת משרה חדשה"
             className={buttonClasses("primary", "py-1.5 px-3 text-support")}
@@ -57,7 +56,6 @@ export const AppHeader = () => (
             <Plus aria-hidden="true" className="size-4" />
             <span className="hidden sm:inline">משרה חדשה</span>
           </Link>
-        </Tooltip>
       </div>
     </div>
 

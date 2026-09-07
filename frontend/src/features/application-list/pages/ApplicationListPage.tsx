@@ -13,7 +13,7 @@ import { ViewSwitch } from "@/ui/ViewSwitch";
 import { ApplicationCardsView } from "../components/ApplicationCardsView";
 import { ApplicationListFilters } from "../components/ApplicationListFilters";
 import { ApplicationListPagination } from "../components/ApplicationListPagination";
-import { ApplicationListTable } from "../components/ApplicationListTable";
+import { ApplicationListTable, ApplicationListTableSkeleton } from "../components/ApplicationListTable";
 import { ApplicationPipelineView } from "../components/ApplicationPipelineView";
 import { CloseApplicationDialog } from "../components/CloseApplicationDialog";
 import { ApplicationAttentionSummary } from "../components/ApplicationAttentionSummary";
@@ -112,6 +112,7 @@ export const ApplicationListPage = () => {
           fallbackTitle="לא ניתן לטעון את המועמדויות"
           loading={listQuery.isPending}
           loadingLabel="טוען את המועמדויות…"
+          loadingState={<ApplicationListTableSkeleton />}
         >
           {page === undefined ? null : (
             <>

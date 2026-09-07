@@ -203,10 +203,25 @@ afterEach(() => {
 });
 
 describe("ApplicationListPage", () => {
+  it("reserves the list layout with row-shaped skeletons while the first request is pending", () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise<Response>(() => undefined)),
+    );
+
+    renderPage();
+
+    expect(screen.getByRole("status", { name: "טוען את המועמדויות" })).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
   /* The reason this screen exists: an Application that was saved has to be reachable
      without its URL, and its row has to say where it stands. */
   it("lists every Application with both of its state axes", async () => {
-    stubList([item(), item({ id: "app-2", company: "Binat", preparation_state: "ready" })]);
+    stubList([
+      item(),
+      item({ id: "app-2", company: "Binat", preparation_state: "ready", target_role: "Sales Engineer" }),
+    ]);
 
     renderPage();
 
@@ -215,8 +230,10 @@ describe("ApplicationListPage", () => {
     expect(await screen.findByText("2 מועמדויות במערכת")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "קליטת משרה חדשה" })).toHaveAttribute("href", "/applications/new");
     expect(screen.queryByRole("button", { name: "קליטה מהירה" })).not.toBeInTheDocument();
-    expect(await screen.findByRole("link", { name: "Acme" })).toHaveAttribute("href", "/applications/app-1");
-    expect(screen.getByRole("link", { name: "Binat" })).toHaveAttribute("href", "/applications/app-2");
+    expect(await screen.findByRole("link", { name: "Backend Engineer" })).toHaveAttribute(
+      "href",
+      "/applications/app-1",
+    );
     /* Preparation and recruitment are independent axes and the board shows both: one says
        how far the CV has got, the other where the Application stands with the employer.
        Scoped to the table because the stage filter offers the same vocabulary as its
@@ -225,9 +242,10 @@ describe("ApplicationListPage", () => {
     expect(board.getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
     expect(board.getByText("קורות החיים מוכנים")).toBeInTheDocument();
     expect(board.getAllByText("נשמר")).toHaveLength(2);
-    expect(board.getByRole("columnheader", { name: "צעד הבא ויעד" })).toBeInTheDocument();
-    expect(board.getByRole("columnheader", { name: "פעולות מהירות" })).toBeInTheDocument();
-    expect(board.getByRole("button", { name: "עדכון סטטוס ומשימות עבור Acme" })).toBeInTheDocument();
+    expect(board.getByRole("columnheader", { name: "המשך טיפול" })).toBeInTheDocument();
+    expect(board.queryByRole("columnheader", { name: "התאמה" })).not.toBeInTheDocument();
+    fireEvent.click(board.getByRole("button", { name: "פעולות נוספות עבור Acme" }));
+    expect(board.getByRole("menuitem", { name: "עדכון סטטוס ומשימות" })).toBeInTheDocument();
   });
 
   /* The column is read to decide which row to open next, so it names what is waiting
@@ -299,6 +317,17 @@ describe("ApplicationListPage", () => {
     expect(screen.getByRole("heading", { name: "מסך המועמדות" })).toBeInTheDocument();
   });
 
+  it("opens a focused row from the keyboard", async () => {
+    stubList([item()]);
+
+    renderPage();
+
+    const row = await screen.findByRole("row", { name: "Backend Engineer אצל Acme" });
+    fireEvent.keyDown(row, { key: "Enter" });
+
+    expect(screen.getByRole("heading", { name: "מסך המועמדות" })).toBeInTheDocument();
+  });
+
   it("switches between table, card, and recruitment pipeline views without changing the server query", async () => {
     const { fetchMock } = stubList([
       item({ next_action: "Follow up", next_action_date: "2020-01-01" }),
@@ -318,7 +347,7 @@ describe("ApplicationListPage", () => {
     expect(screen.getAllByText("Follow up")).toHaveLength(2);
     expect(screen.getAllByText(/באיחור/)).toHaveLength(2);
     expect(screen.getByText(/Referral from Dana/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "עדכון סטטוס ומשימות עבור Acme" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "פעולות נוספות עבור Acme" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "תצוגת שלבי גיוס" }));
     const pipeline = screen.getByRole("list", { name: "מועמדויות לפי שלב גיוס" });
@@ -456,7 +485,8 @@ describe("ApplicationListPage", () => {
 
     renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: "עדכון סטטוס ומשימות עבור Acme" }));
+    fireEvent.click(await screen.findByRole("button", { name: "פעולות נוספות עבור Acme" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "עדכון סטטוס ומשימות" }));
     expect(await screen.findByRole("dialog", { name: "ניהול מועמדות: Acme" })).toBeInTheDocument();
     /* The dialog opens before its own detail fetch settles - it shows a loading line
        until then - so the form's fields exist only once that resolves. */
@@ -584,7 +614,8 @@ describe("ApplicationListPage", () => {
 
     renderPage({ queryClient });
 
-    fireEvent.click(await screen.findByRole("button", { name: "סגירת המועמדות Acme" }));
+    fireEvent.click(await screen.findByRole("button", { name: "פעולות נוספות עבור Acme" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "סגירת המועמדות Acme" }));
     fireEvent.click(screen.getByRole("button", { name: "סגירת המועמדות" }));
 
     await waitFor(() =>
