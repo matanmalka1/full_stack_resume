@@ -1,11 +1,10 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-import { useWorkflowStage } from "@/app/WorkflowLandmark";
-import { appRoutes } from "@/app/appRoutes";
+import { routePaths } from "@/app/routePaths";
 import { Breadcrumbs } from "@/ui/Breadcrumbs";
 import { PageShell } from "@/ui/PageShell";
 import { useAppForm } from "@/forms/useAppForm";
-import { paramsFromQuery, queryFromParams } from "@/features/application-list/components/applicationListParams";
+import { paramsFromQuery, queryFromParams } from "@/features/application-list";
 import { ApplicationIntakeForm } from "../components/ApplicationIntakeForm";
 import { useApplicationIntakeSubmission } from "../hooks/useApplicationIntakeSubmission";
 import { emptyApplicationIntake, intakeFromFields, type ApplicationIntakeFields } from "../model/applicationIntake";
@@ -22,13 +21,12 @@ export const NewApplicationPage = () => {
   const fields = form.watch();
   const currentIntake = intakeFromFields(fields);
   const boardSearch = paramsFromQuery(queryFromParams(boardParams)).toString();
-  const boardPath = boardSearch === "" ? appRoutes.home : `${appRoutes.home}?${boardSearch}`;
+  const boardPath = boardSearch === "" ? routePaths.home : `${routePaths.home}?${boardSearch}`;
 
-  useWorkflowStage("none");
   const submission = useApplicationIntakeSubmission({
     currentIntake,
     onCreated: (result) => {
-      void navigate(appRoutes.application(result.applicationId), {
+      void navigate(routePaths.application(result.applicationId), {
         replace: true,
         state: {
           createdApplication: { analysisProblem: result.analysisProblem, analysisQueued: result.analysisQueued },

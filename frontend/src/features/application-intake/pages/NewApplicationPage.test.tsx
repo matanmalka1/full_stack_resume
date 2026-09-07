@@ -3,10 +3,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { JOB_TEXT_MAX_BYTES } from "../api/applications";
-import type { DuplicateMatch } from "../api/contracts";
-import { settingsQueryKey } from "../api/settings";
-import { NewApplicationPage } from "@/features/application-intake";
+import { JOB_TEXT_MAX_BYTES } from "@/api/applications";
+import type { DuplicateMatch } from "@/api/contracts";
+import { settingsQueryKey } from "@/api/settings";
+import { NewApplicationPage } from "./NewApplicationPage";
 
 const jsonResponse = (body: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response =>
   new Response(JSON.stringify(body), {

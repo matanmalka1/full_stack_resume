@@ -1,6 +1,6 @@
 import { FileCheck2 } from "lucide-react";
 
-import { ErrorCallout } from "@/app/ErrorCallout";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Callout } from "@/ui/Callout";
 
 interface IntakeFeedbackProps {
