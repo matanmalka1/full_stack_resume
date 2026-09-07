@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { NewApplicationPage } from "@/features/application-intake";
 import { ApplicationListPage } from "@/features/application-list";
-import { JobDetailsPage } from "@/features/applications";
+import { ApplicationPage } from "@/features/applications";
 import { router } from "./router";
 
 const route = (path: string) => router.routes[0]?.children?.find((entry) => entry.path === path);
@@ -23,8 +23,8 @@ describe("the route table", () => {
   /* Two addresses, one screen, on purpose: `/preparation` names the document workflow
      that links and bookmarks point at directly. */
   it("answers both Application addresses with the hub screen", () => {
-    expect(elementType("applications/:applicationId")).toBe(JobDetailsPage);
-    expect(elementType("applications/:applicationId/preparation")).toBe(JobDetailsPage);
+    expect(elementType("applications/:applicationId")).toBe(ApplicationPage);
+    expect(elementType("applications/:applicationId/preparation")).toBe(ApplicationPage);
   });
 
   /* Validation, approval, review, and render are states of the draft editor, so the table

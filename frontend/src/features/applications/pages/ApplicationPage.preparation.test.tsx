@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail, Operation, Settings } from "@/api/contracts";
 import { settingsQueryKey } from "@/api/settings";
-import { JobDetailsPage } from "./JobDetailsPage";
+import { ApplicationPage } from "./ApplicationPage";
 
 const ANALYSES_PATH = "/api/v1/applications/app-1/analyses";
 
@@ -144,7 +144,7 @@ const renderPage = (settings: Settings = deterministicSettings) => {
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={["/applications/app-1/preparation"]}>
         <Routes>
-          <Route element={<JobDetailsPage />} path="/applications/:applicationId/preparation" />
+          <Route element={<ApplicationPage />} path="/applications/:applicationId/preparation" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -165,7 +165,7 @@ afterEach(() => {
   sessionStorage.clear();
 });
 
-describe("JobDetailsPage at the preparation route", () => {
+describe("ApplicationPage at the preparation route", () => {
   it("shows the complete hierarchy above CV preparation", async () => {
     vi.stubGlobal(
       "fetch",

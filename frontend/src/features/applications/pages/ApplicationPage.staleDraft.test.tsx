@@ -5,11 +5,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail, Operation, Reason, Settings, WorkingDraft } from "@/api/contracts";
 import { settingsQueryKey } from "@/api/settings";
-import { JobDetailsPage } from "../pages/JobDetailsPage";
+import { ApplicationPage } from "./ApplicationPage";
 
 /* §14: the two ways out of a stale draft, end to end through the screen.
 
-   `applicationActionPlan.test.ts` covers what the pair is offered on. What is left here is
+   `workflowActionPlan.test.ts` covers what the pair is offered on. What is left here is
    what pressing them sends, and that is worth a DOM: both commands are addressed to an
    exact version of a record the engine may not regenerate, and the version reaches them
    from a read the plan does not perform. A payload assembled from the wrong read, or a
@@ -173,7 +173,7 @@ const renderPage = () => {
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={["/applications/app-1/preparation"]}>
         <Routes>
-          <Route element={<JobDetailsPage />} path="/applications/:applicationId/preparation" />
+          <Route element={<ApplicationPage />} path="/applications/:applicationId/preparation" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,

@@ -2,7 +2,7 @@ import { Navigate, createBrowserRouter, useParams } from "react-router-dom";
 
 import { NewApplicationPage } from "@/features/application-intake";
 import { ApplicationListPage } from "@/features/application-list";
-import { JobDetailsPage } from "@/features/applications";
+import { ApplicationPage } from "@/features/applications";
 import { DraftEditorPage } from "@/features/drafts";
 import { RevisionPage } from "@/features/revisions";
 import { SettingsPage } from "@/features/settings";
@@ -51,8 +51,8 @@ export const router = createBrowserRouter([
          tabs of one screen. `/preparation` is a second address for that same screen with
          the preparation tab selected - the document workflow is linked to and bookmarked
          directly, so it keeps a name of its own. */
-      { path: "applications/:applicationId", element: <JobDetailsPage /> },
-      { path: "applications/:applicationId/preparation", element: <JobDetailsPage /> },
+      { path: "applications/:applicationId", element: <ApplicationPage /> },
+      { path: "applications/:applicationId/preparation", element: <ApplicationPage /> },
 
       /* The draft editor: edit, preview, validate, approve, and render, on the one screen
          that holds the draft all five act on. */

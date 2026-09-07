@@ -5,15 +5,15 @@ import { Card } from "@/ui/Card";
 import { LtrText } from "@/ui/LtrText";
 import { SectionHeader } from "@/ui/SectionHeader";
 import { SummaryList } from "@/ui/SummaryList";
-import { formatDateTime } from "@/ui/formatDateTime";
+import { formatDateTime } from "@/utils/formatDateTime";
 import { JobPostingUpdate } from "./JobPostingUpdate";
-import { JobTextDisclosure } from "./JobTextDisclosure";
-import { sourceHostname } from "./applicationPresentation";
+import { CopyableTextDisclosure } from "@/ui/CopyableTextDisclosure";
+import { sourceHostname } from "../model/applicationPresentation";
 
 /* The active posting on Job Detail. The projection already carries `latest_snapshot`, so
    the source remains readable before analysis and after the preparation workflow ends.
 
-   The posting text itself is `JobTextDisclosure`, shared with the preparation screen so
+   The posting text itself uses the shared copyable disclosure, so
    the same source reads the same way under both conclusions.
 
    `latest_snapshot` is the newest immutable snapshot of the Application. */
@@ -64,7 +64,12 @@ export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
           ]}
         />
 
-        <JobTextDisclosure detail={detail} summary="הצגת נוסח המשרה השמור" />
+        <CopyableTextDisclosure
+          emptyMessage="נוסח המשרה אינו זמין."
+          label="נוסח המשרה"
+          summary="הצגת נוסח המשרה השמור"
+          text={snapshot.job_text}
+        />
       </div>
     </Card>
   );

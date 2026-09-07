@@ -8,9 +8,9 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button, buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { SummaryList } from "@/ui/SummaryList";
-import { formatBytes } from "@/ui/formatBytes";
-import { formatDateTime } from "@/ui/formatDateTime";
-import { artifactTypeLabel, lifecycleLabel, unavailableReasonLabel } from "./artifactLabels";
+import { formatBytes } from "@/utils/formatBytes";
+import { formatDateTime } from "@/utils/formatDateTime";
+import { artifactTypeLabel, lifecycleLabel, unavailableReasonLabel } from "../model/artifactLabels";
 
 const artifactIcons: Record<string, LucideIcon> = {
   resume_html: FileCode2,
@@ -21,7 +21,7 @@ const artifactIcons: Record<string, LucideIcon> = {
 const metadataValue = (value: unknown): string =>
   typeof value === "string" ? value : (JSON.stringify(value, null, 0) ?? "");
 
-export const ArtifactRow = ({ artifact }: { artifact: ArtifactVersion }) => {
+export const ApplicationArtifactRow = ({ artifact }: { artifact: ArtifactVersion }) => {
   const [open, setOpen] = useState(false);
   const detailQuery = useQuery({ ...artifactVersionQueryOptions(artifact.id), enabled: open });
   const detail = detailQuery.data;

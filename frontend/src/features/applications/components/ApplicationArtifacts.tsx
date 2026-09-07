@@ -8,11 +8,12 @@ import type { ArtifactVersion } from "@/api/contracts";
 import { routePaths } from "@/app/routePaths";
 import { Button, buttonClasses } from "@/ui/Button";
 import { Card } from "@/ui/Card";
+import { EmptyState } from "@/ui/EmptyState";
 import { QueryState } from "@/ui/QueryState";
 import { SectionHeader } from "@/ui/SectionHeader";
-import { formatDateTime } from "@/ui/formatDateTime";
-import { ArtifactRow } from "./ArtifactRow";
-import { artifactTypeLabel, isDeliverableArtifact } from "./artifactLabels";
+import { formatDateTime } from "@/utils/formatDateTime";
+import { ApplicationArtifactRow } from "./ApplicationArtifactRow";
+import { artifactTypeLabel, isDeliverableArtifact } from "../model/artifactLabels";
 
 interface ArtifactGroup {
   artifacts: ArtifactVersion[];
@@ -83,7 +84,7 @@ const ArtifactGroupCard = ({ group, latest }: { group: ArtifactGroup; latest: bo
       {open ? (
         <ul className="mx-3 divide-y divide-cv-border border-t border-cv-border py-2 sm:mx-4">
           {group.artifacts.map((artifact) => (
-            <ArtifactRow artifact={artifact} key={artifact.id} />
+            <ApplicationArtifactRow artifact={artifact} key={artifact.id} />
           ))}
         </ul>
       ) : null}
@@ -137,7 +138,7 @@ const ArtifactGroupList = ({ artifacts, internal = false }: { artifacts: Artifac
    The engine's own evidence - claim manifests, draft snapshots, provider responses - is
    here too, behind one press. It is part of the record and its integrity is checkable on
    the same terms; it is simply not what the reader came for. */
-export const ArtifactsPanel = ({ applicationId }: { applicationId: string }) => {
+export const ApplicationArtifacts = ({ applicationId }: { applicationId: string }) => {
   const query = useQuery(applicationArtifactsQueryOptions(applicationId));
   const [showInternal, setShowInternal] = useState(false);
   /* Newest first, which is the order the reader is asking about. The server's answer is
@@ -149,13 +150,6 @@ export const ArtifactsPanel = ({ applicationId }: { applicationId: string }) => 
     .sort((left, right) => right.created_at.localeCompare(left.created_at));
   const deliverables = ordered.filter((artifact) => isDeliverableArtifact(artifact.artifact_type));
   const internal = ordered.filter((artifact) => !isDeliverableArtifact(artifact.artifact_type));
-
-  /* Nothing is registered and nothing is loading, and a heading over an empty list would
-     be a section about files that do not exist yet. Still loading is a different state
-     from there being nothing in it - the panel stays visible below and reports that. */
-  if (!query.isPending && query.error === null && ordered.length === 0) {
-    return null;
-  }
 
   return (
     <Card aria-labelledby="artifacts-heading" className="bg-cv-surface p-4 shadow-surface">
@@ -172,6 +166,17 @@ export const ArtifactsPanel = ({ applicationId }: { applicationId: string }) => 
       <QueryState
         className="mt-3"
         empty={ordered.length === 0}
+        /* A tab the reader chose to open. It used to render nothing at all with nothing
+           registered, which on a tab is a dead end rather than a quiet section: the
+           answer to "where are my files" is that the workflow has not produced any yet,
+           and that has to be said. */
+        emptyState={
+          <EmptyState>
+            <p className="text-support text-cv-text-muted">
+              עוד לא נוצר קובץ למועמדות הזו. קובץ נרשם כאן אחרי שגרסה מאושרת עוברת רינדור.
+            </p>
+          </EmptyState>
+        }
         error={query.error}
         fallbackDetail="שום קובץ לא השתנה. אפשר לרענן ולנסות שוב."
         fallbackTitle="לא ניתן לטעון את רשימת הקבצים"

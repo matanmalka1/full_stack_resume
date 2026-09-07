@@ -11,8 +11,8 @@ import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Dialog } from "@/ui/Dialog";
 import { Field } from "@/ui/Field";
-import { TextArea, TextInput } from "@/ui/TextInput";
-import { SOURCE_URL_MAX_CHARACTERS } from "@/features/applications/model/applicationInput";
+import { Input, Textarea } from "@/ui/Input";
+import { SOURCE_URL_MAX_CHARACTERS } from "../model/applicationInput";
 
 interface PostingFields {
   job_text: string;
@@ -159,7 +159,7 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
           <Field error={errors.job_text?.message} label="טקסט המשרה">
             {(control) => (
               /* Mixed Hebrew/English posting text picks its own direction (A.3). */
-              <TextArea
+              <Textarea
                 {...control}
                 {...register("job_text", {
                   validate: (value) => value.trim() !== "" || "יש להזין את טקסט המשרה.",
@@ -177,7 +177,7 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
           >
             {(control) => (
               /* A.3: a URL is an LTR island even inside the RTL shell. */
-              <TextInput
+              <Input
                 {...control}
                 {...register("source_url")}
                 className="ltr-island max-w-xl"

@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail, ArtifactVersion } from "@/api/contracts";
-import { JobDetailsPage } from "./JobDetailsPage";
+import { ApplicationPage } from "./ApplicationPage";
 
 const detail = (): ApplicationDetail =>
   ({
@@ -93,8 +93,12 @@ const renderPage = (fetchImplementation?: (input: RequestInfo | URL, init?: Requ
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={["/applications/app-1"]}>
         <Routes>
-          <Route element={<JobDetailsPage />} path="/applications/:applicationId" />
-          <Route element={<h1>הכנת קורות החיים</h1>} path="/applications/:applicationId/preparation" />
+          {/* Both addresses resolve to this one screen, exactly as `router.tsx` maps them:
+              selecting the preparation tab moves the URL to `/preparation` rather than
+              leaving a `?tab=` on the other form, so a stub behind that path would test a
+              route the application does not have. */}
+          <Route element={<ApplicationPage />} path="/applications/:applicationId" />
+          <Route element={<ApplicationPage />} path="/applications/:applicationId/preparation" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -105,7 +109,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("JobDetailsPage", () => {
+describe("ApplicationPage", () => {
   it("places the job under the applications breadcrumb", async () => {
     renderPage();
 
@@ -138,15 +142,34 @@ describe("JobDetailsPage", () => {
     );
   });
 
-  it("presents recruitment status separately from the CV preparation state", async () => {
+  it("reports preparation and recruitment as two separate axes", async () => {
     renderPage();
 
-    expect(await screen.findByText("ממתין לניתוח המשרה")).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "מעקב גיוס" })).not.toBeInTheDocument();
+    /* Two headings, two states, and neither is a step of the other: the CV can be Ready
+       while the recruitment status is still a first call, so a single merged "status"
+       would be claiming a sequence that does not exist. */
+    const preparation = await screen.findByRole("heading", { name: "הכנת קורות חיים" });
+    const recruitment = screen.getByRole("heading", { name: "גיוס" });
+    expect(preparation.compareDocumentPosition(recruitment) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
+    expect(screen.getByText("שיחת מגייס")).toBeInTheDocument();
 
+    /* Reading the recruitment state is not the same as changing it: the transitions and
+       the timeline stay in the manager dialog. */
+    expect(screen.queryByRole("heading", { name: "מעקב גיוס" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
     expect(await screen.findByRole("dialog", { name: "ניהול מועמדות: Acme" })).toBeInTheDocument();
-    expect(screen.getByText("שיחת מגייס")).toBeInTheDocument();
+  });
+
+  it("offers the recommended action as one destination beside the record", async () => {
+    renderPage();
+
+    /* The projection recommends `analyze`; the masthead offers it as the way into the
+       screen that runs it, never as a second copy of the command itself. */
+    expect(await screen.findByRole("link", { name: /ניתוח המשרה/ })).toHaveAttribute(
+      "href",
+      "/applications/app-1/preparation",
+    );
   });
 
   it("keeps recruitment details in the manager without duplicating application metadata", async () => {
@@ -280,36 +303,6 @@ describe("JobDetailsPage", () => {
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({
       job_text: "Senior Backend Engineer, now remote",
       source_url: "https://example.com/jobs/1",
-    });
-  });
-
-  it("edits notes with the exact server value as an optimistic precondition", async () => {
-    let currentNotes = detail().application.notes;
-    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input).endsWith("/notes") && init?.method === "PATCH") {
-        const body = JSON.parse(String(init.body)) as { notes: string };
-        currentNotes = body.notes;
-        return Promise.resolve(jsonResponse({ application_id: "app-1", notes: currentNotes, updated_at: "now" }));
-      }
-      if (String(input).endsWith("/artifacts")) return Promise.resolve(jsonResponse({ items: [] }));
-      return Promise.resolve(
-        jsonResponse({ ...detail(), application: { ...detail().application, notes: currentNotes } }),
-      );
-    });
-    renderPage(fetchMock);
-
-    fireEvent.click(await screen.findByRole("button", { name: "עריכת הערות" }));
-    fireEvent.change(screen.getByLabelText("הערות"), { target: { value: "Follow up after the holiday" } });
-    fireEvent.click(screen.getByRole("button", { name: "שמירת ההערות" }));
-
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "עריכת הערות למועמדות" })).not.toBeInTheDocument());
-    expect(screen.getByText("Follow up after the holiday")).toBeInTheDocument();
-    const request = fetchMock.mock.calls.find(
-      ([input, init]) => String(input).endsWith("/notes") && init?.method === "PATCH",
-    );
-    expect(JSON.parse(String(request?.[1]?.body))).toEqual({
-      notes: "Follow up after the holiday",
-      expected_notes: "Referral from a former colleague",
     });
   });
 });
