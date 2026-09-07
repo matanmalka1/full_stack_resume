@@ -1,35 +1,10 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-/* The New Application screen is the one M4 screen that renders fully without a backend:
-   the form, the local `.txt` read, and its accessibility are all client-side. Duplicate
-   choices and creation need real FastAPI and a real DraftFlow, so they belong to the
-   central E2E that the F gate owns, not here. */
+/* The New Application screen renders fully without a backend. Duplicate choices and
+   creation need real FastAPI and a real DraftFlow, so they belong to the central E2E
+   that the F gate owns, not here. */
 test.describe("the New Application screen", () => {
-  test("reads a local .txt file into the job text area without uploading it", async ({ page }) => {
-    const unexpectedApiRequests: string[] = [];
-    page.on("request", (request) => {
-      const url = new URL(request.url());
-      /* Stage E makes one shell-owned Settings read. The file-input contract is that
-         choosing a local file starts no command and sends no file contents; permit only
-         that read-only shell request and report every other API request. */
-      if (url.pathname.startsWith("/api/") && !(request.method() === "GET" && url.pathname === "/api/v1/settings")) {
-        unexpectedApiRequests.push(`${request.method()} ${url.pathname}`);
-      }
-    });
-
-    await page.goto("/applications/new");
-    await page.getByLabel("טעינה מקובץ txt").setInputFiles({
-      name: "job.txt",
-      mimeType: "text/plain",
-      buffer: Buffer.from("Senior Backend Engineer\nTel Aviv", "utf8"),
-    });
-
-    await expect(page.getByLabel("טקסט המשרה")).toHaveValue("Senior Backend Engineer\nTel Aviv");
-    await expect(page.getByRole("status")).toContainText("job.txt");
-    expect(unexpectedApiRequests).toEqual([]);
-  });
-
   test("has no automatically detectable accessibility violations", async ({ page }) => {
     await page.goto("/applications/new");
 

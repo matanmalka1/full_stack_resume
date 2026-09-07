@@ -129,7 +129,7 @@ describe("Settings reconciliation", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "הפעלת בדיקת התאמה" }));
 
-    expect(await screen.findByText("נמצאה בעיית תקינות", { selector: "span" })).toBeInTheDocument();
+    expect(await screen.findByRole("status")).toHaveTextContent("נמצאה בעיית תקינות");
     expect(screen.getByText("קבצים חסרים: 1")).toBeInTheDocument();
     expect(screen.getByText("מה צריך לעשות")).toBeInTheDocument();
     fireEvent.click(screen.getByText("פרטים טכניים"));

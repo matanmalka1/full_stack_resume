@@ -259,7 +259,7 @@ describe("DraftEditorPage", () => {
     expect(screen.getAllByText("מבוסס עובדה").length).toBeGreaterThan(0);
     /* The headline is a line of the document rather than a field: it is drawn as text
        under its own "כותרת" status, and the header card above names the same role. */
-    expect(screen.getByText("כותרת")).toBeInTheDocument();
+    expect(screen.getByText("כותרת", { selector: "span" })).toBeInTheDocument();
     expect(screen.getAllByText("Account Manager")).toHaveLength(2);
     const breadcrumbs = screen.getByRole("navigation", { name: "פירורי לחם" });
     expect(within(breadcrumbs).getByRole("link", { name: "Acme – Account Manager" })).toHaveAttribute(

@@ -191,7 +191,12 @@ describe("RecruitmentManagerButton", () => {
   });
 
   it("appends the correction and external submission exactly as entered", async () => {
-    const fetchMock = vi.fn(emptyJsonFetch);
+    const value = detail();
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      (init?.method ?? "GET") === "GET" && String(input).endsWith("/applications/app-1")
+        ? Promise.resolve(jsonResponse(value))
+        : emptyJsonFetch(input, init),
+    );
     vi.stubGlobal("fetch", fetchMock);
     renderPanel();
 
@@ -221,10 +226,11 @@ describe("RecruitmentManagerButton", () => {
 
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "תיקון אירוע שנרשם" })).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "רישום הגשה חיצונית" }));
-    fireEvent.change(screen.getByLabelText("מועד ההגשה"), {
+    const submissionDialog = screen.getByRole("dialog", { name: "רישום הגשה שבוצעה מחוץ למערכת" });
+    fireEvent.change(within(submissionDialog).getByLabelText("מועד ההגשה"), {
       target: { value: "2026-09-01T12:30" },
     });
-    fireEvent.change(screen.getByLabelText(/הערה/), {
+    fireEvent.change(within(submissionDialog).getByLabelText(/הערה/), {
       target: { value: " Submitted by email " },
     });
     fireEvent.click(screen.getByRole("button", { name: "רישום ההגשה החיצונית" }));
@@ -288,7 +294,7 @@ describe("RecruitmentManagerButton", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
-        init?.method === undefined && String(input).endsWith("/applications/app-1")
+        (init?.method ?? "GET") === "GET" && String(input).endsWith("/applications/app-1")
           ? Promise.resolve(jsonResponse(value))
           : Promise.resolve(
               jsonResponse(

@@ -77,7 +77,7 @@ describe("query cache policy", () => {
       "features/drafts/hooks/useDraftEditing.ts":
         "autosave, which fires per keystroke burst and changes nothing the board shows",
       "features/drafts/components/ClaimFactResolution.tsx": "a fact decision, which moves no row on the board",
-      "features/preparation/hooks/useWorkflowCommands.ts":
+      "features/preparation/api/mutations.ts":
         "the version-conflict re-read, which reports a refusal rather than a change",
     };
 
