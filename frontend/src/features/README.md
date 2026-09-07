@@ -10,21 +10,30 @@ internal import.
 
 ## Where server state lives
 
-`src/api/` owns the transport and the cache identity of each server resource: the
-request functions, and the query key and `queryOptions` that name the resource. Both
-belong there because several features read the same resource and every writer has to
-invalidate it by the same key — an Application's projection is read by four features,
-and a working draft by two — so an owning feature could not hold the key without the
-others importing that feature to invalidate it.
+`src/api/` owns the transport and the cache contract of each server resource: the
+request functions, the query key and `queryOptions` that name it, and the fan-out a
+change to it implies — `invalidateApplicationViews` is there because "an Application
+changed" always means its detail read and the board's list read, which is a fact about
+the resource rather than about any feature.
+
+The contract belongs there because several features read the same resource: an
+Application's projection is read by four and a working draft by two, so an owning
+feature could not hold the key without the others importing that feature to invalidate
+it. Features still decide *when* to invalidate; they do not decide *what*.
 
 `features/<f>/api/` owns that feature's composition on top: `queries.ts` for reads it
 narrows (`select`, `enabled`, dependent reads) and `mutations.ts` for the commands it
 sends together with the invalidation each one implies. Only where such composition
 exists — a feature with no query or mutation of its own has no `api/` folder.
 
-`features/<f>/hooks/` owns hooks that hold local, form, or UI state, even when they
-also read or write the server: what puts a hook here is the state the server never
-sees. A mutation used by exactly one component stays inside that component.
+`features/<f>/hooks/` owns hooks a component reaches for to hold state: a form, a
+dialog's answer, a debounced field, or an id a page keeps across a transition. A
+mutation used by exactly one component stays inside that component.
+
+The line between the two is what the module is *for*, not whether it calls `useState`:
+`api/mutations.ts` may track the id of work it queued, because that id only exists to
+gate the next command; a dialog's decision belongs to the screen that opens the dialog,
+and reaches the command as an argument.
 
 ## What `ui/` may not know
 

@@ -1,4 +1,4 @@
-import { type ReactElement } from "react";
+import { type ReactElement, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationDetail } from "@/api/contracts";
@@ -6,7 +6,7 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { ActionBar } from "@/ui/ActionBar";
 import { Button, buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
-import { useWorkflowCommands } from "../hooks/useWorkflowCommands";
+import { useWorkflowCommands } from "../api/mutations";
 import { actionLabel } from "../model/preparationLabels";
 import type { WorkflowActionPlan } from "../model/workflowActionPlan";
 import { ReplaceDraftDialog } from "./ReplaceDraftDialog";
@@ -25,23 +25,24 @@ interface WorkflowActionsProps {
 }
 
 export const WorkflowActions = ({ detail, onQueued, plan }: WorkflowActionsProps) => {
-  const {
-    analyze,
-    archive,
-    closeReplace,
-    commandsBlocked,
-    draft,
-    editVersion,
-    error,
-    keepPrevious,
-    provider,
-    replace,
-    replaceOpen,
-    setKeepPrevious,
-    setReplaceOpen,
-    settings,
-    workInFlight,
-  } = useWorkflowCommands(detail, plan, onQueued);
+  const { analyze, archive, commandsBlocked, draft, editVersion, error, provider, replace, settings, workInFlight } =
+    useWorkflowCommands(detail, plan, onQueued);
+
+  /* The Keep decision is made in the dialog, not assumed by the button. Default on: a
+     draft carries manual wording that nothing regenerates, so the reader opts out of
+     keeping it rather than having to know to opt in.
+
+     It lives here rather than with the command it is sent with, because it is the
+     dialog's state and the dialog is this screen's: closing restores the default rather
+     than remembering the last answer, since an unchecked box carried over from a
+     cancelled dialog would make the next replacement silently discard history the reader
+     never chose to discard. */
+  const [replaceOpen, setReplaceOpen] = useState(false);
+  const [keepPrevious, setKeepPrevious] = useState(true);
+  const closeReplace = () => {
+    setReplaceOpen(false);
+    setKeepPrevious(true);
+  };
 
   /* Keyed because the bar renders them from an array: with more than one secondary
      action, React needs each to be identifiable across renders.
@@ -225,9 +226,10 @@ export const WorkflowActions = ({ detail, onQueued, plan }: WorkflowActionsProps
         commandsBlocked={commandsBlocked}
         keepPrevious={keepPrevious}
         onClose={closeReplace}
+        onConfirm={() => replace.mutate({ keepPrevious }, { onSuccess: closeReplace })}
         onKeepPreviousChange={setKeepPrevious}
         open={replaceOpen}
-        replace={replace}
+        pending={replace.isPending}
       />
     </div>
   );

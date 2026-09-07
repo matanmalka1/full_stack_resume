@@ -1,6 +1,3 @@
-import type { UseMutationResult } from "@tanstack/react-query";
-
-import type { QueuedOperation } from "@/api/operations";
 import { Button } from "@/ui/Button";
 import { Checkbox } from "@/ui/Checkbox";
 import { Dialog } from "@/ui/Dialog";
@@ -9,9 +6,13 @@ interface ReplaceDraftDialogProps {
   commandsBlocked: boolean;
   keepPrevious: boolean;
   onClose: () => void;
+  /* Sends the replacement with the answer the box currently holds. The dialog never
+     reaches the command itself: what it owns is the decision, and the screen decides
+     what to do with it. */
+  onConfirm: () => void;
   onKeepPreviousChange: (keepPrevious: boolean) => void;
   open: boolean;
-  replace: UseMutationResult<QueuedOperation, Error, void>;
+  pending: boolean;
 }
 
 /* The Keep decision is asked, not assumed, because it is the only choice here whose wrong
@@ -22,9 +23,10 @@ export const ReplaceDraftDialog = ({
   commandsBlocked,
   keepPrevious,
   onClose,
+  onConfirm,
   onKeepPreviousChange,
   open,
-  replace,
+  pending,
 }: ReplaceDraftDialogProps) => (
   <Dialog
     dismissible={false}
@@ -35,8 +37,8 @@ export const ReplaceDraftDialog = ({
         </Button>
         <Button
           disabled={commandsBlocked}
-          onClick={() => replace.mutate()}
-          pending={replace.isPending}
+          onClick={onConfirm}
+          pending={pending}
           pendingLabel="מחליף טיוטה…"
           variant="primary"
         >
