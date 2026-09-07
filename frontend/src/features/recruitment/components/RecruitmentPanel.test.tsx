@@ -271,7 +271,7 @@ describe("RecruitmentManagerButton", () => {
     renderPanel(detail({ recruitment_status: "offer", recruitment_timeline: timeline }));
 
     fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
-    const summary = screen.getByRole("region", { name: "מצב המועמדות" });
+    const summary = screen.getByRole("region", { name: "מצב הגיוס" });
     expect(within(summary).getByText("הצעה").closest("span")).toHaveClass("text-cv-success");
     expect(screen.getByText("Action 5")).toBeInTheDocument();
     expect(screen.queryByText("Action 0")).not.toBeInTheDocument();
@@ -384,5 +384,37 @@ describe("RecruitmentManagerButton", () => {
 
     expect(screen.getByLabelText("האירוע השגוי")).toHaveValue("status-older");
     expect(screen.getByText("ציר הזמן השתנה בשרת")).toBeInTheDocument();
+  });
+
+  /* Notes are recruitment's, not the Application screen's. This covered a standalone
+     notes dialog that no longer exists; the field is one section of the manager now, and
+     the precondition it sends is what actually needs guarding - a save that names the
+     value the reader was shown, so an edit made elsewhere is refused rather than
+     overwritten. */
+  it("edits notes with the exact server value as an optimistic precondition", async () => {
+    const value = detail({
+      application: { ...detail().application, notes: "Referral from a former colleague" },
+    });
+    const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) =>
+      Promise.resolve(
+        String(input).endsWith("/notes")
+          ? jsonResponse({ application_id: "app-1", notes: "Follow up after the holiday", updated_at: "now" })
+          : jsonResponse({}),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    renderPanel(value);
+
+    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
+    fireEvent.change(screen.getByLabelText("תוכן ההערה"), { target: { value: "Follow up after the holiday" } });
+    fireEvent.click(screen.getByRole("button", { name: "שמירת שינויים" }));
+
+    await waitFor(() => expect(requestFor(fetchMock, "/notes")).toBeDefined());
+    const request = requestFor(fetchMock, "/notes");
+    expect(request?.[1]?.method).toBe("PATCH");
+    expect(JSON.parse(String(request?.[1]?.body))).toEqual({
+      notes: "Follow up after the holiday",
+      expected_notes: "Referral from a former colleague",
+    });
   });
 });

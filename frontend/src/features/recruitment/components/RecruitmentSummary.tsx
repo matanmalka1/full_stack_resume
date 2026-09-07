@@ -3,11 +3,16 @@ import { CalendarClock } from "lucide-react";
 import type { ApplicationDetail } from "@/api/contracts";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { formatDate } from "@/utils/formatDateTime";
-import { recruitmentStatusIcon, recruitmentStatusLabel, recruitmentStatusTone } from "../recruitmentStatus";
+import { recruitmentStatusIcon, recruitmentStatusLabel, recruitmentStatusTone } from "../model/recruitmentStatus";
 
 export const RecruitmentSummary = ({ detail }: { detail: ApplicationDetail }) => (
   <section
-    aria-label="מצב המועמדות"
+    /* The recruitment axis, named as one. It read "מצב המועמדות" - the state of the
+       application - which was accurate while this block only ever appeared alone in the
+       manager dialog. On the Application screen it sits beside the CV preparation state,
+       and a region claiming the whole application's state next to one that holds half of
+       it is the merge the two axes exist to avoid. */
+    aria-label="מצב הגיוס"
     className="relative overflow-hidden rounded-surface border border-cv-border bg-cv-surface-muted p-4 shadow-inner"
   >
     <span aria-hidden="true" className="absolute inset-y-0 start-0 w-1 bg-cv-accent" />
