@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Settings, ShieldCheck } from "lucide-react";
 
 import { settingsQueryOptions } from "@/api/settings";
+import { FactPoolBrowser } from "@/features/facts";
 import { appRoutes } from "@/app/appRoutes";
 import { useWorkflowStage } from "@/app/WorkflowLandmark";
 import { Breadcrumbs } from "@/ui/Breadcrumbs";
@@ -9,7 +10,6 @@ import { Card } from "@/ui/Card";
 import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
 import { SectionHeader } from "@/ui/SectionHeader";
-import { CanonicalFactsBrowser } from "../components/CanonicalFactsBrowser";
 import { ReconciliationPanel } from "../components/ReconciliationPanel";
 import { SettingsForm } from "../components/SettingsForm";
 
@@ -48,7 +48,7 @@ export const SettingsPage = () => {
         </QueryState>
       </Card>
       <ReconciliationPanel />
-      <CanonicalFactsBrowser />
+      <FactPoolBrowser />
     </PageShell>
   );
 };

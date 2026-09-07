@@ -1,62 +1,53 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-
-import { createPendingFact, factsQueryPrefix } from "@/api/facts";
 import { ErrorCallout } from "@/app/ErrorCallout";
 import { useAppForm } from "@/forms/useAppForm";
 import { Button } from "@/ui/Button";
-import { defaultFactSource, FactFields, type FactFormFields, parseFactTags } from "./FactFields";
+import { useCreatePendingFact } from "../api/factMutations";
+import { emptyFactForm, type FactFormFields, parseFactTags } from "../model/factForm";
+import {
+  FactCoreFields,
+  FactHebrewRenderingField,
+  FactProvenanceField,
+  FactSourceField,
+  FactStyleField,
+  FactTagsField,
+} from "./FactFormFieldset";
 
 interface CreatePendingFactFormProps {
   onCreated: (factId: string) => void;
   profile: string | null;
 }
 
-/* A.4's "יצירת עובדה ממתינה חדשה" form, the one form on this editor that used to hold
-   its seven fields as `useState` instead of `useAppForm` - every other form in the
-   codebase validates and reports per-field errors through it, and this one now does
-   too. */
+/* A new fact entered by hand, which always starts pending: nothing typed here becomes
+   canonical without a separate, explicit confirmation. The Hebrew rendering is optional
+   because the English one is what the CV is built from. */
 export const CreatePendingFactForm = ({ onCreated, profile }: CreatePendingFactFormProps) => {
-  const queryClient = useQueryClient();
-  const form = useAppForm<FactFormFields>({
-    defaultValues: {
-      english: "",
-      hebrew: "",
-      meaning: "",
-      provenance: "",
-      source: defaultFactSource(profile),
-      style: "bullet",
-      tags: "",
-    },
-  });
+  const form = useAppForm<FactFormFields>({ defaultValues: emptyFactForm(profile) });
   const {
     formState: { errors },
     register,
     reset,
   } = form;
-
-  const create = useMutation({
-    mutationFn: (fields: FactFormFields) =>
-      createPendingFact({
-        source: fields.source,
-        meaning: fields.meaning.trim(),
-        renderings: {
-          en: fields.english.trim(),
-          ...(fields.hebrew.trim() === "" ? {} : { he: fields.hebrew.trim() }),
-        },
-        tags: parseFactTags(fields.tags),
-        provenance: fields.provenance.trim(),
-        resume_style: fields.style,
-        reason: "created from the contextual draft fact panel",
-      }),
-    onSuccess: (result) => {
-      reset();
-      void queryClient.invalidateQueries({ queryKey: factsQueryPrefix });
-      onCreated(result.fact.fact_id);
-    },
+  const create = useCreatePendingFact((factId) => {
+    reset();
+    onCreated(factId);
   });
 
+  const submit = (fields: FactFormFields) =>
+    create.mutate({
+      source: fields.source,
+      meaning: fields.meaning.trim(),
+      renderings: {
+        en: fields.english.trim(),
+        ...(fields.hebrew.trim() === "" ? {} : { he: fields.hebrew.trim() }),
+      },
+      tags: parseFactTags(fields.tags),
+      provenance: fields.provenance.trim(),
+      resume_style: fields.style,
+      reason: "created from the contextual draft fact panel",
+    });
+
   return (
-    <form className="mt-4 grid gap-3 lg:grid-cols-2" onSubmit={form.handleSubmit((fields) => create.mutate(fields))}>
+    <form className="mt-4 grid gap-3 lg:grid-cols-2" onSubmit={form.handleSubmit(submit)}>
       {create.error === null ? null : (
         <ErrorCallout
           className="lg:col-span-2"
@@ -66,7 +57,13 @@ export const CreatePendingFactForm = ({ onCreated, profile }: CreatePendingFactF
         />
       )}
 
-      <FactFields errors={errors} includeHebrew includeStyle register={register} twoColumn />
+      <FactSourceField register={register} />
+      <FactStyleField register={register} />
+      <FactCoreFields className="lg:col-span-2" errors={errors} register={register} />
+      <FactHebrewRenderingField register={register} />
+      <FactTagsField errors={errors} register={register} />
+      <FactProvenanceField errors={errors} register={register} />
+
       <Button className="lg:col-span-2" pending={create.isPending} pendingLabel="יוצר…" type="submit">
         יצירת עובדה ממתינה
       </Button>
