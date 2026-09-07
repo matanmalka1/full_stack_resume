@@ -567,12 +567,13 @@ def verify_and_cover_extraction(
 def extraction_is_failed(
     source_text: str,
     requirements: list[Requirement],
-    unmapped: list[UnmappedStatement],
+    _unmapped: list[UnmappedStatement],
     concepts: RequirementConceptStore,
 ) -> bool:
     """Whether no stated requirement was extracted.
 
-    An unmapped entry explains an omission but does not establish understanding.
+    An unmapped entry explains an omission but does not establish understanding,
+    so `_unmapped` is accepted and deliberately not read.
     Partial extraction remains distinct from total failure; this predicate does
     not certify completeness and must not be presented as such.
     """
