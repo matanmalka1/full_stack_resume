@@ -1,4 +1,4 @@
-import { Archive, ArrowLeft, Ellipsis, FileCheck2, SlidersHorizontal } from "lucide-react";
+import { Archive, ArrowLeft, CircleAlert, Ellipsis, FileCheck2, SlidersHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -45,6 +45,7 @@ export const ApplicationRecommendedAction = ({
   variant: ActionVariant;
 }) => {
   const operation = reportedOperation(item);
+  const operationFailed = operation?.status === "failed" || operation?.status === "interrupted";
   /* A ready revision does not suppress newer recommended work: both can be valid when
      the posting or policy changed after that revision was approved. */
   const readyRevisionLink =
@@ -57,7 +58,17 @@ export const ApplicationRecommendedAction = ({
 
   return (
     <div className={variant === "row" ? "flex flex-col items-start gap-1" : "flex flex-col items-end gap-1.5"}>
-      {operation !== null ? (
+      {operationFailed && operation !== null ? (
+        <span
+          className="inline-flex max-w-full items-start gap-1.5 text-start text-support font-medium text-cv-blocker"
+          title={`${operationTypeLabels[operation.operation_type]} · ${statusLabels[operation.status]}`}
+        >
+          <CircleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+          <span className="line-clamp-2">
+            {operationTypeLabels[operation.operation_type]} · {statusLabels[operation.status]}
+          </span>
+        </span>
+      ) : operation !== null ? (
         <StatusBadge
           className={variant === "row" ? "gap-1.5 px-2.5 text-start" : "px-2.5"}
           tone={statusTones[operation.status]}

@@ -29,9 +29,9 @@ const initialViewMode = (): ViewMode =>
   typeof window.matchMedia === "function" && window.matchMedia("(max-width: 639px)").matches ? "cards" : "table";
 
 const viewOptions = [
-  { icon: Table2, label: "תצוגת טבלה", value: "table" },
-  { icon: LayoutGrid, label: "תצוגת כרטיסים", value: "cards" },
-  { icon: Kanban, label: "תצוגת שלבי גיוס", value: "pipeline" },
+  { icon: Table2, label: "טבלה", value: "table" },
+  { icon: LayoutGrid, label: "כרטיסים", value: "cards" },
+  { icon: Kanban, label: "שלבים", value: "pipeline" },
 ] as const;
 
 const findApplication = (items: readonly ApplicationListItem[], id: string | null) =>
@@ -68,8 +68,8 @@ export const ApplicationListPage = () => {
 
   return (
     <section aria-labelledby="route-heading" className="page-frame">
-      <ApplicationListHeader newApplicationTo={newApplicationTo} totalCount={page?.total} />
-      <div className="mt-6 flex flex-col gap-6">
+      <ApplicationListHeader />
+      <div className="mt-4 flex flex-col gap-4">
         <ApplicationStatusSummary
           activeInterviewsCount={page?.preset_counts.active_interviews}
           activePreset={query.preset ?? "all"}
@@ -115,10 +115,13 @@ export const ApplicationListPage = () => {
           loadingState={<ApplicationListTableSkeleton />}
         >
           {page === undefined ? null : (
-            <>
+            <div className="flex flex-col gap-3">
               <ApplicationListFilters
+                activePreset={query.preset}
                 activity={query.activity ?? "open"}
                 onActivityChange={(activity) => updateQuery({ ...query, activity })}
+                onClearAll={() => updateQuery({})}
+                onPresetClear={() => updateQuery({ ...query, preset: undefined })}
                 onPreparationStateChange={(stage) => updateQuery({ ...query, stages: stage ? [stage] : [] })}
                 onRecruitmentStageChange={(stageId) => {
                   const stage = recruitmentStages.find((candidate) => candidate.id === stageId);
@@ -129,27 +132,28 @@ export const ApplicationListPage = () => {
                 preparationState={query.stages?.[0]}
                 recruitmentStage={selectedStage(query.recruitmentStatuses)}
                 recruitmentStageCounts={recruitmentStageCounts}
+                resultSummary={
+                  page.matched === page.total
+                    ? `${page.total} מועמדויות`
+                    : `${page.matched} מתוך ${page.total} מועמדויות`
+                }
                 search={searchInput}
                 sort={query.sort ?? "updated"}
                 stageCounts={page.stage_counts}
+                viewSwitch={
+                  <ViewSwitch
+                    label="בחירת תצוגת מועמדויות"
+                    onChange={setViewMode}
+                    options={viewOptions}
+                    showLabels
+                    value={viewMode}
+                  />
+                }
               />
               <div
                 aria-busy={listQuery.isFetching && !listQuery.isPending ? true : undefined}
                 className={`transition-opacity ${listQuery.isFetching && !listQuery.isPending ? "opacity-60" : ""}`}
               >
-                <div className="mb-3 flex items-center justify-between gap-4">
-                  <p aria-live="polite" className="text-support font-semibold text-cv-text-muted">
-                    {page.matched === page.total
-                      ? `${page.total} מועמדויות`
-                      : `${page.matched} מתוך ${page.total} מועמדויות`}
-                  </p>
-                  <ViewSwitch
-                    label="בחירת תצוגת מועמדויות"
-                    onChange={setViewMode}
-                    options={viewOptions}
-                    value={viewMode}
-                  />
-                </div>
                 {items.length === 0 ? (
                   <EmptyState className="bg-cv-surface">
                     <p className="text-body text-cv-text">אין מועמדות שמתאימה לסינון.</p>
@@ -188,7 +192,7 @@ export const ApplicationListPage = () => {
                   visibleCount={items.length}
                 />
               </div>
-            </>
+            </div>
           )}
         </QueryState>
       </div>

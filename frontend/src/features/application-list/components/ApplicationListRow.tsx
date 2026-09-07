@@ -1,10 +1,9 @@
-import { Clock } from "lucide-react";
+import { Clock, TriangleAlert } from "lucide-react";
 import type { KeyboardEvent, MouseEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
 import { routePaths } from "@/app/routePaths";
-import { StatusBadge } from "@/ui/StatusBadge";
 import { cx } from "@/ui/cx";
 import { applicationAttention, formatApplicationDate } from "../model/applicationListPresentation";
 import { ApplicationRecommendedAction, ApplicationRecordActions } from "./ApplicationListItemActions";
@@ -15,9 +14,6 @@ import {
   ApplicationPreparationStatus,
   ApplicationRecruitmentStatus,
 } from "./ApplicationListStatuses";
-
-/* The list packs its statuses tighter than the calmer screens that use StatusBadge. */
-const rowBadgeClasses = "gap-1.5 px-2.5 text-start";
 
 interface ApplicationListRowProps {
   ambiguous: boolean;
@@ -61,16 +57,15 @@ export const ApplicationListRow = ({ ambiguous, item, onRequestClose, onRequestU
     attention === null ? null : (
       <Link
         aria-label={`${item.company}: ${attention.items.map((entry) => entry.title).join(" · ")}`}
-        className="inline-flex max-w-full rounded-pill focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cv-focus"
+        className={cx(
+          "inline-flex max-w-full items-start gap-1.5 rounded-control text-support font-medium hover:underline",
+          attention.tone === "blocker" ? "text-cv-blocker" : "text-cv-warning",
+        )}
         title={attention.items.map((entry) => entry.title).join(" · ")}
         to={preparationHref}
       >
-        <StatusBadge
-          className={cx(rowBadgeClasses, "max-w-full items-start [overflow-wrap:break-word]")}
-          tone={attention.tone}
-        >
-          <span className="min-w-0 line-clamp-2">{attention.label}</span>
-        </StatusBadge>
+        <TriangleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+        <span className="min-w-0 line-clamp-2 lg:line-clamp-1">{attention.label}</span>
       </Link>
     );
 

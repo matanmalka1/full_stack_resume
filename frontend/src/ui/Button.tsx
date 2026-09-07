@@ -8,7 +8,12 @@ export type ButtonVariant = "primary" | "secondary" | "ghost" | "destructive";
 /* Focus comes from the global :focus-visible rule in styles.css (A.2). No component
    opts in by hand, and none clears the outline. */
 const baseButtonClasses =
-  "inline-flex min-h-11 items-center justify-center gap-2 rounded-control px-4 text-support font-semibold transition-all duration-200 active:translate-y-px disabled:pointer-events-none disabled:translate-y-0 disabled:shadow-none disabled:cursor-not-allowed";
+  "inline-flex items-center justify-center gap-2 rounded-control text-support font-semibold transition-all duration-200 active:translate-y-px disabled:pointer-events-none disabled:translate-y-0 disabled:shadow-none disabled:cursor-not-allowed";
+
+const sizeButtonClasses = {
+  compact: "min-h-8 px-2.5",
+  default: "min-h-11 px-4",
+} as const;
 
 /* Lift is reserved for the one emphasized action on a screen (A.1). A secondary or
    ghost control that rises on hover competes with it for the eye and makes a row of
@@ -32,13 +37,17 @@ const variantButtonClasses: Record<ButtonVariant, string> = {
 };
 
 /* Exported so a router Link can carry button styling without a polymorphic component. */
-export const buttonClasses = (variant: ButtonVariant = "primary", className?: ClassValue): string =>
-  cx(baseButtonClasses, variantButtonClasses[variant], className);
+export const buttonClasses = (
+  variant: ButtonVariant = "primary",
+  className?: ClassValue,
+  size: keyof typeof sizeButtonClasses = "default",
+): string => cx(baseButtonClasses, sizeButtonClasses[size], variantButtonClasses[variant], className);
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
   pending?: boolean;
   pendingLabel?: ReactNode;
+  size?: keyof typeof sizeButtonClasses;
   variant?: ButtonVariant;
 }
 
@@ -48,6 +57,7 @@ export const Button = ({
   disabled,
   pending = false,
   pendingLabel,
+  size = "default",
   type,
   variant = "primary",
   ...rest
@@ -55,7 +65,7 @@ export const Button = ({
   return (
     <button
       aria-busy={pending || undefined}
-      className={buttonClasses(variant, className)}
+      className={buttonClasses(variant, className, size)}
       disabled={disabled || pending}
       type={type ?? "button"}
       {...rest}

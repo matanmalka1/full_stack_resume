@@ -226,10 +226,9 @@ describe("ApplicationListPage", () => {
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "לוח מועמדויות ומעקב גיוס" })).toBeInTheDocument();
-    expect(screen.getByText("בדיקת עובדות לפני אישור")).toBeInTheDocument();
-    expect(await screen.findByText("2 מועמדויות במערכת")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "קליטת משרה חדשה" })).toHaveAttribute("href", "/applications/new");
-    expect(screen.queryByRole("button", { name: "קליטה מהירה" })).not.toBeInTheDocument();
+    expect(screen.queryByText("CV Engine")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "קליטת משרה חדשה" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("סינון מהיר לפי מצב")).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Backend Engineer" })).toHaveAttribute(
       "href",
       "/applications/app-1",
@@ -297,13 +296,18 @@ describe("ApplicationListPage", () => {
 
     expect(screen.getByLabelText("מועמדויות")).toHaveValue("closed");
     expect(screen.getByLabelText("סדר")).toHaveValue("company");
-    expect(screen.getByLabelText("חיפוש")).toHaveValue("");
+    expect(screen.getByLabelText("חיפוש במועמדויות")).toHaveValue("");
     await waitFor(() =>
       expect(fetchMock).toHaveBeenLastCalledWith(
         expect.stringContaining("activity=closed"),
         expect.objectContaining({ method: "GET" }),
       ),
     );
+
+    expect(screen.getByText("מסננים פעילים:")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "ניקוי הכול" }));
+    expect(screen.getByLabelText("מועמדויות")).toHaveValue("open");
+    expect(screen.getByLabelText("סדר")).toHaveValue("updated");
   });
 
   /* The row was painted on hover while only three of its cells were clickable. */
@@ -340,7 +344,7 @@ describe("ApplicationListPage", () => {
     expect(await screen.findByRole("table")).toBeInTheDocument();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    fireEvent.click(screen.getByRole("button", { name: "תצוגת כרטיסים" }));
+    fireEvent.click(screen.getByRole("button", { name: "כרטיסים" }));
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Acme" })).toHaveLength(1);
     expect(screen.getAllByRole("link", { name: "Binat" })).toHaveLength(1);
@@ -349,7 +353,7 @@ describe("ApplicationListPage", () => {
     expect(screen.getByText(/Referral from Dana/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "פעולות נוספות עבור Acme" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "תצוגת שלבי גיוס" }));
+    fireEvent.click(screen.getByRole("button", { name: "שלבים" }));
     const pipeline = screen.getByRole("list", { name: "מועמדויות לפי שלב גיוס" });
     expect(within(pipeline).getByRole("heading", { name: "נשמר" })).toBeInTheDocument();
     expect(within(pipeline).getByRole("heading", { name: "ראיונות ומטלות" })).toBeInTheDocument();
@@ -368,7 +372,7 @@ describe("ApplicationListPage", () => {
 
     const hub = await screen.findByRole("region", { name: "מוקד פעולות" });
     expect(within(hub).getByText("Follow up with recruiter")).toBeInTheDocument();
-    expect(within(hub).getByText(/מתוך המועמדויות המוצגות/)).toBeInTheDocument();
+    expect(within(hub).getByText("פעולה אחת בעדיפות")).toBeInTheDocument();
     fireEvent.click(within(hub).getByRole("button", { name: "הסרת תזכורת" }));
 
     await waitFor(() =>
@@ -446,6 +450,11 @@ describe("ApplicationListPage", () => {
     fireEvent.click(ready);
 
     await waitFor(() => expect(ready).toHaveAttribute("aria-pressed", "true"));
+    expect(
+      within(screen.getByRole("search", { name: "סינון וחיפוש מועמדויות" })).getByRole("button", {
+        name: "מוכן לשליחה",
+      }),
+    ).toBeInTheDocument();
     await waitFor(() =>
       expect(
         fetchMock.mock.calls.some(([url]) => {
@@ -528,7 +537,7 @@ describe("ApplicationListPage", () => {
     renderPage({ entries: ["/?activity=closed"] });
 
     expect(await screen.findByText("אין מועמדות שמתאימה לסינון.")).toBeInTheDocument();
-    expect(screen.getByLabelText("חיפוש")).toBeInTheDocument();
+    expect(screen.getByLabelText("חיפוש במועמדויות")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ניקוי הסינון" })).toBeInTheDocument();
     expect(screen.queryByText("עוד לא נוצרה אף מועמדות.")).not.toBeInTheDocument();
   });
@@ -539,7 +548,7 @@ describe("ApplicationListPage", () => {
     renderPage();
 
     expect(await screen.findByText("עוד לא נוצרה אף מועמדות.")).toBeInTheDocument();
-    expect(screen.queryByLabelText("חיפוש")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("חיפוש במועמדויות")).not.toBeInTheDocument();
     expect(screen.queryByText("אין מועמדות שמתאימה לסינון.")).not.toBeInTheDocument();
   });
 

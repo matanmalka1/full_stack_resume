@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowUpLeft, Briefcase, CheckCircle2, FileCheck2 } from "lucide-react";
+import { AlertTriangle, Briefcase, CheckCircle2, FileCheck2 } from "lucide-react";
 
 import type { ApplicationPreset } from "@/api/contracts";
 import { cx } from "@/ui/cx";
@@ -17,7 +17,6 @@ interface ApplicationStatusSummaryProps {
 interface MetricCardProps {
   active: boolean;
   count: number | undefined;
-  description: string;
   icon: typeof Briefcase;
   label: string;
   onSelect: () => void;
@@ -46,37 +45,30 @@ const toneClasses: Record<MetricCardProps["tone"], { active: string; count: stri
     },
   };
 
-const MetricCard = ({ active, count, description, icon: Icon, label, onSelect, tone }: MetricCardProps) => {
+const MetricCard = ({ active, count, icon: Icon, label, onSelect, tone }: MetricCardProps) => {
   const colors = toneClasses[tone];
 
   return (
     <button
       aria-pressed={active}
       className={cx(
-        "group relative rounded-surface border bg-cv-surface p-4 text-right shadow-surface transition-all hover:border-cv-border-strong hover:shadow-floating",
-        active ? cx(colors.active, "ring-2") : "border-cv-border",
+        "group relative flex min-h-14 items-center gap-3 rounded-control border bg-cv-surface px-3 py-2 text-right transition-colors hover:border-cv-border-strong hover:bg-cv-surface-muted",
+        active ? cx(colors.active, "ring-1") : "border-cv-border",
       )}
       onClick={onSelect}
       type="button"
     >
-      <span className="mb-2 flex items-center justify-between gap-3 text-support font-semibold text-cv-text-muted">
-        <span>{label}</span>
-        <span className={cx("rounded-control p-1.5 transition-transform group-hover:scale-105", colors.icon)}>
-          <Icon aria-hidden="true" className="size-4" />
-        </span>
+      <span className={cx("rounded-control p-1.5", colors.icon)}>
+        <Icon aria-hidden="true" className="size-4" />
       </span>
-      <span className="flex items-baseline justify-between gap-3">
-        <span className={cx("text-heading-lg font-black", colors.count)}>{count ?? "—"}</span>
-        <span className="inline-flex items-center gap-1 text-support font-semibold text-cv-accent">
-          הצגה
-          <ArrowUpLeft aria-hidden="true" className="size-3.5" />
-        </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-support font-semibold text-cv-text-muted">{label}</span>
+        <span className={cx("block text-heading-sm font-black", colors.count)}>{count ?? "—"}</span>
       </span>
-      <span className="mt-1.5 block text-support text-cv-text-muted">{description}</span>
       <span
         aria-hidden="true"
         className={cx(
-          "absolute inset-x-4 bottom-0 h-0.5 rounded-pill transition-colors",
+          "absolute inset-x-3 bottom-0 h-0.5 rounded-pill transition-colors",
           active ? colors.indicator : "bg-transparent group-hover:bg-cv-border",
         )}
       />
@@ -92,11 +84,10 @@ export const ApplicationStatusSummary = ({
   readyCount,
   totalCount,
 }: ApplicationStatusSummaryProps) => (
-  <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4" aria-label="מדדי מועמדויות">
+  <div aria-label="סינון מהיר לפי מצב" className="grid grid-cols-2 gap-2 lg:grid-cols-4" role="group">
     <MetricCard
       active={activePreset === "all"}
       count={totalCount}
-      description="כל המועמדויות במסגרת המסננים שנבחרו"
       icon={Briefcase}
       label="סך מועמדויות"
       onSelect={() => onSelectPreset("all")}
@@ -105,7 +96,6 @@ export const ApplicationStatusSummary = ({
     <MetricCard
       active={activePreset === "active_interviews"}
       count={activeInterviewsCount}
-      description="שיחות מגייס, מטלות, ראיונות והצעות פעילות"
       icon={CheckCircle2}
       label="ראיונות פעילים"
       onSelect={() => onSelectPreset("active_interviews")}
@@ -114,7 +104,6 @@ export const ApplicationStatusSummary = ({
     <MetricCard
       active={activePreset === "ready_to_send"}
       count={readyCount}
-      description="גרסאות קורות חיים שמוכנות לשליחה"
       icon={FileCheck2}
       label="מסמכים מוכנים לשליחה"
       onSelect={() => onSelectPreset("ready_to_send")}
@@ -123,7 +112,6 @@ export const ApplicationStatusSummary = ({
     <MetricCard
       active={activePreset === "needs_attention"}
       count={needsAttentionCount}
-      description="מועמדויות שממתינות להחלטה או פעולה"
       icon={AlertTriangle}
       label="דורש טיפול"
       onSelect={() => onSelectPreset("needs_attention")}

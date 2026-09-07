@@ -1,4 +1,4 @@
-import { BellOff, ChevronLeft, Sparkles } from "lucide-react";
+import { BellOff, ChevronDown, ChevronLeft, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
@@ -26,92 +26,86 @@ export const ApplicationAttentionSummary = ({
   }
 
   return (
-    <section
-      aria-labelledby="urgent-action-heading"
-      className="rounded-surface border border-cv-warning/30 bg-gradient-to-l from-cv-warning-soft/70 via-cv-surface to-cv-accent-soft/40 p-2.5 shadow-surface sm:p-3"
-    >
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-cv-warning/25 pb-1.5">
-        <div className="flex items-center gap-1.5">
-          <span className="flex size-6 shrink-0 items-center justify-center rounded-control bg-cv-warning text-cv-on-accent">
-            <Sparkles aria-hidden="true" className="size-3" />
+    <section aria-labelledby="urgent-action-heading" className="rounded-surface border border-cv-border bg-cv-surface">
+      <details className="group/attention" open>
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 hover:bg-cv-surface-muted">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-control bg-cv-warning-soft text-cv-warning">
+              <Sparkles aria-hidden="true" className="size-3.5" />
+            </span>
+            <span>
+              <span className="block text-support font-bold text-cv-text" id="urgent-action-heading">
+                מוקד פעולות
+              </span>
+              <span className="block text-support text-cv-text-muted">
+                {displayItems.length === 1 ? "פעולה אחת בעדיפות" : `${displayItems.length} פעולות בעדיפות`}
+              </span>
+            </span>
           </span>
-          <div>
-            <h2 className="font-extrabold text-cv-text" id="urgent-action-heading">
-              מוקד פעולות
-            </h2>
-            <p className="text-support text-cv-text-muted">
-              {displayItems.length} פעולות בעדיפות מתוך המועמדויות המוצגות
-            </p>
-          </div>
-        </div>
-        <StatusBadge className="px-2 py-0.5" tone="warning">
-          לטיפול קרוב
-        </StatusBadge>
-      </div>
+          <ChevronDown
+            aria-hidden="true"
+            className="size-4 shrink-0 text-cv-text-muted transition-transform group-open/attention:rotate-180"
+          />
+        </summary>
 
-      <div className="grid gap-2 md:grid-cols-3">
-        {displayItems.map((item) => (
-          <article
-            className="flex min-h-32 flex-col justify-between rounded-control border border-cv-border bg-cv-surface p-2.5 shadow-surface transition-colors hover:border-cv-border-strong"
-            key={`${item.application.id}-${item.type}`}
-          >
-            <div>
-              <div className="mb-1 flex items-start justify-between gap-2">
-                <StatusBadge className="px-2 py-0.5" tone={item.tone}>
-                  {item.label}
-                </StatusBadge>
-                <span className="truncate text-support font-semibold text-cv-text-muted" dir="auto">
-                  {item.application.company}
-                </span>
+        <div className="divide-y divide-cv-border border-t border-cv-border">
+          {displayItems.map((item) => (
+            <article
+              className="grid gap-2 px-3 py-2.5 transition-colors hover:bg-cv-surface-muted sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"
+              key={`${item.application.id}-${item.type}`}
+            >
+              <StatusBadge className="w-fit px-2 py-0.5" tone={item.tone}>
+                {item.label}
+              </StatusBadge>
+              <div className="min-w-0">
+                <h3 className="truncate text-support font-bold text-cv-text" dir="auto">
+                  {item.title}
+                </h3>
+                <p className="truncate text-support text-cv-text-muted" dir="auto">
+                  {item.application.company} · {item.subtitle}
+                </p>
               </div>
-              <h3 className="line-clamp-1 text-support font-bold text-cv-text" dir="auto">
-                {item.title}
-              </h3>
-              <p className="mt-0.5 line-clamp-1 text-support leading-5 text-cv-text-muted" dir="auto">
-                {item.subtitle}
-              </p>
-            </div>
+              <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
+                {item.type === "overdue" || item.type === "due_today" ? (
+                  <Button
+                    className="text-cv-text-muted hover:text-cv-success"
+                    disabled={clearingApplicationId !== null}
+                    onClick={() => onClearNextAction(item.application)}
+                    pending={clearingApplicationId === item.application.id}
+                    pendingLabel="מסיר…"
+                    size="compact"
+                    title="הסרת התזכורת, ללא רישום השלמה"
+                    variant="ghost"
+                  >
+                    <BellOff aria-hidden="true" className="size-3.5" />
+                    הסרת תזכורת
+                  </Button>
+                ) : null}
 
-            <div className="mt-1.5 flex flex-wrap items-center justify-between gap-1.5 border-t border-cv-border pt-1.5">
-              {item.type === "overdue" || item.type === "due_today" ? (
-                <Button
-                  className="min-h-8 px-1.5 text-cv-text-muted hover:text-cv-success"
-                  disabled={clearingApplicationId !== null}
-                  onClick={() => onClearNextAction(item.application)}
-                  pending={clearingApplicationId === item.application.id}
-                  pendingLabel="מסיר…"
-                  title="הסרת התזכורת, ללא רישום השלמה"
-                  variant="ghost"
-                >
-                  <BellOff aria-hidden="true" className="size-3.5" />
-                  הסרת תזכורת
-                </Button>
-              ) : (
-                <span />
-              )}
-
-              {item.actionTo == null ? (
-                <Button
-                  className="min-h-8 gap-1 px-2.5"
-                  onClick={() => onOpenStatusDialog(item.application)}
-                  variant="secondary"
-                >
-                  {item.actionLabel}
-                  <ChevronLeft aria-hidden="true" className="size-3.5" />
-                </Button>
-              ) : (
-                <Link
-                  className="inline-flex min-h-8 items-center gap-1 rounded-control bg-cv-accent-soft px-2.5 text-support font-semibold text-cv-accent transition-colors hover:bg-cv-accent hover:text-cv-on-accent"
-                  to={item.actionTo}
-                >
-                  {item.actionLabel}
-                  <ChevronLeft aria-hidden="true" className="size-3.5" />
-                </Link>
-              )}
-            </div>
-          </article>
-        ))}
-      </div>
+                {item.actionTo == null ? (
+                  <Button
+                    className="gap-1"
+                    onClick={() => onOpenStatusDialog(item.application)}
+                    size="compact"
+                    variant="secondary"
+                  >
+                    {item.actionLabel}
+                    <ChevronLeft aria-hidden="true" className="size-3.5" />
+                  </Button>
+                ) : (
+                  <Link
+                    className="inline-flex min-h-8 items-center gap-1 rounded-control bg-cv-accent-soft px-2.5 text-support font-semibold text-cv-accent transition-colors hover:bg-cv-accent hover:text-cv-on-accent"
+                    to={item.actionTo}
+                  >
+                    {item.actionLabel}
+                    <ChevronLeft aria-hidden="true" className="size-3.5" />
+                  </Link>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+      </details>
     </section>
   );
 };
