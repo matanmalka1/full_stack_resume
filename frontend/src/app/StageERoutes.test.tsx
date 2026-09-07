@@ -1,9 +1,9 @@
 import { isValidElement } from "react";
 import { describe, expect, it } from "vitest";
 
-import { ApplicationListPage } from "../pages/ApplicationListPage";
-import { JobDetailsPage } from "../pages/JobDetailsPage";
-import { NewApplicationPage } from "../pages/NewApplicationPage";
+import { ApplicationListPage } from "@/features/application-list";
+import { NewApplicationPage } from "@/features/application-intake";
+import { JobDetailsPage } from "@/features/applications";
 import { router } from "./router";
 
 const stageERoute = (path: string) => router.routes[0]?.children?.find((route) => route.path === path);
@@ -78,7 +78,7 @@ describe("workflow stage publishing", () => {
 
      The sources come through Vite rather than `node:fs`: the app's TypeScript project
      deliberately carries no Node types, and this check needs none. */
-  const pageSources = import.meta.glob("../pages/**/*.{ts,tsx}", {
+  const pageSources = import.meta.glob("../{pages,features/*/pages}/**/*.{ts,tsx}", {
     query: "?raw",
     import: "default",
     eager: true,

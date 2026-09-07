@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail, Operation, Settings } from "../api/contracts";
 import { settingsQueryKey } from "../api/settings";
-import { JobDetailsPage } from "./JobDetailsPage";
+import { JobDetailsPage } from "@/features/applications";
 
 const ANALYSES_PATH = "/api/v1/applications/app-1/analyses";
 

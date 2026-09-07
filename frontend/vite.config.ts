@@ -1,8 +1,14 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
   plugins: [react(), tailwindcss()],
   /* Component tests run in jsdom; Playwright owns the browser. `globals: false` keeps
      `describe`/`it`/`expect` explicit imports, so a test file reads like the rest of the

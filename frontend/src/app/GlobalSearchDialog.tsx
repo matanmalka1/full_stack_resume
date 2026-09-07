@@ -6,8 +6,8 @@ import { useNavigate } from "react-router-dom";
 import { applicationListQueryOptions } from "../api/applications";
 import type { ApplicationListItem } from "../api/contracts";
 import { appRoutes } from "./appRoutes";
-import { preparationStateIcons, preparationStateLabels, preparationStateTones } from "../pages/application/applicationLabels";
-import { recruitmentStatusLabel, recruitmentStatusTone } from "../pages/application/applicationLabels";
+import { preparationStateIcons, preparationStateLabels, preparationStateTones } from "@/features/applications/model/applicationLabels";
+import { recruitmentStatusLabel, recruitmentStatusTone } from "@/features/applications/model/applicationLabels";
 import { StatusBadge } from "../ui/StatusBadge";
 import { cx } from "../ui/cx";
 

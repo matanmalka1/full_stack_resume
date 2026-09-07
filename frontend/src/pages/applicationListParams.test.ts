@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { PAGE_SIZE, paramsFromQuery, queryFromParams } from "./applicationListParams";
+import { PAGE_SIZE, paramsFromQuery, queryFromParams } from "@/features/application-list/components/applicationListParams";
 
 describe("application list URL parameters", () => {
   it("reads every supported filter and rounds an offset down to a page boundary", () => {

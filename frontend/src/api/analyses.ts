@@ -22,7 +22,7 @@ import {
   languageLabels,
   profileLabels,
   trackLabels,
-} from "../pages/application/analysisLabels";
+} from "@/features/applications/model/analysisLabels";
 
 /* What this screen may submit: the four classification decisions, the two acceptances
    recorded on the analysis, and the per-gap acceptance recorded on the SelectionPlan.

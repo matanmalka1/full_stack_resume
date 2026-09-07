@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail, ArtifactVersion } from "../api/contracts";
-import { JobDetailsPage } from "./JobDetailsPage";
+import { JobDetailsPage } from "@/features/applications";
 
 const detail = (): ApplicationDetail =>
   ({

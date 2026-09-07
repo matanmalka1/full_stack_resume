@@ -15,11 +15,11 @@ import type {
 } from "../api/contracts";
 import { applicationDetailQueryOptions } from "../api/applications";
 import { workingDraftQueryOptions } from "../api/drafts";
-import { DraftApprovalDialog } from "./draft-editor/DraftApprovalDialog";
-import { DraftRenderPanel } from "./draft-editor/DraftRenderPanel";
-import { DraftValidationPanel } from "./draft-editor/DraftValidationPanel";
-import { RevisionPage } from "./RevisionPage";
-import { SettingsPage } from "./SettingsPage";
+import { DraftApprovalDialog } from "@/features/drafts/components/DraftApprovalDialog";
+import { DraftRenderPanel } from "@/features/drafts/components/DraftRenderPanel";
+import { DraftValidationPanel } from "@/features/drafts/components/DraftValidationPanel";
+import { RevisionPage } from "@/features/revisions";
+import { SettingsPage } from "@/features/settings";
 
 const json = (value: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(value), {

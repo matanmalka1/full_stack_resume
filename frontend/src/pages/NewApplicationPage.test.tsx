@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { JOB_TEXT_MAX_BYTES } from "../api/applications";
 import type { DuplicateMatch } from "../api/contracts";
 import { settingsQueryKey } from "../api/settings";
-import { NewApplicationPage } from "./NewApplicationPage";
+import { NewApplicationPage } from "@/features/application-intake";
 
 const jsonResponse = (body: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response =>
   new Response(JSON.stringify(body), {

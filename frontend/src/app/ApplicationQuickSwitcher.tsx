@@ -5,7 +5,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { applicationDetailQueryOptions, applicationListQueryOptions } from "../api/applications";
 import { appRoutes } from "./appRoutes";
-import { preparationStateLabels, preparationStateTones } from "../pages/application/applicationLabels";
+import { preparationStateLabels, preparationStateTones } from "@/features/applications/model/applicationLabels";
 import { StatusBadge } from "../ui/StatusBadge";
 import { cx } from "../ui/cx";
 

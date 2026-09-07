@@ -74,10 +74,10 @@ describe("query cache policy", () => {
      new command cannot forget to refresh the board, because forgetting fails here. */
   it("sends every Application invalidation through the shared helper", () => {
     const detailOnlyByDesign: Record<string, string> = {
-      "pages/draft-editor/useDraftEditorState.ts":
+      "features/drafts/components/useDraftEditorState.ts":
         "autosave, which fires per keystroke burst and changes nothing the board shows",
-      "pages/draft-editor/ClaimFactResolution.tsx": "a fact decision, which moves no row on the board",
-      "pages/application/useApplicationActionsMutations.ts":
+      "features/drafts/components/ClaimFactResolution.tsx": "a fact decision, which moves no row on the board",
+      "features/applications/components/useApplicationActionsMutations.ts":
         "the version-conflict re-read, which reports a refusal rather than a change",
     };
 
