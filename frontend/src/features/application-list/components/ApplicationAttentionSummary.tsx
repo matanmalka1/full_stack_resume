@@ -56,11 +56,14 @@ export const ApplicationAttentionSummary = ({
               <StatusBadge className="w-fit px-2 py-0.5 whitespace-nowrap" tone={item.tone}>
                 {item.label}
               </StatusBadge>
-              <div className="min-w-0">
-                <h3 className="truncate text-support font-bold text-cv-text" dir="auto">
-                  {item.title}
-                </h3>
-                <p className="truncate text-support text-cv-text-muted" dir="auto">
+              {/* One combined line, not a single-script identity field like `CompanyMark`
+                  or `ApplicationSummary` carry - `dir="auto"` per line is wrong here: a
+                  Latin company name (most of them) flips just the subtitle to LTR while
+                  the Hebrew title above stays RTL, splitting the row into two halves with
+                  a gap between them. Both lines follow the page's own direction instead. */}
+              <div className="min-w-0" dir="rtl">
+                <h3 className="truncate text-support font-bold text-cv-text">{item.title}</h3>
+                <p className="truncate text-support text-cv-text-muted">
                   {item.application.company} · {item.subtitle}
                 </p>
               </div>
