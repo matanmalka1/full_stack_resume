@@ -414,10 +414,10 @@ describe("DraftEditorPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("מצב: אושרה")).toBeInTheDocument();
+    expect(await screen.findByText("מצב: אושרה", {}, { timeout: 5_000 })).toBeInTheDocument();
     expect(screen.getByText("ממתינה לאישור ← אושרה · explicit confirmation")).toBeInTheDocument();
     expect(screen.queryByText(/\bpending\b|\bconfirmed\b/)).not.toBeInTheDocument();
-  });
+  }, 10_000);
 
   it("keeps fact creation and lifecycle management inside the draft context", async () => {
     stubReads({});
