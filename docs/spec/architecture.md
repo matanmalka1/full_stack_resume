@@ -469,11 +469,25 @@ temporary browser-startup failures.
 
 ## 11. AI adapter
 
-The existing provider-neutral protocol is retained and expanded for the six tasks
+The existing provider-neutral protocol is retained and expanded for the seven tasks
 defined in product-spec §12, including `assess_claim_support` under D1 (2026-09-06).
 The OpenAI adapter uses the Responses API and strict Structured Outputs. It
 returns task-specific Proposal DTOs and provider provenance; it cannot save domain
 state.
+
+`propose_requirement_extraction` is separate from classification and wording review.
+Source quotes/offsets and explicit interpretation are validated before deterministic
+coverage/gap calculation. Requirement identities incorporate interpretation and extractor
+version; corrections create another immutable JobAnalysis under the same Application.
+New interpretation, attestation and understanding fields absent from old records remain
+NULL unless safely derivable. A version-aware reader preserves old recorded gaps and
+IDs rather than reconstructing history with the new extractor. JSONB contract changes
+require historical-read coverage even when no Alembic migration is needed.
+
+Malformed thresholds are invalid provider output; well-formed thresholds with an
+unsupported scale yield undetermined coverage. Optional provider tags alone cannot
+establish boundary applicability or positive coverage. The detailed mapping and
+validation contracts must be resolved before extraction is connected to activation.
 
 Each task receives minimal allowed context. Provider text and fact IDs pass schema and
 semantic support validation. A valid ID paired with strengthened wording fails. Claims

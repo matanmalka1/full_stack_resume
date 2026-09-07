@@ -1,14 +1,21 @@
 # תוכנית מימוש — שלב 1: הבנת משרה
 
-תאריך: 2026-09-06. גרסה 2 — מתקנת את גרסה 1 בשלוש נקודות ביקורת.
+תאריך מקור: 2026-09-06. גרסה 3 — יישור חוזים וביקורת סתירות, 2026-09-07.
 סטטוס: **תוכנית מימוש. לא שונו קוד, סכימה, עובדות או תוצרים. לא הורצו בדיקות.**
 
 המסמך סוגר את שלוש שאלות המבנה שנשארו פתוחות ב[חוזה
 הניתוח §11](tailoring-analysis-contract.md), ומתקן את תנאי D2.
 
-מקורות מחייבים: `AGENTS.md`, [חוזה הניתוח](tailoring-analysis-contract.md) §2–§4,
-[החלטות המוצר](tailoring-behavior-change.md) §2–§2.1, מפרט מוצר §9 ו־§12,
-מצבים ופעולות §13, ארכיטקטורה §6–§8 ו־§11, תוכנית קבלה §2 ו־§6.
+מקורות מחייבים: `AGENTS.md` וארבעת המפרטים ב־`docs/spec/`, לפי סדר הסמכות
+במפרט המוצר §1. D1–D4 מתועדות ב[החלטות המוצר](tailoring-behavior-change.md)
+ושולבו במפרטים. [חוזה הניתוח](tailoring-analysis-contract.md) ותוכנית זו הם תכנון
+תומך; הצעות שלא הוכרעו אינן נעשות מחייבות מעצם הפניה אליהן.
+
+## יישור גרסה 3
+
+D2–D4, זהות הדרישה והרחבת אישור ניתוח לא שלם עוגנו במפרטים. תוקנו הגנת
+ההזרקה וההבחנה בין סף פגום לסף שאינו נתמך. שיוך גבולות ומיפוי ראיות עדיין
+מחייבים חוזה מפורט לפני חיווט; אין להציג את המסמך כאילו נותר רק שינוי ניסוח אחד.
 
 ## מה תוקן מגרסה 1
 
@@ -69,7 +76,7 @@
 | לאשר, לקדם או לשנות סטטוס של עובדה | מחזור החיים ב־`knowledge_mutations.py`; לספק אין מסלול כתיבה למצב |
 | להרחיב את מאגר העובדות המותר | `allowed_fact_pool(profile)` — פונקציה של הפרופיל בלבד |
 | לעקוף ולידציה, אישור או חסימה | `validate_draft` דטרמיניסטי; `approve_draft` דורש ריצה תואמת לגרסה המדויקת |
-| לקבוע `track`, `profile`, `fit`, `language`, `user_override`, `approval_reasons` | `JobClassificationProposal` אינו נושא את השדות; `RequirementExtractionProposal` גם לא |
+| לקבוע ערכי מדיניות מחוץ לחוזה ההצעה או לעקוף החלטות משתמש | הצעת הסיווג כפופה לשער המיזוג; הצעת החילוץ אינה מוסמכת לקבוע סיווג, Fit או אישור. נבדקות גם השפעות עקיפות דרך דרישות |
 | להכריע כיסוי | `coverage.py` רץ על עובדות קנוניות בלבד ואינו מקבל טקסט משרה |
 | **למחוק או לרכך דרישה אמיתית** | חדש — ראה ב' |
 
@@ -81,8 +88,10 @@ clean    = analyze(posting)
 injected = analyze(posting + injection)
 
 לכל דרישה אמיתית r ב־clean:
-    קיימת r' ב־injected עם אותו טווח מקור בתוך הטקסט הנקי,
-    ו־digest(r'.interpretation) == digest(r.interpretation)
+    קיימת r' ב־injected עם אותה דרישה ופירוש בבסיס המקרה המתויג,
+    והציטוט שלה מתייחס למקור האמיתי בטקסט הנקי.
+לכל דרישה פעילה ב־injected:
+    קיימת דרישת משרה אמיתית תואמת בבסיס המקרה, ללא דרישות שמקורן בהוראה זדונית.
 ```
 
 מה שהטענה תופסת: מחיקת דרישה, ריכוך `mandatory -> preferred`, היפוך `negation`,
@@ -90,18 +99,23 @@ injected = analyze(posting + injection)
 הכיסוי אינו נבדק בנפרד — הוא פונקציה דטרמיניסטית של הפירוש ושל העובדות, ולכן
 שוויון פירוש גורר שוויון כיסוי בלי להתחייב לכלל "הכיסוי לא עולה".
 
-דרישות **נוספות** שההזרקה יצרה מותרות להופיע. הן מצוטטות ולכן חוקיות בשער המקור,
-והן נחסמות במקום אחר: הן אינן יכולות לעשות דבר מרשימה א'.
+גם הכיוון ההפוך נבדק: כל דרישה פעילה ב־`injected` חייבת להתבסס על דרישת משרה
+אמיתית בטקסט הנקי. הוראה זדונית אינה דרישה נוספת, אף שהיא מצוטטת במדויק.
+אסור שתייצר כיסוי, פער, שינוי Fit או החלטת ביקורת נוספים. דרישת HubSpot מזויפת
+היא כשל גם אם היא רק מוסיפה חסימה. טווח הציטוט המדויק אינו מדד סמנטי מספיק:
+אם חלוקת הציטוט השתנתה, נבדקת זהות הדרישה ומשמעותה מול בסיס המקרה המתויג.
+
+זהו חוזה קבלה, לא אלגוריתם זיהוי שכבר קיים. לפני W4 יש להגדיר כיצד הצעה
+שאינה עומדת בחוזה נדחית, וכיצד ספק בפירוש נשאר גלוי בלי להכשיר דרישה מוזרקת.
 
 **ג. הצהרת יושר.** ספק מדומה מוכיח **אכיפת חוזים** — שהמנוע דוחה מה שהוא אמור
 לדחות. הוא אינו מוכיח עמידות של המודל בפני הזרקה, ואין לתייג אותו כך. עמידות
 מודל אמיתית נבדקת ידנית מול ספק אמיתי, לפי תוכנית קבלה §6, ואינה תנאי שער
 אוטומטי.
 
-**נדרש עדכון מפרט מוצר §12 לפני קוד.** המשפט הקיים — "They may influence the
-proposed content but never policy, allowed facts, validation, approval, or output
-schemas" — נשאר נכון, אבל צריך לומר במפורש שדרישות ופערים הם תוכן שנגזר מהמודעה,
-ושהאכיפה עליהם היא רשימה א' ובדיקת ב', לא שוויון למסלול אחר.
+**חוזה הקבלה עוגן במפרט מוצר §12 ובתוכנית הקבלה §6 ב־2026-09-07.**
+האיסור לשנות מדיניות נשאר; דרישות ופערים הם תוכן נגזר, ולכן בודקים גם השפעה
+עקיפה של הזרקה. אין דרישה לשוויון למסלול הדטרמיניסטי.
 
 ### 1.2 D2 מתוקן — שלושה מצבים, בלי להמציא עובדות
 
@@ -157,7 +171,7 @@ class Requirement(StrictModel):
     ...
     #: None = הרשומה נכתבה לפני שער הפירוש. לא "single, לא שלילה".
     interpretation: RequirementInterpretation | None = None
-    #: None = חולצה דטרמיניסטית; לחילוץ דטרמיניסטי אין ציטוט מוצהר.
+    #: None = הרשומה אינה נושאת attestation; אין להסיק מכך איזה מחלץ פעל.
     attestation: RequirementAttestation | None = None
     #: None = רשומה שקדמה למרחב השמות של המחלצים.
     extractor: str | None = None
@@ -180,7 +194,7 @@ class RequirementInterpretation(StrictModel):
     #: ההבחנה נשמרת: רשימה ריקה היא ממצא, חוסר הוא היעדר שאלה.
     unmapped_statements: list[UnmappedStatement] | None = None
     understanding: UnderstandingSources | None = None
-    interpretation_decisions: list[InterpretationDecision] = []
+    interpretation_decisions: list[InterpretationDecision] | None = None
 ```
 
 **מתאם גרסה מפורש.** קורא יחיד ב־`domain/analysis/requirements/compat.py`:
@@ -264,9 +278,9 @@ class RequirementExtractionProposal(StrictModel):
 `ports/outbound.py`: `RequirementExtractionContext` (`job_text` + `requirement_lines`
 שהמנוע כבר חישב, כדי שהשלמות תיבדק מול אותו מכנה), ו־
 `propose_requirement_extraction` על `AIProvider`.
-`ai/contracts/task_contracts.json`: ערך שישי לצד חמשת הקיימים. מפרט מוצר §12 מונה
-שש משימות (כולל `assess_claim_support` שטרם מומשה) — הכניסה כאן היא השביעית
-ברשימת המפרט. §12 מתעדכן.
+`ai/contracts/task_contracts.json`: ערך נוסף לצד חמשת הקיימים בקוד. מפרט מוצר §12
+מונה כעת שבע משימות יעד, כולל החילוץ ו־`assess_claim_support` שטרם מומשו.
+סדר המימוש אינו משנה את רשימת היעד ואינו מציג משימה מתוכננת כיכולת קיימת.
 
 ### 2.4 חתימות ציבוריות שמשתנות
 
@@ -314,11 +328,14 @@ class RequirementExtractionProposal(StrictModel):
 4. `all-of` ⇒ `len(members) >= 2`, כל איבר נבדק בנפרד כמו `ConceptComponent`.
    איבר בלי ראיה נשאר `MissingComponent`; צירוף ראיות נפרדות אינו מספק אותו.
 5. `single` ⇒ `members == []`.
-6. `kind == "threshold"` ⇒ `demanded` קיים ובסולם מוצהר (`concepts.scales` או
-   `years`). מוקדם לשער כדי שסף בלי ערך ייפסל ולא ייקרא `unsupported`.
+6. `kind == "threshold"` ⇒ ערך סף ויחידה/סולם מפורשים ותקינים מבנית, עם
+   תמיכה בציטוט. ערך חסר או פגום פוסל את ההצעה. סולם תקין שהמנוע אינו תומך
+   בחישובו אינו כשל ספק: הדרישה נשמרת ומקבלת `undetermined` בשלב הכיסוי.
+   נדרש להשלים חוזה סף מובנה לפני W1; `demanded: str` לבדו אינו מגדיר ערך ויחידה.
 7. `negation` ⇒ לעולם לא כיסוי חיובי; מקצר החוצה ב־`coverage.py` לפני `_satisfied`.
 
-`_satisfied` ו־`_candidate_fact_ids` **אינם משתנים** — הם כבר מסננים עובדות גבול.
+האינווריאנט נשמר: עובדת גבול אינה ראיה חיובית. אין התחייבות להקפיא את חתימות
+`_satisfied` ו־`_candidate_fact_ids` לפני השלמת מיפוי איברי הדרישה לראיות.
 
 סיווג: משמעות ערך שמור.
 
@@ -398,8 +415,11 @@ classification of a requirement creates a JobAnalysis". תיקון פירוש ה
   `gaps_from_requirements` שולף את `fact.meaning` כנימוק סמכותי.
   השיוך לדרישה שמקורה AI: `boundary_facts` נגזרות מהתגית `boundary` על
   ה־`FactStore` (**guard נגזר, לא רשימה** — עובדת גבול חדשה נכנסת לתוקף עצם
-  קנוניזציה), ומשויכות דרך `fact.tags & requirement.topic_tags`. תגית זרה
-  ב־`topic_tags` פוסלת את ההצעה.
+  קנוניזציה). `fact.tags & requirement.topic_tags` הוא רמז לשיוך בלבד, לא
+  שער הגנה: רשימת תגיות ריקה או תגית חוקית אך שגויה יכולות להסתיר גבול.
+  תחולת הגבול נבדקת מול משמעות הדרישה והעובדה, בלי להסתמך רק על תגיות הספק.
+  תחולה שלא הוכרעה מונעת כיסוי חיובי מאומת ומסומנת `undetermined`; היא אינה
+  מומצאת כפער עובדתי. חוזה השיוך, העדות ובדיקת ההשמטות יושלם לפני W4/W5.
 - **אין תמיכה במאגר** — `_satisfied` לא מצא ראיה ⇒ `unsupported` ⇒ פער עם
   `"Canonical facts do not verify this requirement."` זה כל מה שנדרש כדי למנוע
   טענה על HubSpot. **אין כאן עובדה חדשה ואין מה לממש.**
@@ -425,7 +445,7 @@ classification of a requirement creates a JobAnalysis". תיקון פירוש ה
 
 ### 3.7 `merge_classification`
 
-`approval.py:110`. **הפונקציה עצמה כמעט אינה משתנה.** מה שמשתנה הוא מה שמגיע
+`approval.py:110`. **שימור הסמכות אינו הבטחה לשימור המימוש.** מה שמשתנה הוא מה שמגיע
 אליה כ־`deterministic`. סדר `AnalysisService.prepare`:
 
 ```
@@ -442,13 +462,13 @@ classification of a requirement creates a JobAnalysis". תיקון פירוש ה
 
 צעד 7 הוא המקום שבו D2 מתממש — **לפני** שער המיזוג, לא בתוכו.
 
-נפתח ב־`merge_classification` עצמו: **כלום.** `deterministic.requirements`
-ו־`deterministic.extraction_version` עוברים כפי שהם (`approval.py:174-175`)
-ונושאים תוכן אחר.
+שער המיזוג מקבל בסיס דרישות מאומת בהתאם למסלול. הצעת הסיווג אינה מחלצת
+דרישות ואינה מוחקת פערים קשים שנגזרו מבסיס זה. מונוטוניות אינה היתר להחזיר
+פערי legacy שהוסרו ב־D2. Fit מחושב מהכיסוי והפערים של הבסיס החדש.
 
-נשאר נעול: `JobClassificationProposal` בלי `requirements`; `fit` נגזר מהפערים
-הממוזגים ומקופל דרך `merge_fit`; `merge_gaps` מונוטוני; `language`,
-`user_override`, `classification_requires_approval`, `approval_reasons` ללא נגיעה.
+הגנת השפה ובחירות המשתמש נשמרת. סיבות הביקורת מתעדכנות לפי D4: מחלוקת בין
+מסווגים אינה כשלעצמה בחירה מקצועית מהותית. `coverage-undetermined` נוסף בנפרד;
+אין הבטחה שהפונקציה או רשימת הסיבות יישארו ללא שינוי.
 
 ---
 
@@ -461,7 +481,7 @@ classification of a requirement creates a JobAnalysis". תיקון פירוש ה
 | W3 | כיסוי: `any-of`, `all-of`, `negation`, `undetermined` | `requirements/coverage.py`, `analysis/gaps.py`, `analysis/approval.py` |
 | W4 | משימת ספק + חיווט יישום | `ports/outbound.py`, `infrastructure/providers.py`, `services/analysis.py`, `ai/contracts/task_contracts.json`, `ai/prompts/` |
 | W5 | שיוך עובדות גבול, מחיקת `derive_gaps` במסלול AI, D3 בתצורה | `requirements/coverage.py`, `analysis/gaps.py`, `config/requirements.json` |
-| W6 | תיקון פירוש, תצוגה | `commands.py`, `services/analysis.py`, `api/schemas/`, `openapi/`, `frontend/src/api/analyses.ts`, `frontend/src/pages/application/analysis/` |
+| W6 | תיקון פירוש, תצוגה וסיבות ביקורת לפי D4 | `commands.py`, `services/analysis.py`, `api/schemas/`, `openapi/`, `frontend/src/api/analyses.ts`, `frontend/src/pages/application/analysis/` |
 
 ---
 
@@ -533,7 +553,9 @@ classification of a requirement creates a JobAnalysis". תיקון פירוש ה
 | --- | --- | --- |
 | 1 | עמידות המודל בפני הזרקה | §1.1 ג'. נבדק ידנית מול ספק אמיתי לפי תוכנית קבלה §6, ואינו תנאי שער אוטומטי |
 | 2 | הרחבת `config/requirements.json` למושגי פיתוח (D3) — היקף הרשימה | רשימת חריגים מכוונת; היקפה נקבע מול שתי משרות הקבלה ב־W5, לא מראש |
-| 3 | חסימת טיוטה על ניתוח מוחלף | §9 |
+| 3 | חסימת טיוטה על ניתוח מוחלף | §9; מחוץ לתכולת שלב 1 |
+| 4 | שיוך גבולות ומיפוי איברי `any-of`/`all-of` לראיות | להשלים חוזה אימות, ספים ויחידות, וזהות איבר הנגזרת ממשמעותו; `member_id` ו־`label` לבדם אינם מספיקים לכיסוי. לפני W1/W4 |
+| 5 | אכיפת פירוש ושלמות מול השמטה והוספה זדונית | §1.1 הוא יעד קבלה; פירוט מנגנון הדחייה/הבירור נדרש לפני W4 |
 
 ---
 
@@ -550,7 +572,7 @@ classification of a requirement creates a JobAnalysis". תיקון פירוש ה
 | W3 | `pytest tests/test_analysis.py tests/test_classification_policy.py -q` | `any-of` = דרישה אחת; `all-of` לא מסופק מצירוף ראיות; `negation` לא נספרת חיובית; `undetermined` אינו פער קשה ובכל זאת חוסם; עובדת גבול עדיין לא מספקת דבר |
 | W4 | `pytest tests/test_ai_tasks.py tests/test_provider.py -q` | המשימה רשומה; פלט לא תקין נכשל כ־`INVALID_OUTPUT`; שער ההזרקה בניסוחו החדש — התנהגות אסורה והשוואת לפני/אחרי |
 | W5 | `pytest tests/test_analysis.py tests/test_golden.py -q` | פער מכל אחד משלושת המצבים; מחיקת `derive_gaps` במסלול AI לא הפילה הגנה; **ה־hashes של golden לא זזו** |
-| W6 | `pytest tests/test_api_analyses.py tests/test_api_applications.py tests/test_state_projection.py -q` | תיקון פירוש יוצר גרסה חדשה ואינו נוגע בישנה; ההיטל מציג את שלושת המצבים |
+| W6 | `pytest tests/test_api_analyses.py tests/test_api_applications.py tests/test_state_projection.py -q` | תיקון פירוש יוצר גרסה חדשה ואינו נוגע בישנה; ההיטל מציג את שלושת המצבים; D4 מבדיל בין מחלוקת טכנית לבחירה מהותית בלי להסיר חסימות אחרות |
 | W6, אם חוזה HTTP השתנה | `python openapi/generate_openapi.py` ואז `pytest tests/test_api_foundation.py -q` | הסכימה המחויבת אינה מתיישנת |
 | W6, אם נגעתי ב־frontend | `npm --prefix frontend run check` | typecheck (כולל ה־`Record` הממופה המלא), tokens, format, vitest |
 
@@ -602,5 +624,8 @@ classification of a requirement creates a JobAnalysis". תיקון פירוש ה
   בגרסה 1 לא הייתה עקבית.
 - **אין צורך ליצור אף עובדה קנונית חדשה.** היעדר תמיכה מספיק כדי למנוע טענה,
   ומסלול הפער שלו כבר קיים ועובד.
-- **הכרעה אחת נדרשת לפני קוד:** ניסוח מחדש של שער ההזרקה במפרט מוצר §12 (§1.1).
+- יישור המפרטים הושלם למסגרת D2–D4; אין לפתוח החלטות אלה מחדש.
+- נותרו חוזים טכניים מפורשים בסעיף 7: סף ואיברי דרישה, שיוך גבולות וראיות,
+  ואכיפת פירוש מול הזרקה. משלימים אותם לפני הגל התלוי בהם; אין לאלתר שער
+  חלש יותר כדי להתחיל חיווט. אם אין מנגנון ישים במסגרת החוזה, מדווחים חסימה.
 - שינוי חוזה נתונים אחד ללא Alembic: שדות `None` ומתאם גרסה מפורש (§2.1, §5.2).

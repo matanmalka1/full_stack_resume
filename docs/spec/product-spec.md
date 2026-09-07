@@ -84,6 +84,31 @@ supporting design details; proposed storage/UI mechanics there are not automatic
 approved by D1. The current extractive-only implementation does not yet implement this
 amendment. No runtime or existing record changes as a result of this documentation edit.
 
+### Analysis decisions D2–D4 — reconciled 2026-09-07
+
+D2 makes validated AI requirement extraction the primary requirement source in AI
+mode. Source attestation and interpretation checks precede deterministic coverage,
+gap and Fit calculation. Legacy rule gaps are not automatically unioned into this
+analysis; a material discrepancy is investigated rather than resolved in favor of
+rules by default. Canonical boundary facts remain authoritative. Their applicability
+must not depend solely on optional provider tags; unresolved applicability cannot be
+reported as verified coverage. No new negative candidate facts are required merely
+to represent missing support.
+
+D3 retains an explicitly selected deterministic path through Ready, with limited
+coverage of common development requirements and honest incomplete-analysis reporting.
+It is not a second general language-understanding engine and is never a silent fallback.
+
+D4 requires a user decision for an unresolved material choice of development versus
+sales, professional experience included/omitted, professional emphasis, or proceeding
+despite a material gap. Classifier disagreement alone is not such a choice. This does
+not remove factual, incomplete-analysis, integrity, or execution blockers.
+
+These decisions amend the analysis target contract; they do not claim implementation.
+Stage 1 addresses job understanding before broader evidence matching, content budgets,
+and wording. Detailed unresolved mechanisms in the implementation plan remain design
+work, not implied permission to weaken these contracts.
+
 ### Current product contract
 
 > A single candidate can create a job application, analyze the job, resolve only the
@@ -149,7 +174,7 @@ The product includes:
 - A Ready projection over a qualifying ApprovedRevision.
 - Contextual fact inspection and the pending -> confirmed -> canonical -> attached
   lifecycle without a general Knowledge Manager.
-- OpenAI Responses API integration for the six AI tasks through strict structured
+- OpenAI Responses API integration for the seven AI tasks through strict structured
   Proposal contracts.
 - A deterministic offline flow through Ready when no OpenAI key is configured.
 - A Dashboard, Application Detail, unified timeline, recruitment tracking, next action,
@@ -432,8 +457,10 @@ the later tracking milestone, not the first vertical slice.
 
 The application implements one OpenAI adapter behind the provider-neutral `AIProvider`
 protocol.
-The six AI tasks are:
+The seven AI tasks are:
 
+- `propose_requirement_extraction` — quoted requirements and explicit interpretation;
+  it cannot decide coverage, gaps, Fit, or approval.
 - `propose_job_analysis`
 - `propose_selection_plan`
 - `draft_resume`
@@ -477,6 +504,15 @@ hidden chain-of-thought are never retained.
 
 Job descriptions and user content are untrusted data. They may influence the proposed
 content but never policy, allowed facts, validation, approval, or output schemas.
+
+Under D2, posting content can legitimately change extracted requirements and their
+derived gaps. Prompt-injection instructions are not additional job requirements.
+Acceptance compares the same posting with and without adversarial instructions:
+actual requirements retain their interpretation, and injected instructions must not
+add actionable requirements or alter derived coverage, gaps, Fit, or review decisions.
+An exact quotation proves source presence, not legitimate requirement meaning.
+Mock tests prove enforcement of specified contracts; live evaluation is required for
+model behavior and is not a guarantee of universal injection resistance.
 
 ## 13. Preparation and recruitment
 
@@ -757,7 +793,7 @@ v2.0 is Release Ready only when all of the following are demonstrably true:
 - [ ] The central failure paths are exercised through the same slice.
 - [ ] Review is exception-based and every review reason is explicit and resolvable.
 - [ ] The deterministic offline workflow completes through Ready.
-- [ ] The six AI tasks return Proposals and cannot bypass deterministic policy.
+- [ ] The seven AI tasks return Proposals and cannot bypass deterministic policy.
 - [ ] D1 accepts fully reviewed supported wording without individual confirmation,
       blocks uncertainty/contradiction, preserves evidence attribution and staleness,
       and passes the Connecteam and WeDev acceptance scenarios.

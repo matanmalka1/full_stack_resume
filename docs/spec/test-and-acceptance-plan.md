@@ -266,6 +266,33 @@ not real model accuracy. Manual live evaluation must inspect both supported new
 wording and deliberately unsupported variants from both tracks before release.
 No new passing evidence is asserted by this specification amendment.
 
+### D2–D4 analysis acceptance — reconciled 2026-09-07
+
+Extend the nearest existing tests for these material distinctions:
+
+- AI extraction is primary; legacy keyword gaps cannot silently re-enter its analysis.
+- Exact quotes do not authorize incorrect requirement interpretation. Alternatives,
+  responsibilities and company descriptions retain their distinct meanings.
+- Missing/incorrect provider tags cannot suppress an applicable canonical boundary or
+  produce unsupported positive coverage. Unresolved applicability remains explicit.
+- A malformed threshold fails as invalid output; a valid unsupported scale yields
+  undetermined coverage rather than an invented lack of candidate experience.
+- Proceeding with incomplete analysis resolves only that reason; a separate hard gap
+  and its low Fit survive until separately handled.
+- Interpretation changes change requirement identity and invalidate inherited gap
+  acceptances; historical IDs, gaps, records and missing metadata remain unchanged.
+- Classifier disagreement alone does not force a professional choice under D4;
+  factual, incomplete-analysis and integrity blockers remain enforced.
+- With injected instructions, actual requirements retain their meaning and no injected
+  actionable requirement changes gaps, Fit, coverage or review decisions. Include both
+  deletion/softening and addition attacks. Mock-provider enforcement and manual live
+  model evaluation are reported separately; neither is a universal safety proof.
+- The explicit deterministic no-key pipeline remains usable. Connecteam and WeDev
+  outcomes are reported per execution mode, not assumed identical across modes.
+
+The live release evaluation also covers `propose_requirement_extraction`, including
+adversarial additions and omissions, alongside D1 writer/reviewer evaluation.
+
 ### Provider and integration coverage
 
 Automated provider tests use fake HTTP/provider responses and validate:

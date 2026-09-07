@@ -171,12 +171,12 @@ KNOWLEDGE_RECONCILIATION_REQUIRED
 ```
 
 `ANALYSIS_INCOMPLETE` reports an approval reason that no classification decision
-answers - today `extraction-failed`, requirements the analysis could not read. Naming the
-Track or Profile does not recover a requirement that was never read, and neither does
-analysing the same snapshot again: the deterministic engine reads the same text under the
-same Knowledge and fails the same way. The only decision that answers it is the explicit
-one to proceed with an incomplete analysis, recorded as the `analysis` override, which
-answers nothing else.
+answers: `extraction-failed` for unread requirements, and under D2
+`coverage-undetermined` for mandatory requirements whose coverage cannot be resolved.
+Naming the Track or Profile resolves neither. Repeating the unchanged deterministic
+path is not a resolution. A corrected, newly validated analysis may remove the reason;
+otherwise proceeding requires the explicit `analysis` override, which answers nothing
+else. Missing evidence is not evidence of missing experience.
 
 A review reason advertises an action only when that action can actually close it. Which
 overrides answer which reason, and which review reason each is reported as, are one table
@@ -387,9 +387,13 @@ There is no hard-delete command in the Web UI.
 
 ### `analyze_job(application_id, job_snapshot_id, provider, ...)`
 
-Asynchronous and idempotent. It runs deterministic analysis and, in AI mode, a
-`propose_job_analysis` task. It validates and merges the Proposal without allowing it to
-override hard gaps, factual policy, or schemas. Every successful activation atomically
+Asynchronous and idempotent. Deterministic mode runs the explicit rule/concept path.
+In AI mode, `propose_requirement_extraction` supplies the primary requirements after
+source and interpretation validation; coverage, applicable canonical boundaries,
+gaps and Fit are derived by application/domain policy. Legacy rule gaps are not
+unioned into that result. `propose_job_analysis` remains a separate classification
+Proposal and cannot erase hard gaps established from the validated requirements or
+override factual policy or schemas. Every successful activation atomically
 creates an immutable JobAnalysis and its initial immutable deterministic SelectionPlan,
 with the plan's frozen candidate/policy context. It returns both IDs and NeedsReview as
 a successful outcome when applicable. This guarantees that the no-review path can call
@@ -414,17 +418,23 @@ decisions change, it creates one replacement SelectionPlan. It records overrides
 never mutates the original analysis or plan.
 
 A gap acceptance may accompany a classification decision, and both land in that one
-write. Requirement identity is keyed on the snapshot text rather than on the
-classification, so an accepted requirement is still stated by the new analysis; it is
-re-checked against that analysis before it is stored, and a requirement whose gap the
-reclassification removed is refused with the whole submission. A *fact* overlay may not
+write. New extraction contracts key requirement identity on the snapshot, source span,
+extractor version and normalized interpretation, including obligation, composition,
+members, negation, kind and threshold. A classification-only change need not change
+that identity; an interpretation change does. Submitted gap acceptances are checked
+against the resulting analysis. A changed interpretation cannot inherit the prior
+requirement's acceptance, and an absent hard-gap ID refuses the whole submission.
+Historical requirement IDs and decisions are never rewritten. A *fact* overlay may not
 accompany one: pinned and excluded facts are decided against candidate accounting the
 new analysis has not produced yet, so they stay a second command.
 
-It also carries `accept_incomplete_analysis`, the decision to proceed although the
-analysis read none of the posting's requirements. It records the `analysis` override and
-resolves `ANALYSIS_INCOMPLETE` alone: Fit stays `unknown`, no gap is accepted, and no
-classification question is settled. It is offered only here and never on `analyze`, so a
+It also carries `accept_incomplete_analysis`, the explicit decision to proceed when
+requirements were not understood or a mandatory requirement's coverage could not be
+determined. The UI identifies the unresolved requirements and the limits of analysis.
+It records the `analysis` override and resolves `ANALYSIS_INCOMPLETE` alone: coverage
+remains undetermined, no gap is accepted, and no classification question is settled.
+Fit remains `unknown` unless an independently established hard gap requires `low`;
+that gap requires its own acceptance. It is offered only here and never on `analyze`, so a
 client cannot pre-accept a posting nobody has looked at, and a genuinely new analysis -
 another snapshot, or changed Knowledge - starts without it and blocks again.
 
