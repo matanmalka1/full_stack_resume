@@ -1,83 +1,34 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 
-import { invalidateApplicationViews } from "@/api/applications";
-import type { WorkingDraft } from "@/api/contracts";
-import { validateWorkingDraft, validationRunQueryOptions } from "@/api/validation";
 import { briefServerFailureDetail, ErrorCallout } from "@/app/ErrorCallout";
-import { ActionBar } from "@/ui/ActionBar";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { ValidationReportView } from "@/features/revisions";
+import type { DraftValidation } from "../hooks/useDraftValidation";
 
 interface DraftValidationPanelProps {
-  applicationId: string;
-  /* An approval control rendered inside this panel's own footer, for a caller that has
-     nowhere better to put one. The editor does: it pins approval to the screen rather
-     than leaving it at the foot of a column, so it passes nothing here and the footer
-     does not appear. */
-  approval?: ReactNode;
-  draft: WorkingDraft | undefined;
-  /* Approval is the editor's own dialog, so the panel reports the exact passing run
-     upward rather than linking to a screen for it. */
-  onExactPassingRun: (runId: string | null) => void;
-  /* Set when an approval was refused as stale: the panel says so instead of the user
-     arriving at a validation screen with an unexplained warning. */
-  stale: boolean;
+  validation: DraftValidation;
 }
 
-/* A.4 frame 5, as a panel of the editor rather than a screen of its own. The draft it
-   validates is the one in the editor beside it, so making the user leave the editor to
-   read the result - and come back to fix it - was the trip this removes. Every command,
-   key, and stale path is the one the standalone screen used. */
-export const DraftValidationPanel = ({
-  applicationId,
-  approval,
-  draft,
-  onExactPassingRun,
-  stale,
-}: DraftValidationPanelProps) => {
-  const queryClient = useQueryClient();
+/* A.4 frame 5's result, as a panel of the editor rather than a screen of its own. The
+   draft it describes is the one in the editor beside it, so making the user leave to read
+   the verdict - and come back to fix it - was the trip this removes.
+
+   It draws the run and runs the command. What follows from the run - whether approval is
+   open - is derived upstream from the same values, so nothing is reported back out of
+   here through an effect. */
+export const DraftValidationPanel = ({ validation }: DraftValidationPanelProps) => {
   const summaryRef = useRef<HTMLHeadingElement>(null);
+  const { canValidate, error, isPending, lastRun, run, stale, validate } = validation;
 
-  const runId = draft?.latest_validation_run_id ?? null;
-  const runQuery = useQuery({
-    ...validationRunQueryOptions(runId ?? ""),
-    enabled: runId !== null,
-  });
-
-  const validation = useMutation({
-    mutationFn: async () => {
-      if (draft === undefined) throw new Error("Validation was offered before the draft loaded");
-      return validateWorkingDraft(draft.id, draft.edit_version);
-    },
-    onSuccess: () => {
-      void invalidateApplicationViews(queryClient, applicationId);
-    },
-  });
-
-  const run = validation.data ?? runQuery.data;
-  /* §14: approval names an exact version. A run that describes any other draft, edit
-     version, or content hash is evidence about a version that no longer exists. */
-  const exactPassingRun =
-    run?.passed === true &&
-    draft !== undefined &&
-    run.application_id === applicationId &&
-    run.working_draft_id === draft.id &&
-    run.edit_version === draft.edit_version &&
-    run.content_hash === draft.content_hash;
-
+  /* A run the user asked for: the verdict is what they are waiting for, so the heading
+     that carries it takes focus once it arrives. A run read back with the draft moves
+     nothing. */
+  const lastRunId = lastRun?.validation_run_id ?? null;
   useEffect(() => {
-    if (validation.data !== undefined) summaryRef.current?.focus();
-  }, [validation.data]);
-
-  /* The dialog upstream may only open for a run this panel has confirmed exact. */
-  useEffect(() => {
-    onExactPassingRun(exactPassingRun && run !== undefined ? run.validation_run_id : null);
-  }, [exactPassingRun, onExactPassingRun, run]);
-
-  const error = runQuery.error ?? validation.error;
+    if (lastRunId !== null) summaryRef.current?.focus();
+  }, [lastRunId]);
 
   return (
     <section aria-labelledby="validation-summary" className="flex flex-col gap-3 border-t border-cv-border pt-4">
@@ -85,13 +36,7 @@ export const DraftValidationPanel = ({
         <h2 className="text-heading-sm font-bold text-cv-text" id="validation-summary" ref={summaryRef} tabIndex={-1}>
           {run === undefined ? "אימות הטיוטה" : run.passed ? "הטיוטה עברה אימות" : "הטיוטה לא עברה אימות"}
         </h2>
-        <Button
-          disabled={draft === undefined}
-          onClick={() => validation.mutate()}
-          pending={validation.isPending}
-          pendingLabel="מאמת…"
-          variant="secondary"
-        >
+        <Button disabled={!canValidate} onClick={validate} pending={isPending} pendingLabel="מאמת…" variant="secondary">
           {run === undefined ? "אימות הטיוטה" : "אימות מחדש"}
         </Button>
       </div>
@@ -102,7 +47,7 @@ export const DraftValidationPanel = ({
         </Callout>
       ) : null}
 
-      {error === null ? null : (
+      {error === null || error === undefined ? null : (
         <ErrorCallout
           error={error}
           fallbackDetail={briefServerFailureDetail}
@@ -118,14 +63,8 @@ export const DraftValidationPanel = ({
         <ValidationReportView report={run.report} />
       )}
 
-      {approval === undefined ? null : <ActionBar className="border-t border-cv-border pt-3" primary={approval} />}
-
       <LiveRegion>
-        {validation.data === undefined
-          ? ""
-          : validation.data.passed
-            ? "האימות הושלם בהצלחה."
-            : "האימות הושלם והטיוטה לא עברה."}
+        {lastRun === undefined ? "" : lastRun.passed ? "האימות הושלם בהצלחה." : "האימות הושלם והטיוטה לא עברה."}
       </LiveRegion>
     </section>
   );

@@ -5,19 +5,20 @@ import { Card } from "@/ui/Card";
 import { LtrText } from "@/ui/LtrText";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { workingDraftStateLabels, workingDraftStateTones } from "@/features/applications/model/applicationLabels";
+import type { AutosaveState } from "../hooks/useDraftAutosave";
 import { DraftSaveState } from "./DraftSaveState";
-import type { useDraftAutosave } from "./useDraftAutosave";
 
 interface DraftHeaderCardProps {
-  autosave: ReturnType<typeof useDraftAutosave>;
   detail: ApplicationDetail;
+  /* Undefined while there is no draft to edit, and then there is no save state either. */
   draft: WorkingDraft | undefined;
-  workingDraftId: string | null;
+  dirty: boolean;
+  saveState: AutosaveState | null;
 }
 
 /* A.4 frame 3: which Application this editor is open on, the version being edited, and
    whether it is saved - the one line the reader checks before navigating away. */
-export const DraftHeaderCard = ({ autosave, detail, draft, workingDraftId }: DraftHeaderCardProps) => (
+export const DraftHeaderCard = ({ detail, dirty, draft, saveState }: DraftHeaderCardProps) => (
   <Card className="flex flex-wrap items-center justify-between gap-4 bg-cv-surface p-4 shadow-surface">
     <div className="flex min-w-0 items-center gap-3">
       <span className="grid size-10 shrink-0 place-items-center rounded-control bg-cv-accent-soft text-cv-accent">
@@ -46,7 +47,7 @@ export const DraftHeaderCard = ({ autosave, detail, draft, workingDraftId }: Dra
       <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
         {workingDraftStateLabels[detail.working_draft_state]}
       </StatusBadge>
-      {workingDraftId === null ? null : <DraftSaveState state={autosave} />}
+      {saveState === null ? null : <DraftSaveState dirty={dirty} state={saveState} />}
     </div>
   </Card>
 );

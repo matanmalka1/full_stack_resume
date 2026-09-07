@@ -10,14 +10,15 @@ import { ViewSwitch } from "@/ui/ViewSwitch";
    of sixty textareas. There is no screen-wide editing mode now: `read` shows the draft as
    text with the facts behind each line and a pencil on every row, and `document` drops the
    rows for the rendered preview alone. Changing one line is a decision about that line. */
-export type EditorMode = "read" | "document";
+export type DraftWorkspaceMode = "read" | "document";
 
-interface EditorLayoutProps {
+interface DraftWorkspaceProps {
   /* The claim column: the draft as rows, each with its own editing controls. */
   editor: ReactNode;
-  mode: EditorMode;
-  /* Owned upstream: the page builds the claim handlers from it, so it cannot live here. */
-  onModeChange: (mode: EditorMode) => void;
+  mode: DraftWorkspaceMode;
+  /* Owned upstream: switching to `document` settles the autosave buffer first, which is
+     the page's business rather than the layout's. */
+  onModeChange: (mode: DraftWorkspaceMode) => void;
   preview: ReactNode;
 }
 
@@ -26,13 +27,10 @@ interface EditorLayoutProps {
    unmounted editor would take its visible text with it. `document` hides the claim
    column the same way, which is also what makes approval reachable on a narrow screen
    where the preview pane never sits beside anything. */
-export const EditorLayout = ({ editor, mode, onModeChange, preview }: EditorLayoutProps) => (
+export const DraftWorkspace = ({ editor, mode, onModeChange, preview }: DraftWorkspaceProps) => (
   <div className="flex flex-col gap-6">
-    {/* The switch alone, on its own line. It used to sit in a titled card explaining what
-        the two options do - a heading, a sentence, and a surface, all above the document,
-        to caption a control whose two labels already say it. On a screen that already
-        spends its first six hundred pixels on breadcrumbs, a stepper, a heading and a
-        header card, that was one band of furniture the reader scrolled past every visit. */}
+    {/* The switch alone, on its own line: a titled card explaining what its two labels
+        already say was one more band of furniture above the document. */}
     <div className="flex justify-end">
       <ViewSwitch
         label="בחירת תצוגת סביבת העבודה"

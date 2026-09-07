@@ -1,77 +1,81 @@
-import { ArrowRight, FileText } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import { ErrorCallout } from "@/app/ErrorCallout";
 import { appRoutes } from "@/app/appRoutes";
 import { useRequiredParam } from "@/app/useRequiredParam";
+import { useWorkflowStage, workflowDestinations } from "@/app/WorkflowLandmark";
 import { buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
-import { Card } from "@/ui/Card";
 import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
-import { SectionHeader } from "@/ui/SectionHeader";
 import { reasonTitle } from "@/features/applications/model/applicationLabels";
+import { ActiveOperationPanel } from "@/features/applications/components/ActiveOperationPanel";
 import { ApplicationBreadcrumbs } from "@/features/applications/components/ApplicationBreadcrumbs";
 import { FactLifecyclePanel } from "@/features/facts";
 import { RecruitmentManagerButton } from "@/features/recruitment";
-import { ActiveOperationPanel } from "@/features/applications/components/ActiveOperationPanel";
 import { DraftApprovalBar } from "../components/DraftApprovalBar";
 import { DraftApprovalDialog } from "../components/DraftApprovalDialog";
-import { DraftClaimCard } from "../components/DraftClaimCard";
 import { DraftConflictDialog } from "../components/DraftConflictDialog";
+import { DraftEditorNotices } from "../components/DraftEditorNotices";
+import { DraftEmptyState } from "../components/DraftEmptyState";
 import { DraftFactPanel } from "../components/DraftFactPanel";
 import { DraftHeaderCard } from "../components/DraftHeaderCard";
+import { DraftOutlineEditor } from "../components/DraftOutlineEditor";
 import { DraftPreview } from "../components/DraftPreview";
 import { DraftRenderPanel } from "../components/DraftRenderPanel";
-import { type ClaimHandlers, DraftSectionCard } from "../components/DraftSectionCard";
 import { DraftValidationPanel } from "../components/DraftValidationPanel";
-import { type EditorMode, EditorLayout } from "../components/EditorLayout";
-import { useDraftEditorState } from "../components/useDraftEditorState";
+import { type DraftWorkspaceMode, DraftWorkspace } from "../components/DraftWorkspace";
+import { useDraftDocument } from "../hooks/useDraftDocument";
+import { useDraftEditing } from "../hooks/useDraftEditing";
+import { useDraftValidation } from "../hooks/useDraftValidation";
 
-/* A.4 frame 3: the editor pane. Data and commands live in `useDraftEditorState`; what is
-   left here is how they are drawn. */
+/* A.4 frame 3: read the draft, check what stands behind each line, validate, sign, and
+   render - on the one screen that holds the draft all five act on.
+
+   Reading is what it is for. The user arrives to see what was written and signs; a line
+   that needs changing is edited where it sits. Server state is the three hooks below;
+   what is left here is the four decisions this screen makes for itself and how the parts
+   are placed. */
 export const DraftEditorPage = () => {
   const applicationId = useRequiredParam("applicationId");
-
-  const {
-    applicationQuery,
-    approvalOpen,
-    autosave,
-    detail,
+  const { applicationError, detail, draft, draftError, etag, facts, operation, watch, workingDraftId } =
+    useDraftDocument(applicationId);
+  const editing = useDraftEditing({
+    applicationId,
     draft,
-    draftQuery,
-    editClaim,
-    exactPassingRunId,
+    etag,
     facts,
-    includeFact,
-    onExactPassingRun,
-    operation,
-    regeneration,
-    regenerationAvailable,
-    regenerationDisabled,
-    removeClaim,
-    renderRevisionId,
-    selection,
-    setApprovalOpen,
-    setApprovedRevisionId,
-    settingsPending,
-    setValidationStale,
-    unsaved,
-    validationStale,
-    watch,
+    onOperationQueued: watch,
     workingDraftId,
-  } = useDraftEditorState(applicationId);
+  });
+  const validation = useDraftValidation(applicationId, draft);
 
-  /* Reading is what this screen is for: the user arrives to see what was written, what
-     stands behind each line, and what the validation said, and signs. A line that needs
-     changing is edited where it sits. */
-  const [mode, setMode] = useState<EditorMode>("read");
+  useWorkflowStage(
+    detail === undefined ? "unknown" : detail.preparation_state,
+    workflowDestinations(applicationId, detail),
+  );
+
+  const [mode, setMode] = useState<DraftWorkspaceMode>("read");
+  const [approvalOpen, setApprovalOpen] = useState(false);
+  /* The revision this editor just approved. Held here rather than read from the projection
+     so the render step names the exact revision the approval returned. */
+  const [approvedRevisionId, setApprovedRevisionId] = useState<string | null>(null);
+
+  /* Approval deactivates the WorkingDraft atomically. Prefer the exact command response;
+     after a reload, the projection may recover the same pending render step only when
+     there is no newer active draft and the latest approved revision is the current
+     preparation milestone. */
+  const renderRevisionId =
+    approvedRevisionId ??
+    (workingDraftId === null && detail?.preparation_state === "approved"
+      ? (detail.latest_approved_revision_id ?? null)
+      : null);
 
   /* Hiding the rows must not strand text still sitting in the buffer, so the document
      view settles it first. */
-  const changeMode = (next: EditorMode) => {
-    if (next === "document") autosave.flush();
+  const changeMode = (next: DraftWorkspaceMode) => {
+    if (next === "document") editing.flush();
     setMode(next);
   };
 
@@ -94,221 +98,147 @@ export const DraftEditorPage = () => {
       title="קריאה, אימות ואישור"
     >
       <QueryState
-        error={applicationQuery.error}
+        error={applicationError}
         fallbackTitle="לא ניתן לטעון את מצב המועמדות"
         loading={detail === undefined}
         loadingLabel="טוען את מצב המועמדות…"
       />
-      {draftQuery.error === null ? null : (
-        <QueryState error={draftQuery.error} fallbackTitle="לא ניתן לטעון את הטיוטה" />
+      {draftError === null || draftError === undefined ? null : (
+        <QueryState error={draftError} fallbackTitle="לא ניתן לטעון את הטיוטה" />
       )}
-
-      {detail !== undefined && workingDraftId === null && renderRevisionId === null ? (
-        <Callout
-          action={
-            <Link className={buttonClasses("primary")} to={preparationHref}>
-              חזרה להכנת קורות החיים
-            </Link>
-          }
-          title="אין כרגע טיוטה פעילה למועמדות הזו"
-          tone="neutral"
-        >
-          מסך המועמדות מציג את המצב המדויק ואת הפעולה שיוצרת טיוטה.
-        </Callout>
-      ) : null}
 
       {detail === undefined ? null : (
-        <DraftHeaderCard autosave={autosave} detail={detail} draft={draft} workingDraftId={workingDraftId} />
+        <>
+          <DraftHeaderCard
+            detail={detail}
+            dirty={editing.dirty}
+            draft={draft}
+            saveState={workingDraftId === null ? null : editing.saveState}
+          />
+
+          {/* Live work, reported beside the draft it is rewriting rather than on a screen
+              the user has to leave the text for. */}
+          {operation === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={operation} />}
+
+          {/* The projection's own blockers. A claim with no fact behind it raises
+              PENDING_FACT_REQUIRES_RESOLUTION there, and it is shown here as the reason it
+              already is rather than as an approval rule this screen invented. */}
+          {detail.review_reasons.map((reason) => (
+            <Callout
+              key={reason.code}
+              title={reasonTitle(reason.code, "נדרשת החלטה לפני אישור הגרסה")}
+              tone="blocker"
+            />
+          ))}
+
+          {detail.stale_reasons.map((reason) => (
+            <Callout
+              key={reason.code}
+              title={reasonTitle(reason.code, "הטיוטה אינה מעודכנת מול המקורות שלה")}
+              tone="warning"
+            />
+          ))}
+
+          {workingDraftId === null && renderRevisionId === null ? (
+            <DraftEmptyState applicationId={applicationId} />
+          ) : null}
+        </>
       )}
 
-      {/* Live work, reported beside the draft it is rewriting rather than on a screen
-            the user has to leave the text for. */}
-      {operation === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={operation} />}
-
-      {/* The projection's own blockers. A claim with no fact behind it raises
-            PENDING_FACT_REQUIRES_RESOLUTION there, and it is shown here as the reason it
-            already is rather than as an approval rule this screen invented. */}
-      {(detail?.review_reasons ?? []).map((reason) => (
-        <Callout key={reason.code} title={reasonTitle(reason.code, "נדרשת החלטה לפני אישור הגרסה")} tone="blocker" />
-      ))}
-
-      {(detail?.stale_reasons ?? []).map((reason) => (
-        <Callout
-          key={reason.code}
-          title={reasonTitle(reason.code, "הטיוטה אינה מעודכנת מול המקורות שלה")}
-          tone="warning"
-        />
-      ))}
-
       {renderRevisionId !== null ? <DraftRenderPanel approvedRevisionId={renderRevisionId} onQueued={watch} /> : null}
-      {renderRevisionId === null && draft === undefined && workingDraftId !== null && draftQuery.error === null ? (
+
+      {renderRevisionId === null && draft === undefined && workingDraftId !== null && draftError === null ? (
         <QueryState loading loadingLabel="טוען את הטיוטה…" />
       ) : null}
-      {renderRevisionId !== null || draft === undefined
-        ? null
-        : (() => {
-            /* The five props every `DraftClaimCard` on this screen needs, bundled once: one
-           draft, one facts read, one blur/edit/regenerate/remove policy for every claim,
-           whichever section it sits in. */
-            const claimHandlers: ClaimHandlers = {
-              draft,
-              facts,
-              onBlur: autosave.flush,
-              onEdit: editClaim,
-              onRegenerate: (claim) => regeneration.mutate({ claimId: claim.claim_id }),
-              onRemove: removeClaim,
-              unsaved: regenerationDisabled,
-            };
 
-            return (
+      {renderRevisionId !== null || draft === undefined ? null : (
+        <>
+          <DraftWorkspace
+            editor={
               <>
-                <EditorLayout
-                  mode={mode}
-                  onModeChange={changeMode}
-                  editor={
-                    <>
-                      <Card
-                        aria-labelledby="draft-structure-heading"
-                        className="flex flex-col gap-4 bg-cv-surface p-4 shadow-surface sm:p-5"
-                      >
-                        <SectionHeader
-                          actions={<span className="text-support text-cv-text-muted">מבוססים על הקשר המועמד</span>}
-                          align="center"
-                          gap="tight"
-                          headingId="draft-structure-heading"
-                          icon={FileText}
-                          iconPresentation="inline"
-                          title="כותרת ופרטי קשר"
-                        />
-
-                        <ul className="flex flex-col divide-y divide-cv-border">
-                          <DraftClaimCard {...claimHandlers} claim={draft.outline.headline} />
-                          {draft.outline.contacts.map((contact) => (
-                            <DraftClaimCard {...claimHandlers} claim={contact} key={contact.claim_id} />
-                          ))}
-                        </ul>
-                      </Card>
-
-                      {draft.outline.sections.map((section, sectionIndex) => (
-                        <DraftSectionCard
-                          applicationId={applicationId}
-                          claimHandlers={claimHandlers}
-                          detail={detail}
-                          key={section.name}
-                          onRegenerateSection={() => regeneration.mutate({ section: section.name })}
-                          regenerationDisabled={regenerationDisabled}
-                          section={section}
-                          sectionIndex={sectionIndex}
-                        />
-                      ))}
-
-                      {regenerationAvailable || settingsPending ? null : (
-                        <Callout title="יצירה מחדש באמצעות AI אינה זמינה" tone="neutral">
-                          יש להגדיר ספק ולהפעיל AI במסך ההגדרות. לא יתבצע מעבר דטרמיניסטי שקט.
-                          <div className="mt-3">
-                            <Link className={buttonClasses("secondary")} to={appRoutes.settings}>
-                              מעבר להגדרות
-                            </Link>
-                          </div>
-                        </Callout>
-                      )}
-
-                      {regeneration.error === null ? null : (
-                        <ErrorCallout
-                          error={regeneration.error}
-                          fallbackDetail="לא ניתן היה להפעיל יצירה מחדש. הטיוטה נשמרה כפי שהיא."
-                          fallbackTitle="היצירה מחדש לא הופעלה"
-                        />
-                      )}
-
-                      {unsaved ? (
-                        <p className="text-support leading-6 text-cv-text-muted">
-                          יצירה מחדש מוקפאת על הגרסה השמורה של הטיוטה, ולכן היא זמינה רק אחרי שהשמירה הסתיימה.
-                        </p>
-                      ) : null}
-
-                      {selection.error === null ? null : (
-                        <ErrorCallout
-                          error={selection.error}
-                          fallbackDetail="לא ניתן היה לשנות את בחירת העובדות. הטיוטה נשמרה כפי שהיא."
-                          fallbackTitle="שינוי הבחירה לא בוצע"
-                        />
-                      )}
-
-                      <DraftFactPanel busy={selection.isPending} facts={facts} onInclude={includeFact} />
-
-                      <FactLifecyclePanel
-                        profile={detail?.application.profile ?? null}
-                        sections={draft.outline.sections.map((section) => section.name)}
-                      />
-
-                      <div>
-                        <Link className={buttonClasses("secondary")} to={preparationHref}>
-                          <ArrowRight aria-hidden="true" className="size-4" />
-                          חזרה להכנת קורות החיים
-                        </Link>
-                      </div>
-                    </>
-                  }
-                  preview={
-                    <>
-                      {/* The right pane is the document and everything said about it: the live
-                      preview, the validation result for the exact version shown, and the
-                      approval that follows from it. Those last two were screens; reaching
-                      them meant leaving the text they describe. */}
-                      <DraftPreview draft={draft} />
-
-                      {/* One surface for the result and the decision it gates. The sentence
-                      beside the button says only what the button cannot: why it is shut.
-                      The panel's own heading already says whether the run passed, so the
-                      second card that repeated it is gone. */}
-                      {/* No approval footer here: the decision the report gates is pinned
-                          to the screen instead, in one place across all three modes. */}
-                      <DraftValidationPanel
-                        applicationId={applicationId}
-                        draft={draft}
-                        onExactPassingRun={onExactPassingRun}
-                        stale={validationStale}
-                      />
-                    </>
-                  }
-                />
-
-                <DraftApprovalBar
-                  exactPassingRunId={exactPassingRunId}
-                  onApprove={() => setApprovalOpen(true)}
-                  reviewBlocked={(detail?.review_reasons ?? []).length > 0}
-                  stale={validationStale}
-                />
-
-                <DraftApprovalDialog
-                  applicationId={applicationId}
-                  detail={detail}
+                <DraftOutlineEditor
+                  actions={editing.claimActions}
                   draft={draft}
-                  onApproved={(revisionId) => {
-                    setApprovalOpen(false);
-                    setApprovedRevisionId(revisionId);
+                  factContext={{
+                    analysisId: detail?.active_analysis_id ?? null,
+                    applicationId,
+                    language: facts?.language ?? detail?.application.language ?? "en",
+                    profile: detail?.application.profile ?? null,
                   }}
-                  onClose={() => setApprovalOpen(false)}
-                  onStale={() => {
-                    setApprovalOpen(false);
-                    setValidationStale(true);
-                  }}
-                  open={approvalOpen}
-                  validationRunId={exactPassingRunId}
+                  facts={facts}
+                  onRegenerateSection={editing.regenerateSection}
                 />
 
-                <DraftConflictDialog
-                  current={draft}
-                  onDiscardLocal={autosave.discardLocal}
-                  onReapplyLocal={autosave.reapplyLocal}
-                  open={autosave.status === "conflict"}
-                  pending={autosave.pending}
-                  pendingRemovals={autosave.pendingRemovals}
+                <DraftEditorNotices
+                  aiUnavailable={editing.aiUnavailable}
+                  dirty={editing.dirty}
+                  regenerationError={editing.regenerationError}
+                  selectionError={editing.selectionError}
                 />
+
+                <DraftFactPanel busy={editing.selectionPending} facts={facts} onInclude={editing.includeFact} />
+
+                <FactLifecyclePanel
+                  profile={detail?.application.profile ?? null}
+                  sections={draft.outline.sections.map((section) => section.name)}
+                />
+
+                <div>
+                  <Link className={buttonClasses("secondary")} to={preparationHref}>
+                    <ArrowRight aria-hidden="true" className="size-4" />
+                    חזרה להכנת קורות החיים
+                  </Link>
+                </div>
               </>
-            );
-          })()}
+            }
+            mode={mode}
+            onModeChange={changeMode}
+            preview={
+              /* The right pane is the document and everything said about it: the live
+                 preview and the validation result for the exact version shown. The
+                 decision those two gate is pinned to the screen instead, in one place
+                 across both modes. */
+              <>
+                <DraftPreview draft={draft} />
+                <DraftValidationPanel validation={validation} />
+              </>
+            }
+          />
+
+          <DraftApprovalBar
+            exactPassingRunId={validation.exactPassingRunId}
+            onApprove={() => setApprovalOpen(true)}
+            reviewBlocked={(detail?.review_reasons ?? []).length > 0}
+            stale={validation.stale}
+          />
+
+          <DraftApprovalDialog
+            applicationId={applicationId}
+            detail={detail}
+            draft={draft}
+            onApproved={(revisionId) => {
+              setApprovalOpen(false);
+              setApprovedRevisionId(revisionId);
+            }}
+            onClose={() => setApprovalOpen(false)}
+            onStale={() => {
+              setApprovalOpen(false);
+              validation.reportStaleRefusal();
+            }}
+            open={approvalOpen}
+            validationRunId={validation.exactPassingRunId}
+          />
+
+          <DraftConflictDialog
+            current={draft}
+            onDiscardLocal={editing.conflict.discardLocal}
+            onReapplyLocal={editing.conflict.reapplyLocal}
+            open={editing.conflict.open}
+            pending={editing.conflict.pending}
+            pendingRemovals={editing.conflict.pendingRemovals}
+          />
+        </>
+      )}
     </PageShell>
   );
 };

@@ -11,7 +11,6 @@ import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Checkbox } from "@/ui/Checkbox";
 import { Dialog } from "@/ui/Dialog";
-import { LtrText } from "@/ui/LtrText";
 import { SummaryList } from "@/ui/SummaryList";
 
 interface DraftApprovalDialogProps {

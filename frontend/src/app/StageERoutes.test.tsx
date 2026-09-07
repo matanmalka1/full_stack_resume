@@ -95,19 +95,10 @@ describe("workflow stage publishing", () => {
       const source = matches[0]?.[1];
       expect(source).toBeDefined();
 
-      /* A page may delegate its state - and the `useWorkflowStage` call with it - to a
-         `use<Page>State` hook instead of calling it inline (elsewhere in the tree: the
-         hook is not required to sit beside its page). The hook is still what the page
-         publishes through, so its source counts toward the same guard. The convention
-         drops a trailing "Page" inconsistently (`DraftEditorPage` -> `useDraftEditorState`,
-         `RevisionPage` -> `useRevisionPageState`), so both spellings are tried. */
-      const stateHookNames = new Set([`use${name}State.ts`, `use${name.replace(/Page$/, "")}State.ts`]);
-      const stateHookSource = Object.entries(pageSources)
-        .filter(([path]) => [...stateHookNames].some((hookName) => path.endsWith(`/${hookName}`)))
-        .map(([, hookSource]) => hookSource)
-        .join("\n");
-
-      expect(source + stateHookSource).toMatch(/useWorkflowStage\(/);
+      /* Every routed screen publishes its own stage inline. Delegating the call to a
+         state hook was allowed while one page did that; none does now, and the lookup
+         that searched for such a hook matched nothing, so the guard reads the page. */
+      expect(source).toMatch(/useWorkflowStage\(/);
     }
   });
 });

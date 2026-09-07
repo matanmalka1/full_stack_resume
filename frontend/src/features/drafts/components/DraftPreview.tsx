@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { FileText, RefreshCw } from "lucide-react";
 
 import type { WorkingDraft } from "@/api/contracts";
@@ -21,11 +21,12 @@ import { StatusBadge } from "@/ui/StatusBadge";
    preview cannot go on showing an edit that has been superseded. Nothing here renders a
    PDF. */
 export const DraftPreview = ({ draft }: { draft: WorkingDraft }) => {
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-  }, [draft.edit_version]);
+  /* Which version the frame has actually painted, rather than a flag an effect has to
+     reset every time the version moves. A save gives the frame a new `key` and a new URL,
+     so the version it last loaded is no longer the version on screen and the pane says it
+     is refreshing - derived, with nothing to keep in step. */
+  const [loadedVersion, setLoadedVersion] = useState<number | null>(null);
+  const loading = loadedVersion !== draft.edit_version;
 
   return (
     <section aria-labelledby="draft-preview-heading" className="flex flex-col gap-4">
@@ -49,7 +50,7 @@ export const DraftPreview = ({ draft }: { draft: WorkingDraft }) => {
       <iframe
         className="h-[72vh] w-full rounded-control border border-cv-border bg-cv-surface"
         key={draft.edit_version}
-        onLoad={() => setLoading(false)}
+        onLoad={() => setLoadedVersion(draft.edit_version)}
         sandbox=""
         src={draftPreviewSrc(draft.id, draft.edit_version)}
         title="תצוגה מקדימה של הטיוטה"

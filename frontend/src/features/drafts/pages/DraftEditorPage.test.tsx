@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail, WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
 import { settingsQueryKey } from "@/api/settings";
-import { DraftEditorPage } from "../pages/DraftEditorPage";
+import { DraftEditorPage } from "./DraftEditorPage";
 
 const DETAIL_PATH = "/api/v1/applications/app-1";
 const DRAFT_PATH = "/api/v1/working-drafts/wd-1";
@@ -257,7 +257,10 @@ describe("DraftEditorPage", () => {
     expect(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "Core Skills" })).toBeInTheDocument();
     expect(screen.getAllByText("מבוסס עובדה").length).toBeGreaterThan(0);
-    expect(screen.getByDisplayValue("Account Manager")).toBeInTheDocument();
+    /* The headline is a line of the document rather than a field: it is drawn as text
+       under its own "כותרת" status, and the header card above names the same role. */
+    expect(screen.getByText("כותרת")).toBeInTheDocument();
+    expect(screen.getAllByText("Account Manager")).toHaveLength(2);
     const breadcrumbs = screen.getByRole("navigation", { name: "פירורי לחם" });
     expect(within(breadcrumbs).getByRole("link", { name: "Acme – Account Manager" })).toHaveAttribute(
       "href",
@@ -268,6 +271,28 @@ describe("DraftEditorPage", () => {
       "/applications/app-1/preparation",
     );
     expect(within(breadcrumbs).getByText("עורך טיוטה")).toHaveAttribute("aria-current", "page");
+  });
+
+  it("offers in-page navigation once the outline carries more than one section", async () => {
+    stubReads({
+      draft: () =>
+        jsonResponse(
+          draft({
+            sections: [
+              { name: "Core Skills", claims: draft().outline.sections[0]!.claims },
+              { name: "Experience", claims: [] },
+            ],
+          }),
+        ),
+    });
+
+    renderPage();
+
+    /* Plain anchors to the section headings: a tailored CV runs long enough that reaching
+       the third section meant scrolling past the first two every time. */
+    const sectionNav = await screen.findByRole("navigation", { name: "מעבר לסעיפי הטיוטה" });
+    expect(within(sectionNav).getByRole("link", { name: "Core Skills 1" })).toHaveAttribute("href", "#draft-section-0");
+    expect(within(sectionNav).getByRole("link", { name: "Experience 0" })).toHaveAttribute("href", "#draft-section-1");
   });
 
   it("names the facts behind a claim by their text, never by their identifier", async () => {
@@ -304,7 +329,10 @@ describe("DraftEditorPage", () => {
     });
 
     renderPage();
-    await editRow();
+    /* The unsupported line itself, after the headline and the contact: opening it shows
+       the same text twice - once in the row, once copied verbatim into the fact the
+       resolution flow would capture from it. */
+    await editRow(2);
 
     expect(await screen.findAllByDisplayValue("Delivered 30% growth.")).toHaveLength(2);
     expect(screen.getByText("ללא ביסוס")).toBeInTheDocument();
@@ -449,6 +477,7 @@ describe("DraftEditorPage", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage();
+    await editRow(2);
     const editor = await screen.findByDisplayValue("Owned the CRM migration.");
     fireEvent.change(editor, { target: { value: "My local wording." } });
     fireEvent.blur(editor);

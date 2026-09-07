@@ -1,10 +1,30 @@
 import { outlineClaims } from "@/api/drafts";
-import type { DraftClaim, WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
-import { type Removability, isStructuralStyle } from "./draftLabels";
+import type { DraftClaim, DraftFact, WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
+
+/* A.4 frame 3 offers edit / regenerate / remove, and removal is two different commands.
+   Which one - or neither - is decided per claim, so the reason a line cannot be removed
+   is stated in place instead of a button being offered that would be refused. */
+type RemovalRoute = "patch" | "selection" | "none";
+
+export interface Removability {
+  route: RemovalRoute;
+  /* Present only when the route is "none": why this line stays. */
+  reason?: string;
+}
+
+/* Styles that carry a section's structure rather than a statement. Excluding the fact
+   behind one of these deletes a heading or a date line, not a claim, so the exclusion
+   control does not appear on them even though the plan ranked the fact. */
+const STRUCTURAL_STYLES = new Set(["heading", "date", "contact", "headline"]);
 
 const SHARED_LIMIT = 60;
 
 const shorten = (text: string): string => (text.length <= SHARED_LIMIT ? text : `${text.slice(0, SHARED_LIMIT)}…`);
+
+/* The facts the accounting says stand behind one line, in the order the accounting
+   reports them. */
+export const linkedFacts = (claim: DraftClaim, facts: WorkingDraftFacts | undefined): DraftFact[] =>
+  (facts?.facts ?? []).filter((fact) => claim.fact_ids.includes(fact.fact_id));
 
 /* Which command, if any, removes this line.
 
@@ -38,7 +58,7 @@ export const removability = (
     return { route: "patch" };
   }
 
-  if (isStructuralStyle(claim.style)) {
+  if (STRUCTURAL_STYLES.has(claim.style)) {
     return {
       route: "none",
       reason: "השורה הזו נושאת את מבנה הסעיף ולא טענה בפני עצמה, ולכן היא אינה מוסרת בנפרד.",

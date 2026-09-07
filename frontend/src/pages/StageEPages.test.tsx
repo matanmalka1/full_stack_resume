@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { type ReactElement, useCallback, useState } from "react";
+import { type ReactElement, useState } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -18,6 +18,7 @@ import { workingDraftQueryOptions } from "../api/drafts";
 import { DraftApprovalDialog } from "@/features/drafts/components/DraftApprovalDialog";
 import { DraftRenderPanel } from "@/features/drafts/components/DraftRenderPanel";
 import { DraftValidationPanel } from "@/features/drafts/components/DraftValidationPanel";
+import { useDraftValidation } from "@/features/drafts/hooks/useDraftValidation";
 import { RevisionPage } from "@/features/revisions";
 import { SettingsPage } from "@/features/settings";
 
@@ -241,38 +242,27 @@ afterEach(() => {
    at the same boundaries the screens were held to: the exact payload sent, the exact run
    approval is offered for, and the two refusal paths. */
 
-/* A harness standing in for the editor: it holds the draft, the exact passing run the
-   panel reports, and the dialog, exactly as DraftEditorPage does. */
+/* A harness standing in for the editor: it holds the draft, derives the exact passing run
+   from the same hook the editor uses, and owns the approval control and the dialog exactly
+   as DraftEditorPage does. */
 const DraftFlow = () => {
-  const [runId, setRunId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  const [stale, setStale] = useState(false);
   const [approved, setApproved] = useState<string | null>(null);
   /* The editor watches the work its panels queue rather than navigating to it, so the
      harness records the queued id the same way. */
   const [queued, setQueued] = useState<string | null>(null);
   const detailQuery = useQuery(applicationDetailQueryOptions("app-1"));
   const draftQuery = useQuery(workingDraftQueryOptions("draft-1"));
-  const onExactPassingRun = useCallback((next: string | null) => {
-    setRunId(next);
-    if (next !== null) setStale(false);
-  }, []);
+  const validation = useDraftValidation("app-1", draftQuery.data?.draft);
 
   return (
     <>
-      <DraftValidationPanel
-        applicationId="app-1"
-        /* The approval control lives in the panel's own footer, as it does in the
-           editor. */
-        approval={
-          <button disabled={runId === null} onClick={() => setOpen(true)} type="button">
-            פתיחת אישור
-          </button>
-        }
-        draft={draftQuery.data?.draft}
-        onExactPassingRun={onExactPassingRun}
-        stale={stale}
-      />
+      <DraftValidationPanel validation={validation} />
+      {/* Approval sits beside the report rather than inside it: the panel draws a verdict
+          and the screen holding it decides what that verdict opens. */}
+      <button disabled={validation.exactPassingRunId === null} onClick={() => setOpen(true)} type="button">
+        פתיחת אישור
+      </button>
       <DraftApprovalDialog
         applicationId="app-1"
         detail={detailQuery.data}
@@ -284,10 +274,10 @@ const DraftFlow = () => {
         onClose={() => setOpen(false)}
         onStale={() => {
           setOpen(false);
-          setStale(true);
+          validation.reportStaleRefusal();
         }}
         open={open}
-        validationRunId={runId}
+        validationRunId={validation.exactPassingRunId}
       />
       {approved === null ? null : <DraftRenderPanel approvedRevisionId={approved} onQueued={setQueued} />}
       {queued === null ? null : <p>{`בעבודה: ${queued}`}</p>}

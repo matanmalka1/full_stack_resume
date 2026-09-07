@@ -9,7 +9,7 @@ import { LtrText } from "@/ui/LtrText";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { TextInput } from "@/ui/TextInput";
 import { cx } from "@/ui/cx";
-import { omissionReasonLabels, selectionOutcomeLabels } from "@/features/drafts/components/draftLabels";
+import { omissionReasonLabels, selectionOutcomeLabels } from "@/features/applications/model/selectionLabels";
 import { candidateIncluded, candidateLocked, factGroups, factTotals, includableFactIds } from "./factGroups";
 
 const factLabel = (candidate: SelectionPlanCandidate): string => candidate.text ?? "לא ניתן לקרוא את העובדה הזו מהידע.";
