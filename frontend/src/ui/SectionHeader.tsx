@@ -9,6 +9,7 @@ interface SectionHeaderProps {
   actions?: ReactNode;
   align?: "start" | "center" | "baseline";
   className?: string;
+  /* A description long enough to want a reading measure rather than the full frame. */
   constrainDescription?: boolean;
   description?: ReactNode;
   gap?: "standard" | "tight" | "wide" | "wide-compact";
@@ -17,7 +18,6 @@ interface SectionHeaderProps {
   headingSize?: "section" | "body";
   icon?: LucideIcon;
   iconPresentation?: "badge" | "inline";
-  leadingDescription?: boolean;
   spacing?: "compact" | "roomy";
   title: ReactNode;
 }
@@ -50,7 +50,6 @@ export const SectionHeader = ({
   headingSize = "section",
   icon: Icon,
   iconPresentation = "badge",
-  leadingDescription = false,
   spacing = "compact",
   title,
 }: SectionHeaderProps) => {
@@ -67,13 +66,7 @@ export const SectionHeader = ({
     <div className="min-w-0">
       {heading}
       {description === undefined ? null : (
-        <p
-          className={cx(
-            "mt-1 text-support text-cv-text-muted",
-            constrainDescription ? "max-w-2xl" : undefined,
-            leadingDescription ? "leading-6" : undefined,
-          )}
-        >
+        <p className={cx("mt-1 text-support text-cv-text-muted", constrainDescription ? "max-w-2xl" : undefined)}>
           {description}
         </p>
       )}

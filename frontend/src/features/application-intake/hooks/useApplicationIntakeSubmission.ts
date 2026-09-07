@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { acknowledgementApplies, duplicateCheck, duplicateMatchesFromProblem } from "@/api/applications";
 import type { ApplicationIntake, DuplicateMatch } from "@/api/contracts";
-import { createIntakeApplication, type CreatedIntakeApplication } from "../api/createApplication";
+import { createIntakeApplication, type CreatedIntakeApplication } from "../api/mutations";
 
 interface SubmissionInput {
   acknowledged: boolean;

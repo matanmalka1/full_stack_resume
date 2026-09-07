@@ -10,4 +10,8 @@
    with the panel, so `OperationActions` is not exported: a caller that shows an Operation
    shows this panel. */
 export { ActiveOperationPanel } from "./components/ActiveOperationPanel";
+/* Watching one Application's live work, on whichever screen queued it. It is
+   Operation-shaped and every consumer of it already shows this panel, so it sits with
+   the panel rather than as root-level infrastructure. */
+export { useWatchedOperation } from "./hooks/useWatchedOperation";
 export { operationTypeLabels, statusLabels, statusTones } from "./model/operationLabels";

@@ -2,9 +2,9 @@ import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { type ClassValue, cx } from "./cx";
-import { type StatusTone, statusPresentation } from "./status";
+import { type Tone, tonePresentation } from "./tone";
 
-const toneClasses: Record<StatusTone, string> = {
+const toneClasses: Record<Tone, string> = {
   success: "border-cv-success/30 bg-cv-success/10 text-cv-success",
   warning: "border-cv-warning/30 bg-cv-warning/10 text-cv-warning",
   blocker: "border-cv-blocker/30 bg-cv-blocker/10 text-cv-blocker",
@@ -20,11 +20,11 @@ interface StatusBadgeProps {
      has a face per member. A.2 is unaffected either way: the badge still carries its
      Hebrew word, and the icon repeats what the word says rather than replacing it. */
   icon?: LucideIcon;
-  tone: StatusTone;
+  tone: Tone;
 }
 
 export const StatusBadge = ({ children, className, icon, tone }: StatusBadgeProps) => {
-  const { icon: toneIcon, label } = statusPresentation[tone];
+  const { icon: toneIcon, label } = tonePresentation[tone];
   const Icon = icon ?? toneIcon;
 
   return (

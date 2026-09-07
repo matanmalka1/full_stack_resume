@@ -1,5 +1,5 @@
 import type { Classification } from "@/api/analyses";
-import type { StatusTone } from "@/ui/status";
+import type { Tone } from "@/ui/tone";
 import { classificationItems, confidenceText, fitTones, overrideKeyLabels } from "../../model/analysisLabels";
 
 /* The confidence figure's own text colour, one tone per fit level - reusing the same
@@ -7,7 +7,7 @@ import { classificationItems, confidenceText, fitTones, overrideKeyLabels } from
    this one number. A classification with no fit at all (rather than an unreadable one,
    which `fitTones` already covers as "unknown") has no verdict to colour by, and reads in
    plain muted text instead. */
-const confidenceToneClasses: Record<StatusTone, string> = {
+const confidenceToneClasses: Record<Tone, string> = {
   success: "text-cv-success",
   warning: "text-cv-warning",
   blocker: "text-cv-blocker",

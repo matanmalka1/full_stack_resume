@@ -15,8 +15,8 @@ import { RecruitmentManagerButton } from "@/features/recruitment";
 import { RevisionRecord } from "../components/RevisionRecord";
 import { RevisionSubmissionDialog } from "../components/RevisionSubmissionDialog";
 import { RevisionSummary } from "../components/RevisionSummary";
-import { useRevisionData } from "../hooks/useRevisionData";
-import { useRevisionDraftGeneration } from "../hooks/useRevisionDraftGeneration";
+import { useRevisionData } from "../api/queries";
+import { useRevisionDraftGeneration } from "../api/mutations";
 
 /* One approved revision, addressed by revision rather than Application because the
    immutable record can remain current while work on a newer draft continues. */

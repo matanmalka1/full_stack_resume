@@ -7,7 +7,7 @@ import { Callout } from "@/ui/Callout";
 import { Checkbox } from "@/ui/Checkbox";
 import { Field } from "@/ui/Field";
 import { Select } from "@/ui/Select";
-import { useAttachFact } from "../api/factMutations";
+import { useAttachFact } from "../api/mutations";
 import { defaultFactSource } from "../model/factForm";
 import { factSourceLabel, isCrossTrackFact } from "../model/factLabels";
 

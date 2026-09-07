@@ -4,7 +4,7 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Disclosure } from "@/ui/Disclosure";
 import { Field } from "@/ui/Field";
 import { Select } from "@/ui/Select";
-import { useFactDetail, useFactPool } from "../api/factQueries";
+import { useFactDetail, useFactPool } from "../api/queries";
 import { factLabel, factStatusLabels } from "../model/factLabels";
 import { CreatePendingFactForm } from "./CreatePendingFactForm";
 import { FactAttachmentControl } from "./FactAttachmentControl";

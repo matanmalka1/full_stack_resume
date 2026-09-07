@@ -1,5 +1,5 @@
 import type { Operation, OperationFailureCode, OperationPhase, OperationStatus, OperationType } from "@/api/contracts";
-import { type StatusTone } from "@/ui/status";
+import { type Tone } from "@/ui/tone";
 
 /* The Hebrew vocabulary of an Operation, in one module because two surfaces speak it: the
    Operation screen, which a direct link still reaches, and the panel on the Application
@@ -31,7 +31,7 @@ export const operationTypeLabels: Record<OperationType, string> = {
   render_revision: "יצירת קובץ קורות החיים",
 };
 
-export const statusTones: Record<OperationStatus, StatusTone> = {
+export const statusTones: Record<OperationStatus, Tone> = {
   queued: "progress",
   running: "progress",
   succeeded: "success",
@@ -83,7 +83,7 @@ export const activeOutputLabels = (operation: Operation): string[] =>
 export const joinHebrewList = (labels: string[]): string =>
   labels.length <= 1 ? (labels[0] ?? "") : `${labels.slice(0, -1).join(", ")} ו${labels[labels.length - 1]}`;
 
-export const failureTones: Partial<Record<OperationStatus, StatusTone>> = {
+export const failureTones: Partial<Record<OperationStatus, Tone>> = {
   failed: "blocker",
   cancelled: "neutral",
   interrupted: "warning",

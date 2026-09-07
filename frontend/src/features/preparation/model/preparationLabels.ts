@@ -10,7 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import type { StatusTone } from "@/ui/status";
+import type { Tone } from "@/ui/tone";
 
 /* Keyed by the generated unions, so a state added to the §9 projection fails the
    frontend build instead of reaching the screen untranslated. */
@@ -26,7 +26,7 @@ export const preparationStateLabels: Record<PreparationState, string> = {
 
 /* A.2: a state is never colour alone. The tone adds the icon and the Hebrew status word
    the badge already carries. */
-export const preparationStateTones: Record<PreparationState, StatusTone> = {
+export const preparationStateTones: Record<PreparationState, Tone> = {
   needs_analysis: "neutral",
   needs_review: "warning",
   ready_to_draft: "neutral",
@@ -44,7 +44,7 @@ export const workingDraftStateLabels: Record<WorkingDraftState, string> = {
   stale: "הטיוטה אינה מעודכנת מול המקורות",
 };
 
-export const workingDraftStateTones: Record<WorkingDraftState, StatusTone> = {
+export const workingDraftStateTones: Record<WorkingDraftState, Tone> = {
   none: "neutral",
   editing: "neutral",
   validation_failed: "blocker",

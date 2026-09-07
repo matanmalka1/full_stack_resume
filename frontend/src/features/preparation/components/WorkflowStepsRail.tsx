@@ -53,7 +53,7 @@ const markClasses: Record<WorkflowStepState, string> = {
   upcoming: "border-cv-border bg-cv-canvas text-cv-text-muted",
 };
 
-interface WorkflowStepsProps {
+interface WorkflowStepsRailProps {
   /* One line on what the current stage produces. The stage names are single nouns -
      "אימות", "מוכן" - and a noun alone does not say what the stage is for. */
   hint?: string;
@@ -151,7 +151,7 @@ const StepBody = ({
    technology in both, since the group's own sentence already states the position.
 
    It sits directly above the primary page surface and shares its width. */
-export const WorkflowSteps = ({ hint, label, steps }: WorkflowStepsProps) => {
+export const WorkflowStepsRail = ({ hint, label, steps }: WorkflowStepsRailProps) => {
   const current = steps.find((step) => step.state === "current");
   const position = current === undefined ? null : steps.indexOf(current) + 1;
   const completed = current === undefined && steps.length > 0 && steps.every((step) => step.state === "complete");

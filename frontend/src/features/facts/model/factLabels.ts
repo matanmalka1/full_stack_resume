@@ -1,7 +1,7 @@
 import { BadgeCheck, Clock3, ShieldCheck, type LucideIcon } from "lucide-react";
 
 import type { CreateFactRequest, Fact, FactStatus } from "@/api/contracts";
-import type { StatusTone } from "@/ui/status";
+import type { Tone } from "@/ui/tone";
 
 export type FactSource = CreateFactRequest["source"];
 export type FactStyle = CreateFactRequest["resume_style"];
@@ -28,7 +28,7 @@ export const factStatusLabels: Record<FactStatus, string> = {
   canonical: "מקור אמת",
 };
 
-export const factStatusTones: Record<FactStatus, StatusTone> = {
+export const factStatusTones: Record<FactStatus, Tone> = {
   pending: "warning",
   confirmed: "progress",
   canonical: "success",

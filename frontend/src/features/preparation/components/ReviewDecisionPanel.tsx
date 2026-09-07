@@ -11,7 +11,7 @@ import { Disclosure } from "@/ui/Disclosure";
 import { surfaceClasses } from "@/ui/surface";
 import { emptyDecisions, hasDecision, openDecisions, resolvedByReviewDecision } from "../model/reviewDecisions";
 import { ReviewDecisionForm } from "./ReviewDecisionForm";
-import { type ChecklistEntry, PreparationActionBar, PreparationChecklist } from "./PreparationActionBar";
+import { type ChecklistEntry, CommitBar, CommitChecklist } from "./CommitBar";
 
 /* The classification decision, on the Application screen and directly under the analysis
    it is about.
@@ -155,7 +155,7 @@ export const ReviewDecisionPanel = ({
         </div>
       </section>
 
-      <PreparationActionBar
+      <CommitBar
         primary={
           <Button
             disabled={!decisionReady}
@@ -167,13 +167,13 @@ export const ReviewDecisionPanel = ({
           </Button>
         }
       >
-        <PreparationChecklist entries={checklist} label="ההחלטות הנדרשות" />
+        <CommitChecklist entries={checklist} label="ההחלטות הנדרשות" />
         {decisionReady ? null : (
           <p className="text-support font-medium text-cv-blocker">
             יש להשלים את כל ההחלטות שמופיעות בכרטיס לפני שאפשר לשמור.
           </p>
         )}
-      </PreparationActionBar>
+      </CommitBar>
     </>
   );
 };

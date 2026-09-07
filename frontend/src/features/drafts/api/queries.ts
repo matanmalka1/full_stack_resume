@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { applicationDetailQueryOptions } from "@/api/applications";
 import type { ApplicationDetail, Operation, WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
 import { workingDraftFactsQueryOptions, workingDraftQueryOptions } from "@/api/drafts";
-import { useWatchedOperation } from "@/hooks/useWatchedOperation";
+import { useWatchedOperation } from "@/features/operations";
 
 export interface DraftDocument {
   applicationError: unknown;

@@ -5,7 +5,7 @@ import { applicationDetailQueryOptions } from "@/api/applications";
 import type { ProblemDetails } from "@/api/client";
 import { routePaths } from "@/app/routePaths";
 import { useRequiredParam } from "@/app/useRequiredParam";
-import { useWatchedOperation } from "@/hooks/useWatchedOperation";
+import { useWatchedOperation } from "@/features/operations";
 import { Callout } from "@/ui/Callout";
 import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";

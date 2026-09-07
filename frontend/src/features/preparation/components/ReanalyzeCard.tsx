@@ -1,6 +1,6 @@
 import type { ApplicationDetail } from "@/api/contracts";
 import { Button } from "@/ui/Button";
-import { useAnalyzeCommand } from "../hooks/useAnalyzeCommand";
+import { useAnalyzeCommand } from "../api/mutations";
 import type { WorkflowActionPlan } from "../model/workflowActionPlan";
 
 /* Re-running the analysis, beside the analysis it would replace - in the diagnostics tab,

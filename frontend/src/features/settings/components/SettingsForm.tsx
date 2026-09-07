@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Settings, UpdateSettingsRequest } from "@/api/contracts";
 import { settingsQueryKey, updateSettings } from "@/api/settings";
 import { briefServerFailureDetail, ErrorCallout } from "@/ui/ErrorCallout";
-import { useAppForm } from "@/forms/useAppForm";
+import { useAppForm } from "@/hooks/useAppForm";
 import { ActionBar } from "@/ui/ActionBar";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";

@@ -1,9 +1,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 
-import { invalidateApplicationViews } from "../api/applications";
-import type { ApplicationDetail, Operation } from "../api/contracts";
-import { isTerminalOperation, operationQueryOptions } from "../api/operations";
+import { invalidateApplicationViews } from "@/api/applications";
+import type { ApplicationDetail, Operation } from "@/api/contracts";
+import { isTerminalOperation, operationQueryOptions } from "@/api/operations";
 
 /* Watching one Application's live work, on whichever screen queued it.
 

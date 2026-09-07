@@ -1,7 +1,7 @@
 import type { Classification } from "@/api/analyses";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
-import type { StatusTone } from "@/ui/status";
+import type { Tone } from "@/ui/tone";
 import { confidenceText, fitDescriptions, fitLabels, fitTones } from "../model/analysisLabels";
 
 /* The state of the analysis, above everything this screen offers.
@@ -20,7 +20,7 @@ const decisionSentence = (count: number): string =>
 interface BannerContent {
   body: string;
   title: string;
-  tone: StatusTone;
+  tone: Tone;
 }
 
 const bannerContent = (

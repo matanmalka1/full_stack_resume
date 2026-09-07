@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { invalidateApplicationViews, startDraftGeneration } from "@/api/applications";
 import type { ApplicationDetail, ApprovedRevision } from "@/api/contracts";
 import { operationQueryKey } from "@/api/operations";
-import { useWatchedOperation } from "@/hooks/useWatchedOperation";
+import { useWatchedOperation } from "@/features/operations";
 
 const childDraftKey = (revision: ApprovedRevision, detail: ApplicationDetail) =>
   `revision-draft:${revision.id}:${detail.active_analysis_id ?? "none"}:${detail.active_selection_plan_id ?? "none"}`;

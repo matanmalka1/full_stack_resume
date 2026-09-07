@@ -2,6 +2,7 @@ import { PlusCircle, ShieldCheck, Sparkles, UserCheck } from "lucide-react";
 import { Link, type To } from "react-router-dom";
 
 import { buttonClasses } from "@/ui/Button";
+import { PageHeading } from "@/ui/PageHeading";
 import { surfaceClasses } from "@/ui/surface";
 
 interface ApplicationListHeaderProps {
@@ -30,18 +31,17 @@ export const ApplicationListHeader = ({ newApplicationTo, totalCount }: Applicat
             </span>
           </div>
 
+          {/* The route heading, through the one component that owns the focus contract:
+              the board used to restate `data-route-heading`, the id and the negative
+              tabindex by hand, so a change to how a route hands focus over would have
+              reached every screen but this one. */}
           <div>
-            <h1
-              className="text-heading-lg font-extrabold tracking-tight text-cv-text"
-              data-route-heading
+            <PageHeading
+              description="ניהול תהליכי גיוס, התאמת קורות חיים לדרישות המשרה ובקרה על כל שלב בדרך להגשה."
               id="route-heading"
-              tabIndex={-1}
             >
               לוח מועמדויות ומעקב גיוס
-            </h1>
-            <p className="mt-1 max-w-3xl text-support text-cv-text-muted">
-              ניהול תהליכי גיוס, התאמת קורות חיים לדרישות המשרה ובקרה על כל שלב בדרך להגשה.
-            </p>
+            </PageHeading>
           </div>
 
           <div className="flex items-center gap-1.5 text-support font-medium text-cv-text-muted">

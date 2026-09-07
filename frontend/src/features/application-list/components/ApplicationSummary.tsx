@@ -1,8 +1,8 @@
 import type { ApplicationListItem } from "@/api/contracts";
 import { StatusBadge } from "@/ui/StatusBadge";
-import { preparationStateIcons, preparationStateLabels, preparationStateTones } from "@/features/preparation";
 import { recruitmentStatusLabel, recruitmentStatusTone } from "@/features/recruitment";
 import { CompanyMark } from "./ApplicationIdentity";
+import { ApplicationPreparationStatus } from "./ApplicationListStatuses";
 
 /* One Application named the way the board names it, with no link of its own.
 
@@ -25,13 +25,7 @@ export const ApplicationSummary = ({ item }: { item: ApplicationListItem }) => (
     </div>
 
     <div className="flex shrink-0 items-center gap-2">
-      <StatusBadge
-        className="px-2 py-0.5"
-        icon={preparationStateIcons[item.preparation_state]}
-        tone={preparationStateTones[item.preparation_state]}
-      >
-        {preparationStateLabels[item.preparation_state]}
-      </StatusBadge>
+      <ApplicationPreparationStatus item={item} variant="pipeline" />
       <StatusBadge className="px-2 py-0.5" tone={recruitmentStatusTone(item.recruitment_status)}>
         {recruitmentStatusLabel(item.recruitment_status)}
       </StatusBadge>

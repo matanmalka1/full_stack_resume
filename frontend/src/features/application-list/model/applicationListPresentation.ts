@@ -1,5 +1,6 @@
+import { routePaths } from "@/app/routePaths";
 import type { ApplicationListItem } from "@/api/contracts";
-import type { StatusTone } from "@/ui/status";
+import type { Tone } from "@/ui/tone";
 import { formatDateTime } from "@/utils/formatDateTime";
 import { reasonTitle, warningTitle } from "@/features/preparation";
 
@@ -47,7 +48,7 @@ export interface ApplicationAttention {
   /* What the badge shows: the titles themselves up to two, then the most severe one
      plus a count of what it stands in front of. */
   label: string;
-  tone: StatusTone;
+  tone: Tone;
 }
 
 const ATTENTION_OVERFLOW_LIMIT = 2;
@@ -94,4 +95,94 @@ export const applicationAttention = (item: ApplicationListItem): ApplicationAtte
       : `${items[0].title} · +${items.length - 1} נוספים`;
 
   return { items, label, tone: item.review_reasons.length > 0 ? "blocker" : "warning" };
+};
+
+type HubItemType = "attention" | "due_today" | "overdue" | "ready";
+
+export interface HubItem {
+  actionLabel: string;
+  actionTo: string | null;
+  application: ApplicationListItem;
+  label: string;
+  subtitle: string;
+  title: string;
+  tone: Tone;
+  type: HubItemType;
+}
+
+interface ApplicationAttentionSummaryProps {
+  clearingApplicationId: string | null;
+  items: readonly ApplicationListItem[];
+  onClearNextAction: (application: ApplicationListItem) => void;
+  onOpenStatusDialog: (application: ApplicationListItem) => void;
+}
+
+/* This is a priority summary of the current server-projected page, not a second list
+   filter. Attention comes from the projection's reason collections, Ready comes from
+   its active ready revision, and the date comparison is only a local presentation of a
+   stored reminder. One card per Application prevents a single row from occupying the
+   entire hub when it happens to satisfy several conditions. */
+export const attentionHubItems = (items: readonly ApplicationListItem[], today: Date = new Date()): HubItem[] => {
+  const due: HubItem[] = [];
+  const attention: HubItem[] = [];
+  const ready: HubItem[] = [];
+
+  for (const application of items) {
+    if (application.is_closed) {
+      continue;
+    }
+
+    const applicationHref = routePaths.application(application.id);
+    if (
+      application.next_action != null &&
+      application.next_action_date != null &&
+      (isNextActionOverdue(application.next_action_date, today) || isDueToday(application.next_action_date, today))
+    ) {
+      const overdue = isNextActionOverdue(application.next_action_date, today);
+      due.push({
+        actionLabel: overdue ? "עדכון סטטוס ומשימה" : "פתיחת המועמדות",
+        actionTo: overdue ? null : applicationHref,
+        application,
+        label: overdue ? "באיחור" : "להיום",
+        subtitle: `${formatApplicationDate(application.next_action_date)} · ${application.target_role}`,
+        title: application.next_action,
+        tone: overdue ? "blocker" : "progress",
+        type: overdue ? "overdue" : "due_today",
+      });
+      continue;
+    }
+
+    const projectedAttention = applicationAttention(application);
+    if (projectedAttention != null) {
+      attention.push({
+        actionLabel: "פתיחת מסך ההכנה",
+        actionTo: routePaths.preparation(application.id),
+        application,
+        label: "דורש טיפול",
+        subtitle: application.target_role,
+        title: projectedAttention.label,
+        tone: projectedAttention.tone,
+        type: "attention",
+      });
+      continue;
+    }
+
+    if (application.latest_ready_revision_id != null) {
+      ready.push({
+        actionLabel: "פתיחת הגרסה המוכנה",
+        actionTo: routePaths.revision(application.latest_ready_revision_id),
+        application,
+        label: "מוכן לשליחה",
+        subtitle: application.target_role,
+        title: "קורות החיים מוכנים להורדה ולהגשה",
+        tone: "success",
+        type: "ready",
+      });
+    }
+  }
+
+  due.sort((left, right) =>
+    (left.application.next_action_date ?? "").localeCompare(right.application.next_action_date ?? ""),
+  );
+  return [...due, ...attention, ...ready].slice(0, 3);
 };

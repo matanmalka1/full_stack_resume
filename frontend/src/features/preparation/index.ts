@@ -19,7 +19,7 @@ export { PreparationWorkflowSteps } from "./components/PreparationWorkflowSteps"
 
 /* The Web automation continuation from a finished analysis to its draft. Called by the
    screen that holds the watch, because that is where the Operation being followed is. */
-export { useAutomaticDraft } from "./hooks/useAutomaticDraft";
+export { useAutomaticDraft } from "./api/mutations";
 
 /* What the projection is asking the reader to decide, for a caller that counts it into a
    badge. Where those decisions are taken stays inside. */

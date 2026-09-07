@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 
 import type { RecruitmentStatus } from "@/api/contracts";
-import type { StatusTone } from "@/ui/status";
+import type { Tone } from "@/ui/tone";
 
 export const recruitmentStatusLabels: Record<RecruitmentStatus, string> = {
   saved: "נשמר",
@@ -30,7 +30,7 @@ export const recruitmentStatusLabels: Record<RecruitmentStatus, string> = {
   closed: "סגור",
 };
 
-const recruitmentStatusTones: Record<RecruitmentStatus, StatusTone> = {
+const recruitmentStatusTones: Record<RecruitmentStatus, Tone> = {
   saved: "neutral",
   applied: "progress",
   recruiter_screen: "progress",
@@ -63,7 +63,7 @@ export const recruitmentStatuses = Object.keys(recruitmentStatusLabels) as Recru
 export const recruitmentStatusLabel = (status: string): string =>
   status in recruitmentStatusLabels ? recruitmentStatusLabels[status as RecruitmentStatus] : status;
 
-export const recruitmentStatusTone = (status: string): StatusTone =>
+export const recruitmentStatusTone = (status: string): Tone =>
   status in recruitmentStatusTones ? recruitmentStatusTones[status as RecruitmentStatus] : "neutral";
 
 export const recruitmentStatusIcon = (status: string): LucideIcon =>

@@ -5,7 +5,7 @@ import { Card } from "@/ui/Card";
 import { EmptyState } from "@/ui/EmptyState";
 import { QueryState } from "@/ui/QueryState";
 import { SectionHeader } from "@/ui/SectionHeader";
-import { useFactPool } from "../api/factQueries";
+import { useFactPool } from "../api/queries";
 import { FactPoolList } from "./FactPoolList";
 
 /* The whole stored knowledge, read-only. Its one job beyond listing is to say when the

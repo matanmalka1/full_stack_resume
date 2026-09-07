@@ -1,7 +1,7 @@
 import { useLocation } from "react-router-dom";
 
 import type { ApplicationDetail } from "@/api/contracts";
-import { type WorkflowStep, WorkflowSteps } from "./WorkflowSteps";
+import { type WorkflowStep, WorkflowStepsRail } from "./WorkflowStepsRail";
 import {
   type StageDestinations,
   type WorkflowStage,
@@ -76,7 +76,7 @@ export const PreparationWorkflowSteps = ({ applicationId, detail }: PreparationW
   const hintStage = hereIndex === -1 ? stage : workflowStages[hereIndex];
 
   return (
-    <WorkflowSteps
+    <WorkflowStepsRail
       hint={hintStage === undefined ? undefined : workflowStageHints[hintStage]}
       label="שלבי הכנת קורות החיים"
       steps={located}

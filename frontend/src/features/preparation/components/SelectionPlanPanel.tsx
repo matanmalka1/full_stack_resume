@@ -14,7 +14,7 @@ import { surfaceClasses } from "@/ui/surface";
 import { factTotals } from "../model/factGroups";
 import type { WorkflowActionPlan } from "../model/workflowActionPlan";
 import { FactSelectionList } from "./FactSelectionList";
-import { PreparationActionBar } from "./PreparationActionBar";
+import { CommitBar } from "./CommitBar";
 
 const sameMembers = (left: readonly string[], right: readonly string[]): boolean =>
   left.length === right.length && left.every((item) => right.includes(item));
@@ -196,7 +196,7 @@ export const SelectionPlanPanel = ({
         ) : null}
       </section>
 
-      <PreparationActionBar
+      <CommitBar
         primary={
           <>
             {aiAvailable ? (
@@ -228,7 +228,7 @@ export const SelectionPlanPanel = ({
             : `${totals.included} מתוך ${totals.total} עובדות ייכנסו לטיוטה.`}
           {changed ? " יש שינוי שטרם נשמר." : ""}
         </p>
-      </PreparationActionBar>
+      </CommitBar>
     </>
   );
 };

@@ -26,7 +26,7 @@ import {
   useFactDetail,
   type FactFormFields,
 } from "@/features/facts";
-import { useAppForm } from "@/forms/useAppForm";
+import { useAppForm } from "@/hooks/useAppForm";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Checkbox } from "@/ui/Checkbox";

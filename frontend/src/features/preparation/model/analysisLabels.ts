@@ -4,7 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import type { Classification, RequirementCoverage } from "@/api/analyses";
 import { type FitLevel, isFitLevel } from "@/api/classificationValues";
 import type { Emphasis, Language, ProfileName, Track } from "@/api/contracts";
-import type { StatusTone } from "@/ui/status";
+import type { Tone } from "@/ui/tone";
 import type { SummaryItem } from "@/ui/SummaryList";
 
 /* Keyed by the generated unions, so a classification value added to the backend fails
@@ -65,7 +65,7 @@ export const fitDescriptions: Record<FitLevel, string> = {
   unknown: "לא ניתן היה לקרוא את דרישות המשרה, ולכן ההתאמה לא נבדקה. נדרשת הכרעה מפורשת לפני יצירת טיוטה.",
 };
 
-export const fitTones: Record<FitLevel, StatusTone> = {
+export const fitTones: Record<FitLevel, Tone> = {
   high: "success",
   medium: "neutral",
   low: "warning",
@@ -88,7 +88,7 @@ export const fitIcons: Record<FitLevel, LucideIcon> = {
    not recognise is shown as itself rather than guessed at. */
 export const fitLevelLabel = (fit: string): string => (isFitLevel(fit) ? fitLabels[fit] : fit);
 
-export const fitLevelTone = (fit: string): StatusTone => (isFitLevel(fit) ? fitTones[fit] : "neutral");
+export const fitLevelTone = (fit: string): Tone => (isFitLevel(fit) ? fitTones[fit] : "neutral");
 
 export const fitLevelIcon = (fit: string): LucideIcon | undefined => (isFitLevel(fit) ? fitIcons[fit] : undefined);
 
@@ -152,7 +152,7 @@ export const coverageLabels: Record<RequirementCoverage, string> = {
   undetermined: "לא הוכרע",
 };
 
-export const coverageTones: Record<RequirementCoverage, StatusTone> = {
+export const coverageTones: Record<RequirementCoverage, Tone> = {
   matched: "success",
   partial: "warning",
   unsupported: "blocker",

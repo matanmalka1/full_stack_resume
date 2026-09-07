@@ -1,5 +1,5 @@
 import type { ClaimType } from "@/api/contracts";
-import type { StatusTone } from "@/ui/status";
+import type { Tone } from "@/ui/tone";
 
 /* Exhaustive over the generated union. A claim type added to the backend fails this
    build rather than reaching a screen as an untranslated value. This is the same reason
@@ -17,7 +17,7 @@ export const claimTypeLabels: Record<ClaimType, string> = {
   headline: "כותרת",
 };
 
-export const claimTypeTones: Record<ClaimType, StatusTone> = {
+export const claimTypeTones: Record<ClaimType, Tone> = {
   canonical: "success",
   composite: "success",
   derived: "success",

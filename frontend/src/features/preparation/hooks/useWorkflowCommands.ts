@@ -11,7 +11,7 @@ import type { ApplicationDetail } from "@/api/contracts";
 import { archiveWorkingDraft, workingDraftQueryKey, workingDraftQueryOptions } from "@/api/drafts";
 import { type QueuedOperation, isTerminalOperation, operationQueryKey, operationQueryOptions } from "@/api/operations";
 import type { WorkflowActionPlan } from "../model/workflowActionPlan";
-import { useAnalyzeCommand } from "./useAnalyzeCommand";
+import { useAnalyzeCommand } from "../api/mutations";
 
 /* A.1: which actions are offered comes from the projection, read by `workflowActionPlan`
    and handed in. What is left here is the commands this screen sends and the state that

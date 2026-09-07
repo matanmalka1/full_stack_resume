@@ -19,7 +19,7 @@ import { CloseApplicationDialog } from "../components/CloseApplicationDialog";
 import { ApplicationAttentionSummary } from "../components/ApplicationAttentionSummary";
 import { ApplicationListHeader } from "../components/ApplicationListHeader";
 import { ApplicationStatusSummary } from "../components/ApplicationStatusSummary";
-import { useApplicationListMutations } from "../hooks/useApplicationListMutations";
+import { useApplicationListMutations } from "../api/mutations";
 import { useApplicationListQuery } from "../hooks/useApplicationListQuery";
 import { PAGE_SIZE, paramsFromQuery } from "../model/applicationListParams";
 import { type RecruitmentStageId, recruitmentStages, selectedStage } from "../model/recruitmentStages";

@@ -4,13 +4,13 @@ import type { ReactNode } from "react";
 import type { ApplicationListItem } from "@/api/contracts";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { cx } from "@/ui/cx";
-import { type StatusTone, statusPresentation } from "@/ui/status";
+import { type Tone, tonePresentation } from "@/ui/tone";
 import { fitLevelIcon, fitLevelLabel, fitLevelTone } from "@/features/preparation";
 import { recruitmentStatusIcon, recruitmentStatusLabel, recruitmentStatusTone } from "@/features/recruitment";
 import { preparationStateIcons, preparationStateLabels, preparationStateTones } from "@/features/preparation";
 import type { ApplicationListViewVariant } from "../model/applicationList.types";
 
-const quietToneClasses: Record<StatusTone, string> = {
+const quietToneClasses: Record<Tone, string> = {
   success: "text-cv-success",
   warning: "text-cv-warning",
   blocker: "text-cv-blocker",
@@ -18,8 +18,8 @@ const quietToneClasses: Record<StatusTone, string> = {
   neutral: "text-cv-text-muted",
 };
 
-const QuietStatus = ({ children, icon, tone }: { children: ReactNode; icon?: LucideIcon; tone: StatusTone }) => {
-  const Icon = icon ?? statusPresentation[tone].icon;
+const QuietStatus = ({ children, icon, tone }: { children: ReactNode; icon?: LucideIcon; tone: Tone }) => {
+  const Icon = icon ?? tonePresentation[tone].icon;
 
   return (
     <span className={cx("inline-flex items-start gap-1.5 text-support font-medium", quietToneClasses[tone])}>

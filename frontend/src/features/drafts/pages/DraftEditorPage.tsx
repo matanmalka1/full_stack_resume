@@ -26,7 +26,7 @@ import { DraftPreview } from "../components/DraftPreview";
 import { DraftRenderPanel } from "../components/DraftRenderPanel";
 import { DraftValidationPanel } from "../components/DraftValidationPanel";
 import { type DraftWorkspaceMode, DraftWorkspace } from "../components/DraftWorkspace";
-import { useDraftDocument } from "../hooks/useDraftDocument";
+import { useDraftDocument } from "../api/queries";
 import { useDraftEditing } from "../hooks/useDraftEditing";
 import { useDraftValidation } from "../hooks/useDraftValidation";
 

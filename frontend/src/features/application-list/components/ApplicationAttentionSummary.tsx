@@ -2,29 +2,9 @@ import { BellOff, ChevronLeft, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
-import { routePaths } from "@/app/routePaths";
 import { Button } from "@/ui/Button";
 import { StatusBadge } from "@/ui/StatusBadge";
-import type { StatusTone } from "@/ui/status";
-import {
-  applicationAttention,
-  formatApplicationDate,
-  isDueToday,
-  isNextActionOverdue,
-} from "../model/applicationListPresentation";
-
-type HubItemType = "attention" | "due_today" | "overdue" | "ready";
-
-interface HubItem {
-  actionLabel: string;
-  actionTo: string | null;
-  application: ApplicationListItem;
-  label: string;
-  subtitle: string;
-  title: string;
-  tone: StatusTone;
-  type: HubItemType;
-}
+import { attentionHubItems } from "../model/applicationListPresentation";
 
 interface ApplicationAttentionSummaryProps {
   clearingApplicationId: string | null;
@@ -33,83 +13,13 @@ interface ApplicationAttentionSummaryProps {
   onOpenStatusDialog: (application: ApplicationListItem) => void;
 }
 
-/* This is a priority summary of the current server-projected page, not a second list
-   filter. Attention comes from the projection's reason collections, Ready comes from
-   its active ready revision, and the date comparison is only a local presentation of a
-   stored reminder. One card per Application prevents a single row from occupying the
-   entire hub when it happens to satisfy several conditions. */
-const hubItems = (items: readonly ApplicationListItem[], today: Date = new Date()): HubItem[] => {
-  const due: HubItem[] = [];
-  const attention: HubItem[] = [];
-  const ready: HubItem[] = [];
-
-  for (const application of items) {
-    if (application.is_closed) {
-      continue;
-    }
-
-    const applicationHref = routePaths.application(application.id);
-    if (
-      application.next_action != null &&
-      application.next_action_date != null &&
-      (isNextActionOverdue(application.next_action_date, today) || isDueToday(application.next_action_date, today))
-    ) {
-      const overdue = isNextActionOverdue(application.next_action_date, today);
-      due.push({
-        actionLabel: overdue ? "עדכון סטטוס ומשימה" : "פתיחת המועמדות",
-        actionTo: overdue ? null : applicationHref,
-        application,
-        label: overdue ? "באיחור" : "להיום",
-        subtitle: `${formatApplicationDate(application.next_action_date)} · ${application.target_role}`,
-        title: application.next_action,
-        tone: overdue ? "blocker" : "progress",
-        type: overdue ? "overdue" : "due_today",
-      });
-      continue;
-    }
-
-    const projectedAttention = applicationAttention(application);
-    if (projectedAttention != null) {
-      attention.push({
-        actionLabel: "פתיחת מסך ההכנה",
-        actionTo: routePaths.preparation(application.id),
-        application,
-        label: "דורש טיפול",
-        subtitle: application.target_role,
-        title: projectedAttention.label,
-        tone: projectedAttention.tone,
-        type: "attention",
-      });
-      continue;
-    }
-
-    if (application.latest_ready_revision_id != null) {
-      ready.push({
-        actionLabel: "פתיחת הגרסה המוכנה",
-        actionTo: routePaths.revision(application.latest_ready_revision_id),
-        application,
-        label: "מוכן לשליחה",
-        subtitle: application.target_role,
-        title: "קורות החיים מוכנים להורדה ולהגשה",
-        tone: "success",
-        type: "ready",
-      });
-    }
-  }
-
-  due.sort((left, right) =>
-    (left.application.next_action_date ?? "").localeCompare(right.application.next_action_date ?? ""),
-  );
-  return [...due, ...attention, ...ready].slice(0, 3);
-};
-
 export const ApplicationAttentionSummary = ({
   clearingApplicationId,
   items,
   onClearNextAction,
   onOpenStatusDialog,
 }: ApplicationAttentionSummaryProps) => {
-  const displayItems = hubItems(items);
+  const displayItems = attentionHubItems(items);
 
   if (displayItems.length === 0) {
     return null;

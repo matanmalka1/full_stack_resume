@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 
 import { type ClassValue, cx } from "./cx";
-import { type StatusTone, statusPresentation } from "./status";
+import { type Tone, tonePresentation } from "./tone";
 
-const toneClasses: Record<StatusTone, string> = {
+const toneClasses: Record<Tone, string> = {
   success: "border-cv-success/20 border-s-cv-success bg-cv-success-soft/60",
   warning: "border-cv-warning/20 border-s-cv-warning bg-cv-warning-soft/60",
   blocker: "border-cv-blocker/20 border-s-cv-blocker bg-cv-blocker-soft/60",
@@ -11,7 +11,7 @@ const toneClasses: Record<StatusTone, string> = {
   neutral: "border-cv-border border-s-cv-text-muted bg-cv-surface-muted",
 };
 
-const toneIconClasses: Record<StatusTone, string> = {
+const toneIconClasses: Record<Tone, string> = {
   success: "text-cv-success",
   warning: "text-cv-warning",
   blocker: "text-cv-blocker",
@@ -23,7 +23,7 @@ const toneIconClasses: Record<StatusTone, string> = {
    padding, body text in plain muted grey - for a full-bordered block whose own text is
    tinted in the tone. Reserved for the one verdict a whole screen opens with and is
    organized around; every other Callout on the page stays the quieter inline notice. */
-const bannerToneClasses: Record<StatusTone, string> = {
+const bannerToneClasses: Record<Tone, string> = {
   success: "border-cv-success/30 bg-cv-success-soft",
   warning: "border-cv-warning/30 bg-cv-warning-soft",
   blocker: "border-cv-blocker/30 bg-cv-blocker-soft",
@@ -41,13 +41,13 @@ interface CalloutProps {
   /* "alert" only when the callout appears in response to a user action. */
   role?: "alert" | "status";
   title: ReactNode;
-  tone: StatusTone;
+  tone: Tone;
 }
 
 /* A.2: a warning states its label and never looks like a blocker; a blocker states its
    reason in plain language and offers the allowed resolution action when one exists. */
 export const Callout = ({ action, children, className, emphasis, role, title, tone }: CalloutProps) => {
-  const { icon: Icon, label } = statusPresentation[tone];
+  const { icon: Icon, label } = tonePresentation[tone];
   const banner = emphasis === "banner";
 
   return (

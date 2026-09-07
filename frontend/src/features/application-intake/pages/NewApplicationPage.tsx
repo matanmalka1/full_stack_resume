@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { routePaths } from "@/app/routePaths";
 import { Breadcrumbs } from "@/ui/Breadcrumbs";
 import { PageShell } from "@/ui/PageShell";
-import { useAppForm } from "@/forms/useAppForm";
+import { useAppForm } from "@/hooks/useAppForm";
 import { paramsFromQuery, queryFromParams } from "@/features/application-list";
 import { ApplicationIntakeForm } from "../components/ApplicationIntakeForm";
 import { useApplicationIntakeSubmission } from "../hooks/useApplicationIntakeSubmission";

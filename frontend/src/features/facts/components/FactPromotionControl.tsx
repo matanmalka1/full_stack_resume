@@ -4,7 +4,7 @@ import type { Fact } from "@/api/contracts";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 import { Checkbox } from "@/ui/Checkbox";
-import { useTransitionFact } from "../api/factMutations";
+import { useTransitionFact } from "../api/mutations";
 
 /* Moving a fact forward along `pending -> confirmed -> canonical`. Each step is one
    deliberate act: the checkbox is the person attesting they read the fact and its

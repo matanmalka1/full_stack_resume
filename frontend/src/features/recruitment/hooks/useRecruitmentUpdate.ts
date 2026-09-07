@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { invalidateApplicationViews, updateApplicationNotes } from "@/api/applications";
 import type { ApplicationDetail } from "@/api/contracts";
 import { setNextAction, transitionRecruitmentStatus } from "@/api/tracking";
-import { useAppForm } from "@/forms/useAppForm";
+import { useAppForm } from "@/hooks/useAppForm";
 import type { RecruitmentUpdateFields } from "../model/recruitment.types";
 import { useServerSyncedField } from "./useServerSyncedField";
 

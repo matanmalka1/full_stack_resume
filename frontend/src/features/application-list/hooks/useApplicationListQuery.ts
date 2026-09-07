@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { type ApplicationListQuery, applicationListQueryOptions } from "@/api/applications";
-import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useDebouncedValue } from "./useDebouncedValue";
 import { paramsFromQuery, queryFromParams } from "../model/applicationListParams";
 
 const SEARCH_DEBOUNCE_MS = 300;

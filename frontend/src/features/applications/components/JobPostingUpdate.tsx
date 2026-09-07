@@ -6,7 +6,7 @@ import { createJobSnapshot, invalidateApplicationViews } from "@/api/application
 import type { ApplicationDetail } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
 import { ErrorCallout } from "@/ui/ErrorCallout";
-import { useAppForm } from "@/forms/useAppForm";
+import { useAppForm } from "@/hooks/useAppForm";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Dialog } from "@/ui/Dialog";
