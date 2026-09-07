@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 
-import { WorkflowLandmarkSteps } from "../app/WorkflowLandmark";
 import { PageHeading } from "./PageHeading";
 import { cx } from "./cx";
 
@@ -9,6 +8,10 @@ interface PageShellProps {
   children?: ReactNode;
   description?: ReactNode;
   eyebrow?: ReactNode;
+  /* Where the page sits in a longer piece of work, drawn above the masthead. The shell
+     knows of no such progression, so the page supplies one where it has one and nothing
+     where it does not. */
+  landmark?: ReactNode;
   /* "wide" is the shared outer measure, which suits listings and record views. "form"
      is a shorter reading measure for a page whose whole body is one column of inputs:
      a text field stretched across the full frame is harder to scan, not easier. */
@@ -25,6 +28,7 @@ export const PageShell = ({
   children,
   description,
   eyebrow,
+  landmark,
   measure = "wide",
   navigation,
   title,
@@ -35,9 +39,7 @@ export const PageShell = ({
       className={cx("page-frame", measure === "form" ? "[--page-measure:48rem]" : undefined)}
     >
       {navigation === undefined ? null : <div className="mb-5">{navigation}</div>}
-      <div className="mb-5 empty:hidden">
-        <WorkflowLandmarkSteps />
-      </div>
+      {landmark === undefined ? null : <div className="mb-5">{landmark}</div>}
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 border-b border-cv-border pb-2">
         <div className="min-w-0">
           <PageHeading description={description} eyebrow={eyebrow} id="route-heading">

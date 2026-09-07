@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { ErrorCallout } from "../app/ErrorCallout";
+import { ErrorCallout } from "./ErrorCallout";
 import { cx } from "./cx";
 
 interface QueryStateProps {

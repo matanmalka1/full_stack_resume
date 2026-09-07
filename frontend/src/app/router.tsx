@@ -1,118 +1,78 @@
 import { Navigate, createBrowserRouter, useParams } from "react-router-dom";
 
-import { App } from "../App";
-import { RoutePlaceholder } from "../pages/RoutePlaceholder";
-import { ApplicationListPage } from "../features/application-list";
-import { NewApplicationPage } from "../features/application-intake";
-import { JobDetailsPage } from "../features/applications";
-import { DraftEditorPage } from "../features/drafts";
-import { RevisionPage } from "../features/revisions";
-import { SettingsPage } from "../features/settings";
-import { appRoutes } from "./appRoutes";
-import { RouteErrorBoundary } from "./RouteErrorBoundary";
+import { NewApplicationPage } from "@/features/application-intake";
+import { ApplicationListPage } from "@/features/application-list";
+import { JobDetailsPage } from "@/features/applications";
+import { DraftEditorPage } from "@/features/drafts";
+import { RevisionPage } from "@/features/revisions";
+import { SettingsPage } from "@/features/settings";
+import { AppLayout } from "./layout/AppLayout";
+import { NotFoundPage } from "./layout/NotFoundPage";
+import { RouteErrorBoundary } from "./layout/RouteErrorBoundary";
+import { routePaths } from "./routePaths";
 
-/* The root is the Application list, and intake is a screen reached from it. The two were
-   the other way round until the list existed at all: with the form at `/`, the wordmark
-   started a new Application instead of going home, and a saved one was reachable only by
-   its URL or the back button.
-
-   Job Detail owns the posting. Recruitment tracking is one shared dialog reachable from
-   every existing-Application screen, while CV preparation remains a separate destination
-   under the same Application and continues to own the document workflow.
-
-   Six screens carry the workflow: the list, intake, Job Detail, CV preparation, the
-   draft editor, and Ready.
+/* Six screens carry the workflow: the board, intake, the Application hub, its preparation
+   tab, the draft editor, and the approved revision.
 
    Validation, approval, and render are not among them. Each was a screen holding a single
    button, and each acted on the draft the editor was already showing, so reaching one
-   meant leaving the text it described. They are now states of the editor: a panel, a
-   dialog, and an inline step. Review joined them: the analysis it decides about is on the
-   Application screen, so deciding on a separate route meant showing the subject in one
-   place and the controls in another.
+   meant leaving the text it described. They are states of the editor now. Review joined
+   them: the analysis it decides about is on the Application screen.
 
-   Operation has no route. Queueing reports in place, so the screen was already off the
-   workflow path; what kept it was the argument that an Operation outlives the screen that
-   queued it and a direct link needs somewhere to land. It lands on the Application
-   instead. The Operation screen's own content was the run's type, status, phase, message
-   and failure - all of which `ActiveOperationPanel` shows on the screen that queued it -
-   plus timestamps and identifiers, which are not shown anywhere now. */
+   An Operation has no route either. Queueing reports in place, and a direct link lands on
+   the Application whose panel shows the run. */
 
 /* `useParams` rather than a splat rewrite: the id is a path segment, and re-encoding it
-   through the router is what keeps an id with a slash or a space landing where it did. */
+   through `routePaths` is what keeps an id with a slash or a space landing where it did. */
 const TrackingRedirect = () => {
   const { applicationId } = useParams();
 
-  return <Navigate replace to={appRoutes.application(applicationId ?? "")} />;
+  return <Navigate replace to={routePaths.application(applicationId ?? "")} />;
 };
 
 const ReadyRedirect = () => {
   const { revisionId } = useParams();
 
-  return <Navigate replace to={appRoutes.revision(revisionId ?? "")} />;
+  return <Navigate replace to={routePaths.revision(revisionId ?? "")} />;
 };
 
 export const router = createBrowserRouter([
   {
     path: "/",
-    element: <App />,
+    element: <AppLayout />,
     errorElement: <RouteErrorBoundary />,
     children: [
-      {
-        index: true,
-        element: <ApplicationListPage />,
-      },
-      {
-        /* Creating is one action taken from the list, not the thing the root does. */
-        path: "applications/new",
-        element: <NewApplicationPage />,
-      },
-      {
-        /* The stable destination for an existing Application: its job facts, preparation
-           summary, and immutable outputs. Recruitment remains available in the shared
-           manager rather than occupying this pre-submission screen. */
-        path: "applications/:applicationId",
-        element: <JobDetailsPage />,
-      },
-      {
-        /* The document workflow is addressed separately from the job record. */
-        path: "applications/:applicationId/preparation",
-        element: <JobDetailsPage />,
-      },
-      {
-        /* Recruitment is opened in place from each Application screen. The old path
-           still lands on the stable Job Detail record for existing bookmarks. */
-        path: "applications/:applicationId/tracking",
-        element: <TrackingRedirect />,
-      },
-      {
-        /* The draft editor: edit, preview, validate, approve, and render, on the one
-           screen that holds the draft all five act on. */
-        path: "applications/:applicationId/draft",
-        element: <DraftEditorPage />,
-      },
-      {
-        /* One approved revision, addressed by the revision itself. It stays a screen of
-           its own rather than a state of the editor because the links that reach it -
-           from the board and from the Application's action plan - name a specific
-           immutable record, and an Application-keyed screen would answer them with
-           whatever revision is current instead of the one named. */
-        path: "revisions/:revisionId",
-        element: <RevisionPage />,
-      },
-      {
-        /* The address this screen had while it was named for the state rather than for
-           the record it shows. */
-        path: "approved-revisions/:revisionId/ready",
-        element: <ReadyRedirect />,
-      },
-      {
-        path: "settings",
-        element: <SettingsPage />,
-      },
-      {
-        path: "*",
-        element: <RoutePlaceholder title="העמוד לא נמצא" />,
-      },
+      { index: true, element: <ApplicationListPage /> },
+
+      /* Creating is one action taken from the board, not what the root does. */
+      { path: "applications/new", element: <NewApplicationPage /> },
+
+      /* The Application hub: its job record, its CV preparation, and its artifacts, as
+         tabs of one screen. `/preparation` is a second address for that same screen with
+         the preparation tab selected - the document workflow is linked to and bookmarked
+         directly, so it keeps a name of its own. */
+      { path: "applications/:applicationId", element: <JobDetailsPage /> },
+      { path: "applications/:applicationId/preparation", element: <JobDetailsPage /> },
+
+      /* The draft editor: edit, preview, validate, approve, and render, on the one screen
+         that holds the draft all five act on. */
+      { path: "applications/:applicationId/draft", element: <DraftEditorPage /> },
+
+      /* One approved revision, addressed by the revision itself. It stays a screen of its
+         own rather than a state of the editor because the links that reach it name a
+         specific immutable record, and an Application-keyed screen would answer with
+         whatever revision is current instead of the one named. */
+      { path: "revisions/:revisionId", element: <RevisionPage /> },
+
+      { path: "settings", element: <SettingsPage /> },
+
+      /* Two addresses kept only for links already written down. Recruitment is a dialog
+         opened from each Application screen, and the revision screen is named for the
+         record rather than for the state it was in. */
+      { path: "applications/:applicationId/tracking", element: <TrackingRedirect /> },
+      { path: "approved-revisions/:revisionId/ready", element: <ReadyRedirect /> },
+
+      { path: "*", element: <NotFoundPage /> },
     ],
   },
 ]);

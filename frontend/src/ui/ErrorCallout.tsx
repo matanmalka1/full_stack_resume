@@ -1,5 +1,5 @@
-import { ApiProblem } from "../api/client";
-import { Callout } from "../ui/Callout";
+import { ApiProblem } from "@/api/client";
+import { Callout } from "./Callout";
 
 interface ErrorCalloutProps {
   className?: string;

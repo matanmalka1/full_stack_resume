@@ -1,9 +1,9 @@
 import { isRouteErrorResponse, useRouteError } from "react-router-dom";
 
-import { ApiProblem } from "../api/client";
-import { Card } from "../ui/Card";
-import { LtrText } from "../ui/LtrText";
-import { PageHeading } from "../ui/PageHeading";
+import { ApiProblem } from "@/api/client";
+import { Card } from "@/ui/Card";
+import { LtrText } from "@/ui/LtrText";
+import { PageHeading } from "@/ui/PageHeading";
 
 interface SafeRouteError {
   title: string;
