@@ -15,14 +15,7 @@ import type {
   Track,
 } from "./contracts";
 import { type QueuedOperation, queuedOperation } from "./operations";
-import {
-  type FitLevel,
-  emphasisLabels,
-  fitLabels,
-  languageLabels,
-  profileLabels,
-  trackLabels,
-} from "@/features/applications/model/analysisLabels";
+import { type FitLevel, isEmphasis, isFitLevel, isLanguage, isProfileName, isTrack } from "./classificationValues";
 
 /* What this screen may submit: the four classification decisions, the two acceptances
    recorded on the analysis, and the per-gap acceptance recorded on the SelectionPlan.
@@ -161,20 +154,6 @@ export const applyAnalysisDecisions = async (
   });
   return response.data;
 };
-
-/* Membership checks derived from the exhaustive Hebrew maps rather than written a
-   second time: a value the backend adds fails the build at the map, and a value this
-   build does not recognize is reported as absent instead of rendering `undefined`. */
-const memberOf =
-  <T extends string>(labels: Record<T, string>) =>
-  (value: unknown): value is T =>
-    typeof value === "string" && Object.hasOwn(labels, value);
-
-const isTrack = memberOf<Track>(trackLabels);
-const isProfileName = memberOf<ProfileName>(profileLabels);
-const isEmphasis = memberOf<Emphasis>(emphasisLabels);
-const isLanguage = memberOf<Language>(languageLabels);
-const isFitLevel = memberOf<FitLevel>(fitLabels);
 
 export type RequirementCoverage = "matched" | "partial" | "unsupported" | "undetermined";
 
