@@ -4,7 +4,7 @@ import { invalidateApplicationViews, updateApplicationNotes } from "@/api/applic
 import type { ApplicationDetail } from "@/api/contracts";
 import { setNextAction, transitionRecruitmentStatus } from "@/api/tracking";
 import { useAppForm } from "@/forms/useAppForm";
-import type { RecruitmentUpdateFields } from "../recruitment.types";
+import type { RecruitmentUpdateFields } from "../model/recruitment.types";
 import { useServerSyncedField } from "./useServerSyncedField";
 
 const initialFields = (detail: ApplicationDetail): RecruitmentUpdateFields => ({

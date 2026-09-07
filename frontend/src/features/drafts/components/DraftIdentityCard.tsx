@@ -3,7 +3,7 @@ import { FileText } from "lucide-react";
 import type { WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
 import { Card } from "@/ui/Card";
 import { SectionHeader } from "@/ui/SectionHeader";
-import type { DraftClaimActions } from "../drafts.types";
+import type { DraftClaimActions } from "../model/drafts.types";
 import { DraftClaimList } from "./DraftClaimList";
 
 interface DraftIdentityCardProps {

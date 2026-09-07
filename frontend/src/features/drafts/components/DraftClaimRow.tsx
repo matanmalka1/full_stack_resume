@@ -6,7 +6,7 @@ import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { Textarea } from "@/ui/Input";
-import type { DraftClaimActions } from "../drafts.types";
+import type { DraftClaimActions } from "../model/drafts.types";
 import type { Removability } from "../model/draftClaims";
 import { claimTypeExplanations, claimTypeLabels, claimTypeTones } from "../model/draftLabels";
 

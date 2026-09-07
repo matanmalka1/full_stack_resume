@@ -2,7 +2,7 @@ import { SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/ui/Button";
-import type { RecruitmentManagerTarget } from "../recruitment.types";
+import type { RecruitmentManagerTarget } from "../model/recruitment.types";
 import { RecruitmentUpdateDialog } from "./RecruitmentUpdateDialog";
 
 export const RecruitmentManagerButton = ({ application }: { application: RecruitmentManagerTarget }) => {

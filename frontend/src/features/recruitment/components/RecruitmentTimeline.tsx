@@ -6,8 +6,8 @@ import type { RecruitmentTimelineItem } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { cx } from "@/ui/cx";
 import { formatDateTime } from "@/utils/formatDateTime";
-import { recruitmentStatusIcon, recruitmentStatusTone } from "../recruitmentStatus";
-import { recruitmentEventDescription, recruitmentEventReason } from "../recruitmentTimeline";
+import { recruitmentStatusIcon, recruitmentStatusTone } from "../model/recruitmentStatus";
+import { recruitmentEventDescription, recruitmentEventReason } from "../model/recruitmentTimeline";
 
 const markerFor = (event: RecruitmentTimelineItem): { classes: string; icon: LucideIcon } => {
   if (event.item_type === "submission") {

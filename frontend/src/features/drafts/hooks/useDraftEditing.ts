@@ -16,7 +16,7 @@ import {
 import { type QueuedOperation, operationQueryKey } from "@/api/operations";
 import { aiRegenerationAvailable } from "@/api/settings";
 import { useSettings } from "@/api/useSettings";
-import type { DraftClaimActions } from "../drafts.types";
+import type { DraftClaimActions } from "../model/drafts.types";
 import { removability } from "../model/draftClaims";
 import { type AutosaveState, useDraftAutosave } from "./useDraftAutosave";
 

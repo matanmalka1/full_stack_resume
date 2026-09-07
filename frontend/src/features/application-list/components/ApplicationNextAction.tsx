@@ -3,7 +3,7 @@ import { Clock } from "lucide-react";
 import type { ApplicationListItem } from "@/api/contracts";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { cx } from "@/ui/cx";
-import type { ApplicationListViewVariant } from "../applicationList.types";
+import type { ApplicationListViewVariant } from "../model/applicationList.types";
 import { formatApplicationDate, isNextActionOverdue } from "../model/applicationListPresentation";
 
 export const ApplicationNextAction = ({

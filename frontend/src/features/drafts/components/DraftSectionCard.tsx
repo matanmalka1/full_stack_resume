@@ -3,7 +3,7 @@ import { Layers3, RefreshCw } from "lucide-react";
 import type { WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { Card } from "@/ui/Card";
-import type { ClaimFactContext, DraftClaimActions } from "../drafts.types";
+import type { ClaimFactContext, DraftClaimActions } from "../model/drafts.types";
 import { ClaimFactResolution } from "./ClaimFactResolution";
 import { DraftClaimList } from "./DraftClaimList";
 

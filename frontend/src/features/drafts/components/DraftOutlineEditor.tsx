@@ -1,5 +1,5 @@
 import type { WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
-import type { ClaimFactContext, DraftClaimActions } from "../drafts.types";
+import type { ClaimFactContext, DraftClaimActions } from "../model/drafts.types";
 import { DraftIdentityCard } from "./DraftIdentityCard";
 import { DraftSectionCard } from "./DraftSectionCard";
 import { DraftSectionNav } from "./DraftSectionNav";

@@ -9,7 +9,7 @@ import { Dialog } from "@/ui/Dialog";
 import { ViewSwitch } from "@/ui/ViewSwitch";
 import { cx } from "@/ui/cx";
 import { useRecruitmentUpdate } from "../hooks/useRecruitmentUpdate";
-import type { RecruitmentManagerTarget } from "../recruitment.types";
+import type { RecruitmentManagerTarget } from "../model/recruitment.types";
 import { RecruitmentHistoryPanel } from "./RecruitmentHistoryPanel";
 import { RecruitmentSummary } from "./RecruitmentSummary";
 import { RecruitmentUpdateForm } from "./RecruitmentUpdateForm";

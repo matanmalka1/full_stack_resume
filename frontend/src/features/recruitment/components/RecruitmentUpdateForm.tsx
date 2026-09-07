@@ -9,8 +9,8 @@ import { Field } from "@/ui/Field";
 import { Select } from "@/ui/Select";
 import { Input, Textarea } from "@/ui/Input";
 import { cx } from "@/ui/cx";
-import { recruitmentStatusLabel } from "../recruitmentStatus";
-import type { RecruitmentUpdateFields } from "../recruitment.types";
+import { recruitmentStatusLabel } from "../model/recruitmentStatus";
+import type { RecruitmentUpdateFields } from "../model/recruitment.types";
 
 interface RecruitmentUpdateFormProps {
   detail: ApplicationDetail;

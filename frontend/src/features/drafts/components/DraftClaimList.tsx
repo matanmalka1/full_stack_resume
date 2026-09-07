@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { DraftClaim, WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
-import type { DraftClaimActions } from "../drafts.types";
+import type { DraftClaimActions } from "../model/drafts.types";
 import { linkedFacts, removability } from "../model/draftClaims";
 import { DraftClaimRow } from "./DraftClaimRow";
 

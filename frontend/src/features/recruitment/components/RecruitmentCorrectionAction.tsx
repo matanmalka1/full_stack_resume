@@ -12,8 +12,8 @@ import { Field } from "@/ui/Field";
 import { Select } from "@/ui/Select";
 import { Textarea } from "@/ui/Input";
 import { useServerSyncedField } from "../hooks/useServerSyncedField";
-import { recruitmentStatusLabel, recruitmentStatuses } from "../recruitmentStatus";
-import { statusEventLabel } from "../recruitmentTimeline";
+import { recruitmentStatusLabel, recruitmentStatuses } from "../model/recruitmentStatus";
+import { statusEventLabel } from "../model/recruitmentTimeline";
 
 interface CorrectionFields {
   correctsEventId: string;
