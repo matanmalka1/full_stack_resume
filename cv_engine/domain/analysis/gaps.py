@@ -18,23 +18,34 @@ FIT_SEVERITY = {FitLevel.HIGH: 0, FitLevel.MEDIUM: 1, FitLevel.LOW: 2}
 _COVERAGE_REASON = {
     "partial": "Canonical facts cover part of this requirement; the rest is not verified.",
     "unsupported": "Canonical facts do not verify this requirement.",
+    #: Distinct from `unsupported` on purpose (stage-1 plan §3.6): the engine
+    #: could not decide coverage at all - an unmodelled scale, an uncomputable
+    #: threshold - so it makes no claim about whether canonical facts verify
+    #: the requirement. Reporting it as "not verified" would assert something
+    #: nobody checked.
+    "undetermined": "The engine could not determine coverage for this requirement.",
 }
 
 
-def derive_fit(gaps: Sequence[Gap], *, extraction_failed: bool = False) -> FitLevel:
-    """Fit from the gaps, unless the requirements were never readable.
+def derive_fit(
+    gaps: Sequence[Gap],
+    *,
+    extraction_failed: bool = False,
+    coverage_undetermined: bool = False,
+) -> FitLevel:
+    """Fit from the gaps, unless the requirements were never readable or decidable.
 
-    `extraction_failed` is an explicit signal, never inferred from an empty
-    requirement list. An analysis written before the extractor existed also has
-    no requirements, and it must keep the Fit it was assessed with rather than
-    being reinterpreted as unassessable.
+    `extraction_failed` and `coverage_undetermined` are explicit signals, never
+    inferred from an empty requirement list. An analysis written before the
+    extractor existed also has no requirements, and it must keep the Fit it was
+    assessed with rather than being reinterpreted as unassessable.
 
-    A hard gap still outranks a failed extraction: evidence of poor Fit is
-    knowledge, and losing it to "we could not tell" would be a downgrade.
+    A hard gap still outranks either: evidence of poor Fit is knowledge, and
+    losing it to "we could not tell" would be a downgrade (stage-1 plan §3.6).
     """
     if any(gap.severity == "hard" for gap in gaps):
         return FitLevel.LOW
-    if extraction_failed:
+    if extraction_failed or coverage_undetermined:
         return FitLevel.UNKNOWN
     return FitLevel.MEDIUM if gaps else FitLevel.HIGH
 
@@ -64,6 +75,12 @@ def gaps_from_requirements(
     that the requirement is satisfied, so it still demands an explicit decision
     before drafting.
 
+    `undetermined` is never a hard gap, mandatory or not (stage-1 plan §3.6):
+    "we could not tell" is not "you lack this", so it is a warning-severity gap
+    here and the `coverage-undetermined` approval reason - raised separately by
+    the caller that has access to the analysis's `approval_reasons` - is what
+    actually blocks approval for it.
+
     `substitute_fact_ids` carries the supporting facts because for a *gap* that
     is what they are - what may be shown in place of the thing that is missing.
     The two fields stay distinct on `Requirement`, where they mean different
@@ -77,10 +94,11 @@ def gaps_from_requirements(
         authoritative = [
             meanings[fact_id] for fact_id in requirement.boundary_fact_ids if fact_id in meanings
         ]
+        hard = requirement.mandatory and requirement.coverage != "undetermined"
         gaps.append(
             Gap(
                 requirement=requirement.text,
-                severity="hard" if requirement.mandatory else "warning",
+                severity="hard" if hard else "warning",
                 reason=authoritative[0]
                 if authoritative
                 else _COVERAGE_REASON[requirement.coverage],

@@ -24,6 +24,7 @@ from helpers import (
     ACCOUNT_MANAGER_JOB,
     AMBIGUOUS_HEBREW_JOB,
     approve_active_draft,
+    trivial_requirement_extraction,
 )
 from seed import V2_IDENTITY_FACT, write_canonical_sources
 from sqlalchemy import text
@@ -786,6 +787,17 @@ def provider_analysis(ai_services: Services, fake_openai: FakeOpenAI):
         **analyze_kwargs,
     ) -> ProposalSetup:
         fake_openai.script("propose_job_analysis", response)
+        # Stage-1 plan §3.7: `propose_requirement_extraction` runs before
+        # `propose_job_analysis` on every AI-mode analyze Operation. This
+        # fixture is about classification-merge policy, not extraction
+        # content, so a passing, honest-about-what-it-covers default is
+        # scripted unless the caller already scripted one explicitly.
+        if not fake_openai.scripts.get("propose_requirement_extraction"):
+            concepts = ai_services.analysis.load_knowledge().requirement_concepts
+            fake_openai.script(
+                "propose_requirement_extraction",
+                trivial_requirement_extraction(job_text, concepts),
+            )
         ingested = ai_services.applications.ingest(
             IngestCommand(
                 company=company,

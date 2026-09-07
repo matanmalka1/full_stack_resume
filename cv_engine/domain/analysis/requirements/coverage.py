@@ -18,7 +18,7 @@ def _canonical(facts: FactStore) -> list:
     return [fact for fact in facts.facts.values() if fact.status is FactStatus.CANONICAL]
 
 
-def _candidate_fact_ids(concept: RequirementConcept, facts: FactStore) -> list[str]:
+def candidate_fact_ids(concept: RequirementConcept, facts: FactStore) -> list[str]:
     """Tag overlap finds candidate evidence. It never decides sufficiency.
 
     Boundary facts are excluded here and everywhere else evidence is counted. A
@@ -33,7 +33,7 @@ def _candidate_fact_ids(concept: RequirementConcept, facts: FactStore) -> list[s
     return sorted(found - concept.boundary_fact_ids)
 
 
-def _satisfied(
+def satisfied_evidence(
     fact_ids: frozenset[str],
     tags: frozenset[str],
     facts: FactStore,
@@ -78,24 +78,40 @@ def _value_fact(concept: RequirementConcept, fact_id: str, facts: FactStore):
     return fact if fact is not None and fact.status is FactStatus.CANONICAL else None
 
 
-def _threshold_coverage(
+def threshold_coverage(
     concept: RequirementConcept,
     extracted: ExtractedRequirement,
     facts: FactStore,
     scales: dict[str, tuple[str, ...]],
 ) -> tuple[Coverage, list[MissingComponent]]:
-    """Met or not met. A threshold is never partial.
+    """Met, not met, or undetermined. A threshold that is met is never partial.
 
     Falling short of a demanded level is a real failure to meet the
     requirement, not half of one, even when a related canonical value exists.
     That value is still reported as supporting evidence.
+
+    A scale the engine cannot compute against - the demanded value did not
+    parse for a `years` threshold, or the demanded level is not one of the
+    scale's own named levels - is `undetermined`, not `unsupported` (stage-1
+    plan §3.2 rule 6 / §3.6). "We could not tell" is a different claim from
+    "the facts do not verify this", and reporting the first as the second
+    would tell the candidate they lack something nobody checked.
     """
     if extracted.demanded is None:
         return "unsupported", [MissingComponent(component_id=concept.concept, label=concept.label)]
     held: float | None = None
     demanded_value: float | None = None
     if concept.scale == "years":
-        demanded_value = float(extracted.demanded)
+        try:
+            demanded_value = float(extracted.demanded)
+        except ValueError:
+            return "undetermined", [
+                MissingComponent(
+                    component_id=concept.concept,
+                    label=concept.label,
+                    demanded=extracted.demanded,
+                )
+            ]
         for fact_id in concept.value_fact_ids:
             fact = _value_fact(concept, fact_id, facts)
             if fact is None:
@@ -106,8 +122,12 @@ def _threshold_coverage(
     else:
         levels = scales.get(concept.scale, ())
         if extracted.demanded.casefold() not in levels:
-            return "unsupported", [
-                MissingComponent(component_id=concept.concept, label=concept.label)
+            return "undetermined", [
+                MissingComponent(
+                    component_id=concept.concept,
+                    label=concept.label,
+                    demanded=extracted.demanded,
+                )
             ]
         demanded_value = float(levels.index(extracted.demanded.casefold()))
         for fact_id in concept.value_fact_ids:
@@ -139,7 +159,7 @@ def cover_requirements(
     covered: list[Requirement] = []
     for item in extracted:
         concept = concepts.concepts[item.concept]
-        supporting = _candidate_fact_ids(concept, facts)
+        supporting = candidate_fact_ids(concept, facts)
         boundary = sorted(
             fact_id
             for fact_id in concept.boundary_fact_ids
@@ -148,11 +168,11 @@ def cover_requirements(
         missing: list[MissingComponent] = []
 
         if concept.kind == "threshold":
-            coverage, missing = _threshold_coverage(concept, item, facts, concepts.scales)
+            coverage, missing = threshold_coverage(concept, item, facts, concepts.scales)
         elif concept.kind == "compositional":
             met: list[str] = []
             for component in concept.components:
-                evidence = _satisfied(
+                evidence = satisfied_evidence(
                     component.satisfied_by_fact_ids,
                     component.satisfied_by_tags,
                     facts,
@@ -169,7 +189,7 @@ def cover_requirements(
                     )
             coverage = "matched" if not missing else ("partial" if met else "unsupported")
         else:
-            evidence = _satisfied(
+            evidence = satisfied_evidence(
                 concept.satisfied_by_fact_ids,
                 concept.satisfied_by_tags,
                 facts,

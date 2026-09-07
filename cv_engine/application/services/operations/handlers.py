@@ -7,6 +7,7 @@ root's handler table, and to nothing else.
 
 from __future__ import annotations
 
+from dataclasses import fields
 from typing import Any, cast
 
 from ...commands import (
@@ -41,6 +42,7 @@ from ...ports import (
 )
 from ..analysis import AnalysisService, PreparedAnalysis, PreparedSelectionProposal
 from ..drafts import DraftService, PreparedDraft, PreparedRegeneration
+from ..proposals import ProviderEvidence
 from ..rendering import ExecutedRender, RenderingService
 from .common import (
     _model_hash,
@@ -61,26 +63,26 @@ class AITaskHandler:
     service: Any
     task: str
 
-    @staticmethod
-    def evidence_outputs(prepared_value: Any) -> tuple[OperationOutputReference, ...]:
-        """The provider response an executed AI task produced, as an inactive output.
+    @classmethod
+    def evidence_outputs(cls, prepared_value: Any) -> tuple[OperationOutputReference, ...]:
+        """Every provider response an executed AI task produced, as inactive outputs.
 
         Handed to the runner from `execute` rather than returned from `activate`,
         which is what makes it survive a cancellation. The runner records
         `prepared.outputs` as inactive *before* it re-checks cancellation, and
         activates them only inside a successful commit - so a cancelled or
-        stale Operation ends holding exactly what §18 says it should: a
+        stale Operation ends holding exactly what §18 says it should: every
         completed output, recorded, inactive.
         """
-        evidence = getattr(prepared_value, "evidence", None)
-        if evidence is None:
-            return ()
-        return (
+        return tuple(
             OperationOutputReference(
                 output_type="provider_response",
                 output_id=evidence.artifact_version_id,
                 active=False,
-            ),
+            )
+            for field in fields(prepared_value)
+            for evidence in (getattr(prepared_value, field.name),)
+            if isinstance(evidence, ProviderEvidence)
         )
 
     def prepared(self, value: Any) -> PreparedOperation:
@@ -104,9 +106,19 @@ class AITaskHandler:
         classified failure the user needs to see; replacing that diagnosis with
         an error about storing evidence for it would be a worse report.
         """
+        # Earlier successful calls survive a later call's failure too.
+        completed = getattr(error, "completed_evidence", ())
         evidence = getattr(error, "evidence", None)
         provenance = getattr(error, "provenance", None)
         try:
+            for item in completed:
+                self.service.repo.record_operation_output(
+                    operation.id, "provider_response", item.artifact_version_id, active=False
+                )
+            if evidence is not None and any(
+                item.artifact_version_id == evidence.artifact_version_id for item in completed
+            ):
+                return
             if evidence is not None:
                 artifact_version_id = evidence.artifact_version_id
             elif provenance is not None:

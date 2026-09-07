@@ -24,7 +24,7 @@ from typing import Any, Literal
 
 from pydantic import Field
 
-from ...domain.contracts.analysis import Language
+from ...domain.contracts.analysis import InterpretationOverride, Language
 from ...domain.contracts.selection import OmissionReason, SelectionOutcome
 from ...domain.contracts.taxonomy import (
     Emphasis,
@@ -121,6 +121,11 @@ class ApplyAnalysisDecisionsRequest(SelectionOverlayRequest, ClassificationOverr
     #: on the analyze endpoint would let a client pre-accept a posting before
     #: anyone had looked at what the engine made of it.
     accept_incomplete_analysis: bool = False
+    #: Corrections to a requirement's interpretation (stage-1 plan §3.5).
+    #: A non-empty list creates a new JobAnalysis, the same way a
+    #: classification override does, and is refused together with a fact
+    #: overlay for the same reason the four classification overrides are.
+    requirement_interpretations: list[InterpretationOverride] = []
 
 
 class SelectionPlanResponse(HttpSchema):

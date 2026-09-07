@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 from pydantic import model_validator
 
-from ...domain.contracts.analysis import JobAnalysis
+from ...domain.contracts.analysis import InterpretationOverride, JobAnalysis
 from ...domain.contracts.selection import SelectionPlan
 from ...domain.contracts.validation import ValidationReport
 from ._base import BoundaryDTO, DuplicateMatchReason, WriteClient
@@ -146,6 +146,13 @@ class ApplyAnalysisDecisionsCommand(SelectionOverlay):
     accepted_requirement_ids: list[str] = []
     acceptance_reason: str | None = None
     expected_selection_plan_id: str | None = None
+    #: Corrections to a requirement's interpretation (stage-1 plan §3.5).
+    #: Product-spec §9 already treats a change to a requirement's meaning as
+    #: creating a new JobAnalysis; this is that change, submitted through the
+    #: same review-form command rather than a new one. A non-empty list makes
+    #: `changes_meaning` true even when none of the four classification
+    #: overrides above are set.
+    requirement_interpretations: list[InterpretationOverride] = []
 
 
 class ProposeSelectionPlanCommand(SelectionOverlay):

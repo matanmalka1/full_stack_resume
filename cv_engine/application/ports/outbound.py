@@ -22,6 +22,7 @@ from ...domain.contracts.providers import (
     ClaimProposal,
     DraftProposal,
     ProviderTaskResult,
+    RequirementExtractionProposal,
     SectionProposal,
     SelectionProposal,
 )
@@ -268,6 +269,20 @@ class AIProposal(Generic[ProposalT]):
     provenance: ProviderTaskResult
 
 
+class RequirementExtractionContext(StrictModel):
+    """`propose_requirement_extraction`: this snapshot's text and its own statement lines.
+
+    `requirement_lines` is the engine's own segmentation
+    (`requirements/segmentation.py::requirement_lines`), supplied so
+    completeness is judged against the identical denominator the deterministic
+    path uses (stage-1 plan §3.3) - a provider is not asked to re-derive it,
+    and cannot inflate completeness by choosing a friendlier one.
+    """
+
+    job_text: str
+    requirement_lines: list[dict[str, Any]]
+
+
 class JobAnalysisContext(StrictModel):
     """`propose_job_analysis`: this snapshot and what the rules already decided.
 
@@ -329,12 +344,12 @@ class RegenerateClaimContext(StrictModel):
 
 
 class AIProvider(Protocol):
-    """The five contracted AI tasks, as the application declares them.
+    """The seven contracted AI tasks, as the application declares them.
 
-    One method per task rather than one `run(task, payload)`, because the five
-    take different inputs and return different Proposal types, and a single
-    stringly-typed entry point makes that invisible at the call site. The
-    transport - strict Structured Outputs over the Responses API - is an
+    One method per task rather than one `run(task, payload)`, because the
+    tasks take different inputs and return different Proposal types, and a
+    single stringly-typed entry point makes that invisible at the call site.
+    The transport - strict Structured Outputs over the Responses API - is an
     infrastructure concern behind `StructuredOutputClient`, and no rule in this
     layer may depend on it.
 
@@ -346,6 +361,14 @@ class AIProvider(Protocol):
     Calls are stateless. No method takes a conversation, a prior response ID,
     or anything that would make a second call depend on a first.
     """
+
+    def propose_requirement_extraction(
+        self,
+        context: RequirementExtractionContext,
+        *,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+    ) -> AIProposal[RequirementExtractionProposal]: ...
 
     def propose_job_analysis(
         self,

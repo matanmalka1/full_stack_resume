@@ -20,7 +20,12 @@ from .gaps import derive_fit, derive_gaps, gaps_from_requirements
 from .requirements.concepts import RequirementConceptStore
 from .requirements.confidence import extraction_confidence, extraction_failed
 from .requirements.coverage import cover_requirements
-from .requirements.extraction import extract_requirements, normalize_span, requirement_id
+from .requirements.extraction import (
+    RULE_INTERPRETATION,
+    extract_requirements,
+    normalize_span,
+    requirement_id,
+)
 
 HEBREW = re.compile(r"[\u0590-\u05ff]")
 
@@ -115,13 +120,20 @@ def _identified(
     The id is built on the same scheme as a requirement's, from the immutable
     snapshot and the gap's own wording, so it is stable across re-analysis of
     the same posting and distinct between postings.
+
+    `extraction_version` is stamped with the explicit `RULE_INTERPRETATION`
+    marker rather than left at the bare concept version. A silent, unmarked
+    version here would let a rule-derived gap and an AI-extracted requirement
+    that quote the same wording collide on one requirement id, and an
+    acceptance recorded against one would silently answer for the other
+    (stage-1 plan §5.5).
     """
     return [
         gap.model_copy(
             update={
                 "requirement_id": requirement_id(
                     normalized_hash=normalized_hash,
-                    extraction_version=concepts.extraction_version,
+                    extraction_version=f"{concepts.extraction_version}:{RULE_INTERPRETATION}",
                     identity_span=normalize_span(gap.requirement),
                     ordinal=ordinal,
                 )
@@ -199,6 +211,91 @@ def requirement_profile_scores(
             for requirement in requirements
         )
     return scores
+
+
+def rebase_requirements(
+    deterministic: JobAnalysis,
+    *,
+    requirements: list[Requirement],
+    extraction_version: str,
+    facts: FactStore,
+    extraction_failed: bool,
+) -> JobAnalysis:
+    """Step 7 of the stage-1 pipeline (§3.7): swap in a verified requirement set.
+
+    Called after an AI extraction has passed the source and interpretation
+    gates and been re-covered against canonical facts, and before
+    `merge_classification` runs. `deterministic` is `classify_job`'s own output
+    over the same text - Track, Profile, Emphasis, and its own rule-derived
+    gaps are untouched here, because D2 gives AI extraction authority over
+    *what the posting requires*, not over classification.
+
+    `extraction_failed` is a required, explicit signal - never assumed false
+    because every individual requirement in `requirements` passed its own
+    gate. An empty extraction, or one that leaves most of the posting's
+    requirement-bearing statements neither mapped nor declared unmapped, is
+    exactly the false-green `extraction-failed` exists to catch
+    (`ai_extraction.py::extraction_is_failed`, stage-1 plan §3.3), and it must
+    survive into an AI-produced analysis exactly as it does a deterministic
+    one - not be silently cleared merely because a *different* AI task
+    (classification) also runs.
+
+    D2's boundary-gap condition (stage-1 plan §1.2): `derive_gaps` is not
+    consulted here at all. A verified `requirements` list is authoritative
+    for the AI path, and a rule that fires on wording no longer needs
+    inferring - like the `"saas" in lowered` gap that fired on any mention of
+    the word regardless of what was actually demanded - would only resurrect
+    a gap D2 exists to remove. A rule the AI path cannot yet express is not
+    silently reinstated; it is a modelling gap to close by extending
+    `config/requirements.json`, not by falling back to the legacy heuristic.
+    Boundary facts keep protecting what they actually limit, because
+    `cover_requirements` already refuses to let a boundary fact satisfy a
+    requirement independent of which extractor found it.
+    """
+    boundary_meanings = {
+        fact_id: facts.facts[fact_id].meaning
+        for requirement in requirements
+        for fact_id in requirement.boundary_fact_ids
+        if fact_id in facts.facts
+    }
+    gaps = gaps_from_requirements(requirements, boundary_meanings=boundary_meanings)
+    # Stage-1 plan §3.6's table: `undetermined` blocks - and drives Fit to
+    # UNKNOWN - only for a *mandatory* requirement. "We could not tell" about
+    # a preferred one is not a decision the user must be stopped to make; the
+    # posting did not demand it in the first place.
+    mandatory_undetermined = any(
+        requirement.coverage == "undetermined" and requirement.mandatory
+        for requirement in requirements
+    )
+    fit = derive_fit(
+        gaps, extraction_failed=extraction_failed, coverage_undetermined=mandatory_undetermined
+    )
+    reasons = [
+        *(
+            reason
+            for reason in deterministic.approval_reasons
+            if reason not in {"extraction-failed", "coverage-undetermined"}
+        ),
+        *(["extraction-failed"] if extraction_failed else []),
+        *(["coverage-undetermined"] if mandatory_undetermined else []),
+    ]
+    reasons = list(dict.fromkeys(reasons))
+    return deterministic.model_copy(
+        update={
+            "requirements": requirements,
+            "extraction_version": extraction_version,
+            "gaps": gaps,
+            "fit": fit,
+            "mandatory_requirements": [gap.requirement for gap in gaps if gap.severity == "hard"],
+            "preferred_requirements": [
+                gap.requirement for gap in gaps if gap.severity == "warning"
+            ],
+            "classification_requires_approval": bool(
+                unresolved_reasons(reasons, deterministic.user_override)
+            ),
+            "approval_reasons": reasons,
+        }
+    )
 
 
 def classify_job(
@@ -359,7 +456,17 @@ def classify_job(
         *gaps_from_requirements(requirements, boundary_meanings=boundary_meanings),
         *(gap for gap in rule_gaps if gap.requirement not in covered_text),
     ]
-    fit = derive_fit(gaps, extraction_failed=failed_extraction)
+    # Stage-1 plan §3.6: `undetermined` blocks - and drives Fit to UNKNOWN -
+    # only for a mandatory requirement. The deterministic `cover_requirements`
+    # never itself emits `undetermined` today; this stays consistent with the
+    # AI path's rule in `rebase_requirements` in case that changes.
+    mandatory_undetermined = any(
+        requirement.coverage == "undetermined" and requirement.mandatory
+        for requirement in requirements
+    )
+    fit = derive_fit(
+        gaps, extraction_failed=failed_extraction, coverage_undetermined=mandatory_undetermined
+    )
     candidate_overrides: dict[OverrideKey, str | None] = {
         "track": track_override,
         "profile": profile_override,
@@ -377,6 +484,7 @@ def classify_job(
     )
     reasons = [
         *(["extraction-failed"] if failed_extraction else []),
+        *(["coverage-undetermined"] if mandatory_undetermined else []),
         *(["ambiguous-signals"] if ambiguous else []),
         *(["low-confidence"] if confidence < CONFIDENCE_APPROVAL_THRESHOLD else []),
     ]

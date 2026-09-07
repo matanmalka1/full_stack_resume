@@ -3,7 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ...domain.analysis.approval import ACCEPTED_INCOMPLETE_ANALYSIS, merge_classification
-from ...domain.analysis.classification import classify_job
+from ...domain.analysis.classification import classify_job, rebase_requirements
+from ...domain.analysis.requirements.ai_extraction import (
+    RequirementExtractionRejected,
+    apply_interpretation_corrections,
+    extraction_is_failed,
+    verify_and_cover_extraction,
+)
+from ...domain.analysis.requirements.segmentation import requirement_lines
 from ...domain.contracts.analysis import (
     JobAnalysis,
     OverrideKey,
@@ -28,6 +35,7 @@ from ..commands import (
     SelectionPlanResult,
 )
 from ..errors import (
+    ApplicationError,
     # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     DependencyUnavailable,
@@ -35,12 +43,14 @@ from ..errors import (
     LineageBroken,
     MissingFactRendering,
     PreconditionFailed,
+    ProviderInvalidOutput,
     StateConflict,
     UnknownRecord,
 )
 from ..ports import (
     JobAnalysisContext,
     PreparationRepository,
+    RequirementExtractionContext,
     SelectionPlanContext,
 )
 from .base import ServiceBase
@@ -66,6 +76,12 @@ class PreparedAnalysis:
     track_emphasis_dependencies: dict[str, str]
     normalized_role: str
     evidence: ProviderEvidence | None = None
+    #: `propose_requirement_extraction`'s preserved response (stage-1 plan
+    #: §3.7), when the AI path ran it - separate from `evidence`
+    #: (`propose_job_analysis`'s) because both are preserved as immutable
+    #: artifacts and §18 requires each to have its own Operation output
+    #: reference, not just the one this dataclass used to carry.
+    extraction_evidence: ProviderEvidence | None = None
 
 
 @dataclass(frozen=True)
@@ -198,38 +214,117 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         result = deterministic
         used_provider, used_model = "deterministic", "rules-v1"
         evidence: ProviderEvidence | None = None
+        extraction_evidence: ProviderEvidence | None = None
         if command.provider == "openai":
             if operation_id is None:
                 raise PreconditionFailed(
                     "AI analysis runs as an Operation; there is no synchronous form"
                 )
-            # The provider sees the full deterministic picture as context, but it
-            # answers on the narrower proposal contract; deterministic policy decides
-            # what survives.
-            answered = self.provider.propose_job_analysis(
-                JobAnalysisContext(
+            # Stage-1 plan §3.7 steps 3-7: a verified AI extraction replaces
+            # `deterministic`'s requirements and their projected gaps *before*
+            # the classification proposal is asked for or merged. Extraction
+            # authority (D2) and classification authority (Track/Profile/
+            # Emphasis) are separate AI tasks with separate gates; folding them
+            # into one call would blur exactly the boundary product-spec §12
+            # is built on.
+            extracted_answer = self.provider.propose_requirement_extraction(
+                RequirementExtractionContext(
                     job_text=job_text,
-                    deterministic_classification={
-                        "track": deterministic.track.value,
-                        "profile": deterministic.profile.value,
-                        "emphasis": deterministic.emphasis.value,
-                        "confidence": deterministic.confidence,
-                        "language": deterministic.language,
-                    },
-                    deterministic_gaps=[gap.model_dump(mode="json") for gap in deterministic.gaps],
-                    overrides={
-                        str(key): value for key, value in deterministic.user_override.items()
-                    },
+                    requirement_lines=[
+                        {
+                            "start": line.start,
+                            "end": line.end,
+                            "text": line.text,
+                            "section": line.section,
+                        }
+                        for line in requirement_lines(job_text, knowledge.requirement_concepts)
+                    ],
                 ),
                 model=command.model,
                 reasoning_effort=command.reasoning_effort,
             )
-            evidence = self.preserve(
-                command.application_id, operation_id, "propose_job_analysis", answered.provenance
+            extraction_evidence = self.preserve(
+                command.application_id,
+                operation_id,
+                "propose_requirement_extraction",
+                extracted_answer.provenance,
             )
-            result = merge_classification(deterministic, answered.proposal, profiles)
-            used_provider = answered.provenance.context.provider
-            used_model = answered.provenance.context.model
+            try:
+                verified_requirements, unmapped, understanding = verify_and_cover_extraction(
+                    extracted_answer.proposal,
+                    source_text=job_text,
+                    normalized_hash=snapshot["normalized_hash"],
+                    facts=knowledge.facts,
+                    concepts=knowledge.requirement_concepts,
+                    task_version=extracted_answer.provenance.context.task_contract_version,
+                    prompt_version=extracted_answer.provenance.context.prompt_version,
+                )
+            except RequirementExtractionRejected as exc:
+                # The sanitized response was already preserved and registered
+                # above via `self.preserve` (invariant 15: a refused output
+                # stays inactive immutable evidence rather than being dropped
+                # at the raise site). `.evidence` is set, not just
+                # `provenance=`, so `_preserve_rejected` finds it already
+                # registered and only adds the missing Operation output
+                # reference - calling `self.preserve` a second time on the
+                # same payload would collide on `artifact_versions.path`
+                # UNIQUE, exactly as that function's docstring warns against.
+                failure = ProviderInvalidOutput(str(exc), provenance=extracted_answer.provenance)
+                failure.evidence = extraction_evidence
+                raise failure from exc
+            extraction_namespace = (
+                f"ai:{extracted_answer.provenance.context.task_contract_version}:"
+                f"{extracted_answer.provenance.context.prompt_version}"
+            )
+            deterministic = rebase_requirements(
+                deterministic,
+                requirements=verified_requirements,
+                extraction_version=extraction_namespace,
+                facts=knowledge.facts,
+                extraction_failed=extraction_is_failed(
+                    job_text, verified_requirements, unmapped, knowledge.requirement_concepts
+                ),
+            ).model_copy(
+                update={
+                    "analysis_version": "1.1",
+                    "unmapped_statements": unmapped,
+                    "understanding": understanding,
+                }
+            )
+            result = deterministic
+            # The provider sees the full deterministic picture as context, but it
+            # answers on the narrower proposal contract; deterministic policy decides
+            # what survives.
+            try:
+                answered = self.provider.propose_job_analysis(
+                    JobAnalysisContext(
+                        job_text=job_text,
+                        deterministic_classification={
+                            "track": deterministic.track.value,
+                            "profile": deterministic.profile.value,
+                            "emphasis": deterministic.emphasis.value,
+                            "confidence": deterministic.confidence,
+                            "language": deterministic.language,
+                        },
+                        deterministic_gaps=[gap.model_dump(mode="json") for gap in deterministic.gaps],
+                        overrides={
+                            str(key): value for key, value in deterministic.user_override.items()
+                        },
+                    ),
+                    model=command.model,
+                    reasoning_effort=command.reasoning_effort,
+                )
+                evidence = self.preserve(
+                    command.application_id, operation_id, "propose_job_analysis", answered.provenance
+                )
+                result = merge_classification(deterministic, answered.proposal, profiles)
+                used_provider = answered.provenance.context.provider
+                used_model = answered.provenance.context.model
+            except ApplicationError as exc:
+                exc.completed_evidence = tuple(
+                    item for item in (extraction_evidence, evidence) if item is not None
+                )
+                raise
         elif command.provider != "deterministic":
             raise DependencyUnavailable(f"unsupported provider: {command.provider}")
 
@@ -288,6 +383,7 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             },
             normalized_role=selected_profile.normalized_role,
             evidence=evidence,
+            extraction_evidence=extraction_evidence,
         )
 
     def activate(
@@ -660,9 +756,31 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         if command.accept_incomplete_analysis:
             submitted["analysis"] = ACCEPTED_INCOMPLETE_ANALYSIS
         merged = {**analysis.user_override, **submitted}
-        changes_meaning = merged != dict(analysis.user_override)
+        has_interpretation_corrections = bool(command.requirement_interpretations)
+        changes_meaning = merged != dict(analysis.user_override) or has_interpretation_corrections
         has_fact_overlay = bool(command.pinned_fact_ids or command.excluded_fact_ids)
         has_overlay = bool(has_fact_overlay or command.accepted_requirement_ids)
+
+        if has_interpretation_corrections:
+            # Stage-1 plan §3.5: a correction re-covers the named requirements
+            # under their new interpretation and rebuilds gaps/Fit from the
+            # result - it does not re-run classification or re-extract from
+            # the provider, so it goes through its own path rather than
+            # `self.analyze()`, which would do both.
+            if has_fact_overlay:
+                raise PreconditionFailed(
+                    "a classification decision creates a new analysis with its own initial "
+                    "SelectionPlan; apply the fact overlay to that analysis in a second command"
+                )
+            result = self._correct_interpretations(command, analysis, record, merged)
+            return AnalysisDecisionsResult(
+                application_id=command.application_id,
+                job_analysis_id=result.analysis_id,
+                selection_plan_id=result.selection_plan_id,
+                created_analysis=True,
+                analysis=result.analysis,
+                plan=self.repo.selection_plan(result.selection_plan_id),
+            )
 
         if changes_meaning and has_fact_overlay:
             # A classification decision produces a *new* analysis whose initial
@@ -741,4 +859,113 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             created_analysis=False,
             analysis=analysis,
             plan=created.plan,
+        )
+
+    def _correct_interpretations(
+        self,
+        command: ApplyAnalysisDecisionsCommand,
+        analysis: JobAnalysis,
+        record: dict,
+        merged_overrides: dict[str, str],
+    ) -> AnalysisResult:
+        """Stage-1 plan §3.5: re-cover the named requirements, not re-classify.
+
+        Track, Profile, and Emphasis are untouched - a correction is a claim
+        about what one requirement means, not a new classification. Every
+        corrected interpretation passes the same interpretation gate a
+        provider's original claim did, against the same signed snapshot text,
+        so a correction cannot introduce a reading the gate would have refused
+        from a provider.
+        """
+        snapshot = self.repo.get_snapshot(record["job_snapshot_id"])
+        try:
+            job_text = self.snapshot_payloads.read_snapshot(
+                snapshot["payload_path"],
+                snapshot["source_hash"],
+            )
+        except (OSError, ValueError) as exc:
+            raise InfrastructureFailure(f"could not read job snapshot payload: {exc}") from exc
+        knowledge = self.load_knowledge()
+
+        corrected_requirements, decisions = apply_interpretation_corrections(
+            list(analysis.requirements),
+            list(command.requirement_interpretations),
+            source_text=job_text,
+            normalized_hash=snapshot["normalized_hash"],
+            facts=knowledge.facts,
+            concepts=knowledge.requirement_concepts,
+            actor=ACCEPTANCE_ACTOR,
+            decided_at=utc_now(),
+            prior_analysis_id=command.job_analysis_id,
+        )
+        rebased = rebase_requirements(
+            analysis,
+            requirements=corrected_requirements,
+            extraction_version=analysis.extraction_version,
+            facts=knowledge.facts,
+            # A correction changes one requirement's interpretation, not
+            # whether the extraction as a whole read the posting - that
+            # signal is carried forward from the analysis being corrected
+            # rather than re-derived, since only a fresh extraction run can
+            # actually change it.
+            extraction_failed="extraction-failed" in analysis.approval_reasons,
+        )
+        result = rebased.model_copy(
+            update={
+                "analysis_version": "1.1",
+                "user_override": merged_overrides,
+                "interpretation_decisions": [
+                    *(analysis.interpretation_decisions or []),
+                    *decisions,
+                ],
+            }
+        )
+
+        selected_profile = self._consistent_profile(result, knowledge.profiles)
+        try:
+            _, plan_manifest = build_selection(
+                analysis=result,
+                profile=selected_profile,
+                policy=knowledge.policies.get(result.emphasis),
+                policy_store_version=knowledge.policies.version,
+                facts=knowledge.facts,
+                line_groups=(
+                    knowledge.presentations.line_groups(selected_profile, result.emphasis)
+                    if knowledge.presentations is not None
+                    else None
+                ),
+            )
+        except DomainMissingFactRendering as exc:
+            raise MissingFactRendering(exc.fact_id, exc.language) from exc
+        except ValueError as exc:
+            raise PreconditionFailed(f"selection plan could not be built: {exc}") from exc
+
+        prepared = PreparedAnalysis(
+            result=result,
+            plan_manifest=plan_manifest,
+            # Named truthfully rather than "deterministic": this record was
+            # produced by a user's interpretation correction, not a fresh
+            # deterministic classification run, and the two should not read
+            # identically in history.
+            provider="correction",
+            model="interpretation-correction-v1",
+            candidate_context_version=knowledge.candidate.context_version,
+            candidate_context_hash=knowledge.candidate.version_hash,
+            profile_version=knowledge.profiles.version,
+            selection_policy_version=knowledge.policies.version,
+            track_emphasis_dependencies={
+                "track": result.track.value,
+                "emphasis": result.emphasis.value,
+            },
+            normalized_role=selected_profile.normalized_role,
+        )
+        return self.activate(
+            AnalyzeCommand(
+                application_id=command.application_id,
+                job_snapshot_id=record["job_snapshot_id"],
+                accepted_requirement_ids=list(command.accepted_requirement_ids),
+                acceptance_reason=command.acceptance_reason,
+                expected_selection_plan_id=command.expected_selection_plan_id,
+            ),
+            prepared,
         )

@@ -3,6 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from cv_engine.application.commands import ApproveDraftCommand, ValidateDraftCommand
+from cv_engine.domain.analysis.requirements.concepts import RequirementConceptStore
+from cv_engine.domain.analysis.requirements.segmentation import requirement_lines
+from cv_engine.domain.contracts.analysis import UnmappedStatement
+from cv_engine.domain.contracts.providers import RequirementExtractionProposal
 from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.runtime.composition import Services
@@ -47,6 +51,41 @@ PAYME_TECH_SALES_JOB = (
     "customers, and maintain Sales progress and follow-up tasks in our CRM system. "
     "Prefer inside Sales experience in a SaaS or tech-related industry."
 )
+
+
+def trivial_requirement_extraction(
+    job_text: str, concepts: RequirementConceptStore
+) -> RequirementExtractionProposal:
+    """A `propose_requirement_extraction` answer that passes both gates and never
+    reports a failed extraction, for tests whose subject is something else -
+    classification merge behaviour, retry policy, provenance - and that only
+    need the AI analysis pipeline (stage-1 plan §3.7) to get past the
+    extraction step without asserting anything about what it extracted.
+
+    Every requirement-bearing statement in `job_text` is declared as an
+    `unmapped_statements` entry rather than left uncovered: per §3.3's
+    completeness rule an unmapped-but-declared statement counts as handled
+    (capping completeness at `partial`, never failing it), so
+    `extraction_is_failed` is `False` and `fit`/`approval_reasons` compute as
+    if extraction were clean. No requirement is proposed, so this never
+    asserts a false `matched` either. It is a stub for "extraction succeeded
+    without reading anything of substance" - not a stand-in for a real,
+    content-bearing extraction, which a test asserting on requirements or
+    coverage must still script itself.
+    """
+    return RequirementExtractionProposal(
+        requirements=[],
+        unmapped_statements=[
+            UnmappedStatement(
+                start=line.start,
+                end=line.end,
+                text=line.text,
+                source_role="other",
+                reason="test fixture: not extracted, declared to keep completeness honest",
+            )
+            for line in requirement_lines(job_text, concepts)
+        ],
+    )
 
 
 def validate_active_draft(services: Services, application_id: str):

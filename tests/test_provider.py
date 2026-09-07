@@ -5,7 +5,7 @@ is asserted is production behavior at the seam a live call would cross. No test
 in this file reaches the network, and none of them needs `OPENAI_API_KEY`.
 
 Covers test-and-acceptance-plan §6 at the transport level: strict schema
-generation for all five tasks, per-task Proposal parsing, refusal and
+generation for every contracted task, per-task Proposal parsing, refusal and
 invalid-output handling, raw sanitization, and exact provider/model/usage/
 latency/response metadata. The application-level items - semantic support, no
 silent fallback, artifact registration, retries, injection - are in
@@ -33,8 +33,10 @@ from cv_engine.application.ports import (
     JobAnalysisContext,
     RegenerateClaimContext,
     RegenerateSectionContext,
+    RequirementExtractionContext,
     SelectionPlanContext,
 )
+from cv_engine.domain.contracts.providers import RequirementExtractionProposal
 from cv_engine.domain.models import (
     ClaimProposal,
     DraftProposal,
@@ -46,6 +48,10 @@ from cv_engine.domain.models import (
 from cv_engine.infrastructure.providers import TASK_OUTPUT_MODELS
 from cv_engine.util import canonical_json, sha256_text
 
+EXTRACTION_CONTEXT = RequirementExtractionContext(
+    job_text="...",
+    requirement_lines=[{"start": 0, "end": 3, "text": "...", "section": "other"}],
+)
 ANALYSIS_CONTEXT = JobAnalysisContext(
     job_text="...",
     deterministic_classification={"track": "sales"},
@@ -77,6 +83,7 @@ CLAIM_CONTEXT = RegenerateClaimContext(
     allowed_facts=[{"fact_id": "a.b"}],
 )
 
+EXTRACTION = RequirementExtractionProposal(requirements=[], unmapped_statements=[])
 CLASSIFICATION = JobClassificationProposal(
     track="sales",
     profile="account-manager",
@@ -99,9 +106,11 @@ SECTION = SectionProposal(
 CLAIM = ClaimProposal(claim_id="c1", text="t", fact_ids=["a.b"], rationale="r")
 
 #: Every contracted task, its port method, its context, and its Proposal.
-#: Read as a table so a sixth task cannot be added without appearing here - the
-#: five-task coverage §6 asks for is then structural rather than remembered.
+#: Read as a table so a new task cannot be added without appearing here -
+#: coverage of every task §6 asks for is then structural rather than
+#: remembered.
 TASKS = [
+    ("propose_requirement_extraction", EXTRACTION_CONTEXT, EXTRACTION),
     ("propose_job_analysis", ANALYSIS_CONTEXT, CLASSIFICATION),
     ("propose_selection_plan", SELECTION_CONTEXT, SELECTION),
     ("draft_resume", DRAFT_CONTEXT, DRAFT),

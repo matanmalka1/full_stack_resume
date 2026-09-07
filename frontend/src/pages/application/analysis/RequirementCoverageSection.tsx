@@ -14,12 +14,18 @@ const coverageBorderClasses: Record<RequirementCoverage, string> = {
   matched: "border-cv-success/50",
   partial: "border-cv-warning/50",
   unsupported: "border-cv-blocker/50",
+  undetermined: "border-cv-text-muted/50",
 };
 
+/* `undetermined` sits between `partial` and `matched`: it is not evidence of a
+   shortfall the way `unsupported`/`partial` are, but it is also not a settled
+   `matched`, so a reader still sees it before the requirements that are actually
+   covered. */
 const coveragePriority: Record<RequirementCoverage, number> = {
   unsupported: 0,
   partial: 1,
-  matched: 2,
+  undetermined: 2,
+  matched: 3,
 };
 
 const orderedRequirements = (requirements: Requirement[]): Requirement[] =>
@@ -38,7 +44,7 @@ export const RequirementCoverageSummary = ({
 }) => {
   const counts = requirements.reduce(
     (result, requirement) => ({ ...result, [requirement.coverage]: result[requirement.coverage] + 1 }),
-    { matched: 0, partial: 0, unsupported: 0 } satisfies Record<RequirementCoverage, number>,
+    { matched: 0, partial: 0, unsupported: 0, undetermined: 0 } satisfies Record<RequirementCoverage, number>,
   );
   const uncoveredMandatory = requirements.filter(
     (requirement) => requirement.mandatory && requirement.coverage !== "matched",
@@ -50,6 +56,7 @@ export const RequirementCoverageSummary = ({
         <StatusBadge tone="success">מכוסות: {counts.matched}</StatusBadge>
         <StatusBadge tone="warning">חלקיות: {counts.partial}</StatusBadge>
         <StatusBadge tone="blocker">לא מכוסות: {counts.unsupported}</StatusBadge>
+        {counts.undetermined === 0 ? null : <StatusBadge tone="neutral">לא הוכרעו: {counts.undetermined}</StatusBadge>}
         {unreadableRequirementCount === 0 ? null : (
           <StatusBadge tone="warning">לא ניתנות להצגה: {unreadableRequirementCount}</StatusBadge>
         )}

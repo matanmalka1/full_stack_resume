@@ -146,17 +146,21 @@ export const gapSeverityLabels: Record<"hard" | "warning", string> = {
 /* The coverage a Requirement carries independently of its gap projection: `matched` and
    `partial` have no gap at all, so this is the only place either is named for the
    reader. Ordered as a scale, like Fit's tones above - `matched` reads as the safe end
-   and `unsupported` as the blocked one, with `partial` between them. */
+   and `unsupported` as the blocked one, with `partial` between them. `undetermined` is
+   not a point on that scale - it means the engine could not decide, not that the facts
+   fall short, so it is never worded or toned like `unsupported` (stage-1 plan §3.6). */
 export const coverageLabels: Record<RequirementCoverage, string> = {
   matched: "מכוסה",
   partial: "מכוסה חלקית",
   unsupported: "לא מכוסה",
+  undetermined: "לא הוכרע",
 };
 
 export const coverageTones: Record<RequirementCoverage, StatusTone> = {
   matched: "success",
   partial: "warning",
   unsupported: "blocker",
+  undetermined: "neutral",
 };
 
 /* One derivation, used by every select on the review form: the option list is the map's

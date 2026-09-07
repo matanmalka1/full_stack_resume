@@ -1186,6 +1186,14 @@
               }
             ]
           },
+          "requirement_interpretations": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/InterpretationOverride"
+            },
+            "title": "Requirement Interpretations",
+            "type": "array"
+          },
           "track_override": {
             "anyOf": [
               {
@@ -3534,6 +3542,47 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "InterpretationOverride": {
+        "additionalProperties": false,
+        "description": "One user-submitted correction to a requirement's interpretation (§3.5).\n\nSubmitted through `apply_analysis_decisions` like any other classification\ndecision. `prior_requirement_id` names the requirement, on the analysis\nbeing decided on, whose interpretation the user is correcting - not a\nrequirement id on some other analysis, since identity is scoped to one\nanalysis's snapshot and extractor namespace.",
+        "properties": {
+          "demanded": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Demanded"
+          },
+          "interpretation": {
+            "$ref": "#/components/schemas/RequirementInterpretation"
+          },
+          "prior_requirement_id": {
+            "title": "Prior Requirement Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "prior_requirement_id",
+          "interpretation"
+        ],
+        "title": "InterpretationOverride",
+        "type": "object"
+      },
       "JobAnalysisResponse": {
         "additionalProperties": false,
         "properties": {
@@ -4516,6 +4565,127 @@
           "selection_plan_id"
         ],
         "title": "ReplaceWorkingDraftRequest",
+        "type": "object"
+      },
+      "RequirementAttestation": {
+        "additionalProperties": false,
+        "description": "The source gate's proof: offsets into the signed snapshot text as read\nfrom the payload store, and the quote they are supposed to name.\n\nA gate failure is not represented here - it is a rejected proposal, never\na partially-populated attestation. When this is present, `quote` was\nalready verified to equal `text[start:end]` in the exact snapshot string.",
+        "properties": {
+          "end": {
+            "title": "End",
+            "type": "integer"
+          },
+          "quote": {
+            "title": "Quote",
+            "type": "string"
+          },
+          "start": {
+            "title": "Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "quote",
+          "start",
+          "end"
+        ],
+        "title": "RequirementAttestation",
+        "type": "object"
+      },
+      "RequirementInterpretation": {
+        "additionalProperties": false,
+        "description": "A provider's declared reading of one requirement. All-or-nothing: a\n`Requirement` either carries a complete interpretation or none at all -\nsee `interpretation_of()` in `requirements/compat.py` for why a legacy\nrecord's absence of these fields is never filled in with a default.",
+        "properties": {
+          "composition": {
+            "enum": [
+              "single",
+              "any-of",
+              "all-of"
+            ],
+            "title": "Composition",
+            "type": "string"
+          },
+          "context_quote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Quote"
+          },
+          "members": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RequirementMember"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "negation": {
+            "title": "Negation",
+            "type": "boolean"
+          },
+          "obligation": {
+            "enum": [
+              "mandatory",
+              "preferred",
+              "unspecified"
+            ],
+            "title": "Obligation",
+            "type": "string"
+          },
+          "source_role": {
+            "enum": [
+              "requirement",
+              "responsibility",
+              "company-description",
+              "benefit",
+              "other"
+            ],
+            "title": "Source Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_role",
+          "obligation",
+          "composition",
+          "negation"
+        ],
+        "title": "RequirementInterpretation",
+        "type": "object"
+      },
+      "RequirementMember": {
+        "additionalProperties": false,
+        "description": "One member of an `any-of`/`all-of` requirement.\n\n`label` is display text a provider proposes; it is never used to decide\ncoverage. `attestation`, when present, is what a member is actually\nmapped against - the same verified-quote mechanism the requirement itself\nuses (stage-1 plan §3.5a addendum) - because a bare label is exactly as\nunverifiable as a requirement's own text would be without a source gate.\nA member with no attestation, or one that fails verification, cannot be\nmapped to a concept and stays `undetermined`.",
+        "properties": {
+          "attestation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RequirementAttestation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "member_id": {
+            "title": "Member Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "member_id",
+          "label"
+        ],
+        "title": "RequirementMember",
         "type": "object"
       },
       "SelectionCandidate": {

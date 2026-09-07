@@ -6,9 +6,15 @@ import re
 from dataclasses import dataclass
 
 from ....util import canonical_json, sha256_text
-from ...contracts.analysis import RequirementKind
+from ...contracts.analysis import RequirementInterpretation, RequirementKind
 from .concepts import RequirementConcept, RequirementConceptStore
 from .segmentation import _segments
+
+#: The interpretation stamped on every rule-derived and concept-derived
+#: requirement's identity. Explicit rather than `None`: a `None` interpretation
+#: key would let a rule-derived gap and an AI-extracted requirement collide on
+#: the same wording and inherit each other's acceptances (stage-1 plan §5.5).
+RULE_INTERPRETATION = "rule-interpretation-v1"
 
 _WHITESPACE = re.compile(r"\s+")
 _SENTENCE = re.compile(r"[.;\n]")
@@ -161,12 +167,44 @@ def extract_requirements(
     return sorted(found, key=lambda item: (item.concept, item.ordinal))
 
 
+def interpretation_identity_key(interpretation: RequirementInterpretation) -> dict[str, object]:
+    """The interpretation summary `requirement_id` folds into identity (stage-1 plan §3.4).
+
+    Two different interpretations of the same quoted text are two different
+    requirements: one may read as `mandatory`, the other as `preferred`; one as
+    `single`, another as `any-of`. Giving them the same id would let an
+    acceptance recorded against one silently answer for the other.
+
+    A member's identity is its own *attested, normalized quote*, not its
+    `member_id` - `member_id` is a provider-chosen label with no verification
+    behind it, and two proposals could use the same label for differently
+    quoted members or different labels for the same one. An unattested member
+    (which coverage already treats as unmappable and `undetermined`) is keyed
+    on its bare `label` only as a last resort, so it still participates in
+    identity rather than being silently interchangeable with a differently
+    labelled unattested member.
+    """
+    return {
+        "source_role": interpretation.source_role,
+        "obligation": interpretation.obligation,
+        "composition": interpretation.composition,
+        "members": sorted(
+            normalize_span(member.attestation.quote) if member.attestation else member.label
+            for member in interpretation.members
+        ),
+        "negation": interpretation.negation,
+    }
+
+
 def requirement_id(
     *,
     normalized_hash: str,
     extraction_version: str,
     identity_span: str,
     ordinal: int,
+    interpretation: RequirementInterpretation | None = None,
+    kind: str | None = None,
+    demanded: str | None = None,
 ) -> str:
     """Identity from the immutable analysis input, not a global taxonomy.
 
@@ -174,14 +212,28 @@ def requirement_id(
     yields the same IDs and two different postings never share one, and on the
     extractor version so a semantics change does not silently inherit an
     acceptance recorded against the old meaning.
+
+    `interpretation`, `kind`, and `demanded` are the identity keys stage-1
+    plan §3.4 adds for a requirement whose meaning is a judgement rather than
+    fixed by the concept vocabulary: omitted for the deterministic and legacy
+    paths, where a concept's `kind` and a match's `demanded` value are already
+    folded into `identity_span`/`extraction_version` by construction, and
+    required in substance - though not by this signature - for every
+    AI-extracted requirement. `kind` and `demanded` matter on their own:
+    reading the same quote as a `threshold` of "5 years" versus a `presence`
+    requirement, or as different demanded values, are different judgements
+    about what the posting asks for, and must not collide on one id.
     """
-    return sha256_text(
-        canonical_json(
-            {
-                "snapshot": normalized_hash,
-                "extractor": extraction_version,
-                "span": identity_span,
-                "ordinal": ordinal,
-            }
-        )
-    )[:16]
+    payload: dict[str, object] = {
+        "snapshot": normalized_hash,
+        "extractor": extraction_version,
+        "span": identity_span,
+        "ordinal": ordinal,
+    }
+    if interpretation is not None:
+        payload["interpretation"] = interpretation_identity_key(interpretation)
+    if kind is not None:
+        payload["kind"] = kind
+    if demanded is not None:
+        payload["demanded"] = demanded
+    return sha256_text(canonical_json(payload))[:16]

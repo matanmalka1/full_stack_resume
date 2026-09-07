@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from .analysis import RequirementAttestation, RequirementInterpretation, UnmappedStatement
 from .base import StrictModel
 
 
@@ -20,6 +21,38 @@ class ProposedClaim(StrictModel):
     claim_id: str | None = None
     text: str
     fact_ids: list[str] = []
+
+
+class ProposedRequirement(StrictModel):
+    """`propose_requirement_extraction`: one requirement, as the provider read it.
+
+    Deliberately separate from `JobClassificationProposal` (stage-1 plan
+    §2.3): mixing extraction into the classification task in one call would
+    collapse the separation product-spec §12 is built on - a provider proposes
+    classification and a provider proposes what the posting requires are two
+    different judgements with two different gates, and merging the call would
+    make that invisible at the contract boundary.
+
+    `attestation` and `interpretation` are unverified provider claims until
+    the source and interpretation gates run over them; nothing here is trusted
+    before that. `topic_tags` is a hint to fact-boundary association, not a
+    grant: a foreign tag disqualifies the proposal rather than being trusted
+    as scoping (stage-1 plan §3.6).
+    """
+
+    attestation: RequirementAttestation
+    interpretation: RequirementInterpretation
+    kind: Literal["threshold", "compositional", "presence"]
+    label: str
+    demanded: str | None = None
+    topic_tags: list[str] = []
+
+
+class RequirementExtractionProposal(StrictModel):
+    """`propose_requirement_extraction`: every requirement, and what was left over."""
+
+    requirements: list[ProposedRequirement]
+    unmapped_statements: list[UnmappedStatement] = []
 
 
 class SelectionProposal(StrictModel):

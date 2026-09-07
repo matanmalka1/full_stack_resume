@@ -675,11 +675,26 @@ def test_only_accepting_an_incomplete_analysis_resolves_extraction_failure() -> 
     assert entry.review_code == ANALYSIS_INCOMPLETE
     # The blanket bypass Stage 3 removed must not come back through this door.
     assert not entry.overrides & {"track", "profile", "emphasis", "language", "fit"}
-    assert all(
-        "analysis" not in other.overrides
-        for name, other in APPROVAL_REASONS.items()
-        if name != "extraction-failed"
-    )
+
+
+def test_no_reason_reopens_the_blanket_bypass_through_analysis() -> None:
+    """§3.6 added `coverage-undetermined` to the same override as `extraction-failed`
+    on purpose - both are "the engine could not tell", answered only by the same
+    explicit decision to proceed with an incomplete analysis. That is a second
+    reason sharing the override deliberately, not the exclusivity
+    `test_only_accepting_an_incomplete_analysis_resolves_extraction_failure` used
+    to assert when `extraction-failed` was the only one.
+
+    What must still hold, for every reason that names `analysis`: none of the
+    four classification overrides sits beside it. A reason whose `overrides` mix
+    `analysis` with `track`/`profile`/`emphasis`/`language`/`fit` would let one
+    classification decision silently resolve an analysis-completeness problem it
+    never actually answered - the blanket bypass Stage 3 removed.
+    """
+    classification_overrides = {"track", "profile", "emphasis", "language", "fit"}
+    for name, entry in APPROVAL_REASONS.items():
+        if "analysis" in entry.overrides:
+            assert not entry.overrides & classification_overrides, name
 
 
 def test_every_approval_reason_the_engine_records_is_registered() -> None:
@@ -1406,7 +1421,7 @@ def test_only_canonical_facts_are_reported_as_supporting_evidence(fact_store) ->
     So the fact is moved through pending, confirmed and canonical and the
     question is asked again at each.
     """
-    from cv_engine.domain.analysis.requirements.coverage import _candidate_fact_ids
+    from cv_engine.domain.analysis.requirements.coverage import candidate_fact_ids
     from cv_engine.domain.facts import FactStore
 
     concept = RequirementConceptStore.from_payload(
@@ -1446,7 +1461,7 @@ def test_only_canonical_facts_are_reported_as_supporting_evidence(fact_store) ->
             },
             source_versions={"sales.md": "v1"},
         )
-        found = _candidate_fact_ids(concept, store)
+        found = candidate_fact_ids(concept, store)
         if status is FactStatus.CANONICAL:
             assert found == ["sales.tool.priority", "sales.tool.widget"], status
         else:
@@ -1593,3 +1608,24 @@ def test_coverage_is_decided_before_the_profile_is(
         )
         assert forced.profile.value == override
         assert forced.requirements == default.requirements, override
+
+
+def test_rebased_coverage_removes_only_the_resolved_review_reason(
+    fact_store, profile_store, requirement_concepts
+):
+    """Recomputing coverage must remove its old blocker, not unrelated decisions."""
+    from cv_engine.domain.analysis.classification import rebase_requirements
+
+    analysis = classify_job(
+        "Account Manager", facts=fact_store, profiles=profile_store,
+        concepts=requirement_concepts, normalized_hash="review-rebase",
+    )
+    analysis = analysis.model_copy(update={
+        "approval_reasons": ["coverage-undetermined", "extraction-failed"],
+    })
+    updated = rebase_requirements(
+        analysis, requirements=[], extraction_version="ai:test",
+        facts=fact_store, extraction_failed=True,
+    )
+    assert "coverage-undetermined" not in updated.approval_reasons
+    assert "extraction-failed" in updated.approval_reasons

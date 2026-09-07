@@ -23,7 +23,128 @@ class FitLevel(StrEnum):
 
 
 RequirementKind = Literal["threshold", "compositional", "presence"]
-Coverage = Literal["matched", "partial", "unsupported"]
+Coverage = Literal["matched", "partial", "unsupported", "undetermined"]
+
+#: What kind of statement a requirement's source text actually is. A
+#: `mandatory` obligation is refused when this is not `requirement`, unless a
+#: mandatory marker is quoted in `context_quote` - see `interpretation.py`.
+SourceRole = Literal["requirement", "responsibility", "company-description", "benefit", "other"]
+Obligation = Literal["mandatory", "preferred", "unspecified"]
+#: `any-of` is one requirement satisfied by any one member; `all-of` checks
+#: each member independently, the way `ConceptComponent` already does.
+Composition = Literal["single", "any-of", "all-of"]
+
+
+class RequirementAttestation(StrictModel):
+    """The source gate's proof: offsets into the signed snapshot text as read
+    from the payload store, and the quote they are supposed to name.
+
+    A gate failure is not represented here - it is a rejected proposal, never
+    a partially-populated attestation. When this is present, `quote` was
+    already verified to equal `text[start:end]` in the exact snapshot string.
+    """
+
+    quote: str
+    start: int
+    end: int
+
+
+class RequirementMember(StrictModel):
+    """One member of an `any-of`/`all-of` requirement.
+
+    `label` is display text a provider proposes; it is never used to decide
+    coverage. `attestation`, when present, is what a member is actually
+    mapped against - the same verified-quote mechanism the requirement itself
+    uses (stage-1 plan §3.5a addendum) - because a bare label is exactly as
+    unverifiable as a requirement's own text would be without a source gate.
+    A member with no attestation, or one that fails verification, cannot be
+    mapped to a concept and stays `undetermined`.
+    """
+
+    member_id: str
+    label: str
+    attestation: RequirementAttestation | None = None
+
+
+class RequirementInterpretation(StrictModel):
+    """A provider's declared reading of one requirement. All-or-nothing: a
+    `Requirement` either carries a complete interpretation or none at all -
+    see `interpretation_of()` in `requirements/compat.py` for why a legacy
+    record's absence of these fields is never filled in with a default.
+    """
+
+    source_role: SourceRole
+    obligation: Obligation
+    composition: Composition
+    members: list[RequirementMember] = []
+    negation: bool
+    #: The quoted heading or surrounding sentence the interpretation leans on,
+    #: when it leans on one. Verified by the source gate like any other quote.
+    context_quote: str | None = None
+
+
+class UnmappedStatement(StrictModel):
+    """A requirement-bearing statement no proposed requirement covers.
+
+    Explicit rather than inferred from the gap between total statements and
+    covered ones: an extractor that lists why it left something unmapped can
+    be graded on the reason, and a false "company-description" excuse is
+    something a reviewer can actually see and dispute.
+    """
+
+    start: int
+    end: int
+    text: str
+    source_role: SourceRole
+    reason: str
+
+
+class UnderstandingSources(StrictModel):
+    """Where credit for reading a requirement-bearing statement came from.
+
+    Three counts, not one `understood_elsewhere: bool`: a bool answers
+    "was anything understood" but not "by what", and attributing a failure
+    needs to know which of concepts, legacy rules, or an AI proposal did the
+    reading - or that none of them did.
+    """
+
+    by_concepts: int
+    by_rules: int
+    by_ai: int
+
+
+class InterpretationOverride(StrictModel):
+    """One user-submitted correction to a requirement's interpretation (§3.5).
+
+    Submitted through `apply_analysis_decisions` like any other classification
+    decision. `prior_requirement_id` names the requirement, on the analysis
+    being decided on, whose interpretation the user is correcting - not a
+    requirement id on some other analysis, since identity is scoped to one
+    analysis's snapshot and extractor namespace.
+    """
+
+    prior_requirement_id: str
+    interpretation: RequirementInterpretation
+    #: Required to re-derive coverage when the corrected requirement is a
+    #: `threshold` concept - the demanded value is not stored on `Requirement`
+    #: itself, only computed at extraction time, so a correction that changes
+    #: a threshold's interpretation must resupply it explicitly or coverage
+    #: cannot be recomputed at all.
+    demanded: str | None = None
+    reason: str | None = None
+
+
+class InterpretationDecision(StrictModel):
+    """One correction recorded when an analysis revision changes what a prior
+    requirement's interpretation was decided to mean (§3.5 of the stage-1 plan).
+    """
+
+    prior_requirement_id: str
+    prior_analysis_id: str
+    interpretation: RequirementInterpretation
+    actor: str
+    decided_at: str
+    reason: str | None = None
 
 
 class MissingComponent(StrictModel):
@@ -64,6 +185,16 @@ class Requirement(StrictModel):
     supporting_fact_ids: list[str] = []
     boundary_fact_ids: list[str] = []
     missing_components: list[MissingComponent] = []
+    #: None = this record was written before the interpretation gate existed.
+    #: Not "single, not negated" - that would be inventing a value the record
+    #: never carried. Read through `interpretation_of()`, never directly.
+    interpretation: RequirementInterpretation | None = None
+    #: None = this record carries no attestation; do not infer which
+    #: extractor produced it from that absence.
+    attestation: RequirementAttestation | None = None
+    #: None = this record predates the extractor namespace introduced with
+    #: the interpretation gate.
+    extractor: str | None = None
 
 
 class Gap(StrictModel):
@@ -101,6 +232,9 @@ class JobClassificationProposal(StrictModel):
 
 
 class JobAnalysis(StrictModel):
+    #: "1.1" carries `interpretation`/`attestation`/`understanding`/
+    #: `unmapped_statements`; "1.0" and unset predate them and read as `None`
+    #: through the explicit version adapter, never as an invented default.
     analysis_version: str = "1.0"
     track: Track
     profile: ProfileName
@@ -119,6 +253,13 @@ class JobAnalysis(StrictModel):
     #: Which extractor produced `requirements`. "0" marks a legacy analysis
     #: whose stored `gaps` are authoritative and are never re-derived.
     extraction_version: str = "0"
+    #: None = this analysis never asked the completeness question (predates
+    #: the interpretation gate). [] = it asked, and found no unmapped
+    #: requirement-bearing statement. The distinction is deliberate: an empty
+    #: list is a finding, not a missing question.
+    unmapped_statements: list[UnmappedStatement] | None = None
+    understanding: UnderstandingSources | None = None
+    interpretation_decisions: list[InterpretationDecision] | None = None
     mandatory_requirements: list[str]
     preferred_requirements: list[str]
     keywords: list[str]

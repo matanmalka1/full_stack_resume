@@ -18,7 +18,7 @@ import json
 import pytest
 from fake_provider import FakeOpenAI, HTTPStatus, Timeout, envelope, refusal_envelope
 from foreground import foreground_executor
-from helpers import ACCOUNT_MANAGER_JOB
+from helpers import ACCOUNT_MANAGER_JOB, trivial_requirement_extraction
 
 from cv_engine.application.commands import (
     AnalyzeCommand,
@@ -35,6 +35,12 @@ from cv_engine.application.operations import OperationFailureCode
 from cv_engine.application.services.proposals import allowed_fact_pool
 from cv_engine.application.settings import UpdateSettings
 from cv_engine.domain.analysis.classification import classify_job
+from cv_engine.domain.contracts.analysis import (
+    RequirementAttestation,
+    RequirementInterpretation,
+    RequirementMember,
+)
+from cv_engine.domain.contracts.providers import ProposedRequirement, RequirementExtractionProposal
 from cv_engine.domain.models import (
     ClaimProposal,
     DraftProposal,
@@ -129,7 +135,29 @@ def _provider_artifacts(services, application_id: str) -> list[dict]:
     ]
 
 
-def _analysis_operation(services, ingested, *, model: str = "gpt-5.6-terra"):
+def _analysis_operation(
+    services,
+    ingested,
+    *,
+    model: str = "gpt-5.6-terra",
+    fake_openai: FakeOpenAI | None = None,
+    job_text: str = ACCOUNT_MANAGER_JOB,
+):
+    """Submit one AI analysis Operation.
+
+    Stage-1 plan §3.7 makes `propose_requirement_extraction` the first AI call
+    every AI-mode `analyze` Operation makes, ahead of `propose_job_analysis`.
+    A caller here is testing something downstream of extraction - the
+    classification merge, retry policy, provenance, cancellation - and does
+    not want to assert anything about extraction itself, so a passing,
+    honest-about-what-it-covers default is scripted unless the caller already
+    scripted one explicitly (`fake_openai.scripts` already has an entry).
+    """
+    if fake_openai is not None and not fake_openai.scripts.get("propose_requirement_extraction"):
+        concepts = services.analysis.load_knowledge().requirement_concepts
+        fake_openai.script(
+            "propose_requirement_extraction", trivial_requirement_extraction(job_text, concepts)
+        )
     return services.operations.submit_analysis(
         AnalyzeCommand(
             application_id=ingested.application_id,
@@ -152,7 +180,7 @@ def test_propose_job_analysis_commits_an_analysis_and_its_initial_plan(
 ) -> None:
     fake_openai.script("propose_job_analysis", CLASSIFICATION)
     ingested = _ingested(ai_services, "Analysis Co")
-    completed = _run(ai_services, _analysis_operation(ai_services, ingested))
+    completed = _run(ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai))
 
     assert completed.status.value == "succeeded", completed.safe_failure_detail
     outputs = {output.output_type for output in completed.outputs}
@@ -176,7 +204,7 @@ def test_ai_preferences_are_frozen_before_settings_can_change(
     )
     fake_openai.script("propose_job_analysis", CLASSIFICATION)
     ingested = _ingested(ai_services, "Frozen Preferences Co")
-    queued = _analysis_operation(ai_services, ingested, model=None)
+    queued = _analysis_operation(ai_services, ingested, model=None, fake_openai=fake_openai)
 
     assert queued.model == "gpt-5.6-luna"
     assert queued.reasoning_effort == "high"
@@ -545,11 +573,16 @@ def test_a_provider_failure_never_produces_a_deterministic_result(
     """Invariant 14. The Operation fails; nothing is committed in its place."""
     fake_openai.script("propose_job_analysis", HTTPStatus(400))
     ingested = _ingested(ai_services, "Fallback Co")
-    completed = _run(ai_services, _analysis_operation(ai_services, ingested))
+    completed = _run(ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai))
 
     assert completed.status.value == "failed"
     assert completed.failure_code is OperationFailureCode.PROVIDER_REFUSED
-    assert completed.outputs == []
+    artifacts = _provider_artifacts(ai_services, ingested.application_id)
+    assert len(artifacts) == 1  # extraction succeeded before classification failed
+    assert {output.output_id for output in completed.outputs} == {
+        artifact["id"] for artifact in artifacts
+    }
+    assert all(not output.active for output in completed.outputs)
     with pytest.raises(UnknownRecord):
         ai_services.repository.latest_analysis(ingested.application_id)
 
@@ -583,12 +616,16 @@ def test_a_successful_run_registers_the_sanitized_response_with_full_provenance(
     fake_openai.script("propose_job_analysis", dirty)
 
     ingested = _ingested(ai_services, "Provenance Co")
-    completed = _run(ai_services, _analysis_operation(ai_services, ingested))
+    completed = _run(ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai))
     assert completed.status.value == "succeeded", completed.safe_failure_detail
 
+    # Two provider responses are registered now that extraction (stage-1 plan
+    # §3.7) runs before classification - this test is about `propose_job_analysis`
+    # specifically, so it selects that one rather than asserting a total count.
     artifacts = _provider_artifacts(ai_services, ingested.application_id)
-    assert len(artifacts) == 1
-    row = artifacts[0]
+    matching = [row for row in artifacts if row["logical_name"] == "propose_job_analysis"]
+    assert len(matching) == 1
+    row = matching[0]
     assert row["logical_name"] == "propose_job_analysis"
     assert row["lifecycle_status"] == "provider-output"
     assert row["path"].startswith("artifacts/provider/")
@@ -600,8 +637,13 @@ def test_a_successful_run_registers_the_sanitized_response_with_full_provenance(
     assert '"reasoning"' not in stored
     assert "account-manager" in stored
 
+    # Two `provider_response` outputs exist now (extraction's and
+    # classification's); the one that names this specific artifact is found
+    # by id rather than assuming which one `next()` would hand back first.
     reference = next(
-        output for output in completed.outputs if output.output_type == "provider_response"
+        output
+        for output in completed.outputs
+        if output.output_type == "provider_response" and output.output_id == row["id"]
     )
     assert reference.output_id == row["id"]
     assert reference.active is True
@@ -652,7 +694,7 @@ def test_a_cancelled_run_keeps_its_completed_output_as_inactive_evidence(
     pre-activation check.
     """
     ingested = _ingested(ai_services, "Cancelled Co")
-    queued = _analysis_operation(ai_services, ingested)
+    queued = _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
     original = ai_services.analysis.prepare
 
     def prepare_then_cancel(command, *, operation_id=None):
@@ -665,12 +707,15 @@ def test_a_cancelled_run_keeps_its_completed_output_as_inactive_evidence(
     completed = _run(ai_services, queued)
 
     assert completed.status.value == "cancelled"
+    # Two provider responses are preserved now that extraction (stage-1 plan
+    # §3.7) runs before classification - both must be registered and both
+    # references inactive, so this compares sets rather than a single id.
     artifacts = _provider_artifacts(ai_services, ingested.application_id)
-    assert len(artifacts) == 1, "the preserved response was left unregistered"
+    assert len(artifacts) == 2, "a preserved response was left unregistered"
     references = [
         output for output in completed.outputs if output.output_type == "provider_response"
     ]
-    assert [output.output_id for output in references] == [artifacts[0]["id"]]
+    assert {output.output_id for output in references} == {row["id"] for row in artifacts}
     assert all(not output.active for output in references)
     assert len(fake_openai.calls_for("propose_job_analysis")) == 1
     # Cancellation prevents activation, so nothing was committed.
@@ -689,7 +734,7 @@ def test_a_source_that_moves_after_execution_keeps_the_output_as_inactive_eviden
     still evidence.
     """
     ingested = _ingested(ai_services, "Raced Co")
-    queued = _analysis_operation(ai_services, ingested)
+    queued = _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
     original = ai_services.analysis.prepare
 
     def prepare_then_move_the_source(command, *, operation_id=None):
@@ -709,12 +754,15 @@ def test_a_source_that_moves_after_execution_keeps_the_output_as_inactive_eviden
 
     assert completed.status.value == "failed"
     assert completed.failure_code is OperationFailureCode.SOURCE_CHANGED
+    # Two provider responses are preserved now that extraction (stage-1 plan
+    # §3.7) runs before classification - both must be registered and both
+    # references inactive, so this compares sets rather than a single id.
     artifacts = _provider_artifacts(ai_services, ingested.application_id)
-    assert len(artifacts) == 1, "the preserved response was left unregistered"
+    assert len(artifacts) == 2, "a preserved response was left unregistered"
     references = [
         output for output in completed.outputs if output.output_type == "provider_response"
     ]
-    assert [output.output_id for output in references] == [artifacts[0]["id"]]
+    assert {output.output_id for output in references} == {row["id"] for row in artifacts}
     assert all(not output.active for output in references)
     assert len(fake_openai.calls_for("propose_job_analysis")) == 1
 
@@ -763,7 +811,7 @@ def test_retry_policy_distinguishes_transient_from_terminal_provider_failures(
     """§6: one transient retry, and zero retries for terminal failures."""
     fake_openai.script("propose_job_analysis", Timeout(), CLASSIFICATION)
     ingested = _ingested(ai_services, "Transient Co")
-    completed = _run(ai_services, _analysis_operation(ai_services, ingested))
+    completed = _run(ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai))
 
     assert completed.status.value == "succeeded", completed.safe_failure_detail
     assert len(fake_openai.calls_for("propose_job_analysis")) == 2
@@ -773,7 +821,7 @@ def test_retry_policy_distinguishes_transient_from_terminal_provider_failures(
     calls_before = len(fake_openai.calls_for("propose_job_analysis"))
     fake_openai.script("propose_job_analysis", HTTPStatus(429))
     ingested = _ingested(ai_services, "Persistent Co")
-    completed = _run(ai_services, _analysis_operation(ai_services, ingested))
+    completed = _run(ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai))
 
     assert completed.status.value == "failed"
     assert completed.failure_code is OperationFailureCode.PROVIDER_RATE_LIMITED
@@ -789,7 +837,9 @@ def test_retry_policy_distinguishes_transient_from_terminal_provider_failures(
         calls_before = len(fake_openai.calls_for("propose_job_analysis"))
         fake_openai.script("propose_job_analysis", answer)
         ingested = _ingested(ai_services, f"Terminal {index} Co")
-        completed = _run(ai_services, _analysis_operation(ai_services, ingested))
+        completed = _run(
+            ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
+        )
 
         assert completed.status.value == "failed", index
         assert completed.failure_code is expected, index
@@ -822,6 +872,37 @@ PROVIDER_OWNED_FIELDS = frozenset(JobClassificationProposal.model_fields)
 #: cannot be expected to reproduce. A deliberate exception list, so a new
 #: `JobAnalysis` field is policy-owned by default and forgetting to register it
 #: fails the guard instead of silently escaping it.
+#:
+#: `unmapped_statements`, `understanding`, and `interpretation_decisions` are
+#: here because they are populated only by the AI extraction step (stage-1
+#: plan §3.7), which the `classify_job`-only baseline this test compares
+#: against never runs at all - so the baseline always leaves them
+#: `None`/absent regardless of job text, and comparing them would fail on
+#: every injection for a reason that has nothing to do with injection safety.
+#: They are not exempt from scrutiny: an injected statement could not smuggle
+#: a fake entry into any of them without a fabricated attestation, which the
+#: source gate (`attestation.py`) rejects before any of this is ever written,
+#: voiding the whole extraction.
+#:
+#: `requirements`, `gaps`, `fit`, `mandatory_requirements`, and
+#: `preferred_requirements` are here for the reason stage-1 plan §1.1 states
+#: directly: once AI extraction is authoritative for what a posting requires
+#: (D2), a verified extraction is *supposed* to diverge from the concept-only
+#: deterministic baseline - reading a requirement-bearing statement the
+#: baseline could not, and reporting completeness/Fit accordingly, is a
+#: correct result, not a leak. "Equal to the deterministic run" stopped being
+#: a safety measure for these fields and became a ceiling on extraction
+#: quality. What actually stands between an injected instruction and a
+#: fabricated or softened requirement is the explicit forbidden-behavior
+#: tests below (§1.1.A), not a literal-equality diff against a baseline that
+#: does not run extraction at all.
+#:
+#: `approval_reasons` and `classification_requires_approval` follow for the
+#: same reason: both can carry `extraction-failed`/`coverage-undetermined`,
+#: which are downstream of exactly the extraction outcome just excluded - a
+#: baseline that never runs extraction and a verified extraction that reads
+#: the posting differently can legitimately disagree on whether *that*
+#: specific reason is present, without either being unsafe.
 NON_POLICY_FIELDS = frozenset(
     {
         "analysis_version",
@@ -830,48 +911,38 @@ NON_POLICY_FIELDS = frozenset(
         "proposal_confidence",
         "rationale",
         "extraction_version",
+        "unmapped_statements",
+        "understanding",
+        "interpretation_decisions",
+        "requirements",
+        "gaps",
+        "fit",
+        "mandatory_requirements",
+        "preferred_requirements",
+        "approval_reasons",
+        "classification_requires_approval",
     }
 )
 
-#: Everything the deterministic policy owns. An AI run over the same JobSnapshot
-#: must agree with a deterministic run on every one of them, whatever the job
-#: text tries to say. Derived, not listed: adding a field to `JobAnalysis`
-#: protects it here automatically.
-#: Proposable, yet still policy-governed. `merge_gaps` is monotonic - a
-#: proposal may add a gap or raise its severity, never drop or soften one - so
-#: against a proposal that is silent on gaps the deterministic set must survive
-#: intact.
-PROPOSABLE_BUT_POLICY_GOVERNED = frozenset({"gaps"})
-
+#: Everything the deterministic policy owns that extraction cannot move at
+#: all: language and the user's overrides.
 POLICY_OWNED_FIELDS = tuple(
-    sorted(
-        (set(JobAnalysis.model_fields) - PROVIDER_OWNED_FIELDS - NON_POLICY_FIELDS)
-        | PROPOSABLE_BUT_POLICY_GOVERNED
-    )
+    sorted(set(JobAnalysis.model_fields) - PROVIDER_OWNED_FIELDS - NON_POLICY_FIELDS)
 )
 
 
-def test_injected_job_text_changes_no_policy_owned_result(
+def test_injected_job_text_changes_no_classification_policy(
     ai_services, fake_openai: FakeOpenAI
 ) -> None:
-    """§6: the content may affect a Proposal; it may not affect anything else.
+    """§6/§1.1: injected text may not move classification, approval, or the fact pool.
 
-    Asserted against a deterministic baseline over the *same* job text rather
-    than against a shape. The earlier version of this test checked that
-    `language` was one of two legal values and that `fit` was not `None`, which
-    both hold for every analysis this engine can produce - it would have passed
-    against an injection that flipped Fit from low to high.
-
-    What is compared is every field the deterministic policy owns: language,
-    Fit, the requirement lists, approval routing and its reasons, the surviving
-    gaps, and the user's overrides. The provider's proposal here is silent on
-    gaps, so `merge_classification` keeps the deterministic ones - and Fit is
-    derived from them, so an injection that could reach either would show up
-    as a difference in both.
-
-    The allowed-fact pool is checked too, because it is the other thing job text
-    must not be able to move: it is a function of the Profile, and the Profile
-    is a function of policy plus a proposal the schema cannot widen.
+    This is the half of the old injection test that is still a literal-equality
+    comparison against the deterministic baseline, and still should be: nothing
+    about D2 gives extraction authority over Track/Profile/Emphasis/language,
+    approval routing, or the allowed-fact pool. `requirements`/`gaps`/`fit` are
+    excluded from `POLICY_OWNED_FIELDS` for the reason stated there - they are
+    covered by the malicious-extraction-proposal tests below instead, not by
+    this comparison.
     """
     assert POLICY_OWNED_FIELDS
     for injection in INJECTIONS:
@@ -891,6 +962,16 @@ def test_injected_job_text_changes_no_policy_owned_result(
             profiles=knowledge.profiles,
             concepts=knowledge.requirement_concepts,
             normalized_hash=snapshot["normalized_hash"],
+        )
+        # Scripted fresh per injection: each iteration's `job_text` differs, and
+        # the default in `_analysis_operation` only fires once per test, which
+        # would otherwise silently replay the first iteration's extraction
+        # proposal against every later job_text. An honest extraction is
+        # scripted here - this test is not about extraction content.
+        fake_openai.scripts["propose_requirement_extraction"].clear()
+        fake_openai.script(
+            "propose_requirement_extraction",
+            trivial_requirement_extraction(job_text, knowledge.requirement_concepts),
         )
         completed = _run(ai_services, _analysis_operation(ai_services, ingested))
         assert completed.status.value == "succeeded", completed.safe_failure_detail
@@ -915,6 +996,224 @@ def test_injected_job_text_changes_no_policy_owned_result(
         assert allowed_fact_pool(knowledge.profiles.get(analysis.profile)) == allowed_fact_pool(
             knowledge.profiles.get(baseline.profile)
         ), injection
+
+
+# --------------------------------------------------------------------------
+# Malicious extraction proposals (stage-1 plan §1.1.A): contract enforcement,
+# not model resilience (§1.1.C). A scripted fake provider proves the engine
+# rejects what it is supposed to reject when a proposal says it outright; it
+# proves nothing about whether a real model can be talked into producing one
+# of these from injected text in the first place. That is a manual check
+# against a real provider, per acceptance-plan §6, and is not automated here.
+# --------------------------------------------------------------------------
+
+
+def _extraction_operation(ai_services, fake_openai: FakeOpenAI, job_text: str, proposal):
+    ingested = _ingested(ai_services, f"Malicious {new_id()[:8]}", job_text)
+    fake_openai.scripts["propose_job_analysis"].clear()
+    fake_openai.script("propose_job_analysis", CLASSIFICATION)
+    fake_openai.scripts["propose_requirement_extraction"].clear()
+    fake_openai.script("propose_requirement_extraction", proposal)
+    return _run(ai_services, _analysis_operation(ai_services, ingested, fake_openai=None))
+
+
+@pytest.mark.parametrize("declare_unmapped", [False, True])
+def test_unread_ai_requirements_do_not_become_high_fit(
+    ai_services, fake_openai, declare_unmapped
+) -> None:
+    job_text = "Account Manager.\nRequirements:\n- Must have enterprise sales experience."
+    concepts = ai_services.analysis.load_knowledge().requirement_concepts
+    proposal = trivial_requirement_extraction(job_text, concepts)
+    if not declare_unmapped:
+        proposal = RequirementExtractionProposal(requirements=[], unmapped_statements=[])
+    completed = _extraction_operation(ai_services, fake_openai, job_text, proposal)
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    analysis_id = next(
+        output.output_id for output in completed.outputs if output.output_type == "job_analysis"
+    )
+    analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
+    assert analysis.fit.value == "unknown"
+    assert "extraction-failed" in analysis.approval_reasons
+    assert analysis.classification_requires_approval
+    assert analysis.understanding.by_ai == 0
+
+
+def test_member_quote_cannot_be_borrowed_from_another_requirement(ai_services, fake_openai):
+    job_text = (
+        "Requirements:\n- Must know React or Vue.\n"
+        "- Must have enterprise sales experience."
+    )
+    quote = "Must know React or Vue"
+    other = "enterprise sales experience"
+    start = job_text.index(quote)
+    members = [
+        RequirementMember(
+            member_id=value,
+            label=value,
+            attestation=RequirementAttestation(
+                quote=value, start=job_text.index(value), end=job_text.index(value) + len(value)
+            ),
+        )
+        for value in ("React", other)
+    ]
+    proposal = ProposedRequirement(
+        attestation=RequirementAttestation(quote=quote, start=start, end=start + len(quote)),
+        interpretation=RequirementInterpretation(
+            source_role="requirement", obligation="mandatory", composition="any-of",
+            members=members, negation=False,
+        ),
+        kind="compositional", label=quote,
+    )
+    completed = _extraction_operation(
+        ai_services, fake_openai, job_text,
+        RequirementExtractionProposal(requirements=[proposal], unmapped_statements=[]),
+    )
+    assert completed.status.value == "failed"
+    assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
+
+
+def test_a_requirement_not_quoted_in_the_posting_is_rejected(ai_services, fake_openai) -> None:
+    """The source gate refuses a requirement whose quote the posting never said.
+
+    This is what actually stands between injected text and a fabricated
+    requirement: the quote must be verbatim and at the claimed offsets in the
+    signed snapshot. A quote lifted from an injected instruction would still
+    pass this gate, because it *is* in the signed text - proving that is
+    exactly why §1.1 does not call this an injection defense. What it does
+    catch is a provider inventing a requirement with no textual basis at all.
+    """
+    job_text = ACCOUNT_MANAGER_JOB
+    fabricated = ProposedRequirement(
+        attestation=RequirementAttestation(quote="10 years of HubSpot administration", start=0, end=10),
+        interpretation=RequirementInterpretation(
+            source_role="requirement", obligation="mandatory", composition="single", negation=False
+        ),
+        kind="presence",
+        label="HubSpot administration",
+    )
+    completed = _extraction_operation(
+        ai_services,
+        fake_openai,
+        job_text,
+        RequirementExtractionProposal(requirements=[fabricated], unmapped_statements=[]),
+    )
+    assert completed.status.value == "failed"
+    assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
+    with pytest.raises(UnknownRecord):
+        ai_services.repository.latest_analysis(completed.application_id)
+
+
+def test_softening_mandatory_to_preferred_without_a_quoted_marker_is_rejected(
+    ai_services, fake_openai
+) -> None:
+    """An explicit Requirements block cannot be demoted to a responsibility."""
+    job_text = "Account Manager.\nRequirements:\n- 5+ years of enterprise sales experience."
+    quote = "5+ years of enterprise sales experience"
+    start = job_text.index(quote)
+    softened = ProposedRequirement(
+        attestation=RequirementAttestation(quote=quote, start=start, end=start + len(quote)),
+        interpretation=RequirementInterpretation(
+            # Claiming this is a mere responsibility, with no quoted marker to
+            # justify treating a Requirements-block bullet as optional.
+            source_role="responsibility",
+            obligation="preferred",
+            composition="single",
+            negation=False,
+        ),
+        kind="presence",
+        label="enterprise sales experience",
+    )
+    completed = _extraction_operation(
+        ai_services,
+        fake_openai,
+        job_text,
+        RequirementExtractionProposal(requirements=[softened], unmapped_statements=[]),
+    )
+    assert completed.status.value == "failed"
+    assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
+    with pytest.raises(UnknownRecord):
+        ai_services.repository.latest_analysis(completed.application_id)
+
+
+def test_a_context_quote_from_elsewhere_cannot_justify_mandatory(ai_services, fake_openai) -> None:
+    """A quoted mandatory marker only counts when it sits in the requirement's
+    own statement (stage-1 plan §3.5a addendum to §3.2) - one lifted from an
+    unrelated sentence is refused by the interpretation gate outright, which
+    is a stronger result than merely not applying it.
+    """
+    job_text = (
+        "Responsibilities: manage inbound leads.\n\n"
+        "Requirements: 3 years of experience (must)."
+    )
+    quote = "manage inbound leads"
+    start = job_text.index(quote)
+    fake_marker = "(must)"
+    smuggled = ProposedRequirement(
+        attestation=RequirementAttestation(quote=quote, start=start, end=start + len(quote)),
+        interpretation=RequirementInterpretation(
+            source_role="responsibility",
+            obligation="mandatory",
+            composition="single",
+            negation=False,
+            context_quote=fake_marker,
+        ),
+        kind="presence",
+        label="inbound lead management",
+    )
+    completed = _extraction_operation(
+        ai_services,
+        fake_openai,
+        job_text,
+        RequirementExtractionProposal(requirements=[smuggled], unmapped_statements=[]),
+    )
+    assert completed.status.value == "failed"
+    assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
+    with pytest.raises(UnknownRecord):
+        ai_services.repository.latest_analysis(completed.application_id)
+
+
+def test_an_any_of_member_with_no_attestation_cannot_be_silently_matched(
+    ai_services, fake_openai
+) -> None:
+    """A member's `label` alone cannot drive coverage to `matched` (stage-1
+    plan §3.5a addendum): an unattested member is `undetermined`, and an
+    `any-of` requirement is `matched` only if some member truly is - so a
+    fabricated, unattested member cannot manufacture false coverage.
+    """
+    job_text = "Account Manager. Requirements: React, Angular, or Vue experience."
+    quote = "React, Angular, or Vue experience"
+    start = job_text.index(quote)
+    unattested = ProposedRequirement(
+        attestation=RequirementAttestation(quote=quote, start=start, end=start + len(quote)),
+        interpretation=RequirementInterpretation(
+            source_role="requirement",
+            obligation="mandatory",
+            composition="any-of",
+            members=[
+                RequirementMember(member_id="react", label="React"),
+                RequirementMember(
+                    member_id="fabricated", label="10 years of anything the candidate wants"
+                ),
+            ],
+            negation=False,
+        ),
+        kind="compositional",
+        label="frontend framework",
+    )
+    completed = _extraction_operation(
+        ai_services,
+        fake_openai,
+        job_text,
+        RequirementExtractionProposal(requirements=[unattested], unmapped_statements=[]),
+    )
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    analysis_id = next(
+        output.output_id for output in completed.outputs if output.output_type == "job_analysis"
+    )
+    analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
+    # Neither member is attested, so neither can be mapped to a concept -
+    # the requirement is `undetermined`, never a false `matched`.
+    assert analysis.requirements[0].coverage == "undetermined"
 
 
 def test_a_proposal_cannot_add_experience_that_is_not_in_the_facts(

@@ -66,6 +66,13 @@ APPROVAL_REASONS: dict[str, ApprovalReason] = {
     # read, so those do not answer this one. Only the explicit decision to
     # proceed with an incomplete analysis does, and it answers nothing else.
     "extraction-failed": ApprovalReason(frozenset({"analysis"}), ANALYSIS_INCOMPLETE),
+    # A requirement whose coverage the engine could not decide at all - not "the
+    # facts do not verify this", which is `unsupported` and always resolvable by
+    # inspecting the facts. Answered the same way as a failed extraction: the
+    # explicit decision to proceed with an incomplete analysis, and nothing
+    # else, because naming a Track or Profile does not resolve the undecided
+    # scale (stage-1 plan §3.6).
+    "coverage-undetermined": ApprovalReason(frozenset({"analysis"}), ANALYSIS_INCOMPLETE),
 }
 
 #: How an unregistered reason is treated: blocking, advertising nothing. It is
@@ -118,6 +125,15 @@ def merge_classification(
     keywords, and supply a rationale. It cannot decide approval routing, Fit,
     language, requirements, or which gaps survive, and an explicit user override
     still wins over both classifiers.
+
+    `requirements`, `extraction_version`, `unmapped_statements`,
+    `understanding`, and `interpretation_decisions` are carried through
+    unchanged from `deterministic` rather than left at their model defaults.
+    When the AI extraction path (stage-1 plan §3.7) has already rebased
+    `deterministic` onto a verified requirement set, dropping these here would
+    silently discard that work the moment classification runs - the analysis
+    would report `extraction_version: "0"` and no understanding breakdown for
+    a record that, moments earlier, had both.
     """
     overrides = dict(deterministic.user_override)
     consistent = profiles.get(proposal.profile).track is proposal.track
@@ -170,9 +186,13 @@ def merge_classification(
         )
 
     return JobAnalysis(
+        analysis_version=deterministic.analysis_version,
         track=track,
         requirements=deterministic.requirements,
         extraction_version=deterministic.extraction_version,
+        unmapped_statements=deterministic.unmapped_statements,
+        understanding=deterministic.understanding,
+        interpretation_decisions=deterministic.interpretation_decisions,
         profile=profile,
         emphasis=emphasis,
         confidence=confidence,

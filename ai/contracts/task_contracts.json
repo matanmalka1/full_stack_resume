@@ -5,6 +5,14 @@
     "file": "ai/prompts/system-v3.md"
   },
   "tasks": {
+    "propose_requirement_extraction": {
+      "version": "1.0.0",
+      "input": "RequirementExtractionContext",
+      "input_schema_version": "1.0.0",
+      "output": "RequirementExtractionProposal",
+      "output_schema_version": "1.0.0",
+      "critical_state": true
+    },
     "propose_job_analysis": {
       "version": "2.0.0",
       "input": "JobAnalysisContext",

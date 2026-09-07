@@ -176,7 +176,7 @@ const isEmphasis = memberOf<Emphasis>(emphasisLabels);
 const isLanguage = memberOf<Language>(languageLabels);
 const isFitLevel = memberOf<FitLevel>(fitLabels);
 
-export type RequirementCoverage = "matched" | "partial" | "unsupported";
+export type RequirementCoverage = "matched" | "partial" | "unsupported" | "undetermined";
 
 export interface MissingComponent {
   componentId: string;
@@ -277,7 +277,7 @@ const gapsFrom = (value: unknown): AnalysisGap[] => {
 };
 
 const isRequirementCoverage = (value: unknown): value is RequirementCoverage =>
-  value === "matched" || value === "partial" || value === "unsupported";
+  value === "matched" || value === "partial" || value === "unsupported" || value === "undetermined";
 
 const missingComponentsFrom = (value: unknown): MissingComponent[] => {
   if (!Array.isArray(value)) {

@@ -53,6 +53,7 @@ from ..application.ports import (
     JobAnalysisContext,
     RegenerateClaimContext,
     RegenerateSectionContext,
+    RequirementExtractionContext,
     SelectionPlanContext,
     TaskContracts,
 )
@@ -66,6 +67,7 @@ from ..domain.contracts.providers import (
     ProviderPricing,
     ProviderTaskResult,
     ProviderUsage,
+    RequirementExtractionProposal,
     SectionProposal,
     SelectionProposal,
 )
@@ -390,6 +392,7 @@ class OpenAIResponsesProvider:
 #: satisfy. Derived from here by both the request schema and the parse, so a
 #: task cannot be requested under one schema and validated against another.
 TASK_OUTPUT_MODELS: dict[str, type[StrictModel]] = {
+    "propose_requirement_extraction": RequirementExtractionProposal,
     "propose_job_analysis": JobClassificationProposal,
     "propose_selection_plan": SelectionProposal,
     "draft_resume": DraftProposal,
@@ -452,6 +455,20 @@ class OpenAIProvider:
             output_model,
             contracts=self._contracts,
             input_model=type(context),
+        )
+
+    def propose_requirement_extraction(
+        self,
+        context: RequirementExtractionContext,
+        *,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+    ) -> AIProposal[RequirementExtractionProposal]:
+        proposal, provenance = self._run(
+            "propose_requirement_extraction", context, model=model, reasoning_effort=reasoning_effort
+        )
+        return AIProposal(
+            proposal=cast(RequirementExtractionProposal, proposal), provenance=provenance
         )
 
     def propose_job_analysis(
