@@ -12,10 +12,7 @@ from ...domain.drafts import draft_claims
 from ...domain.facts import FactStore
 from ...domain.selection import ROLE_BLOCK_TAG, STRUCTURAL_STYLES
 from .narrowing import application_is_closed
-from .views import (
-    ApplicationListItemView,
-    ApplicationStateView,
-    ApplicationView,
+from .views_prep import (
     ApprovedRevisionView,
     ArtifactVersionView,
     DecisionRecordView,
@@ -25,11 +22,12 @@ from .views import (
     DraftSectionView,
     JobAnalysisView,
     JobSnapshotView,
-    RecruitmentTimelineItemView,
     SelectionPlanCandidateView,
     SelectionPlanDetailView,
     WorkingDraftFactsView,
 )
+from .views_shared import ApplicationListItemView, ApplicationStateView, ApplicationView
+from .views_tracking import RecruitmentTimelineItemView
 
 
 def application_view(record: dict[str, Any]) -> ApplicationView:

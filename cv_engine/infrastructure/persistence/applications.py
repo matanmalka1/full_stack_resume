@@ -8,7 +8,7 @@ from ...application.errors import StateConflict, UnknownRecord
 from ...domain.contracts.recruitment import ApplicationStatus
 from ...util import new_id, utc_now
 from .base import SqlAlchemyRepositoryBase
-from .tables import application_events, applications, recruitment_events
+from .tables import applications, draft_lifecycle_events, recruitment_events
 
 
 class SqlAlchemyApplicationRepository(SqlAlchemyRepositoryBase):
@@ -77,7 +77,7 @@ class SqlAlchemyApplicationRepository(SqlAlchemyRepositoryBase):
         event_id = new_id()
         with self.transaction() as connection:
             connection.execute(
-                insert(application_events).values(
+                insert(draft_lifecycle_events).values(
                     id=event_id,
                     application_id=application_id,
                     event_type=event_type,

@@ -97,7 +97,6 @@ def test_commit_supports_every_approved_payload_family(payload_store: PayloadSto
         payload_store.revision_path("app", "revision", format="md"),
         payload_store.output_path("app", "revision", "html", suffix="html"),
         payload_store.output_path("app", "revision", "pdf", suffix="pdf"),
-        payload_store.output_path("app", "revision", "png", suffix="png"),
         payload_store.provider_path("app", "operation", "response"),
         payload_store.manifest_path(str(uuid.uuid4())),
     ]

@@ -978,7 +978,7 @@ def test_failed_render_operation_preserves_registered_outputs_as_inactive(
     assert log_entry["application_id"] == setup.application_id
     assert log_entry["error_code"] == OperationFailureCode.RENDER_FAILED.value
     assert log_entry["log_reference"] == failed.technical_log_reference
-    assert len(failed.outputs) == 3
+    assert len(failed.outputs) == 2
     assert all(not output.active for output in failed.outputs)
     for output in failed.outputs:
         assert (

@@ -1,23 +1,20 @@
 """Ports: what the application layer needs from the outside, as protocols.
 
-Split into four modules by what a name is, not by who imports it: `values`
-for what crosses a boundary, `outbound` for effects the application cannot
-perform itself, `repositories` for one stored capability each, and
-`composed` for the unions a service or the composition root receives.
+Split into modules by what a name is, not by who imports it: `values` for
+what crosses a boundary, `outbound` for effects the application cannot
+perform itself, `repositories` for one stored capability each, and the
+`composed_*` modules for the unions a service or the composition root
+receives - themselves split by domain (prep / tracking / knowledge / shared),
+matching how `commands/` and `infrastructure/persistence/tables/` are split.
 
 Re-exported here so importers name one place, as they did when this was a
 single 789-line module.
 """
 
-from .composed import (
-    ApplicationRepository,
-    DraftRepository,
-    KnowledgeAuditRepository,
-    PreparationRepository,
-    QueryRepository,
-    ReadinessRepository,
-    TrackingRepository,
-)
+from .composed_knowledge import KnowledgeAuditRepository
+from .composed_prep import DraftRepository, PreparationRepository, ReadinessRepository
+from .composed_shared import ApplicationRepository, QueryRepository
+from .composed_tracking import TrackingRepository
 from .outbound import (
     AIProposal,
     AIProvider,

@@ -622,7 +622,7 @@ def test_no_stage_after_analysis_reads_the_requirement_vocabulary(project_root: 
         Path("cv_engine/infrastructure/knowledge.py"),
         Path("cv_engine/api/routers/health.py"),
         Path("cv_engine/api/schemas/health.py"),
-        Path("cv_engine/application/commands.py"),
+        Path("cv_engine/application/commands/knowledge.py"),
         # The one stage that consumes it.
         Path("cv_engine/application/services/analysis.py"),
     }

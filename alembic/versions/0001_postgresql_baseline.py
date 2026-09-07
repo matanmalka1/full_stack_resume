@@ -399,7 +399,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("singleton_id", name=op.f("pk_app_settings")),
     )
     op.create_table(
-        "application_events",
+        "draft_lifecycle_events",
         sa.Column("id", sa.String(), nullable=False),
         sa.Column("application_id", sa.String(), nullable=False),
         sa.Column("event_type", sa.Text(), nullable=False),
@@ -408,9 +408,9 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["application_id"],
             ["applications.id"],
-            name=op.f("fk_application_events_application_id_applications"),
+            name=op.f("fk_draft_lifecycle_events_application_id_applications"),
         ),
-        sa.PrimaryKeyConstraint("id", name=op.f("pk_application_events")),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_draft_lifecycle_events")),
     )
     op.create_table(
         "artifacts",
@@ -1259,7 +1259,7 @@ def downgrade() -> None:
     op.drop_table("audit_records")
     op.drop_index("idx_artifacts_application", table_name="artifacts")
     op.drop_table("artifacts")
-    op.drop_table("application_events")
+    op.drop_table("draft_lifecycle_events")
     op.drop_table("app_settings")
     op.drop_index("idx_knowledge_mutation_journal_state", table_name="knowledge_mutation_journal")
     op.drop_table("knowledge_mutation_journal")

@@ -5,14 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 from ...domain.contracts.recruitment import ApplicationStatus
-from .views import (
+from .views_prep import PreparationState
+from .views_shared import (
     ActivityFilter,
     ApplicationListItemView,
     ApplicationListQuery,
     ApplicationListView,
     ApplicationPreset,
     ApplicationSort,
-    PreparationState,
 )
 
 _INTERVIEW_STATUSES = frozenset(

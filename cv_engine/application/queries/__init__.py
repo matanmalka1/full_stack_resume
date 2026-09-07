@@ -18,21 +18,11 @@ from .narrowing import (
     application_is_closed,
     narrow_application_list,
 )
-from .views import (
-    ActivityFilter,
-    ApplicationDetailView,
-    ApplicationListItemView,
-    ApplicationListQuery,
-    ApplicationListView,
-    ApplicationPreset,
-    ApplicationSort,
-    ApplicationStateView,
-    ApplicationView,
+from .views_prep import (
     ApprovedRevisionView,
     ArtifactVersionDetailView,
     ArtifactVersionsView,
     ArtifactVersionView,
-    BlockedActionView,
     DecisionRecordView,
     DraftClaimView,
     DraftFactView,
@@ -42,17 +32,28 @@ from .views import (
     JobAnalysisView,
     JobSnapshotView,
     PreparationState,
-    ReasonView,
-    RecruitmentStatus,
-    RecruitmentTimelineItemView,
     SelectionPlanCandidateView,
     SelectionPlanDetailView,
     ValidationRunView,
-    WarningView,
     WorkingDraftFactsView,
     WorkingDraftState,
     WorkingDraftView,
 )
+from .views_shared import (
+    ActivityFilter,
+    ApplicationDetailView,
+    ApplicationListItemView,
+    ApplicationListQuery,
+    ApplicationListView,
+    ApplicationPreset,
+    ApplicationSort,
+    ApplicationStateView,
+    ApplicationView,
+    BlockedActionView,
+    ReasonView,
+    WarningView,
+)
+from .views_tracking import RecruitmentStatus, RecruitmentTimelineItemView
 
 __all__ = (
     "ActivityFilter",
