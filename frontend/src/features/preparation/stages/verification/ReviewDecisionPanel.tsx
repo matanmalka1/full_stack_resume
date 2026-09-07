@@ -9,9 +9,10 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 import { Disclosure } from "@/ui/Disclosure";
 import { surfaceClasses } from "@/ui/surface";
-import { emptyDecisions, hasDecision, openDecisions, resolvedByReviewDecision } from "../model/reviewDecisions";
+import { emptyDecisions, hasDecision, openDecisions, resolvedByReviewDecision } from "../../model/reviewDecisions";
+import { type ChecklistEntry, CommitBar, CommitChecklist } from "../../components/CommitBar";
+import { GapsSection } from "../analysis/GapsSection";
 import { ReviewDecisionForm } from "./ReviewDecisionForm";
-import { type ChecklistEntry, CommitBar, CommitChecklist } from "./CommitBar";
 
 /* The classification decision, on the Application screen and directly under the analysis
    it is about.
@@ -25,27 +26,30 @@ import { type ChecklistEntry, CommitBar, CommitChecklist } from "./CommitBar";
    they commit, and the refusal if the server declines. What is being decided is the
    `AnalysisPanel`; this is the deciding.
 
+   A hard-gap acceptance is taken here too, not in a card of its own beside this one: the
+   mark and the rest of the decision are one submission, and a reader marking a gap is
+   already inside the "what do I have to decide" surface rather than arriving at it from
+   somewhere else on the tab. Its own state stays local for the same reason the rest of
+   the form's does - cleared on a successful commit, in the same beat the form clears.
+
    It reports nothing about what happens next: `apply_analysis_decisions` is one commit
    and the refreshed projection is what says whether the reason closed. */
 export const ReviewDecisionPanel = ({
-  acceptableGapCount,
-  acceptedRequirementIds,
   classification,
   detail,
-  onAcceptancesApplied,
 }: {
-  /* How many hard gaps of this analysis carry a Requirement to accept. The marks arrive
-     from the gap list above, which is where they are taken; this panel only reports what
-     is about to be sent and sends it. */
-  acceptableGapCount: number;
-  acceptedRequirementIds: readonly string[];
-  /* Read only to name the values the override selects would replace. */
+  /* Read both to name the values the override selects would replace and to render the
+     gap list a hard-gap acceptance is taken against. */
   classification: Classification | null;
   detail: ApplicationDetail;
-  onAcceptancesApplied: () => void;
 }) => {
   const queryClient = useQueryClient();
   const [decisions, setDecisions] = useState(emptyDecisions);
+  const [acceptedRequirementIds, setAcceptedRequirementIds] = useState<string[]>([]);
+  const toggleAcceptance = (requirementId: string) =>
+    setAcceptedRequirementIds((current) =>
+      current.includes(requirementId) ? current.filter((id) => id !== requirementId) : [...current, requirementId],
+    );
   const applicationId = detail.application.id;
 
   /* The analysis being decided on is the one the projection calls active, which is also
@@ -62,6 +66,13 @@ export const ReviewDecisionPanel = ({
   const showFit = open.fit;
   const showGapAcceptance = open.gaps;
   const showIncompleteAnalysis = open.incompleteAnalysis;
+  /* Only a hard gap that names a Requirement can be accepted - the id is the whole of
+     what an acceptance records. `GapsSection` applies the same rule per gap; this is the
+     count the checklist and the form's helper sentence read. */
+  const acceptableGapCount =
+    classification === null
+      ? 0
+      : classification.gaps.filter((gap) => gap.severity === "hard" && gap.requirementId !== null).length;
 
   /* The marks are the gap list's state, so they are merged in at the submission rather
      than copied into this panel's - one value, read where it is sent. */
@@ -93,7 +104,7 @@ export const ReviewDecisionPanel = ({
        the state that follows - which is this screen, so there is nowhere to navigate. */
     onSuccess: async () => {
       setDecisions(emptyDecisions);
-      onAcceptancesApplied();
+      setAcceptedRequirementIds([]);
       await invalidateApplicationViews(queryClient, applicationId);
     },
   });
@@ -120,18 +131,32 @@ export const ReviewDecisionPanel = ({
         </h2>
 
         <div className="mt-4 flex flex-col gap-5">
-          <ReviewDecisionForm
-            classification={classification}
-            decisions={decisions}
-            disabled={apply.isPending}
-            gapAcceptance={
-              showGapAcceptance ? { acceptable: acceptableGapCount, marked: acceptedRequirementIds.length } : null
-            }
-            onChange={setDecisions}
-            showClassification={showClassification}
-            showFit={showFit}
-            showIncompleteAnalysis={showIncompleteAnalysis}
-          />
+          {/* A hard-gap decision is taken on the exact gap it is about, so the gap list
+              stands inside the same card as the rest of the decision rather than beside
+              it as a card of its own. */}
+          {showGapAcceptance && classification !== null ? (
+            <GapsSection
+              acceptance={{ disabled: apply.isPending, onToggle: toggleAcceptance, selected: acceptedRequirementIds }}
+              gaps={classification.gaps}
+            />
+          ) : null}
+
+          {/* The border only appears once there is a gap list above to separate this
+              form from - two decisions read as two, one decision as one. */}
+          <div className={showGapAcceptance && classification !== null ? "border-t border-cv-border pt-5" : undefined}>
+            <ReviewDecisionForm
+              classification={classification}
+              decisions={decisions}
+              disabled={apply.isPending}
+              gapAcceptance={
+                showGapAcceptance ? { acceptable: acceptableGapCount, marked: acceptedRequirementIds.length } : null
+              }
+              onChange={setDecisions}
+              showClassification={showClassification}
+              showFit={showFit}
+              showIncompleteAnalysis={showIncompleteAnalysis}
+            />
+          </div>
 
           {/* §13: what the commit does, and the two things the controls cannot say. What
               it writes depends on what was decided - a classification decision derives a

@@ -1,7 +1,7 @@
 import type { ApplicationDetail } from "@/api/contracts";
 import { Button } from "@/ui/Button";
-import { useAnalyzeCommand } from "../api/mutations";
-import type { WorkflowActionPlan } from "../model/workflowActionPlan";
+import { useAnalyzeCommand } from "../../api/mutations";
+import type { WorkflowActionPlan } from "../../model/workflowActionPlan";
 
 /* Re-running the analysis, beside the analysis it would replace - in the diagnostics tab,
    not among the workflow's own next steps.

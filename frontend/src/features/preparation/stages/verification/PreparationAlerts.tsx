@@ -5,9 +5,9 @@ import { buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Card } from "@/ui/Card";
 import { Disclosure } from "@/ui/Disclosure";
-import { actionDestination, actionIsOnPreparationScreen } from "../model/actionDestinations";
-import { actionLabel, blockedReasonLabel, reasonTitle, warningTitle } from "../model/preparationLabels";
-import { resolvedByReviewDecision } from "../model/reviewDecisions";
+import { actionDestination, actionIsOnPreparationScreen } from "../../model/actionDestinations";
+import { actionLabel, blockedReasonLabel, reasonTitle, warningTitle } from "../../model/preparationLabels";
+import { resolvedByReviewDecision } from "../../model/reviewDecisions";
 
 /* Review reasons and stale reasons carry the same shape, and both are reported as a
    short title plus the control that resolves them. The server's complete message stays

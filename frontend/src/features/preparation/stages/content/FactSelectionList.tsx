@@ -9,8 +9,8 @@ import { LtrText } from "@/ui/LtrText";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { Input } from "@/ui/Input";
 import { cx } from "@/ui/cx";
-import { omissionReasonLabels, selectionOutcomeLabels } from "../model/selectionLabels";
-import { candidateIncluded, candidateLocked, factGroups, factTotals, includableFactIds } from "../model/factGroups";
+import { omissionReasonLabels, selectionOutcomeLabels } from "../../model/selectionLabels";
+import { candidateIncluded, candidateLocked, factGroups, factTotals, includableFactIds } from "../../model/factGroups";
 
 const factLabel = (candidate: SelectionPlanCandidate): string => candidate.text ?? "לא ניתן לקרוא את העובדה הזו מהידע.";
 

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail, Operation, SelectionPlanDetail, Settings } from "@/api/contracts";
 import { settingsQueryKey } from "@/api/settings";
-import { workflowActionPlan } from "../model/workflowActionPlan";
+import { workflowActionPlan } from "../../model/workflowActionPlan";
 import { SelectionPlanPanel } from "./SelectionPlanPanel";
 
 const detail = (planId: string | null): ApplicationDetail => ({

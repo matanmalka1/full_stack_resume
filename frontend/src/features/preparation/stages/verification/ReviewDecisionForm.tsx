@@ -4,7 +4,7 @@ import { Field } from "@/ui/Field";
 import { Select } from "@/ui/Select";
 import { Switch } from "@/ui/Switch";
 import { Textarea } from "@/ui/Input";
-import { emphasisLabels, languageLabels, optionsFrom, profileLabels, trackLabels } from "../model/analysisLabels";
+import { emphasisLabels, languageLabels, optionsFrom, profileLabels, trackLabels } from "../../model/analysisLabels";
 
 const NO_OVERRIDE = "";
 

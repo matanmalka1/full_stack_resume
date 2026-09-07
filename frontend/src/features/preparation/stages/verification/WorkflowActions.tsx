@@ -6,9 +6,9 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { ActionBar } from "@/ui/ActionBar";
 import { Button, buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
-import { useWorkflowCommands } from "../api/mutations";
-import { actionLabel } from "../model/preparationLabels";
-import type { WorkflowActionPlan } from "../model/workflowActionPlan";
+import { useWorkflowCommands } from "../../api/mutations";
+import { actionLabel } from "../../model/preparationLabels";
+import type { WorkflowActionPlan } from "../../model/workflowActionPlan";
 import { ReplaceDraftDialog } from "./ReplaceDraftDialog";
 
 interface WorkflowActionsProps {
