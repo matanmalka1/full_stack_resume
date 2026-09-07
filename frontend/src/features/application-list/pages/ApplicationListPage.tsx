@@ -1,42 +1,35 @@
-import { Kanban, LayoutGrid, Table2 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
-import { ErrorCallout } from "@/ui/ErrorCallout";
 import { routePaths } from "@/app/routePaths";
 import { RecruitmentUpdateDialog } from "@/features/recruitment";
-import { Button, buttonClasses } from "@/ui/Button";
+import { buttonClasses } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
+import { ErrorCallout } from "@/ui/ErrorCallout";
+import { PageHeading } from "@/ui/PageHeading";
 import { QueryState } from "@/ui/QueryState";
-import { ViewSwitch } from "@/ui/ViewSwitch";
-import { ApplicationCardsView } from "../components/ApplicationCardsView";
-import { ApplicationListFilters } from "../components/ApplicationListFilters";
-import { ApplicationListPagination } from "../components/ApplicationListPagination";
-import { ApplicationListTable, ApplicationListTableSkeleton } from "../components/ApplicationListTable";
-import { ApplicationPipelineView } from "../components/ApplicationPipelineView";
-import { CloseApplicationDialog } from "../components/CloseApplicationDialog";
 import { ApplicationAttentionSummary } from "../components/ApplicationAttentionSummary";
-import { ApplicationListHeader } from "../components/ApplicationListHeader";
-import { ApplicationStatusSummary } from "../components/ApplicationStatusSummary";
+import { ApplicationListResults } from "../components/ApplicationListResults";
+import { ApplicationListToolbar } from "../components/ApplicationListToolbar";
+import { ApplicationListTableSkeleton } from "../components/ApplicationListTable";
+import { CloseApplicationDialog } from "../components/CloseApplicationDialog";
 import { useApplicationListMutations } from "../api/mutations";
 import { useApplicationListQuery } from "../hooks/useApplicationListQuery";
 import { PAGE_SIZE, paramsFromQuery } from "../model/applicationListParams";
+import { initialViewMode, type ViewMode } from "../model/applicationViews";
 import { type RecruitmentStageId, recruitmentStages, selectedStage } from "../model/recruitmentStages";
-
-type ViewMode = "table" | "cards" | "pipeline";
-const initialViewMode = (): ViewMode =>
-  typeof window.matchMedia === "function" && window.matchMedia("(max-width: 639px)").matches ? "cards" : "table";
-
-const viewOptions = [
-  { icon: Table2, label: "טבלה", value: "table" },
-  { icon: LayoutGrid, label: "כרטיסים", value: "cards" },
-  { icon: Kanban, label: "שלבים", value: "pipeline" },
-] as const;
 
 const findApplication = (items: readonly ApplicationListItem[], id: string | null) =>
   id === null ? null : (items.find((item) => item.id === id) ?? null);
 
+/* The board reads top to bottom as four answers: where the reader is, what is waiting
+   for them, which slice of the work they are looking at, and the work itself.
+
+   The one action that starts something - a new Application - is the shell's, not this
+   screen's, and is on screen already; repeating it here would give the reader two
+   buttons for one thing. The empty database is the exception: there is no board to act
+   on yet, so the offer is the only thing on the page. */
 export const ApplicationListPage = () => {
   const { listQuery, query, searchInput, setSearchInput, updateQuery } = useApplicationListQuery();
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
@@ -59,25 +52,24 @@ export const ApplicationListPage = () => {
       stage.statuses.reduce((count, status) => count + (page?.recruitment_status_counts[status] ?? 0), 0),
     ]),
   ) as Partial<Record<RecruitmentStageId, number>>;
-  const newApplicationTo = { pathname: routePaths.newApplication, search: paramsFromQuery(query).toString() };
-  const newApplication = (
-    <Link className={buttonClasses("primary")} to={newApplicationTo}>
-      משרה חדשה
-    </Link>
-  );
+
+  /* Sorting orders the page rather than narrowing it, so it is neither part of "the
+     list is filtered" nor undone by clearing the filters. */
+  const filtered =
+    query.preset !== undefined ||
+    searchInput !== "" ||
+    (query.activity ?? "open") !== "open" ||
+    (query.stages?.length ?? 0) > 0 ||
+    (query.recruitmentStatuses?.length ?? 0) > 0;
+  const clearFilters = () => updateQuery({ sort: query.sort });
 
   return (
     <section aria-labelledby="route-heading" className="page-frame">
-      <ApplicationListHeader />
-      <div className="mt-4 flex flex-col gap-4">
-        <ApplicationStatusSummary
-          activeInterviewsCount={page?.preset_counts.active_interviews}
-          activePreset={query.preset ?? "all"}
-          needsAttentionCount={page?.preset_counts.needs_attention}
-          onSelectPreset={(preset) => updateQuery({ ...query, preset: preset === "all" ? undefined : preset })}
-          readyCount={page?.preset_counts.ready_to_send}
-          totalCount={page?.preset_counts.all}
-        />
+      <header className="border-b border-cv-border pb-3">
+        <PageHeading id="route-heading">לוח מועמדויות</PageHeading>
+      </header>
+
+      <div className="mt-5 flex flex-col gap-5">
         <ApplicationAttentionSummary
           clearingApplicationId={clearNextActionMutation.isPending ? (clearNextActionMutation.variables ?? null) : null}
           items={items}
@@ -105,7 +97,14 @@ export const ApplicationListPage = () => {
             <EmptyState className="bg-cv-surface">
               <p className="text-body text-cv-text">עוד לא נוצרה אף מועמדות.</p>
               <p className="mt-1 text-support text-cv-text-muted">מועמדות חדשה מתחילה בהדבקת מודעת המשרה.</p>
-              <div className="mt-5 flex justify-center">{newApplication}</div>
+              <div className="mt-5 flex justify-center">
+                <Link
+                  className={buttonClasses("primary")}
+                  to={{ pathname: routePaths.newApplication, search: paramsFromQuery(query).toString() }}
+                >
+                  משרה חדשה
+                </Link>
+              </div>
             </EmptyState>
           }
           error={listQuery.error}
@@ -115,21 +114,24 @@ export const ApplicationListPage = () => {
           loadingState={<ApplicationListTableSkeleton />}
         >
           {page === undefined ? null : (
-            <div className="flex flex-col gap-3">
-              <ApplicationListFilters
-                activePreset={query.preset}
+            <div className="flex flex-col gap-4">
+              <ApplicationListToolbar
                 activity={query.activity ?? "open"}
+                filtered={filtered}
                 onActivityChange={(activity) => updateQuery({ ...query, activity })}
-                onClearAll={() => updateQuery({})}
-                onPresetClear={() => updateQuery({ ...query, preset: undefined })}
+                onClearFilters={clearFilters}
                 onPreparationStateChange={(stage) => updateQuery({ ...query, stages: stage ? [stage] : [] })}
+                onPresetSelect={(preset) => updateQuery({ ...query, preset: preset === "all" ? undefined : preset })}
                 onRecruitmentStageChange={(stageId) => {
                   const stage = recruitmentStages.find((candidate) => candidate.id === stageId);
                   updateQuery({ ...query, recruitmentStatuses: stage?.statuses ?? [] });
                 }}
                 onSearchChange={setSearchInput}
                 onSortChange={(sort) => updateQuery({ ...query, sort })}
+                onViewModeChange={setViewMode}
                 preparationState={query.stages?.[0]}
+                preset={query.preset ?? "all"}
+                presetCounts={page.preset_counts}
                 recruitmentStage={selectedStage(query.recruitmentStatuses)}
                 recruitmentStageCounts={recruitmentStageCounts}
                 resultSummary={
@@ -140,62 +142,25 @@ export const ApplicationListPage = () => {
                 search={searchInput}
                 sort={query.sort ?? "updated"}
                 stageCounts={page.stage_counts}
-                viewSwitch={
-                  <ViewSwitch
-                    label="בחירת תצוגת מועמדויות"
-                    onChange={setViewMode}
-                    options={viewOptions}
-                    showLabels
-                    value={viewMode}
-                  />
-                }
+                viewMode={viewMode}
               />
-              <div
-                aria-busy={listQuery.isFetching && !listQuery.isPending ? true : undefined}
-                className={`transition-opacity ${listQuery.isFetching && !listQuery.isPending ? "opacity-60" : ""}`}
-              >
-                {items.length === 0 ? (
-                  <EmptyState className="bg-cv-surface">
-                    <p className="text-body text-cv-text">אין מועמדות שמתאימה לסינון.</p>
-                    <div className="mt-5 flex justify-center">
-                      <Button
-                        onClick={() => updateQuery({ activity: query.activity, sort: query.sort })}
-                        variant="secondary"
-                      >
-                        ניקוי הסינון
-                      </Button>
-                    </div>
-                  </EmptyState>
-                ) : viewMode === "cards" ? (
-                  <ApplicationCardsView
-                    items={items}
-                    onRequestClose={(item) => setClosingApplicationId(item.id)}
-                    onRequestUpdate={(item) => setUpdatingApplicationId(item.id)}
-                  />
-                ) : viewMode === "pipeline" ? (
-                  <ApplicationPipelineView
-                    items={items}
-                    onRequestUpdate={(item) => setUpdatingApplicationId(item.id)}
-                  />
-                ) : (
-                  <ApplicationListTable
-                    items={items}
-                    onRequestClose={(item) => setClosingApplicationId(item.id)}
-                    onRequestUpdate={(item) => setUpdatingApplicationId(item.id)}
-                  />
-                )}
-                <ApplicationListPagination
-                  matchedCount={page.matched}
-                  offset={query.offset ?? 0}
-                  onOffsetChange={(offset) => updateQuery({ ...query, offset }, { replace: false, resetOffset: false })}
-                  pageSize={PAGE_SIZE}
-                  visibleCount={items.length}
-                />
-              </div>
+              <ApplicationListResults
+                fetching={listQuery.isFetching && !listQuery.isPending}
+                items={items}
+                matchedCount={page.matched}
+                offset={query.offset ?? 0}
+                onClearFilters={clearFilters}
+                onOffsetChange={(offset) => updateQuery({ ...query, offset }, { replace: false, resetOffset: false })}
+                onRequestClose={(item) => setClosingApplicationId(item.id)}
+                onRequestUpdate={(item) => setUpdatingApplicationId(item.id)}
+                pageSize={PAGE_SIZE}
+                viewMode={viewMode}
+              />
             </div>
           )}
         </QueryState>
       </div>
+
       <CloseApplicationDialog
         application={closingApplication}
         onCancel={() => setClosingApplicationId(null)}

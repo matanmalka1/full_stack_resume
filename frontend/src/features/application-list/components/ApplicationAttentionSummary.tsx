@@ -29,17 +29,13 @@ export const ApplicationAttentionSummary = ({
     <section aria-labelledby="urgent-action-heading" className="rounded-surface border border-cv-border bg-cv-surface">
       <details className="group/attention" open>
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 hover:bg-cv-surface-muted">
-          <span className="flex min-w-0 items-center gap-2">
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-control bg-cv-warning-soft text-cv-warning">
-              <Sparkles aria-hidden="true" className="size-3.5" />
-            </span>
-            <span>
-              <span className="block text-support font-bold text-cv-text" id="urgent-action-heading">
-                מוקד פעולות
-              </span>
-              <span className="block text-support text-cv-text-muted">
-                {displayItems.length === 1 ? "פעולה אחת בעדיפות" : `${displayItems.length} פעולות בעדיפות`}
-              </span>
+          <span className="flex min-w-0 items-baseline gap-2">
+            <Sparkles aria-hidden="true" className="size-4 shrink-0 self-center text-cv-warning" />
+            <h2 className="text-support font-bold text-cv-text" id="urgent-action-heading">
+              מוקד פעולות
+            </h2>
+            <span className="truncate text-support text-cv-text-muted">
+              {displayItems.length === 1 ? "פעולה אחת בעדיפות" : `${displayItems.length} פעולות בעדיפות`}
             </span>
           </span>
           <ChevronDown
@@ -48,13 +44,16 @@ export const ApplicationAttentionSummary = ({
           />
         </summary>
 
+        {/* The first column is a fixed width rather than `auto`: each row is its own
+            grid, so a badge-width column let every title start at a different x and the
+            three rows read as unrelated blocks. */}
         <div className="divide-y divide-cv-border border-t border-cv-border">
           {displayItems.map((item) => (
             <article
-              className="grid gap-2 px-3 py-2.5 transition-colors hover:bg-cv-surface-muted sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"
+              className="grid gap-x-3 gap-y-2 px-3 py-2.5 transition-colors hover:bg-cv-surface-muted sm:grid-cols-[9rem_minmax(0,1fr)_auto] sm:items-center"
               key={`${item.application.id}-${item.type}`}
             >
-              <StatusBadge className="w-fit px-2 py-0.5" tone={item.tone}>
+              <StatusBadge className="w-fit px-2 py-0.5 whitespace-nowrap" tone={item.tone}>
                 {item.label}
               </StatusBadge>
               <div className="min-w-0">
