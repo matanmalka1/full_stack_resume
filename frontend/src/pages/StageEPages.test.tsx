@@ -818,7 +818,7 @@ describe("SettingsPage", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/settings", "/settings", <SettingsPage />);
-    const autoGenerate = await screen.findByRole("checkbox", {
+    const autoGenerate = await screen.findByRole("switch", {
       name: "יצירת טיוטה אוטומטית כשלא נדרשת סקירה",
     });
     fireEvent.click(autoGenerate);

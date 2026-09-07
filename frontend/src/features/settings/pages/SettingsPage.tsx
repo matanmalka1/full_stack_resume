@@ -9,7 +9,6 @@ import { Card } from "@/ui/Card";
 import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
 import { SectionHeader } from "@/ui/SectionHeader";
-import { StatusBadge } from "@/ui/StatusBadge";
 import { CanonicalFactsBrowser } from "../components/CanonicalFactsBrowser";
 import { ReconciliationPanel } from "../components/ReconciliationPanel";
 import { SettingsForm } from "../components/SettingsForm";
@@ -22,13 +21,6 @@ export const SettingsPage = () => {
 
   return (
     <PageShell
-      actions={
-        query.data === undefined ? null : (
-          <StatusBadge tone={query.data.settings.provider_configured ? "success" : "neutral"}>
-            {query.data.settings.provider_configured ? "ספק AI מוגדר" : "מצב דטרמיניסטי זמין"}
-          </StatusBadge>
-        )
-      }
       description="מדיניות ביצוע, תצוגת הממשק ובדיקות התקינות של מאגר הידע והתוצרים."
       measure="form"
       navigation={<Breadcrumbs items={[{ label: "מועמדויות", to: appRoutes.home }, { label: "הגדרות" }]} />}

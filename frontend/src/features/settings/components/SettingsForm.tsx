@@ -7,28 +7,17 @@ import { useAppForm } from "@/forms/useAppForm";
 import { ActionBar } from "@/ui/ActionBar";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
-import { Checkbox } from "@/ui/Checkbox";
 import { Field } from "@/ui/Field";
-import { cx } from "@/ui/cx";
+import { FormSection } from "@/ui/FormSection";
 import { LtrText } from "@/ui/LtrText";
 import { Select } from "@/ui/Select";
-
-const fieldWrapClass = "rounded-control bg-cv-surface-muted p-3";
+import { Switch } from "@/ui/Switch";
+import { editableSettings } from "../settings.model";
 
 interface SettingsFormProps {
   etag: string | null;
   settings: Settings;
 }
-
-const editableSettings = (settings: Settings): UpdateSettingsRequest => ({
-  auto_generate_when_review_not_required: settings.auto_generate_when_review_not_required,
-  ai_enabled_override: settings.ai_enabled_override,
-  default_execution_mode: settings.default_execution_mode,
-  default_ai_model: settings.default_ai_model,
-  default_reasoning_effort: settings.default_reasoning_effort,
-  ui_density: settings.ui_density,
-  ui_text_size: settings.ui_text_size,
-});
 
 export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
   const queryClient = useQueryClient();
@@ -38,7 +27,6 @@ export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
     values,
   });
   const form = watch();
-  const aiOverrideRegistration = register("ai_enabled_override");
   const save = useMutation({
     mutationFn: async (fields: UpdateSettingsRequest) => {
       if (etag === null) {
@@ -52,103 +40,115 @@ export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
       queryClient.setQueryData(settingsQueryKey, result);
     },
   });
-  const aiAvailable = settings.provider_configured && (form.ai_enabled_override ?? settings.ai_enabled);
+  const aiEnabled = form.ai_enabled_override ?? settings.ai_enabled;
+  const aiAvailable = settings.provider_configured && aiEnabled;
   const selectedModel = settings.available_ai_models.find((model) => model.id === form.default_ai_model);
 
   return (
     <>
-      <form className="flex flex-col gap-5" onSubmit={handleSubmit((fields) => save.mutate(fields))}>
-        <div className="flex flex-col gap-2 rounded-control bg-cv-surface-muted p-2">
-          <Checkbox
+      <form className="flex flex-col gap-6" onSubmit={handleSubmit((fields) => save.mutate(fields))}>
+        <FormSection description="הרשאה ליצירת טיוטה חדשה בלי לחכות לאישור ידני." title="אוטומציה">
+          <Switch
             checked={form.auto_generate_when_review_not_required}
-            hint="לאחר ניתוח שאין בו החלטה ידנית, המערכת רשאית להתחיל יצירת טיוטה באופן אוטומטי."
-            {...register("auto_generate_when_review_not_required")}
+            description="לאחר ניתוח שאין בו החלטה ידנית, המערכת רשאית להתחיל יצירת טיוטה באופן אוטומטי."
+            onChange={(checked) => setValue("auto_generate_when_review_not_required", checked, { shouldDirty: true })}
           >
             יצירת טיוטה אוטומטית כשלא נדרשת סקירה
-          </Checkbox>
-          <Checkbox
-            checked={form.ai_enabled_override ?? settings.ai_enabled}
-            disabled={!settings.provider_configured}
-            hint={settings.provider_configured ? "מפעיל פעולות AI ידניות." : "לא הוגדר ספק AI בסביבת הריצה."}
-            {...aiOverrideRegistration}
-            onChange={(event) => {
-              void aiOverrideRegistration.onChange(event);
-              const enabled = event.currentTarget.checked;
+          </Switch>
+        </FormSection>
 
-              if (!enabled) {
-                setValue("default_execution_mode", "deterministic");
+        <FormSection description="הפעלה ומדיניות עבור פעולות שנעזרות במודל שפה." title="בינה מלאכותית">
+          <Switch
+            checked={aiEnabled}
+            description={settings.provider_configured ? "מפעיל פעולות AI ידניות." : "לא הוגדר ספק AI בסביבת הריצה."}
+            disabled={!settings.provider_configured}
+            onChange={(checked) => {
+              setValue("ai_enabled_override", checked, { shouldDirty: true });
+              if (!checked) {
+                setValue("default_execution_mode", "deterministic", { shouldDirty: true });
               }
             }}
           >
             הפעלת AI
-          </Checkbox>
-        </div>
+          </Switch>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field className={fieldWrapClass} hint="דטרמיניסטי משתמש בחוקים ובשומרי הסף בלבד." label="מצב ביצוע ברירת מחדל">
-            {(control) => (
-              <Select {...control} {...register("default_execution_mode")}>
-                <option value="deterministic">דטרמיניסטי</option>
-                <option disabled={!aiAvailable} value="ai">
-                  AI
-                </option>
-              </Select>
-            )}
-          </Field>
-          <Field
-            className={fieldWrapClass}
-            hint="הבחירה נשמרת לכל פעולת AI חדשה; פעולה שכבר נשלחה שומרת את המודל שלה."
-            label="מודל AI"
-          >
-            {(control) => (
-              <Select {...control} {...register("default_ai_model")}>
-                {settings.available_ai_models.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.label}
-                    {model.recommended ? " — מומלץ" : ""}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field hint="דטרמיניסטי משתמש בחוקים ובשומרי הסף בלבד." label="מצב ביצוע ברירת מחדל">
+              {(control) => (
+                <Select {...control} {...register("default_execution_mode")}>
+                  <option value="deterministic">דטרמיניסטי</option>
+                  <option disabled={!aiAvailable} value="ai">
+                    AI
                   </option>
-                ))}
-              </Select>
-            )}
-          </Field>
-          <Field className={fieldWrapClass} hint="מאמץ גבוה עשוי לשפר משימות קשות, אך מגדיל זמן ועלות." label="מאמץ חשיבה">
-            {(control) => (
-              <Select {...control} {...register("default_reasoning_effort")}>
-                <option value="low">נמוך — מהיר</option>
-                <option value="medium">בינוני — מאוזן</option>
-                <option value="high">גבוה — איכות</option>
-              </Select>
-            )}
-          </Field>
-          <Field className={fieldWrapClass} label="צפיפות תצוגה">
-            {(control) => (
-              <Select {...control} {...register("ui_density")}>
-                <option value="comfortable">נוחה</option>
-                <option value="compact">צפופה</option>
-              </Select>
-            )}
-          </Field>
-          <Field className={cx(fieldWrapClass, "sm:col-span-2")} label="גודל טקסט">
-            {(control) => (
-              <Select {...control} {...register("ui_text_size")}>
-                <option value="normal">רגיל</option>
-                <option value="large">גדול</option>
-              </Select>
-            )}
-          </Field>
-        </div>
-        {selectedModel === undefined ? null : (
-          <Callout title={`תעריפי ${selectedModel.label}`} tone="neutral">
-            <p>
-              לכל מיליון טוקנים: קלט <LtrText>${selectedModel.input_per_million_usd}</LtrText>, קלט שמור במטמון{" "}
-              <LtrText>${selectedModel.cached_input_per_million_usd}</LtrText>, ופלט{" "}
-              <LtrText>${selectedModel.output_per_million_usd}</LtrText>. העלות בפועל תוצג לאחר כל פעולה.
-            </p>
-            <p className="mt-2 text-support text-cv-text-muted">
-              בבקשות ארוכות במיוחד עשוי לחול תעריף מוגדל. המחירון הוא snapshot מתוארך ולא התחייבות למחיר עתידי.
-            </p>
-          </Callout>
-        )}
+                </Select>
+              )}
+            </Field>
+            <Field
+              hint="הבחירה נשמרת לכל פעולת AI חדשה; פעולה שכבר נשלחה שומרת את המודל שלה."
+              label="מודל AI"
+            >
+              {(control) => (
+                <Select {...control} {...register("default_ai_model")}>
+                  {settings.available_ai_models.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.label}
+                      {model.recommended ? " — מומלץ" : ""}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <Field
+              className="sm:col-span-2"
+              hint="מאמץ גבוה עשוי לשפר משימות קשות, אך מגדיל זמן ועלות."
+              label="מאמץ חשיבה"
+            >
+              {(control) => (
+                <Select {...control} {...register("default_reasoning_effort")}>
+                  <option value="low">נמוך — מהיר</option>
+                  <option value="medium">בינוני — מאוזן</option>
+                  <option value="high">גבוה — איכות</option>
+                </Select>
+              )}
+            </Field>
+          </div>
+
+          {selectedModel === undefined ? null : (
+            <Callout title="תעריפי המודל" tone="neutral">
+              <p>
+                <LtrText className="font-semibold text-cv-text">{selectedModel.label}</LtrText> — לכל מיליון טוקנים:
+                קלט <LtrText>${selectedModel.input_per_million_usd}</LtrText>, קלט שמור במטמון{" "}
+                <LtrText>${selectedModel.cached_input_per_million_usd}</LtrText>, ופלט{" "}
+                <LtrText>${selectedModel.output_per_million_usd}</LtrText>. העלות בפועל תוצג לאחר כל פעולה.
+              </p>
+              <p className="mt-2 text-support text-cv-text-muted">
+                בבקשות ארוכות במיוחד עשוי לחול תעריף מוגדל. המחירון הוא snapshot מתוארך ולא התחייבות למחיר עתידי.
+              </p>
+            </Callout>
+          )}
+        </FormSection>
+
+        <FormSection description="משפיע מיד על הממשק, לכל מסך." divided={false} title="תצוגה">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="צפיפות תצוגה">
+              {(control) => (
+                <Select {...control} {...register("ui_density")}>
+                  <option value="comfortable">נוחה</option>
+                  <option value="compact">צפופה</option>
+                </Select>
+              )}
+            </Field>
+            <Field label="גודל טקסט">
+              {(control) => (
+                <Select {...control} {...register("ui_text_size")}>
+                  <option value="normal">רגיל</option>
+                  <option value="large">גדול</option>
+                </Select>
+              )}
+            </Field>
+          </div>
+        </FormSection>
+
         <ActionBar
           primary={
             <Button pending={save.isPending} pendingLabel="שומר…" type="submit">
