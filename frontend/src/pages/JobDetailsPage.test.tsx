@@ -118,7 +118,7 @@ describe("JobDetailsPage", () => {
     expect(await screen.findByText("Acme – Backend Engineer")).toHaveAttribute("aria-current", "page");
   });
 
-  it("links a Ready application to the exact immutable revision", async () => {
+  it("links a Ready application to the exact immutable revision, from the preparation tab", async () => {
     renderPage((input) =>
       Promise.resolve(
         String(input).endsWith("/artifacts")
@@ -131,6 +131,7 @@ describe("JobDetailsPage", () => {
       ),
     );
 
+    fireEvent.click(await screen.findByRole("tab", { name: /הכנת קורות חיים/ }));
     expect(await screen.findByRole("link", { name: "צפייה בגרסה המוכנה" })).toHaveAttribute(
       "href",
       "/revisions/revision-7",
@@ -197,6 +198,7 @@ describe("JobDetailsPage", () => {
       ),
     );
 
+    fireEvent.click(await screen.findByRole("tab", { name: /תוצרים/ }));
     expect(await screen.findByText("הגרסה האחרונה")).toBeInTheDocument();
     expect(screen.queryByText("גרסה קודמת")).not.toBeInTheDocument();
     expect(screen.queryByText("קובץ PDF של קורות החיים")).not.toBeInTheDocument();

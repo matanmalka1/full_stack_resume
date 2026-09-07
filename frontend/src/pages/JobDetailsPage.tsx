@@ -1,83 +1,70 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link, useLocation } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 
+import { classificationFromAnalysis } from "../api/analyses";
 import { applicationDetailQueryOptions } from "../api/applications";
 import type { ProblemDetails } from "../api/client";
-import type { ApplicationDetail } from "../api/contracts";
-import { appRoutes } from "../app/appRoutes";
 import { useRequiredParam } from "../app/useRequiredParam";
-import { useWorkflowStage, workflowStageCountWord } from "../app/WorkflowLandmark";
+import { useWorkflowStage, workflowDestinations } from "../app/WorkflowLandmark";
 import { useWatchedOperation } from "../hooks/useWatchedOperation";
-import { buttonClasses } from "../ui/Button";
 import { Callout } from "../ui/Callout";
-import { Card } from "../ui/Card";
 import { PageShell } from "../ui/PageShell";
 import { QueryState } from "../ui/QueryState";
 import { ActiveOperationPanel } from "./ActiveOperationPanel";
-import { ArtifactsPanel } from "./application/ArtifactsPanel";
 import { ApplicationBreadcrumbs } from "./application/ApplicationBreadcrumbs";
+import { ApplicationHubTabs, type ApplicationHubTab, HubTabPanel } from "./application/ApplicationHubTabs";
+import { ArtifactsPanel } from "./application/ArtifactsPanel";
 import { JobSnapshotPanel } from "./application/JobSnapshotPanel";
 import { PreparationStatusBadges } from "./application/PreparationStatusBadges";
+import { PreparationView } from "./application/PreparationView";
+import { openDecisionCount, openDecisions } from "./application/ReviewDecisionForm";
+import { useAutomaticDraft } from "./application/useAutomaticDraft";
 import { RecruitmentManagerButton } from "./recruitment/RecruitmentManagerButton";
 
-/* The one door on this screen, and the only place the two halves of an Application meet.
+const isHubTab = (value: string | null): value is ApplicationHubTab =>
+  value === "job" || value === "preparation" || value === "artifacts";
 
-   It is a surface of its own above the job's own sections rather than a fourth section
-   among them: preparation is not another fact about the job, it is the work started from
-   here, and the screen should say where that work stands and how to reach it before it
-   starts listing what the job is. The accent rail is the single loud thing on the page;
-   everything below it stays plain. */
-const PreparationGate = ({ detail }: { detail: ApplicationDetail }) => {
-  const applicationId = detail.application.id;
-
-  return (
-    <Card
-      aria-labelledby="preparation-gate-heading"
-      className="relative overflow-hidden bg-cv-surface-muted p-4 shadow-inner sm:p-5"
-    >
-      <span aria-hidden="true" className="absolute inset-y-0 start-0 w-1 bg-cv-accent" />
-      <div className="flex flex-wrap items-start justify-between gap-4 ps-2">
-        <div className="min-w-0">
-          <h2 className="text-body font-semibold text-cv-text" id="preparation-gate-heading">
-            הכנת קורות החיים
-          </h2>
-          {/* Says how far the door leads, in the same count the landmark keeps on the
-              other side of it - taken from the landmark rather than restated here, which
-              is what let this sentence claim four stages while the bar drew three. This
-              screen draws no landmark: it is not one of them. */}
-          <p className="mt-1 text-support text-cv-text-muted">
-            {`תהליך נפרד ב${workflowStageCountWord} שלבים, מניתוח המשרה ועד גרסה מוכנה לשליחה.`}
-          </p>
-          <PreparationStatusBadges className="mt-3 flex flex-wrap gap-2" detail={detail} />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            className={buttonClasses(detail.latest_ready_revision_id == null ? "primary" : "secondary")}
-            to={appRoutes.preparation(applicationId)}
-          >
-            מעבר להכנת קורות החיים
-          </Link>
-          {detail.active_working_draft_id == null ? null : (
-            <Link className={buttonClasses("ghost")} to={appRoutes.draft(applicationId)}>
-              פתיחת עורך קורות החיים
-            </Link>
-          )}
-        </div>
-      </div>
-    </Card>
-  );
-};
-
-/* Job Detail owns the posting and remains the entrance to an Application. Recruitment
-   management is available from its masthead through the same dialog used elsewhere,
-   without competing with the pre-submission analysis work in the page body. */
+/* One screen for the Application: the job record, the CV preparation workflow, and the
+   artifacts it has produced, as tabs of one hub rather than two screens joined by a hop
+   through a gate card. Recruitment tracking stays one shared dialog reachable from the
+   masthead, not a tab - it is a status to update in passing, not a place to read from.
+   `/applications/:id/preparation` still resolves - it lands here with the preparation tab
+   selected, so existing links and bookmarks keep working. */
 export const JobDetailsPage = () => {
   const applicationId = useRequiredParam("applicationId");
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const isPreparationPath = location.pathname.endsWith("/preparation");
+  const tabParam = searchParams.get("tab");
+  const currentTab: ApplicationHubTab = isHubTab(tabParam) ? tabParam : isPreparationPath ? "preparation" : "job";
+
+  const handleTabChange = (nextTab: ApplicationHubTab) => {
+    setSearchParams(
+      (prev) => {
+        const updated = new URLSearchParams(prev);
+        updated.set("tab", nextTab);
+        return updated;
+      },
+      { replace: true },
+    );
+  };
 
   const query = useQuery(applicationDetailQueryOptions(applicationId));
   const detail = query.data;
-  const { operation: watched, watch } = useWatchedOperation(applicationId, detail);
+  const { operation: watched, operationId: watchedId, watch } = useWatchedOperation(applicationId, detail);
+
+  const classification = detail === undefined ? null : classificationFromAnalysis(detail);
+  const supersededAnalysis = detail !== undefined && classification === null && detail.latest_analysis != null;
+
+  useAutomaticDraft({
+    applicationId,
+    detail,
+    operation: watched,
+    operationId: watchedId,
+    watch,
+  });
+
   const createdApplication = (
     location.state as {
       createdApplication?: {
@@ -87,35 +74,42 @@ export const JobDetailsPage = () => {
     } | null
   )?.createdApplication;
 
-  /* No stage. The job record is the entrance to an Application and outlives the document
-     workflow run against it, so showing the four CV stages here made a screen that is
-     never "done" report progress through a process it takes no part in. The door below
-     names where preparation stands; the landmark belongs to the screens that do the
-     work. */
-  useWorkflowStage("none");
+  useWorkflowStage(
+    detail === undefined ? "unknown" : detail.preparation_state,
+    workflowDestinations(applicationId, detail),
+  );
+
+  const openDecisionsCount = detail === undefined ? 0 : openDecisionCount(openDecisions(detail));
 
   return (
     <PageShell
-      actions={detail === undefined ? null : <RecruitmentManagerButton application={detail.application} />}
+      actions={
+        detail === undefined ? null : (
+          <div className="flex flex-wrap items-center gap-2">
+            <PreparationStatusBadges detail={detail} hideStageImpliedStatus />
+            <RecruitmentManagerButton application={detail.application} />
+          </div>
+        )
+      }
+      eyebrow={detail === undefined ? undefined : <span dir="auto">{detail.application.company}</span>}
       navigation={
         <ApplicationBreadcrumbs
           applicationId={applicationId}
           company={detail?.application.company}
-          page="job"
+          page={currentTab === "preparation" ? "preparation" : "job"}
           targetRole={detail?.application.target_role}
         />
       }
-      eyebrow={detail === undefined ? undefined : <span dir="auto">{detail.application.company}</span>}
       title={detail?.application.target_role ?? "פרטי משרה"}
     >
       <QueryState
         error={query.error}
-        fallbackTitle="לא ניתן לטעון את פרטי המשרה"
+        fallbackTitle="לא ניתן לטעון את פרטי המועמדות"
         loading={detail === undefined}
-        loadingLabel="טוען את פרטי המשרה…"
+        loadingLabel="טוען את פרטי המועמדות…"
       >
         {detail === undefined ? null : (
-          <>
+          <div className="space-y-6">
             {createdApplication === undefined ? null : createdApplication.analysisQueued === true ? (
               watched === undefined ? (
                 <Callout role="status" title="המועמדות נוצרה, הניתוח רץ" tone="progress" />
@@ -123,18 +117,39 @@ export const JobDetailsPage = () => {
                 <ActiveOperationPanel onQueued={watch} operation={watched} />
               )
             ) : (
-              /* No action of its own: the door below is the way to preparation, and two
-                 controls with the same destination one above the other made the reader
-                 choose between identical doors. */
               <Callout role="alert" title="המועמדות נוצרה, אך הניתוח לא הופעל" tone="warning">
-                {createdApplication.analysisProblem?.detail ?? "ניתן להפעיל את הניתוח ממסך הכנת קורות החיים."} המועמדות
+                {createdApplication.analysisProblem?.detail ?? "ניתן להפעיל את הניתוח מלשונית הכנת קורות החיים."} המועמדות
                 שכבר נוצרה לא תיווצר שוב.
               </Callout>
             )}
-            <PreparationGate detail={detail} />
-            <JobSnapshotPanel detail={detail} />
-            <ArtifactsPanel applicationId={applicationId} />
-          </>
+
+            <ApplicationHubTabs
+              active={currentTab}
+              detail={detail}
+              onSelect={handleTabChange}
+              openDecisionsCount={openDecisionsCount}
+            />
+
+            <HubTabPanel active={currentTab} tab="preparation">
+              <PreparationView
+                classification={classification}
+                detail={detail}
+                onQueued={watch}
+                operationPanel={
+                  watched === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={watched} />
+                }
+                supersededAnalysis={supersededAnalysis}
+              />
+            </HubTabPanel>
+
+            <HubTabPanel active={currentTab} tab="job">
+              <JobSnapshotPanel detail={detail} />
+            </HubTabPanel>
+
+            <HubTabPanel active={currentTab} tab="artifacts">
+              <ArtifactsPanel applicationId={applicationId} />
+            </HubTabPanel>
+          </div>
         )}
       </QueryState>
     </PageShell>

@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail, Reason } from "../../api/contracts";
-import { ApplicationPage } from "../ApplicationPage";
+import { JobDetailsPage } from "../JobDetailsPage";
 
 const APPLY_PATH = "/api/v1/analyses/analysis-1/apply-decisions";
 
@@ -104,7 +104,7 @@ const renderPage = () => {
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={["/applications/app-1/preparation"]}>
         <Routes>
-          <Route element={<ApplicationPage />} path="/applications/:applicationId/preparation" />
+          <Route element={<JobDetailsPage />} path="/applications/:applicationId/preparation" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,

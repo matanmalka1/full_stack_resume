@@ -7,6 +7,8 @@ export const appRoutes = {
   settings: "/settings",
   application,
   preparation: (applicationId: string): string => `${application(applicationId)}/preparation`,
+  job: (applicationId: string): string => `${application(applicationId)}?tab=job`,
+  artifacts: (applicationId: string): string => `${application(applicationId)}?tab=artifacts`,
   draft: (applicationId: string): string => `${application(applicationId)}/draft`,
   revision: (revisionId: string): string => `/revisions/${segment(revisionId)}`,
 } as const;

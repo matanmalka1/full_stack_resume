@@ -2,7 +2,6 @@ import { isValidElement } from "react";
 import { describe, expect, it } from "vitest";
 
 import { ApplicationListPage } from "../pages/ApplicationListPage";
-import { ApplicationPage } from "../pages/ApplicationPage";
 import { JobDetailsPage } from "../pages/JobDetailsPage";
 import { NewApplicationPage } from "../pages/NewApplicationPage";
 import { router } from "./router";
@@ -41,7 +40,7 @@ describe("Stage E routes", () => {
     expect(isValidElement(index?.element) ? index?.element.type : null).toBe(ApplicationListPage);
     expect(stageEElementType("applications/new")).toBe(NewApplicationPage);
     expect(stageEElementType("applications/:applicationId")).toBe(JobDetailsPage);
-    expect(stageEElementType("applications/:applicationId/preparation")).toBe(ApplicationPage);
+    expect(stageEElementType("applications/:applicationId/preparation")).toBe(JobDetailsPage);
   });
 });
 

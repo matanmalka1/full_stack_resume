@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail, Operation, Reason, Settings, WorkingDraft } from "../../api/contracts";
 import { settingsQueryKey } from "../../api/settings";
-import { ApplicationPage } from "../ApplicationPage";
+import { JobDetailsPage } from "../JobDetailsPage";
 
 /* §14: the two ways out of a stale draft, end to end through the screen.
 
@@ -173,7 +173,7 @@ const renderPage = () => {
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={["/applications/app-1/preparation"]}>
         <Routes>
-          <Route element={<ApplicationPage />} path="/applications/:applicationId/preparation" />
+          <Route element={<JobDetailsPage />} path="/applications/:applicationId/preparation" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,

@@ -2,7 +2,6 @@ import { Navigate, createBrowserRouter, useParams } from "react-router-dom";
 
 import { App } from "../App";
 import { ApplicationListPage } from "../pages/ApplicationListPage";
-import { ApplicationPage } from "../pages/ApplicationPage";
 import { JobDetailsPage } from "../pages/JobDetailsPage";
 import { DraftEditorPage } from "../pages/draft-editor/DraftEditorPage";
 import { NewApplicationPage } from "../pages/NewApplicationPage";
@@ -77,7 +76,7 @@ export const router = createBrowserRouter([
       {
         /* The document workflow is addressed separately from the job record. */
         path: "applications/:applicationId/preparation",
-        element: <ApplicationPage />,
+        element: <JobDetailsPage />,
       },
       {
         /* Recruitment is opened in place from each Application screen. The old path
