@@ -217,6 +217,11 @@ select {
 }
 
 .cv-field-select {
+  /* Matches `.cv-field-input`'s tinted fill. Left unset, a select's background stayed
+     `--color-cv-surface` - the same white as the page and every card - so next to a
+     real field it read as a plain, unstyled native control rather than a sibling of
+     the same field family. */
+  --cv-field-fill: var(--color-cv-field-background);
   font-size: var(--text-field-select);
 }
 

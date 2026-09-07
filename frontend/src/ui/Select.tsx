@@ -6,7 +6,7 @@ export const Select = ({ className, ...rest }: SelectHTMLAttributes<HTMLSelectEl
   return (
     <select
       className={cx(
-        "cv-field cv-field-select block w-full appearance-auto rounded-control border px-3 py-2.25",
+        "cv-field cv-field-select block w-full appearance-auto rounded-control border px-3 py-2",
         className,
       )}
       {...rest}
