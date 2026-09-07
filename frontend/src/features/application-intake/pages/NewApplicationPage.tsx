@@ -1,6 +1,4 @@
-import { useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useWatch } from "react-hook-form";
 
 import { useWorkflowStage } from "@/app/WorkflowLandmark";
 import { appRoutes } from "@/app/appRoutes";
@@ -16,8 +14,13 @@ export const NewApplicationPage = () => {
   const navigate = useNavigate();
   const [boardParams] = useSearchParams();
   const form = useAppForm<ApplicationIntakeFields>({ defaultValues: emptyApplicationIntake });
-  const fields = useWatch({ control: form.control, defaultValue: emptyApplicationIntake });
-  const currentIntake = useMemo(() => intakeFromFields(fields), [fields]);
+  /* `watch()` rather than `useWatch`: without a field name `useWatch` reports every value
+     as optional, which is not what this form holds - it is registered from
+     `emptyApplicationIntake`, so every field is a string from the first render. The
+     intake is derived from those values on each render rather than memoised, because
+     `watch()` returns a fresh object every time and the memo could never hit. */
+  const fields = form.watch();
+  const currentIntake = intakeFromFields(fields);
   const boardSearch = paramsFromQuery(queryFromParams(boardParams)).toString();
   const boardPath = boardSearch === "" ? appRoutes.home : `${appRoutes.home}?${boardSearch}`;
 
