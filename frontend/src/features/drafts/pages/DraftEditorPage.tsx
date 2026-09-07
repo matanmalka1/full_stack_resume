@@ -14,7 +14,7 @@ import { SectionHeader } from "@/ui/SectionHeader";
 import { reasonTitle } from "@/features/applications/model/applicationLabels";
 import { ApplicationBreadcrumbs } from "@/features/applications/components/ApplicationBreadcrumbs";
 import { FactLifecyclePanel } from "@/features/facts/components/FactLifecyclePanel";
-import { RecruitmentManagerButton } from "@/features/recruitment/components/RecruitmentManagerButton";
+import { RecruitmentManagerButton } from "@/features/recruitment";
 import { ActiveOperationPanel } from "@/features/applications/components/ActiveOperationPanel";
 import { DraftApprovalBar } from "../components/DraftApprovalBar";
 import { DraftApprovalDialog } from "../components/DraftApprovalDialog";

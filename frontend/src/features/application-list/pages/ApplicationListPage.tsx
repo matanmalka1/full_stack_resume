@@ -30,7 +30,7 @@ import { ApplicationPipelineView } from "../components/ApplicationPipelineView";
 import { type RecruitmentStageId, recruitmentStages, selectedStage } from "../components/recruitmentStages";
 import { UrgentActionHub } from "../components/UrgentActionHub";
 import { PAGE_SIZE, paramsFromQuery, queryFromParams } from "../components/applicationListParams";
-import { RecruitmentUpdateDialog } from "@/features/recruitment/components/RecruitmentUpdateDialog";
+import { RecruitmentUpdateDialog } from "@/features/recruitment";
 
 const SEARCH_DEBOUNCE_MS = 300;
 type ViewMode = "table" | "cards" | "pipeline";

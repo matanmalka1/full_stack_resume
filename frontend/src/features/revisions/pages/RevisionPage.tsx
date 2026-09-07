@@ -11,7 +11,7 @@ import { QueryState } from "@/ui/QueryState";
 import { ActiveOperationPanel } from "@/features/applications/components/ActiveOperationPanel";
 import { ApplicationBreadcrumbs } from "@/features/applications/components/ApplicationBreadcrumbs";
 import { warningDetail, warningTitle } from "@/features/applications/model/applicationLabels";
-import { RecruitmentManagerButton } from "@/features/recruitment/components/RecruitmentManagerButton";
+import { RecruitmentManagerButton } from "@/features/recruitment";
 import { RevisionRecord } from "../components/RevisionRecord";
 import { RevisionSubmissionDialog } from "../components/RevisionSubmissionDialog";
 import { RevisionSummary } from "../components/RevisionSummary";

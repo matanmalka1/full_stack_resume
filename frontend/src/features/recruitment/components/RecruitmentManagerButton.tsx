@@ -1,11 +1,9 @@
 import { SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 
-import type { ApplicationListItem } from "@/api/contracts";
 import { Button } from "@/ui/Button";
+import type { RecruitmentManagerTarget } from "../recruitment.types";
 import { RecruitmentUpdateDialog } from "./RecruitmentUpdateDialog";
-
-type RecruitmentManagerTarget = Pick<ApplicationListItem, "company" | "id" | "target_role">;
 
 export const RecruitmentManagerButton = ({ application }: { application: RecruitmentManagerTarget }) => {
   const [open, setOpen] = useState(false);

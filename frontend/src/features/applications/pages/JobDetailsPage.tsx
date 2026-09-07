@@ -19,7 +19,7 @@ import { PreparationStatusBadges } from "../components/PreparationStatusBadges";
 import { PreparationView } from "../components/PreparationView";
 import { openDecisionCount, openDecisions } from "../components/ReviewDecisionForm";
 import { useAutomaticDraft } from "../components/useAutomaticDraft";
-import { RecruitmentManagerButton } from "@/features/recruitment/components/RecruitmentManagerButton";
+import { RecruitmentManagerButton } from "@/features/recruitment";
 
 const isHubTab = (value: string | null): value is ApplicationHubTab =>
   value === "job" || value === "preparation" || value === "artifacts";
@@ -118,8 +118,8 @@ export const JobDetailsPage = () => {
               )
             ) : (
               <Callout role="alert" title="המועמדות נוצרה, אך הניתוח לא הופעל" tone="warning">
-                {createdApplication.analysisProblem?.detail ?? "ניתן להפעיל את הניתוח מלשונית הכנת קורות החיים."} המועמדות
-                שכבר נוצרה לא תיווצר שוב.
+                {createdApplication.analysisProblem?.detail ?? "ניתן להפעיל את הניתוח מלשונית הכנת קורות החיים."}{" "}
+                המועמדות שכבר נוצרה לא תיווצר שוב.
               </Callout>
             )}
 

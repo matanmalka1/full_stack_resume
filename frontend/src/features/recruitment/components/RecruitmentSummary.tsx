@@ -3,7 +3,7 @@ import { CalendarClock } from "lucide-react";
 import type { ApplicationDetail } from "@/api/contracts";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { formatDate } from "@/ui/formatDateTime";
-import { recruitmentStatusIcon, recruitmentStatusLabel, recruitmentStatusTone } from "@/features/applications/model/applicationLabels";
+import { recruitmentStatusIcon, recruitmentStatusLabel, recruitmentStatusTone } from "../recruitmentStatus";
 
 export const RecruitmentSummary = ({ detail }: { detail: ApplicationDetail }) => (
   <section
@@ -21,6 +21,12 @@ export const RecruitmentSummary = ({ detail }: { detail: ApplicationDetail }) =>
         >
           {recruitmentStatusLabel(detail.recruitment_status)}
         </StatusBadge>
+        {detail.terminal_outcome == null ? null : (
+          <p className="mt-2 text-support text-cv-text-muted">
+            תוצאה סופית:{" "}
+            <strong className="font-semibold text-cv-text">{recruitmentStatusLabel(detail.terminal_outcome)}</strong>
+          </p>
+        )}
       </div>
       <div className="min-w-0 sm:border-s sm:border-cv-border sm:ps-4">
         <p className="text-support font-semibold text-cv-text-muted">הפעולה הבאה</p>

@@ -6,7 +6,7 @@ import { StatusBadge } from "@/ui/StatusBadge";
 import { cx } from "@/ui/cx";
 import { type StatusTone, statusPresentation } from "@/ui/status";
 import { fitLevelIcon, fitLevelLabel, fitLevelTone } from "@/features/applications/model/analysisLabels";
-import { recruitmentStatusIcon, recruitmentStatusLabel, recruitmentStatusTone } from "@/features/applications/model/applicationLabels";
+import { recruitmentStatusIcon, recruitmentStatusLabel, recruitmentStatusTone } from "@/features/recruitment";
 import type { ApplicationListViewVariant } from "./ApplicationListParts";
 
 const quietToneClasses: Record<StatusTone, string> = {

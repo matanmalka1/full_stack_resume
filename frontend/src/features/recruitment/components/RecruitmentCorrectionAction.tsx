@@ -11,11 +11,9 @@ import { Dialog } from "@/ui/Dialog";
 import { Field } from "@/ui/Field";
 import { Select } from "@/ui/Select";
 import { TextArea } from "@/ui/TextInput";
-import { recruitmentStatusLabel, recruitmentStatusLabels } from "@/features/applications/model/applicationLabels";
-import { useServerSyncedField } from "@/features/applications/hooks/useServerSyncedField";
-import { statusEventLabel } from "./RecruitmentTimeline";
-
-const allStatuses = Object.keys(recruitmentStatusLabels) as RecruitmentStatus[];
+import { useServerSyncedField } from "../hooks/useServerSyncedField";
+import { recruitmentStatusLabel, recruitmentStatuses } from "../recruitmentStatus";
+import { statusEventLabel } from "../recruitmentTimeline";
 
 interface CorrectionFields {
   correctsEventId: string;
@@ -125,7 +123,7 @@ export const RecruitmentCorrectionAction = ({ detail, onChanged }: RecruitmentCo
             <Field label="המצב הנכון">
               {(control) => (
                 <Select {...control} {...form.register("target")}>
-                  {allStatuses.map((status) => (
+                  {recruitmentStatuses.map((status) => (
                     <option key={status} value={status}>
                       {recruitmentStatusLabel(status)}
                     </option>

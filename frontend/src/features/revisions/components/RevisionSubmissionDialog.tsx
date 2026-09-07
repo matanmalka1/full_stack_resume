@@ -42,7 +42,7 @@ export const RevisionSubmissionDialog = ({
   const submission = useMutation({
     mutationFn: ({ submittedAt }: { submittedAt: string }) => {
       const submittedAtIso = isoFromLocalDateTimeInput(submittedAt);
-      if (revision.pdf_artifact_version_id === null || submittedAtIso === null) {
+      if (revision.pdf_artifact_version_id == null || submittedAtIso === null) {
         throw new Error("Submission requires the exact Ready revision, PDF, and a valid date and time");
       }
       return recordInternalSubmission(revision.application_id, {

@@ -9,15 +9,8 @@ import { Field } from "@/ui/Field";
 import { Select } from "@/ui/Select";
 import { TextArea, TextInput } from "@/ui/TextInput";
 import { cx } from "@/ui/cx";
-import { recruitmentStatusLabel } from "@/features/applications/model/applicationLabels";
-
-export interface RecruitmentUpdateFields {
-  nextAction: string;
-  nextActionDate: string;
-  notes: string;
-  reason: string;
-  targetStatus: TransitionableRecruitmentStatus | "";
-}
+import { recruitmentStatusLabel } from "../recruitmentStatus";
+import type { RecruitmentUpdateFields } from "../recruitment.types";
 
 interface RecruitmentUpdateFormProps {
   detail: ApplicationDetail;
@@ -79,7 +72,12 @@ export const RecruitmentUpdateForm = ({
         <div className="flex flex-col gap-4">
           <Field label="עדכון שלב">
             {(control) => (
-              <Select {...control} {...form.register("targetStatus")} value={fields.targetStatus}>
+              <Select
+                {...control}
+                {...form.register("targetStatus")}
+                disabled={detail.allowed_recruitment_transitions.length === 0}
+                value={fields.targetStatus}
+              >
                 <option value="">ללא שינוי בשלב</option>
                 {statusOptions.map((status) => (
                   <option key={status} value={status}>
@@ -92,6 +90,9 @@ export const RecruitmentUpdateForm = ({
               </Select>
             )}
           </Field>
+          {detail.allowed_recruitment_transitions.length === 0 ? (
+            <p className="text-support text-cv-text-muted">אין מעבר קדימה זמין מהמצב הנוכחי.</p>
+          ) : null}
           {fields.targetStatus === "" ? null : (
             <Field label="סיבת השינוי">{(control) => <TextInput {...control} {...form.register("reason")} />}</Field>
           )}

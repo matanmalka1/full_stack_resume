@@ -5,52 +5,9 @@ import { useState } from "react";
 import type { RecruitmentTimelineItem } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { cx } from "@/ui/cx";
-import { formatDate, formatDateTime } from "@/ui/formatDateTime";
-import { recruitmentStatusIcon, recruitmentStatusLabel, recruitmentStatusTone } from "@/features/applications/model/applicationLabels";
-
-export const statusEventLabel = (event: RecruitmentTimelineItem): string =>
-  `${formatDateTime(event.occurred_at)} · ${recruitmentStatusLabel(event.to_status ?? "saved")}`;
-
-const descriptionFor = (event: RecruitmentTimelineItem, byId: ReadonlyMap<string, RecruitmentTimelineItem>): string => {
-  if (event.item_type === "submission") {
-    return event.submission_type === "internal" ? "נרשמה הגשה של הגרסה המוכנה" : "נרשמה הגשה שבוצעה מחוץ למערכת";
-  }
-  if (event.item_type === "next_action") {
-    return event.next_action == null
-      ? "התזכורת לפעולה הבאה הוסרה"
-      : `הפעולה הבאה נקבעה: ${event.next_action}${
-          event.next_action_date == null ? "" : ` · ${formatDate(event.next_action_date)}`
-        }`;
-  }
-  if (event.item_type === "status_correction") {
-    const corrected = event.corrects_event_id == null ? undefined : byId.get(event.corrects_event_id);
-    const target = recruitmentStatusLabel(event.to_status ?? "saved");
-    return corrected === undefined
-      ? `מצב הגיוס תוקן ל־${target}`
-      : `האירוע „${statusEventLabel(corrected)}” תוקן ל־${target}`;
-  }
-  /* A first event carries no `from_status`, because there was no status before it. The
-     null was read as "saved" and printed as a transition from a status the record never
-     held - "מצב הגיוס עבר מ־נשמר ל־נשמר" on every Application the moment it was created.
-     An absent origin is now named as the opening it is. */
-  if (event.from_status == null) {
-    return `המועמדות נפתחה במצב ${recruitmentStatusLabel(event.to_status ?? "saved")}`;
-  }
-  return `מצב הגיוס עבר מ־${recruitmentStatusLabel(
-    event.from_status,
-  )} ל־${recruitmentStatusLabel(event.to_status ?? "saved")}`;
-};
-
-/* The reasons the engine writes into the immutable event, in Hebrew. The records keep the
-   exact English sentence they were written with; this is presentation over them, and a
-   reason with no entry is shown exactly as recorded rather than guessed at. */
-const engineReasons: Record<string, string> = {
-  "application created": "המועמדות נוצרה",
-  "application closed": "המועמדות נסגרה",
-  "submission recorded": "נרשמה הגשה",
-};
-
-const reasonFor = (reason: string): string => engineReasons[reason] ?? reason;
+import { formatDateTime } from "@/ui/formatDateTime";
+import { recruitmentStatusIcon, recruitmentStatusTone } from "../recruitmentStatus";
+import { recruitmentEventDescription, recruitmentEventReason } from "../recruitmentTimeline";
 
 const markerFor = (event: RecruitmentTimelineItem): { classes: string; icon: LucideIcon } => {
   if (event.item_type === "submission") {
@@ -109,7 +66,7 @@ export const RecruitmentTimeline = ({ items }: { items: RecruitmentTimelineItem[
               </span>
               <div className="min-w-0 pt-0.5">
                 <p className="font-medium text-cv-text" dir="auto">
-                  {descriptionFor(event, byId)}
+                  {recruitmentEventDescription(event, byId)}
                 </p>
                 <p className="text-support text-cv-text-muted">
                   {formatDateTime(event.occurred_at)}
@@ -117,7 +74,7 @@ export const RecruitmentTimeline = ({ items }: { items: RecruitmentTimelineItem[
                 </p>
                 {event.reason === "" ? null : (
                   <p className="mt-1 text-support text-cv-text-muted" dir="auto">
-                    {reasonFor(event.reason)}
+                    {recruitmentEventReason(event.reason)}
                   </p>
                 )}
               </div>

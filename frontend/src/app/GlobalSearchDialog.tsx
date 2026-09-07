@@ -6,8 +6,12 @@ import { useNavigate } from "react-router-dom";
 import { applicationListQueryOptions } from "../api/applications";
 import type { ApplicationListItem } from "../api/contracts";
 import { appRoutes } from "./appRoutes";
-import { preparationStateIcons, preparationStateLabels, preparationStateTones } from "@/features/applications/model/applicationLabels";
-import { recruitmentStatusLabel, recruitmentStatusTone } from "@/features/applications/model/applicationLabels";
+import {
+  preparationStateIcons,
+  preparationStateLabels,
+  preparationStateTones,
+} from "@/features/applications/model/applicationLabels";
+import { recruitmentStatusLabel, recruitmentStatusTone } from "@/features/recruitment";
 import { StatusBadge } from "../ui/StatusBadge";
 import { cx } from "../ui/cx";
 
@@ -167,9 +171,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
                 aria-selected={isSelected}
                 className={cx(
                   "flex cursor-pointer items-center justify-between gap-3 rounded-control border p-3 transition-colors",
-                  isSelected
-                    ? "border-cv-accent/40 bg-cv-accent-soft"
-                    : "border-transparent hover:bg-cv-surface-muted",
+                  isSelected ? "border-cv-accent/40 bg-cv-accent-soft" : "border-transparent hover:bg-cv-surface-muted",
                 )}
                 id={`search-result-${item.id}`}
                 key={item.id}
@@ -209,10 +211,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
                   >
                     {preparationStateLabels[item.preparation_state]}
                   </StatusBadge>
-                  <StatusBadge
-                    className="px-2 py-0.5 text-xs"
-                    tone={recruitmentStatusTone(item.current_status)}
-                  >
+                  <StatusBadge className="px-2 py-0.5 text-xs" tone={recruitmentStatusTone(item.current_status)}>
                     {recruitmentStatusLabel(item.current_status)}
                   </StatusBadge>
                 </div>
