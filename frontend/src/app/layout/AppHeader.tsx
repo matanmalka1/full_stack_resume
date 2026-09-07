@@ -48,14 +48,14 @@ export const AppHeader = () => (
       <div className="flex items-center gap-2 sm:gap-3">
         <GlobalSearch />
 
-          <Link
-            aria-label="קליטת משרה חדשה"
-            className={buttonClasses("primary", "py-1.5 px-3 text-support")}
-            to={routePaths.newApplication}
-          >
-            <Plus aria-hidden="true" className="size-4" />
-            <span className="hidden sm:inline">משרה חדשה</span>
-          </Link>
+        <Link
+          aria-label="קליטת משרה חדשה"
+          className={buttonClasses("primary", "py-1.5 px-3 text-support")}
+          to={routePaths.newApplication}
+        >
+          <Plus aria-hidden="true" className="size-4" />
+          <span className="hidden sm:inline">משרה חדשה</span>
+        </Link>
       </div>
     </div>
 
