@@ -7,10 +7,10 @@ import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
-import { ActiveOperationPanel } from "@/features/applications/components/ActiveOperationPanel";
-import { ApplicationBreadcrumbs } from "@/features/applications/components/ApplicationBreadcrumbs";
-import { WorkflowLandmark } from "@/features/applications/components/WorkflowLandmark";
-import { warningDetail, warningTitle } from "@/features/applications/model/applicationLabels";
+import { ActiveOperationPanel } from "@/features/operations";
+import { ApplicationBreadcrumbs } from "@/features/applications";
+import { PreparationWorkflowSteps } from "@/features/preparation";
+import { warningDetail, warningTitle } from "@/features/preparation";
 import { RecruitmentManagerButton } from "@/features/recruitment";
 import { RevisionRecord } from "../components/RevisionRecord";
 import { RevisionSubmissionDialog } from "../components/RevisionSubmissionDialog";
@@ -39,7 +39,7 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
     <PageShell
       actions={detail === undefined ? null : <RecruitmentManagerButton application={detail.application} />}
       description="הגרסה המאושרת נשארת זמינה גם כאשר העבודה על המועמדות ממשיכה."
-      landmark={<WorkflowLandmark applicationId={revision?.application_id} detail={detail} />}
+      landmark={<PreparationWorkflowSteps applicationId={revision?.application_id} detail={detail} />}
       navigation={
         <ApplicationBreadcrumbs
           applicationId={revision?.application_id}

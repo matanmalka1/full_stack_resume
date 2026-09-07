@@ -4,7 +4,7 @@ import type { ApplicationDetail, WorkingDraft } from "@/api/contracts";
 import { Card } from "@/ui/Card";
 import { LtrText } from "@/ui/LtrText";
 import { StatusBadge } from "@/ui/StatusBadge";
-import { workingDraftStateLabels, workingDraftStateTones } from "@/features/applications/model/applicationLabels";
+import { workingDraftStateLabels, workingDraftStateTones } from "@/features/preparation";
 import type { AutosaveState } from "../hooks/useDraftAutosave";
 import { DraftSaveState } from "./DraftSaveState";
 

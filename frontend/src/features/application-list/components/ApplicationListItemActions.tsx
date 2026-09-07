@@ -7,10 +7,10 @@ import { routePaths } from "@/app/routePaths";
 import { Button } from "@/ui/Button";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { Tooltip } from "@/ui/Tooltip";
-import { actionDestination } from "@/features/applications/components/actionDestinations";
-import { actionLabel } from "@/features/applications/model/applicationLabels";
-import { operationTypeLabels, statusLabels, statusTones } from "@/features/applications/components/operationLabels";
-import type { ApplicationListViewVariant } from "../applicationList.types";
+import { actionDestination } from "@/features/preparation";
+import { actionLabel } from "@/features/preparation";
+import { operationTypeLabels, statusLabels, statusTones } from "@/features/operations";
+import type { ApplicationListViewVariant } from "../model/applicationList.types";
 
 type ActionVariant = Exclude<ApplicationListViewVariant, "pipeline">;
 

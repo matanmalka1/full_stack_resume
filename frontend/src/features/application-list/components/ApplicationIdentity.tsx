@@ -3,10 +3,10 @@ import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
 import { routePaths } from "@/app/routePaths";
-import { sourceHostname } from "@/features/applications/components/applicationPresentation";
-import { trackLabel } from "@/features/applications/model/analysisLabels";
+import { sourceHostname } from "@/features/applications";
+import { trackLabel } from "@/features/preparation";
 import { cx } from "@/ui/cx";
-import type { ApplicationListViewVariant } from "../applicationList.types";
+import type { ApplicationListViewVariant } from "../model/applicationList.types";
 import { formatApplicationDate } from "../model/applicationListPresentation";
 
 export const CompanyMark = ({ company, variant }: { company: string; variant: "card" | "row" }) => (

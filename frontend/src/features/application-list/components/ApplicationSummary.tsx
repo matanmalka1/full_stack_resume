@@ -1,10 +1,6 @@
 import type { ApplicationListItem } from "@/api/contracts";
 import { StatusBadge } from "@/ui/StatusBadge";
-import {
-  preparationStateIcons,
-  preparationStateLabels,
-  preparationStateTones,
-} from "@/features/applications/model/applicationLabels";
+import { preparationStateIcons, preparationStateLabels, preparationStateTones } from "@/features/preparation";
 import { recruitmentStatusLabel, recruitmentStatusTone } from "@/features/recruitment";
 import { CompanyMark } from "./ApplicationIdentity";
 

@@ -4,7 +4,7 @@ import type { ActivityFilter, ApplicationSort, PreparationState } from "@/api/co
 import { Select } from "@/ui/Select";
 import { Input } from "@/ui/Input";
 import { cx } from "@/ui/cx";
-import { preparationStateLabels } from "@/features/applications/model/applicationLabels";
+import { preparationStateLabels } from "@/features/preparation";
 import { type RecruitmentStageId, recruitmentStages } from "../model/recruitmentStages";
 
 const activityLabels: Record<ActivityFilter, string> = {

@@ -5,14 +5,10 @@ import type { ApplicationListItem } from "@/api/contracts";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { cx } from "@/ui/cx";
 import { type StatusTone, statusPresentation } from "@/ui/status";
-import { fitLevelIcon, fitLevelLabel, fitLevelTone } from "@/features/applications/model/analysisLabels";
+import { fitLevelIcon, fitLevelLabel, fitLevelTone } from "@/features/preparation";
 import { recruitmentStatusIcon, recruitmentStatusLabel, recruitmentStatusTone } from "@/features/recruitment";
-import {
-  preparationStateIcons,
-  preparationStateLabels,
-  preparationStateTones,
-} from "@/features/applications/model/applicationLabels";
-import type { ApplicationListViewVariant } from "../applicationList.types";
+import { preparationStateIcons, preparationStateLabels, preparationStateTones } from "@/features/preparation";
+import type { ApplicationListViewVariant } from "../model/applicationList.types";
 
 const quietToneClasses: Record<StatusTone, string> = {
   success: "text-cv-success",

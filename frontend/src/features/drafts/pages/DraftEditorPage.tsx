@@ -8,10 +8,10 @@ import { buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
-import { reasonTitle } from "@/features/applications/model/applicationLabels";
-import { ActiveOperationPanel } from "@/features/applications/components/ActiveOperationPanel";
-import { ApplicationBreadcrumbs } from "@/features/applications/components/ApplicationBreadcrumbs";
-import { WorkflowLandmark } from "@/features/applications/components/WorkflowLandmark";
+import { reasonTitle } from "@/features/preparation";
+import { ActiveOperationPanel } from "@/features/operations";
+import { ApplicationBreadcrumbs } from "@/features/applications";
+import { PreparationWorkflowSteps } from "@/features/preparation";
 import { FactLifecyclePanel } from "@/features/facts";
 import { RecruitmentManagerButton } from "@/features/recruitment";
 import { DraftApprovalBar } from "../components/DraftApprovalBar";
@@ -82,7 +82,7 @@ export const DraftEditorPage = () => {
       /* No description: `DraftHeaderCard` below names the company and the target role
          together, and the heading repeated the role on its own a line above it. */
       eyebrow="סביבת האישור"
-      landmark={<WorkflowLandmark applicationId={applicationId} detail={detail} />}
+      landmark={<PreparationWorkflowSteps applicationId={applicationId} detail={detail} />}
       navigation={
         <ApplicationBreadcrumbs
           applicationId={applicationId}

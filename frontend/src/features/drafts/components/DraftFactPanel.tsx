@@ -3,7 +3,7 @@ import { Database, Plus } from "lucide-react";
 import type { DraftFact, WorkingDraftFacts } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { QueryState } from "@/ui/QueryState";
-import { omissionReasonLabels, selectionOutcomeLabels } from "@/features/applications/model/selectionLabels";
+import { omissionReasonLabels, selectionOutcomeLabels } from "@/features/preparation";
 
 interface DraftFactPanelProps {
   busy: boolean;

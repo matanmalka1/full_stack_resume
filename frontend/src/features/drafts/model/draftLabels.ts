@@ -7,7 +7,7 @@ import type { StatusTone } from "@/ui/status";
 
    Selection outcomes and omission reasons are the SelectionPlan's vocabulary rather than
    the draft's, and both the preparation screen and this editor say them, so they live
-   with the plan in `@/features/applications/model/selectionLabels`. */
+   with the plan in `@/features/preparation`. */
 
 export const claimTypeLabels: Record<ClaimType, string> = {
   canonical: "מבוסס עובדה",
