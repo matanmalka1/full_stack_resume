@@ -17,7 +17,7 @@ import {
   phaseLabels,
   statusLabels,
   statusTones,
-} from "./operationLabels";
+} from "../model/operationLabels";
 
 const reasoningEffortLabels: Record<NonNullable<Operation["reasoning_effort"]>, string> = {
   low: "נמוך",
