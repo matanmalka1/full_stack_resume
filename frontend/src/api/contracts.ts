@@ -72,7 +72,6 @@ export type Reason = ApiSchemas["ReasonResponse"];
 export type CreateAnalysisRequest = ApiSchemas["CreateAnalysisRequest"];
 export type CreateSelectionPlanRequest = ApiSchemas["CreateSelectionPlanRequest"];
 export type CreatedSelectionPlan = ApiSchemas["CreateSelectionPlanResponse"];
-export type SelectionPlan = ApiSchemas["SelectionPlanResponse"];
 export type SelectionPlanDetail = ApiSchemas["SelectionPlanDetailResponse"];
 export type SelectionPlanCandidate = ApiSchemas["SelectionPlanCandidateResponse"];
 export type GenerateWorkingDraftRequest = ApiSchemas["GenerateWorkingDraftRequest"];

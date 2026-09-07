@@ -48,7 +48,7 @@ const selectionPlansPath = (analysisId: string): ApiPath =>
 const selectionPlanPath = (selectionPlanId: string): ApiPath =>
   `/api/v1/selection-plans/${encodeURIComponent(selectionPlanId)}`;
 
-export const selectionPlanQueryKey = (selectionPlanId: string) => ["selection-plan", selectionPlanId] as const;
+const selectionPlanQueryKey = (selectionPlanId: string) => ["selection-plan", selectionPlanId] as const;
 
 export const selectionPlanQueryOptions = (selectionPlanId: string) =>
   queryOptions({
@@ -157,7 +157,7 @@ export const applyAnalysisDecisions = async (
 
 export type RequirementCoverage = "matched" | "partial" | "unsupported" | "undetermined";
 
-export interface MissingComponent {
+interface MissingComponent {
   componentId: string;
   label: string;
   demanded: string | null;
