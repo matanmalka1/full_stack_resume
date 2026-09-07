@@ -1,6 +1,6 @@
-# תוכנית מימוש — שלב 1: הבנת משרה
+# תוכנית מימוש — מסירה 1: ניתוח משרה נכון
 
-תאריך מקור: 2026-09-06. גרסה 3 — יישור חוזים וביקורת סתירות, 2026-09-07.
+תאריך מקור: 2026-09-06. גרסה 4 — שלוש מסירות ומשימות פנימיות, 2026-09-07.
 סטטוס: **תוכנית מימוש. לא שונו קוד, סכימה, עובדות או תוצרים. לא הורצו בדיקות.**
 
 המסמך סוגר את שלוש שאלות המבנה שנשארו פתוחות ב[חוזה
@@ -10,6 +10,14 @@
 במפרט המוצר §1. D1–D4 מתועדות ב[החלטות המוצר](tailoring-behavior-change.md)
 ושולבו במפרטים. [חוזה הניתוח](tailoring-analysis-contract.md) ותוכנית זו הם תכנון
 תומך; הצעות שלא הוכרעו אינן נעשות מחייבות מעצם הפניה אליהן.
+
+## מסגרת המסירה
+
+זו המסירה הראשונה מתוך [שלוש מסירות](tailoring-behavior-change.md#8-תוכנית-ביצוע--שלוש-מסירות).
+שם הקובץ נשמר כדי לא לשבור הפניות. "שלב 1" בהפניות קודמות הוא מסירה זו.
+ששת תחומי העבודה בהמשך הם משימות פנימיות; אין ביניהם שערי מסירה או אישור.
+שלושת החוזים הטכניים הפתוחים מושלמים בתוך המסירה לפני המימוש התלוי בהם.
+המסירה נסגרת בניתוח שימושי של שתי משרות הקבלה, כולל תיקון ותצוגה, ובשער אחד.
 
 ## יישור גרסה 3
 
@@ -35,7 +43,7 @@ D2–D4, זהות הדרישה והרחבת אישור ניתוח לא שלם ע
 | --- | --- | --- | --- |
 | 1 | איפה נשמר תקציר הפירוש | **גם וגם**: שדות מפורשים על `Requirement`, והמזהה נגזר מהם | מזהה הוא hash — אי אפשר להציג ואי אפשר לאכוף עליו מדיניות. `composition` ו־`negation` נדרשים בזמן ריצה ב־`coverage.py` |
 | 2 | גרסת ניתוח — ישות חדשה או רשומה נוספת | **רשומה נוספת. אין ישות חדשה** | `job_analyses` כבר נושא `version_number` ייחודי לכל `application_id`, כבר חסום ל־UPDATE/DELETE בטריגר, ו־`apply_analysis_decisions` כבר מייצר רשומה חדשה בענף "שינוי משמעות" |
-| 3 | תקציב תוכן | **מחוץ לתכולה של שלב 1** | שייך לשלב 3–4 |
+| 3 | תקציב תוכן | **מחוץ לתכולה של שלב 1** | נבחן במסירה 2, בכפוף לחוזה מפורש |
 
 **אין שינוי Alembic.** `job_analyses.structured_json` הוא `JSONB` שנכתב מ־
 `analysis.model_dump(mode="json")` (`preparation.py:333`).
@@ -105,7 +113,7 @@ injected = analyze(posting + injection)
 היא כשל גם אם היא רק מוסיפה חסימה. טווח הציטוט המדויק אינו מדד סמנטי מספיק:
 אם חלוקת הציטוט השתנתה, נבדקת זהות הדרישה ומשמעותה מול בסיס המקרה המתויג.
 
-זהו חוזה קבלה, לא אלגוריתם זיהוי שכבר קיים. לפני W4 יש להגדיר כיצד הצעה
+זהו חוזה קבלה, לא אלגוריתם זיהוי שכבר קיים. לפני חיבור הספק יש להגדיר כיצד הצעה
 שאינה עומדת בחוזה נדחית, וכיצד ספק בפירוש נשאר גלוי בלי להכשיר דרישה מוזרקת.
 
 **ג. הצהרת יושר.** ספק מדומה מוכיח **אכיפת חוזים** — שהמנוע דוחה מה שהוא אמור
@@ -331,7 +339,7 @@ class RequirementExtractionProposal(StrictModel):
 6. `kind == "threshold"` ⇒ ערך סף ויחידה/סולם מפורשים ותקינים מבנית, עם
    תמיכה בציטוט. ערך חסר או פגום פוסל את ההצעה. סולם תקין שהמנוע אינו תומך
    בחישובו אינו כשל ספק: הדרישה נשמרת ומקבלת `undetermined` בשלב הכיסוי.
-   נדרש להשלים חוזה סף מובנה לפני W1; `demanded: str` לבדו אינו מגדיר ערך ויחידה.
+   נדרש להשלים חוזה סף מובנה לפני חוזים ושערים; `demanded: str` לבדו אינו מגדיר ערך ויחידה.
 7. `negation` ⇒ לעולם לא כיסוי חיובי; מקצר החוצה ב־`coverage.py` לפני `_satisfied`.
 
 האינווריאנט נשמר: עובדת גבול אינה ראיה חיובית. אין התחייבות להקפיא את חתימות
@@ -419,7 +427,7 @@ classification of a requirement creates a JobAnalysis". תיקון פירוש ה
   שער הגנה: רשימת תגיות ריקה או תגית חוקית אך שגויה יכולות להסתיר גבול.
   תחולת הגבול נבדקת מול משמעות הדרישה והעובדה, בלי להסתמך רק על תגיות הספק.
   תחולה שלא הוכרעה מונעת כיסוי חיובי מאומת ומסומנת `undetermined`; היא אינה
-  מומצאת כפער עובדתי. חוזה השיוך, העדות ובדיקת ההשמטות יושלם לפני W4/W5.
+  מומצאת כפער עובדתי. חוזה השיוך, העדות ובדיקת ההשמטות יושלם לפני חיבור הספק/גבולות ותצורה.
 - **אין תמיכה במאגר** — `_satisfied` לא מצא ראיה ⇒ `unsupported` ⇒ פער עם
   `"Canonical facts do not verify this requirement."` זה כל מה שנדרש כדי למנוע
   טענה על HubSpot. **אין כאן עובדה חדשה ואין מה לממש.**
@@ -472,16 +480,20 @@ classification of a requirement creates a JobAnalysis". תיקון פירוש ה
 
 ---
 
-## 4. סדר עבודה פנימי
+## 4. משימות פנימיות במסירה אחת
 
-| גל | מה | קבצים ראשיים |
+הטבלה היא מפת עבודה לפי תחום, לא סדרת גלים. מותר לשלב משימות בשינוי אחד
+לפי התלויות והדיף. חוזים נפתרים לפני החיבור התלוי בהם; שערי הכיסוי והגבולות
+חייבים להיות פעילים לפני הפעלת פלט הספק. תיקון ותצוגה הם חלק מתוצאת המסירה.
+
+| תחום משימה | מה | קבצים ראשיים |
 | --- | --- | --- |
-| W1 | חוזים + מתאם הגרסה + שני השערים, ללא חיווט | `contracts/analysis.py`, `contracts/providers.py`, `requirements/attestation.py`, `requirements/interpretation.py`, `requirements/compat.py` |
-| W2 | זהות ושלמות | `requirements/extraction.py`, `requirements/confidence.py`, `analysis/classification.py` |
-| W3 | כיסוי: `any-of`, `all-of`, `negation`, `undetermined` | `requirements/coverage.py`, `analysis/gaps.py`, `analysis/approval.py` |
-| W4 | משימת ספק + חיווט יישום | `ports/outbound.py`, `infrastructure/providers.py`, `services/analysis.py`, `ai/contracts/task_contracts.json`, `ai/prompts/` |
-| W5 | שיוך עובדות גבול, מחיקת `derive_gaps` במסלול AI, D3 בתצורה | `requirements/coverage.py`, `analysis/gaps.py`, `config/requirements.json` |
-| W6 | תיקון פירוש, תצוגה וסיבות ביקורת לפי D4 | `commands.py`, `services/analysis.py`, `api/schemas/`, `openapi/`, `frontend/src/api/analyses.ts`, `frontend/src/pages/application/analysis/` |
+| חוזים ושערים | חוזים + מתאם הגרסה + שני השערים, ללא חיווט | `contracts/analysis.py`, `contracts/providers.py`, `requirements/attestation.py`, `requirements/interpretation.py`, `requirements/compat.py` |
+| זהות ושלמות | זהות ושלמות | `requirements/extraction.py`, `requirements/confidence.py`, `analysis/classification.py` |
+| כיסוי | כיסוי: `any-of`, `all-of`, `negation`, `undetermined` | `requirements/coverage.py`, `analysis/gaps.py`, `analysis/approval.py` |
+| חיבור הספק | משימת ספק + חיווט יישום | `ports/outbound.py`, `infrastructure/providers.py`, `services/analysis.py`, `ai/contracts/task_contracts.json`, `ai/prompts/` |
+| גבולות ותצורה | שיוך עובדות גבול, מחיקת `derive_gaps` במסלול AI, D3 בתצורה | `requirements/coverage.py`, `analysis/gaps.py`, `config/requirements.json` |
+| תיקון ותצוגה | תיקון פירוש, תצוגה וסיבות ביקורת לפי D4 | `commands.py`, `services/analysis.py`, `api/schemas/`, `openapi/`, `frontend/src/api/analyses.ts`, `frontend/src/pages/application/analysis/` |
 
 ---
 
@@ -507,7 +519,7 @@ classification of a requirement creates a JobAnalysis". תיקון פירוש ה
 
 ### 5.4 golden — סיכון עקיף אמיתי
 `classification.py` בוחר פרופיל לפי `(coverage_scores, term_scores)`. הרחבת
-`config/requirements.json` למושגי פיתוח (D3, W5) מזיזה את `coverage_scores` לכל
+`config/requirements.json` למושגי פיתוח (D3, גבולות ותצורה) מזיזה את `coverage_scores` לכל
 משרה, לרבות הקבועות ב־`tests/golden/*.json`. שינוי פרופיל או הדגש משנה בחירת
 עובדות ומכאן את המסמך. **תזוזת golden אינה מותרת אלא אם הפלט אמור היה להשתנות.**
 
@@ -529,21 +541,21 @@ classification of a requirement creates a JobAnalysis". תיקון פירוש ה
 
 ### WeDev — Junior Fullstack
 
-| דרישה בקבלה | מה מספק אותה | גל |
+| דרישה בקבלה | מה מספק אותה | תחום משימה |
 | --- | --- | --- |
-| `React, Angular, or Vue` = דרישה אחת `any-of`, `matched` דרך React | `composition: any-of` + "איבר אחד מספיק" | W1, W3 |
-| Shopify בתיאור החברה אינו תנאי סף | `source_role: company-description` + חסימת `mandatory` בלי סמן מצוטט | W1 |
-| Node.js, MongoDB, SQL, responsive נקראים בכלל | חילוץ AI (D2) או מושגי D3. בלי אחד מהם המשרה נשארת `unparsed` → `FitLevel.UNKNOWN` | W4 / W5 |
+| `React, Angular, or Vue` = דרישה אחת `any-of`, `matched` דרך React | `composition: any-of` + "איבר אחד מספיק" | חוזים ושערים, כיסוי |
+| Shopify בתיאור החברה אינו תנאי סף | `source_role: company-description` + חסימת `mandatory` בלי סמן מצוטט | חוזים ושערים |
+| Node.js, MongoDB, SQL, responsive נקראים בכלל | חילוץ AI (D2) או מושגי D3. בלי אחד מהם המשרה נשארת `unparsed` → `FitLevel.UNKNOWN` | חיבור הספק / גבולות ותצורה |
 
 ### Connecteam — SDR
 
-| דרישה בקבלה | מה מספק אותה | גל |
+| דרישה בקבלה | מה מספק אותה | תחום משימה |
 | --- | --- | --- |
-| inbound כחלק מתמהיל, לא דרישה שהומצאה | שער המקור: אין ציטוט → אין דרישה | W1 |
-| "1–2 שנות SDR **או** תפקיד מכירות אחר" אינו חוסר | `any-of`, לא `threshold` על SDR | W1, W3 |
-| HubSpot ודמואים אינם ותק חובה | `source_role: responsibility` + חסימת `mandatory` | W1 |
+| inbound כחלק מתמהיל, לא דרישה שהומצאה | שער המקור: אין ציטוט → אין דרישה | חוזים ושערים |
+| "1–2 שנות SDR **או** תפקיד מכירות אחר" אינו חוסר | `any-of`, לא `threshold` על SDR | חוזים ושערים, כיסוי |
+| HubSpot ודמואים אינם ותק חובה | `source_role: responsibility` + חסימת `mandatory` | חוזים ושערים |
 | **HubSpot לא נטען, בלי עובדה חדשה** | "אין תמיכה במאגר" — `unsupported` ⇒ פער. קיים היום | — |
-| אין פער SaaS שגוי כשהמודעה לא דורשת SaaS | מחיקת `derive_gaps` במסלול AI. עובדת הגבול מגינה רק כשדרישת SaaS אמיתית חולצה | W5 |
+| אין פער SaaS שגוי כשהמודעה לא דורשת SaaS | מחיקת `derive_gaps` במסלול AI. עובדת הגבול מגינה רק כשדרישת SaaS אמיתית חולצה | גבולות ותצורה |
 
 ---
 
@@ -552,10 +564,10 @@ classification of a requirement creates a JobAnalysis". תיקון פירוש ה
 | # | פתוח | למה זה לא נסגר כאן |
 | --- | --- | --- |
 | 1 | עמידות המודל בפני הזרקה | §1.1 ג'. נבדק ידנית מול ספק אמיתי לפי תוכנית קבלה §6, ואינו תנאי שער אוטומטי |
-| 2 | הרחבת `config/requirements.json` למושגי פיתוח (D3) — היקף הרשימה | רשימת חריגים מכוונת; היקפה נקבע מול שתי משרות הקבלה ב־W5, לא מראש |
+| 2 | הרחבת `config/requirements.json` למושגי פיתוח (D3) — היקף הרשימה | רשימת חריגים מכוונת; היקפה נקבע מול שתי משרות הקבלה ב־גבולות ותצורה, לא מראש |
 | 3 | חסימת טיוטה על ניתוח מוחלף | §9; מחוץ לתכולת שלב 1 |
-| 4 | שיוך גבולות ומיפוי איברי `any-of`/`all-of` לראיות | להשלים חוזה אימות, ספים ויחידות, וזהות איבר הנגזרת ממשמעותו; `member_id` ו־`label` לבדם אינם מספיקים לכיסוי. לפני W1/W4 |
-| 5 | אכיפת פירוש ושלמות מול השמטה והוספה זדונית | §1.1 הוא יעד קבלה; פירוט מנגנון הדחייה/הבירור נדרש לפני W4 |
+| 4 | שיוך גבולות ומיפוי איברי `any-of`/`all-of` לראיות | להשלים חוזה אימות, ספים ויחידות, וזהות איבר הנגזרת ממשמעותו; `member_id` ו־`label` לבדם אינם מספיקים לכיסוי. לפני חוזים ושערים/חיבור הספק |
+| 5 | אכיפת פירוש ושלמות מול השמטה והוספה זדונית | §1.1 הוא יעד קבלה; פירוט מנגנון הדחייה/הבירור נדרש לפני חיבור הספק |
 
 ---
 
@@ -565,16 +577,19 @@ classification of a requirement creates a JobAnalysis". תיקון פירוש ה
 
 ### תוך כדי עבודה — ממוקד לפי הדיף
 
+הפקודות הן מיפוי לבחירה לפי השינוי בפועל, לא רשימת ריצות חובה לכל שורת משימה.
+אין לחזור על אותה בדיקה באותם תנאים רק מפני שהעבודה נגעה בתחום נוסף.
+
 | אחרי | פקודה | מה זה מוכיח |
 | --- | --- | --- |
-| W1 | `pytest tests/test_domain_contracts.py tests/test_analysis.py -q` | החוזים נטענים; ניתוח שנשמר קודם נקרא עם `None` ולא עם ערכים מומצאים; שני השערים דוחים מה שהם אמורים |
-| W2 | `pytest tests/test_analysis.py -q` | אותו ציטוט בפירוש אחר מקבל מזהה אחר; משפט לא מכוסה ולא מסומן משאיר `partial`; שלושת המקורות נספרים בנפרד |
-| W3 | `pytest tests/test_analysis.py tests/test_classification_policy.py -q` | `any-of` = דרישה אחת; `all-of` לא מסופק מצירוף ראיות; `negation` לא נספרת חיובית; `undetermined` אינו פער קשה ובכל זאת חוסם; עובדת גבול עדיין לא מספקת דבר |
-| W4 | `pytest tests/test_ai_tasks.py tests/test_provider.py -q` | המשימה רשומה; פלט לא תקין נכשל כ־`INVALID_OUTPUT`; שער ההזרקה בניסוחו החדש — התנהגות אסורה והשוואת לפני/אחרי |
-| W5 | `pytest tests/test_analysis.py tests/test_golden.py -q` | פער מכל אחד משלושת המצבים; מחיקת `derive_gaps` במסלול AI לא הפילה הגנה; **ה־hashes של golden לא זזו** |
-| W6 | `pytest tests/test_api_analyses.py tests/test_api_applications.py tests/test_state_projection.py -q` | תיקון פירוש יוצר גרסה חדשה ואינו נוגע בישנה; ההיטל מציג את שלושת המצבים; D4 מבדיל בין מחלוקת טכנית לבחירה מהותית בלי להסיר חסימות אחרות |
-| W6, אם חוזה HTTP השתנה | `python openapi/generate_openapi.py` ואז `pytest tests/test_api_foundation.py -q` | הסכימה המחויבת אינה מתיישנת |
-| W6, אם נגעתי ב־frontend | `npm --prefix frontend run check` | typecheck (כולל ה־`Record` הממופה המלא), tokens, format, vitest |
+| חוזים ושערים | `pytest tests/test_domain_contracts.py tests/test_analysis.py -q` | החוזים נטענים; ניתוח שנשמר קודם נקרא עם `None` ולא עם ערכים מומצאים; שני השערים דוחים מה שהם אמורים |
+| זהות ושלמות | `pytest tests/test_analysis.py -q` | אותו ציטוט בפירוש אחר מקבל מזהה אחר; משפט לא מכוסה ולא מסומן משאיר `partial`; שלושת המקורות נספרים בנפרד |
+| כיסוי | `pytest tests/test_analysis.py tests/test_classification_policy.py -q` | `any-of` = דרישה אחת; `all-of` לא מסופק מצירוף ראיות; `negation` לא נספרת חיובית; `undetermined` אינו פער קשה ובכל זאת חוסם; עובדת גבול עדיין לא מספקת דבר |
+| חיבור הספק | `pytest tests/test_ai_tasks.py tests/test_provider.py -q` | המשימה רשומה; פלט לא תקין נכשל כ־`INVALID_OUTPUT`; שער ההזרקה בניסוחו החדש — התנהגות אסורה והשוואת לפני/אחרי |
+| גבולות ותצורה | `pytest tests/test_analysis.py tests/test_golden.py -q` | פער מכל אחד משלושת המצבים; מחיקת `derive_gaps` במסלול AI לא הפילה הגנה; **ה־hashes של golden לא זזו** |
+| תיקון ותצוגה | `pytest tests/test_api_analyses.py tests/test_api_applications.py tests/test_state_projection.py -q` | תיקון פירוש יוצר גרסה חדשה ואינו נוגע בישנה; ההיטל מציג את שלושת המצבים; D4 מבדיל בין מחלוקת טכנית לבחירה מהותית בלי להסיר חסימות אחרות |
+| תיקון ותצוגה, אם חוזה HTTP השתנה | `python openapi/generate_openapi.py` ואז `pytest tests/test_api_foundation.py -q` | הסכימה המחויבת אינה מתיישנת |
+| תיקון ותצוגה, אם נגעתי ב־frontend | `npm --prefix frontend run check` | typecheck (כולל ה־`Record` הממופה המלא), tokens, format, vitest |
 
 ### שער הגבול — פעם אחת, בסוף
 
@@ -598,7 +613,7 @@ classification of a requirement creates a JobAnalysis". תיקון פירוש ה
 | טופולוגיית מיגרציות, שדרוג מסד ריק, diff סכימה | **אין שינוי `alembic/`.** השדות נכנסים ל־`job_analyses.structured_json` שהוא `JSONB` קיים. תאימות היסטורית נבדקת בקוד, לא במיגרציה — §5.2 |
 | סוויטת דפדפן | שלב 1 אינו נוגע ברינדור או בנתיב תוצר |
 
-`tests/test_golden.py` נכלל ב־`pytest -q` ומורץ בנפרד ב־W5 כי §5.4 הוא סיכון
+`tests/test_golden.py` נכלל ב־`pytest -q` ומורץ בנפרד ב־גבולות ותצורה כי §5.4 הוא סיכון
 אמיתי. תזוזת hash היא ממצא, לא ערך לעדכן.
 
 ---
@@ -626,6 +641,6 @@ classification of a requirement creates a JobAnalysis". תיקון פירוש ה
   ומסלול הפער שלו כבר קיים ועובד.
 - יישור המפרטים הושלם למסגרת D2–D4; אין לפתוח החלטות אלה מחדש.
 - נותרו חוזים טכניים מפורשים בסעיף 7: סף ואיברי דרישה, שיוך גבולות וראיות,
-  ואכיפת פירוש מול הזרקה. משלימים אותם לפני הגל התלוי בהם; אין לאלתר שער
+  ואכיפת פירוש מול הזרקה. משלימים אותם לפני המימוש התלוי בהם; אין לאלתר שער
   חלש יותר כדי להתחיל חיווט. אם אין מנגנון ישים במסגרת החוזה, מדווחים חסימה.
 - שינוי חוזה נתונים אחד ללא Alembic: שדות `None` ומתאם גרסה מפורש (§2.1, §5.2).

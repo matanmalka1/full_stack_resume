@@ -14,7 +14,8 @@ Binding on what the product does. Changes by an approved decision.
 ## State and process
 
 - [Tailoring behavior change](tailoring-behavior-change.md) — approved tailoring principles
-  and remaining design work for development and sales.
+  and remaining design work for development and sales; §8 organizes execution into
+  three deliveries: correct analysis, tailored writing, and the final experience/PDF.
 - [Acceptance cases](tailoring-acceptance-cases.md) — Connecteam SDR and WeDev Junior
   Fullstack: source mappings, proposed outputs, and editing scenarios.
 - [Wording validation design](tailoring-wording-validation.md) — approved acceptance
@@ -23,8 +24,8 @@ Binding on what the product does. Changes by an approved decision.
   incorporated into the binding specifications: primary AI requirement extraction,
   the explicit deterministic path, and material professional choices. Remaining
   evidence-matching and selection/budget proposals are not blanket-approved.
-- [Stage 1 implementation plan](tailoring-stage-1-plan.md) — job understanding before
-  wording; structural decisions are resolved, while threshold/member contracts,
+- [Delivery 1 implementation plan](tailoring-stage-1-plan.md) — correct job analysis,
+  with internal tasks rather than separate waves. Structural decisions are resolved; threshold/member contracts,
   evidence/boundary mapping, and interpretation enforcement remain to be completed.
   This supporting plan does not override `spec/` or claim runtime implementation.
 - `m5-remaining.md` — M5 closure status and only the work explicitly carried forward.
