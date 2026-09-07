@@ -41,7 +41,7 @@ export const Checkbox = ({
   return (
     <label
       className={cx(
-        "flex min-h-11 items-start gap-3 rounded-control border border-transparent px-3 py-2.5 text-body transition-colors hover:border-cv-border hover:bg-cv-surface-muted has-[:disabled]:cursor-not-allowed",
+        "flex min-h-11 items-start gap-3 rounded-control border border-transparent px-3 py-2.5 text-body transition-colors hover:border-cv-border hover:bg-cv-surface-muted has-[:disabled]:cursor-not-allowed has-[:disabled]:text-cv-text-muted",
         className,
       )}
     >

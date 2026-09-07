@@ -1,6 +1,6 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
-import { surfaceClasses } from "./Surface";
+import { surfaceClasses } from "./surface";
 
 interface CardProps extends HTMLAttributes<HTMLElement> {
   children: ReactNode;

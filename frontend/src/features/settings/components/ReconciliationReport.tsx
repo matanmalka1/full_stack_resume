@@ -1,7 +1,7 @@
 import type { ReconciliationReport as ReconciliationReportData } from "@/api/contracts";
 import { Callout } from "@/ui/Callout";
 import { LtrText } from "@/ui/LtrText";
-import { surfaceClasses } from "@/ui/Surface";
+import { surfaceClasses } from "@/ui/surface";
 import { type SummaryItem, SummaryList } from "@/ui/SummaryList";
 
 const MISSING_ARTIFACT_PREFIX = "missing artifact:";

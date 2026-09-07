@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 
 import { cx } from "./cx";
-import { surfaceClasses } from "./Surface";
+import { surfaceClasses } from "./surface";
 
 interface ViewSwitchOption<TValue extends string> {
   /* An icon-only option renders its icon instead of `label` text; `label` still names

@@ -2,7 +2,7 @@ import { CalendarClock } from "lucide-react";
 
 import type { ApplicationDetail } from "@/api/contracts";
 import { StatusBadge } from "@/ui/StatusBadge";
-import { formatDate } from "@/ui/formatDateTime";
+import { formatDate } from "@/utils/formatDateTime";
 import { recruitmentStatusIcon, recruitmentStatusLabel, recruitmentStatusTone } from "../recruitmentStatus";
 
 export const RecruitmentSummary = ({ detail }: { detail: ApplicationDetail }) => (

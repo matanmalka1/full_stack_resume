@@ -5,7 +5,7 @@ import { useState } from "react";
 import type { RecruitmentTimelineItem } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { cx } from "@/ui/cx";
-import { formatDateTime } from "@/ui/formatDateTime";
+import { formatDateTime } from "@/utils/formatDateTime";
 import { recruitmentStatusIcon, recruitmentStatusTone } from "../recruitmentStatus";
 import { recruitmentEventDescription, recruitmentEventReason } from "../recruitmentTimeline";
 

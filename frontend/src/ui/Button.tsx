@@ -15,7 +15,7 @@ const baseButtonClasses =
    equal-weight buttons twitch under the pointer, so those two change color only.
 
    Disabled is a flat neutral fill, the same idiom every text control on this design
-   system already disables with (`TextInput`, `Select`: `disabled:bg-cv-surface-muted
+   system already disables with (`Input`, `Select`: `disabled:bg-cv-surface-muted
    disabled:text-cv-text-muted`) - not the accent colour dimmed by opacity. Dimming
    `cv-accent` with opacity keeps its hue: at 60% over a white surface the saturated blue
    composites to a pale blue-violet that a reader can still mistake for the same button,
@@ -60,8 +60,20 @@ export const Button = ({
       type={type ?? "button"}
       {...rest}
     >
-      {pending ? <LoaderCircle aria-hidden="true" className="size-4 shrink-0 animate-spin" /> : null}
-      {pending && pendingLabel !== undefined ? pendingLabel : children}
+      <span className="inline-grid items-center justify-items-center">
+        <span
+          aria-hidden={pending || undefined}
+          className={cx("col-start-1 row-start-1 inline-flex items-center gap-2", pending && "invisible")}
+        >
+          {children}
+        </span>
+        {pending ? (
+          <span className="col-start-1 row-start-1 inline-flex items-center gap-2">
+            <LoaderCircle aria-hidden="true" className="size-4 shrink-0 animate-spin" />
+            {pendingLabel ?? children}
+          </span>
+        ) : null}
+      </span>
     </button>
   );
 };

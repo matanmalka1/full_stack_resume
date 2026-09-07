@@ -7,7 +7,7 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Callout } from "@/ui/Callout";
 import { Field } from "@/ui/Field";
 import { Select } from "@/ui/Select";
-import { TextArea, TextInput } from "@/ui/TextInput";
+import { Input, Textarea } from "@/ui/Input";
 import { cx } from "@/ui/cx";
 import { recruitmentStatusLabel } from "../recruitmentStatus";
 import type { RecruitmentUpdateFields } from "../recruitment.types";
@@ -94,7 +94,7 @@ export const RecruitmentUpdateForm = ({
             <p className="text-support text-cv-text-muted">אין מעבר קדימה זמין מהמצב הנוכחי.</p>
           ) : null}
           {fields.targetStatus === "" ? null : (
-            <Field label="סיבת השינוי">{(control) => <TextInput {...control} {...form.register("reason")} />}</Field>
+            <Field label="סיבת השינוי">{(control) => <Input {...control} {...form.register("reason")} />}</Field>
           )}
         </div>
       </section>
@@ -111,11 +111,11 @@ export const RecruitmentUpdateForm = ({
         </div>
         <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_10rem]">
           <Field label="הפעולה הבאה">
-            {(control) => <TextInput {...control} {...form.register("nextAction")} dir="auto" />}
+            {(control) => <Input {...control} {...form.register("nextAction")} dir="auto" />}
           </Field>
           <Field label="תאריך יעד">
             {(control) => (
-              <TextInput {...control} {...form.register("nextActionDate")} className="ltr-island" type="date" />
+              <Input {...control} {...form.register("nextActionDate")} className="ltr-island" type="date" />
             )}
           </Field>
         </div>
@@ -132,7 +132,7 @@ export const RecruitmentUpdateForm = ({
           </div>
         </div>
         <Field label="תוכן ההערה">
-          {(control) => <TextArea {...control} {...form.register("notes")} className="min-h-28" dir="auto" />}
+          {(control) => <Textarea {...control} {...form.register("notes")} className="min-h-28" dir="auto" />}
         </Field>
       </section>
     </form>

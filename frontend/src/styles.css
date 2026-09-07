@@ -196,19 +196,54 @@ select {
 }
 
 .cv-field {
+  --cv-field-fill: var(--color-cv-surface);
   border-color: var(--color-cv-field-border);
+  background-color: var(--cv-field-fill);
   color: var(--color-cv-text);
   line-height: normal;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    background-color 0.2s;
+}
+
+.cv-field:hover:not(:disabled) {
+  border-color: var(--color-cv-border-strong);
 }
 
 .cv-field-input {
-  background: var(--color-cv-field-background);
+  --cv-field-fill: var(--color-cv-field-background);
   font-size: var(--text-field-input);
 }
 
 .cv-field-select {
-  background: var(--color-cv-surface);
   font-size: var(--text-field-select);
+}
+
+.cv-field-textarea {
+  border-color: var(--color-cv-border-strong);
+  font-size: var(--text-body);
+  line-height: 1.75;
+}
+
+/* Browsers paint autofilled values on their own internal layer. Repaint that layer with
+   the field's existing fill while retaining native autofill behavior and identification. */
+.cv-field:autofill {
+  background-color: var(--cv-field-fill);
+  color: var(--color-cv-text);
+  caret-color: var(--color-cv-text);
+}
+
+.cv-field:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px var(--cv-field-fill) inset;
+  -webkit-text-fill-color: var(--color-cv-text);
+  caret-color: var(--color-cv-text);
+}
+
+.cv-field[aria-invalid="true"]:-webkit-autofill {
+  -webkit-box-shadow:
+    0 0 0 1000px var(--cv-field-fill) inset,
+    0 0 0 2px var(--color-cv-blocker-soft);
 }
 
 .cv-field::placeholder {

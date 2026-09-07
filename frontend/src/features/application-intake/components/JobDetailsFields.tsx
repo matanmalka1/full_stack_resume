@@ -4,7 +4,7 @@ import type { FieldErrors, UseFormRegister } from "react-hook-form";
 
 import { Field } from "@/ui/Field";
 import { FormSection } from "@/ui/FormSection";
-import { TextInput } from "@/ui/TextInput";
+import { Input } from "@/ui/Input";
 import { LABEL_MAX_CHARACTERS, SOURCE_URL_MAX_CHARACTERS } from "@/features/applications/model/applicationInput";
 import type { ApplicationIntakeFields } from "../model/applicationIntake";
 
@@ -32,7 +32,7 @@ export const JobDetailsFields = ({ errors, onInputChanged, register }: JobDetail
       <Field error={errors.company?.message} label="שם החברה">
         {(control) => (
           <IconField icon={Building2}>
-            <TextInput
+            <Input
               {...control}
               {...register("company", {
                 onChange: onInputChanged,
@@ -50,7 +50,7 @@ export const JobDetailsFields = ({ errors, onInputChanged, register }: JobDetail
       <Field error={errors.target_role?.message} label="תפקיד היעד">
         {(control) => (
           <IconField icon={Briefcase}>
-            <TextInput
+            <Input
               {...control}
               {...register("target_role", {
                 onChange: onInputChanged,
@@ -68,7 +68,7 @@ export const JobDetailsFields = ({ errors, onInputChanged, register }: JobDetail
     <Field hint="נשמרת כתיעוד מקור בלבד, המערכת אינה פותחת את הכתובת או מייבאת ממנה טקסט." label="כתובת המשרה" optional>
       {(control) => (
         <IconField icon={Link2}>
-          <TextInput
+          <Input
             {...control}
             {...register("source_url", { onChange: onInputChanged })}
             className="ltr-island ps-10"

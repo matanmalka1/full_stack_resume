@@ -11,10 +11,10 @@ import { Callout } from "@/ui/Callout";
 import { Checkbox } from "@/ui/Checkbox";
 import { Dialog } from "@/ui/Dialog";
 import { Field } from "@/ui/Field";
-import { TextInput } from "@/ui/TextInput";
-import { formatDateTime } from "@/ui/formatDateTime";
-import { isoFromLocalDateTimeInput } from "@/ui/isoFromLocalDateTimeInput";
-import { localDateTimeInputValue } from "@/ui/localDateTimeInputValue";
+import { Input } from "@/ui/Input";
+import { formatDateTime } from "@/utils/formatDateTime";
+import { isoFromLocalDateTimeInput } from "@/utils/isoFromLocalDateTimeInput";
+import { localDateTimeInputValue } from "@/utils/localDateTimeInputValue";
 
 interface RevisionSubmissionDialogProps {
   onClose: () => void;
@@ -118,7 +118,7 @@ export const RevisionSubmissionDialog = ({
         )}
         <Field error={form.formState.errors.submittedAt?.message} label="מועד ההגשה">
           {(control) => (
-            <TextInput
+            <Input
               {...control}
               {...form.register("submittedAt", {
                 required: "יש להזין מועד הגשה.",

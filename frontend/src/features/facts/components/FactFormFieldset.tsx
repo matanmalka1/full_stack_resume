@@ -2,7 +2,7 @@ import type { FieldErrors, UseFormRegister } from "react-hook-form";
 
 import { Field } from "@/ui/Field";
 import { Select } from "@/ui/Select";
-import { TextArea, TextInput } from "@/ui/TextInput";
+import { Input, Textarea } from "@/ui/Input";
 import { factFieldRules, type FactFormFields } from "../model/factForm";
 import { factSourceLabels, factStyleLabels } from "../model/factLabels";
 
@@ -24,11 +24,11 @@ export const FactCoreFields = ({
 }: FactFormControl & { className?: string; englishHint?: string; showEnglish?: boolean }) => (
   <>
     <Field className={className} error={errors.meaning?.message} label="משמעות">
-      {(control) => <TextArea {...control} {...register("meaning", factFieldRules.meaning)} dir="auto" />}
+      {(control) => <Textarea {...control} {...register("meaning", factFieldRules.meaning)} dir="auto" />}
     </Field>
     {showEnglish ? (
       <Field error={errors.english?.message} hint={englishHint} label="ניסוח באנגלית">
-        {(control) => <TextArea {...control} {...register("english", factFieldRules.english)} dir="ltr" />}
+        {(control) => <Textarea {...control} {...register("english", factFieldRules.english)} dir="ltr" />}
       </Field>
     ) : null}
   </>
@@ -36,13 +36,13 @@ export const FactCoreFields = ({
 
 export const FactTagsField = ({ errors, register }: FactFormControl) => (
   <Field error={errors.tags?.message} hint="יש להפריד תגיות בפסיקים." label="תגיות">
-    {(control) => <TextInput {...control} {...register("tags", factFieldRules.tags)} />}
+    {(control) => <Input {...control} {...register("tags", factFieldRules.tags)} />}
   </Field>
 );
 
 export const FactProvenanceField = ({ errors, register }: FactFormControl) => (
   <Field error={errors.provenance?.message} label="מקור ואימות העובדה">
-    {(control) => <TextArea {...control} {...register("provenance", factFieldRules.provenance)} dir="auto" />}
+    {(control) => <Textarea {...control} {...register("provenance", factFieldRules.provenance)} dir="auto" />}
   </Field>
 );
 
@@ -76,6 +76,6 @@ export const FactStyleField = ({ register }: Pick<FactFormControl, "register">) 
 
 export const FactHebrewRenderingField = ({ register }: Pick<FactFormControl, "register">) => (
   <Field label="ניסוח בעברית" optional>
-    {(control) => <TextArea {...control} {...register("hebrew")} />}
+    {(control) => <Textarea {...control} {...register("hebrew")} />}
   </Field>
 );

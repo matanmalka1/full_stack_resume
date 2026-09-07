@@ -5,9 +5,9 @@ import { JOB_TEXT_MAX_BYTES } from "@/api/applications";
 import { Field } from "@/ui/Field";
 import { FormSection } from "@/ui/FormSection";
 import { LtrText } from "@/ui/LtrText";
-import { TextArea } from "@/ui/TextInput";
+import { Textarea } from "@/ui/Input";
 import { cx } from "@/ui/cx";
-import { formatBytes } from "@/ui/formatBytes";
+import { formatBytes } from "@/utils/formatBytes";
 import { isJobTextWithinBudget, jobTextByteLength, type ApplicationIntakeFields } from "../model/applicationIntake";
 
 const NOTICE_RATIO = 0.8;
@@ -58,7 +58,7 @@ export const JobTextField = ({ error, jobText, onInputChanged, register }: JobTe
         }
       >
         {(control) => (
-          <TextArea
+          <Textarea
             {...control}
             {...register("job_text", {
               onChange: onInputChanged,

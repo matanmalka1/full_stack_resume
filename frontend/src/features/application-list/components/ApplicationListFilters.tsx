@@ -2,7 +2,7 @@ import { Search } from "lucide-react";
 
 import type { ActivityFilter, ApplicationSort, PreparationState } from "@/api/contracts";
 import { Select } from "@/ui/Select";
-import { TextInput } from "@/ui/TextInput";
+import { Input } from "@/ui/Input";
 import { cx } from "@/ui/cx";
 import { preparationStateLabels } from "@/features/applications/model/applicationLabels";
 import { type RecruitmentStageId, recruitmentStages } from "../model/recruitmentStages";
@@ -65,7 +65,7 @@ export const ApplicationListFilters = ({
             aria-hidden="true"
             className="pointer-events-none absolute inset-y-0 start-3 my-auto size-4 text-cv-text-muted"
           />
-          <TextInput
+          <Input
             className={cx(toolbarControlClasses, "ps-8")}
             dir="rtl"
             id="list-search"

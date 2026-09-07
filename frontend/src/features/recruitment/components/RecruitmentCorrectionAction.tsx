@@ -10,7 +10,7 @@ import { Callout } from "@/ui/Callout";
 import { Dialog } from "@/ui/Dialog";
 import { Field } from "@/ui/Field";
 import { Select } from "@/ui/Select";
-import { TextArea } from "@/ui/TextInput";
+import { Textarea } from "@/ui/Input";
 import { useServerSyncedField } from "../hooks/useServerSyncedField";
 import { recruitmentStatusLabel, recruitmentStatuses } from "../recruitmentStatus";
 import { statusEventLabel } from "../recruitmentTimeline";
@@ -132,7 +132,7 @@ export const RecruitmentCorrectionAction = ({ detail, onChanged }: RecruitmentCo
               )}
             </Field>
             <Field className="lg:col-span-2" label="למה נדרש תיקון">
-              {(control) => <TextArea {...control} {...form.register("reason")} required />}
+              {(control) => <Textarea {...control} {...form.register("reason")} required />}
             </Field>
           </form>
         )}

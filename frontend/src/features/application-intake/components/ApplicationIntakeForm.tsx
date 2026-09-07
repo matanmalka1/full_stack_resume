@@ -5,7 +5,7 @@ import type { FieldErrors, UseFormRegister } from "react-hook-form";
 import type { DuplicateMatch } from "@/api/contracts";
 import { ActionBar } from "@/ui/ActionBar";
 import { Button } from "@/ui/Button";
-import { surfaceClasses } from "@/ui/Surface";
+import { surfaceClasses } from "@/ui/surface";
 import { isJobTextWithinBudget, type ApplicationIntakeFields } from "../model/applicationIntake";
 import { DuplicateChoices } from "./DuplicateChoices";
 import { IntakeFeedback } from "./IntakeFeedback";

@@ -9,9 +9,9 @@ import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Dialog } from "@/ui/Dialog";
 import { Field } from "@/ui/Field";
-import { TextArea, TextInput } from "@/ui/TextInput";
-import { isoFromLocalDateTimeInput } from "@/ui/isoFromLocalDateTimeInput";
-import { localDateTimeInputValue } from "@/ui/localDateTimeInputValue";
+import { Input, Textarea } from "@/ui/Input";
+import { isoFromLocalDateTimeInput } from "@/utils/isoFromLocalDateTimeInput";
+import { localDateTimeInputValue } from "@/utils/localDateTimeInputValue";
 
 interface ExternalSubmissionFields {
   note: string;
@@ -86,7 +86,7 @@ export const ExternalSubmissionAction = ({ detail, onChanged }: ExternalSubmissi
           </Callout>
           <Field error={form.formState.errors.submittedAt?.message} label="מועד ההגשה">
             {(control) => (
-              <TextInput
+              <Input
                 {...control}
                 {...form.register("submittedAt", {
                   required: "יש להזין מועד הגשה.",
@@ -98,7 +98,7 @@ export const ExternalSubmissionAction = ({ detail, onChanged }: ExternalSubmissi
             )}
           </Field>
           <Field label="הערה" optional>
-            {(control) => <TextArea {...control} {...form.register("note")} />}
+            {(control) => <Textarea {...control} {...form.register("note")} />}
           </Field>
         </form>
       </Dialog>

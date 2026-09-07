@@ -1,6 +1,6 @@
 import type { ApplicationListItem } from "@/api/contracts";
 import type { StatusTone } from "@/ui/status";
-import { formatDateTime } from "@/ui/formatDateTime";
+import { formatDateTime } from "@/utils/formatDateTime";
 import { reasonTitle, warningTitle } from "@/features/applications/model/applicationLabels";
 
 export const formatApplicationDate = (value: string): string => formatDateTime(value, "date");

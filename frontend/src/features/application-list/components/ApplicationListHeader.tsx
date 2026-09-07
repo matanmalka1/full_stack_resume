@@ -2,7 +2,7 @@ import { PlusCircle, ShieldCheck, Sparkles, UserCheck } from "lucide-react";
 import { Link, type To } from "react-router-dom";
 
 import { buttonClasses } from "@/ui/Button";
-import { surfaceClasses } from "@/ui/Surface";
+import { surfaceClasses } from "@/ui/surface";
 
 interface ApplicationListHeaderProps {
   newApplicationTo: To;

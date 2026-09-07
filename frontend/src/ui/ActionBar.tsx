@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { cx } from "./cx";
-import { surfaceClasses } from "./Surface";
+import { surfaceClasses } from "./surface";
 
 interface ActionBarProps {
   /* Where a lone action sits. A bar closing a form belongs at the end, the way a submit

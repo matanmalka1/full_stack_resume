@@ -1,5 +1,5 @@
 import type { RecruitmentTimelineItem } from "@/api/contracts";
-import { formatDate, formatDateTime } from "@/ui/formatDateTime";
+import { formatDate, formatDateTime } from "@/utils/formatDateTime";
 import { recruitmentStatusLabel } from "./recruitmentStatus";
 
 export const statusEventLabel = (event: RecruitmentTimelineItem): string =>

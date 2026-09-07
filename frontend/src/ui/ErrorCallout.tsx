@@ -1,4 +1,3 @@
-import { ApiProblem } from "@/api/client";
 import { Callout } from "./Callout";
 
 interface ErrorCalloutProps {
@@ -10,6 +9,21 @@ interface ErrorCalloutProps {
 
 const defaultFallbackDetail = "הפנייה לשרת נכשלה. אפשר לרענן את העמוד ולנסות שוב.";
 export const briefServerFailureDetail = "הפנייה לשרת נכשלה.";
+
+const problemDetailsFrom = (error: unknown): { detail: string; title: string } | null => {
+  if (typeof error !== "object" || error === null || !("problem" in error)) {
+    return null;
+  }
+
+  const problem = error.problem;
+  if (typeof problem !== "object" || problem === null || !("title" in problem) || !("detail" in problem)) {
+    return null;
+  }
+
+  return typeof problem.title === "string" && typeof problem.detail === "string"
+    ? { detail: problem.detail, title: problem.title }
+    : null;
+};
 
 /** One presentation boundary for failed API queries and mutations.
  *
@@ -27,7 +41,7 @@ export const ErrorCallout = ({
   fallbackDetail = defaultFallbackDetail,
   fallbackTitle,
 }: ErrorCalloutProps) => {
-  const problem = error instanceof ApiProblem ? error.problem : null;
+  const problem = problemDetailsFrom(error);
 
   return (
     <Callout className={className} role="alert" title={problem?.title ?? fallbackTitle} tone="blocker">

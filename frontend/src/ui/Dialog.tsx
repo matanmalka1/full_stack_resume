@@ -1,7 +1,8 @@
 import { type ReactNode, useEffect, useRef } from "react";
 
-import { surfaceClasses } from "./Surface";
+import { surfaceClasses } from "./surface";
 import { cx } from "./cx";
+import { IconButton } from "./IconButton";
 
 interface DialogProps {
   children: ReactNode;
@@ -64,6 +65,11 @@ export const Dialog = ({
           event.preventDefault();
         }
       }}
+      onClick={(event) => {
+        if (dismissible && event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
       onClose={onClose}
       ref={dialogRef}
     >
@@ -78,16 +84,15 @@ export const Dialog = ({
             {title}
           </h2>
           {dismissible ? (
-            <button
+            <IconButton
               aria-label="סגירה"
-              className="-me-2 -mt-1 inline-flex size-8 shrink-0 items-center justify-center rounded-control text-cv-text-muted transition-colors hover:bg-cv-surface-muted hover:text-cv-text"
+              className="-me-2 -mt-1 text-cv-text-muted hover:text-cv-text"
               onClick={onClose}
-              type="button"
             >
               <svg aria-hidden="true" className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" strokeWidth={1.75} />
               </svg>
-            </button>
+            </IconButton>
           ) : null}
         </div>
         <div className="min-h-0 overflow-y-auto px-6 py-5 text-body leading-7">{children}</div>

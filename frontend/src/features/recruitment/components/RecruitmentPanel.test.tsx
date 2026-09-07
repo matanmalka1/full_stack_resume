@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { applicationDetailQueryKey } from "@/api/applications";
 import type { ApplicationDetail, RecruitmentTimelineItem } from "@/api/contracts";
-import { formatDate } from "@/ui/formatDateTime";
+import { formatDate } from "@/utils/formatDateTime";
 import { RecruitmentManagerButton } from "./RecruitmentManagerButton";
 
 const statusEvent = (overrides: Partial<RecruitmentTimelineItem> = {}): RecruitmentTimelineItem => ({

@@ -6,7 +6,7 @@ import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Card } from "@/ui/Card";
 import { SummaryList } from "@/ui/SummaryList";
-import { surfaceClasses } from "@/ui/Surface";
+import { surfaceClasses } from "@/ui/surface";
 import { ValidationReportView } from "./ValidationReportView";
 
 interface RevisionRecordProps {

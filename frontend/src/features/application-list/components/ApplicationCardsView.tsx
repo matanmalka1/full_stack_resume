@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
 import { routePaths } from "@/app/routePaths";
-import { surfaceClasses } from "@/ui/Surface";
+import { surfaceClasses } from "@/ui/surface";
 import { cx } from "@/ui/cx";
 import { applicationAttention, formatApplicationDate } from "../model/applicationListPresentation";
 import { ApplicationRecommendedAction, ApplicationRecordActions } from "./ApplicationListItemActions";

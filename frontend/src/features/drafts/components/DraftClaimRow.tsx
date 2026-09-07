@@ -5,7 +5,7 @@ import type { DraftClaim, DraftFact } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { StatusBadge } from "@/ui/StatusBadge";
-import { TextArea } from "@/ui/TextInput";
+import { Textarea } from "@/ui/Input";
 import type { DraftClaimActions } from "../drafts.types";
 import type { Removability } from "../model/draftClaims";
 import { claimTypeExplanations, claimTypeLabels, claimTypeTones } from "../model/draftLabels";
@@ -97,7 +97,7 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, removal }
             keyboard user tabbing through the rows can see where they are. */}
         <div className={editing ? "rounded-control bg-cv-surface-muted" : undefined}>
           {editing ? (
-            <TextArea
+            <Textarea
               aria-label="טקסט השורה"
               className="min-h-16 resize-y border-transparent bg-transparent px-2 py-1.5 shadow-none"
               dir="auto"
