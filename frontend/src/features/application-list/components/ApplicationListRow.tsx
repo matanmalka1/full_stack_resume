@@ -3,13 +3,18 @@ import type { MouseEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
-import { appRoutes } from "@/app/appRoutes";
+import { routePaths } from "@/app/routePaths";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { cx } from "@/ui/cx";
-import { applicationAttention, formatApplicationDate } from "./applicationListPresentation";
+import { applicationAttention, formatApplicationDate } from "../model/applicationListPresentation";
 import { ApplicationRecommendedAction, ApplicationRecordActions } from "./ApplicationListItemActions";
-import { ApplicationIdentity, ApplicationNextAction, ApplicationPreparationBadge } from "./ApplicationListParts";
-import { ApplicationFitStatus, ApplicationRecruitmentStatus } from "./ApplicationListStatuses";
+import { ApplicationIdentity } from "./ApplicationIdentity";
+import { ApplicationNextAction } from "./ApplicationNextAction";
+import {
+  ApplicationFitStatus,
+  ApplicationPreparationStatus,
+  ApplicationRecruitmentStatus,
+} from "./ApplicationListStatuses";
 
 /* The list packs its statuses tighter than the calmer screens that use StatusBadge. */
 const rowBadgeClasses = "gap-1.5 px-2.5 text-start";
@@ -23,8 +28,8 @@ interface ApplicationListRowProps {
 
 export const ApplicationListRow = ({ ambiguous, item, onRequestClose, onRequestUpdate }: ApplicationListRowProps) => {
   const navigate = useNavigate();
-  const href = appRoutes.application(item.id);
-  const preparationHref = appRoutes.preparation(item.id);
+  const href = routePaths.application(item.id);
+  const preparationHref = routePaths.preparation(item.id);
   const attention = applicationAttention(item);
 
   /* The row navigates as a whole but yields to real controls and text selection. The
@@ -58,7 +63,7 @@ export const ApplicationListRow = ({ ambiguous, item, onRequestClose, onRequestU
       </td>
       <td className="px-3 py-3 align-top">
         <div className="flex flex-col items-start gap-1.5">
-          <ApplicationPreparationBadge item={item} variant="row" />
+          <ApplicationPreparationStatus item={item} variant="row" />
           {attention === null ? null : (
             <Link
               aria-label={`${item.company}: ${attention.items.map((entry) => entry.title).join(" · ")}`}

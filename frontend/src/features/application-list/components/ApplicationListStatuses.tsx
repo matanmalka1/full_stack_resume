@@ -7,7 +7,12 @@ import { cx } from "@/ui/cx";
 import { type StatusTone, statusPresentation } from "@/ui/status";
 import { fitLevelIcon, fitLevelLabel, fitLevelTone } from "@/features/applications/model/analysisLabels";
 import { recruitmentStatusIcon, recruitmentStatusLabel, recruitmentStatusTone } from "@/features/recruitment";
-import type { ApplicationListViewVariant } from "./ApplicationListParts";
+import {
+  preparationStateIcons,
+  preparationStateLabels,
+  preparationStateTones,
+} from "@/features/applications/model/applicationLabels";
+import type { ApplicationListViewVariant } from "../applicationList.types";
 
 const quietToneClasses: Record<StatusTone, string> = {
   success: "text-cv-success",
@@ -107,3 +112,19 @@ export const ApplicationRecruitmentStatus = ({
     </div>
   );
 };
+
+export const ApplicationPreparationStatus = ({
+  item,
+  variant,
+}: {
+  item: ApplicationListItem;
+  variant: ApplicationListViewVariant;
+}) => (
+  <StatusBadge
+    className={variant === "row" ? "gap-1.5 px-2.5 text-start" : variant === "card" ? "px-2.5 py-0.5" : "px-2 py-0.5"}
+    icon={preparationStateIcons[item.preparation_state]}
+    tone={preparationStateTones[item.preparation_state]}
+  >
+    {preparationStateLabels[item.preparation_state]}
+  </StatusBadge>
+);

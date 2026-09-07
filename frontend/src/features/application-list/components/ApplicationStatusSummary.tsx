@@ -5,7 +5,7 @@ import { cx } from "@/ui/cx";
 
 type MetricSelection = ApplicationPreset | "all";
 
-interface MetricsKpiGridProps {
+interface ApplicationStatusSummaryProps {
   activeInterviewsCount: number | undefined;
   activePreset: MetricSelection;
   needsAttentionCount: number | undefined;
@@ -84,14 +84,14 @@ const MetricCard = ({ active, count, description, icon: Icon, label, onSelect, t
   );
 };
 
-export const MetricsKpiGrid = ({
+export const ApplicationStatusSummary = ({
   activeInterviewsCount,
   activePreset,
   needsAttentionCount,
   onSelectPreset,
   readyCount,
   totalCount,
-}: MetricsKpiGridProps) => (
+}: ApplicationStatusSummaryProps) => (
   <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4" aria-label="מדדי מועמדויות">
     <MetricCard
       active={activePreset === "all"}

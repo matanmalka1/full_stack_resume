@@ -2,7 +2,7 @@ import { BellOff, ChevronLeft, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
-import { appRoutes } from "@/app/appRoutes";
+import { routePaths } from "@/app/routePaths";
 import { Button } from "@/ui/Button";
 import { StatusBadge } from "@/ui/StatusBadge";
 import type { StatusTone } from "@/ui/status";
@@ -11,7 +11,7 @@ import {
   formatApplicationDate,
   isDueToday,
   isNextActionOverdue,
-} from "./applicationListPresentation";
+} from "../model/applicationListPresentation";
 
 type HubItemType = "attention" | "due_today" | "overdue" | "ready";
 
@@ -26,7 +26,7 @@ interface HubItem {
   type: HubItemType;
 }
 
-interface UrgentActionHubProps {
+interface ApplicationAttentionSummaryProps {
   clearingApplicationId: string | null;
   items: readonly ApplicationListItem[];
   onClearNextAction: (application: ApplicationListItem) => void;
@@ -48,7 +48,7 @@ const hubItems = (items: readonly ApplicationListItem[], today: Date = new Date(
       continue;
     }
 
-    const applicationHref = appRoutes.application(application.id);
+    const applicationHref = routePaths.application(application.id);
     if (
       application.next_action != null &&
       application.next_action_date != null &&
@@ -72,7 +72,7 @@ const hubItems = (items: readonly ApplicationListItem[], today: Date = new Date(
     if (projectedAttention != null) {
       attention.push({
         actionLabel: "פתיחת מסך ההכנה",
-        actionTo: appRoutes.preparation(application.id),
+        actionTo: routePaths.preparation(application.id),
         application,
         label: "דורש טיפול",
         subtitle: application.target_role,
@@ -86,7 +86,7 @@ const hubItems = (items: readonly ApplicationListItem[], today: Date = new Date(
     if (application.latest_ready_revision_id != null) {
       ready.push({
         actionLabel: "פתיחת הגרסה המוכנה",
-        actionTo: appRoutes.revision(application.latest_ready_revision_id),
+        actionTo: routePaths.revision(application.latest_ready_revision_id),
         application,
         label: "מוכן לשליחה",
         subtitle: application.target_role,
@@ -103,12 +103,12 @@ const hubItems = (items: readonly ApplicationListItem[], today: Date = new Date(
   return [...due, ...attention, ...ready].slice(0, 3);
 };
 
-export const UrgentActionHub = ({
+export const ApplicationAttentionSummary = ({
   clearingApplicationId,
   items,
   onClearNextAction,
   onOpenStatusDialog,
-}: UrgentActionHubProps) => {
+}: ApplicationAttentionSummaryProps) => {
   const displayItems = hubItems(items);
 
   if (displayItems.length === 0) {

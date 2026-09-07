@@ -4,12 +4,12 @@ import { Link, type To } from "react-router-dom";
 import { buttonClasses } from "@/ui/Button";
 import { surfaceClasses } from "@/ui/Surface";
 
-interface DashboardHeaderProps {
+interface ApplicationListHeaderProps {
   newApplicationTo: To;
   totalCount: number | undefined;
 }
 
-export const DashboardHeader = ({ newApplicationTo, totalCount }: DashboardHeaderProps) => {
+export const ApplicationListHeader = ({ newApplicationTo, totalCount }: ApplicationListHeaderProps) => {
   return (
     <header className={surfaceClasses("relative overflow-hidden bg-cv-surface p-5 shadow-surface sm:p-6")}>
       <div

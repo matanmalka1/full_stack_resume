@@ -5,7 +5,7 @@ import { Select } from "@/ui/Select";
 import { TextInput } from "@/ui/TextInput";
 import { cx } from "@/ui/cx";
 import { preparationStateLabels } from "@/features/applications/model/applicationLabels";
-import { type RecruitmentStageId, recruitmentStages } from "./recruitmentStages";
+import { type RecruitmentStageId, recruitmentStages } from "../model/recruitmentStages";
 
 const activityLabels: Record<ActivityFilter, string> = {
   open: "פעילות",

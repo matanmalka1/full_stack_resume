@@ -1,8 +1,13 @@
 import type { ApplicationListItem } from "@/api/contracts";
 import { cx } from "@/ui/cx";
-import { ApplicationIdentity, ApplicationNextAction, ApplicationPreparationBadge } from "./ApplicationListParts";
-import { ApplicationFitStatus, ApplicationRecruitmentStatus } from "./ApplicationListStatuses";
-import { closedStage, recruitmentStages } from "./recruitmentStages";
+import { ApplicationIdentity } from "./ApplicationIdentity";
+import { ApplicationNextAction } from "./ApplicationNextAction";
+import {
+  ApplicationFitStatus,
+  ApplicationPreparationStatus,
+  ApplicationRecruitmentStatus,
+} from "./ApplicationListStatuses";
+import { closedStage, recruitmentStages } from "../model/recruitmentStages";
 
 interface ApplicationPipelineViewProps {
   items: readonly ApplicationListItem[];
@@ -49,7 +54,7 @@ const PipelineCard = ({
         item={item}
         variant="pipeline"
       />
-      <ApplicationPreparationBadge item={item} variant="pipeline" />
+      <ApplicationPreparationStatus item={item} variant="pipeline" />
       <ApplicationNextAction item={item} variant="pipeline" />
     </div>
     <div className="flex items-center justify-between gap-2 border-t border-cv-border pt-2 text-support">

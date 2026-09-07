@@ -2,13 +2,18 @@ import { AlertTriangle, Clock } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
-import { appRoutes } from "@/app/appRoutes";
+import { routePaths } from "@/app/routePaths";
 import { surfaceClasses } from "@/ui/Surface";
 import { cx } from "@/ui/cx";
-import { applicationAttention, formatApplicationDate } from "./applicationListPresentation";
+import { applicationAttention, formatApplicationDate } from "../model/applicationListPresentation";
 import { ApplicationRecommendedAction, ApplicationRecordActions } from "./ApplicationListItemActions";
-import { ApplicationIdentity, ApplicationNextAction, ApplicationPreparationBadge } from "./ApplicationListParts";
-import { ApplicationFitStatus, ApplicationRecruitmentStatus } from "./ApplicationListStatuses";
+import { ApplicationIdentity } from "./ApplicationIdentity";
+import { ApplicationNextAction } from "./ApplicationNextAction";
+import {
+  ApplicationFitStatus,
+  ApplicationPreparationStatus,
+  ApplicationRecruitmentStatus,
+} from "./ApplicationListStatuses";
 
 interface ApplicationCardsViewProps {
   items: readonly ApplicationListItem[];
@@ -30,7 +35,7 @@ const ApplicationCard = ({
   return (
     <article
       className={surfaceClasses(
-        "group flex h-full flex-col bg-cv-surface-raised p-5 shadow-surface transition-all hover:border-cv-border-strong hover:shadow-floating",
+        "group flex h-full min-w-0 flex-col bg-cv-surface-raised p-5 shadow-surface transition-all hover:border-cv-border-strong hover:shadow-floating",
       )}
     >
       <div className="flex-1">
@@ -41,7 +46,7 @@ const ApplicationCard = ({
 
         <div className="mb-3 flex flex-wrap items-center gap-1.5">
           <ApplicationRecruitmentStatus item={item} variant="card" />
-          <ApplicationPreparationBadge item={item} variant="card" />
+          <ApplicationPreparationStatus item={item} variant="card" />
         </div>
 
         <ApplicationNextAction closed={item.is_closed} item={item} variant="card" />
@@ -54,7 +59,7 @@ const ApplicationCard = ({
                 ? "border-cv-blocker/30 bg-cv-blocker-soft text-cv-blocker"
                 : "border-cv-warning/30 bg-cv-warning-soft text-cv-warning",
             )}
-            to={appRoutes.preparation(item.id)}
+            to={routePaths.preparation(item.id)}
           >
             <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
             <span className="line-clamp-2">{attention.label}</span>

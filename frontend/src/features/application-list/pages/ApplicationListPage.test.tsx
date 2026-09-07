@@ -3,9 +3,9 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { applicationDetailQueryOptions, applicationListQueryOptions } from "../api/applications";
-import type { ApplicationDetail, ApplicationListItem, ApplicationListResponse, Reason } from "../api/contracts";
-import { ApplicationListPage } from "@/features/application-list";
+import { applicationDetailQueryOptions, applicationListQueryOptions } from "@/api/applications";
+import type { ApplicationDetail, ApplicationListItem, ApplicationListResponse, Reason } from "@/api/contracts";
+import { ApplicationListPage } from "./ApplicationListPage";
 
 const item = (overrides: Partial<ApplicationListItem> = {}): ApplicationListItem => {
   const result = {

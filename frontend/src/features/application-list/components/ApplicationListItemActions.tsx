@@ -3,14 +3,14 @@ import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
-import { appRoutes } from "@/app/appRoutes";
+import { routePaths } from "@/app/routePaths";
 import { Button } from "@/ui/Button";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { Tooltip } from "@/ui/Tooltip";
 import { actionDestination } from "@/features/applications/components/actionDestinations";
 import { actionLabel } from "@/features/applications/model/applicationLabels";
 import { operationTypeLabels, statusLabels, statusTones } from "@/features/applications/components/operationLabels";
-import type { ApplicationListViewVariant } from "./ApplicationListParts";
+import type { ApplicationListViewVariant } from "../applicationList.types";
 
 type ActionVariant = Exclude<ApplicationListViewVariant, "pipeline">;
 
@@ -48,7 +48,7 @@ export const ApplicationRecommendedAction = ({
      the posting or policy changed after that revision was approved. */
   const readyRevisionLink =
     item.latest_ready_revision_id == null ? null : (
-      <Link className={revisionLinkClasses[variant]} to={appRoutes.revision(item.latest_ready_revision_id)}>
+      <Link className={revisionLinkClasses[variant]} to={routePaths.revision(item.latest_ready_revision_id)}>
         <FileCheck2 aria-hidden="true" className={variant === "row" ? "size-3.5 shrink-0" : "size-4 shrink-0"} />
         הגרסה המוכנה
       </Link>
@@ -66,7 +66,7 @@ export const ApplicationRecommendedAction = ({
       ) : item.recommended_action != null ? (
         <Link
           className={actionClasses[variant]}
-          to={actionDestination(item.recommended_action, item.id) ?? appRoutes.application(item.id)}
+          to={actionDestination(item.recommended_action, item.id) ?? routePaths.application(item.id)}
         >
           <ArrowLeft aria-hidden="true" className="size-4" />
           {actionLabel(item.recommended_action)}
@@ -88,7 +88,7 @@ export const ApplicationRecordActions = ({
   onRequestClose: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
 }) => (
-  <div className="flex shrink-0 items-center gap-0.5">
+  <div className="flex shrink-0 items-center gap-0.5 max-sm:[&_[role=tooltip]]:hidden">
     <Tooltip label="עדכון סטטוס ומשימות">
       <button
         aria-label={`עדכון סטטוס ומשימות עבור ${item.company}`}
