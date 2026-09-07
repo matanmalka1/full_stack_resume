@@ -7,7 +7,11 @@ import { appRoutes } from "@/app/appRoutes";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { cx } from "@/ui/cx";
 import { trackLabel } from "@/features/applications/model/analysisLabels";
-import { preparationStateIcons, preparationStateLabels, preparationStateTones } from "@/features/applications/model/applicationLabels";
+import {
+  preparationStateIcons,
+  preparationStateLabels,
+  preparationStateTones,
+} from "@/features/applications/model/applicationLabels";
 import { sourceHostname } from "@/features/applications/components/applicationPresentation";
 import { formatApplicationDate, isNextActionOverdue } from "./applicationListPresentation";
 

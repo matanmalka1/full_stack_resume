@@ -107,10 +107,7 @@ const HubTabButton = ({ isActive, onKeyDown, onSelect, ref, tab }: HubTabButtonP
       ) : null}
 
       {isActive ? (
-        <span
-          aria-hidden="true"
-          className="absolute -bottom-2.5 inset-x-2 h-0.5 rounded-full bg-cv-accent"
-        />
+        <span aria-hidden="true" className="absolute -bottom-2.5 inset-x-2 h-0.5 rounded-full bg-cv-accent" />
       ) : null}
     </button>
   );
@@ -123,11 +120,7 @@ interface HubTabPanelProps {
 }
 
 export const HubTabPanel = ({ active, children, tab }: HubTabPanelProps) => (
-  <div
-    className={active === tab ? "block space-y-6" : "hidden"}
-    id={hubTabPanelId(tab)}
-    role="tabpanel"
-  >
+  <div className={active === tab ? "block space-y-6" : "hidden"} id={hubTabPanelId(tab)} role="tabpanel">
     {children}
   </div>
 );
@@ -139,12 +132,7 @@ interface ApplicationHubTabsProps {
   openDecisionsCount?: number;
 }
 
-export const ApplicationHubTabs = ({
-  active,
-  detail,
-  onSelect,
-  openDecisionsCount = 0,
-}: ApplicationHubTabsProps) => {
+export const ApplicationHubTabs = ({ active, detail, onSelect, openDecisionsCount = 0 }: ApplicationHubTabsProps) => {
   const refs = useRef(new Map<ApplicationHubTab, HTMLButtonElement>());
   const tabs = buildApplicationHubTabs(detail, openDecisionsCount);
 
@@ -173,10 +161,7 @@ export const ApplicationHubTabs = ({
   };
 
   return (
-    <nav
-      aria-label="לשוניות מועמדות"
-      className="border-b border-cv-border bg-cv-surface/50 pb-2"
-    >
+    <nav aria-label="לשוניות מועמדות" className="border-b border-cv-border bg-cv-surface/50 pb-2">
       <div className="flex flex-wrap items-center gap-1 sm:gap-2" role="tablist">
         {tabs.map((tab) => (
           <HubTabButton

@@ -5,7 +5,13 @@ import { Field } from "@/ui/Field";
 import { Select } from "@/ui/Select";
 import { Switch } from "@/ui/Switch";
 import { TextArea } from "@/ui/TextInput";
-import { emphasisLabels, languageLabels, optionsFrom, profileLabels, trackLabels } from "@/features/applications/model/analysisLabels";
+import {
+  emphasisLabels,
+  languageLabels,
+  optionsFrom,
+  profileLabels,
+  trackLabels,
+} from "@/features/applications/model/analysisLabels";
 
 /* Which control answers which review reason. A `Record` over exactly the codes this
    screen owns, so a review reason added to the backend falls through to being named as

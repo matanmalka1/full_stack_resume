@@ -1,6 +1,11 @@
 import type { Classification } from "@/api/analyses";
 import type { StatusTone } from "@/ui/status";
-import { classificationItems, confidenceText, fitTones, overrideKeyLabels } from "@/features/applications/model/analysisLabels";
+import {
+  classificationItems,
+  confidenceText,
+  fitTones,
+  overrideKeyLabels,
+} from "@/features/applications/model/analysisLabels";
 
 /* The confidence figure's own text colour, one tone per fit level - reusing the same
    scale `StatusBadge` already draws the fit with, rather than a threshold invented for

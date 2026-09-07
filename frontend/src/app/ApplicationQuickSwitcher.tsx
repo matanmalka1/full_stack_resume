@@ -140,10 +140,7 @@ export const ApplicationQuickSwitcher = () => {
                     </div>
 
                     <div className="flex shrink-0 items-center gap-1.5">
-                      <StatusBadge
-                        className="px-2 py-0.5 text-xs"
-                        tone={preparationStateTones[item.preparation_state]}
-                      >
+                      <StatusBadge className="px-2 py-0.5 text-xs" tone={preparationStateTones[item.preparation_state]}>
                         {preparationStateLabels[item.preparation_state]}
                       </StatusBadge>
                     </div>

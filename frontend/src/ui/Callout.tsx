@@ -87,10 +87,7 @@ export const Callout = ({ action, children, className, emphasis, role, title, to
           </div>
           {children === undefined ? null : (
             <div
-              className={cx(
-                "mt-1 text-support leading-6",
-                banner ? toneIconClasses[tone] : "text-cv-text-muted",
-              )}
+              className={cx("mt-1 text-support leading-6", banner ? toneIconClasses[tone] : "text-cv-text-muted")}
               dir="auto"
             >
               {children}

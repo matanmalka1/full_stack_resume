@@ -83,10 +83,7 @@ export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
                 </Select>
               )}
             </Field>
-            <Field
-              hint="הבחירה נשמרת לכל פעולת AI חדשה; פעולה שכבר נשלחה שומרת את המודל שלה."
-              label="מודל AI"
-            >
+            <Field hint="הבחירה נשמרת לכל פעולת AI חדשה; פעולה שכבר נשלחה שומרת את המודל שלה." label="מודל AI">
               {(control) => (
                 <Select {...control} {...register("default_ai_model")}>
                   {settings.available_ai_models.map((model) => (
@@ -116,8 +113,8 @@ export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
           {selectedModel === undefined ? null : (
             <Callout title="תעריפי המודל" tone="neutral">
               <p>
-                <LtrText className="font-semibold text-cv-text">{selectedModel.label}</LtrText> — לכל מיליון טוקנים:
-                קלט <LtrText>${selectedModel.input_per_million_usd}</LtrText>, קלט שמור במטמון{" "}
+                <LtrText className="font-semibold text-cv-text">{selectedModel.label}</LtrText> — לכל מיליון טוקנים: קלט{" "}
+                <LtrText>${selectedModel.input_per_million_usd}</LtrText>, קלט שמור במטמון{" "}
                 <LtrText>${selectedModel.cached_input_per_million_usd}</LtrText>, ופלט{" "}
                 <LtrText>${selectedModel.output_per_million_usd}</LtrText>. העלות בפועל תוצג לאחר כל פעולה.
               </p>

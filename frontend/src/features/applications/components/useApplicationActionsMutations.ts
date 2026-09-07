@@ -12,12 +12,7 @@ import type { ApplicationDetail } from "@/api/contracts";
 import { archiveWorkingDraft, workingDraftQueryKey, workingDraftQueryOptions } from "@/api/drafts";
 import { executionProvider } from "@/api/settings";
 import { useSettings } from "@/api/useSettings";
-import {
-  type QueuedOperation,
-  isTerminalOperation,
-  operationQueryKey,
-  operationQueryOptions,
-} from "@/api/operations";
+import { type QueuedOperation, isTerminalOperation, operationQueryKey, operationQueryOptions } from "@/api/operations";
 import { applicationActionPlan } from "./applicationActionPlan";
 
 /* A.1: the actions come from the projection, read by `applicationActionPlan`. What is left

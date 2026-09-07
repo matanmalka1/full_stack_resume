@@ -70,11 +70,7 @@ export const PreparationTabs = ({
   };
 
   return (
-    <div
-      aria-label="חלקי מסך ההכנה"
-      className="flex gap-1 rounded-surface bg-cv-surface-muted p-1"
-      role="tablist"
-    >
+    <div aria-label="חלקי מסך ההכנה" className="flex gap-1 rounded-surface bg-cv-surface-muted p-1" role="tablist">
       {tabs.map((tab) => {
         const selected = tab.id === active;
 

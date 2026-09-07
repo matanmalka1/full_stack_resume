@@ -80,11 +80,7 @@ export const GlobalHeader = () => {
             <div className="hidden h-5 w-px bg-cv-border sm:block" />
 
             <Tooltip label="הגדרות המערכת">
-              <Link
-                aria-label="הגדרות המערכת"
-                className={buttonClasses("ghost", "p-2")}
-                to={appRoutes.settings}
-              >
+              <Link aria-label="הגדרות המערכת" className={buttonClasses("ghost", "p-2")} to={appRoutes.settings}>
                 <Settings aria-hidden="true" className="size-4 text-cv-text-muted hover:text-cv-text" />
               </Link>
             </Tooltip>
