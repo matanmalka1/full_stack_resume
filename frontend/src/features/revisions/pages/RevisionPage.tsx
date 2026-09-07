@@ -1,7 +1,9 @@
 import { FilePlus2 } from "lucide-react";
+import { useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { ErrorCallout } from "@/app/ErrorCallout";
+import { useWorkflowStage, workflowDestinations } from "@/app/WorkflowLandmark";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { PageShell } from "@/ui/PageShell";
@@ -13,13 +15,30 @@ import { RecruitmentManagerButton } from "@/features/recruitment/components/Recr
 import { RevisionRecord } from "../components/RevisionRecord";
 import { RevisionSubmissionDialog } from "../components/RevisionSubmissionDialog";
 import { RevisionSummary } from "../components/RevisionSummary";
-import { useRevisionPageState } from "../components/useRevisionPageState";
+import { useRevisionData } from "../hooks/useRevisionData";
+import { useRevisionDraftGeneration } from "../hooks/useRevisionDraftGeneration";
 
 /* One approved revision, addressed by revision rather than Application because the
    immutable record can remain current while work on a newer draft continues. */
 const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: string }) => {
-  const state = useRevisionPageState(approvedRevisionId);
-  const { detail, revision } = state;
+  const [submissionOpen, setSubmissionOpen] = useState(false);
+  const [submissionRecorded, setSubmissionRecorded] = useState(false);
+  const {
+    applicationQuery,
+    decisionQuery,
+    detail,
+    displayedWarningCode,
+    otherWarnings,
+    revision,
+    revisionQuery,
+    submittedAt,
+  } = useRevisionData(approvedRevisionId);
+  const { canCreate, createDraft, operation, watch } = useRevisionDraftGeneration(revision, detail);
+
+  useWorkflowStage(
+    detail === undefined ? "unknown" : detail.preparation_state,
+    revision === undefined ? undefined : workflowDestinations(revision.application_id, detail),
+  );
 
   return (
     <PageShell
@@ -37,26 +56,26 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
       title={revision?.ready_qualified === false ? "גרסה מאושרת" : "קורות החיים מוכנים"}
     >
       <QueryState
-        error={state.revisionQuery.error ?? state.applicationQuery.error}
+        error={revisionQuery.error ?? applicationQuery.error}
         fallbackTitle="לא ניתן לטעון את הגרסה המוכנה"
         loading={revision === undefined}
         loadingLabel="טוען את הגרסה…"
       >
         {revision === undefined ? null : (
           <>
-            {state.decisionQuery.error === null ? null : (
+            {decisionQuery.error === null ? null : (
               <ErrorCallout
-                error={state.decisionQuery.error}
+                error={decisionQuery.error}
                 fallbackDetail="הגרסה עצמה נשארה זמינה; רק מסמך הסבר ההחלטה לא נטען."
                 fallbackTitle="לא ניתן לטעון את הסבר ההחלטה"
               />
             )}
-            {state.displayedRevisionWarningCode === null ? null : (
-              <Callout title={warningTitle(state.displayedRevisionWarningCode)} tone="warning">
-                {warningDetail(state.displayedRevisionWarningCode, "")}
+            {displayedWarningCode === null ? null : (
+              <Callout title={warningTitle(displayedWarningCode)} tone="warning">
+                {warningDetail(displayedWarningCode, "")}
               </Callout>
             )}
-            {state.otherWarnings?.map((warning) => (
+            {otherWarnings.map((warning) => (
               <Callout key={warning.code} title={warningTitle(warning.code)} tone="warning">
                 {warningDetail(warning.code, warning.message)}
               </Callout>
@@ -74,43 +93,30 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
 
             <RevisionSummary
               detail={detail}
-              onOpenSubmission={state.openSubmission}
+              onOpenSubmission={() => setSubmissionOpen(true)}
               revision={revision}
-              submittedAt={state.submittedAtRecorded}
+              submittedAt={submittedAt}
             />
-            <RevisionRecord
-              decision={state.decisionQuery.data}
-              onDownloadDecision={state.downloadDecision}
-              revision={revision}
-            />
+            <RevisionRecord decision={decisionQuery.data} revision={revision} />
           </>
         )}
       </QueryState>
 
-      {state.operation === undefined ? null : (
-        <ActiveOperationPanel onQueued={state.watch} operation={state.operation} />
+      {operation === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={operation} />}
+      {createDraft.error === null ? null : (
+        <ErrorCallout error={createDraft.error} fallbackTitle="לא ניתן ליצור טיוטה חדשה" />
       )}
-      {state.newDraft.error === null ? null : (
-        <ErrorCallout error={state.newDraft.error} fallbackTitle="לא ניתן ליצור טיוטה חדשה" />
-      )}
-      {state.submission.error === null ? null : (
-        <ErrorCallout
-          error={state.submission.error}
-          fallbackDetail="ההגשה לא נרשמה וההיסטוריה לא השתנתה."
-          fallbackTitle="לא ניתן לרשום את ההגשה"
-        />
-      )}
-      {state.submission.isSuccess ? (
+      {submissionRecorded ? (
         <Callout role="status" title="ההגשה נרשמה" tone="success">
           הגרסה וקובץ ה־PDF המדויקים נוספו להיסטוריית המועמדות.
         </Callout>
       ) : null}
-      {revision !== undefined && state.hasSources ? (
+      {revision !== undefined && canCreate ? (
         <div className="flex flex-wrap gap-3">
           <Button
             disabled={detail?.working_draft_state !== "none"}
-            onClick={() => state.newDraft.mutate()}
-            pending={state.newDraft.isPending}
+            onClick={() => createDraft.mutate()}
+            pending={createDraft.isPending}
             pendingLabel="יוצר טיוטה…"
             variant="secondary"
           >
@@ -120,18 +126,15 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
         </div>
       ) : null}
 
-      <RevisionSubmissionDialog
-        onClose={state.closeSubmission}
-        onRepeatAcknowledgedChange={state.setRepeatAcknowledged}
-        onSubmit={() => state.submission.mutate()}
-        onSubmittedAtChange={state.setSubmittedAt}
-        open={state.submissionOpen}
-        pending={state.submission.isPending}
-        previousSubmittedAt={state.submittedAtRecorded}
-        repeatAcknowledged={state.repeatAcknowledged}
-        submittedAt={state.submittedAt}
-        submittedAtValid={state.submittedAtValid}
-      />
+      {revision === undefined ? null : (
+        <RevisionSubmissionDialog
+          onClose={() => setSubmissionOpen(false)}
+          onRecorded={() => setSubmissionRecorded(true)}
+          open={submissionOpen}
+          previousSubmittedAt={submittedAt}
+          revision={revision}
+        />
+      )}
     </PageShell>
   );
 };

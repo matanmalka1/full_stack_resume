@@ -9,7 +9,7 @@ import { ActionBar } from "@/ui/ActionBar";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { LiveRegion } from "@/ui/LiveRegion";
-import { ValidationReportView } from "@/features/revisions/components/ValidationReportView";
+import { ValidationReportView } from "@/features/revisions";
 
 interface DraftValidationPanelProps {
   applicationId: string;
