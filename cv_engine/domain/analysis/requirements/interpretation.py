@@ -97,9 +97,7 @@ def verify_interpretation(
 
     if interpretation.composition == "single":
         if interpretation.members:
-            raise InvalidRequirementInterpretation(
-                "composition 'single' must not declare members"
-            )
+            raise InvalidRequirementInterpretation("composition 'single' must not declare members")
     else:
         if len(interpretation.members) < 2:
             raise InvalidRequirementInterpretation(
@@ -115,8 +113,10 @@ def verify_interpretation(
                 try:
                     verify_attestation(member.attestation, source_text=source_text)
                     if requirement_span is not None and not (
-                        requirement_span[0] <= member.attestation.start
-                        < member.attestation.end <= requirement_span[1]
+                        requirement_span[0]
+                        <= member.attestation.start
+                        < member.attestation.end
+                        <= requirement_span[1]
                     ):
                         raise InvalidRequirementInterpretation(
                             "member attestation must be contained in its requirement quote"

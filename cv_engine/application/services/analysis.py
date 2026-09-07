@@ -306,7 +306,9 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                             "confidence": deterministic.confidence,
                             "language": deterministic.language,
                         },
-                        deterministic_gaps=[gap.model_dump(mode="json") for gap in deterministic.gaps],
+                        deterministic_gaps=[
+                            gap.model_dump(mode="json") for gap in deterministic.gaps
+                        ],
                         overrides={
                             str(key): value for key, value in deterministic.user_override.items()
                         },
@@ -315,7 +317,10 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                     reasoning_effort=command.reasoning_effort,
                 )
                 evidence = self.preserve(
-                    command.application_id, operation_id, "propose_job_analysis", answered.provenance
+                    command.application_id,
+                    operation_id,
+                    "propose_job_analysis",
+                    answered.provenance,
                 )
                 result = merge_classification(deterministic, answered.proposal, profiles)
                 used_provider = answered.provenance.context.provider

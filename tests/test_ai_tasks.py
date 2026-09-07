@@ -180,7 +180,9 @@ def test_propose_job_analysis_commits_an_analysis_and_its_initial_plan(
 ) -> None:
     fake_openai.script("propose_job_analysis", CLASSIFICATION)
     ingested = _ingested(ai_services, "Analysis Co")
-    completed = _run(ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai))
+    completed = _run(
+        ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
+    )
 
     assert completed.status.value == "succeeded", completed.safe_failure_detail
     outputs = {output.output_type for output in completed.outputs}
@@ -573,7 +575,9 @@ def test_a_provider_failure_never_produces_a_deterministic_result(
     """Invariant 14. The Operation fails; nothing is committed in its place."""
     fake_openai.script("propose_job_analysis", HTTPStatus(400))
     ingested = _ingested(ai_services, "Fallback Co")
-    completed = _run(ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai))
+    completed = _run(
+        ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
+    )
 
     assert completed.status.value == "failed"
     assert completed.failure_code is OperationFailureCode.PROVIDER_REFUSED
@@ -616,7 +620,9 @@ def test_a_successful_run_registers_the_sanitized_response_with_full_provenance(
     fake_openai.script("propose_job_analysis", dirty)
 
     ingested = _ingested(ai_services, "Provenance Co")
-    completed = _run(ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai))
+    completed = _run(
+        ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
+    )
     assert completed.status.value == "succeeded", completed.safe_failure_detail
 
     # Two provider responses are registered now that extraction (stage-1 plan
@@ -811,7 +817,9 @@ def test_retry_policy_distinguishes_transient_from_terminal_provider_failures(
     """§6: one transient retry, and zero retries for terminal failures."""
     fake_openai.script("propose_job_analysis", Timeout(), CLASSIFICATION)
     ingested = _ingested(ai_services, "Transient Co")
-    completed = _run(ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai))
+    completed = _run(
+        ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
+    )
 
     assert completed.status.value == "succeeded", completed.safe_failure_detail
     assert len(fake_openai.calls_for("propose_job_analysis")) == 2
@@ -821,7 +829,9 @@ def test_retry_policy_distinguishes_transient_from_terminal_provider_failures(
     calls_before = len(fake_openai.calls_for("propose_job_analysis"))
     fake_openai.script("propose_job_analysis", HTTPStatus(429))
     ingested = _ingested(ai_services, "Persistent Co")
-    completed = _run(ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai))
+    completed = _run(
+        ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
+    )
 
     assert completed.status.value == "failed"
     assert completed.failure_code is OperationFailureCode.PROVIDER_RATE_LIMITED
@@ -1039,10 +1049,7 @@ def test_unread_ai_requirements_do_not_become_high_fit(
 
 
 def test_member_quote_cannot_be_borrowed_from_another_requirement(ai_services, fake_openai):
-    job_text = (
-        "Requirements:\n- Must know React or Vue.\n"
-        "- Must have enterprise sales experience."
-    )
+    job_text = "Requirements:\n- Must know React or Vue.\n- Must have enterprise sales experience."
     quote = "Must know React or Vue"
     other = "enterprise sales experience"
     start = job_text.index(quote)
@@ -1059,13 +1066,19 @@ def test_member_quote_cannot_be_borrowed_from_another_requirement(ai_services, f
     proposal = ProposedRequirement(
         attestation=RequirementAttestation(quote=quote, start=start, end=start + len(quote)),
         interpretation=RequirementInterpretation(
-            source_role="requirement", obligation="mandatory", composition="any-of",
-            members=members, negation=False,
+            source_role="requirement",
+            obligation="mandatory",
+            composition="any-of",
+            members=members,
+            negation=False,
         ),
-        kind="compositional", label=quote,
+        kind="compositional",
+        label=quote,
     )
     completed = _extraction_operation(
-        ai_services, fake_openai, job_text,
+        ai_services,
+        fake_openai,
+        job_text,
         RequirementExtractionProposal(requirements=[proposal], unmapped_statements=[]),
     )
     assert completed.status.value == "failed"
@@ -1084,7 +1097,9 @@ def test_a_requirement_not_quoted_in_the_posting_is_rejected(ai_services, fake_o
     """
     job_text = ACCOUNT_MANAGER_JOB
     fabricated = ProposedRequirement(
-        attestation=RequirementAttestation(quote="10 years of HubSpot administration", start=0, end=10),
+        attestation=RequirementAttestation(
+            quote="10 years of HubSpot administration", start=0, end=10
+        ),
         interpretation=RequirementInterpretation(
             source_role="requirement", obligation="mandatory", composition="single", negation=False
         ),
@@ -1142,8 +1157,7 @@ def test_a_context_quote_from_elsewhere_cannot_justify_mandatory(ai_services, fa
     is a stronger result than merely not applying it.
     """
     job_text = (
-        "Responsibilities: manage inbound leads.\n\n"
-        "Requirements: 3 years of experience (must)."
+        "Responsibilities: manage inbound leads.\n\nRequirements: 3 years of experience (must)."
     )
     quote = "manage inbound leads"
     start = job_text.index(quote)

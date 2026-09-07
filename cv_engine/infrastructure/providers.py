@@ -465,7 +465,10 @@ class OpenAIProvider:
         reasoning_effort: str | None = None,
     ) -> AIProposal[RequirementExtractionProposal]:
         proposal, provenance = self._run(
-            "propose_requirement_extraction", context, model=model, reasoning_effort=reasoning_effort
+            "propose_requirement_extraction",
+            context,
+            model=model,
+            reasoning_effort=reasoning_effort,
         )
         return AIProposal(
             proposal=cast(RequirementExtractionProposal, proposal), provenance=provenance

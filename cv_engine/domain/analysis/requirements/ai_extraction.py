@@ -96,7 +96,9 @@ def _presence_coverage(
     )
     boundary = _boundary_facts(concept, facts)
     coverage: Coverage = "matched" if evidence else "unsupported"
-    missing = [] if evidence else [MissingComponent(component_id=concept.concept, label=concept.label)]
+    missing = (
+        [] if evidence else [MissingComponent(component_id=concept.concept, label=concept.label)]
+    )
     if boundary and coverage == "matched":
         coverage = "partial"
     return coverage, evidence, missing
@@ -126,7 +128,9 @@ def _compositional_concept_coverage(
             met.append(component.component_id)
             supporting.extend(evidence)
         else:
-            missing.append(MissingComponent(component_id=component.component_id, label=component.label))
+            missing.append(
+                MissingComponent(component_id=component.component_id, label=component.label)
+            )
     coverage: Coverage = "matched" if not missing else ("partial" if met else "unsupported")
     boundary = _boundary_facts(concept, facts)
     if boundary and coverage == "matched":
@@ -194,7 +198,9 @@ def cover_ai_requirement(
             concept=None,
             mandatory=interpretation.obligation == "mandatory",
             coverage="unsupported",
-            missing_components=[MissingComponent(component_id="negated", label="Negated statement")],
+            missing_components=[
+                MissingComponent(component_id="negated", label="Negated statement")
+            ],
             interpretation=interpretation,
         )
 
@@ -202,7 +208,12 @@ def cover_ai_requirement(
 
     if interpretation.composition in ("any-of", "all-of"):
         results = [
-            (member, *_member_coverage(member.attestation.quote if member.attestation else None, facts, concepts))
+            (
+                member,
+                *_member_coverage(
+                    member.attestation.quote if member.attestation else None, facts, concepts
+                ),
+            )
             for member in interpretation.members
         ]
         supporting = sorted({fact_id for _, _, ids, _ in results for fact_id in ids})
@@ -264,7 +275,9 @@ def cover_ai_requirement(
             start=0,
             end=0,
         )
-        coverage, missing_components = threshold_coverage(concept, extracted, facts, concepts.scales)
+        coverage, missing_components = threshold_coverage(
+            concept, extracted, facts, concepts.scales
+        )
         supporting = sorted(
             {
                 fact_id
@@ -370,7 +383,9 @@ def correct_interpretation(
         facts=facts,
         concepts=concepts,
     )
-    return covered.model_copy(update={"attestation": requirement.attestation, "extractor": extractor})
+    return covered.model_copy(
+        update={"attestation": requirement.attestation, "extractor": extractor}
+    )
 
 
 class RequirementExtractionRejected(ValueError):
@@ -572,7 +587,5 @@ def extraction_is_failed(
     # Declaring a statement unmapped explains the omission; it does not read it.
     # A completely unread posting must retain UNKNOWN and its explicit decision.
     return not any(
-        start < line.end and line.start < end
-        for line in lines
-        for start, end in mapped_spans
+        start < line.end and line.start < end for line in lines for start, end in mapped_spans
     )

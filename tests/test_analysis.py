@@ -1617,15 +1617,23 @@ def test_rebased_coverage_removes_only_the_resolved_review_reason(
     from cv_engine.domain.analysis.classification import rebase_requirements
 
     analysis = classify_job(
-        "Account Manager", facts=fact_store, profiles=profile_store,
-        concepts=requirement_concepts, normalized_hash="review-rebase",
+        "Account Manager",
+        facts=fact_store,
+        profiles=profile_store,
+        concepts=requirement_concepts,
+        normalized_hash="review-rebase",
     )
-    analysis = analysis.model_copy(update={
-        "approval_reasons": ["coverage-undetermined", "extraction-failed"],
-    })
+    analysis = analysis.model_copy(
+        update={
+            "approval_reasons": ["coverage-undetermined", "extraction-failed"],
+        }
+    )
     updated = rebase_requirements(
-        analysis, requirements=[], extraction_version="ai:test",
-        facts=fact_store, extraction_failed=True,
+        analysis,
+        requirements=[],
+        extraction_version="ai:test",
+        facts=fact_store,
+        extraction_failed=True,
     )
     assert "coverage-undetermined" not in updated.approval_reasons
     assert "extraction-failed" in updated.approval_reasons

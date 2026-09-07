@@ -1068,9 +1068,7 @@ def test_a_render_stopped_between_the_phases_keeps_registered_inactive_outputs(
     assert stopped.status is expected_status
     assert stopped.failure_code is expected_code
     outputs = [
-        output
-        for output in stopped.outputs
-        if output.output_type in {"resume_html", "resume_pdf"}
+        output for output in stopped.outputs if output.output_type in {"resume_html", "resume_pdf"}
     ]
     assert len(outputs) == 2
     assert all(not output.active for output in outputs)
@@ -1132,9 +1130,7 @@ def test_a_failure_partway_through_registration_leaves_no_artifact_at_all(
     after = {row["id"] for row in repository.artifact_versions(setup.application_id)}
     assert after == before, "a partial render registration survived"
     assert not [
-        output
-        for output in failed.outputs
-        if output.output_type in {"resume_html", "resume_pdf"}
+        output for output in failed.outputs if output.output_type in {"resume_html", "resume_pdf"}
     ]
 
 

@@ -184,8 +184,10 @@ class Requirement(StrictModel):
     #: None = רשומה שקדמה למרחב השמות של המחלצים.
     extractor: str | None = None
 
+
 class RequirementInterpretation(StrictModel):
     """כשהיא קיימת, כל שדותיה קיימים. אין חצי פירוש."""
+
     source_role: SourceRole
     obligation: Obligation
     composition: Composition
@@ -227,19 +229,23 @@ def interpretation_of(requirement) -> RequirementInterpretation | None:
 ### 2.2 סוגי משנה חדשים
 
 ```python
-SourceRole  = Literal["requirement", "responsibility", "company-description", "benefit", "other"]
-Obligation  = Literal["mandatory", "preferred", "unspecified"]
+SourceRole = Literal["requirement", "responsibility", "company-description", "benefit", "other"]
+Obligation = Literal["mandatory", "preferred", "unspecified"]
 Composition = Literal["single", "any-of", "all-of"]
+
 
 class RequirementMember(StrictModel):
     member_id: str
     label: str
 
+
 class RequirementAttestation(StrictModel):
     """שער המקור. היסטים לתוך טקסט התצלום כפי שנקרא מחנות המטענים."""
+
     quote: str
     start: int
     end: int
+
 
 class UnmappedStatement(StrictModel):
     start: int
@@ -248,11 +254,14 @@ class UnmappedStatement(StrictModel):
     source_role: SourceRole
     reason: str
 
+
 class UnderstandingSources(StrictModel):
     """מי הבין מה. bool אחד לא היה בר־ייחוס."""
+
     by_concepts: int
     by_rules: int
     by_ai: int
+
 
 class InterpretationDecision(StrictModel):
     prior_requirement_id: str
@@ -277,6 +286,7 @@ class ProposedRequirement(StrictModel):
     demanded: str | None = None
     #: תגיות נושא מאוצר התגיות של המאגר. תגית זרה פוסלת את ההצעה.
     topic_tags: list[str] = []
+
 
 class RequirementExtractionProposal(StrictModel):
     requirements: list[ProposedRequirement]
