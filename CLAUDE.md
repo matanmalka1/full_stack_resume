@@ -13,10 +13,13 @@ renders, projections. Getting one wrong costs a re-run. Calibrate effort to that
 One thing is not regenerable, and that is where care belongs:
 
 **Immutable records already written** — approved and submitted CV, HTML, PDF, job
-snapshot, and application records. A job snapshot preserves a posting that later vanishes
-from the web. Never overwrite or relocate one; overwriting destroys evidence nothing else
-can reproduce. Never invent a value a record never carried — a field that cannot be
-derived stays NULL.
+snapshot, and past application history. A job snapshot preserves a posting that later
+vanishes from the web. Never overwrite or relocate one; overwriting destroys evidence
+nothing else can reproduce. Never invent a value a record never carried — a field that
+cannot be derived stays NULL. This does not freeze an application's current status: a
+status field may transition per the lifecycle rules in `docs/spec/state-and-use-cases.md`.
+What is immutable is the history and artifacts already written, not the live state that
+lifecycle transitions are defined to change.
 
 ## Specifications
 
@@ -37,8 +40,10 @@ conflict silently.
 
 The user runs every gate. You never run tests — you hand over the commands.
 
-Every change needs the focused tests for what it touched. At the end of a boundary, the
-non-browser suite once.
+Every change needs the focused tests for what it touched. A **boundary** is a delivery
+point — the work handed back to the user as done, whether that's a task, a PR, or an
+explicit checkpoint the user names. It is not any internal step inside that work.
+At the end of a boundary, the non-browser suite once.
 
 Three things earn more than that, and only these:
 
@@ -73,7 +78,10 @@ Report what passed, what failed, and what remains. Never claim completion with
 
 ## Facts and AI boundaries
 
-- Never invent, strengthen, merge, or "improve" candidate facts.
+- Never invent, strengthen, merge, or "improve" candidate facts — the fact and its
+  meaning must not change. Rewording and combining sentences to fit a role is allowed
+  when the fact and its meaning are unchanged and the validation contract accepts it;
+  the restriction is on the fact, not on prose.
 - One fact has one canonical location. Profiles may reference it; they may not create
   conflicting copies.
 - New facts follow `pending -> confirmed -> canonical` unless the user confirms in the
@@ -81,13 +89,18 @@ Report what passed, what failed, and what remains. Never claim completion with
 - Unsupported factual claims block approval and `ready_qualified`. No chained or
   no-pause flow may bypass that; a blocker refuses whatever is driving it.
 - AI proposes classification, selection, and wording. Canonical facts and deterministic
-  validation stay authoritative.
+  validation stay authoritative — authoritative over meaning, not over exact wording.
+  Deterministic validation may enforce semantic equivalence to the canonical fact; it is
+  not required to demand verbatim copying, and a check that does so is enforcing more
+  than this rule requires.
 - Preserve canonical job titles, dates, metrics, uncertainty, and source provenance.
 
 ## Working rules
 
-- Stop for a blocker, an unresolved specification conflict, a required semantic
+- Stop for a blocker, an unresolved specification conflict, an *unapproved* semantic
   deviation, or material data-loss risk. Explain the issue and its consequences first.
+  Implementing a deviation the spec or the user has already approved is not a stop
+  condition — that is just the task.
 - Internal implementation details may change freely when observable behavior, safety, and
   product semantics stay the same.
 - Do not silently change workflow, validation behavior, fact semantics, application
