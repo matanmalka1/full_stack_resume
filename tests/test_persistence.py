@@ -130,7 +130,7 @@ def test_app_settings_schema_rejects_non_singleton_and_invalid_values(
 def test_app_settings_default_read_is_pure(application_repo) -> None:
     assert application_repo.app_settings().model_dump(mode="python") == {
         "edit_version": 0,
-        "auto_generate_when_review_not_required": False,
+        "auto_generate_when_review_not_required": True,
         "ai_enabled_override": None,
         "default_execution_mode": "deterministic",
         "default_ai_model": None,

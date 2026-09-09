@@ -145,6 +145,7 @@ const renderPage = (settings: Settings = deterministicSettings, routeState?: unk
       <MemoryRouter initialEntries={[{ pathname: "/applications/app-1", state: routeState }]}>
         <Routes>
           <Route element={<ApplicationPage />} path="/applications/:applicationId" />
+          <Route element={<p>Draft editor route</p>} path="/applications/:applicationId/draft" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -272,6 +273,53 @@ describe("ApplicationPage at the preparation route", () => {
     renderPage({ ...deterministicSettings, auto_generate_when_review_not_required: true });
 
     await waitFor(() => expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1));
+  });
+
+  it("moves to the editor after the automatically generated draft succeeds", async () => {
+    let projectionReads = 0;
+    const analyzed = queued({
+      status: "succeeded",
+      is_terminal: true,
+      phase: "completed",
+      available_actions: [],
+    });
+    const drafting = queued({ id: "op-draft", operation_type: "create_draft" });
+    const drafted = queued({
+      id: "op-draft",
+      operation_type: "create_draft",
+      status: "succeeded",
+      is_terminal: true,
+      phase: "completed",
+      available_actions: [],
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === "POST") return Promise.resolve(acceptedResponse(drafting));
+        if (url.endsWith("/operations/op-draft")) return Promise.resolve(jsonResponse(drafted));
+        if (url.includes("/settings")) {
+          return Promise.resolve(
+            jsonResponse({ ...deterministicSettings, auto_generate_when_review_not_required: true }),
+          );
+        }
+        if (url.includes("/operations/")) return Promise.resolve(jsonResponse(analyzed));
+        projectionReads += 1;
+        return Promise.resolve(
+          jsonResponse(
+            analyzed_detail({
+              active_operation: projectionReads === 1 ? queued({ status: "running" }) : null,
+              active_selection_plan_id: "plan-1",
+            }),
+          ),
+        );
+      }),
+    );
+
+    renderPage({ ...deterministicSettings, auto_generate_when_review_not_required: true });
+
+    expect(await screen.findByText("Draft editor route")).toBeInTheDocument();
+    expect(sessionStorage.getItem("stage-e:auto-draft-navigation:op-draft")).toBe("completed");
   });
   it("analyzes the exact snapshot the projection names and reports the queued Operation", async () => {
     /* Routed by URL rather than by call order: once the command is accepted the screen

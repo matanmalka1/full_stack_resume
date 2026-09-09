@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { routePaths } from "@/app/routePaths";
 import { useRequiredParam } from "@/app/useRequiredParam";
@@ -33,6 +34,7 @@ import { useDraftValidation } from "../hooks/useDraftValidation";
    are placed. */
 export const DraftEditorPage = () => {
   const applicationId = useRequiredParam("applicationId");
+  const navigate = useNavigate();
   const { applicationError, detail, draft, draftError, etag, facts, operation, watch, workingDraftId } =
     useDraftDocument(applicationId);
   const editing = useDraftEditing({
@@ -63,6 +65,16 @@ export const DraftEditorPage = () => {
     (workingDraftId === null && detail?.preparation_state === "approved"
       ? (detail.latest_approved_revision_id ?? null)
       : null);
+
+  useEffect(() => {
+    if (
+      operation?.operation_type === "render_revision" &&
+      operation.status === "succeeded" &&
+      renderRevisionId !== null
+    ) {
+      navigate(routePaths.revision(renderRevisionId), { replace: true });
+    }
+  }, [navigate, operation, renderRevisionId]);
 
   /* Hiding the rows must not strand text still sitting in the buffer, so the document
      view settles it first. */
@@ -125,7 +137,13 @@ export const DraftEditorPage = () => {
         </>
       )}
 
-      {renderRevisionId !== null ? <DraftRenderPanel approvedRevisionId={renderRevisionId} onQueued={watch} /> : null}
+      {renderRevisionId !== null ? (
+        <DraftRenderPanel
+          approvedRevisionId={renderRevisionId}
+          autoStart={approvedRevisionId !== null}
+          onQueued={watch}
+        />
+      ) : null}
 
       {renderRevisionId === null && draft === undefined && workingDraftId !== null && draftError === null ? (
         <QueryState loading loadingLabel="טוען את הטיוטה…" />

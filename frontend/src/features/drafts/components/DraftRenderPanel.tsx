@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 
 import { operationQueryKey } from "@/api/operations";
@@ -12,6 +12,10 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 
 interface DraftRenderPanelProps {
   approvedRevisionId: string;
+  /* True only in the render reached by this screen's just-completed approval. Reloading
+     an older approved state remains passive, so a visit never queues artifact work by
+     itself. */
+  autoStart?: boolean;
   /* What this panel just queued, handed to the editor that holds it. Rendering used to
      navigate to the Operation's own screen, which took the approved draft off the display
      at the moment the user was waiting to see what became of it - and the way back from
@@ -24,12 +28,10 @@ interface DraftRenderPanelProps {
   onQueued: (operationId: string) => void;
 }
 
-/* A.4 frame 6's render step, inline in the editor that produced the revision.
-   Rendering stays an explicit action with its own retry: it queues a durable Operation
-   and it can fail on its own, and a render that fired itself on approval would queue
-   work the user never asked for and leave a failure with nothing that asked for it.
-   Approval is what became one click; rendering is one more, in place. */
-export const DraftRenderPanel = ({ approvedRevisionId, onQueued }: DraftRenderPanelProps) => {
+/* A.4 frame 6's render step, inline in the editor that produced the revision. Explicit
+   approval starts its artifact generation; a failed Operation remains here with the same
+   manual retry, while reloading an already-approved revision does not create new work. */
+export const DraftRenderPanel = ({ approvedRevisionId, autoStart = false, onQueued }: DraftRenderPanelProps) => {
   const queryClient = useQueryClient();
   const revisionQuery = useQuery(approvedRevisionQueryOptions(approvedRevisionId));
   const revision = revisionQuery.data;
@@ -47,6 +49,12 @@ export const DraftRenderPanel = ({ approvedRevisionId, onQueued }: DraftRenderPa
   });
 
   const ready = revision?.ready_qualified === true;
+  const automaticAttempted = useRef(false);
+  useEffect(() => {
+    if (!autoStart || automaticAttempted.current || revision === undefined || ready) return;
+    automaticAttempted.current = true;
+    render.mutate();
+  }, [autoStart, ready, revision]);
 
   return (
     <>

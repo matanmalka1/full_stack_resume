@@ -335,6 +335,33 @@ describe("DraftRenderPanel", () => {
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({ application_id: "app-1" });
   });
 
+  it("starts rendering without another confirmation when reached from approval", async () => {
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) =>
+      init?.method === "POST"
+        ? Promise.resolve(json(operation(), 202, { Location: "/api/v1/operations/op-render" }))
+        : Promise.resolve(
+            json(
+              revision({
+                ready_qualified: false,
+                html_artifact_version_id: null,
+                pdf_artifact_version_id: null,
+              }),
+            ),
+          ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const onQueued = vi.fn();
+
+    renderRoute(
+      "/applications/app-1/draft",
+      "/applications/:applicationId/draft",
+      <DraftRenderPanel approvedRevisionId="revision-1" autoStart onQueued={onQueued} />,
+    );
+
+    await waitFor(() => expect(onQueued).toHaveBeenCalledWith(operation().id));
+    expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1);
+  });
+
   it("keeps the completed render transition in the wizard action bar", async () => {
     vi.stubGlobal(
       "fetch",

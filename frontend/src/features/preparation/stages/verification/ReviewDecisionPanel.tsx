@@ -9,6 +9,7 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 import { Disclosure } from "@/ui/Disclosure";
 import { surfaceClasses } from "@/ui/surface";
+import { continueAutomaticallyAfterDecisions } from "../../api/mutations";
 import { emptyDecisions, hasDecision, openDecisions, resolvedByReviewDecision } from "../../model/reviewDecisions";
 import { type ChecklistEntry, CommitBar, CommitChecklist } from "../../components/CommitBar";
 import { GapsSection } from "../analysis/GapsSection";
@@ -99,11 +100,12 @@ export const ReviewDecisionPanel = ({
       return applyAnalysisDecisions(analysisId, applicationId, submitted, selectionPlanId);
     },
     /* Nothing from the response body is seeded into the cache. `created_analysis` is read
-       as what happened rather than assumed, and the refreshed projection is what reports
-       the state that follows - which is this screen, so there is nowhere to navigate. */
+       as what happened rather than assumed, and the refreshed projection confirms whether
+       every decision actually closed before the page-level automation may create a draft. */
     onSuccess: async () => {
       setDecisions(emptyDecisions);
       setAcceptedRequirementIds([]);
+      continueAutomaticallyAfterDecisions(applicationId);
       await invalidateApplicationViews(queryClient, applicationId);
     },
   });

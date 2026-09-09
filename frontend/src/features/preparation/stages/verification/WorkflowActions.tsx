@@ -124,7 +124,10 @@ export const WorkflowActions = ({ detail, onQueued, plan }: WorkflowActionsProps
           "draft-screen",
           plan.draftScreen.href,
           plan.draftScreen.label === "אישור הגרסה" ? "מעבר לעורך לאימות ואישור" : plan.draftScreen.label,
-          plan.draftScreen.emphasized,
+          /* Automatic generation advances to this destination itself. Keep the link for
+             a reader who deliberately returned to analysis, without presenting that
+             recovery route as another workflow command they must press. */
+          false,
         );
   const readyButton =
     plan.readyRevision === null

@@ -113,6 +113,7 @@ const renderPage = () => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  sessionStorage.clear();
 });
 
 describe("the review decision, on the Application screen", () => {

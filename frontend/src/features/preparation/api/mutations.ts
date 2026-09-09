@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import {
   applicationDetailQueryKey,
@@ -13,6 +14,7 @@ import { archiveWorkingDraft, workingDraftQueryKey, workingDraftQueryOptions } f
 import { type QueuedOperation, isTerminalOperation, operationQueryKey, operationQueryOptions } from "@/api/operations";
 import { executionProvider, settingsQueryOptions } from "@/api/settings";
 import { useSettings } from "@/api/useSettings";
+import { routePaths } from "@/app/routePaths";
 import { type AutoDraftSources, autoDraftSources } from "../model/autoDraft";
 import type { WorkflowActionPlan } from "../model/workflowActionPlan";
 
@@ -54,6 +56,12 @@ export const useAnalyzeCommand = (detail: ApplicationDetail, onQueued: (operatio
 };
 
 const autoDraftReceiptKey = (operationId: string): string => `stage-e:auto-draft:${operationId}`;
+const autoDraftNavigationKey = (operationId: string): string => `stage-e:auto-draft-navigation:${operationId}`;
+const decisionContinuationKey = (applicationId: string): string => `stage-e:auto-draft-decision:${applicationId}`;
+
+export const continueAutomaticallyAfterDecisions = (applicationId: string): void => {
+  sessionStorage.setItem(decisionContinuationKey(applicationId), "pending");
+};
 
 interface AutomaticDraftAttempt {
   sources: AutoDraftSources;
@@ -84,6 +92,7 @@ export const useAutomaticDraft = ({
   watch: (operationId: string) => void;
 }) => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const settingsQuery = useQuery(settingsQueryOptions);
   const automaticDraft = useMutation({
     mutationFn: ({ sources, triggerOperationId }: AutomaticDraftAttempt) =>
@@ -95,6 +104,7 @@ export const useAutomaticDraft = ({
       ),
     onSuccess: ({ operation: queued }, attempt) => {
       sessionStorage.setItem(autoDraftReceiptKey(attempt.triggerOperationId), "accepted");
+      sessionStorage.setItem(autoDraftNavigationKey(queued.id), "pending");
       queryClient.setQueryData(operationQueryKey(queued.id), queued);
       watch(queued.id);
       void invalidateApplicationViews(queryClient, applicationId);
@@ -111,6 +121,53 @@ export const useAutomaticDraft = ({
       automaticDraft.mutate({ sources, triggerOperationId: operationId });
     }
   }, [attemptedOperationId, detail, operation, operationId, settingsQuery.data]);
+
+  /* Applying review decisions is synchronous, so there is no analyze Operation to
+     trigger the continuation above. Once the refreshed projection confirms that every
+     review reason closed, continue from its exact active analysis and plan. */
+  useEffect(() => {
+    if (
+      detail === undefined ||
+      settingsQuery.data?.settings.auto_generate_when_review_not_required !== true ||
+      sessionStorage.getItem(decisionContinuationKey(applicationId)) !== "pending" ||
+      detail.preparation_state !== "ready_to_draft" ||
+      detail.review_reasons.length !== 0 ||
+      detail.working_draft_state !== "none" ||
+      detail.active_operation != null ||
+      detail.active_analysis_id == null ||
+      detail.active_selection_plan_id == null
+    ) {
+      return;
+    }
+    const triggerOperationId = `decision:${detail.active_analysis_id}:${detail.active_selection_plan_id}`;
+    if (attemptedOperationId === triggerOperationId) return;
+    sessionStorage.setItem(decisionContinuationKey(applicationId), "dispatched");
+    automaticDraft.mutate({
+      sources: {
+        applicationId,
+        analysisId: detail.active_analysis_id,
+        planId: detail.active_selection_plan_id,
+      },
+      triggerOperationId,
+    });
+  }, [applicationId, attemptedOperationId, detail, settingsQuery.data]);
+
+  /* A queued response only says that generation may begin. Move to the editor after the
+     durable Operation reports success, when its WorkingDraft has been activated. The
+     session marker limits this continuation to drafts this hook queued automatically:
+     revisiting the analysis screen after a manual generation must remain a deliberate
+     visit rather than immediately bouncing back to the editor. */
+  useEffect(() => {
+    if (
+      operation?.operation_type !== "create_draft" ||
+      operation.status !== "succeeded" ||
+      sessionStorage.getItem(autoDraftNavigationKey(operation.id)) !== "pending"
+    ) {
+      return;
+    }
+    sessionStorage.setItem(autoDraftNavigationKey(operation.id), "completed");
+    navigate(routePaths.draft(applicationId), { replace: true });
+  }, [applicationId, navigate, operation]);
 };
 
 /* A.1: which actions are offered comes from the projection, read by `workflowActionPlan`
