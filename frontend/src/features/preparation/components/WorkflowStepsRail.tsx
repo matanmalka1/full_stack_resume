@@ -126,7 +126,11 @@ export const WorkflowStepsRail = ({ hint, label, steps }: WorkflowStepsRailProps
         {progressText === null ? null : <span className="text-[0.75rem] text-cv-text-muted">{progressText}</span>}
       </div>
 
-      <div className="min-w-0 flex-1 overflow-x-auto">
+      {/* Scrolls, but shows no bar: the rail is one line tall, and even the page's thin
+          scrollbar takes a visible share of that height rather than overlaying it.
+          Nothing here is reachable only by scrolling - every step is a link the keyboard
+          reaches in order - so hiding the bar hides no content. */}
+      <div className="scrollbar-none min-w-0 flex-1 overflow-x-auto">
         <div className="flex w-fit items-center">
           {steps.map((step, index) => {
             const body = <StepBody index={index} step={step} />;
@@ -154,7 +158,7 @@ export const WorkflowStepsRail = ({ hint, label, steps }: WorkflowStepsRailProps
                 {next === undefined ? null : (
                   <span
                     aria-hidden="true"
-                    className={cx("mx-1 h-0.5 w-6 shrink-0 rounded-pill sm:w-10", connectorClasses[next.state])}
+                    className={cx("mx-1 h-0.5 w-4 shrink-0 rounded-pill sm:w-8", connectorClasses[next.state])}
                   />
                 )}
               </Fragment>

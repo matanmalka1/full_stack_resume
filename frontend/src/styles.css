@@ -103,48 +103,63 @@ html {
   direction: rtl;
 }
 
-/* Keep page and nested scroll areas visually consistent. Firefox uses the
-   standard properties; browsers with WebKit scrollbar selectors use the more
-   expressive states below. */
+/* One scrollbar for the whole product. Every scroll area - the page, a dialog body, the
+   fact pool, a rail - draws the same thin bar over a transparent track, so a scroll area
+   is told apart by its content and not by a strip of chrome that changes weight from one
+   page to the next. It used to be a 10px bar over a filled `surface-sunken` track, which
+   on a one-line rail read as a page element rather than as a control. Firefox takes the
+   standard properties; browsers with the WebKit selectors take the more expressive rules
+   below, where a transparent border plus `background-clip` insets the thumb instead of
+   painting a track behind it. */
 * {
-  scrollbar-color: var(--color-cv-border-strong) var(--color-cv-surface-sunken);
+  scrollbar-color: var(--color-cv-border-strong) transparent;
   scrollbar-width: thin;
 }
 
 @supports selector(::-webkit-scrollbar) {
-  * {
-    scrollbar-color: auto;
-    scrollbar-width: auto;
-  }
-
   *::-webkit-scrollbar {
-    width: 0.625rem;
-    height: 0.625rem;
+    width: 0.5rem;
+    height: 0.5rem;
   }
 
-  *::-webkit-scrollbar-track {
-    background: var(--color-cv-surface-sunken);
+  *::-webkit-scrollbar-track,
+  *::-webkit-scrollbar-corner {
+    background: transparent;
   }
 
   *::-webkit-scrollbar-thumb {
     min-width: 2rem;
     min-height: 2rem;
-    border: 2px solid var(--color-cv-surface-sunken);
+    border: 2px solid transparent;
     border-radius: var(--radius-pill);
     background: var(--color-cv-border-strong);
+    background-clip: content-box;
   }
 
   *::-webkit-scrollbar-thumb:hover {
     background: var(--color-cv-accent);
+    background-clip: content-box;
   }
 
   *::-webkit-scrollbar-thumb:active {
     background: var(--color-cv-accent-hover);
+    background-clip: content-box;
   }
+}
 
-  *::-webkit-scrollbar-corner {
-    background: var(--color-cv-surface-sunken);
-  }
+/* A scroll area that is not a reading surface: a one-line rail whose content may exceed
+   its slot by a few pixels. Even the thin bar above is always present rather than an
+   overlay, and against a row this short it costs a visible share of the rail's height.
+   The scrolling itself stays - keyboard, wheel and touch all still reach the overflow -
+   only the bar is hidden. Never put this on a surface a reader must scroll to find
+   content, where the bar is the only sign that more exists. */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 body {
