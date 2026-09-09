@@ -124,10 +124,14 @@ export const WorkflowActions = ({ detail, onQueued, plan }: WorkflowActionsProps
           "draft-screen",
           plan.draftScreen.href,
           plan.draftScreen.label === "אישור הגרסה" ? "מעבר לעורך לאימות ואישור" : plan.draftScreen.label,
-          /* Automatic generation advances to this destination itself. Keep the link for
-             a reader who deliberately returned to analysis, without presenting that
-             recovery route as another workflow command they must press. */
-          false,
+          /* The projection's own recommendation, not a constant. A generate queued here
+             now advances to the editor by itself, so this link is what a reader who
+             deliberately returned to analysis presses - and when the workflow is waiting
+             on validation or approval, it is the action they came back for. Held at
+             `false` it was not merely unemphasized: beside a rendered revision the
+             fallback below handed the emphasis to "צפייה בגרסה המוכנה" while the
+             workflow was in fact waiting on the newer draft. */
+          plan.draftScreen.emphasized,
         );
   const readyButton =
     plan.readyRevision === null

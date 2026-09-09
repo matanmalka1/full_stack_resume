@@ -16,12 +16,15 @@ export interface WorkflowStep {
 }
 
 interface WorkflowStepsRailProps {
-  hint?: string;
   label: string;
   steps: WorkflowStep[];
 }
 
-const railClasses = surfaceClasses("w-full min-w-0 overflow-hidden bg-cv-surface shadow-surface");
+/* No `overflow-hidden`. It was there to keep the corners clean, but with the row inside it
+   set to scroll, what it actually did was cut the flow's last steps off the frame at the
+   widths this screen is read at. Nothing here is positioned outside the box, so the corners
+   survive without it. */
+const railClasses = surfaceClasses("w-full min-w-0 bg-cv-surface shadow-surface");
 
 const stepMarkClasses: Record<WorkflowStepState, string> = {
   complete: "border-cv-success/25 bg-cv-success-soft text-cv-success",
@@ -67,7 +70,11 @@ const StepMark = ({ index, state }: { index: number; state: WorkflowStepState })
 const StepBody = ({ index, step }: { index: number; step: WorkflowStep }) => (
   <span
     className={cx(
-      "relative flex shrink-0 items-center gap-2 rounded-pill px-2.5 py-1.5 text-support transition-colors duration-200",
+      /* Tightens rather than truncates: below the wide breakpoints the padding and the gap
+         between mark and label give up their room first, so the words themselves never
+         have to. */
+      "relative flex shrink-0 items-center gap-1.5 rounded-pill px-1.5 py-1 text-support transition-colors duration-200",
+      "lg:gap-2 lg:px-2.5 lg:py-1.5",
       stepLabelClasses[step.state],
       step.state === "current" && "bg-cv-accent-soft/55",
       step.here === true && step.state !== "current" && "bg-cv-surface-muted",
@@ -83,7 +90,7 @@ const StepBody = ({ index, step }: { index: number; step: WorkflowStep }) => (
    compact row a reader passes on the way to the content that actually needs the space.
    It used to spend a header band and a full row of large cards to say what the row below
    now says by itself - three marks, three labels, and the line between them. */
-export const WorkflowStepsRail = ({ hint, label, steps }: WorkflowStepsRailProps) => {
+export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
   const current = steps.find((step) => step.state === "current");
   const position = current === undefined ? null : steps.indexOf(current) + 1;
   const completed = current === undefined && steps.length > 0 && steps.every((step) => step.state === "complete");
@@ -126,12 +133,18 @@ export const WorkflowStepsRail = ({ hint, label, steps }: WorkflowStepsRailProps
         {progressText === null ? null : <span className="text-[0.75rem] text-cv-text-muted">{progressText}</span>}
       </div>
 
-      {/* Scrolls, but shows no bar: the rail is one line tall, and even the page's thin
-          scrollbar takes a visible share of that height rather than overlaying it.
-          Nothing here is reachable only by scrolling - every step is a link the keyboard
-          reaches in order - so hiding the bar hides no content. */}
-      <div className="scrollbar-none min-w-0 flex-1 overflow-x-auto">
-        <div className="flex w-fit items-center">
+      {/* Every step, always drawn. This used to be a bar-less horizontal scroller, on the
+          reasoning that the keyboard reaches each step in order anyway - but a sighted
+          reader has no way to know a stage exists past the edge of a strip that shows no
+          scrollbar, and the spine's whole job is to say where the work stands across all
+          four.
+
+          From the large breakpoint up the row holds its width and never breaks: the
+          padding, the gaps and the connectors tighten instead. Below that - a phone, a
+          split window - a second line is better than a row running off the frame, so the
+          row may shrink and wrap again. */}
+      <div className="min-w-0 shrink lg:shrink-0">
+        <div className="flex flex-wrap items-center gap-y-1 lg:flex-nowrap">
           {steps.map((step, index) => {
             const body = <StepBody index={index} step={step} />;
             const next = steps[index + 1];
@@ -158,7 +171,10 @@ export const WorkflowStepsRail = ({ hint, label, steps }: WorkflowStepsRailProps
                 {next === undefined ? null : (
                   <span
                     aria-hidden="true"
-                    className={cx("mx-1 h-0.5 w-4 shrink-0 rounded-pill sm:w-8", connectorClasses[next.state])}
+                    className={cx(
+                      "mx-0.5 h-0.5 w-3 shrink-0 rounded-pill lg:mx-1 lg:w-5 xl:w-8",
+                      connectorClasses[next.state],
+                    )}
                   />
                 )}
               </Fragment>
@@ -166,12 +182,6 @@ export const WorkflowStepsRail = ({ hint, label, steps }: WorkflowStepsRailProps
           })}
         </div>
       </div>
-
-      {hint === undefined ? null : (
-        <p aria-hidden="true" className="hidden max-w-64 shrink-0 truncate text-[0.75rem] text-cv-text-muted lg:block">
-          {hint}
-        </p>
-      )}
     </div>
   );
 

@@ -3,11 +3,10 @@ import { useNavigate } from "react-router-dom";
 
 import { routePaths } from "@/app/routePaths";
 import { useRequiredParam } from "@/app/useRequiredParam";
-import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
 import { ActiveOperationPanel } from "@/features/operations";
 import { applicationLabel } from "@/features/applications";
-import { PreparationAlerts, PreparationWorkflowSteps } from "@/features/preparation";
+import { PreparationAlerts, WizardStepShell } from "@/features/preparation";
 import { FactLifecyclePanel } from "@/features/facts";
 import { DraftApprovalBar } from "../components/DraftApprovalBar";
 import { DraftApprovalDialog } from "../components/DraftApprovalDialog";
@@ -86,19 +85,23 @@ export const DraftEditorPage = () => {
   const applicationHref = routePaths.application(applicationId);
 
   return (
-    <PageShell
-      /* No description: `DraftHeaderCard` below names the company and the target role
-         together, and the heading repeated the role on its own a line above it. */
+    /* No description: `DraftHeaderCard` below names the company and the target role
+       together, and the heading repeated the role on its own a line above it. The step's
+       name is the shell's, from the same table the spine marks it with - it used to be
+       "קריאה, אימות ואישור", three words the rail does not use, so the reader's position
+       had two names depending on which of the two they read. */
+    <WizardStepShell
+      applicationId={applicationId}
+      detail={detail}
       eyebrow={
         detail === undefined ? undefined : (
           <span dir="auto">{applicationLabel(detail.application.company, detail.application.target_role)}</span>
         )
       }
-      landmark={<PreparationWorkflowSteps applicationId={applicationId} detail={detail} />}
-      /* Named for the stage the spine marks, not for what the screen does. "קריאה, אימות
-         ואישור" described the same work in three words the rail does not use, so the
-         reader's position had two names depending on which of the two they read. */
-      title="טיוטה ואימות"
+      /* The one step whose body is a document beside the evidence for each of its lines.
+         Two readable columns need the wide frame the other steps do not. */
+      measure="wide"
+      stage="draft"
     >
       <QueryState
         error={applicationError}
@@ -231,6 +234,6 @@ export const DraftEditorPage = () => {
           />
         </>
       )}
-    </PageShell>
+    </WizardStepShell>
   );
 };

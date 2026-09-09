@@ -1,8 +1,7 @@
 import { useNavigate } from "react-router-dom";
 
 import { routePaths } from "@/app/routePaths";
-import { PreparationWorkflowSteps } from "@/features/preparation";
-import { PageShell } from "@/ui/PageShell";
+import { WizardStepShell } from "@/features/preparation";
 import { useAppForm } from "@/hooks/useAppForm";
 import { ApplicationIntakeForm } from "../components/ApplicationIntakeForm";
 import { useApplicationIntakeSubmission } from "../hooks/useApplicationIntakeSubmission";
@@ -37,13 +36,13 @@ export const NewApplicationPage = () => {
   );
 
   return (
-    <PageShell
+    /* The first step, and the only one with no Application to read its position from - the
+       record it creates does not exist yet, so the shell marks the stage this screen says
+       it is. The spine carries the way back to the board, so the trail that used to sit
+       above it is gone with the ones the other three steps drew. */
+    <WizardStepShell
       description="הזנת פרטי המשרה יוצרת תצלום מקור קבוע ומתחילה ניתוח התאמה מול העובדות הקנוניות."
-      /* The spine carries the way back to the board, so the trail that used to sit above
-         it is gone with the ones the other three steps drew. */
-      landmark={<PreparationWorkflowSteps stage="intake" />}
-      measure="wizard"
-      title="קליטת משרה"
+      stage="intake"
     >
       {/* The page keeps the wide measure so the wizard spine spans the frame like every
           other step, while the form itself holds the shorter reading measure a single
@@ -63,6 +62,6 @@ export const NewApplicationPage = () => {
           register={form.register}
         />
       </div>
-    </PageShell>
+    </WizardStepShell>
   );
 };

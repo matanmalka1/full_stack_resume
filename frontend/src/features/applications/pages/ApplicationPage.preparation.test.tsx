@@ -319,7 +319,46 @@ describe("ApplicationPage at the preparation route", () => {
     renderPage({ ...deterministicSettings, auto_generate_when_review_not_required: true });
 
     expect(await screen.findByText("Draft editor route")).toBeInTheDocument();
-    expect(sessionStorage.getItem("stage-e:auto-draft-navigation:op-draft")).toBe("completed");
+    expect(sessionStorage.getItem("stage-e:draft-navigation:op-draft")).toBe("completed");
+  });
+
+  /* The same move, for the generate a reader pressed. It used to belong to the automation
+     alone: a pressed generate finished and left the reader on the analysis screen, with
+     the draft it had just written reachable only through a link below - so the two ways of
+     starting the identical command ended in different places. */
+  it("moves to the editor after a pressed draft generation succeeds", async () => {
+    const drafting = queued({ id: "op-draft", operation_type: "create_draft" });
+    const drafted = queued({
+      id: "op-draft",
+      operation_type: "create_draft",
+      status: "succeeded",
+      is_terminal: true,
+      phase: "completed",
+      available_actions: [],
+    });
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") return Promise.resolve(acceptedResponse(drafting));
+      if (url.endsWith("/operations/op-draft")) return Promise.resolve(jsonResponse(drafted));
+      return Promise.resolve(
+        jsonResponse(
+          analyzed_detail({
+            available_actions: ["create_draft"],
+            recommended_action: "create_draft",
+            active_selection_plan_id: "plan-1",
+          }),
+        ),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+    await clickEnabledButton("יצירת טיוטה");
+
+    expect(await screen.findByText("Draft editor route")).toBeInTheDocument();
+    /* One command, from the press alone: the automation opt-in is off in these settings,
+       so nothing else may queue a second generate behind it. */
+    expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1);
   });
   it("analyzes the exact snapshot the projection names and reports the queued Operation", async () => {
     /* Routed by URL rather than by call order: once the command is accepted the screen

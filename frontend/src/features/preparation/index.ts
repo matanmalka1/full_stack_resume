@@ -19,9 +19,12 @@ export { CommitBar, NEXT_STEP_LABEL } from "./components/CommitBar";
    workflow is waiting on, and the facts, diagnosis and posting a press away. The hub
    renders it as the body of the preparation screen. */
 export { PreparationView } from "./components/PreparationView";
-/* Where the work stands across the three stages, for the three screens that are part of
-   preparing one CV: the hub, the editor, and the revision. */
-export { PreparationWorkflowSteps } from "./components/PreparationWorkflowSteps";
+/* The frame a step of the flow is drawn in: the spine that says where the work stands, the
+   heading named from the stage table, and the measure. A screen in the flow renders this
+   instead of assembling its own `PageShell` around the same three things - which is what
+   kept a step's heading and its chip two independently written answers to one question.
+   The spine itself is reached only through here. */
+export { WizardStepShell } from "./components/WizardStepShell";
 /* What the projection is refusing and why, with the way to the control that answers it.
    The draft editor reports the same review and stale reasons this screen does, so it
    renders this region rather than a thinner copy of it that names a blocker without

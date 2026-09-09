@@ -9,7 +9,6 @@ import {
   type WorkflowStage,
   stageForPreparationState,
   workflowDestinations,
-  workflowStageHints,
   workflowStageLabels,
   workflowStages,
 } from "../model/workflowStages";
@@ -81,11 +80,6 @@ export const PreparationWorkflowSteps = ({
     state: step.state,
   }));
 
-  /* The hint describes the screen the reader is on where that is one of the three, and
-     falls back to the stage the work is on where it is not - a revision opened from
-     outside the workflow, say. */
-  const hintStage = hereIndex === -1 ? stage : workflowStages[hereIndex];
-
   /* One way out, above the spine, and the wizard's only navigation besides it.
 
      The flow screens used to carry a breadcrumb trail as well - board › Application ›
@@ -104,11 +98,7 @@ export const PreparationWorkflowSteps = ({
         חזרה ללוח המועמדויות
       </Link>
 
-      <WorkflowStepsRail
-        hint={hintStage === undefined ? undefined : workflowStageHints[hintStage]}
-        label="שלבי הכנת קורות החיים"
-        steps={located}
-      />
+      <WorkflowStepsRail label="שלבי הכנת קורות החיים" steps={located} />
     </div>
   );
 };

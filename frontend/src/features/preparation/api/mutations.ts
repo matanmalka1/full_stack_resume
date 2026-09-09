@@ -56,7 +56,13 @@ export const useAnalyzeCommand = (detail: ApplicationDetail, onQueued: (operatio
 };
 
 const autoDraftReceiptKey = (operationId: string): string => `stage-e:auto-draft:${operationId}`;
-const autoDraftNavigationKey = (operationId: string): string => `stage-e:auto-draft-navigation:${operationId}`;
+/* A generate this session queued and therefore owes the reader a move to the editor when
+   it succeeds - whether the automation sent it or a press did. It is keyed by the queued
+   Operation rather than by how it was started, because the question the navigation effect
+   asks is "did this screen start this run", not "which path started it": a reader who
+   returns to the analysis screen later, with that same run long finished, must stay where
+   they navigated to rather than be bounced forward again. */
+const draftNavigationKey = (operationId: string): string => `stage-e:draft-navigation:${operationId}`;
 const decisionContinuationKey = (applicationId: string): string => `stage-e:auto-draft-decision:${applicationId}`;
 
 export const continueAutomaticallyAfterDecisions = (applicationId: string): void => {
@@ -68,7 +74,8 @@ interface AutomaticDraftAttempt {
   triggerOperationId: string;
 }
 
-/* Owns the Web automation continuation from a successful analysis to its draft.
+/* Owns the Web automation continuation from a successful analysis to its draft, and the
+   move to the editor once any generate this screen queued has succeeded.
 
    Eligibility comes from two server-backed reads only: the watched analyze Operation and
    the Application projection. The mutation's variables prevent another dispatch of the
@@ -104,7 +111,7 @@ export const useAutomaticDraft = ({
       ),
     onSuccess: ({ operation: queued }, attempt) => {
       sessionStorage.setItem(autoDraftReceiptKey(attempt.triggerOperationId), "accepted");
-      sessionStorage.setItem(autoDraftNavigationKey(queued.id), "pending");
+      sessionStorage.setItem(draftNavigationKey(queued.id), "pending");
       queryClient.setQueryData(operationQueryKey(queued.id), queued);
       watch(queued.id);
       void invalidateApplicationViews(queryClient, applicationId);
@@ -153,19 +160,23 @@ export const useAutomaticDraft = ({
   }, [applicationId, attemptedOperationId, detail, settingsQuery.data]);
 
   /* A queued response only says that generation may begin. Move to the editor after the
-     durable Operation reports success, when its WorkingDraft has been activated. The
-     session marker limits this continuation to drafts this hook queued automatically:
-     revisiting the analysis screen after a manual generation must remain a deliberate
-     visit rather than immediately bouncing back to the editor. */
+     durable Operation reports success, when its WorkingDraft has been activated.
+
+     The marker is the whole condition, and the Operation's type is not consulted: it was
+     written by the code that queued the run, so it already says both that this screen
+     started the work and that the work was a generate. That is what lets one effect serve
+     the automatic continuation and a press on "יצירת טיוטה" alike - the two used to differ
+     only in that the press left the reader on the analysis screen with the draft it had
+     just written one link away, which is not where the work continues. */
   useEffect(() => {
     if (
-      operation?.operation_type !== "create_draft" ||
+      operation === undefined ||
       operation.status !== "succeeded" ||
-      sessionStorage.getItem(autoDraftNavigationKey(operation.id)) !== "pending"
+      sessionStorage.getItem(draftNavigationKey(operation.id)) !== "pending"
     ) {
       return;
     }
-    sessionStorage.setItem(autoDraftNavigationKey(operation.id), "completed");
+    sessionStorage.setItem(draftNavigationKey(operation.id), "completed");
     navigate(routePaths.draft(applicationId), { replace: true });
   }, [applicationId, navigate, operation]);
 };
@@ -212,8 +223,14 @@ export const useWorkflowCommands = (
 
   const { analyze, provider, settings } = useAnalyzeCommand(detail, follow);
 
+  /* The two commands that write a WorkingDraft, followed the same way and marked the same
+     way: the draft they produce is worked on in the editor, so the run is registered as
+     one that moves the reader there when it succeeds. `useAutomaticDraft`, mounted by the
+     same screen, owns that move for both this and the automatic continuation. Analyze is
+     not marked - it stays on this screen, which is where its verdict is read. */
   const followQueued = ({ operation }: QueuedOperation) => {
     queryClient.setQueryData(operationQueryKey(operation.id), operation);
+    sessionStorage.setItem(draftNavigationKey(operation.id), "pending");
     follow(operation.id);
     void invalidateApplicationViews(queryClient, detail.application.id);
   };

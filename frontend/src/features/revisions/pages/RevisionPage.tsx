@@ -9,11 +9,10 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button, buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Disclosure } from "@/ui/Disclosure";
-import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
 import { ActiveOperationPanel } from "@/features/operations";
 import { applicationLabel } from "@/features/applications";
-import { CommitBar, NEXT_STEP_LABEL, PreparationWorkflowSteps } from "@/features/preparation";
+import { CommitBar, NEXT_STEP_LABEL, WizardStepShell } from "@/features/preparation";
 import { warningDetail, warningTitle } from "@/features/preparation";
 import { RevisionRecord } from "../components/RevisionRecord";
 import { RevisionSubmissionDialog } from "../components/RevisionSubmissionDialog";
@@ -122,19 +121,20 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
               };
 
   return (
-    <PageShell
+    <WizardStepShell
+      applicationId={revision?.application_id}
       description="הגרסה המאושרת נשארת זמינה גם כאשר העבודה על המועמדות ממשיכה."
+      detail={detail}
       eyebrow={
         detail === undefined ? undefined : (
           <span dir="auto">{applicationLabel(detail.application.company, detail.application.target_role)}</span>
         )
       }
-      landmark={<PreparationWorkflowSteps applicationId={revision?.application_id} detail={detail} />}
-      measure="wizard"
-      /* The last stage's name, qualified only where the record does not actually meet it:
-         a revision that is approved but not deliverable is not "מוכן", and saying so in
-         the heading is the difference between the two the summary below also draws. */
-      title={revision?.ready_qualified === false ? "גרסה מאושרת" : "מוכן למסירה"}
+      stage="ready"
+      /* The stage's own name everywhere except where the record does not actually meet it:
+         a revision that is approved but not deliverable is not "מוכן למסירה", and saying so
+         in the heading is the difference between the two the summary below also draws. */
+      title={revision?.ready_qualified === false ? "גרסה מאושרת" : undefined}
     >
       <QueryState
         error={revisionQuery.error ?? applicationQuery.error}
@@ -238,7 +238,7 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
           revision={revision}
         />
       )}
-    </PageShell>
+    </WizardStepShell>
   );
 };
 

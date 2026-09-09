@@ -7,10 +7,9 @@ import { useRequiredParam } from "@/app/useRequiredParam";
 import { useWatchedOperation } from "@/features/operations";
 import { Callout } from "@/ui/Callout";
 import { Disclosure } from "@/ui/Disclosure";
-import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
 import { ActiveOperationPanel } from "@/features/operations";
-import { PreparationView, PreparationWorkflowSteps, useAutomaticDraft } from "@/features/preparation";
+import { PreparationView, WizardStepShell, useAutomaticDraft } from "@/features/preparation";
 import { applicationLabel } from "../model/applicationPresentation";
 import { ApplicationArtifacts } from "../components/ApplicationArtifacts";
 import { JobSnapshotPanel } from "../components/JobSnapshotPanel";
@@ -62,19 +61,19 @@ export const ApplicationPage = () => {
   const hasArtifacts = detail !== undefined && detail.latest_ready_revision_id != null;
 
   return (
-    <PageShell
+    /* The analysis step of the wizard. Its name, its spine and its measure are the shell's;
+       what is left here is the one thing this step is identified by - who the CV is for.
+       The heading used to be the target role, which named the record rather than the step
+       and left the reader's position stated only by the rail. */
+    <WizardStepShell
+      applicationId={applicationId}
+      detail={detail}
       eyebrow={
         detail === undefined ? undefined : (
           <span dir="auto">{applicationLabel(detail.application.company, detail.application.target_role)}</span>
         )
       }
-      landmark={<PreparationWorkflowSteps applicationId={applicationId} detail={detail} />}
-      measure="wizard"
-      /* The step's name, the same word the spine above uses for it. The heading used to
-         be the target role, which named the record rather than the step and left the
-         reader's position stated only by the rail. The role and company are the eyebrow,
-         where identity belongs on a screen that is one step of a longer piece of work. */
-      title="ניתוח והתאמה"
+      stage="analysis"
     >
       <QueryState
         error={query.error}
@@ -129,6 +128,6 @@ export const ApplicationPage = () => {
           </div>
         )}
       </QueryState>
-    </PageShell>
+    </WizardStepShell>
   );
 };

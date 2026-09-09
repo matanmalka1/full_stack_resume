@@ -147,21 +147,6 @@ html {
   }
 }
 
-/* A scroll area that is not a reading surface: a one-line rail whose content may exceed
-   its slot by a few pixels. Even the thin bar above is always present rather than an
-   overlay, and against a row this short it costs a visible share of the rail's height.
-   The scrolling itself stays - keyboard, wheel and touch all still reach the overflow -
-   only the bar is hidden. Never put this on a surface a reader must scroll to find
-   content, where the bar is the only sign that more exists. */
-.scrollbar-none {
-  scrollbar-width: none;
-}
-
-.scrollbar-none::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-}
-
 body {
   min-width: 320px;
   min-height: 100vh;

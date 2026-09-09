@@ -22,23 +22,18 @@ export const workflowStages = ["intake", "analysis", "draft", "ready"] as const;
 
 export type WorkflowStage = (typeof workflowStages)[number];
 
+/* The stage names, and the only place they are written. Each screen in the flow titles
+   itself from this table rather than from a string of its own: a heading that names the
+   step differently from the chip above it gives the reader's position two names, and the
+   draft step had already been repaired that way once, one page at a time. Two stages
+   still carried the fault - "ניתוח" against a "ניתוח והתאמה" heading and "מוכן" against
+   "מוכן למסירה" - which is what a hand-kept second copy does. The fuller name is the one
+   that survives, because it is the one that says what the step is. */
 export const workflowStageLabels: Record<WorkflowStage, string> = {
   intake: "קליטת משרה",
-  analysis: "ניתוח",
+  analysis: "ניתוח והתאמה",
   draft: "טיוטה ואימות",
-  ready: "מוכן",
-};
-
-/* What each stage produces, in one line. The labels above are single nouns, and a noun
-   alone does not tell a reader what a stage is for or what has to be true before "מוכן".
-
-   These describe the stage, not what may happen next: which action is possible is
-   `available_actions` and `recommended_action`, and the landmark decides none of it. */
-export const workflowStageHints: Record<WorkflowStage, string> = {
-  intake: "הדבקת מודעת המשרה ויצירת המועמדות",
-  analysis: "התאמת המשרה לעובדות הקנוניות",
-  draft: "ניסוח, אימות מול העובדות ואישור הגרסה",
-  ready: "גרסה מאושרת ומרונדרת, מוכנה לשליחה",
+  ready: "מוכן למסירה",
 };
 
 /* Where the backend's PreparationState sits in the landmark. Exhaustive over the
@@ -53,7 +48,7 @@ export const stageForPreparationState: Record<PreparationState, WorkflowStage> =
   needs_review: "analysis",
   /* Creating the draft is the action that closes analysis. Until a draft exists there is
      no draft screen to be on, so marking the next stage here made the rail disagree with
-     the open page's "ניתוח והתאמה" heading. */
+     the open page's heading. */
   ready_to_draft: "analysis",
   draft_in_progress: "draft",
   ready_for_approval: "draft",
