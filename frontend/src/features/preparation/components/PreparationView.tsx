@@ -51,7 +51,10 @@ export const PreparationView = ({
      longer the headline of a step it is behind. The pre-analysis and superseded notes are
      always shown, because there is no later step standing in for them. */
   const draftExists = detail.working_draft_state !== "none";
-  const showBanner = supersededAnalysis || classification === null || decisionCount > 0 || !draftExists;
+  const incompleteAnalysisAccepted =
+    classification?.fit === "unknown" && !open.incompleteAnalysis && detail.preparation_state !== "needs_analysis";
+  const showBanner =
+    supersededAnalysis || classification === null || decisionCount > 0 || !draftExists || incompleteAnalysisAccepted;
 
   return (
     <div className="flex flex-col gap-4">
@@ -62,8 +65,8 @@ export const PreparationView = ({
       {showBanner ? (
         <AnalysisStatusBanner
           classification={classification}
-          decisionCount={decisionCount}
-          onShowDiagnostics={null}
+          hasOpenDecisions={decisionCount > 0}
+          incompleteAnalysisAccepted={incompleteAnalysisAccepted}
           supersededAnalysis={supersededAnalysis}
         />
       ) : null}

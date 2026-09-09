@@ -64,6 +64,7 @@ export const hasWorkflowActionsContent = (plan: WorkflowActionPlan): boolean =>
 export const workflowActionPlan = (detail: ApplicationDetail): WorkflowActionPlan => {
   const applicationId = detail.application.id;
   const recommended = detail.recommended_action ?? null;
+  const readyMilestoneCurrent = detail.preparation_state === "ready" && detail.latest_ready_revision_id != null;
   const available = (action: string): boolean => detail.available_actions.includes(action);
   const analysisId = detail.active_analysis_id ?? null;
   const selectionPlanId = detail.active_selection_plan_id ?? null;
@@ -82,6 +83,7 @@ export const workflowActionPlan = (detail: ApplicationDetail): WorkflowActionPla
       : null;
 
   const createDraft =
+    !readyMilestoneCurrent &&
     available("create_draft") && analysisId !== null && selectionPlanId !== null && !draftWouldReplace
       ? { analysisId, emphasized: recommended === "create_draft", selectionPlanId }
       : null;
@@ -106,15 +108,17 @@ export const workflowActionPlan = (detail: ApplicationDetail): WorkflowActionPla
             ? { href: editHref, label: "עריכת הטיוטה" }
             : null;
   const draftScreen =
-    draftScreenTarget === null
+    draftScreenTarget === null || (readyMilestoneCurrent && !detail.newer_draft_in_progress)
       ? null
       : {
           ...draftScreenTarget,
+          label: readyMilestoneCurrent ? "המשך עבודה על הטיוטה החדשה" : draftScreenTarget.label,
           emphasized:
-            recommended === "render" ||
-            recommended === "approve" ||
-            recommended === "validate" ||
-            recommended === "update_working_draft",
+            !readyMilestoneCurrent &&
+            (recommended === "render" ||
+              recommended === "approve" ||
+              recommended === "validate" ||
+              recommended === "update_working_draft"),
         };
 
   const readyRevision =
@@ -155,7 +159,10 @@ export const workflowActionPlan = (detail: ApplicationDetail): WorkflowActionPla
   );
 
   const unbuiltRecommendation =
-    recommended !== null && !handledHere.has(recommended) && actionDestination(recommended, applicationId) === null
+    !readyMilestoneCurrent &&
+    recommended !== null &&
+    !handledHere.has(recommended) &&
+    actionDestination(recommended, applicationId) === null
       ? recommended
       : null;
 

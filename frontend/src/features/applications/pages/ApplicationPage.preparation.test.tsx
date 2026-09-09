@@ -200,7 +200,7 @@ describe("ApplicationPage at the preparation route", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("link", { name: "Acme – Backend Engineer" })).toHaveAttribute(
+    expect(await screen.findByRole("link", { name: "Acme — Backend Engineer" })).toHaveAttribute(
       "href",
       "/applications/app-1",
     );
@@ -344,6 +344,40 @@ describe("ApplicationPage at the preparation route", () => {
     expect(await screen.findByText("הניתוח שעל המסך אינו הניתוח הפעיל")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "ניתוח המשרה" })).not.toBeInTheDocument();
     expect(screen.queryByText("The posting is a backend role.")).not.toBeInTheDocument();
+  });
+
+  it("presents an accepted incomplete analysis as recorded history, not an open instruction", async () => {
+    const accepted = analyzed_detail();
+    const latest = accepted.latest_analysis!;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          ...accepted,
+          preparation_state: "ready",
+          working_draft_state: "none",
+          active_working_draft_id: null,
+          latest_ready_revision_id: "revision-1",
+          review_reasons: [],
+          latest_analysis: {
+            ...latest,
+            analysis: {
+              ...(latest.analysis as Record<string, unknown>),
+              fit: "unknown",
+              confidence: 0,
+              approval_reasons: ["extraction-failed"],
+              user_override: { accept_incomplete_analysis: true },
+            },
+          },
+        }),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("המשך ללא ניתוח דרישות אושר")).toBeInTheDocument();
+    expect(screen.getByText(/ההמשך ללא דירוג התאמה אושר ונשמר כהחלטה/)).toBeInTheDocument();
+    expect(screen.queryByText(/נדרשת הכרעה מפורשת לפני יצירת טיוטה/)).not.toBeInTheDocument();
   });
 
   it("shows requirement coverage, resolving supporting facts by id, once the analysis carries requirements", async () => {

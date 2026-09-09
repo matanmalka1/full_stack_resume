@@ -17,6 +17,11 @@ export { PreparationView } from "./components/PreparationView";
 /* Where the work stands across the three stages, for the three screens that are part of
    preparing one CV: the hub, the editor, and the revision. */
 export { PreparationWorkflowSteps } from "./components/PreparationWorkflowSteps";
+/* What the projection is refusing and why, with the way to the control that answers it.
+   The draft editor reports the same review and stale reasons this screen does, so it
+   renders this region rather than a thinner copy of it that names a blocker without
+   naming a way out. */
+export { PreparationAlerts } from "./stages/verification/PreparationAlerts";
 
 /* The Web automation continuation from a finished analysis to its draft. Called by the
    screen that holds the watch, because that is where the Operation being followed is. */

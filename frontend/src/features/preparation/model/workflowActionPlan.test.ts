@@ -191,4 +191,45 @@ describe("recommended action destinations", () => {
     });
     expect(plan.unbuiltRecommendation).toBeNull();
   });
+
+  it("makes the current Ready revision the only preparation action when no newer draft exists", () => {
+    const plan = workflowActionPlan(
+      staleDetail({
+        preparation_state: "ready",
+        working_draft_state: "none",
+        stale_reasons: [],
+        active_working_draft_id: null,
+        latest_ready_revision_id: "revision-1",
+        available_actions: ["create_draft", "render"],
+        recommended_action: "create_draft",
+      }),
+    );
+
+    expect(plan.createDraft).toBeNull();
+    expect(plan.draftScreen).toBeNull();
+    expect(plan.readyRevision).toEqual({ emphasized: true, href: "/revisions/revision-1" });
+    expect(plan.unbuiltRecommendation).toBeNull();
+  });
+
+  it("names the distinct newer draft while preserving the usable Ready revision", () => {
+    const plan = workflowActionPlan(
+      staleDetail({
+        preparation_state: "ready",
+        working_draft_state: "validated",
+        stale_reasons: [],
+        active_working_draft_id: "draft-2",
+        latest_ready_revision_id: "revision-1",
+        newer_draft_in_progress: true,
+        available_actions: ["approve"],
+        recommended_action: "approve",
+      }),
+    );
+
+    expect(plan.draftScreen).toEqual({
+      emphasized: false,
+      href: "/applications/app-1/draft",
+      label: "המשך עבודה על הטיוטה החדשה",
+    });
+    expect(plan.readyRevision).toEqual({ emphasized: true, href: "/revisions/revision-1" });
+  });
 });

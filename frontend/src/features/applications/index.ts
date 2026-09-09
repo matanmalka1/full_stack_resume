@@ -9,5 +9,5 @@ export { ApplicationPage } from "./pages/ApplicationPage";
 /* One hierarchy for every view of an Application, so the editor and the revision screen
    cannot describe the same parent differently. */
 export { ApplicationBreadcrumbs } from "./components/ApplicationBreadcrumbs";
-export { sourceHostname } from "./model/applicationPresentation";
+export { applicationLabel, sourceHostname } from "./model/applicationPresentation";
 export { LABEL_MAX_CHARACTERS, SOURCE_URL_MAX_CHARACTERS } from "./model/applicationInput";

@@ -238,6 +238,18 @@ afterEach(() => {
 });
 
 describe("DraftEditorPage", () => {
+  it("opens on the document to approve and keeps factual editing one explicit switch away", async () => {
+    stubReads({});
+
+    renderPage();
+
+    expect(await screen.findByRole("button", { name: "מסמך לאישור" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "בדיקת עובדות ועריכה" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
   it("gates AI regeneration through effective Settings without offering a silent fallback", async () => {
     stubReads({});
 
@@ -258,11 +270,13 @@ describe("DraftEditorPage", () => {
     expect(screen.getByRole("heading", { level: 3, name: "Core Skills" })).toBeInTheDocument();
     expect(screen.getAllByText("מבוסס עובדה").length).toBeGreaterThan(0);
     /* The headline is a line of the document rather than a field: it is drawn as text
-       under its own "כותרת" status, and the header card above names the same role. */
+       under its own "כותרת" status, and it is now the only place the role is written on
+       its own - the header card used to name it a second time, two lines under the
+       breadcrumb trail that already names it beside the company. */
     expect(screen.getByText("כותרת", { selector: "span" })).toBeInTheDocument();
-    expect(screen.getAllByText("Account Manager")).toHaveLength(2);
+    expect(screen.getAllByText("Account Manager")).toHaveLength(1);
     const breadcrumbs = screen.getByRole("navigation", { name: "פירורי לחם" });
-    expect(within(breadcrumbs).getByRole("link", { name: "Acme – Account Manager" })).toHaveAttribute(
+    expect(within(breadcrumbs).getByRole("link", { name: "Acme — Account Manager" })).toHaveAttribute(
       "href",
       "/applications/app-1",
     );
@@ -519,11 +533,44 @@ describe("DraftEditorPage", () => {
 
     /* The projection's reason reaches the screen as its own code, titled from the code
        rather than by the backend's sentence: the message is written to be complete, and
-       several of them stacked was what made this screen open with a wall of prose. What
-       the test guards is unchanged - the blocker shown is the projection's, not a rule
-       this screen invented. */
+       several of them stacked was what made this screen open with a wall of prose. It is
+       kept rather than dropped - folded behind its disclosure, so the evidence is one
+       press away instead of gone. What the test guards is unchanged - the blocker shown
+       is the projection's, not a rule this screen invented.
+
+       No resolution link: both resolution actions this reason allows are answered on this
+       very screen, and a link to the page the reader is reading is not an answer. */
     expect(await screen.findByText("טענה בלי עובדה מאושרת")).toBeInTheDocument();
-    expect(screen.queryByText("A claim in the active draft depends on a pending fact.")).toBeNull();
+    expect(screen.getByText("A claim in the active draft depends on a pending fact.")).not.toBeVisible();
+    expect(screen.queryByRole("link", { name: "עריכת הטיוטה" })).toBeNull();
+  });
+
+  it("routes a blocker it cannot answer to the screen that owns the control", async () => {
+    stubReads({
+      detail: () =>
+        jsonResponse(
+          detail({
+            review_reasons: [
+              {
+                code: "HARD_GAP_REQUIRES_DECISION",
+                message: "A hard requirement has no canonical fact behind it.",
+                entity_references: {},
+                allowed_resolution_actions: ["apply_analysis_decisions"],
+              },
+            ],
+          } as Partial<ApplicationDetail>),
+        ),
+    });
+
+    renderPage();
+
+    /* The decision form lives on the preparation screen. Naming the blocker here without
+       naming a way to it left approval refused with nothing to press - the editor used to
+       render its own bare title for exactly this case. */
+    expect(await screen.findByRole("link", { name: "החלת החלטות הסקירה" })).toHaveAttribute(
+      "href",
+      "/applications/app-1/preparation",
+    );
   });
 
   it("says plainly when there is no active draft instead of reading one that does not exist", async () => {

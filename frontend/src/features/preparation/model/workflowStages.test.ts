@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ApplicationDetail } from "@/api/contracts";
-import { workflowDestinations } from "./workflowStages";
+import { stageForPreparationState, workflowDestinations } from "./workflowStages";
 
 const detail = (overrides: Partial<ApplicationDetail>) => overrides as ApplicationDetail;
 
@@ -20,12 +20,25 @@ describe("workflowDestinations", () => {
     );
   });
 
-  /* A rendered revision is what "מוכן" means to the reader; the approved one answers only
-     while no render exists yet. */
-  it("names the ready revision, preferring the rendered one", () => {
-    expect(workflowDestinations("app-1", detail({ latest_approved_revision_id: "rev-a" })).ready).toBe(
-      "/revisions/rev-a",
-    );
+  /* Approval still has one explicit action left: rendering. The ready destination must
+     not claim that an unrendered revision is ready. */
+  it("keeps an approved revision in the draft stage until a rendered revision exists", () => {
+    expect(stageForPreparationState.approved).toBe("draft");
+    expect(
+      workflowDestinations(
+        "app-1",
+        detail({ preparation_state: "approved", latest_approved_revision_id: "rev-a" }),
+      ),
+    ).toMatchObject({ draft: "/applications/app-1/draft" });
+    expect(
+      workflowDestinations(
+        "app-1",
+        detail({ preparation_state: "approved", latest_approved_revision_id: "rev-a" }),
+      ),
+    ).not.toHaveProperty("ready");
+  });
+
+  it("names only the rendered ready revision", () => {
     expect(
       workflowDestinations("app-1", detail({ latest_approved_revision_id: "rev-a", latest_ready_revision_id: "rev-b" }))
         .ready,

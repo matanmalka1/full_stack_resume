@@ -54,7 +54,7 @@ export const stageForPreparationState: Record<PreparationState, WorkflowStage> =
   ready_to_draft: "draft",
   draft_in_progress: "draft",
   ready_for_approval: "draft",
-  approved: "ready",
+  approved: "draft",
   ready: "ready",
 };
 
@@ -69,20 +69,19 @@ export type StageDestinations = Partial<Record<WorkflowStage, string>>;
    breadcrumbs and in the shell header.
 
    The editor is one destination for one stage: the draft, its validation, and its
-   approval are panels of that single screen. Ready names the revision the Application
-   currently stands on - `latest_ready_revision_id` first, because a rendered revision is
-   the one the reader means by "מוכן", and the approved revision only while no render
-   exists yet. */
+   approval are panels of that single screen. Ready names only a rendered revision.
+   Approval remains in the draft stage until rendering succeeds, and the editor stays
+   reachable because it owns that explicit render action. */
 export const workflowDestinations = (
   applicationId: string,
   detail: ApplicationDetail | undefined,
 ): StageDestinations => {
-  const readyRevisionId = detail?.latest_ready_revision_id ?? detail?.latest_approved_revision_id ?? null;
-  const editable = detail?.active_working_draft_id != null;
+  const readyRevisionId = detail?.latest_ready_revision_id ?? null;
+  const draftAvailable = detail?.active_working_draft_id != null || detail?.preparation_state === "approved";
 
   return {
     analysis: routePaths.preparation(applicationId),
-    ...(editable ? { draft: routePaths.draft(applicationId) } : {}),
+    ...(draftAvailable ? { draft: routePaths.draft(applicationId) } : {}),
     ...(readyRevisionId == null ? {} : { ready: routePaths.revision(readyRevisionId) }),
   };
 };

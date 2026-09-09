@@ -14,10 +14,10 @@ import {
   failureTones,
   joinHebrewList,
   operationTypeLabels,
-  phaseLabels,
   statusLabels,
   statusTones,
 } from "../model/operationLabels";
+import { operationProgressLabel } from "../model/operationProgress";
 
 const reasoningEffortLabels: Record<NonNullable<Operation["reasoning_effort"]>, string> = {
   low: "נמוך",
@@ -54,6 +54,7 @@ export const ActiveOperationPanel = ({
   operation: Operation;
 }) => {
   const terminal = isTerminalOperation(operation);
+  const progressLabel = operationProgressLabel(operation);
   const failure = operation.failure_code == null ? null : failurePresentations[operation.failure_code];
   const produced = activeOutputLabels(operation);
   const aiExecution = operation.provider === "openai" && operation.model != null;
@@ -126,25 +127,13 @@ export const ActiveOperationPanel = ({
           הרצת {operationTypeLabels[operation.operation_type]}
         </h2>
         <div className="flex flex-wrap items-center gap-3">
-          <StatusBadge tone={statusTones[operation.status]}>{statusLabels[operation.status]}</StatusBadge>
-          {/* The phase is the progress axis and earns its place only when it says
-              something the status has not. The two share vocabulary at both ends -
-              `queued`/`queued` are both "ממתינה בתור", `succeeded`/`completed` both
-              "הושלמה" - so the test is whether the words differ, not whether the run has
-              finished. Keyed on `terminal` alone, a queued run printed one word twice. */}
-          {phaseLabels[operation.phase] === statusLabels[operation.status] ? null : (
-            <span className="text-support text-cv-text-muted">{phaseLabels[operation.phase]}</span>
-          )}
+          <StatusBadge tone={statusTones[operation.status]}>{progressLabel}</StatusBadge>
         </div>
       </div>
 
-      {/* A.5: the announcement is the status and phase themselves, so an identical poll
-          tick re-renders without speaking. */}
-      <LiveRegion>
-        {phaseLabels[operation.phase] === statusLabels[operation.status]
-          ? statusLabels[operation.status]
-          : `${statusLabels[operation.status]}. ${phaseLabels[operation.phase]}.`}
-      </LiveRegion>
+      {/* A.5: announce the same single progress sentence shown in the badge, so an
+          identical poll tick re-renders without speaking. */}
+      <LiveRegion>{progressLabel}</LiveRegion>
 
       <div className="mt-4 flex flex-col gap-4">
         {executionDetail}

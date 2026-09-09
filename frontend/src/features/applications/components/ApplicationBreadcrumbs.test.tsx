@@ -19,7 +19,7 @@ describe("ApplicationBreadcrumbs", () => {
 
     const breadcrumbs = screen.getByRole("navigation", { name: "פירורי לחם" });
     expect(within(breadcrumbs).getByRole("link", { name: "מועמדויות" })).toHaveAttribute("href", "/");
-    expect(within(breadcrumbs).getByRole("link", { name: "Google – מפתח Full Stack" })).toHaveAttribute(
+    expect(within(breadcrumbs).getByRole("link", { name: "Google — מפתח Full Stack" })).toHaveAttribute(
       "href",
       "/applications/record%20%2F%20%D7%A2%D7%91%D7%A8%D7%99%D7%AA",
     );

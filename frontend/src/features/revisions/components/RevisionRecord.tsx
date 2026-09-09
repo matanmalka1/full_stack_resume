@@ -5,6 +5,7 @@ import { approvedPreviewSrc, type DecisionMarkdownDownload } from "@/api/revisio
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Card } from "@/ui/Card";
+import { Disclosure } from "@/ui/Disclosure";
 import { SummaryList } from "@/ui/SummaryList";
 import { surfaceClasses } from "@/ui/surface";
 import { ValidationReportView } from "./ValidationReportView";
@@ -45,24 +46,26 @@ export const RevisionRecord = ({ decision, revision }: RevisionRecordProps) => {
       </div>
 
       <aside aria-label="פרטי הגרסה והאימות" className="flex min-w-0 flex-col gap-6">
-        <Card aria-labelledby="revision-record-heading" className="overflow-x-auto bg-cv-surface p-4 shadow-surface">
-          <h2 className="flex items-center gap-2 font-semibold text-cv-text" id="revision-record-heading">
-            <Lock aria-hidden="true" className="size-4 text-cv-accent" />
-            הרשומה הקבועה
-          </h2>
-          <SummaryList
-            className="mt-4"
-            items={[
-              { term: "מזהה גרסה", value: revision.id, ltr: true },
-              { term: "מספר גרסה", value: revision.version_number, ltr: true },
-              { term: "תצלום משרה", value: revision.job_snapshot_id, ltr: true },
-              { term: "ריצת אימות", value: revision.validation_run_id, ltr: true },
-              { term: "חתימת הטיוטה", value: revision.draft_content_hash, ltr: true },
-              { term: "קובץ HTML", value: revision.html_artifact_version_id == null ? "חסר" : "קיים" },
-              { term: "קובץ PDF", value: revision.pdf_artifact_version_id == null ? "חסר" : "קיים" },
-            ]}
-          />
-        </Card>
+        <Disclosure summary="פרטים טכניים וביקורת">
+          <Card aria-labelledby="revision-record-heading" className="overflow-x-auto bg-cv-surface p-4 shadow-surface">
+            <h2 className="flex items-center gap-2 font-semibold text-cv-text" id="revision-record-heading">
+              <Lock aria-hidden="true" className="size-4 text-cv-accent" />
+              הרשומה הקבועה
+            </h2>
+            <SummaryList
+              className="mt-4"
+              items={[
+                { term: "מזהה גרסה", value: revision.id, ltr: true },
+                { term: "מספר גרסה", value: revision.version_number, ltr: true },
+                { term: "תצלום משרה", value: revision.job_snapshot_id, ltr: true },
+                { term: "ריצת אימות", value: revision.validation_run_id, ltr: true },
+                { term: "חתימת הטיוטה", value: revision.draft_content_hash, ltr: true },
+                { term: "קובץ HTML", value: revision.html_artifact_version_id == null ? "חסר" : "קיים" },
+                { term: "קובץ PDF", value: revision.pdf_artifact_version_id == null ? "חסר" : "קיים" },
+              ]}
+            />
+          </Card>
+        </Disclosure>
 
         <Card aria-labelledby="ready-validation-heading" className="bg-cv-surface p-4 shadow-surface">
           <h2 className="mb-4 flex items-center gap-2 font-semibold text-cv-text" id="ready-validation-heading">

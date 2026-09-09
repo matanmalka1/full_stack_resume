@@ -5,6 +5,7 @@ import type { DuplicateMatch, DuplicateMatchReason } from "@/api/contracts";
 import { routePaths } from "@/app/routePaths";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
+import { applicationLabel } from "@/features/applications";
 
 interface ReasonPresentation {
   icon: LucideIcon;
@@ -72,7 +73,7 @@ export const DuplicateChoices = ({ matches, onCreateAnyway, pending }: Duplicate
             const ReasonIcon = reason === undefined ? undefined : matchReasons[reason].icon;
             /* The whole row is the link, so the label carries what a repeated button
                caption used to: which record opening this row leads to. */
-            const openLabel = `פתיחת המועמדות הקיימת: ${match.company} — ${match.target_role}`;
+            const openLabel = `פתיחת המועמדות הקיימת: ${applicationLabel(match.company, match.target_role)}`;
 
             return (
               <li key={match.application_id}>

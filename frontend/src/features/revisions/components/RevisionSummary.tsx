@@ -6,6 +6,7 @@ import { Button, buttonClasses } from "@/ui/Button";
 import { Card } from "@/ui/Card";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { formatDateTime } from "@/utils/formatDateTime";
+import { applicationLabel } from "@/features/applications";
 
 interface RevisionSummaryProps {
   detail: ApplicationDetail | undefined;
@@ -38,7 +39,7 @@ export const RevisionSummary = ({ detail, onOpenSubmission, revision, submittedA
             </div>
             {detail === undefined ? null : (
               <p className="mt-1 text-support text-cv-text-muted" dir="auto">
-                {detail.application.company} · {detail.application.target_role}
+                {applicationLabel(detail.application.company, detail.application.target_role)}
               </p>
             )}
             <p className="mt-1 text-support text-cv-text-muted">

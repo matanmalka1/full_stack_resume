@@ -36,8 +36,8 @@ export const DraftWorkspace = ({ editor, mode, onModeChange, preview }: DraftWor
         label="בחירת תצוגת סביבת העבודה"
         onChange={onModeChange}
         options={[
-          { label: "קריאה ואישור", value: "read" },
-          { label: "מסמך בלבד", value: "document" },
+          { label: "בדיקת עובדות ועריכה", value: "read" },
+          { label: "מסמך לאישור", value: "document" },
         ]}
         value={mode}
       />

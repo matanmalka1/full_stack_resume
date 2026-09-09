@@ -1,5 +1,4 @@
 import type { Classification } from "@/api/analyses";
-import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import type { Tone } from "@/ui/tone";
 import { confidenceText, fitDescriptions, fitLabels, fitTones } from "../model/analysisLabels";
@@ -19,7 +18,9 @@ import { confidenceText, fitDescriptions, fitLabels, fitTones } from "../model/a
    decisions sub-tab's badge, where it is a target, and by the commit checklist, where it
    is live progress against named decisions; stated a third time here it was the same
    number in a place that could disagree with them on any refetch. The banner keeps only
-   the fact the count implies - that decisions are open - in its tone, not a tally. */
+   the fact the count implies - that decisions are open - in its tone, not a tally, and it
+   takes that fact as the boolean it uses rather than a count it immediately compares
+   against zero. */
 interface BannerContent {
   body: string;
   title: string;
@@ -28,8 +29,9 @@ interface BannerContent {
 
 const bannerContent = (
   classification: Classification | null,
-  decisionCount: number,
+  hasOpenDecisions: boolean,
   supersededAnalysis: boolean,
+  incompleteAnalysisAccepted: boolean,
 ): BannerContent => {
   if (supersededAnalysis) {
     return {
@@ -43,6 +45,14 @@ const bannerContent = (
     return {
       body: "אין ניתוח פעיל למשרה הזו. ניתוח המשרה הוא מה שקובע את הסיווג, את הפערים ואת העובדות שייכנסו לקורות החיים.",
       title: "המשרה טרם נותחה",
+      tone: "neutral",
+    };
+  }
+
+  if (incompleteAnalysisAccepted) {
+    return {
+      body: "המערכת לא הצליחה לקרוא את דרישות המשרה. ההמשך ללא דירוג התאמה אושר ונשמר כהחלטה על הניתוח הזה.",
+      title: "המשך ללא ניתוח דרישות אושר",
       tone: "neutral",
     };
   }
@@ -67,34 +77,32 @@ const bannerContent = (
        from the form directly below, never a dead end. Blocker is reserved for what a
        reader cannot act their way out of, which is not this. With nothing open, the tone
        is the verdict's own. */
-    tone: decisionCount > 0 ? "warning" : classification.fit === null ? "neutral" : fitTones[classification.fit],
+    tone: hasOpenDecisions ? "warning" : classification.fit === null ? "neutral" : fitTones[classification.fit],
   };
 };
 
 export const AnalysisStatusBanner = ({
   classification,
-  decisionCount,
-  onShowDiagnostics,
+  hasOpenDecisions,
   supersededAnalysis,
+  incompleteAnalysisAccepted = false,
 }: {
   classification: Classification | null;
-  decisionCount: number;
-  /* Absent when there is no diagnosis to show - an Application with no active analysis
-     has no diagnostics tab, and a link to an empty region is worse than none. */
-  onShowDiagnostics: (() => void) | null;
+  hasOpenDecisions: boolean;
   supersededAnalysis: boolean;
+  /* Once the dedicated review reason has been resolved, the unread analysis is history
+     rather than an instruction that still claims a decision is required. */
+  incompleteAnalysisAccepted?: boolean;
 }) => {
-  const { body, title, tone } = bannerContent(classification, decisionCount, supersededAnalysis);
+  const { body, title, tone } = bannerContent(
+    classification,
+    hasOpenDecisions,
+    supersededAnalysis,
+    incompleteAnalysisAccepted,
+  );
 
   return (
     <Callout
-      action={
-        onShowDiagnostics === null ? undefined : (
-          <Button className="min-h-0! px-0! underline underline-offset-2" onClick={onShowDiagnostics} variant="ghost">
-            לפרטי האבחון המלאים ←
-          </Button>
-        )
-      }
       emphasis="banner"
       title={title}
       tone={tone}

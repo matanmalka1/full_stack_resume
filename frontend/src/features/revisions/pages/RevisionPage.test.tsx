@@ -28,7 +28,10 @@ describe("RevisionPage", () => {
     expect(await screen.findByRole("button", { name: "עדכון סטטוס ומשימות" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "גרסה מוכנה למסירה" })).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "פרטי הגרסה והאימות" })).toBeInTheDocument();
-    expect(screen.getByText("draft-hash")).toBeInTheDocument();
+    const technicalDetails = screen.getByText("פרטים טכניים וביקורת");
+    expect(screen.getByText("draft-hash")).not.toBeVisible();
+    fireEvent.click(technicalDetails);
+    expect(screen.getByText("draft-hash")).toBeVisible();
     expect(frame).toHaveAttribute("sandbox", "");
     expect(frame).toHaveAttribute(
       "src",
@@ -217,7 +220,7 @@ describe("RevisionPage", () => {
     const newDraft = await screen.findByRole("button", { name: "יצירת טיוטה חדשה" });
     /* The immutable revision keeps the complete route back to its Application and its
        preparation screen alongside the action that starts newer work. */
-    expect(screen.getByRole("link", { name: "Acme – Engineer" })).toHaveAttribute("href", "/applications/app-1");
+    expect(screen.getByRole("link", { name: "Acme — Engineer" })).toHaveAttribute("href", "/applications/app-1");
     expect(screen.getByRole("link", { name: "הכנת קורות החיים" })).toHaveAttribute(
       "href",
       "/applications/app-1/preparation",

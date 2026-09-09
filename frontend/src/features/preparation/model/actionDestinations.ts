@@ -38,5 +38,11 @@ const destinations: Record<string, (applicationId: string) => string> = {
 export const actionDestination = (action: string, applicationId: string): string | null =>
   destinations[action]?.(applicationId) ?? null;
 
-export const actionIsOnPreparationScreen = (action: string, applicationId: string): boolean =>
-  actionDestination(action, applicationId) === routePaths.preparation(applicationId);
+/* Which of the screens above the reader is on. An alert region is rendered on more than
+   one of them, and whether it offers a way to the control that resolves a reason depends
+   on whether that control is already where the reader is standing - a question only the
+   screen can answer, so it says which one it is rather than each caller re-deriving it. */
+export type PreparationScreen = "preparation" | "draft";
+
+export const screenPath = (screen: PreparationScreen, applicationId: string): string =>
+  screen === "draft" ? routePaths.draft(applicationId) : routePaths.preparation(applicationId);

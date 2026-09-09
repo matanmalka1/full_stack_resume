@@ -5,13 +5,11 @@ import { Link } from "react-router-dom";
 import { routePaths } from "@/app/routePaths";
 import { useRequiredParam } from "@/app/useRequiredParam";
 import { buttonClasses } from "@/ui/Button";
-import { Callout } from "@/ui/Callout";
 import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
-import { reasonTitle } from "@/features/preparation";
 import { ActiveOperationPanel } from "@/features/operations";
 import { ApplicationBreadcrumbs } from "@/features/applications";
-import { PreparationWorkflowSteps } from "@/features/preparation";
+import { PreparationAlerts, PreparationWorkflowSteps } from "@/features/preparation";
 import { FactLifecyclePanel } from "@/features/facts";
 import { DraftApprovalBar } from "../components/DraftApprovalBar";
 import { DraftApprovalDialog } from "../components/DraftApprovalDialog";
@@ -50,7 +48,10 @@ export const DraftEditorPage = () => {
   });
   const validation = useDraftValidation(applicationId, draft);
 
-  const [mode, setMode] = useState<DraftWorkspaceMode>("read");
+  /* Open on the document the user is deciding about. Claim provenance and editing are
+     one deliberate switch away instead of making every fact and advanced control part
+     of the first reading surface. */
+  const [mode, setMode] = useState<DraftWorkspaceMode>("document");
   const [approvalOpen, setApprovalOpen] = useState(false);
   /* The revision this editor just approved. Held here rather than read from the projection
      so the render step names the exact revision the approval returned. */
@@ -114,26 +115,13 @@ export const DraftEditorPage = () => {
               the user has to leave the text for. */}
           {operation === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={operation} />}
 
-          {/* The projection's own blockers. A claim with no fact behind it raises
-              PENDING_FACT_REQUIRES_RESOLUTION there, and it is shown here as the reason it
-              already is rather than as an approval rule this screen invented. Titled from
-              the code only, deliberately without the backend's full sentence: several
-              reasons stacked used to open this screen with a wall of prose. */}
-          {detail.review_reasons.map((reason) => (
-            <Callout
-              key={reason.code}
-              title={reasonTitle(reason.code, "נדרשת החלטה לפני אישור הגרסה")}
-              tone="blocker"
-            />
-          ))}
-
-          {detail.stale_reasons.map((reason) => (
-            <Callout
-              key={reason.code}
-              title={reasonTitle(reason.code, "הטיוטה אינה מעודכנת מול המקורות שלה")}
-              tone="warning"
-            />
-          ))}
+          {/* The projection's own blockers, reported by the one region that reports them.
+              A claim with no fact behind it raises PENDING_FACT_REQUIRES_RESOLUTION there,
+              and it is shown here as the reason it already is rather than as an approval
+              rule this screen invented. This screen used to map the same two arrays into
+              bare titles of its own - no server message, no control - which named what
+              refuses approval without naming anything the reader could do about it. */}
+          <PreparationAlerts detail={detail} screen="draft" />
 
           {workingDraftId === null && renderRevisionId === null ? (
             <DraftEmptyState applicationId={applicationId} />

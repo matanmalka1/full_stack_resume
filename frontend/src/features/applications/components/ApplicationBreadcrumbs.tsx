@@ -1,5 +1,6 @@
 import { routePaths } from "@/app/routePaths";
 import { Breadcrumbs, type BreadcrumbItem } from "@/ui/Breadcrumbs";
+import { applicationLabel } from "../model/applicationPresentation";
 
 type ApplicationBreadcrumbPage = "job" | "preparation" | "draft" | "revision";
 
@@ -10,14 +11,6 @@ interface ApplicationBreadcrumbsProps {
   revisionLabel?: string;
   targetRole?: string;
 }
-
-const applicationLabel = (company?: string, targetRole?: string): string => {
-  if (company !== undefined && targetRole !== undefined) {
-    return `${company} – ${targetRole}`;
-  }
-
-  return "פרטי משרה";
-};
 
 /* One hierarchy for every view of an Application. Keeping the labels and destinations
    here prevents the preparation and revision screens from quietly describing the same

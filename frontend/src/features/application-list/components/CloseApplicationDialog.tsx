@@ -1,6 +1,7 @@
 import type { ApplicationListItem } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
+import { applicationLabel } from "@/features/applications";
 
 interface CloseApplicationDialogProps {
   application: ApplicationListItem | null;
@@ -29,7 +30,7 @@ export const CloseApplicationDialog = ({ application, pending, onCancel, onConfi
     <p dir="auto">
       {application === null
         ? null
-        : `${application.company} — ${application.target_role} תסומן כסגורה ותרד מלוח המועמדויות הפעילות.`}
+        : `${applicationLabel(application.company, application.target_role)} תסומן כסגורה ותרד מלוח המועמדויות הפעילות.`}
     </p>
     <p className="mt-2 text-support text-cv-text-muted">
       שום דבר לא נמחק. תצלום המשרה, הטיוטות והגרסאות שאושרו נשמרים כפי שהם, והמועמדות נשארת נגישה דרך הסינון.

@@ -5,7 +5,7 @@ import { buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Card } from "@/ui/Card";
 import { Disclosure } from "@/ui/Disclosure";
-import { actionDestination, actionIsOnPreparationScreen } from "../../model/actionDestinations";
+import { type PreparationScreen, actionDestination, screenPath } from "../../model/actionDestinations";
 import { actionLabel, blockedReasonLabel, reasonTitle, warningTitle } from "../../model/preparationLabels";
 import { resolvedByReviewDecision } from "../../model/reviewDecisions";
 
@@ -16,24 +16,24 @@ import { resolvedByReviewDecision } from "../../model/reviewDecisions";
    with. The internal code remains translated rather than exposed as UI vocabulary. */
 const ReasonCallout = ({
   applicationId,
+  currentPath,
   fallbackTitle,
   reason,
-  resolvedHere = false,
   tone,
 }: {
   applicationId: string;
+  /* Where the reader is standing. A resolution that lands back here is not offered: the
+     control is already on the screen, and a link to it would be a link to the page the
+     reader is reading. A resolution anywhere else is always offered - that is the whole
+     point of showing the reason on a screen that cannot answer it. */
+  currentPath: string;
   fallbackTitle: string;
   reason: Reason;
-  /* The control that resolves this reason is on this screen, so the callout states the
-     requirement and offers no destination. */
-  resolvedHere?: boolean;
   tone: "blocker" | "warning";
 }) => {
-  const resolution = resolvedHere
-    ? undefined
-    : reason.allowed_resolution_actions
-        .map((action) => ({ action, href: actionDestination(action, applicationId) }))
-        .find((candidate) => candidate.href !== null);
+  const resolution = reason.allowed_resolution_actions
+    .map((action) => ({ action, href: actionDestination(action, applicationId) }))
+    .find((candidate) => candidate.href !== null && candidate.href !== currentPath);
 
   return (
     <Callout
@@ -58,11 +58,26 @@ const ReasonCallout = ({
    blockers, stale sources, general warnings, then the informational newer-draft note.
    Keeping this region visually quiet lets the action surface beside it remain the clear
    place to continue the workflow. */
-export const PreparationAlerts = ({ detail }: { detail: ApplicationDetail }) => {
+export const PreparationAlerts = ({
+  detail,
+  screen = "preparation",
+}: {
+  detail: ApplicationDetail;
+  /* Which screen is rendering the region. The preparation screen carries the decision
+     form, so a reason that form answers is left to it; the draft editor carries none, so
+     the same reason is stated there with the way back to the control that resolves it.
+     The editor used to render its own two `map`s over the same arrays - title only, no
+     server message, no resolution - which turned every blocker into a dead end on the one
+     screen where approval is refused. */
+  screen?: PreparationScreen;
+}) => {
+  const currentPath = screenPath(screen, detail.application.id);
   /* A reason resolved by the decision form is presented with its control instead of
-     once here as an alert and once again below as a decision. Reasons owned elsewhere
-     keep their callout and resolution route. */
-  const reviewReasons = detail.review_reasons.filter((reason) => !resolvedByReviewDecision(reason));
+     once here as an alert and once again below as a decision - but only where that form
+     is actually rendered. */
+  const reviewReasons = detail.review_reasons.filter(
+    (reason) => !(screen === "preparation" && resolvedByReviewDecision(reason)),
+  );
   const statedReasonCodes = new Set([...detail.review_reasons, ...detail.stale_reasons].map((reason) => reason.code));
   /* `blocked_actions` contains the normal future workflow as well as exceptional
      blockers. Only translated exceptions are useful here, and a reason already stated
@@ -97,12 +112,10 @@ export const PreparationAlerts = ({ detail }: { detail: ApplicationDetail }) => 
       {reviewReasons.map((reason) => (
         <ReasonCallout
           applicationId={detail.application.id}
+          currentPath={currentPath}
           fallbackTitle="נדרשת החלטה לפני המשך"
           key={reason.code}
           reason={reason}
-          resolvedHere={
-            resolvedByReviewDecision(reason) || reason.allowed_resolution_actions.includes("create_selection_plan")
-          }
           tone="blocker"
         />
       ))}
@@ -110,12 +123,10 @@ export const PreparationAlerts = ({ detail }: { detail: ApplicationDetail }) => 
       {detail.stale_reasons.map((reason) => (
         <ReasonCallout
           applicationId={detail.application.id}
+          currentPath={currentPath}
           fallbackTitle="הטיוטה אינה מעודכנת מול המקורות שלה"
           key={reason.code}
           reason={reason}
-          resolvedHere={reason.allowed_resolution_actions.some((action) =>
-            actionIsOnPreparationScreen(action, detail.application.id),
-          )}
           tone="warning"
         />
       ))}

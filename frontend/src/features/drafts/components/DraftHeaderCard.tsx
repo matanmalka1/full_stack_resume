@@ -1,5 +1,3 @@
-import { FileText } from "lucide-react";
-
 import type { ApplicationDetail, WorkingDraft } from "@/api/contracts";
 import { Card } from "@/ui/Card";
 import { LtrText } from "@/ui/LtrText";
@@ -16,25 +14,16 @@ interface DraftHeaderCardProps {
   saveState: AutosaveState | null;
 }
 
-/* A.4 frame 3: which Application this editor is open on, the version being edited, and
-   whether it is saved - the one line the reader checks before navigating away. */
+/* A.4 frame 3: which version is being edited and whether it is saved - the line the
+   reader checks before navigating away.
+
+   Which Application it belongs to is not repeated here. The card used to open with the
+   company and the target role, two lines under a breadcrumb trail that had just named the
+   same pair; the identity is the trail's to state, and what only this card can say is the
+   version, its hash, the draft's state and whether the last edit reached the server. */
 export const DraftHeaderCard = ({ detail, dirty, draft, saveState }: DraftHeaderCardProps) => (
   <Card className="flex flex-wrap items-center justify-between gap-4 bg-cv-surface p-4 shadow-surface">
-    <div className="flex min-w-0 items-center gap-3">
-      <span className="grid size-10 shrink-0 place-items-center rounded-control bg-cv-accent-soft text-cv-accent">
-        <FileText aria-hidden="true" className="size-5" />
-      </span>
-      <div className="min-w-0">
-        <p className="truncate text-body font-bold text-cv-text" dir="auto">
-          {detail.application.company}
-        </p>
-        <p className="truncate text-support text-cv-text-muted" dir="auto">
-          {detail.application.target_role}
-        </p>
-      </div>
-    </div>
-
-    <div className="flex flex-wrap items-center justify-end gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       {draft === undefined ? null : (
         <LtrText
           className="rounded-pill border border-cv-border bg-cv-surface-muted px-2.5 py-1 text-support text-cv-text-muted"
