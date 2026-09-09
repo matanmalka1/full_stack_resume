@@ -16,7 +16,7 @@ import { ApplicationListTableSkeleton } from "../components/ApplicationListTable
 import { CloseApplicationDialog } from "../components/CloseApplicationDialog";
 import { useApplicationListMutations } from "../api/mutations";
 import { useApplicationListQuery } from "../hooks/useApplicationListQuery";
-import { PAGE_SIZE, paramsFromQuery } from "../model/applicationListParams";
+import { PAGE_SIZE } from "../model/applicationListParams";
 import { initialViewMode, type ViewMode } from "../model/applicationViews";
 import { type RecruitmentStageId, recruitmentStages, selectedStage } from "../model/recruitmentStages";
 
@@ -98,10 +98,7 @@ export const ApplicationListPage = () => {
               <p className="text-body text-cv-text">עוד לא נוצרה אף מועמדות.</p>
               <p className="mt-1 text-support text-cv-text-muted">מועמדות חדשה מתחילה בהדבקת מודעת המשרה.</p>
               <div className="mt-5 flex justify-center">
-                <Link
-                  className={buttonClasses("primary")}
-                  to={{ pathname: routePaths.newApplication, search: paramsFromQuery(query).toString() }}
-                >
+                <Link className={buttonClasses("primary")} to={routePaths.newApplication}>
                   משרה חדשה
                 </Link>
               </div>

@@ -244,10 +244,7 @@ describe("DraftEditorPage", () => {
     renderPage();
 
     expect(await screen.findByRole("button", { name: "מסמך לאישור" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "בדיקת עובדות ועריכה" })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
+    expect(screen.getByRole("button", { name: "בדיקת עובדות ועריכה" })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("gates AI regeneration through effective Settings without offering a silent fallback", async () => {

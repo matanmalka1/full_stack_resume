@@ -38,8 +38,7 @@ export const PreparationView = ({
   const plan = workflowActionPlan(detail);
   const open = openDecisions(detail);
   const decisionCount = openDecisionCount(open);
-  const hasRecommendation =
-    detail.review_reasons.some(resolvedByReviewDecision) || detail.recommended_action != null;
+  const hasRecommendation = detail.review_reasons.some(resolvedByReviewDecision) || detail.recommended_action != null;
   const selectionPlanAction = plan.createSelectionPlan;
 
   /* The banner is the verdict for the phase that acts on it: while there is no draft yet,

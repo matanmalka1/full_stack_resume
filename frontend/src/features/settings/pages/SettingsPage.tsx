@@ -3,7 +3,7 @@ import { Settings, ShieldCheck } from "lucide-react";
 
 import { settingsQueryOptions } from "@/api/settings";
 import { FactPoolBrowser } from "@/features/facts";
-import { routePaths } from "@/app/routePaths";
+import { boardPath } from "@/app/boardReturn";
 import { Breadcrumbs } from "@/ui/Breadcrumbs";
 import { Card } from "@/ui/Card";
 import { PageShell } from "@/ui/PageShell";
@@ -19,7 +19,7 @@ export const SettingsPage = () => {
     <PageShell
       description="מדיניות ביצוע, תצוגת הממשק ובדיקות התקינות של מאגר הידע והתוצרים."
       measure="form"
-      navigation={<Breadcrumbs items={[{ label: "מועמדויות", to: routePaths.home }, { label: "הגדרות" }]} />}
+      navigation={<Breadcrumbs items={[{ label: "מועמדויות", to: boardPath() }, { label: "הגדרות" }]} />}
       title={
         <span className="inline-flex items-center gap-2">
           <Settings aria-hidden="true" className="size-6 text-cv-accent" />

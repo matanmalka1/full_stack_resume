@@ -40,38 +40,51 @@ export const router = createBrowserRouter([
   {
     path: "/",
     element: <AppLayout />,
+    /* The shell's own failure. Nothing above it is left to render, so the boundary here
+       stands alone and carries its own way out. */
     errorElement: <RouteErrorBoundary />,
     children: [
-      { index: true, element: <ApplicationListPage /> },
+      {
+        /* A pathless route whose only job is to own the boundary for every screen below
+           it. A screen that throws used to take the whole shell down with it - the
+           boundary sat on the route that renders `AppLayout`, so replacing it removed the
+           masthead, the primary navigation and the search palette along with the screen,
+           and a reader who hit a 500 was left with a red card and the browser's own back
+           button. Owned here, the boundary replaces the `Outlet` and the shell stays. */
+        errorElement: <RouteErrorBoundary />,
+        children: [
+          { index: true, element: <ApplicationListPage /> },
 
-      /* Creating is one action taken from the board, not what the root does. */
-      { path: "applications/new", element: <NewApplicationPage /> },
+          /* Creating is one action taken from the board, not what the root does. */
+          { path: "applications/new", element: <NewApplicationPage /> },
 
-      /* The Application hub: its job record, its CV preparation, and its artifacts, on
+          /* The Application hub: its job record, its CV preparation, and its artifacts, on
          one screen with one address. */
-      { path: "applications/:applicationId", element: <ApplicationPage /> },
+          { path: "applications/:applicationId", element: <ApplicationPage /> },
 
-      /* The draft editor: edit, preview, validate, approve, and render, on the one screen
+          /* The draft editor: edit, preview, validate, approve, and render, on the one screen
          that holds the draft all five act on. */
-      { path: "applications/:applicationId/draft", element: <DraftEditorPage /> },
+          { path: "applications/:applicationId/draft", element: <DraftEditorPage /> },
 
-      /* One approved revision, addressed by the revision itself. It stays a screen of its
+          /* One approved revision, addressed by the revision itself. It stays a screen of its
          own rather than a state of the editor because the links that reach it name a
          specific immutable record, and an Application-keyed screen would answer with
          whatever revision is current instead of the one named. */
-      { path: "revisions/:revisionId", element: <RevisionPage /> },
+          { path: "revisions/:revisionId", element: <RevisionPage /> },
 
-      { path: "settings", element: <SettingsPage /> },
+          { path: "settings", element: <SettingsPage /> },
 
-      /* Three addresses kept only for links already written down. `/preparation` was a
+          /* Three addresses kept only for links already written down. `/preparation` was a
          second name for the hub itself; recruitment is a dialog opened from each
          Application screen; and the revision screen is named for the record rather than
          for the state it was in. */
-      { path: "applications/:applicationId/preparation", element: <ApplicationRedirect /> },
-      { path: "applications/:applicationId/tracking", element: <ApplicationRedirect /> },
-      { path: "approved-revisions/:revisionId/ready", element: <ReadyRedirect /> },
+          { path: "applications/:applicationId/preparation", element: <ApplicationRedirect /> },
+          { path: "applications/:applicationId/tracking", element: <ApplicationRedirect /> },
+          { path: "approved-revisions/:revisionId/ready", element: <ReadyRedirect /> },
 
-      { path: "*", element: <NotFoundPage /> },
+          { path: "*", element: <NotFoundPage /> },
+        ],
+      },
     ],
   },
 ]);

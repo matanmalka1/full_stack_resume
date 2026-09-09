@@ -1,18 +1,17 @@
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
+import { boardPath } from "@/app/boardReturn";
 import { routePaths } from "@/app/routePaths";
 import { PreparationWorkflowSteps } from "@/features/preparation";
 import { Breadcrumbs } from "@/ui/Breadcrumbs";
 import { PageShell } from "@/ui/PageShell";
 import { useAppForm } from "@/hooks/useAppForm";
-import { paramsFromQuery, queryFromParams } from "@/features/application-list";
 import { ApplicationIntakeForm } from "../components/ApplicationIntakeForm";
 import { useApplicationIntakeSubmission } from "../hooks/useApplicationIntakeSubmission";
 import { emptyApplicationIntake, intakeFromFields, type ApplicationIntakeFields } from "../model/applicationIntake";
 
 export const NewApplicationPage = () => {
   const navigate = useNavigate();
-  const [boardParams] = useSearchParams();
   const form = useAppForm<ApplicationIntakeFields>({ defaultValues: emptyApplicationIntake });
   /* `watch()` rather than `useWatch`: without a field name `useWatch` reports every value
      as optional, which is not what this form holds - it is registered from
@@ -21,8 +20,6 @@ export const NewApplicationPage = () => {
      `watch()` returns a fresh object every time and the memo could never hit. */
   const fields = form.watch();
   const currentIntake = intakeFromFields(fields);
-  const boardSearch = paramsFromQuery(queryFromParams(boardParams)).toString();
-  const boardPath = boardSearch === "" ? routePaths.home : `${routePaths.home}?${boardSearch}`;
 
   const submission = useApplicationIntakeSubmission({
     currentIntake,
@@ -45,7 +42,7 @@ export const NewApplicationPage = () => {
     <PageShell
       description="הזנת פרטי המשרה יוצרת תצלום מקור קבוע ומתחילה ניתוח התאמה מול העובדות הקנוניות."
       landmark={<PreparationWorkflowSteps stage="intake" />}
-      navigation={<Breadcrumbs items={[{ label: "מועמדויות", to: boardPath }, { label: "משרה חדשה" }]} />}
+      navigation={<Breadcrumbs items={[{ label: "מועמדויות", to: boardPath() }, { label: "משרה חדשה" }]} />}
       title="קליטת משרה חדשה"
     >
       {/* The page keeps the wide measure so the wizard spine spans the frame like every

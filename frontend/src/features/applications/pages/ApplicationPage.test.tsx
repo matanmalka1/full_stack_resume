@@ -163,10 +163,7 @@ describe("ApplicationPage", () => {
 
     /* The projection recommends `analyze`; the masthead offers it as the way into the
        screen that runs it, never as a second copy of the command itself. */
-    expect(await screen.findByRole("link", { name: /ניתוח המשרה/ })).toHaveAttribute(
-      "href",
-      "/applications/app-1",
-    );
+    expect(await screen.findByRole("link", { name: /ניתוח המשרה/ })).toHaveAttribute("href", "/applications/app-1");
   });
 
   it("keeps recruitment details in the manager without duplicating application metadata", async () => {

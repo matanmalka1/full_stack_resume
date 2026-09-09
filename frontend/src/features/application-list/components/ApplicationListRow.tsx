@@ -34,6 +34,14 @@ export const ApplicationListRow = ({ ambiguous, item, onRequestClose, onRequestU
       return;
     }
 
+    /* The row looks and behaves like a link, so it yields to the gestures that open a
+       link somewhere else. Without this, Cmd- or Ctrl-clicking the row body navigated in
+       place - the one thing the reader was asking it not to do - while the same gesture
+       on the title inside it opened a tab, because that is a real anchor. */
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+      return;
+    }
+
     if (event.target.closest("a, button, input, label") !== null) {
       return;
     }

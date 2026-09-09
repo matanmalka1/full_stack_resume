@@ -200,9 +200,23 @@ const renderPage = ({
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  window.sessionStorage.clear();
 });
 
 describe("ApplicationListPage", () => {
+  /* The board's filtering is what every "back to the board" link returns to, and the
+     board is the only screen that knows it. Stored in the board's own canonical form
+     rather than as the raw location, so an address arriving with a stale or invented
+     parameter is not handed back later as a filtering the reader chose. */
+  it("remembers its filtering for the screens that offer a way back to it", async () => {
+    stubList([item()]);
+
+    renderPage({ entries: ["/?activity=all&stage=approved&limit=9&nonsense=x"] });
+
+    expect(await screen.findByRole("heading", { name: "לוח מועמדויות" })).toBeInTheDocument();
+    expect(window.sessionStorage.getItem("cv:board-query")).toBe("activity=all&stage=approved");
+  });
+
   it("reserves the list layout with row-shaped skeletons while the first request is pending", () => {
     vi.stubGlobal(
       "fetch",

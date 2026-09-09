@@ -84,7 +84,10 @@ export const workflowActionPlan = (detail: ApplicationDetail): WorkflowActionPla
 
   const createDraft =
     !readyMilestoneCurrent &&
-    available("create_draft") && analysisId !== null && selectionPlanId !== null && !draftWouldReplace
+    available("create_draft") &&
+    analysisId !== null &&
+    selectionPlanId !== null &&
+    !draftWouldReplace
       ? { analysisId, emphasized: recommended === "create_draft", selectionPlanId }
       : null;
 

@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 import { buttonClasses } from "@/ui/Button";
 import { PageShell } from "@/ui/PageShell";
-import { routePaths } from "../routePaths";
+import { boardPath } from "../boardReturn";
 
 /* A URL that matches no route. It offers the way back rather than only reporting the
    miss, because the reader who lands here typed or followed an address and has nothing
@@ -15,7 +15,7 @@ export const NotFoundPage = () => (
     title="העמוד לא נמצא"
   >
     <div>
-      <Link className={buttonClasses("primary")} to={routePaths.home}>
+      <Link className={buttonClasses("primary")} to={boardPath()}>
         חזרה ללוח המועמדויות
       </Link>
     </div>

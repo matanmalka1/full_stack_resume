@@ -54,7 +54,11 @@ const stepsFor = (stage: WorkflowStage | undefined, destinations: StageDestinati
   });
 };
 
-export const PreparationWorkflowSteps = ({ applicationId, detail, stage: stageOverride }: PreparationWorkflowStepsProps) => {
+export const PreparationWorkflowSteps = ({
+  applicationId,
+  detail,
+  stage: stageOverride,
+}: PreparationWorkflowStepsProps) => {
   const { pathname } = useLocation();
 
   const stage =

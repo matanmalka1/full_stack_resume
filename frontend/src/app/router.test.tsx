@@ -6,7 +6,11 @@ import { ApplicationListPage } from "@/features/application-list";
 import { ApplicationPage } from "@/features/applications";
 import { router } from "./router";
 
-const route = (path: string) => router.routes[0]?.children?.find((entry) => entry.path === path);
+/* Every screen sits under a pathless route whose only job is to own the error boundary,
+   so the table is read one level in. Reading `routes[0].children` directly would find
+   that single wrapper and report every screen as absent. */
+const screens = router.routes[0]?.children?.[0]?.children ?? [];
+const route = (path: string) => screens.find((entry) => entry.path === path);
 const elementType = (path: string) => {
   const element = route(path)?.element;
   return isValidElement(element) ? element.type : null;
@@ -14,7 +18,7 @@ const elementType = (path: string) => {
 
 describe("the route table", () => {
   it("puts the board at the root and intake on its own path", () => {
-    const index = router.routes[0]?.children?.find((entry) => entry.index === true);
+    const index = screens.find((entry) => entry.index === true);
 
     expect(isValidElement(index?.element) ? index?.element.type : null).toBe(ApplicationListPage);
     expect(elementType("applications/new")).toBe(NewApplicationPage);
@@ -45,13 +49,14 @@ describe("the route table", () => {
      from the table, so a route added as a redirect is checked without anyone registering
      it here. */
   it("keeps the compatibility paths as redirects", () => {
-    const redirects = (router.routes[0]?.children ?? []).filter((entry) =>
+    const redirects = screens.filter((entry) =>
       isValidElement(entry.element) && typeof entry.element.type === "function"
         ? entry.element.type.name.endsWith("Redirect")
         : false,
     );
 
     expect(redirects.map((entry) => entry.path)).toEqual([
+      "applications/:applicationId/preparation",
       "applications/:applicationId/tracking",
       "approved-revisions/:revisionId/ready",
     ]);

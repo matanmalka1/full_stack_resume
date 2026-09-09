@@ -90,8 +90,8 @@ export const ApplicationPage = () => {
                 Operation's later "completed" state. */}
             {createdApplication?.analysisQueued !== false ? null : (
               <Callout role="alert" title="המועמדות נוצרה, אך הניתוח לא הופעל" tone="warning">
-                {createdApplication.analysisProblem?.detail ?? "ניתן להפעיל את הניתוח מהמסך הזה."}{" "}
-                המועמדות שכבר נוצרה לא תיווצר שוב.
+                {createdApplication.analysisProblem?.detail ?? "ניתן להפעיל את הניתוח מהמסך הזה."} המועמדות שכבר נוצרה
+                לא תיווצר שוב.
               </Callout>
             )}
 

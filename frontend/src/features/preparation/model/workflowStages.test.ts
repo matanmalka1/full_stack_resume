@@ -25,16 +25,10 @@ describe("workflowDestinations", () => {
   it("keeps an approved revision in the draft stage until a rendered revision exists", () => {
     expect(stageForPreparationState.approved).toBe("draft");
     expect(
-      workflowDestinations(
-        "app-1",
-        detail({ preparation_state: "approved", latest_approved_revision_id: "rev-a" }),
-      ),
+      workflowDestinations("app-1", detail({ preparation_state: "approved", latest_approved_revision_id: "rev-a" })),
     ).toMatchObject({ draft: "/applications/app-1/draft" });
     expect(
-      workflowDestinations(
-        "app-1",
-        detail({ preparation_state: "approved", latest_approved_revision_id: "rev-a" }),
-      ),
+      workflowDestinations("app-1", detail({ preparation_state: "approved", latest_approved_revision_id: "rev-a" })),
     ).not.toHaveProperty("ready");
   });
 

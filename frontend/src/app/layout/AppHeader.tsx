@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { buttonClasses } from "@/ui/Button";
 import { Tooltip } from "@/ui/Tooltip";
 import { GlobalSearch } from "../search/GlobalSearch";
+import { boardPath } from "../boardReturn";
 import { routePaths } from "../routePaths";
 import { AppNavigation } from "./AppNavigation";
 
@@ -35,7 +36,7 @@ export const AppHeader = () => (
   <header className="sticky top-0 z-30 border-b border-cv-border bg-cv-surface/85 backdrop-blur-xl">
     <div className="page-frame flex min-h-16 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2 sm:px-6 lg:px-8">
       <div className="flex min-w-0 items-center gap-4 sm:gap-6">
-        <Link className="group shrink-0 rounded-control" to={routePaths.home}>
+        <Link className="group shrink-0 rounded-control" to={boardPath()}>
           <span className="block text-heading-sm font-extrabold tracking-tight text-cv-text">קורות חיים</span>
           <span className="block h-0.5 w-8 bg-cv-accent transition-all duration-200 group-hover:w-full" />
         </Link>

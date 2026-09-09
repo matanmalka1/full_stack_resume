@@ -1,3 +1,4 @@
+import { boardPath } from "@/app/boardReturn";
 import { routePaths } from "@/app/routePaths";
 import { Breadcrumbs, type BreadcrumbItem } from "@/ui/Breadcrumbs";
 import { applicationLabel } from "../model/applicationPresentation";
@@ -28,16 +29,20 @@ export const ApplicationBreadcrumbs = ({
   revisionLabel = "גרסה מוכנה",
   targetRole,
 }: ApplicationBreadcrumbsProps) => {
-  const items: BreadcrumbItem[] = [{ label: "מועמדויות", to: routePaths.home }];
+  /* The board as the reader left it, filters and all - not a bare board that answers a
+     different question than the one they were asking when they opened this record. */
+  const items: BreadcrumbItem[] = [{ label: "מועמדויות", to: boardPath() }];
 
-  if (applicationId !== undefined) {
-    items.push({
-      dir: "auto",
-      label: applicationLabel(company, targetRole),
-      ...(page === "job" ? {} : { to: routePaths.application(applicationId) }),
-    });
-
-  }
+  /* Drawn whether or not the id has arrived. The revision screen learns which Application
+     it belongs to from the record it is fetching, so gating this level on the id made the
+     trail two items deep during the load and three once it settled - a level appearing
+     under the reader's pointer. Without an id it is a name rather than a destination,
+     which is what `applicationLabel` already falls back to. */
+  items.push({
+    dir: "auto",
+    label: applicationLabel(company, targetRole),
+    ...(page === "job" || applicationId === undefined ? {} : { to: routePaths.application(applicationId) }),
+  });
 
   if (page === "draft") {
     items.push({ label: "עורך טיוטה" });

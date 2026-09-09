@@ -161,14 +161,26 @@ const submitForm = () => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  window.sessionStorage.clear();
 });
 
 describe("NewApplicationPage", () => {
-  it("returns to the board the user left, dropping what the board would not have asked", () => {
-    renderPage("/?activity=all&stage=approved&limit=9&nonsense=x");
+  /* The board's filtering is remembered by the board itself and read back by every screen
+     that offers a way to it, rather than threaded through this one screen's own URL. What
+     is guarded here is that this screen returns to the remembered board and not to a bare
+     one; that what gets remembered is the board's canonical query is the board's own. */
+  it("returns to the board the user left rather than to a bare board", () => {
+    window.sessionStorage.setItem("cv:board-query", "activity=all&stage=approved");
+    renderPage("/");
 
     expect(screen.getByRole("link", { name: "מועמדויות" })).toHaveAttribute("href", "/?activity=all&stage=approved");
     expect(screen.getByText("משרה חדשה")).toHaveAttribute("aria-current", "page");
+  });
+
+  it("returns to the bare board when nothing was remembered", () => {
+    renderPage("/");
+
+    expect(screen.getByRole("link", { name: "מועמדויות" })).toHaveAttribute("href", "/");
   });
 
   it("creates the application and queues its analysis when the precheck finds nothing", async () => {

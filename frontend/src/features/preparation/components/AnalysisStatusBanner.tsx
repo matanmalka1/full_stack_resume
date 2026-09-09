@@ -102,11 +102,7 @@ export const AnalysisStatusBanner = ({
   );
 
   return (
-    <Callout
-      emphasis="banner"
-      title={title}
-      tone={tone}
-    >
+    <Callout emphasis="banner" title={title} tone={tone}>
       {body}
     </Callout>
   );
