@@ -18,6 +18,11 @@ interface OverrideFieldProps<T extends string> {
      value looked like one - and which value it would leave in place was nowhere on
      screen. */
   current: string | null;
+  /* Whether leaving this field on its current value is itself the decision, not the
+     absence of one. A field under classification review confirms the analysis's guess
+     when kept, so its default option reads as a confirmation rather than a withholding -
+     the two say opposite things about whether a press is still owed. */
+  confirmsCurrent?: boolean;
   disabled: boolean;
   hint?: string;
   label: string;
@@ -29,6 +34,7 @@ interface OverrideFieldProps<T extends string> {
 
 const OverrideField = <T extends string>({
   current,
+  confirmsCurrent,
   disabled,
   hint,
   label,
@@ -46,7 +52,9 @@ const OverrideField = <T extends string>({
         value={value ?? NO_OVERRIDE}
       >
         <option value={NO_OVERRIDE}>
-          {current === null ? "השארת הבחירה הנוכחית" : `השארת הבחירה הנוכחית — ${current}`}
+          {current === null
+            ? "השארת הבחירה הנוכחית"
+            : `${confirmsCurrent ? "אישור הבחירה הנוכחית" : "השארת הבחירה הנוכחית"} — ${current}`}
         </option>
         {optionsFrom(labels).map(([option, optionLabel]) => (
           <option key={option} value={option}>
@@ -172,12 +180,14 @@ export const ReviewDecisionForm = ({
           <div>
             <h3 className="text-support font-semibold text-cv-text">בחירת סוג קורות החיים</h3>
             <p className="mt-1 text-support leading-6 text-cv-text-muted">
-              כדי לפתור את אי־הבהירות יש לשנות לפחות את המסלול או את הפרופיל. שדות שלא ישונו יישארו כפי שנקבעו בניתוח.
+              אשרו את הסיווג שהניתוח הציע, או שנו את המסלול או הפרופיל. שדה שיישאר על הבחירה הנוכחית יאושר כפי שנקבע
+              בניתוח — אין צורך לשנות ערך נכון רק כדי להמשיך.
             </p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
             <OverrideField
+              confirmsCurrent
               current={current.track}
               disabled={disabled}
               label="מסלול"
@@ -186,6 +196,7 @@ export const ReviewDecisionForm = ({
               value={decisions.track_override ?? null}
             />
             <OverrideField
+              confirmsCurrent
               current={current.profile}
               disabled={disabled}
               label="פרופיל"

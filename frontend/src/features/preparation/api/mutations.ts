@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
   applicationDetailQueryKey,
+  applicationListQueryPrefix,
   invalidateApplicationViews,
   replaceWorkingDraft,
   startAnalysis,
@@ -101,20 +102,38 @@ export const useAutomaticDraft = ({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const settingsQuery = useQuery(settingsQueryOptions);
+
+  /* One auto-draft per analysis-and-plan pair, whichever effect reaches it first.
+     Continuation after a plain analysis and continuation after a decision are two entry
+     conditions to the *same* generate, and both can be true in the same commit once a
+     decision has cleared the last review reason: the analysis is succeeded and the
+     projection now shows no open review. Keyed on the sources rather than on the trigger,
+     they used to dispatch two commands the server saw as different work - two concurrent
+     generates for one draft, which crashed the second. This ref is the shared latch that
+     lets exactly one through; the source-derived idempotency key below is the same guard at
+     the API boundary, for a race this ref cannot see across reloads. */
+  const dispatchedSourcesRef = useRef<string | null>(null);
+
   const automaticDraft = useMutation({
-    mutationFn: ({ sources, triggerOperationId }: AutomaticDraftAttempt) =>
+    mutationFn: ({ sources }: AutomaticDraftAttempt) =>
       startDraftGeneration(
         sources.applicationId,
         sources.analysisId,
         sources.planId,
-        `auto-draft:${triggerOperationId}:${sources.analysisId}:${sources.planId}`,
+        `auto-draft:${sources.analysisId}:${sources.planId}`,
       ),
     onSuccess: ({ operation: queued }, attempt) => {
       sessionStorage.setItem(autoDraftReceiptKey(attempt.triggerOperationId), "accepted");
       sessionStorage.setItem(draftNavigationKey(queued.id), "pending");
       queryClient.setQueryData(operationQueryKey(queued.id), queued);
       watch(queued.id);
-      void invalidateApplicationViews(queryClient, applicationId);
+      /* Only the board list is invalidated here, not this Application's detail. The
+         continuation watches the queued Operation directly and then moves to the editor,
+         which reads the detail fresh on arrival - so a detail invalidation now would only
+         race the Operation poll and that mount, and it is exactly those overlapping detail
+         reads that the dev proxy reports as superseded during the generate. The list has no
+         other refresh on this path, so it keeps its own. */
+      void queryClient.invalidateQueries({ queryKey: applicationListQueryPrefix });
     },
   });
 
@@ -125,6 +144,9 @@ export const useAutomaticDraft = ({
     }
     const sources = autoDraftSources(operation, settingsQuery.data?.settings, detail);
     if (sources !== null) {
+      const dispatchKey = `${sources.analysisId}:${sources.planId}`;
+      if (dispatchedSourcesRef.current === dispatchKey) return;
+      dispatchedSourcesRef.current = dispatchKey;
       automaticDraft.mutate({ sources, triggerOperationId: operationId });
     }
   }, [attemptedOperationId, detail, operation, operationId, settingsQuery.data]);
@@ -148,6 +170,9 @@ export const useAutomaticDraft = ({
     }
     const triggerOperationId = `decision:${detail.active_analysis_id}:${detail.active_selection_plan_id}`;
     if (attemptedOperationId === triggerOperationId) return;
+    const dispatchKey = `${detail.active_analysis_id}:${detail.active_selection_plan_id}`;
+    if (dispatchedSourcesRef.current === dispatchKey) return;
+    dispatchedSourcesRef.current = dispatchKey;
     sessionStorage.setItem(decisionContinuationKey(applicationId), "dispatched");
     automaticDraft.mutate({
       sources: {

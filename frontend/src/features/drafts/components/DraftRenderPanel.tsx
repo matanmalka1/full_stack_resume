@@ -16,6 +16,12 @@ interface DraftRenderPanelProps {
      an older approved state remains passive, so a visit never queues artifact work by
      itself. */
   autoStart?: boolean;
+  /* Whether a render Operation for this revision is queued or running right now, read from
+     the same watched Operation the host screen shows in `ActiveOperationPanel`. That panel
+     is the single live status of the render; while it is up, this panel must not also offer
+     a "create the files" button - the file creation is already under way, so the approved
+     box and its CTA are a second, contradictory account of the same moment. */
+  rendering?: boolean;
   /* What this panel just queued, handed to the editor that holds it. Rendering used to
      navigate to the Operation's own screen, which took the approved draft off the display
      at the moment the user was waiting to see what became of it - and the way back from
@@ -31,7 +37,12 @@ interface DraftRenderPanelProps {
 /* A.4 frame 6's render step, inline in the editor that produced the revision. Explicit
    approval starts its artifact generation; a failed Operation remains here with the same
    manual retry, while reloading an already-approved revision does not create new work. */
-export const DraftRenderPanel = ({ approvedRevisionId, autoStart = false, onQueued }: DraftRenderPanelProps) => {
+export const DraftRenderPanel = ({
+  approvedRevisionId,
+  autoStart = false,
+  onQueued,
+  rendering = false,
+}: DraftRenderPanelProps) => {
   const queryClient = useQueryClient();
   const revisionQuery = useQuery(approvedRevisionQueryOptions(approvedRevisionId));
   const revision = revisionQuery.data;
@@ -55,6 +66,21 @@ export const DraftRenderPanel = ({ approvedRevisionId, autoStart = false, onQueu
     automaticAttempted.current = true;
     render.mutate();
   }, [autoStart, ready, revision]);
+
+  /* While the render is under way, this panel steps aside for the one that is actually
+     reporting it. `ActiveOperationPanel` shows the live status and owns cancel and retry;
+     a failed run stays there with its retry, so this panel does not offer a second one.
+
+     `render.isPending` covers the moment before the accepted 202 has named an Operation to
+     watch, and the auto-start branch covers the same window in the automatic path: with
+     `autoStart` set the render always begins on mount, so the approved box and its manual
+     CTA are never the right thing to show. The one auto case that does belong here is a 202
+     that never queued anything (`render.error`), which leaves no Operation for the other
+     panel to report - then the retry below is the only way on. */
+  const renderInFlight = rendering || render.isPending || (autoStart && !ready && render.error === null);
+  if (renderInFlight) {
+    return null;
+  }
 
   return (
     <>

@@ -75,12 +75,34 @@ export const ReviewDecisionPanel = ({
       ? 0
       : classification.gaps.filter((gap) => gap.severity === "hard" && gap.requirementId !== null).length;
 
+  /* A materially ambiguous classification is resolved by an explicit track or profile
+     override, and the server clears the reason on the presence of that key whatever its
+     value - so confirming the analysis's own guess resolves it exactly as changing it
+     would. A field left on "keep current" therefore submits that current value rather than
+     withholding it: keeping the classification the analysis proposed is a valid decision,
+     not a missing one, and the reader is not forced to change a value only to move on. With
+     no analysis to read a current value from there is nothing to confirm, so the explicit
+     pick stays required. */
+  const confirmedTrack =
+    showClassification && decisions.track_override === null
+      ? (classification?.track ?? null)
+      : decisions.track_override;
+  const confirmedProfile =
+    showClassification && decisions.profile_override === null
+      ? (classification?.profile ?? null)
+      : decisions.profile_override;
+
   /* The marks are the gap list's state, so they are merged in at the submission rather
      than copied into this panel's - one value, read where it is sent. */
-  const submitted = { ...decisions, accepted_requirement_ids: showGapAcceptance ? [...acceptedRequirementIds] : [] };
+  const submitted = {
+    ...decisions,
+    track_override: confirmedTrack,
+    profile_override: confirmedProfile,
+    accepted_requirement_ids: showGapAcceptance ? [...acceptedRequirementIds] : [],
+  };
 
   const classificationReady =
-    !showClassification || decisions.track_override !== null || decisions.profile_override !== null;
+    !showClassification || submitted.track_override !== null || submitted.profile_override !== null;
   const incompleteAnalysisReady = !showIncompleteAnalysis || decisions.accept_incomplete_analysis;
   const fitReady = !showFit || decisions.accept_low_fit;
   const gapsReady = !showGapAcceptance || acceptedRequirementIds.length > 0;
@@ -118,7 +140,7 @@ export const ReviewDecisionPanel = ({
      commits them. What stood here was a single sentence saying something was missing,
      under the button and out of sight on a long form. */
   const checklist: ChecklistEntry[] = [
-    ...(showClassification ? [{ done: classificationReady, label: "בחירת מסלול או פרופיל" }] : []),
+    ...(showClassification ? [{ done: classificationReady, label: "אישור סיווג קורות החיים" }] : []),
     ...(showIncompleteAnalysis ? [{ done: incompleteAnalysisReady, label: "אישור שהדרישות לא נקראו" }] : []),
     ...(showFit ? [{ done: fitReady, label: "אישור ההתאמה הנמוכה" }] : []),
     ...(showGapAcceptance ? [{ done: gapsReady, label: "סימון פער חוסם לקבלה" }] : []),

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { isTerminalOperation } from "@/api/operations";
 import { routePaths } from "@/app/routePaths";
 import { useRequiredParam } from "@/app/useRequiredParam";
 import { QueryState } from "@/ui/QueryState";
@@ -145,6 +146,11 @@ export const DraftEditorPage = () => {
           approvedRevisionId={renderRevisionId}
           autoStart={approvedRevisionId !== null}
           onQueued={watch}
+          /* The live render is reported once, by `ActiveOperationPanel` above. This tells
+             the render panel to stand down while that is true, so the approved box and its
+             "create the files" CTA never appear beside the operation already creating
+             them. */
+          rendering={operation?.operation_type === "render_revision" && !isTerminalOperation(operation)}
         />
       ) : null}
 

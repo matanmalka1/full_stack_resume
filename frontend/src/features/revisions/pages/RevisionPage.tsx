@@ -74,10 +74,15 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
       יצירת טיוטה חדשה
     </Button>
   );
+  /* Download is a secondary action beside recording the submission, never a gate in front
+     of it. It used to be the primary until it had been pressed once, and only then did the
+     submit button appear - so the step's actual conclusion, recording that the CV was sent,
+     was hidden behind a press a reader could leave the screen without ever making. Both are
+     offered together now: download the file, and record the submission it was for. */
   const downloadButton =
     revision === undefined || recruiterPdfArtifactId === null ? null : (
       <a
-        className={buttonClasses(downloadStarted || submissionExists ? "secondary" : "primary")}
+        className={buttonClasses("secondary")}
         href={recruiterPdfHref(revision.id, recruiterPdfArtifactId)}
         key="download-pdf"
         onClick={() => setDownloadStarted(true)}
@@ -103,22 +108,16 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
               ),
               secondary: downloadButton === null ? [] : [downloadButton],
             }
-          : downloadStarted
-            ? {
-                note: "לאחר מסירת הקובץ למגייס, יש לתעד זאת כהגשה.",
-                primary: (
-                  <Button onClick={() => setSubmissionOpen(true)}>
-                    <Send aria-hidden="true" className="size-4" />
-                    רישום הגשת הגרסה הזו
-                  </Button>
-                ),
-                secondary: downloadButton === null ? [] : [downloadButton],
-              }
-            : {
-                note: "הקובץ מוכן. הורידו אותו לפני רישום ההגשה.",
-                primary: downloadButton,
-                secondary: [],
-              };
+          : {
+              note: "הורידו את הקובץ ומסרו אותו למגייס, ואז רשמו כאן שההגשה בוצעה.",
+              primary: (
+                <Button onClick={() => setSubmissionOpen(true)}>
+                  <Send aria-hidden="true" className="size-4" />
+                  רישום הגשת הגרסה הזו
+                </Button>
+              ),
+              secondary: downloadButton === null ? [] : [downloadButton],
+            };
 
   return (
     <WizardStepShell
