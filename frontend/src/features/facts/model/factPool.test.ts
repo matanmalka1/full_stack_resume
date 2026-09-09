@@ -36,10 +36,15 @@ describe("the fact pool as the interface reads it", () => {
     expect(pool.outOfSyncCount).toBe(0);
   });
 
-  /* A fact the log never recorded is what a lost write leaves behind, so it is a
-     mismatch rather than a fact with nothing to compare against. */
-  it("counts a fact the log never recorded as out of sync", () => {
+  it("does not require an initial lifecycle event for a canonical source fact", () => {
     const pool = toFactPool({ items: [item("fact.a", "canonical", null)] });
+
+    expect(pool.entries[0]?.outOfSync).toBe(false);
+    expect(pool.outOfSyncCount).toBe(0);
+  });
+
+  it("counts a non-canonical fact with no lifecycle event as out of sync", () => {
+    const pool = toFactPool({ items: [item("fact.a", "pending", null)] });
 
     expect(pool.entries[0]?.outOfSync).toBe(true);
     expect(pool.outOfSyncCount).toBe(1);

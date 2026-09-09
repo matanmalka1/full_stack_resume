@@ -3,9 +3,8 @@ import type { Fact, FactList } from "@/api/contracts";
 export interface FactPoolEntry {
   fact: Fact;
   /* The fact's own status disagrees with the last status its lifecycle log recorded.
-     That gap is evidence of a write that did not finish, so the fact must be reconciled
-     before anything uses it again. A fact the log never recorded at all counts as out of
-     sync too: an unrecorded fact is exactly what a lost write leaves behind. */
+     Canonical source facts need no lifecycle event: the log records mutations, not the
+     initial canonical corpus. A non-canonical fact with no event is still out of sync. */
   outOfSync: boolean;
 }
 
@@ -17,7 +16,7 @@ export interface FactPool {
 export const toFactPool = (data: FactList): FactPool => {
   const entries = data.items.map(({ fact, recorded_status: recordedStatus }) => ({
     fact,
-    outOfSync: recordedStatus !== fact.status,
+    outOfSync: recordedStatus === null ? fact.status !== "canonical" : recordedStatus !== fact.status,
   }));
 
   return { entries, outOfSyncCount: entries.filter((entry) => entry.outOfSync).length };
