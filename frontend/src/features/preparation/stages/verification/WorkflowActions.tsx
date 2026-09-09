@@ -3,10 +3,10 @@ import { Link } from "react-router-dom";
 
 import type { ApplicationDetail } from "@/api/contracts";
 import { ErrorCallout } from "@/ui/ErrorCallout";
-import { ActionBar } from "@/ui/ActionBar";
 import { Button, buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { useWorkflowCommands } from "../../api/mutations";
+import { CommitBar, NEXT_STEP_LABEL } from "../../components/CommitBar";
 import { actionLabel } from "../../model/preparationLabels";
 import type { WorkflowActionPlan } from "../../model/workflowActionPlan";
 import { ReplaceDraftDialog } from "./ReplaceDraftDialog";
@@ -191,18 +191,6 @@ export const WorkflowActions = ({ detail, onQueued, plan }: WorkflowActionsProps
         </p>
       )}
 
-      {inWorkflowOrder.length === 0 ? null : (
-        <ActionBar
-          /* The offered actions continue the next-step sentence above them rather than
-             closing the page, so they start where that sentence starts. Whether there is
-             one of them or several, they are the reader's way on from that line and belong
-             beside it, not at the far edge of the card. */
-          align="start"
-          primary={emphasizedEntry.node}
-          secondary={restButtons.length === 0 ? undefined : restButtons}
-        />
-      )}
-
       {/* What separates the two stale-draft commands. They appear only beside a stale-draft
           alert, so the reader has already been told the draft is out of date; what they
           have not been told is that the two buttons are not variants of one another. */}
@@ -221,6 +209,24 @@ export const WorkflowActions = ({ detail, onQueued, plan }: WorkflowActionsProps
           פעולה על הטיוטה מתבצעת כעת. החלפה והעברה לארכיון יהיו זמינות שוב כשהיא תסתיים.
         </p>
       ) : null}
+
+      {/* The step's action, in the one place every step puts it, and last so the bar it
+          pins to the viewport has nothing of this region left underneath it. It used to
+          sit mid-flow, which meant the reader found it in a different position on each of
+          the three screens - and on a long preparation screen, only after scrolling past
+          the alerts and the diagnosis. The sentences above it are what is said before the
+          press; the bar is the press. */}
+      {inWorkflowOrder.length === 0 ? null : (
+        <CommitBar
+          label={NEXT_STEP_LABEL}
+          primary={
+            <>
+              {restButtons.length === 0 ? null : <div className="flex flex-wrap gap-3">{restButtons}</div>}
+              {emphasizedEntry.node}
+            </>
+          }
+        />
+      )}
 
       <ReplaceDraftDialog
         commandsBlocked={commandsBlocked}

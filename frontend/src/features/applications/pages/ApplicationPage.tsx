@@ -11,8 +11,8 @@ import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
 import { ActiveOperationPanel } from "@/features/operations";
 import { PreparationView, PreparationWorkflowSteps, useAutomaticDraft } from "@/features/preparation";
+import { applicationLabel } from "../model/applicationPresentation";
 import { ApplicationArtifacts } from "../components/ApplicationArtifacts";
-import { ApplicationBreadcrumbs } from "../components/ApplicationBreadcrumbs";
 import { JobSnapshotPanel } from "../components/JobSnapshotPanel";
 
 /* The news that an Application was just created, handed over in route state by the intake
@@ -63,17 +63,18 @@ export const ApplicationPage = () => {
 
   return (
     <PageShell
-      eyebrow={detail === undefined ? undefined : <span dir="auto">{detail.application.company}</span>}
-      landmark={<PreparationWorkflowSteps applicationId={applicationId} detail={detail} />}
-      navigation={
-        <ApplicationBreadcrumbs
-          applicationId={applicationId}
-          company={detail?.application.company}
-          page="job"
-          targetRole={detail?.application.target_role}
-        />
+      eyebrow={
+        detail === undefined ? undefined : (
+          <span dir="auto">{applicationLabel(detail.application.company, detail.application.target_role)}</span>
+        )
       }
-      title={detail?.application.target_role ?? "פרטי משרה"}
+      landmark={<PreparationWorkflowSteps applicationId={applicationId} detail={detail} />}
+      measure="wizard"
+      /* The step's name, the same word the spine above uses for it. The heading used to
+         be the target role, which named the record rather than the step and left the
+         reader's position stated only by the rail. The role and company are the eyebrow,
+         where identity belongs on a screen that is one step of a longer piece of work. */
+      title="ניתוח והתאמה"
     >
       <QueryState
         error={query.error}
@@ -102,20 +103,29 @@ export const ApplicationPage = () => {
 
             {/* The posting the CV is tailored to, and the files the work produced: reference
                 the reader checks or downloads, folded away so the step above stays the
-                screen's subject. */}
-            <Disclosure summary="צפייה בנוסח המשרה שנשמר">
-              <div className="pt-2">
-                <JobSnapshotPanel detail={detail} />
-              </div>
-            </Disclosure>
+                screen's subject.
 
-            {hasArtifacts ? (
-              <Disclosure summary="גרסאות וקבצים">
+                Behind a rule and a quiet heading, because a drawer sitting in the same
+                column at the same weight as the step reads as another panel of it - which
+                is how a step turns back into a record with sections. The line says where
+                the step ends and the material about it begins. */}
+            <div className="flex flex-col gap-2 border-t border-cv-border pt-5">
+              <p className="text-support font-semibold text-cv-text-muted">חומר עזר</p>
+
+              <Disclosure summary="צפייה בנוסח המשרה שנשמר">
                 <div className="pt-2">
-                  <ApplicationArtifacts applicationId={applicationId} />
+                  <JobSnapshotPanel detail={detail} />
                 </div>
               </Disclosure>
-            ) : null}
+
+              {hasArtifacts ? (
+                <Disclosure summary="גרסאות וקבצים">
+                  <div className="pt-2">
+                    <ApplicationArtifacts applicationId={applicationId} />
+                  </div>
+                </Disclosure>
+              ) : null}
+            </div>
           </div>
         )}
       </QueryState>

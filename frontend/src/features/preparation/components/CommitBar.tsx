@@ -3,15 +3,58 @@ import type { ReactNode } from "react";
 
 import { cx } from "@/ui/cx";
 
-/* The bar that closes a tab: what is still missing on one side, the command on the other.
+/* What every pinned bar in the flow calls itself when it is a wizard step's action rather
+   than a form's commit. Named "מה עושים עכשיו" and not "הצעד הבא": the bar carries the
+   action the current step is waiting on, not the step after it, and the board already
+   spends "הצעד הבא" on a recruitment reminder that has nothing to do with the CV work. */
+export const NEXT_STEP_LABEL = "מה עושים עכשיו";
+
+interface CommitBarProps {
+  /* The way back to the previous step, ahead of everything else on the opening edge. A
+     wizard that only goes forward is a form; what makes the spine navigable in both
+     directions has to be true of the bar as well.
+
+     Absent on a bar that commits a decision rather than closing a step, and absent on the
+     first step with a record - the intake behind it created the Application, and
+     re-entering it would not be going back. */
+  back?: ReactNode;
+  children?: ReactNode;
+  /* What this bar is, in one small line above whatever `children` say. Given by a wizard
+     step, which has the same answer on every screen; omitted by a commit that is already
+     named by the panel it closes. */
+  label?: ReactNode;
+  primary: ReactNode;
+}
+
+/* The bar that closes a piece of work: the way back and what is still missing on one
+   side, the command on the other.
 
    It replaced a disabled button with a sentence under it that only appeared once the
    reader had scrolled past everything else. Pinned to the bottom of the viewport, the
    state of the decision and the control that commits it are read together at any scroll
-   position - so "why is this disabled" is answered where the button is, not above it. */
-export const CommitBar = ({ children, primary }: { children?: ReactNode; primary: ReactNode }) => (
+   position - so "why is this disabled" is answered where the button is, not above it.
+
+   One bar for both jobs it does. A wizard step and a decision panel close the same way -
+   pinned, two sides, one emphasized command - and the step needs exactly two things the
+   panel does not: a way back and a name. Those are the two optional props above rather
+   than a second component wrapping this one, which is what they were: a wrapper that
+   passed four values through and added a heading. Each screen used to answer "what do I
+   do now" in a shape of its own - a row of buttons in the flow on the preparation screen,
+   a pinned approval in the editor, a download inside the identity card on the ready
+   screen - and it is this component, at all three, that makes the answer one shape. */
+export const CommitBar = ({ back, children, label, primary }: CommitBarProps) => (
   <div className="sticky bottom-4 z-20 flex flex-wrap items-center justify-between gap-4 rounded-surface border border-cv-border bg-cv-surface/95 p-4 shadow-floating backdrop-blur-xl">
-    <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">{children}</div>
+    <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
+      {back}
+      {label === undefined ? (
+        children
+      ) : (
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-[0.75rem] font-bold text-cv-text-muted">{label}</span>
+          {children}
+        </div>
+      )}
+    </div>
     <div className="flex flex-wrap items-center gap-3">{primary}</div>
   </div>
 );

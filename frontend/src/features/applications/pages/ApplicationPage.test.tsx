@@ -107,16 +107,18 @@ afterEach(() => {
 });
 
 describe("ApplicationPage", () => {
-  it("places the job under the applications breadcrumb", async () => {
+  /* One navigation landmark and one way out. The breadcrumb trail that used to draw
+     board › Application above the spine is gone: it claimed a record hierarchy over a
+     linear flow, and its only destination the spine did not already offer was the board. */
+  it("names the step and offers the board as the only way out of the flow", async () => {
     renderPage();
 
-    expect(await screen.findByRole("navigation", { name: "פירורי לחם" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "מועמדויות" })).toHaveAttribute("href", "/");
-    /* Awaited, not read: the breadcrumb trail renders while the projection is still in
-       flight - with "פרטי משרה" as the current crumb - so the navigation landmark is
-       present one tick before the company is. Reading the company synchronously after it
-       asserted the record's crumb against the loading state. */
-    expect(await screen.findByText("Acme — Backend Engineer")).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("heading", { name: "ניתוח והתאמה" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "חזרה ללוח המועמדויות" })).toHaveAttribute("href", "/");
+    expect(screen.queryByRole("navigation", { name: "פירורי לחם" })).not.toBeInTheDocument();
+    /* Awaited: the shell renders before the projection lands, so the record's identity
+       arrives a tick after the heading that names its step. */
+    expect(await screen.findByText("Acme — Backend Engineer")).toBeInTheDocument();
   });
 
   it("links a Ready application to the exact immutable revision, from the preparation tab", async () => {

@@ -10,6 +10,11 @@
    A consumer that needs something not listed here needs it added here, not imported from
    inside. */
 
+/* The bar every wizard step closes with: the way back, the step's name, the one action it
+   is waiting on and its caveat. Exported because the editor and the ready screen close
+   with the same surface as the preparation step - that sameness is the point. */
+export { CommitBar, NEXT_STEP_LABEL } from "./components/CommitBar";
+
 /* The CV-preparation step of the workflow wizard: the verdict, the one action the
    workflow is waiting on, and the facts, diagnosis and posting a press away. The hub
    renders it as the body of the preparation screen. */

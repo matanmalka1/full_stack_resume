@@ -267,20 +267,15 @@ describe("DraftEditorPage", () => {
     expect(screen.getByRole("heading", { level: 3, name: "Core Skills" })).toBeInTheDocument();
     expect(screen.getAllByText("מבוסס עובדה").length).toBeGreaterThan(0);
     /* The headline is a line of the document rather than a field: it is drawn as text
-       under its own "כותרת" status, and it is now the only place the role is written on
-       its own - the header card used to name it a second time, two lines under the
-       breadcrumb trail that already names it beside the company. */
+       under its own "כותרת" status, and it is the only place the role is written on its
+       own - the header card used to name it a second time. */
     expect(screen.getByText("כותרת", { selector: "span" })).toBeInTheDocument();
     expect(screen.getAllByText("Account Manager")).toHaveLength(1);
-    const breadcrumbs = screen.getByRole("navigation", { name: "פירורי לחם" });
-    expect(within(breadcrumbs).getByRole("link", { name: "Acme — Account Manager" })).toHaveAttribute(
-      "href",
-      "/applications/app-1",
-    );
-    /* Two crumbs, not three: the preparation screen the trail used to name in between is
-       the Application record the crumb above already leads to. */
-    expect(within(breadcrumbs).queryByText("הכנת קורות החיים")).not.toBeInTheDocument();
-    expect(within(breadcrumbs).getByText("עורך טיוטה")).toHaveAttribute("aria-current", "page");
+    /* The wizard's own navigation, and no trail beside it: the step back is on the bar
+       that carries the step's action, and the way out is on the spine. */
+    expect(screen.queryByRole("navigation", { name: "פירורי לחם" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "חזרה להכנת קורות החיים" })).toHaveAttribute("href", "/applications/app-1");
+    expect(screen.getByRole("link", { name: "חזרה ללוח המועמדויות" })).toBeInTheDocument();
   });
 
   it("offers in-page navigation once the outline carries more than one section", async () => {
@@ -738,7 +733,7 @@ describe("DraftEditorPage regeneration", () => {
 
     /* The panel, not the route: the editor's own heading is still on screen beside it. */
     expect(await screen.findByRole("heading", { name: "הרצת יצירה מחדש של טענה" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "קריאה, אימות ואישור" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "טיוטה ואימות" })).toBeInTheDocument();
     const call = fetchMock.mock.calls.find((entry) => String(entry[0]).endsWith("/regenerate-claim"));
     /* All three parts of the draft's identity: that is what makes a save landing mid
        flight fail as SOURCE_CHANGED instead of overwriting the user's edit. */

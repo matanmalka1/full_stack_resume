@@ -1,6 +1,8 @@
-import { useLocation } from "react-router-dom";
+import { ArrowRight } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
 
 import type { ApplicationDetail } from "@/api/contracts";
+import { boardPath } from "@/app/boardReturn";
 import { type WorkflowStep, WorkflowStepsRail } from "./WorkflowStepsRail";
 import {
   type StageDestinations,
@@ -84,11 +86,29 @@ export const PreparationWorkflowSteps = ({
      outside the workflow, say. */
   const hintStage = hereIndex === -1 ? stage : workflowStages[hereIndex];
 
+  /* One way out, above the spine, and the wizard's only navigation besides it.
+
+     The flow screens used to carry a breadcrumb trail as well - board › Application ›
+     editor - which drew a record hierarchy over a linear piece of work and gave the reader
+     two navigation landmarks saying different things about the same position. The trail's
+     only unique destination was the board, so that is what is left: a way out of the
+     wizard, not a level above it. It returns to the board as the reader left it, filters
+     and all. */
   return (
-    <WorkflowStepsRail
-      hint={hintStage === undefined ? undefined : workflowStageHints[hintStage]}
-      label="שלבי הכנת קורות החיים"
-      steps={located}
-    />
+    <div className="flex flex-col gap-2">
+      <Link
+        className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-control px-1 text-support font-semibold text-cv-text-muted transition-colors duration-200 hover:text-cv-text"
+        to={boardPath()}
+      >
+        <ArrowRight aria-hidden="true" className="size-4 shrink-0" />
+        חזרה ללוח המועמדויות
+      </Link>
+
+      <WorkflowStepsRail
+        hint={hintStage === undefined ? undefined : workflowStageHints[hintStage]}
+        label="שלבי הכנת קורות החיים"
+        steps={located}
+      />
+    </div>
   );
 };

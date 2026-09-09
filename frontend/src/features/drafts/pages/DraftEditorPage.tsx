@@ -1,14 +1,11 @@
-import { ArrowRight } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
 
 import { routePaths } from "@/app/routePaths";
 import { useRequiredParam } from "@/app/useRequiredParam";
-import { buttonClasses } from "@/ui/Button";
 import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
 import { ActiveOperationPanel } from "@/features/operations";
-import { ApplicationBreadcrumbs } from "@/features/applications";
+import { applicationLabel } from "@/features/applications";
 import { PreparationAlerts, PreparationWorkflowSteps } from "@/features/preparation";
 import { FactLifecyclePanel } from "@/features/facts";
 import { DraftApprovalBar } from "../components/DraftApprovalBar";
@@ -80,17 +77,16 @@ export const DraftEditorPage = () => {
     <PageShell
       /* No description: `DraftHeaderCard` below names the company and the target role
          together, and the heading repeated the role on its own a line above it. */
-      eyebrow="סביבת האישור"
-      landmark={<PreparationWorkflowSteps applicationId={applicationId} detail={detail} />}
-      navigation={
-        <ApplicationBreadcrumbs
-          applicationId={applicationId}
-          company={detail?.application.company}
-          page="draft"
-          targetRole={detail?.application.target_role}
-        />
+      eyebrow={
+        detail === undefined ? undefined : (
+          <span dir="auto">{applicationLabel(detail.application.company, detail.application.target_role)}</span>
+        )
       }
-      title="קריאה, אימות ואישור"
+      landmark={<PreparationWorkflowSteps applicationId={applicationId} detail={detail} />}
+      /* Named for the stage the spine marks, not for what the screen does. "קריאה, אימות
+         ואישור" described the same work in three words the rail does not use, so the
+         reader's position had two names depending on which of the two they read. */
+      title="טיוטה ואימות"
     >
       <QueryState
         error={applicationError}
@@ -166,13 +162,6 @@ export const DraftEditorPage = () => {
                   profile={detail?.application.profile ?? null}
                   sections={draft.outline.sections.map((section) => section.name)}
                 />
-
-                <div>
-                  <Link className={buttonClasses("secondary")} to={applicationHref}>
-                    <ArrowRight aria-hidden="true" className="size-4" />
-                    חזרה להכנת קורות החיים
-                  </Link>
-                </div>
               </>
             }
             mode={mode}
@@ -190,6 +179,7 @@ export const DraftEditorPage = () => {
           />
 
           <DraftApprovalBar
+            applicationHref={applicationHref}
             exactPassingRunId={validation.exactPassingRunId}
             onApprove={() => setApprovalOpen(true)}
             reviewBlocked={(detail?.review_reasons ?? []).length > 0}

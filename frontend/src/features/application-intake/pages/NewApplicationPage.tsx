@@ -1,9 +1,7 @@
 import { useNavigate } from "react-router-dom";
 
-import { boardPath } from "@/app/boardReturn";
 import { routePaths } from "@/app/routePaths";
 import { PreparationWorkflowSteps } from "@/features/preparation";
-import { Breadcrumbs } from "@/ui/Breadcrumbs";
 import { PageShell } from "@/ui/PageShell";
 import { useAppForm } from "@/hooks/useAppForm";
 import { ApplicationIntakeForm } from "../components/ApplicationIntakeForm";
@@ -41,9 +39,11 @@ export const NewApplicationPage = () => {
   return (
     <PageShell
       description="הזנת פרטי המשרה יוצרת תצלום מקור קבוע ומתחילה ניתוח התאמה מול העובדות הקנוניות."
+      /* The spine carries the way back to the board, so the trail that used to sit above
+         it is gone with the ones the other three steps drew. */
       landmark={<PreparationWorkflowSteps stage="intake" />}
-      navigation={<Breadcrumbs items={[{ label: "מועמדויות", to: boardPath() }, { label: "משרה חדשה" }]} />}
-      title="קליטת משרה חדשה"
+      measure="wizard"
+      title="קליטת משרה"
     >
       {/* The page keeps the wide measure so the wizard spine spans the frame like every
           other step, while the form itself holds the shorter reading measure a single
