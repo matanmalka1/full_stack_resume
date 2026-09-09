@@ -312,7 +312,7 @@ def database_engine(database_url: str) -> Iterator[Engine]:
 
 @pytest.fixture(autouse=True)
 def isolated_database(database_engine: Engine, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Give every test the same empty PostgreSQL schema and configured URL."""
+    """Give every test an empty database and no ambient paid provider."""
     table_names = ", ".join(f'"{name}"' for name in metadata.tables)
     with database_engine.begin() as connection:
         connection.execute(text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE"))
@@ -320,6 +320,10 @@ def isolated_database(database_engine: Engine, monkeypatch: pytest.MonkeyPatch) 
         "CV_DATABASE_URL",
         database_engine.url.render_as_string(hide_password=False),
     )
+    # The suite's AI coverage injects FakeOpenAI explicitly. An ambient developer
+    # key must not silently turn ordinary `services` / `api_worker` fixtures into
+    # live-provider compositions before an individual test can remove the key.
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
 
 @pytest.fixture
