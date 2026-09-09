@@ -118,7 +118,9 @@ export const DraftEditorPage = () => {
 
           {/* The projection's own blockers. A claim with no fact behind it raises
               PENDING_FACT_REQUIRES_RESOLUTION there, and it is shown here as the reason it
-              already is rather than as an approval rule this screen invented. */}
+              already is rather than as an approval rule this screen invented. Titled from
+              the code only, deliberately without the backend's full sentence: several
+              reasons stacked used to open this screen with a wall of prose. */}
           {detail.review_reasons.map((reason) => (
             <Callout
               key={reason.code}
