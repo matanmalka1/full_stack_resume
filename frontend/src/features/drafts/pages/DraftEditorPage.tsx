@@ -74,7 +74,7 @@ export const DraftEditorPage = () => {
     setMode(next);
   };
 
-  const preparationHref = routePaths.preparation(applicationId);
+  const applicationHref = routePaths.application(applicationId);
 
   return (
     <PageShell
@@ -168,7 +168,7 @@ export const DraftEditorPage = () => {
                 />
 
                 <div>
-                  <Link className={buttonClasses("secondary")} to={preparationHref}>
+                  <Link className={buttonClasses("secondary")} to={applicationHref}>
                     <ArrowRight aria-hidden="true" className="size-4" />
                     חזרה להכנת קורות החיים
                   </Link>

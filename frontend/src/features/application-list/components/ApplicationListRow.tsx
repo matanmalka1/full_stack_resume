@@ -25,7 +25,6 @@ interface ApplicationListRowProps {
 export const ApplicationListRow = ({ ambiguous, item, onRequestClose, onRequestUpdate }: ApplicationListRowProps) => {
   const navigate = useNavigate();
   const href = routePaths.application(item.id);
-  const preparationHref = routePaths.preparation(item.id);
   const attention = applicationAttention(item);
 
   /* The row navigates as a whole but yields to real controls and text selection. The
@@ -62,7 +61,7 @@ export const ApplicationListRow = ({ ambiguous, item, onRequestClose, onRequestU
           attention.tone === "blocker" ? "text-cv-blocker" : "text-cv-warning",
         )}
         title={attention.items.map((entry) => entry.title).join(" · ")}
-        to={preparationHref}
+        to={href}
       >
         <TriangleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
         <span className="min-w-0 line-clamp-2 lg:line-clamp-1">{attention.label}</span>

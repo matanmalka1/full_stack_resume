@@ -20,11 +20,14 @@ describe("the route table", () => {
     expect(elementType("applications/new")).toBe(NewApplicationPage);
   });
 
-  /* Two addresses, one screen, on purpose: `/preparation` names the document workflow
-     that links and bookmarks point at directly. */
-  it("answers both Application addresses with the hub screen", () => {
+  /* One address, one screen. `/preparation` was a second name for this same screen, and
+     the two components that locate the reader by comparing against `pathname` disagreed
+     depending on which one had been used to arrive. It is a redirect now, so the
+     assertion is that the hub answers its own address and nothing else does. */
+  it("answers the Application address with the hub screen and redirects its former name", () => {
     expect(elementType("applications/:applicationId")).toBe(ApplicationPage);
-    expect(elementType("applications/:applicationId/preparation")).toBe(ApplicationPage);
+    expect(elementType("applications/:applicationId/preparation")).not.toBe(ApplicationPage);
+    expect(route("applications/:applicationId/preparation")).not.toBeUndefined();
   });
 
   /* Validation, approval, review, and render are states of the draft editor, so the table

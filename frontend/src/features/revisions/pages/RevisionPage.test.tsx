@@ -218,13 +218,10 @@ describe("RevisionPage", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
     const newDraft = await screen.findByRole("button", { name: "יצירת טיוטה חדשה" });
-    /* The immutable revision keeps the complete route back to its Application and its
-       preparation screen alongside the action that starts newer work. */
+    /* The immutable revision keeps the complete route back to its Application - one step,
+       because the preparation screen it used to name in between is that same record. */
     expect(screen.getByRole("link", { name: "Acme — Engineer" })).toHaveAttribute("href", "/applications/app-1");
-    expect(screen.getByRole("link", { name: "הכנת קורות החיים" })).toHaveAttribute(
-      "href",
-      "/applications/app-1/preparation",
-    );
+    expect(screen.queryByText("הכנת קורות החיים")).toBeNull();
     expect(screen.getByText("גרסה מוכנה")).toHaveAttribute("aria-current", "page");
     fireEvent.click(newDraft);
     await waitFor(() => expect(fetchMock.mock.calls.some((call) => call[1]?.method === "POST")).toBe(true));

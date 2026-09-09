@@ -220,7 +220,7 @@ const renderPage = (aiEnabled = true) => {
       <MemoryRouter initialEntries={["/applications/app-1/draft"]}>
         <Routes>
           <Route element={<DraftEditorPage />} path="/applications/:applicationId/draft" />
-          <Route element={<h1>הכנת קורות החיים</h1>} path="/applications/:applicationId/preparation" />
+          <Route element={<h1>הכנת קורות החיים</h1>} path="/applications/:applicationId" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -280,10 +280,9 @@ describe("DraftEditorPage", () => {
       "href",
       "/applications/app-1",
     );
-    expect(within(breadcrumbs).getByRole("link", { name: "הכנת קורות החיים" })).toHaveAttribute(
-      "href",
-      "/applications/app-1/preparation",
-    );
+    /* Two crumbs, not three: the preparation screen the trail used to name in between is
+       the Application record the crumb above already leads to. */
+    expect(within(breadcrumbs).queryByText("הכנת קורות החיים")).not.toBeInTheDocument();
     expect(within(breadcrumbs).getByText("עורך טיוטה")).toHaveAttribute("aria-current", "page");
   });
 
@@ -569,7 +568,7 @@ describe("DraftEditorPage", () => {
        render its own bare title for exactly this case. */
     expect(await screen.findByRole("link", { name: "החלת החלטות הסקירה" })).toHaveAttribute(
       "href",
-      "/applications/app-1/preparation",
+      "/applications/app-1",
     );
   });
 

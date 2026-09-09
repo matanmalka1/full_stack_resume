@@ -2,7 +2,7 @@ import { routePaths } from "@/app/routePaths";
 import { Breadcrumbs, type BreadcrumbItem } from "@/ui/Breadcrumbs";
 import { applicationLabel } from "../model/applicationPresentation";
 
-type ApplicationBreadcrumbPage = "job" | "preparation" | "draft" | "revision";
+type ApplicationBreadcrumbPage = "job" | "draft" | "revision";
 
 interface ApplicationBreadcrumbsProps {
   applicationId?: string;
@@ -15,7 +15,12 @@ interface ApplicationBreadcrumbsProps {
 /* One hierarchy for every view of an Application. Keeping the labels and destinations
    here prevents the preparation and revision screens from quietly describing the same
    parent differently. Data-backed labels are shown only when both canonical values are
-   available; loading never exposes the record id as user-facing content. */
+   available; loading never exposes the record id as user-facing content.
+
+   There is no "הכנת קורות החיים" level any more. It named a screen that turned out to be
+   the Application record itself under a second URL, so the editor and the revision screen
+   drew two crumbs one after the other that led to the same address - a hierarchy claiming
+   a depth the routes do not have. */
 export const ApplicationBreadcrumbs = ({
   applicationId,
   company,
@@ -32,11 +37,6 @@ export const ApplicationBreadcrumbs = ({
       ...(page === "job" ? {} : { to: routePaths.application(applicationId) }),
     });
 
-    if (page === "draft" || page === "revision") {
-      items.push({ label: "הכנת קורות החיים", to: routePaths.preparation(applicationId) });
-    } else if (page === "preparation") {
-      items.push({ label: "הכנת קורות החיים" });
-    }
   }
 
   if (page === "draft") {

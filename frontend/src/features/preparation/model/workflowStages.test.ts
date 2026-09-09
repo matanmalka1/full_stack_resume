@@ -8,7 +8,7 @@ const detail = (overrides: Partial<ApplicationDetail>) => overrides as Applicati
 describe("workflowDestinations", () => {
   it("offers the editor only once a working draft exists", () => {
     expect(workflowDestinations("app-1", detail({}))).toEqual({
-      analysis: "/applications/app-1/preparation",
+      analysis: "/applications/app-1",
     });
     expect(workflowDestinations("app-1", detail({ active_working_draft_id: "draft-1" }))).toMatchObject({
       draft: "/applications/app-1/draft",

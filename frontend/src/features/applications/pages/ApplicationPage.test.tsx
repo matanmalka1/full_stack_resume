@@ -93,12 +93,9 @@ const renderPage = (fetchImplementation?: (input: RequestInfo | URL, init?: Requ
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={["/applications/app-1"]}>
         <Routes>
-          {/* Both addresses resolve to this one screen, exactly as `router.tsx` maps them:
-              selecting the preparation tab moves the URL to `/preparation` rather than
-              leaving a `?tab=` on the other form, so a stub behind that path would test a
-              route the application does not have. */}
+          {/* One address for this screen, exactly as `router.tsx` maps it. The second entry
+              here mirrored the second route the table used to carry. */}
           <Route element={<ApplicationPage />} path="/applications/:applicationId" />
-          <Route element={<ApplicationPage />} path="/applications/:applicationId/preparation" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -168,7 +165,7 @@ describe("ApplicationPage", () => {
        screen that runs it, never as a second copy of the command itself. */
     expect(await screen.findByRole("link", { name: /ניתוח המשרה/ })).toHaveAttribute(
       "href",
-      "/applications/app-1/preparation",
+      "/applications/app-1",
     );
   });
 

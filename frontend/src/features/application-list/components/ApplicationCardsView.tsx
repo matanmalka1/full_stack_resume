@@ -59,7 +59,7 @@ const ApplicationCard = ({
                 ? "border-cv-blocker/30 bg-cv-blocker-soft text-cv-blocker"
                 : "border-cv-warning/30 bg-cv-warning-soft text-cv-warning",
             )}
-            to={routePaths.preparation(item.id)}
+            to={routePaths.application(item.id)}
           >
             <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
             <span className="line-clamp-2">{attention.label}</span>

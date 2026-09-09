@@ -69,7 +69,7 @@ export const ApplicationPage = () => {
         <ApplicationBreadcrumbs
           applicationId={applicationId}
           company={detail?.application.company}
-          page="preparation"
+          page="job"
           targetRole={detail?.application.target_role}
         />
       }

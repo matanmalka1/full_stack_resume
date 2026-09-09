@@ -142,9 +142,9 @@ const renderPage = (settings: Settings = deterministicSettings, routeState?: unk
 
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[{ pathname: "/applications/app-1/preparation", state: routeState }]}>
+      <MemoryRouter initialEntries={[{ pathname: "/applications/app-1", state: routeState }]}>
         <Routes>
-          <Route element={<ApplicationPage />} path="/applications/:applicationId/preparation" />
+          <Route element={<ApplicationPage />} path="/applications/:applicationId" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -200,11 +200,11 @@ describe("ApplicationPage at the preparation route", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("link", { name: "Acme — Backend Engineer" })).toHaveAttribute(
-      "href",
-      "/applications/app-1",
-    );
-    expect(screen.getByText("הכנת קורות החיים", { selector: "[aria-current='page']" })).toBeInTheDocument();
+    /* The Application is the open page, so its trail names it rather than offering it as
+       a destination - it used to link to itself, because the screen answered to a second
+       URL and the crumb pointed at the other one. */
+    expect(await screen.findByText("Acme — Backend Engineer")).toHaveAttribute("aria-current", "page");
+    expect(screen.queryByRole("link", { name: "Acme — Backend Engineer" })).toBeNull();
     expect(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" })).toBeInTheDocument();
   });
 

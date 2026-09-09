@@ -10,7 +10,7 @@ import { Callout } from "@/ui/Callout";
 export const DraftEmptyState = ({ applicationId }: { applicationId: string }) => (
   <Callout
     action={
-      <Link className={buttonClasses("primary")} to={routePaths.preparation(applicationId)}>
+      <Link className={buttonClasses("primary")} to={routePaths.application(applicationId)}>
         חזרה להכנת קורות החיים
       </Link>
     }

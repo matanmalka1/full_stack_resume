@@ -256,11 +256,11 @@ describe("ApplicationListPage", () => {
     renderPage();
 
     const attention = await screen.findByRole("link", { name: "Acme: יש פער חוסם מול הדרישות" });
-    expect(attention).toHaveAttribute("href", "/applications/app-1/preparation");
+    expect(attention).toHaveAttribute("href", "/applications/app-1");
     expect(within(attention).getByText("יש פער חוסם מול הדרישות")).toBeInTheDocument();
     expect(within(screen.getByRole("region", { name: "מוקד פעולות" })).getByRole("link")).toHaveAttribute(
       "href",
-      "/applications/app-1/preparation",
+      "/applications/app-1",
     );
   });
 

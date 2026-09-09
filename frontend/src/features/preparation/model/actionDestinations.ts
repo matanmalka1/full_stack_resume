@@ -11,14 +11,15 @@ import { routePaths } from "@/app/routePaths";
    An action absent from the table has no screen yet, which is the honest default. */
 
 const destinations: Record<string, (applicationId: string) => string> = {
-  /* Job Detail summarizes preparation but does not execute it. Board recommendations and
-     alerts therefore address the preparation screen that owns these controls. */
-  analyze: routePaths.preparation,
-  apply_analysis_decisions: routePaths.preparation,
-  create_selection_plan: routePaths.preparation,
-  create_draft: routePaths.preparation,
-  archive_working_draft: routePaths.preparation,
-  replace_working_draft: routePaths.preparation,
+  /* The Application screen is where preparation is executed - it is the preparation
+     screen, not a summary beside one. It carried a second URL ending in `/preparation`
+     for exactly these links; one address answers them now. */
+  analyze: routePaths.application,
+  apply_analysis_decisions: routePaths.application,
+  create_selection_plan: routePaths.application,
+  create_draft: routePaths.application,
+  archive_working_draft: routePaths.application,
+  replace_working_draft: routePaths.application,
   /* The Draft Editor is where the patch is issued, so the three commands it carries all
      lead to it. `apply_selection_change` and the removal path are controls on that
      screen rather than screens of their own: they act on the claim the user is looking
@@ -45,4 +46,4 @@ export const actionDestination = (action: string, applicationId: string): string
 export type PreparationScreen = "preparation" | "draft";
 
 export const screenPath = (screen: PreparationScreen, applicationId: string): string =>
-  screen === "draft" ? routePaths.draft(applicationId) : routePaths.preparation(applicationId);
+  screen === "draft" ? routePaths.draft(applicationId) : routePaths.application(applicationId);

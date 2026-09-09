@@ -139,7 +139,6 @@ const renderPage = (entry = "/") => {
         <Routes>
           <Route element={<NewApplicationPage />} path="/" />
           <Route element={<CreatedApplicationDestination />} path="/applications/:applicationId" />
-          <Route element={<h1>הכנת קורות החיים</h1>} path="/applications/:applicationId/preparation" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,

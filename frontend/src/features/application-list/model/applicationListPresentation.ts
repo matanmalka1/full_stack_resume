@@ -156,7 +156,7 @@ export const attentionHubItems = (items: readonly ApplicationListItem[], today: 
     if (projectedAttention != null) {
       attention.push({
         actionLabel: "פתיחת מסך ההכנה",
-        actionTo: routePaths.preparation(application.id),
+        actionTo: routePaths.application(application.id),
         application,
         label: "דורש טיפול",
         subtitle: application.target_role,

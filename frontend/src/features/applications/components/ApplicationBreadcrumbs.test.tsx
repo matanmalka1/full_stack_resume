@@ -23,10 +23,9 @@ describe("ApplicationBreadcrumbs", () => {
       "href",
       "/applications/record%20%2F%20%D7%A2%D7%91%D7%A8%D7%99%D7%AA",
     );
-    expect(within(breadcrumbs).getByRole("link", { name: "הכנת קורות החיים" })).toHaveAttribute(
-      "href",
-      "/applications/record%20%2F%20%D7%A2%D7%91%D7%A8%D7%99%D7%AA/preparation",
-    );
+    /* No "הכנת קורות החיים" level between them. It led to a second URL for the screen the
+       crumb above already names, so the trail drew two steps that arrived at one place. */
+    expect(within(breadcrumbs).queryByText("הכנת קורות החיים")).not.toBeInTheDocument();
     expect(within(breadcrumbs).getByText("עורך טיוטה")).toHaveAttribute("aria-current", "page");
     expect(within(breadcrumbs).queryByRole("link", { name: "עורך טיוטה" })).not.toBeInTheDocument();
   });

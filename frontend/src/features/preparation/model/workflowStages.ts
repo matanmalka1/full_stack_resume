@@ -80,7 +80,7 @@ export const workflowDestinations = (
   const draftAvailable = detail?.active_working_draft_id != null || detail?.preparation_state === "approved";
 
   return {
-    analysis: routePaths.preparation(applicationId),
+    analysis: routePaths.application(applicationId),
     ...(draftAvailable ? { draft: routePaths.draft(applicationId) } : {}),
     ...(readyRevisionId == null ? {} : { ready: routePaths.revision(readyRevisionId) }),
   };

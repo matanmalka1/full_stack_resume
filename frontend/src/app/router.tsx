@@ -24,7 +24,7 @@ import { routePaths } from "./routePaths";
 
 /* `useParams` rather than a splat rewrite: the id is a path segment, and re-encoding it
    through `routePaths` is what keeps an id with a slash or a space landing where it did. */
-const TrackingRedirect = () => {
+const ApplicationRedirect = () => {
   const { applicationId } = useParams();
 
   return <Navigate replace to={routePaths.application(applicationId ?? "")} />;
@@ -47,12 +47,9 @@ export const router = createBrowserRouter([
       /* Creating is one action taken from the board, not what the root does. */
       { path: "applications/new", element: <NewApplicationPage /> },
 
-      /* The Application hub: its job record, its CV preparation, and its artifacts, as
-         tabs of one screen. `/preparation` is a second address for that same screen with
-         the preparation tab selected - the document workflow is linked to and bookmarked
-         directly, so it keeps a name of its own. */
+      /* The Application hub: its job record, its CV preparation, and its artifacts, on
+         one screen with one address. */
       { path: "applications/:applicationId", element: <ApplicationPage /> },
-      { path: "applications/:applicationId/preparation", element: <ApplicationPage /> },
 
       /* The draft editor: edit, preview, validate, approve, and render, on the one screen
          that holds the draft all five act on. */
@@ -66,10 +63,12 @@ export const router = createBrowserRouter([
 
       { path: "settings", element: <SettingsPage /> },
 
-      /* Two addresses kept only for links already written down. Recruitment is a dialog
-         opened from each Application screen, and the revision screen is named for the
-         record rather than for the state it was in. */
-      { path: "applications/:applicationId/tracking", element: <TrackingRedirect /> },
+      /* Three addresses kept only for links already written down. `/preparation` was a
+         second name for the hub itself; recruitment is a dialog opened from each
+         Application screen; and the revision screen is named for the record rather than
+         for the state it was in. */
+      { path: "applications/:applicationId/preparation", element: <ApplicationRedirect /> },
+      { path: "applications/:applicationId/tracking", element: <ApplicationRedirect /> },
       { path: "approved-revisions/:revisionId/ready", element: <ReadyRedirect /> },
 
       { path: "*", element: <NotFoundPage /> },
