@@ -14,16 +14,48 @@ from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
 from cv_engine.application.errors import WorkflowError
 from cv_engine.domain.analysis.approval import merge_classification
+from cv_engine.domain.contracts.analysis import RequirementAttestation, RequirementInterpretation
+from cv_engine.domain.contracts.providers import ProposedRequirement, RequirementExtractionProposal
 from cv_engine.domain.models import Emphasis, FitLevel, Gap, ProfileName, Track
 from cv_engine.domain.profiles import ProfileStore
 
 
 def test_provider_cannot_relax_approval_confidence_or_language(
-    provider_analysis, classification_proposal, classify
+    provider_analysis, classification_proposal, classify, fake_openai
 ) -> None:
     deterministic = classify(AMBIGUOUS_HEBREW_JOB)
     assert deterministic.classification_requires_approval
     assert deterministic.language == "he"
+
+    # This test's subject is classification-merge policy, not extraction, so
+    # the extraction answer must not itself block drafting: unlike
+    # `trivial_requirement_extraction`, it reads the "Salesforce" quote (a
+    # non-mandatory match, so it cannot also open `coverage-undetermined`) so
+    # `extraction-failed` never joins `analysis.approval_reasons` and the
+    # classification-ambiguity gate is the one left to block the draft.
+    quote = "Salesforce"
+    start = AMBIGUOUS_HEBREW_JOB.index(quote)
+    fake_openai.script(
+        "propose_requirement_extraction",
+        RequirementExtractionProposal(
+            requirements=[
+                ProposedRequirement(
+                    attestation=RequirementAttestation(
+                        quote=quote, start=start, end=start + len(quote)
+                    ),
+                    interpretation=RequirementInterpretation(
+                        source_role="requirement",
+                        obligation="preferred",
+                        composition="single",
+                        negation=False,
+                    ),
+                    kind="presence",
+                    label=quote,
+                )
+            ],
+            unmapped_statements=[],
+        ),
+    )
 
     # The job's hard gap is accepted, so the approval gate is what must block.
     setup = provider_analysis(classification_proposal(), accept_low_fit=True)
