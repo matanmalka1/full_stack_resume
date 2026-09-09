@@ -1,5 +1,6 @@
 import { Circle, CircleCheck } from "lucide-react";
-import type { ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { cx } from "@/ui/cx";
 
@@ -26,6 +27,12 @@ interface CommitBarProps {
   primary: ReactNode;
 }
 
+/* A workflow page owns one physical action position even when the component deciding
+   what belongs there lives several layers below the route. The shell supplies this
+   target; a standalone CommitBar (including focused component tests) still renders in
+   place. Portalling only changes layout ownership, not action ownership. */
+export const CommitBarTargetContext = createContext<HTMLElement | null | undefined>(undefined);
+
 /* The bar that closes a piece of work: the way back and what is still missing on one
    side, the command on the other.
 
@@ -42,7 +49,7 @@ interface CommitBarProps {
    do now" in a shape of its own - a row of buttons in the flow on the preparation screen,
    a pinned approval in the editor, a download inside the identity card on the ready
    screen - and it is this component, at all three, that makes the answer one shape. */
-export const CommitBar = ({ back, children, label, primary }: CommitBarProps) => (
+const CommitBarSurface = ({ back, children, label, primary }: CommitBarProps) => (
   <div className="sticky bottom-4 z-20 flex flex-wrap items-center justify-between gap-4 rounded-surface border border-cv-border bg-cv-surface/95 p-4 shadow-floating backdrop-blur-xl">
     <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
       {back}
@@ -58,6 +65,15 @@ export const CommitBar = ({ back, children, label, primary }: CommitBarProps) =>
     <div className="flex flex-wrap items-center gap-3">{primary}</div>
   </div>
 );
+
+export const CommitBar = (props: CommitBarProps) => {
+  const target = useContext(CommitBarTargetContext);
+  const surface = <CommitBarSurface {...props} />;
+
+  if (target === undefined) return surface;
+  if (target === null) return null;
+  return createPortal(surface, target);
+};
 
 export interface ChecklistEntry {
   done: boolean;

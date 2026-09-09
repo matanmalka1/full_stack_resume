@@ -1,9 +1,10 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import type { ApplicationDetail } from "@/api/contracts";
 import { PageShell } from "@/ui/PageShell";
 import { type WorkflowStage, workflowStageLabels } from "../model/workflowStages";
 import { PreparationWorkflowSteps } from "./PreparationWorkflowSteps";
+import { CommitBarTargetContext } from "./CommitBar";
 
 interface WizardStepShellProps {
   /* Absent on intake, where the Application does not exist yet, and while the record
@@ -49,23 +50,32 @@ export const WizardStepShell = ({
   measure = "wizard",
   stage,
   title,
-}: WizardStepShellProps) => (
-  <PageShell
-    description={description}
-    eyebrow={eyebrow}
-    /* The spine states the position it reads from the projection. Only a screen with no
-       Application to read it from - intake - names its own, which is exactly the case
-       where there is no id either. */
-    landmark={
-      <PreparationWorkflowSteps
-        applicationId={applicationId}
-        detail={detail}
-        stage={applicationId === undefined ? stage : undefined}
-      />
-    }
-    measure={measure}
-    title={title ?? workflowStageLabels[stage]}
-  >
-    {children}
-  </PageShell>
-);
+}: WizardStepShellProps) => {
+  const [commitBarTarget, setCommitBarTarget] = useState<HTMLDivElement | null>(null);
+
+  return (
+    <CommitBarTargetContext.Provider value={commitBarTarget}>
+      <PageShell
+        description={description}
+        eyebrow={eyebrow}
+        /* The spine states the position it reads from the projection. Only a screen with no
+           Application to read it from - intake - names its own, which is exactly the case
+           where there is no id either. */
+        landmark={
+          <PreparationWorkflowSteps
+            applicationId={applicationId}
+            detail={detail}
+            stage={applicationId === undefined ? stage : undefined}
+          />
+        }
+        measure={measure}
+        title={title ?? workflowStageLabels[stage]}
+      >
+        <div className="flex flex-col gap-6">
+          {children}
+          <div className="contents" ref={setCommitBarTarget} />
+        </div>
+      </PageShell>
+    </CommitBarTargetContext.Provider>
+  );
+};

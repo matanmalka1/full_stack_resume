@@ -1,4 +1,4 @@
-import { Navigate, createBrowserRouter, useParams } from "react-router-dom";
+import { createBrowserRouter } from "react-router-dom";
 
 import { NewApplicationPage } from "@/features/application-intake";
 import { ApplicationListPage } from "@/features/application-list";
@@ -8,8 +8,7 @@ import { RevisionPage } from "@/features/revisions";
 import { SettingsPage } from "@/features/settings";
 import { AppLayout } from "./layout/AppLayout";
 import { NotFoundPage } from "./layout/NotFoundPage";
-import { RouteErrorBoundary } from "./layout/RouteErrorBoundary";
-import { routePaths } from "./routePaths";
+import { RootRouteErrorBoundary, RouteErrorBoundary } from "./layout/RouteErrorBoundary";
 
 /* Six screens carry the workflow: the board, intake, the Application hub, its preparation
    tab, the draft editor, and the approved revision.
@@ -22,27 +21,13 @@ import { routePaths } from "./routePaths";
    An Operation has no route either. Queueing reports in place, and a direct link lands on
    the Application whose panel shows the run. */
 
-/* `useParams` rather than a splat rewrite: the id is a path segment, and re-encoding it
-   through `routePaths` is what keeps an id with a slash or a space landing where it did. */
-const ApplicationRedirect = () => {
-  const { applicationId } = useParams();
-
-  return <Navigate replace to={routePaths.application(applicationId ?? "")} />;
-};
-
-const ReadyRedirect = () => {
-  const { revisionId } = useParams();
-
-  return <Navigate replace to={routePaths.revision(revisionId ?? "")} />;
-};
-
 export const router = createBrowserRouter([
   {
     path: "/",
     element: <AppLayout />,
     /* The shell's own failure. Nothing above it is left to render, so the boundary here
        stands alone and carries its own way out. */
-    errorElement: <RouteErrorBoundary />,
+    errorElement: <RootRouteErrorBoundary />,
     children: [
       {
         /* A pathless route whose only job is to own the boundary for every screen below
@@ -74,14 +59,6 @@ export const router = createBrowserRouter([
           { path: "revisions/:revisionId", element: <RevisionPage /> },
 
           { path: "settings", element: <SettingsPage /> },
-
-          /* Three addresses kept only for links already written down. `/preparation` was a
-         second name for the hub itself; recruitment is a dialog opened from each
-         Application screen; and the revision screen is named for the record rather than
-         for the state it was in. */
-          { path: "applications/:applicationId/preparation", element: <ApplicationRedirect /> },
-          { path: "applications/:applicationId/tracking", element: <ApplicationRedirect /> },
-          { path: "approved-revisions/:revisionId/ready", element: <ReadyRedirect /> },
 
           { path: "*", element: <NotFoundPage /> },
         ],

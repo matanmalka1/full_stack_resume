@@ -3,9 +3,8 @@ import { Link } from "react-router-dom";
 
 import type { DuplicateMatch, DuplicateMatchReason } from "@/api/contracts";
 import { routePaths } from "@/app/routePaths";
-import { Button } from "@/ui/Button";
-import { Callout } from "@/ui/Callout";
 import { applicationLabel } from "@/features/applications";
+import { Callout } from "@/ui/Callout";
 
 interface ReasonPresentation {
   icon: LucideIcon;
@@ -36,28 +35,18 @@ const matchStrength = (match: DuplicateMatch): number => {
 
 interface DuplicateChoicesProps {
   matches: DuplicateMatch[];
-  onCreateAnyway: () => void;
-  pending: boolean;
 }
 
 /* A.4 frame 1, region 9. Duplicate results are warnings: each one offers the existing
    Application, and creating another is a separate explicit action rather than something
    the primary button does quietly. */
-export const DuplicateChoices = ({ matches, onCreateAnyway, pending }: DuplicateChoicesProps) => {
+export const DuplicateChoices = ({ matches }: DuplicateChoicesProps) => {
   /* Sorted for reading, not scored: every match the server returned is still shown, in
      the order that puts the most specific evidence first. */
   const ranked = [...matches].sort((left, right) => matchStrength(right) - matchStrength(left));
 
   return (
     <Callout
-      action={
-        <div className="flex flex-wrap items-center gap-3">
-          <Button onClick={onCreateAnyway} pending={pending} pendingLabel="יוצר מועמדות…" variant="secondary">
-            יצירת מועמדות נוספת
-          </Button>
-          <span className="text-cv-text-muted">הטקסט שהוזן יישמר כמועמדות חדשה לצד הקיימות.</span>
-        </div>
-      }
       role="alert"
       title={matches.length === 1 ? "נמצאה מועמדות דומה" : `נמצאו ${matches.length} מועמדויות דומות`}
       tone="warning"

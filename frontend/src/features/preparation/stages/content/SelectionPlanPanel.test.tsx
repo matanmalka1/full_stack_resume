@@ -203,7 +203,9 @@ describe("SelectionPlanPanel", () => {
     const row = (await screen.findByText("עובדה שהושמטה")).closest("li");
     if (row === null) throw new Error("candidate row was not rendered");
     fireEvent.click(within(row).getByRole("checkbox", { name: "קיבוע העובדה" }));
-    fireEvent.click(screen.getByRole("button", { name: "שמירת בחירת העובדות" }));
+    const saveButton = screen.getByRole("button", { name: "שמירת בחירת העובדות" });
+    expect(saveButton.closest(".sticky")).toBeNull();
+    fireEvent.click(saveButton);
 
     await waitFor(() => expect(fetchMock.mock.calls.some((call) => call[1]?.method === "POST")).toBe(true));
     const post = fetchMock.mock.calls.find((call) => call[1]?.method === "POST");

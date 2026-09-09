@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { PageHeading } from "./PageHeading";
+import { PageHeading, type EyebrowTone } from "./PageHeading";
 import { cx } from "./cx";
 
 interface PageShellProps {
@@ -8,6 +8,7 @@ interface PageShellProps {
   children?: ReactNode;
   description?: ReactNode;
   eyebrow?: ReactNode;
+  eyebrowTone?: EyebrowTone;
   /* Where the page sits in a longer piece of work, drawn above the masthead. The shell
      knows of no such progression, so the page supplies one where it has one and nothing
      where it does not. */
@@ -35,6 +36,7 @@ export const PageShell = ({
   children,
   description,
   eyebrow,
+  eyebrowTone,
   landmark,
   measure = "wide",
   navigation,
@@ -53,7 +55,7 @@ export const PageShell = ({
       {landmark === undefined ? null : <div className="mb-5">{landmark}</div>}
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 border-b border-cv-border pb-2">
         <div className="min-w-0">
-          <PageHeading description={description} eyebrow={eyebrow} id="route-heading">
+          <PageHeading description={description} eyebrow={eyebrow} eyebrowTone={eyebrowTone} id="route-heading">
             {title}
           </PageHeading>
         </div>

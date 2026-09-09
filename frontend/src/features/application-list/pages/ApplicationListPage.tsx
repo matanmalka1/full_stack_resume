@@ -7,7 +7,7 @@ import { RecruitmentUpdateDialog } from "@/features/recruitment";
 import { buttonClasses } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
 import { ErrorCallout } from "@/ui/ErrorCallout";
-import { PageHeading } from "@/ui/PageHeading";
+import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
 import { ApplicationAttentionSummary } from "../components/ApplicationAttentionSummary";
 import { ApplicationListResults } from "../components/ApplicationListResults";
@@ -64,100 +64,91 @@ export const ApplicationListPage = () => {
   const clearFilters = () => updateQuery({ sort: query.sort });
 
   return (
-    <section aria-labelledby="route-heading" className="page-frame">
-      <header className="border-b border-cv-border pb-3">
-        <PageHeading id="route-heading">לוח מועמדויות</PageHeading>
-      </header>
-
-      <div className="mt-5 flex flex-col gap-5">
-        <ApplicationAttentionSummary
-          clearingApplicationId={clearNextActionMutation.isPending ? (clearNextActionMutation.variables ?? null) : null}
-          items={items}
-          onClearNextAction={(application) => clearNextActionMutation.mutate(application.id)}
-          onOpenStatusDialog={(application) => setUpdatingApplicationId(application.id)}
+    <PageShell measure="wide" title="לוח מועמדויות">
+      <ApplicationAttentionSummary
+        clearingApplicationId={clearNextActionMutation.isPending ? (clearNextActionMutation.variables ?? null) : null}
+        items={items}
+        onClearNextAction={(application) => clearNextActionMutation.mutate(application.id)}
+        onOpenStatusDialog={(application) => setUpdatingApplicationId(application.id)}
+      />
+      {clearNextActionMutation.error === null ? null : (
+        <ErrorCallout
+          error={clearNextActionMutation.error}
+          fallbackDetail="התזכורת לא הוסרה. הערכים הקיימים לא השתנו."
+          fallbackTitle="לא ניתן להסיר את התזכורת"
         />
-        {clearNextActionMutation.error === null ? null : (
-          <ErrorCallout
-            error={clearNextActionMutation.error}
-            fallbackDetail="התזכורת לא הוסרה. הערכים הקיימים לא השתנו."
-            fallbackTitle="לא ניתן להסיר את התזכורת"
-          />
-        )}
-        {closeMutation.error === null ? null : (
-          <ErrorCallout
-            error={closeMutation.error}
-            fallbackDetail="המועמדות לא נסגרה. אפשר לנסות שוב."
-            fallbackTitle="סגירת המועמדות נכשלה"
-          />
-        )}
+      )}
+      {closeMutation.error === null ? null : (
+        <ErrorCallout
+          error={closeMutation.error}
+          fallbackDetail="המועמדות לא נסגרה. אפשר לנסות שוב."
+          fallbackTitle="סגירת המועמדות נכשלה"
+        />
+      )}
 
-        <QueryState
-          empty={page?.total === 0}
-          emptyState={
-            <EmptyState className="bg-cv-surface">
-              <p className="text-body text-cv-text">עוד לא נוצרה אף מועמדות.</p>
-              <p className="mt-1 text-support text-cv-text-muted">מועמדות חדשה מתחילה בהדבקת מודעת המשרה.</p>
-              <div className="mt-5 flex justify-center">
-                <Link className={buttonClasses("primary")} to={routePaths.newApplication}>
-                  משרה חדשה
-                </Link>
-              </div>
-            </EmptyState>
-          }
-          error={listQuery.error}
-          fallbackTitle="לא ניתן לטעון את המועמדויות"
-          loading={listQuery.isPending}
-          loadingLabel="טוען את המועמדויות…"
-          loadingState={<ApplicationListTableSkeleton />}
-        >
-          {page === undefined ? null : (
-            <div className="flex flex-col gap-4">
-              <ApplicationListToolbar
-                activity={query.activity ?? "open"}
-                filtered={filtered}
-                onActivityChange={(activity) => updateQuery({ ...query, activity })}
-                onClearFilters={clearFilters}
-                onPreparationStateChange={(stage) => updateQuery({ ...query, stages: stage ? [stage] : [] })}
-                onPresetSelect={(preset) => updateQuery({ ...query, preset: preset === "all" ? undefined : preset })}
-                onRecruitmentStageChange={(stageId) => {
-                  const stage = recruitmentStages.find((candidate) => candidate.id === stageId);
-                  updateQuery({ ...query, recruitmentStatuses: stage?.statuses ?? [] });
-                }}
-                onSearchChange={setSearchInput}
-                onSortChange={(sort) => updateQuery({ ...query, sort })}
-                onViewModeChange={setViewMode}
-                preparationState={query.stages?.[0]}
-                preset={query.preset ?? "all"}
-                presetCounts={page.preset_counts}
-                recruitmentStage={selectedStage(query.recruitmentStatuses)}
-                recruitmentStageCounts={recruitmentStageCounts}
-                resultSummary={
-                  page.matched === page.total
-                    ? `${page.total} מועמדויות`
-                    : `${page.matched} מתוך ${page.total} מועמדויות`
-                }
-                search={searchInput}
-                sort={query.sort ?? "updated"}
-                stageCounts={page.stage_counts}
-                viewMode={viewMode}
-              />
-              <ApplicationListResults
-                fetching={listQuery.isFetching && !listQuery.isPending}
-                items={items}
-                matchedCount={page.matched}
-                offset={query.offset ?? 0}
-                onClearFilters={clearFilters}
-                onOffsetChange={(offset) => updateQuery({ ...query, offset }, { replace: false, resetOffset: false })}
-                onRequestClose={(item) => setClosingApplicationId(item.id)}
-                onRequestUpdate={(item) => setUpdatingApplicationId(item.id)}
-                pageSize={PAGE_SIZE}
-                viewMode={viewMode}
-              />
+      <QueryState
+        empty={page?.total === 0}
+        emptyState={
+          <EmptyState className="bg-cv-surface">
+            <p className="text-body text-cv-text">עוד לא נוצרה אף מועמדות.</p>
+            <p className="mt-1 text-support text-cv-text-muted">מועמדות חדשה מתחילה בהדבקת מודעת המשרה.</p>
+            <div className="mt-5 flex justify-center">
+              <Link className={buttonClasses("primary")} to={routePaths.newApplication}>
+                משרה חדשה
+              </Link>
             </div>
-          )}
-        </QueryState>
-      </div>
-
+          </EmptyState>
+        }
+        error={listQuery.error}
+        fallbackTitle="לא ניתן לטעון את המועמדויות"
+        loading={listQuery.isPending}
+        loadingLabel="טוען את המועמדויות…"
+        loadingState={<ApplicationListTableSkeleton />}
+      >
+        {page === undefined ? null : (
+          <div className="flex flex-col gap-4">
+            <ApplicationListToolbar
+              activity={query.activity ?? "open"}
+              filtered={filtered}
+              onActivityChange={(activity) => updateQuery({ ...query, activity })}
+              onClearFilters={clearFilters}
+              onPreparationStateChange={(stage) => updateQuery({ ...query, stages: stage ? [stage] : [] })}
+              onPresetSelect={(preset) => updateQuery({ ...query, preset: preset === "all" ? undefined : preset })}
+              onRecruitmentStageChange={(stageId) => {
+                const stage = recruitmentStages.find((candidate) => candidate.id === stageId);
+                updateQuery({ ...query, recruitmentStatuses: stage?.statuses ?? [] });
+              }}
+              onSearchChange={setSearchInput}
+              onSortChange={(sort) => updateQuery({ ...query, sort })}
+              onViewModeChange={setViewMode}
+              preparationState={query.stages?.[0]}
+              preset={query.preset ?? "all"}
+              presetCounts={page.preset_counts}
+              recruitmentStage={selectedStage(query.recruitmentStatuses)}
+              recruitmentStageCounts={recruitmentStageCounts}
+              resultSummary={
+                page.matched === page.total ? `${page.total} מועמדויות` : `${page.matched} מתוך ${page.total} מועמדויות`
+              }
+              search={searchInput}
+              sort={query.sort ?? "updated"}
+              stageCounts={page.stage_counts}
+              viewMode={viewMode}
+            />
+            <ApplicationListResults
+              fetching={listQuery.isFetching && !listQuery.isPending}
+              items={items}
+              matchedCount={page.matched}
+              offset={query.offset ?? 0}
+              onClearFilters={clearFilters}
+              onOffsetChange={(offset) => updateQuery({ ...query, offset }, { replace: false, resetOffset: false })}
+              onRequestClose={(item) => setClosingApplicationId(item.id)}
+              onRequestUpdate={(item) => setUpdatingApplicationId(item.id)}
+              pageSize={PAGE_SIZE}
+              viewMode={viewMode}
+            />
+          </div>
+        )}
+      </QueryState>
       <CloseApplicationDialog
         application={closingApplication}
         onCancel={() => setClosingApplicationId(null)}
@@ -165,6 +156,6 @@ export const ApplicationListPage = () => {
         pending={closeMutation.isPending}
       />
       <RecruitmentUpdateDialog application={updatingApplication} onClose={() => setUpdatingApplicationId(null)} />
-    </section>
+    </PageShell>
   );
 };

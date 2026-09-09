@@ -4,7 +4,7 @@ import { ApiProblem } from "@/api/client";
 import { buttonClasses } from "@/ui/Button";
 import { Card } from "@/ui/Card";
 import { LtrText } from "@/ui/LtrText";
-import { PageHeading } from "@/ui/PageHeading";
+import { PageShell } from "@/ui/PageShell";
 import { boardPath } from "../boardReturn";
 
 interface SafeRouteError {
@@ -36,33 +36,48 @@ const toSafeRouteError = (error: unknown): SafeRouteError => {
   };
 };
 
-export const RouteErrorBoundary = () => {
+const RouteErrorContent = ({ status }: { status: number | undefined }) => (
+  <Card aria-labelledby="route-heading" role="alert">
+    {status === undefined ? null : (
+      <p className="text-support text-cv-text-muted">
+        <LtrText>HTTP {status}</LtrText>
+      </p>
+    )}
+
+    {/* A route failure leaves no useful action on its screen, so the shared presentation
+        always carries one deterministic way back to the board. */}
+    <div className={status === undefined ? undefined : "mt-4"}>
+      <Link className={buttonClasses("primary")} to={boardPath()}>
+        חזרה ללוח המועמדויות
+      </Link>
+    </div>
+  </Card>
+);
+
+const RouteErrorPage = () => {
   const error = toSafeRouteError(useRouteError());
 
   return (
-    /* A section rather than a `main` of its own: this renders in place of the screen,
-       inside the shell's `main`, so a second one would nest two document landmarks. When
-       the shell itself is what failed there is no outer landmark and this is the page. */
-    <section className="page-frame px-6 py-12">
-      <Card aria-labelledby="route-error-heading" role="alert">
-        <PageHeading description={error.detail} eyebrow="הבקשה נכשלה" eyebrowTone="blocker" id="route-error-heading">
-          {error.title}
-        </PageHeading>
-        {error.status === undefined ? null : (
-          <p className="mt-4 text-support text-cv-text-muted">
-            <LtrText>HTTP {error.status}</LtrText>
-          </p>
-        )}
-
-        {/* The way out, for the same reason `NotFoundPage` carries one: a reader who lands
-            here has nothing else on the screen to act on, and when the shell is what
-            failed there is no navigation around this card either. */}
-        <div className="mt-6">
-          <Link className={buttonClasses("primary")} to={boardPath()}>
-            חזרה ללוח המועמדויות
-          </Link>
-        </div>
-      </Card>
-    </section>
+    <PageShell
+      description={error.detail}
+      eyebrow="הבקשה נכשלה"
+      eyebrowTone="blocker"
+      measure="form"
+      title={error.title}
+    >
+      <RouteErrorContent status={error.status} />
+    </PageShell>
   );
 };
+
+/* A screen failure replaces the Outlet inside AppLayout, whose main landmark and gutter
+   remain in place. */
+export const RouteErrorBoundary = RouteErrorPage;
+
+/* A layout failure has no outer document container left. Supply only those missing
+   responsibilities, then render the exact same error page presentation. */
+export const RootRouteErrorBoundary = () => (
+  <main className="page-gutter py-12">
+    <RouteErrorPage />
+  </main>
+);

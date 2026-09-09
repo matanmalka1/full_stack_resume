@@ -202,6 +202,11 @@ describe("NewApplicationPage", () => {
     renderPage();
 
     fillIntake();
+    const createButton = screen.getByRole("button", { name: "יצירת מועמדות" });
+    expect(createButton).toHaveAttribute("form", "application-intake-form");
+    const commitBar = createButton.closest(".sticky");
+    expect(commitBar).not.toBeNull();
+    expect(commitBar?.parentElement?.lastElementChild).toBe(commitBar);
     submitForm();
 
     expect(await screen.findByRole("heading", { name: "פרטי משרה" })).toBeInTheDocument();

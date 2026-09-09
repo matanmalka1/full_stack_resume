@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { cx } from "./cx";
 
-type EyebrowTone = "accent" | "blocker";
+export type EyebrowTone = "accent" | "blocker";
 
 const eyebrowClasses: Record<EyebrowTone, string> = {
   accent: "text-cv-accent",

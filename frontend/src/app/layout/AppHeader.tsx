@@ -45,35 +45,37 @@ export const AppHeader = () => {
 
   return (
     <header className="sticky top-0 z-30 border-b border-cv-border bg-cv-surface/85 backdrop-blur-xl">
-      <div className="page-frame flex min-h-16 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2 sm:px-6 lg:px-8">
-        <div className="flex min-w-0 items-center gap-4 sm:gap-6">
-          <Link className="group shrink-0 rounded-control" to={boardPath()}>
-            <span className="block text-heading-sm font-extrabold tracking-tight text-cv-text">קורות חיים</span>
-            <span className="block h-0.5 w-8 bg-cv-accent transition-all duration-200 group-hover:w-full" />
-          </Link>
-
-          {inWorkflow ? null : (
-            <>
-              <div className="hidden h-5 w-px bg-cv-border sm:block" />
-
-              <AppNavigation />
-            </>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 sm:gap-3">
-          {inWorkflow ? null : <GlobalSearch />}
-
-          {inWorkflow ? null : (
-            <Link
-              aria-label="קליטת משרה חדשה"
-              className={buttonClasses("primary", "py-1.5 px-3 text-support")}
-              to={routePaths.newApplication}
-            >
-              <Plus aria-hidden="true" className="size-4" />
-              <span className="hidden sm:inline">משרה חדשה</span>
+      <div className="page-gutter">
+        <div className="page-frame flex min-h-16 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2">
+          <div className="flex min-w-0 items-center gap-4 sm:gap-6">
+            <Link className="group shrink-0 rounded-control" to={boardPath()}>
+              <span className="block text-heading-sm font-extrabold tracking-tight text-cv-text">קורות חיים</span>
+              <span className="block h-0.5 w-8 bg-cv-accent transition-all duration-200 group-hover:w-full" />
             </Link>
-          )}
+
+            {inWorkflow ? null : (
+              <>
+                <div className="hidden h-5 w-px bg-cv-border sm:block" />
+
+                <AppNavigation />
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3">
+            {inWorkflow ? null : <GlobalSearch />}
+
+            {inWorkflow ? null : (
+              <Link
+                aria-label="קליטת משרה חדשה"
+                className={buttonClasses("primary", "py-1.5 px-3 text-support")}
+                to={routePaths.newApplication}
+              >
+                <Plus aria-hidden="true" className="size-4" />
+                <span className="hidden sm:inline">משרה חדשה</span>
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 

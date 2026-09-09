@@ -31,7 +31,7 @@
   --color-cv-field-border: #e3e8ef;
   --color-cv-field-background: #f8fafc;
   --color-cv-field-focus: #2f6fed;
-  
+
   --text-field: 1rem;
   --color-cv-text: #111827;
   --color-cv-text-muted: #5b6577;
@@ -157,9 +157,28 @@ body {
   background: var(--color-cv-canvas);
 }
 
-/* One outer measure for every route-level surface and shell landmark. A page whose
-   body is a single column of inputs shortens the line by setting --page-measure rather
-   than by nesting a second frame inside this one. */
+/* One gutter outside every constrained application frame. Header and main content use
+   the same order - gutter, then frame - so their edges remain aligned above the maximum
+   measure as well as below it. */
+.page-gutter {
+  width: 100%;
+  padding-inline: 1rem;
+}
+
+@media (min-width: 40rem) {
+  .page-gutter {
+    padding-inline: 1.5rem;
+  }
+}
+
+@media (min-width: 64rem) {
+  .page-gutter {
+    padding-inline: 2rem;
+  }
+}
+
+/* One outer measure for every route-level surface and shell landmark. A page whose body
+   is a single column of inputs shortens the line by setting --page-measure. */
 .page-frame {
   max-width: var(--page-measure, 110rem);
   margin-inline: auto;

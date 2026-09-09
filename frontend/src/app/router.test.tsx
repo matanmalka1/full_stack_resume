@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { NewApplicationPage } from "@/features/application-intake";
 import { ApplicationListPage } from "@/features/application-list";
 import { ApplicationPage, ApplicationResumePage } from "@/features/applications";
+import { RootRouteErrorBoundary, RouteErrorBoundary } from "./layout/RouteErrorBoundary";
 import { router } from "./router";
 
 /* Every screen sits under a pathless route whose only job is to own the error boundary,
@@ -24,15 +25,23 @@ describe("the route table", () => {
     expect(elementType("applications/new")).toBe(NewApplicationPage);
   });
 
+  it("keeps root and in-layout failures in containers that own different landmarks", () => {
+    const rootBoundary = router.routes[0]?.errorElement;
+    const routeBoundary = router.routes[0]?.children?.[0]?.errorElement;
+
+    expect(isValidElement(rootBoundary) ? rootBoundary.type : null).toBe(RootRouteErrorBoundary);
+    expect(isValidElement(routeBoundary) ? routeBoundary.type : null).toBe(RouteErrorBoundary);
+  });
+
   /* One address, one screen. `/preparation` was a second name for this same screen, and
      the two components that locate the reader by comparing against `pathname` disagreed
-     depending on which one had been used to arrive. It is a redirect now, so the
-     assertion is that the hub answers its own address and nothing else does. */
-  it("answers the Application address with the hub screen and redirects its former name", () => {
+     depending on which one had been used to arrive. */
+  it("answers only the canonical Application addresses", () => {
     expect(elementType("applications/:applicationId")).toBe(ApplicationPage);
     expect(elementType("applications/:applicationId/resume")).toBe(ApplicationResumePage);
-    expect(elementType("applications/:applicationId/preparation")).not.toBe(ApplicationPage);
-    expect(route("applications/:applicationId/preparation")).not.toBeUndefined();
+    expect(route("applications/:applicationId/preparation")).toBeUndefined();
+    expect(route("applications/:applicationId/tracking")).toBeUndefined();
+    expect(route("approved-revisions/:revisionId/ready")).toBeUndefined();
   });
 
   /* Validation, approval, review, and render are states of the draft editor, so the table
@@ -44,22 +53,5 @@ describe("the route table", () => {
     expect(route("applications/:applicationId/approval")).toBeUndefined();
     expect(route("approved-revisions/:approvedRevisionId/render")).toBeUndefined();
     expect(route("revisions/:revisionId/render")).toBeUndefined();
-  });
-
-  /* Every path that is not a screen redirects rather than rendering something. Derived
-     from the table, so a route added as a redirect is checked without anyone registering
-     it here. */
-  it("keeps the compatibility paths as redirects", () => {
-    const redirects = screens.filter((entry) =>
-      isValidElement(entry.element) && typeof entry.element.type === "function"
-        ? entry.element.type.name.endsWith("Redirect")
-        : false,
-    );
-
-    expect(redirects.map((entry) => entry.path)).toEqual([
-      "applications/:applicationId/preparation",
-      "applications/:applicationId/tracking",
-      "approved-revisions/:revisionId/ready",
-    ]);
   });
 });

@@ -7,13 +7,13 @@ import type { ApplicationDetail, CreateSelectionPlanRequest } from "@/api/contra
 import { isTerminalOperation, operationQueryKey, operationQueryOptions } from "@/api/operations";
 import { aiRegenerationAvailable } from "@/api/settings";
 import { useSettings } from "@/api/useSettings";
-import { ErrorCallout } from "@/ui/ErrorCallout";
+import { ActionBar } from "@/ui/ActionBar";
 import { Button } from "@/ui/Button";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { QueryState } from "@/ui/QueryState";
 import { surfaceClasses } from "@/ui/surface";
 import { factTotals } from "../../model/factGroups";
 import type { WorkflowActionPlan } from "../../model/workflowActionPlan";
-import { CommitBar } from "../../components/CommitBar";
 import { FactSelectionList } from "./FactSelectionList";
 
 const sameMembers = (left: readonly string[], right: readonly string[]): boolean =>
@@ -196,7 +196,10 @@ export const SelectionPlanPanel = ({
         ) : null}
       </section>
 
-      <CommitBar
+      {/* This saves a refinement inside the preparation step; it does not advance the
+          wizard. Keep it local and non-sticky so it cannot compete with the step's one
+          viewport commit bar. */}
+      <ActionBar
         primary={
           <>
             {aiAvailable ? (
@@ -221,14 +224,15 @@ export const SelectionPlanPanel = ({
             </Button>
           </>
         }
-      >
-        <p className="text-support font-medium text-cv-text-muted">
-          {plan === undefined
-            ? "בחירת העובדות עדיין נטענת."
-            : `${totals.included} מתוך ${totals.total} עובדות ייכנסו לטיוטה.`}
-          {changed ? " יש שינוי שטרם נשמר." : ""}
-        </p>
-      </CommitBar>
+        secondary={
+          <p className="text-support font-medium text-cv-text-muted">
+            {plan === undefined
+              ? "בחירת העובדות עדיין נטענת."
+              : `${totals.included} מתוך ${totals.total} עובדות ייכנסו לטיוטה.`}
+            {changed ? " יש שינוי שטרם נשמר." : ""}
+          </p>
+        }
+      />
     </>
   );
 };

@@ -12,11 +12,11 @@ export const routePaths = {
   home: "/",
   newApplication: "/applications/new",
   settings: "/settings",
-  /* One address for the screen that prepares one Application's CV. It carried a second
-     name, `preparation`, resolving to `/applications/:id/preparation` - the same screen
-     under a second URL, kept for links that named the preparation work directly. Two
-     names is what this file exists to prevent: the pair drifted, and the two components
-     that locate the reader by comparing against `pathname` disagreed depending on which
+  /* One address for the screen that prepares one Application's CV. It once carried a
+     second name, `preparation`, resolving to `/applications/:id/preparation` - the same
+     screen under a second URL. Two names is what this file exists to prevent: the pair
+     drifted, and the two components that locate the reader by comparing against
+     `pathname` disagreed depending on which
      one had been used. The breadcrumb trail offered the current page as its own parent,
      and the workflow rail offered the open screen as a step to travel to.
 

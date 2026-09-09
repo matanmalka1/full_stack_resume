@@ -19,7 +19,9 @@ export const ApplicationResumePage = () => {
   }
 
   return (
-    <PageShell title="ממשיך מהמקום שבו עצרת">
+    /* This resolver belongs to the workflow geometry but does not claim a workflow stage:
+       it only reads the projection and redirects to the screen that owns that stage. */
+    <PageShell measure="wizard" title="ממשיך מהמקום שבו עצרת">
       <QueryState
         error={query.error}
         fallbackTitle="לא ניתן לפתוח את המועמדות"

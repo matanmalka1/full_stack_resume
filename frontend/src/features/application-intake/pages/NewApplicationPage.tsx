@@ -1,11 +1,21 @@
-import { useNavigate } from "react-router-dom";
+import { ArrowRight, Sparkles } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 
+import { boardPath } from "@/app/boardReturn";
 import { routePaths } from "@/app/routePaths";
-import { WizardStepShell } from "@/features/preparation";
+import { CommitBar, NEXT_STEP_LABEL, WizardStepShell } from "@/features/preparation";
 import { useAppForm } from "@/hooks/useAppForm";
+import { Button, buttonClasses } from "@/ui/Button";
 import { ApplicationIntakeForm } from "../components/ApplicationIntakeForm";
 import { useApplicationIntakeSubmission } from "../hooks/useApplicationIntakeSubmission";
-import { emptyApplicationIntake, intakeFromFields, type ApplicationIntakeFields } from "../model/applicationIntake";
+import {
+  emptyApplicationIntake,
+  intakeFromFields,
+  isJobTextWithinBudget,
+  type ApplicationIntakeFields,
+} from "../model/applicationIntake";
+
+const INTAKE_FORM_ID = "application-intake-form";
 
 export const NewApplicationPage = () => {
   const navigate = useNavigate();
@@ -44,24 +54,54 @@ export const NewApplicationPage = () => {
       description="הזנת פרטי המשרה יוצרת תצלום מקור קבוע ומתחילה ניתוח התאמה מול העובדות הקנוניות."
       stage="intake"
     >
-      {/* The page keeps the wide measure so the wizard spine spans the frame like every
-          other step, while the form itself holds the shorter reading measure a single
-          column of inputs wants - a text field stretched across the full frame is harder to
-          scan, not easier. */}
+      {/* The wizard frame carries the spine; the single-column form takes a shorter reading
+          measure inside it so long fields remain easy to scan. */}
       <div className="mx-auto max-w-3xl">
         <ApplicationIntakeForm
           duplicates={submission.duplicateMatches}
           error={submission.error}
           errors={form.formState.errors}
+          formId={INTAKE_FORM_ID}
           isStale={submission.isStale}
-          isSubmitting={submission.isSubmitting}
           jobText={fields.job_text}
-          onCreateAnyway={() => void createAnyway()}
           onInputChanged={submission.resetSettledResult}
           onSubmit={submit}
           register={form.register}
         />
       </div>
+      <CommitBar
+        back={
+          <Link className={buttonClasses("ghost")} to={boardPath()}>
+            <ArrowRight aria-hidden="true" className="size-4" />
+            חזרה ללוח המועמדויות
+          </Link>
+        }
+        label={NEXT_STEP_LABEL}
+        primary={
+          submission.duplicateMatches === null ? (
+            <Button
+              disabled={!isJobTextWithinBudget(fields.job_text)}
+              form={INTAKE_FORM_ID}
+              pending={submission.isSubmitting}
+              pendingLabel="בודק כפילויות…"
+              type="submit"
+            >
+              <Sparkles aria-hidden="true" className="size-4" />
+              יצירת מועמדות
+            </Button>
+          ) : (
+            <Button onClick={() => void createAnyway()} pending={submission.isSubmitting} pendingLabel="יוצר מועמדות…">
+              יצירת מועמדות נוספת
+            </Button>
+          )
+        }
+      >
+        <p className="text-support leading-6 text-cv-text-muted">
+          {submission.duplicateMatches === null
+            ? "יצירת המועמדות תשמור את תצלום המשרה ותתחיל את הניתוח."
+            : "נדרש אישור מפורש כדי לשמור מועמדות חדשה לצד המועמדויות הדומות."}
+        </p>
+      </CommitBar>
     </WizardStepShell>
   );
 };
