@@ -21,7 +21,10 @@ export default defineConfig({
   webServer: {
     command: `npm run build && npm run preview -- --host 127.0.0.1 --port ${PORT} --strictPort`,
     url: `http://127.0.0.1:${PORT}`,
-    reuseExistingServer: !process.env.CI,
+    /* Reusing a local preview can make the browser suite exercise an older dist build
+       and report failures for styles that are no longer in the source tree. Always
+       start from the production build created by the command above. */
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });
