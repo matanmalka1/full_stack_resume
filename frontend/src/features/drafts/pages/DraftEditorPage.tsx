@@ -13,7 +13,6 @@ import { ActiveOperationPanel } from "@/features/operations";
 import { ApplicationBreadcrumbs } from "@/features/applications";
 import { PreparationWorkflowSteps } from "@/features/preparation";
 import { FactLifecyclePanel } from "@/features/facts";
-import { RecruitmentManagerButton } from "@/features/recruitment";
 import { DraftApprovalBar } from "../components/DraftApprovalBar";
 import { DraftApprovalDialog } from "../components/DraftApprovalDialog";
 import { DraftConflictDialog } from "../components/DraftConflictDialog";
@@ -78,7 +77,6 @@ export const DraftEditorPage = () => {
 
   return (
     <PageShell
-      actions={detail === undefined ? null : <RecruitmentManagerButton application={detail.application} />}
       /* No description: `DraftHeaderCard` below names the company and the target role
          together, and the heading repeated the role on its own a line above it. */
       eyebrow="סביבת האישור"

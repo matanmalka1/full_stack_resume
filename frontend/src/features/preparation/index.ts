@@ -10,9 +10,10 @@
    A consumer that needs something not listed here needs it added here, not imported from
    inside. */
 
+/* The CV-preparation step of the workflow wizard: the verdict, the one action the
+   workflow is waiting on, and the facts, diagnosis and posting a press away. The hub
+   renders it as the body of the preparation screen. */
 export { PreparationView } from "./components/PreparationView";
-/* The two preparation badges as one row, for a masthead that already lays one out. */
-export { PreparationStatusBadges } from "./components/PreparationStatusBadges";
 /* Where the work stands across the three stages, for the three screens that are part of
    preparing one CV: the hub, the editor, and the revision. */
 export { PreparationWorkflowSteps } from "./components/PreparationWorkflowSteps";

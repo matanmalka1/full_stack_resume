@@ -1,9 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-
-import { classificationFromAnalysis, selectionPlanQueryOptions } from "@/api/analyses";
+import { classificationFromAnalysis } from "@/api/analyses";
 import type { ApplicationDetail } from "@/api/contracts";
-import { TabPanel, Tabs, type TabSpec } from "@/ui/Tabs";
+import { Disclosure } from "@/ui/Disclosure";
 import { openDecisionCount, openDecisions, resolvedByReviewDecision } from "../model/reviewDecisions";
 import { workflowActionPlan } from "../model/workflowActionPlan";
 import { AnalysisStage } from "../stages/analysis/AnalysisStage";
@@ -12,19 +9,20 @@ import { VerificationStage } from "../stages/verification/VerificationStage";
 import { AnalysisStatusBanner } from "./AnalysisStatusBanner";
 import { AutomaticDraftNotice } from "./AutomaticDraftNotice";
 
-type PreparationTab = "decisions" | "facts" | "analysis";
+/* Preparing one Application's CV, as a single step of the workflow wizard rather than a
+   hub of tabs.
 
-const TAB_GROUP = "preparation";
+   The screen used to be a record you browsed: a tab bar over decisions, facts and the
+   diagnosis, a second bar over the posting and the files, a two-axis state panel, and a
+   recruitment column - several readings of the same projection side by side at the same
+   weight. None of that is the task. The task is the one thing the workflow is waiting on,
+   and it is stated once: the verdict, then the single action panel that answers it.
 
-/* The CV preparation workflow for one Application: what has to be decided, which facts
-   the CV will carry, and what the analysis found.
-
-   It reads the projection once - the action plan, the classification, the open decisions -
-   and hands the result down, so every control on the screen is drawn from the same
-   answer rather than from four independent re-derivations of it. Composition, not
-   implementation: each tab's content is one stage component under `../stages`, and this
-   file's own job stops at deciding which stage is open and what the verdict above it
-   says. */
+   What supported the old tabs is still reachable, but as reference a press away rather
+   than as panels competing for the same space. The facts the CV will carry, the full
+   diagnosis, and the posting text sit below the action in collapsed disclosures - opened
+   when a reader wants to adjust or check something, closed by default so the screen shows
+   the step and its action and nothing beside them. */
 export const PreparationView = ({
   detail,
   onQueued,
@@ -32,97 +30,79 @@ export const PreparationView = ({
   detail: ApplicationDetail;
   onQueued: (operationId: string) => void;
 }) => {
-  /* The active analysis as this screen reads it, and the case where the newest stored
-     analysis is not it: an analysis of a superseded job snapshot is on record but is not
-     what the workflow is standing on, so it is reported as absent and said to be. */
   const classification = classificationFromAnalysis(detail);
+  /* The active analysis as this screen reads it: an analysis of a superseded job snapshot
+     is on record but is not what the workflow stands on, so it is reported as absent. */
   const supersededAnalysis = classification === null && detail.latest_analysis != null;
 
-  /* Two different claims, kept apart. A recommendation is the projection naming the one
-     action the workflow is waiting on - `recommended_action`, or a review decision this
-     screen holds the control for. Offered actions are merely what is permitted.
-
-     The surface appeared for either and announced itself as "the recommended action" for
-     both, so an Application with three permitted actions and no recommendation got an
-     emphasized panel promising guidance the projection had not given. The panel still
-     appears - the actions have to live somewhere - it just says which of the two it is. */
+  const plan = workflowActionPlan(detail);
   const open = openDecisions(detail);
   const decisionCount = openDecisionCount(open);
-  const hasRecommendation = detail.review_reasons.some(resolvedByReviewDecision) || detail.recommended_action != null;
-  const plan = workflowActionPlan(detail);
-
-  /* The same plan the fact tab reads, asked for by the same key: React Query answers both
-     from one request. It is read here only to count what the tab's badge announces - the
-     panel below still owns every command against it. */
+  const hasRecommendation =
+    detail.review_reasons.some(resolvedByReviewDecision) || detail.recommended_action != null;
   const selectionPlanAction = plan.createSelectionPlan;
-  const activePlanId = selectionPlanAction?.selectionPlanId ?? null;
-  const planQuery = useQuery({
-    ...selectionPlanQueryOptions(activePlanId ?? ""),
-    enabled: selectionPlanAction !== null && activePlanId !== null,
-  });
 
-  const tabs: TabSpec<PreparationTab>[] = [
-    { badge: decisionCount, badgeTone: "warning", id: "decisions", label: "החלטות נדרשות" },
-    ...(selectionPlanAction === null
-      ? []
-      : [{ badge: planQuery.data?.candidates.length ?? null, id: "facts", label: "עובדות לקורות החיים" } as const]),
-    ...(classification === null ? [] : [{ id: "analysis", label: "פרטי ניתוח ואבחון" } as const]),
-  ];
-
-  const [requestedTab, setRequestedTab] = useState<PreparationTab>("decisions");
-  /* The tabs follow the projection, so one can disappear under the reader - an analysis
-     that becomes superseded takes the diagnostics tab with it. The active tab is therefore
-     derived rather than stored: a tab that is gone falls back to the first that remains
-     instead of leaving the screen with no visible panel. */
-  const activeTab = tabs.some((tab) => tab.id === requestedTab) ? requestedTab : (tabs[0]?.id ?? "decisions");
+  /* The banner is the verdict for the phase that acts on it: while there is no draft yet,
+     the analysis fit is what decides whether to draft, and an open decision is always its
+     to announce. Once a draft exists and nothing is open, that verdict is history - the
+     work has moved to approving a validated draft, and a warning reading "a decision is
+     required before creating a draft" beside the draft it already produced is a
+     contradiction. The diagnosis stays in the collapsed disclosure below; it is simply no
+     longer the headline of a step it is behind. The pre-analysis and superseded notes are
+     always shown, because there is no later step standing in for them. */
+  const draftExists = detail.working_draft_state !== "none";
+  const showBanner = supersededAnalysis || classification === null || decisionCount > 0 || !draftExists;
 
   return (
     <div className="flex flex-col gap-4">
       <AutomaticDraftNotice detail={detail} />
 
-      {/* The verdict the whole screen is about, stated once and first. */}
-      <AnalysisStatusBanner
-        classification={classification}
-        decisionCount={decisionCount}
-        onShowDiagnostics={tabs.some((tab) => tab.id === "analysis") ? () => setRequestedTab("analysis") : null}
-        supersededAnalysis={supersededAnalysis}
-      />
-
-      <Tabs
-        active={activeTab}
-        group={TAB_GROUP}
-        label="חלקי מסך ההכנה"
-        onSelect={setRequestedTab}
-        tabs={tabs}
-        variant="segmented"
-      />
-
-      <TabPanel active={activeTab === "decisions"} group={TAB_GROUP} tab="decisions">
-        <VerificationStage
+      {/* The verdict the step is about, stated once and first - while it is still the
+          step's verdict. */}
+      {showBanner ? (
+        <AnalysisStatusBanner
           classification={classification}
-          detail={detail}
-          hasRecommendation={hasRecommendation}
-          onQueued={onQueued}
-          plan={plan}
+          decisionCount={decisionCount}
+          onShowDiagnostics={null}
+          supersededAnalysis={supersededAnalysis}
         />
-      </TabPanel>
+      ) : null}
 
+      {/* The one thing to do now: run the analysis, resolve the open decisions, or generate
+          the draft and move to the editor. Everything else on the screen is below it and
+          closed. */}
+      <VerificationStage
+        classification={classification}
+        detail={detail}
+        hasRecommendation={hasRecommendation}
+        onQueued={onQueued}
+        plan={plan}
+      />
+
+      {/* Adjusting which facts the CV carries is a refinement of the generate step, not a
+          parallel destination - offered where it is done, folded away until wanted. */}
       {selectionPlanAction === null ? null : (
-        <TabPanel active={activeTab === "facts"} group={TAB_GROUP} tab="facts">
-          <SelectionPlanPanel action={selectionPlanAction} detail={detail} onQueued={onQueued} />
-        </TabPanel>
+        <Disclosure summary="התאמת העובדות שייכנסו לקורות החיים">
+          <div className="pt-2">
+            <SelectionPlanPanel action={selectionPlanAction} detail={detail} onQueued={onQueued} />
+          </div>
+        </Disclosure>
       )}
 
+      {/* The reasoning behind the verdict, for a reader who wants to check it before acting.
+          It decides nothing; the acceptance controls it once held are in the step above. */}
       {classification === null ? null : (
-        <TabPanel active={activeTab === "analysis"} group={TAB_GROUP} tab="analysis">
-          <AnalysisStage
-            classification={classification}
-            detail={detail}
-            onQueued={onQueued}
-            plan={plan}
-            showGaps={!open.gaps}
-          />
-        </TabPanel>
+        <Disclosure summary="פרטי הניתוח והאבחון">
+          <div className="pt-2">
+            <AnalysisStage
+              classification={classification}
+              detail={detail}
+              onQueued={onQueued}
+              plan={plan}
+              showGaps={!open.gaps}
+            />
+          </div>
+        </Disclosure>
       )}
     </div>
   );

@@ -1,22 +1,29 @@
 import type { ApplicationDetail, PreparationState } from "@/api/contracts";
 import { routePaths } from "@/app/routePaths";
 
-/* Three ordered stages of preparing a CV, and the only place their Hebrew names live.
+/* The ordered stages of the CV wizard, and the only place their Hebrew names live.
 
-   Intake is not among them. Creating a job and reading its record is how the reader gets
-   to the work, not the first of its stages: counting it made Job Detail - the screen a
-   saved job is opened from every day, long after preparation is done - read as step 1 of
-   a document workflow it does not take part in.
+   Intake leads. Pasting the posting and creating the Application is the wizard's first
+   step, not merely how a reader arrives: the screen is one guided flow from a job ad to a
+   ready CV, so the spine names where that flow begins. It once sat outside these stages
+   because the Application screen was a record hub a saved job was reopened from long after
+   preparation was done - counting intake then made that hub read as step 1 of a workflow
+   it no longer took part in. The hub is a wizard step now, so its first stage is honest.
+
+   Intake is a display position only, and never the target of a `PreparationState`: once an
+   Application exists it is already past intake, so `stageForPreparationState` maps every
+   backend state to a later stage and the create screen supplies the position explicitly.
 
    Validation is not a stage of its own either. It has no screen and no record of its own:
    both stages pointed at `/draft`, so the bar drew two chips for one screen. The
    distinction they carried - draft written vs. draft validated - is the preparation
    badge's, and it is on the screen itself. */
-export const workflowStages = ["analysis", "draft", "ready"] as const;
+export const workflowStages = ["intake", "analysis", "draft", "ready"] as const;
 
 export type WorkflowStage = (typeof workflowStages)[number];
 
 export const workflowStageLabels: Record<WorkflowStage, string> = {
+  intake: "קליטת משרה",
   analysis: "ניתוח",
   draft: "טיוטה ואימות",
   ready: "מוכן",
@@ -28,6 +35,7 @@ export const workflowStageLabels: Record<WorkflowStage, string> = {
    These describe the stage, not what may happen next: which action is possible is
    `available_actions` and `recommended_action`, and the landmark decides none of it. */
 export const workflowStageHints: Record<WorkflowStage, string> = {
+  intake: "הדבקת מודעת המשרה ויצירת המועמדות",
   analysis: "התאמת המשרה לעובדות הקנוניות",
   draft: "ניסוח, אימות מול העובדות ואישור הגרסה",
   ready: "גרסה מאושרת ומרונדרת, מוכנה לשליחה",

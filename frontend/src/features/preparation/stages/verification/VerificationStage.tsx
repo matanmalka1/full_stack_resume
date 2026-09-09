@@ -1,6 +1,6 @@
 import type { Classification } from "@/api/analyses";
 import type { ApplicationDetail } from "@/api/contracts";
-import { surfaceClasses } from "@/ui/surface";
+import { openDecisionCount, openDecisions } from "../../model/reviewDecisions";
 import { hasWorkflowActionsContent, type WorkflowActionPlan } from "../../model/workflowActionPlan";
 import { PreparationAlerts } from "./PreparationAlerts";
 import { ReviewDecisionPanel } from "./ReviewDecisionPanel";
@@ -31,23 +31,32 @@ export const VerificationStage = ({
   hasRecommendation: boolean;
   onQueued: (operationId: string) => void;
   plan: WorkflowActionPlan;
-}) => (
-  <>
-    <PreparationAlerts detail={detail} />
+}) => {
+  /* One commit at a time. The decision panel owns a viewport-sticky commit bar; drawing
+     the action card below it put two "do this next" surfaces on the tab and let the sticky
+     bar float over the second. While a decision this screen owns is open it is the next
+     step - and it gates the actions the card would offer anyway - so the card waits for the
+     refreshed projection after the commit rather than sitting behind the bar that resolves
+     what blocks it. */
+  const decisionOpen = openDecisionCount(openDecisions(detail)) > 0;
 
-    <ReviewDecisionPanel classification={classification} detail={detail} />
+  return (
+    <>
+      <PreparationAlerts detail={detail} />
 
-    {hasWorkflowActionsContent(plan) ? (
-      <section
-        aria-label={hasRecommendation ? "הפעולה המומלצת" : "פעולות זמינות"}
-        className={
-          hasRecommendation
-            ? "rounded-surface border-2 border-cv-accent/25 bg-cv-accent-soft/40 p-5 shadow-surface"
-            : surfaceClasses("bg-cv-surface p-5")
-        }
-      >
-        <WorkflowActions detail={detail} onQueued={onQueued} plan={plan} />
-      </section>
-    ) : null}
-  </>
-);
+      <ReviewDecisionPanel classification={classification} detail={detail} />
+
+      {!decisionOpen && hasWorkflowActionsContent(plan) ? (
+        /* The step's action, not a card around it. The action used to sit in an emphasized
+           bordered box to mark it as recommended - but on a wizard step the action is the
+           subject of the screen, not one card competing among others, and when it is a
+           single "go to the editor" link the box was chrome around one button saying
+           nothing the button did not. It stands on the page; its own primary styling is the
+           emphasis. */
+        <section aria-label={hasRecommendation ? "הפעולה המומלצת" : "פעולות זמינות"}>
+          <WorkflowActions detail={detail} onQueued={onQueued} plan={plan} />
+        </section>
+      ) : null}
+    </>
+  );
+};

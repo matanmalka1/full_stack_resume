@@ -77,7 +77,6 @@ export const ReviewDecisionPanel = ({
   /* The marks are the gap list's state, so they are merged in at the submission rather
      than copied into this panel's - one value, read where it is sent. */
   const submitted = { ...decisions, accepted_requirement_ids: showGapAcceptance ? [...acceptedRequirementIds] : [] };
-  const decisionCount = [showClassification, showIncompleteAnalysis, showFit, showGapAcceptance].filter(Boolean).length;
 
   const classificationReady =
     !showClassification || decisions.track_override !== null || decisions.profile_override !== null;
@@ -126,8 +125,11 @@ export const ReviewDecisionPanel = ({
   return (
     <>
       <section aria-labelledby="review-decision-heading" className={surfaceClasses("bg-cv-surface p-5 shadow-surface")}>
+        {/* How many decisions are open is the checklist's to count and the sub-tab
+            badge's to announce; the heading names the surface and stops, so the number
+            is not restated a place it can fall out of step with them. */}
         <h2 className="text-body font-semibold text-cv-text" id="review-decision-heading">
-          {decisionCount === 1 ? "נדרשת החלטה כדי להמשיך" : `נדרשות ${decisionCount} החלטות כדי להמשיך`}
+          החלטות נדרשות כדי להמשיך
         </h2>
 
         <div className="mt-4 flex flex-col gap-5">

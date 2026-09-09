@@ -13,10 +13,13 @@ import { confidenceText, fitDescriptions, fitLabels, fitTones } from "../model/a
 
    It is the one place the verdict is explained. The same sentence stood in the analysis
    masthead, in the decision panel's own preamble, and again on the control that accepts
-   it; here it is said once and the full diagnosis is a link away rather than a repeat. */
-const decisionSentence = (count: number): string =>
-  count === 1 ? "נדרשת החלטה אחת לפני שאפשר להמשיך." : `נדרשות ${count} החלטות לפני שאפשר להמשיך.`;
+   it; here it is said once and the full diagnosis is a link away rather than a repeat.
 
+   How many decisions are open is not the banner's to say. That count is carried by the
+   decisions sub-tab's badge, where it is a target, and by the commit checklist, where it
+   is live progress against named decisions; stated a third time here it was the same
+   number in a place that could disagree with them on any refetch. The banner keeps only
+   the fact the count implies - that decisions are open - in its tone, not a tally. */
 interface BannerContent {
   body: string;
   title: string;
@@ -56,7 +59,7 @@ const bannerContent = (
       : fitDescriptions[classification.fit];
 
   return {
-    body: decisionCount === 0 ? explanation : `${explanation} ${decisionSentence(decisionCount)}`,
+    body: explanation,
     title: confidencePart === null ? fitPart : `${fitPart} · ${confidencePart}`,
     /* Warning, not blocker, while a decision is open: `needs_review` is the same state
        `preparationStateTones` already reports as "warning" everywhere else on this

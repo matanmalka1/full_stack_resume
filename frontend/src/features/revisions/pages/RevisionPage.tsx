@@ -11,7 +11,6 @@ import { ActiveOperationPanel } from "@/features/operations";
 import { ApplicationBreadcrumbs } from "@/features/applications";
 import { PreparationWorkflowSteps } from "@/features/preparation";
 import { warningDetail, warningTitle } from "@/features/preparation";
-import { RecruitmentManagerButton } from "@/features/recruitment";
 import { RevisionRecord } from "../components/RevisionRecord";
 import { RevisionSubmissionDialog } from "../components/RevisionSubmissionDialog";
 import { RevisionSummary } from "../components/RevisionSummary";
@@ -37,7 +36,6 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
 
   return (
     <PageShell
-      actions={detail === undefined ? null : <RecruitmentManagerButton application={detail.application} />}
       description="הגרסה המאושרת נשארת זמינה גם כאשר העבודה על המועמדות ממשיכה."
       landmark={<PreparationWorkflowSteps applicationId={revision?.application_id} detail={detail} />}
       navigation={

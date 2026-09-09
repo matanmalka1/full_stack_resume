@@ -128,7 +128,7 @@ const deterministicSettings: Settings = {
 
 /* Retries and the projection poll are off inside the test client: the interval is
    covered by its own unit test, and a live timer here would make every assertion racy. */
-const renderPage = (settings: Settings = deterministicSettings) => {
+const renderPage = (settings: Settings = deterministicSettings, routeState?: unknown) => {
   const client = new QueryClient({
     defaultOptions: {
       /* Settings is shell-owned in production and deliberately seeded here. Keep that
@@ -142,7 +142,7 @@ const renderPage = (settings: Settings = deterministicSettings) => {
 
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/applications/app-1/preparation"]}>
+      <MemoryRouter initialEntries={[{ pathname: "/applications/app-1/preparation", state: routeState }]}>
         <Routes>
           <Route element={<ApplicationPage />} path="/applications/:applicationId/preparation" />
         </Routes>
@@ -166,6 +166,32 @@ afterEach(() => {
 });
 
 describe("ApplicationPage at the preparation route", () => {
+  it("uses the Operation as the only status after creation queued the analysis", async () => {
+    const succeeded = queued({
+      status: "succeeded",
+      is_terminal: true,
+      phase: "completed",
+      available_actions: ["retry"],
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) =>
+        Promise.resolve(
+          String(input).includes("/operations/")
+            ? jsonResponse(succeeded)
+            : jsonResponse(detail({ active_operation: queued({ status: "running", phase: "executing" }) })),
+        ),
+      ),
+    );
+
+    renderPage(deterministicSettings, {
+      createdApplication: { analysisProblem: null, analysisQueued: true },
+    });
+
+    expect(await screen.findByText("הושלמה")).toBeInTheDocument();
+    expect(screen.queryByText("המועמדות נוצרה, הניתוח רץ")).not.toBeInTheDocument();
+  });
+
   it("shows the complete hierarchy above CV preparation", async () => {
     vi.stubGlobal(
       "fetch",

@@ -1,6 +1,7 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { routePaths } from "@/app/routePaths";
+import { PreparationWorkflowSteps } from "@/features/preparation";
 import { Breadcrumbs } from "@/ui/Breadcrumbs";
 import { PageShell } from "@/ui/PageShell";
 import { useAppForm } from "@/hooks/useAppForm";
@@ -43,22 +44,28 @@ export const NewApplicationPage = () => {
   return (
     <PageShell
       description="הזנת פרטי המשרה יוצרת תצלום מקור קבוע ומתחילה ניתוח התאמה מול העובדות הקנוניות."
-      measure="form"
+      landmark={<PreparationWorkflowSteps stage="intake" />}
       navigation={<Breadcrumbs items={[{ label: "מועמדויות", to: boardPath }, { label: "משרה חדשה" }]} />}
       title="קליטת משרה חדשה"
     >
-      <ApplicationIntakeForm
-        duplicates={submission.duplicateMatches}
-        error={submission.error}
-        errors={form.formState.errors}
-        isStale={submission.isStale}
-        isSubmitting={submission.isSubmitting}
-        jobText={fields.job_text}
-        onCreateAnyway={() => void createAnyway()}
-        onInputChanged={submission.resetSettledResult}
-        onSubmit={submit}
-        register={form.register}
-      />
+      {/* The page keeps the wide measure so the wizard spine spans the frame like every
+          other step, while the form itself holds the shorter reading measure a single
+          column of inputs wants - a text field stretched across the full frame is harder to
+          scan, not easier. */}
+      <div className="mx-auto max-w-3xl">
+        <ApplicationIntakeForm
+          duplicates={submission.duplicateMatches}
+          error={submission.error}
+          errors={form.formState.errors}
+          isStale={submission.isStale}
+          isSubmitting={submission.isSubmitting}
+          jobText={fields.job_text}
+          onCreateAnyway={() => void createAnyway()}
+          onInputChanged={submission.resetSettledResult}
+          onSubmit={submit}
+          register={form.register}
+        />
+      </div>
     </PageShell>
   );
 };

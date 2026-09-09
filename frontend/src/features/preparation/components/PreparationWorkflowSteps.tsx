@@ -26,6 +26,10 @@ interface PreparationWorkflowStepsProps {
   /* Absent while the projection is in flight. The stage the work is on is the
      projection's to state, not this component's to guess, so no stage is marked. */
   detail?: ApplicationDetail;
+  /* The stage to mark current, stated rather than derived. The intake step has no
+     projection to read it from - the Application does not exist yet - so the create screen
+     names its own position. When given, it overrides what `detail` would imply. */
+  stage?: WorkflowStage;
 }
 
 const stepsFor = (stage: WorkflowStage | undefined, destinations: StageDestinations): WorkflowStep[] => {
@@ -50,10 +54,11 @@ const stepsFor = (stage: WorkflowStage | undefined, destinations: StageDestinati
   });
 };
 
-export const PreparationWorkflowSteps = ({ applicationId, detail }: PreparationWorkflowStepsProps) => {
+export const PreparationWorkflowSteps = ({ applicationId, detail, stage: stageOverride }: PreparationWorkflowStepsProps) => {
   const { pathname } = useLocation();
 
-  const stage = detail === undefined ? undefined : stageForPreparationState[detail.preparation_state];
+  const stage =
+    stageOverride ?? (detail === undefined ? undefined : stageForPreparationState[detail.preparation_state]);
   const destinations = applicationId === undefined ? {} : workflowDestinations(applicationId, detail);
   const steps = stepsFor(stage, destinations);
 

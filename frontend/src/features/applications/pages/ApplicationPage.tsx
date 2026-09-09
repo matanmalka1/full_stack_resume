@@ -1,34 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 
 import { applicationDetailQueryOptions } from "@/api/applications";
 import type { ProblemDetails } from "@/api/client";
-import { routePaths } from "@/app/routePaths";
 import { useRequiredParam } from "@/app/useRequiredParam";
 import { useWatchedOperation } from "@/features/operations";
 import { Callout } from "@/ui/Callout";
+import { Disclosure } from "@/ui/Disclosure";
 import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
-import { TabPanel } from "@/ui/Tabs";
 import { ActiveOperationPanel } from "@/features/operations";
-import {
-  PreparationView,
-  PreparationWorkflowSteps,
-  openDecisionCount,
-  openDecisions,
-  useAutomaticDraft,
-} from "@/features/preparation";
-import { RecruitmentManagerButton } from "@/features/recruitment";
+import { PreparationView, PreparationWorkflowSteps, useAutomaticDraft } from "@/features/preparation";
 import { ApplicationArtifacts } from "../components/ApplicationArtifacts";
 import { ApplicationBreadcrumbs } from "../components/ApplicationBreadcrumbs";
-import { ApplicationPrimaryAction } from "../components/ApplicationPrimaryAction";
-import { ApplicationStatePanel } from "../components/ApplicationStatePanel";
-import {
-  APPLICATION_TAB_GROUP,
-  type ApplicationTab,
-  ApplicationTabs,
-  isApplicationTab,
-} from "../components/ApplicationTabs";
 import { JobSnapshotPanel } from "../components/JobSnapshotPanel";
 
 /* The news that an Application was just created, handed over in route state by the intake
@@ -39,43 +23,27 @@ interface CreatedApplicationState {
   analysisQueued?: unknown;
 }
 
-/* One screen for one Application: what it is, where it stands on both axes, and the three
-   domains it opens into - preparing its CV, the posting it is for, and the files that
-   work produced.
+/* One step of the workflow wizard for one Application: preparing its CV.
 
-   The screen composes; it executes nothing. Preparation owns its own workflow and its own
-   commands, recruitment owns its status and its dialog, and what is left here is the
-   Application's identity, the state band that keeps the two axes apart, and the one
-   destination the projection says the work is waiting on.
+   Not a record you browse. The screen used to be a hub of tabs - decisions, facts and the
+   diagnosis under one tab bar, the posting and the files under another, a two-axis state
+   panel and a recruitment column above them all - several readings of one projection side
+   by side. A wizard shows the step, not the record: the progress spine says where the work
+   stands across analysis, draft and ready; `PreparationView` is the one action the step is
+   waiting on with its supporting detail folded away; and the posting and the files sit
+   below as reference a press away, never as panels competing for the same space.
 
-   `/applications/:id/preparation` is a second address for this same screen with the
-   preparation tab selected: the document workflow is linked to and bookmarked directly,
-   so it keeps a name of its own. The other two tabs are `?tab=`, and selecting one moves
-   the URL between the two forms rather than leaving `/preparation?tab=job` standing. */
+   Recruitment is not here at all. Where the application stands with the employer moves on
+   its own axis and is managed from the board; putting it beside the CV work claimed a
+   relationship between the two that does not exist and crowded the one task this screen is
+   for. */
 export const ApplicationPage = () => {
   const applicationId = useRequiredParam("applicationId");
   const location = useLocation();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-
-  const tabParam = searchParams.get("tab");
-  const currentTab: ApplicationTab = isApplicationTab(tabParam)
-    ? tabParam
-    : location.pathname.endsWith("/preparation")
-      ? "preparation"
-      : "job";
-
-  const selectTab = (nextTab: ApplicationTab) =>
-    navigate(
-      nextTab === "preparation"
-        ? routePaths.preparation(applicationId)
-        : `${routePaths.application(applicationId)}?tab=${nextTab}`,
-      { replace: true },
-    );
 
   const query = useQuery(applicationDetailQueryOptions(applicationId));
   const detail = query.data;
-  const { operation: watched, operationId: watchedId, watch } = useWatchedOperation(applicationId, detail);
+  const { operation: watched, watch, operationId: watchedId } = useWatchedOperation(applicationId, detail);
 
   useAutomaticDraft({
     applicationId,
@@ -87,25 +55,21 @@ export const ApplicationPage = () => {
 
   const createdApplication = (location.state as { createdApplication?: CreatedApplicationState } | null)
     ?.createdApplication;
-  const openDecisionsCount = detail === undefined ? 0 : openDecisionCount(openDecisions(detail));
+
+  /* The files exist only after a revision is rendered, so their reference section is drawn
+     only once there is something in it - never as an empty disclosure the reader opens onto
+     nothing. */
+  const hasArtifacts = detail !== undefined && detail.latest_ready_revision_id != null;
 
   return (
     <PageShell
-      actions={
-        detail === undefined ? null : (
-          <div className="flex flex-wrap items-center gap-2">
-            <ApplicationPrimaryAction detail={detail} />
-            <RecruitmentManagerButton application={detail.application} />
-          </div>
-        )
-      }
       eyebrow={detail === undefined ? undefined : <span dir="auto">{detail.application.company}</span>}
       landmark={<PreparationWorkflowSteps applicationId={applicationId} detail={detail} />}
       navigation={
         <ApplicationBreadcrumbs
           applicationId={applicationId}
           company={detail?.application.company}
-          page={currentTab === "preparation" ? "preparation" : "job"}
+          page="preparation"
           targetRole={detail?.application.target_role}
         />
       }
@@ -119,46 +83,39 @@ export const ApplicationPage = () => {
       >
         {detail === undefined ? null : (
           <div className="space-y-6">
-            {createdApplication === undefined ? null : createdApplication.analysisQueued === true ? (
-              <Callout role="status" title="המועמדות נוצרה, הניתוח רץ" tone="progress" />
-            ) : (
+            {/* A successfully queued analysis is reported by the Operation panel below,
+                which follows the run through its current and terminal states. Route state
+                only owns the exceptional creation outcome where no Operation exists to
+                report; keeping its success message would freeze "running" beside the
+                Operation's later "completed" state. */}
+            {createdApplication?.analysisQueued !== false ? null : (
               <Callout role="alert" title="המועמדות נוצרה, אך הניתוח לא הופעל" tone="warning">
-                {createdApplication.analysisProblem?.detail ?? "ניתן להפעיל את הניתוח מלשונית הכנת קורות החיים."}{" "}
+                {createdApplication.analysisProblem?.detail ?? "ניתן להפעיל את הניתוח מהמסך הזה."}{" "}
                 המועמדות שכבר נוצרה לא תיווצר שוב.
               </Callout>
             )}
 
-            {/* Live work is the Application's, not one tab's: an analysis queued from the
-                preparation tab is still running while the reader is reading the posting.
-                It is reported once, above the tabs, rather than once here and again inside
-                preparation - which is what put two copies of the panel on screen on the
-                first visit after an Application was created. */}
+            {/* Live work, reported once above the step it belongs to. */}
             {watched === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={watched} />}
 
-            <ApplicationStatePanel
-              detail={detail}
-              onOpenPreparation={() => selectTab("preparation")}
-              openDecisionsCount={openDecisionsCount}
-            />
+            <PreparationView detail={detail} onQueued={watch} />
 
-            <ApplicationTabs
-              active={currentTab}
-              detail={detail}
-              onSelect={selectTab}
-              openDecisionsCount={openDecisionsCount}
-            />
+            {/* The posting the CV is tailored to, and the files the work produced: reference
+                the reader checks or downloads, folded away so the step above stays the
+                screen's subject. */}
+            <Disclosure summary="צפייה בנוסח המשרה שנשמר">
+              <div className="pt-2">
+                <JobSnapshotPanel detail={detail} />
+              </div>
+            </Disclosure>
 
-            <TabPanel active={currentTab === "preparation"} group={APPLICATION_TAB_GROUP} tab="preparation">
-              <PreparationView detail={detail} onQueued={watch} />
-            </TabPanel>
-
-            <TabPanel active={currentTab === "job"} group={APPLICATION_TAB_GROUP} tab="job">
-              <JobSnapshotPanel detail={detail} />
-            </TabPanel>
-
-            <TabPanel active={currentTab === "artifacts"} group={APPLICATION_TAB_GROUP} tab="artifacts">
-              <ApplicationArtifacts applicationId={applicationId} />
-            </TabPanel>
+            {hasArtifacts ? (
+              <Disclosure summary="גרסאות וקבצים">
+                <div className="pt-2">
+                  <ApplicationArtifacts applicationId={applicationId} />
+                </div>
+              </Disclosure>
+            ) : null}
           </div>
         )}
       </QueryState>
