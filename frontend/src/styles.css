@@ -31,8 +31,8 @@
   --color-cv-field-border: #e3e8ef;
   --color-cv-field-background: #f8fafc;
   --color-cv-field-focus: #2f6fed;
-  --text-field-input: 0.78125rem;
-  --text-field-select: 0.8125rem;
+  
+  --text-field: 1rem;
   --color-cv-text: #111827;
   --color-cv-text-muted: #5b6577;
   --color-cv-accent: #1d4ed8;
@@ -189,8 +189,7 @@ select {
 }
 
 [data-text-size="large"] {
-  --text-field-input: 0.90625rem;
-  --text-field-select: 0.9375rem;
+  --text-field: 1.125rem;
   --text-support: 1rem;
   --text-body: 1.125rem;
   --text-heading-sm: 1.375rem;
@@ -228,7 +227,7 @@ select {
 
 .cv-field-input {
   --cv-field-fill: var(--color-cv-field-background);
-  font-size: var(--text-field-input);
+  font-size: var(--text-field);
 }
 
 .cv-field-select {
@@ -237,12 +236,12 @@ select {
      real field it read as a plain, unstyled native control rather than a sibling of
      the same field family. */
   --cv-field-fill: var(--color-cv-field-background);
-  font-size: var(--text-field-select);
+  font-size: var(--text-field);
 }
 
 .cv-field-textarea {
   border-color: var(--color-cv-border-strong);
-  font-size: var(--text-body);
+  font-size: var(--text-field);
   line-height: 1.75;
 }
 
