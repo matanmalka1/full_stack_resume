@@ -190,6 +190,8 @@ const renderPage = ({
           <Route element={<ApplicationListPage />} path="/" />
           <Route element={<h1>משרה חדשה</h1>} path="/applications/new" />
           <Route element={<h1>מסך המועמדות</h1>} path="/applications/:applicationId" />
+          <Route element={<h1>עורך הטיוטה</h1>} path="/applications/:applicationId/draft" />
+          <Route element={<h1>גרסה מוכנה</h1>} path="/revisions/:revisionId" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -340,6 +342,28 @@ describe("ApplicationListPage", () => {
     fireEvent.keyDown(row, { key: "Enter" });
 
     expect(screen.getByRole("heading", { name: "מסך המועמדות" })).toBeInTheDocument();
+  });
+
+  it("resumes a row at the step recommended by the server", async () => {
+    stubList([item({ preparation_state: "ready_for_approval", recommended_action: "approve" })]);
+
+    renderPage();
+
+    fireEvent.click(await screen.findByText("Backend Engineer"));
+
+    expect(screen.getByRole("heading", { name: "עורך הטיוטה" })).toBeInTheDocument();
+  });
+
+  it("opens the exact ready revision when the workflow is complete", async () => {
+    stubList([
+      item({ latest_ready_revision_id: "revision-1", preparation_state: "ready", recommended_action: null }),
+    ]);
+
+    renderPage();
+
+    fireEvent.click(await screen.findByText("Backend Engineer"));
+
+    expect(screen.getByRole("heading", { name: "גרסה מוכנה" })).toBeInTheDocument();
   });
 
   it("switches between table, card, and recruitment pipeline views without changing the server query", async () => {

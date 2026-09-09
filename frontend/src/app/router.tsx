@@ -2,7 +2,7 @@ import { Navigate, createBrowserRouter, useParams } from "react-router-dom";
 
 import { NewApplicationPage } from "@/features/application-intake";
 import { ApplicationListPage } from "@/features/application-list";
-import { ApplicationPage } from "@/features/applications";
+import { ApplicationPage, ApplicationResumePage } from "@/features/applications";
 import { DraftEditorPage } from "@/features/drafts";
 import { RevisionPage } from "@/features/revisions";
 import { SettingsPage } from "@/features/settings";
@@ -61,6 +61,7 @@ export const router = createBrowserRouter([
           /* The Application hub: its job record, its CV preparation, and its artifacts, on
          one screen with one address. */
           { path: "applications/:applicationId", element: <ApplicationPage /> },
+          { path: "applications/:applicationId/resume", element: <ApplicationResumePage /> },
 
           /* The draft editor: edit, preview, validate, approve, and render, on the one screen
          that holds the draft all five act on. */

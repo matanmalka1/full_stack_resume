@@ -2,7 +2,7 @@ import { AlertTriangle, Clock } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
-import { routePaths } from "@/app/routePaths";
+import { preparationResumeDestination } from "@/features/preparation";
 import { surfaceClasses } from "@/ui/surface";
 import { cx } from "@/ui/cx";
 import { applicationAttention, formatApplicationDate } from "../model/applicationListPresentation";
@@ -59,7 +59,7 @@ const ApplicationCard = ({
                 ? "border-cv-blocker/30 bg-cv-blocker-soft text-cv-blocker"
                 : "border-cv-warning/30 bg-cv-warning-soft text-cv-warning",
             )}
-            to={routePaths.application(item.id)}
+            to={preparationResumeDestination(item)}
           >
             <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
             <span className="line-clamp-2">{attention.label}</span>

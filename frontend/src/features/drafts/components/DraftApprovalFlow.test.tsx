@@ -334,4 +334,33 @@ describe("DraftRenderPanel", () => {
     const request = fetchMock.mock.calls.find((call) => call[1]?.method === "POST");
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({ application_id: "app-1" });
   });
+
+  it("keeps the completed render transition in the wizard action bar", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve(
+          json(
+            revision({
+              ready_qualified: true,
+              html_artifact_version_id: "html-1",
+              pdf_artifact_version_id: "pdf-1",
+            }),
+          ),
+        ),
+      ),
+    );
+
+    renderRoute(
+      "/applications/app-1/draft",
+      "/applications/:applicationId/draft",
+      <DraftRenderPanel approvedRevisionId="revision-1" onQueued={vi.fn()} />,
+    );
+
+    expect(await screen.findByRole("link", { name: "מעבר לגרסה המוכנה" })).toHaveAttribute(
+      "href",
+      "/revisions/revision-1",
+    );
+    expect(screen.getByText("שלב הטיוטה הושלם.")).toBeInTheDocument();
+  });
 });

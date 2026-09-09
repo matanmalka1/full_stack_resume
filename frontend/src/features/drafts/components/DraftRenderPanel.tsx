@@ -1,12 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowRight } from "lucide-react";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
 import { operationQueryKey } from "@/api/operations";
 import { approvedRevisionQueryOptions, renderApprovedRevision } from "@/api/revisions";
-import { ErrorCallout } from "@/ui/ErrorCallout";
 import { routePaths } from "@/app/routePaths";
+import { CommitBar, NEXT_STEP_LABEL } from "@/features/preparation";
 import { Button, buttonClasses } from "@/ui/Button";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 
 interface DraftRenderPanelProps {
   approvedRevisionId: string;
@@ -44,44 +46,65 @@ export const DraftRenderPanel = ({ approvedRevisionId, onQueued }: DraftRenderPa
     },
   });
 
+  const ready = revision?.ready_qualified === true;
+
   return (
-    <section
-      aria-labelledby="render-heading"
-      className="flex flex-col gap-4 rounded-surface border-2 border-cv-success/30 bg-cv-success-soft p-5"
-    >
-      <div>
-        <h2 className="text-heading-sm font-bold text-cv-text" id="render-heading">
-          הגרסה אושרה
-        </h2>
-        <p className="mt-1 text-support leading-6 text-cv-text-muted">
-          הגרסה שאושרה נשמרה כרשומה קבועה. יצירת הקובץ היא פעולה נפרדת, והגרסה נשארת מאושרת גם אם היא נכשלת.
-        </p>
-      </div>
+    <>
+      <section
+        aria-labelledby="render-heading"
+        className="flex flex-col gap-4 rounded-surface border-2 border-cv-success/30 bg-cv-success-soft p-5"
+      >
+        <div>
+          <h2 className="text-heading-sm font-bold text-cv-text" id="render-heading">
+            הגרסה אושרה
+          </h2>
+          <p className="mt-1 text-support leading-6 text-cv-text-muted">
+            {ready
+              ? "הקבצים נוצרו בהצלחה. אפשר להמשיך לגרסה המוכנה למסירה."
+              : "הגרסה שאושרה נשמרה כרשומה קבועה. כעת נותר ליצור ממנה HTML ו־PDF."}
+          </p>
+        </div>
 
-      {revisionQuery.error === null && render.error === null ? null : (
-        <ErrorCallout
-          error={render.error ?? revisionQuery.error}
-          fallbackDetail="הפנייה לשרת נכשלה. הגרסה המאושרת נשמרה."
-          fallbackTitle="לא ניתן להתחיל את יצירת הקובץ"
-        />
-      )}
-
-      <div className="flex flex-wrap gap-3">
-        {revision?.ready_qualified === true ? (
-          <Link className={buttonClasses("primary")} to={routePaths.revision(revision.id)}>
-            צפייה בגרסה המוכנה
-          </Link>
-        ) : (
-          <Button
-            disabled={revision === undefined}
-            onClick={() => render.mutate()}
-            pending={render.isPending}
-            pendingLabel="מתחיל רינדור…"
-          >
-            יצירת HTML ו־PDF
-          </Button>
+        {revisionQuery.error === null && render.error === null ? null : (
+          <ErrorCallout
+            error={render.error ?? revisionQuery.error}
+            fallbackDetail="הפנייה לשרת נכשלה. הגרסה המאושרת נשמרה."
+            fallbackTitle="לא ניתן להתחיל את יצירת הקובץ"
+          />
         )}
-      </div>
-    </section>
+      </section>
+
+      <CommitBar
+        back={
+          revision === undefined ? undefined : (
+            <Link className={buttonClasses("ghost")} to={routePaths.application(revision.application_id)}>
+              <ArrowRight aria-hidden="true" className="size-4" />
+              חזרה לניתוח ולהתאמה
+            </Link>
+          )
+        }
+        label={NEXT_STEP_LABEL}
+        primary={
+          revision?.ready_qualified === true ? (
+            <Link className={buttonClasses("primary")} to={routePaths.revision(revision.id)}>
+              מעבר לגרסה המוכנה
+            </Link>
+          ) : (
+            <Button
+              disabled={revision === undefined}
+              onClick={() => render.mutate()}
+              pending={render.isPending}
+              pendingLabel="יוצר HTML ו־PDF…"
+            >
+              יצירת HTML ו־PDF
+            </Button>
+          )
+        }
+      >
+        <p className="text-support leading-6 text-cv-text-muted">
+          {ready ? "שלב הטיוטה הושלם." : "האישור הושלם; יצירת הקבצים היא הפעולה האחרונה בשלב הזה."}
+        </p>
+      </CommitBar>
+    </>
   );
 };

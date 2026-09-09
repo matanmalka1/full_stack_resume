@@ -103,10 +103,13 @@ describe("RevisionPage", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
 
+    expect(screen.queryByRole("button", { name: "רישום הגשת הגרסה הזו" })).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("link", { name: "הורדת PDF" }));
     fireEvent.click(await screen.findByRole("button", { name: "רישום הגשת הגרסה הזו" }));
     fireEvent.click(screen.getByRole("button", { name: "אישור ורישום ההגשה" }));
 
     await screen.findByText("ההגשה נרשמה");
+    expect(screen.getByRole("link", { name: "סיום וחזרה ללוח" })).toHaveAttribute("href", "/");
     const request = fetchMock.mock.calls.find(
       (call) => call[1]?.method === "POST" && String(call[0]).endsWith("/submissions"),
     );
@@ -159,6 +162,7 @@ describe("RevisionPage", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
 
+    fireEvent.click(await screen.findByText("אפשרויות נוספות"));
     fireEvent.click(await screen.findByRole("button", { name: "רישום הגשה נוספת" }));
     expect(await screen.findByText("הגרסה הזו כבר נרשמה כמוגשת")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "אישור ורישום ההגשה" })).toBeDisabled();
@@ -217,6 +221,7 @@ describe("RevisionPage", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
+    fireEvent.click(await screen.findByText("אפשרויות נוספות"));
     const newDraft = await screen.findByRole("button", { name: "יצירת טיוטה חדשה" });
     /* The immutable revision keeps the complete route back to its Application - one step,
        because the preparation screen it used to name in between is that same record. */

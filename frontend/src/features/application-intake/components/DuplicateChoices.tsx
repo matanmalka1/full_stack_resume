@@ -83,7 +83,7 @@ export const DuplicateChoices = ({ matches, onCreateAnyway, pending }: Duplicate
                 <Link
                   aria-label={openLabel}
                   className="group flex items-center gap-3 py-3 transition-colors duration-200 hover:text-cv-accent"
-                  to={routePaths.application(match.application_id)}
+                  to={routePaths.resumeApplication(match.application_id)}
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium text-cv-text group-hover:text-cv-accent" dir="auto">

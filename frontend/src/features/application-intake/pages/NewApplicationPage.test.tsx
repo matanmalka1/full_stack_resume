@@ -271,7 +271,7 @@ describe("NewApplicationPage", () => {
     expect(screen.getByText("אותה כתובת מקור · אותה חברה ואותו תפקיד")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "פתיחת המועמדות הקיימת: Acme — Backend Engineer" })).toHaveAttribute(
       "href",
-      "/applications/app-existing",
+      "/applications/app-existing/resume",
     );
     expect(
       screen.getByText("נדרש אישור מפורש כדי ליצור מועמדות נוספת. אפשר גם לפתוח אחת מהמועמדויות הקיימות."),
@@ -356,7 +356,7 @@ describe("NewApplicationPage", () => {
     expect(await screen.findByText("נמצאה מועמדות דומה")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "פתיחת המועמדות הקיימת: Acme — Backend Engineer" })).toHaveAttribute(
       "href",
-      "/applications/app-raced",
+      "/applications/app-raced/resume",
     );
     expect(screen.queryByText("חסימה")).not.toBeInTheDocument();
   });

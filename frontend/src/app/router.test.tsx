@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { NewApplicationPage } from "@/features/application-intake";
 import { ApplicationListPage } from "@/features/application-list";
-import { ApplicationPage } from "@/features/applications";
+import { ApplicationPage, ApplicationResumePage } from "@/features/applications";
 import { router } from "./router";
 
 /* Every screen sits under a pathless route whose only job is to own the error boundary,
@@ -30,6 +30,7 @@ describe("the route table", () => {
      assertion is that the hub answers its own address and nothing else does. */
   it("answers the Application address with the hub screen and redirects its former name", () => {
     expect(elementType("applications/:applicationId")).toBe(ApplicationPage);
+    expect(elementType("applications/:applicationId/resume")).toBe(ApplicationResumePage);
     expect(elementType("applications/:applicationId/preparation")).not.toBe(ApplicationPage);
     expect(route("applications/:applicationId/preparation")).not.toBeUndefined();
   });

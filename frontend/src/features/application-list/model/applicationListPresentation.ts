@@ -1,8 +1,8 @@
 import { routePaths } from "@/app/routePaths";
 import type { ApplicationListItem } from "@/api/contracts";
+import { preparationResumeDestination, reasonTitle, warningTitle } from "@/features/preparation";
 import type { Tone } from "@/ui/tone";
 import { formatDateTime } from "@/utils/formatDateTime";
-import { reasonTitle, warningTitle } from "@/features/preparation";
 
 export const formatApplicationDate = (value: string): string => formatDateTime(value, "date");
 
@@ -132,7 +132,7 @@ export const attentionHubItems = (items: readonly ApplicationListItem[], today: 
       continue;
     }
 
-    const applicationHref = routePaths.application(application.id);
+    const applicationHref = preparationResumeDestination(application);
     if (
       application.next_action != null &&
       application.next_action_date != null &&
@@ -156,7 +156,7 @@ export const attentionHubItems = (items: readonly ApplicationListItem[], today: 
     if (projectedAttention != null) {
       attention.push({
         actionLabel: "פתיחת מסך ההכנה",
-        actionTo: routePaths.application(application.id),
+        actionTo: preparationResumeDestination(application),
         application,
         label: "דורש טיפול",
         subtitle: application.target_role,

@@ -2,11 +2,13 @@ import { ArrowRight, Download, FilePlus2, Send } from "lucide-react";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
+import { boardPath } from "@/app/boardReturn";
 import { routePaths } from "@/app/routePaths";
 import { recruiterPdfHref } from "@/api/revisions";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button, buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
+import { Disclosure } from "@/ui/Disclosure";
 import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
 import { ActiveOperationPanel } from "@/features/operations";
@@ -24,6 +26,7 @@ import { useRevisionDraftGeneration } from "../api/mutations";
 const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: string }) => {
   const [submissionOpen, setSubmissionOpen] = useState(false);
   const [submissionRecorded, setSubmissionRecorded] = useState(false);
+  const [downloadStarted, setDownloadStarted] = useState(false);
   const {
     applicationQuery,
     decisionQuery,
@@ -58,6 +61,7 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
      which is the back link itself, and the bar draws nothing rather than a primary that
      repeats it. */
   const recruiterPdfArtifactId = revision?.ready_qualified === true ? revision.pdf_artifact_version_id : null;
+  const submissionExists = submittedAt !== null || submissionRecorded;
   const newDraftButton = !canCreate ? null : (
     <Button
       disabled={detail?.working_draft_state !== "none"}
@@ -71,6 +75,18 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
       יצירת טיוטה חדשה
     </Button>
   );
+  const downloadButton =
+    revision === undefined || recruiterPdfArtifactId === null ? null : (
+      <a
+        className={buttonClasses(downloadStarted || submissionExists ? "secondary" : "primary")}
+        href={recruiterPdfHref(revision.id, recruiterPdfArtifactId)}
+        key="download-pdf"
+        onClick={() => setDownloadStarted(true)}
+      >
+        <Download aria-hidden="true" className="size-4" />
+        {downloadStarted || submissionExists ? "הורדת PDF שוב" : "הורדת PDF"}
+      </a>
+    );
   const nextStep =
     revision === undefined
       ? null
@@ -78,29 +94,32 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
         ? newDraftButton === null
           ? null
           : { note: "הגרסה אינה עומדת בתנאי המסירה. דוח האימות מפרט את החסימות.", primary: newDraftButton }
-        : {
-            note:
-              submittedAt === null
-                ? "הקובץ מוכן להורדה ולמסירה למגייס."
-                : "הגרסה כבר רשומה כמוגשת. אפשר לרשום הגשה נוספת של אותה גרסה.",
-            primary: (
-              <a className={buttonClasses("primary")} href={recruiterPdfHref(revision.id, recruiterPdfArtifactId)}>
-                <Download aria-hidden="true" className="size-4" />
-                הורדת PDF
-              </a>
-            ),
-            /* The button says what pressing it would do next, which is not the same
-               sentence once a submission is on record. It stayed "רישום הגשת הגרסה הזו"
-               after the submission was recorded, so the screen offered the action it had
-               just completed as though nothing had happened. */
-            secondary: [
-              <Button key="submission" onClick={() => setSubmissionOpen(true)} variant="secondary">
-                <Send aria-hidden="true" className="size-4" />
-                {submittedAt === null ? "רישום הגשת הגרסה הזו" : "רישום הגשה נוספת"}
-              </Button>,
-              newDraftButton,
-            ].filter((node) => node !== null),
-          };
+        : submissionExists
+          ? {
+              note: "הגרסה נרשמה כמוגשת. תהליך הכנת קורות החיים הושלם.",
+              primary: (
+                <Link className={buttonClasses("primary")} to={boardPath()}>
+                  סיום וחזרה ללוח
+                </Link>
+              ),
+              secondary: downloadButton === null ? [] : [downloadButton],
+            }
+          : downloadStarted
+            ? {
+                note: "לאחר מסירת הקובץ למגייס, יש לתעד זאת כהגשה.",
+                primary: (
+                  <Button onClick={() => setSubmissionOpen(true)}>
+                    <Send aria-hidden="true" className="size-4" />
+                    רישום הגשת הגרסה הזו
+                  </Button>
+                ),
+                secondary: downloadButton === null ? [] : [downloadButton],
+              }
+            : {
+                note: "הקובץ מוכן. הורידו אותו לפני רישום ההגשה.",
+                primary: downloadButton,
+                secondary: [],
+              };
 
   return (
     <PageShell
@@ -155,6 +174,24 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
 
             <RevisionSummary detail={detail} revision={revision} submittedAt={submittedAt} />
             <RevisionRecord decision={decisionQuery.data} revision={revision} />
+            {revision.ready_qualified && (newDraftButton !== null || submittedAt !== null) ? (
+              <Disclosure summary="אפשרויות נוספות">
+                <div className="pt-2">
+                  <p className="mb-3 text-support text-cv-text-muted">
+                    הפעולות כאן אינן חלק מהשלמת המסירה הנוכחית ואינן משנות את הגרסה המוכנה הזו.
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    {submittedAt !== null ? (
+                      <Button onClick={() => setSubmissionOpen(true)} variant="secondary">
+                        <Send aria-hidden="true" className="size-4" />
+                        רישום הגשה נוספת
+                      </Button>
+                    ) : null}
+                    {newDraftButton}
+                  </div>
+                </div>
+              </Disclosure>
+            ) : null}
           </>
         )}
       </QueryState>

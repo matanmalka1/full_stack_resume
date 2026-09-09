@@ -6,6 +6,10 @@ import { stageForPreparationState, workflowDestinations } from "./workflowStages
 const detail = (overrides: Partial<ApplicationDetail>) => overrides as ApplicationDetail;
 
 describe("workflowDestinations", () => {
+  it("keeps ready-to-draft on analysis until a draft record exists", () => {
+    expect(stageForPreparationState.ready_to_draft).toBe("analysis");
+  });
+
   it("offers the editor only once a working draft exists", () => {
     expect(workflowDestinations("app-1", detail({}))).toEqual({
       analysis: "/applications/app-1",

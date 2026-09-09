@@ -2,9 +2,8 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
-import { routePaths } from "@/app/routePaths";
 import { sourceHostname } from "@/features/applications";
-import { trackLabel } from "@/features/preparation";
+import { preparationResumeDestination, trackLabel } from "@/features/preparation";
 import { cx } from "@/ui/cx";
 import type { ApplicationListViewVariant } from "../model/applicationList.types";
 import { formatApplicationDate } from "../model/applicationListPresentation";
@@ -61,7 +60,7 @@ export const ApplicationIdentity = ({
   item: ApplicationListItem;
   variant: ApplicationListViewVariant;
 }) => {
-  const href = routePaths.application(item.id);
+  const href = preparationResumeDestination(item);
   if (variant === "pipeline") {
     return (
       <>

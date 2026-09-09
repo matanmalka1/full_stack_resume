@@ -36,7 +36,11 @@ export { useAutomaticDraft } from "./api/mutations";
    badge. Where those decisions are taken stays inside. */
 export { openDecisionCount, openDecisions } from "./model/reviewDecisions";
 
-export { actionDestination } from "./model/actionDestinations";
+export {
+  actionDestination,
+  preparationResumeDestination,
+  preparationResumeDestinationFromDetail,
+} from "./model/actionDestinations";
 export { fitLevelIcon, fitLevelLabel, fitLevelTone, trackLabel } from "./model/analysisLabels";
 export {
   actionLabel,

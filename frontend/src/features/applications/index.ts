@@ -6,5 +6,6 @@
    posting's source line are exported for the screens that name the same record from
    outside. */
 export { ApplicationPage } from "./pages/ApplicationPage";
+export { ApplicationResumePage } from "./pages/ApplicationResumePage";
 export { applicationLabel, sourceHostname } from "./model/applicationPresentation";
 export { LABEL_MAX_CHARACTERS, SOURCE_URL_MAX_CHARACTERS } from "./model/applicationInput";

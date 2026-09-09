@@ -51,7 +51,10 @@ export const workflowStageHints: Record<WorkflowStage, string> = {
 export const stageForPreparationState: Record<PreparationState, WorkflowStage> = {
   needs_analysis: "analysis",
   needs_review: "analysis",
-  ready_to_draft: "draft",
+  /* Creating the draft is the action that closes analysis. Until a draft exists there is
+     no draft screen to be on, so marking the next stage here made the rail disagree with
+     the open page's "ניתוח והתאמה" heading. */
+  ready_to_draft: "analysis",
   draft_in_progress: "draft",
   ready_for_approval: "draft",
   approved: "draft",

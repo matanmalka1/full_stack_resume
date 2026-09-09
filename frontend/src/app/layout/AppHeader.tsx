@@ -34,13 +34,12 @@ const GlobalActivityBar = () => {
    heading, and the header carrying a second copy of that made the record's identity a
    shell concern.
 
-   Inside a wizard step it draws itself down to the wordmark and the search palette. The
-   primary navigation and the new-Application button are how a reader chooses which work
-   to do; on a step they are two more destinations sitting over the one thing the step is
+   Inside a wizard step it draws itself down to the wordmark. Primary navigation, search,
+   and the new-Application button are how a reader chooses which work to do; on a step
+   they are more destinations sitting over the one thing the step is
    asking, and the "משרה חדשה" button in particular offers starting a second Application
    above the one being prepared. The step keeps its own way out - the board link above the
-   spine - so nothing is unreachable, only unoffered. Search stays: it is how the reader
-   reaches a different record without first backing out of this one. */
+   spine - so the global destinations remain reachable after deliberately leaving the flow. */
 export const AppHeader = () => {
   const inWorkflow = useInWorkflow();
 
@@ -63,7 +62,7 @@ export const AppHeader = () => {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <GlobalSearch />
+          {inWorkflow ? null : <GlobalSearch />}
 
           {inWorkflow ? null : (
             <Link

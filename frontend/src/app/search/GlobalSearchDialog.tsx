@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { applicationListQueryOptions } from "@/api/applications";
 import type { ApplicationListItem } from "@/api/contracts";
 import { ApplicationSummary } from "@/features/application-list";
+import { preparationResumeDestination } from "@/features/preparation";
 import { cx } from "@/ui/cx";
 import { routePaths } from "../routePaths";
 
@@ -65,7 +66,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
 
   const selectItem = (item: ApplicationListItem) => {
     onClose();
-    void navigate(routePaths.application(item.id));
+    void navigate(preparationResumeDestination(item));
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {

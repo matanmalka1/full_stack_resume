@@ -1,3 +1,4 @@
+import type { ApplicationDetail, ApplicationListItem } from "@/api/contracts";
 import { routePaths } from "@/app/routePaths";
 
 /* Which backend action names this frontend has actually built a screen for.
@@ -38,6 +39,57 @@ const destinations: Record<string, (applicationId: string) => string> = {
 
 export const actionDestination = (action: string, applicationId: string): string | null =>
   destinations[action]?.(applicationId) ?? null;
+
+/* Re-enter the guided flow at the work the server currently recommends. The fallback is
+   deliberately about records that already exist, not about deciding what work is allowed:
+   a draft opens in its editor and a rendered revision opens as the finished document.
+   Availability and recommendation remain projection-owned. */
+type ResumeProjection = Pick<
+  ApplicationListItem,
+  "id" | "latest_ready_revision_id" | "preparation_state" | "recommended_action"
+>;
+
+const resumeDestination = (application: ResumeProjection): string => {
+  const recommended =
+    application.recommended_action === null
+      ? null
+      : actionDestination(application.recommended_action, application.id);
+
+  if (recommended !== null) {
+    return recommended;
+  }
+
+  if (application.preparation_state === "ready" && application.latest_ready_revision_id != null) {
+    return routePaths.revision(application.latest_ready_revision_id);
+  }
+
+  if (
+    application.preparation_state === "draft_in_progress" ||
+    application.preparation_state === "ready_for_approval" ||
+    application.preparation_state === "approved"
+  ) {
+    return routePaths.draft(application.id);
+  }
+
+  return routePaths.application(application.id);
+};
+
+export const preparationResumeDestination = (application: ApplicationListItem): string =>
+  resumeDestination(application);
+
+/* Duplicate detection intentionally returns identity evidence only. Its resume route can
+   read the full projection before choosing a screen, so the duplicate contract does not
+   grow a second, soon-stale copy of workflow state merely to build a link. */
+export const preparationResumeDestinationFromDetail = (
+  applicationId: string,
+  detail: ApplicationDetail,
+): string =>
+  resumeDestination({
+    id: applicationId,
+    latest_ready_revision_id: detail.latest_ready_revision_id,
+    preparation_state: detail.preparation_state,
+    recommended_action: detail.recommended_action,
+  });
 
 /* Which of the screens above the reader is on. An alert region is rendered on more than
    one of them, and whether it offers a way to the control that resolves a reason depends

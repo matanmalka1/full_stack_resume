@@ -11,6 +11,7 @@ import { useMatch } from "react-router-dom";
 const workflowPatterns = [
   "/applications/new",
   "/applications/:applicationId",
+  "/applications/:applicationId/resume",
   "/applications/:applicationId/draft",
   "/revisions/:revisionId",
 ] as const;
@@ -20,10 +21,11 @@ const workflowPatterns = [
 export const useInWorkflow = (): boolean => {
   const intake = useMatch(workflowPatterns[0]);
   const preparation = useMatch(workflowPatterns[1]);
-  const draft = useMatch(workflowPatterns[2]);
-  const revision = useMatch(workflowPatterns[3]);
+  const resume = useMatch(workflowPatterns[2]);
+  const draft = useMatch(workflowPatterns[3]);
+  const revision = useMatch(workflowPatterns[4]);
 
-  return intake !== null || preparation !== null || draft !== null || revision !== null;
+  return intake !== null || preparation !== null || resume !== null || draft !== null || revision !== null;
 };
 
 export const workflowRoutePatterns = workflowPatterns;

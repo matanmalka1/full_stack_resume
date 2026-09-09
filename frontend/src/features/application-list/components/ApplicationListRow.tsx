@@ -3,7 +3,7 @@ import type { KeyboardEvent, MouseEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
-import { routePaths } from "@/app/routePaths";
+import { preparationResumeDestination } from "@/features/preparation";
 import { cx } from "@/ui/cx";
 import { applicationAttention, formatApplicationDate } from "../model/applicationListPresentation";
 import { ApplicationRecommendedAction, ApplicationRecordActions } from "./ApplicationListItemActions";
@@ -24,7 +24,7 @@ interface ApplicationListRowProps {
 
 export const ApplicationListRow = ({ ambiguous, item, onRequestClose, onRequestUpdate }: ApplicationListRowProps) => {
   const navigate = useNavigate();
-  const href = routePaths.application(item.id);
+  const href = preparationResumeDestination(item);
   const attention = applicationAttention(item);
 
   /* The row navigates as a whole but yields to real controls and text selection. The
