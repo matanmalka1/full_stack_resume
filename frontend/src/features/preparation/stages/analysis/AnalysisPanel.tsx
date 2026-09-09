@@ -2,7 +2,6 @@ import type { Classification } from "@/api/analyses";
 import type { ApplicationDetail } from "@/api/contracts";
 import { Disclosure } from "@/ui/Disclosure";
 import { surfaceClasses } from "@/ui/surface";
-import { CopyableTextDisclosure } from "@/ui/CopyableTextDisclosure";
 import { AnalysisHeader } from "./AnalysisHeader";
 import { ApprovalReasonsSection } from "./ApprovalReasonsSection";
 import { ClassificationSummary } from "./ClassificationSummary";
@@ -21,9 +20,11 @@ import { RequirementsSection } from "./RequirementsSection";
    through `available_actions`. A second place that *commits* the same values would be the
    second workflow state machine A.1 forbids.
 
-   The panel itself only composes: the masthead, the four findings below it, and the
-   source text disclosure each live in their own file under this folder, so a change to
-   one - a new gap presentation, a reworded rationale note - never touches the others.
+   The panel itself only composes: the masthead and the findings below it each live in
+   their own file under this folder, so a change to one - a new gap presentation, a
+   reworded rationale note - never touches the others. The posting text itself is not
+   drawn here: `JobSnapshotPanel` owns the snapshot on this same screen, and this panel
+   reads from that same `latest_snapshot`, so a copy here was the one source shown twice.
 
    Findings are laid out with the same `divide-y` rhythm ApplicationPage uses for its own
    top-level sections, rather than one uniform `gap-5` column: a hairline and real
@@ -61,7 +62,7 @@ export const AnalysisPanel = ({
       {showGaps ? <GapsSection acceptance={null} gaps={classification.gaps} /> : null}
 
       <section>
-        <Disclosure summary="פרטי הניתוח והמקור">
+        <Disclosure summary="פרטי הניתוח">
           <div className="flex flex-col divide-y divide-cv-border [&>section]:py-4 [&>section:first-child]:pt-1">
             <RationaleSection rationale={classification.rationale} />
             {/* The full requirement picture - matched requirements included - once the
@@ -80,14 +81,6 @@ export const AnalysisPanel = ({
               </>
             )}
             <RequirementsSection items={classification.keywords} title="מילות מפתח מהמשרה" />
-            <section>
-              <CopyableTextDisclosure
-                emptyMessage="נוסח המשרה שנותח אינו זמין."
-                label="נוסח המשרה"
-                summary="הצגת נוסח המשרה שנותח"
-                text={detail.latest_snapshot.job_text}
-              />
-            </section>
           </div>
         </Disclosure>
       </section>
