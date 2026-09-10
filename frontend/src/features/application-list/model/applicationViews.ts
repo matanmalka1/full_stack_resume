@@ -21,14 +21,13 @@ const isViewMode = (value: string | null): value is ViewMode =>
    record's own page doesn't spend it back to the default - not the URL, since it is
    still a presentation preference rather than part of the query. */
 export const initialViewMode = (): ViewMode => {
-  const stored = typeof window.sessionStorage === "object" ? window.sessionStorage.getItem(VIEW_MODE_STORAGE_KEY) : null;
+  const stored =
+    typeof window.sessionStorage === "object" ? window.sessionStorage.getItem(VIEW_MODE_STORAGE_KEY) : null;
   if (isViewMode(stored)) {
     return stored;
   }
 
-  return typeof window.matchMedia === "function" && window.matchMedia("(max-width: 639px)").matches
-    ? "cards"
-    : "table";
+  return typeof window.matchMedia === "function" && window.matchMedia("(max-width: 639px)").matches ? "cards" : "table";
 };
 
 export const rememberViewMode = (viewMode: ViewMode): void => {

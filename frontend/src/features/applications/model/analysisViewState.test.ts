@@ -26,12 +26,12 @@ const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =
 
 describe("analysisViewState", () => {
   it("keeps creation and its live analysis in one processing state", () => {
-    expect(
-      analysisViewState({ analysisWasQueuedOnCreate: true, detail: undefined, operation: undefined }),
-    ).toBe("processing");
-    expect(
-      analysisViewState({ analysisWasQueuedOnCreate: true, detail: detail(), operation: operation() }),
-    ).toBe("processing");
+    expect(analysisViewState({ analysisWasQueuedOnCreate: true, detail: undefined, operation: undefined })).toBe(
+      "processing",
+    );
+    expect(analysisViewState({ analysisWasQueuedOnCreate: true, detail: detail(), operation: operation() })).toBe(
+      "processing",
+    );
   });
 
   it("does not expose the pre-analysis projection after the operation succeeds", () => {
