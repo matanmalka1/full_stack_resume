@@ -35,9 +35,9 @@ const pipelineColumns: readonly PipelineColumn[] = [
 
 const pipelineToneClasses: Record<PipelineColumn["tone"], string> = {
   neutral: "border-cv-border bg-cv-surface-muted",
-  accent: "border-cv-accent/30 bg-cv-accent-soft/40",
-  warning: "border-cv-warning/30 bg-cv-warning-soft/40",
-  success: "border-cv-success/30 bg-cv-success-soft/40",
+  accent: "border-cv-accent/30 bg-cv-accent-soft",
+  warning: "border-cv-warning/30 bg-cv-warning-soft",
+  success: "border-cv-success/30 bg-cv-success-soft",
 };
 
 const PipelineCard = ({

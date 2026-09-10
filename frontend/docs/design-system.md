@@ -10,6 +10,13 @@ values once through `light-dark()`. Semantic colours exposed to
 Tailwind use `--color-cv-{role}`. Components consume semantic utilities such as
 `bg-cv-surface` and never primitives or Tailwind palette colours.
 
+The palette is deliberately monochrome: bright snow and platinum establish the light
+surfaces, while gunmetal and carbon black carry text, actions and the dark theme. The
+two supplied pale-slate values are named `pale-slate-light` (`#ced4da`) and
+`pale-slate` (`#adb5bd`) so both remain addressable without a duplicate token name.
+Semantic status roles share this neutral family; their meaning therefore comes from
+their Hebrew label, icon and structure rather than hue alone.
+
 The default follows `prefers-color-scheme`. The navigation toggle writes an explicit
 `data-theme="light"` or `data-theme="dark"` choice to the root and persists it under
 `cv-theme` in local storage. Until the first selection there is no attribute, so changes

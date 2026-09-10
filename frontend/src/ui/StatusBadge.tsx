@@ -5,9 +5,9 @@ import { type ClassValue, cx } from "./cx";
 import { type Tone, tonePresentation } from "./tone";
 
 const toneClasses: Record<Tone, string> = {
-  success: "border-cv-success/30 bg-cv-success/10 text-cv-success",
-  warning: "border-cv-warning/30 bg-cv-warning/10 text-cv-warning",
-  blocker: "border-cv-blocker/30 bg-cv-blocker/10 text-cv-blocker",
+  success: "border-cv-success/30 bg-cv-success-soft text-cv-success",
+  warning: "border-cv-warning/30 bg-cv-warning-soft text-cv-warning",
+  blocker: "border-cv-blocker/30 bg-cv-blocker-soft text-cv-blocker",
   info: "border-cv-info/30 bg-cv-info-soft text-cv-info",
   progress: "border-cv-accent/30 bg-cv-accent-soft text-cv-accent",
   neutral: "border-cv-border bg-cv-surface-muted text-cv-text-muted",

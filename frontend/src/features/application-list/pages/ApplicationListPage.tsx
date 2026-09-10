@@ -110,7 +110,7 @@ export const ApplicationListPage = () => {
   return (
     <PageShell actions={presetTabs} measure="wide" title="לוח מועמדויות">
       {closedResult === null ? null : (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-cv-success/20 bg-cv-success-soft/60 px-3.5 py-2.5 text-support text-cv-text">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-cv-success/20 bg-cv-success-soft px-3.5 py-2.5 text-support text-cv-text">
           <LiveRegion visuallyHidden={false}>
             <span dir="auto">המועמדות של {closedResult.label} נסגרה והועברה למועמדויות הסגורות.</span>
           </LiveRegion>

@@ -5,34 +5,18 @@
    change meaning without changing a single component utility. */
 :root {
   color-scheme: light dark;
-  --cv-neutral-0: light-dark(#ffffff, #151b26);
-  --cv-neutral-25: light-dark(#f8fafc, #1a2230);
-  --cv-neutral-50: light-dark(#f5f7fa, #202a3a);
-  --cv-neutral-100: light-dark(#f1f3f7, #0d121b);
-  --cv-neutral-150: light-dark(#eceff4, #111824);
-  --cv-neutral-200: light-dark(#e3e7ee, #2a3547);
-  --cv-neutral-225: light-dark(#e2e6ee, #344155);
-  --cv-neutral-600: light-dark(#5b6577, #aeb9ca);
-  --cv-neutral-900: light-dark(#111827, #f3f6fb);
-  --cv-blue-50: light-dark(#e6edfd, #172c53);
-  --cv-blue-500: light-dark(#2f6fed, #83b4ff);
-  --cv-blue-700: light-dark(#1d4ed8, #8bb9ff);
-  --cv-blue-800: light-dark(#1739a8, #b4d1ff);
-  --cv-blue-950: light-dark(#132a5e, #d7e5ff);
-  --cv-sky-50: light-dark(#e5f4fb, #102f3f);
-  --cv-sky-700: light-dark(#08658f, #74c9ed);
-  --cv-amber-50: light-dark(#fdf0dc, #3c2814);
-  --cv-amber-700: light-dark(#9c4a07, #f3b56f);
-  --cv-green-50: light-dark(#e4f5ea, #153322);
-  --cv-green-700: light-dark(#136c34, #7ed69b);
-  --cv-orange-50: light-dark(#fdf0d9, #3a2b12);
-  --cv-orange-700: light-dark(#8a4f08, #efbd72);
-  --cv-red-50: light-dark(#fce8e5, #421d1b);
-  --cv-red-700: light-dark(#c02617, #ff9b8f);
-  --cv-red-800: light-dark(#9a1e12, #ffc0b8);
+  --cv-bright-snow: light-dark(#f8f9fa, #29323a);
+  --cv-platinum: light-dark(#e9ecef, #343a40);
+  --cv-alabaster-grey: light-dark(#dee2e6, #495057);
+  --cv-pale-slate-light: light-dark(#ced4da, #6c757d);
+  --cv-pale-slate: light-dark(#adb5bd, #adb5bd);
+  --cv-slate-grey: light-dark(#6c757d, #ced4da);
+  --cv-iron-grey: light-dark(#495057, #dee2e6);
+  --cv-gunmetal: light-dark(#343a40, #e9ecef);
+  --cv-carbon-black: light-dark(#212529, #f8f9fa);
   --cv-shadow-edge: light-dark(transparent, rgb(255 255 255 / 0.08));
-  --cv-shadow-medium: light-dark(rgb(17 24 39 / 0.4), rgb(0 0 0 / 0.9));
-  --cv-shadow-strong: light-dark(rgb(17 24 39 / 0.45), rgb(0 0 0 / 0.95));
+  --cv-shadow-medium: light-dark(rgb(33 37 41 / 0.4), rgb(0 0 0 / 0.9));
+  --cv-shadow-strong: light-dark(rgb(33 37 41 / 0.45), rgb(0 0 0 / 0.95));
 }
 
 :root[data-theme="light"] {
@@ -49,8 +33,8 @@
    offline DraftFlow still renders Hebrew in a face designed for it. */
 
 @theme {
-  /* Cool document white. The canvas is a light neutral the app sits on, surfaces
-     are plain white above it, and the accent is a clear blue. Canvas and surface
+  /* Soft document white. The canvas is a light neutral the app sits on, surfaces
+     are bright snow above it, and the accent is gunmetal. Canvas and surface
      are two clearly different values, so a card reads as a card without needing a
      heavy border.
 
@@ -59,46 +43,46 @@
      soft chip and on plain surfaces, on-accent text on every filled button, and
      the focus ring against both canvas and surface. The status
      colours are deliberately darker than their mid-palette equivalents - a
-     lighter blue or green reads well as a fill but fails as 14px text on its own
+     lighter status colour reads well as a fill but fails as 14px text on its own
      soft chip, which is exactly how `StatusBadge` uses it. */
-  --color-cv-canvas: var(--cv-neutral-100);
-  --color-cv-canvas-strong: var(--cv-neutral-200);
-  --color-cv-surface: var(--cv-neutral-0);
-  --color-cv-surface-muted: var(--cv-neutral-50);
-  --color-cv-surface-raised: var(--cv-neutral-0);
-  --color-cv-surface-sunken: var(--cv-neutral-150);
-  --color-cv-border: var(--cv-neutral-225);
-  --color-cv-hairline: var(--cv-neutral-200);
-  --color-cv-nav-active-bg: var(--cv-neutral-50);
+  --color-cv-canvas: var(--cv-bright-snow);
+  --color-cv-canvas-strong: var(--cv-alabaster-grey);
+  --color-cv-surface: light-dark(#fefefe, #212529);
+  --color-cv-surface-muted: var(--cv-platinum);
+  --color-cv-surface-raised: light-dark(#fefefe, #212529);
+  --color-cv-surface-sunken: var(--cv-platinum);
+  --color-cv-border: var(--cv-alabaster-grey);
+  --color-cv-hairline: var(--cv-alabaster-grey);
+  --color-cv-nav-active-bg: var(--cv-platinum);
   /* Deliberate semantic alias: navigation may diverge from the global accent later. */
   --color-cv-nav-active-indicator: var(--color-cv-accent);
   /* Strong edges remain available for checkboxes and multiline editors. */
-  --color-cv-border-strong: var(--cv-neutral-600);
+  --color-cv-border-strong: var(--cv-pale-slate);
   /* Input/select reference: Main.dc.html. */
-  --color-cv-field-border: var(--cv-neutral-200);
-  --color-cv-field-background: var(--cv-neutral-25);
-  --color-cv-field-focus: var(--cv-blue-500);
+  --color-cv-field-border: var(--cv-alabaster-grey);
+  --color-cv-field-background: var(--cv-bright-snow);
+  --color-cv-field-focus: var(--cv-iron-grey);
 
   --text-field: 1rem;
-  --color-cv-text: var(--cv-neutral-900);
-  --color-cv-text-muted: var(--cv-neutral-600);
-  --color-cv-accent: var(--cv-blue-700);
-  --color-cv-accent-hover: var(--cv-blue-800);
-  --color-cv-accent-soft: var(--cv-blue-50);
-  --color-cv-info: var(--cv-sky-700);
-  --color-cv-info-soft: var(--cv-sky-50);
-  --color-cv-brand-deep: var(--cv-blue-950);
-  --color-cv-brass: var(--cv-amber-700);
-  --color-cv-brass-soft: var(--cv-amber-50);
-  --color-cv-success: var(--cv-green-700);
-  --color-cv-success-soft: var(--cv-green-50);
-  --color-cv-warning: var(--cv-orange-700);
-  --color-cv-warning-soft: var(--cv-orange-50);
-  --color-cv-blocker: var(--cv-red-700);
-  --color-cv-blocker-hover: var(--cv-red-800);
-  --color-cv-blocker-soft: var(--cv-red-50);
-  --color-cv-focus: var(--cv-blue-700);
-  --color-cv-on-accent: var(--cv-neutral-0);
+  --color-cv-text: var(--cv-carbon-black);
+  --color-cv-text-muted: var(--cv-iron-grey);
+  --color-cv-accent: var(--cv-gunmetal);
+  --color-cv-accent-hover: var(--cv-carbon-black);
+  --color-cv-accent-soft: var(--cv-platinum);
+  --color-cv-info: var(--cv-iron-grey);
+  --color-cv-info-soft: var(--cv-platinum);
+  --color-cv-brand-deep: var(--cv-carbon-black);
+  --color-cv-brass: var(--cv-slate-grey);
+  --color-cv-brass-soft: var(--cv-bright-snow);
+  --color-cv-success: var(--cv-gunmetal);
+  --color-cv-success-soft: var(--cv-platinum);
+  --color-cv-warning: var(--cv-iron-grey);
+  --color-cv-warning-soft: var(--cv-alabaster-grey);
+  --color-cv-blocker: var(--cv-carbon-black);
+  --color-cv-blocker-hover: var(--cv-gunmetal);
+  --color-cv-blocker-soft: var(--cv-alabaster-grey);
+  --color-cv-focus: var(--cv-carbon-black);
+  --color-cv-on-accent: var(--cv-bright-snow);
   --font-sans:
     "Heebo", "Assistant", "Rubik", "Arial Hebrew", "Noto Sans Hebrew", system-ui, -apple-system, "Segoe UI", Arial,
     sans-serif;
@@ -485,9 +469,9 @@ dialog {
 }
 
 dialog::backdrop {
-  /* The same cool neutral the shadows are cast in, so the scrim dims the page
+  /* The same neutral charcoal the shadows are cast in, so the scrim dims the page
      rather than tinting it. */
-  background: rgb(17 24 39 / 0.45);
+  background: rgb(33 37 41 / 0.45);
   backdrop-filter: blur(2px);
   opacity: 1;
   transition:

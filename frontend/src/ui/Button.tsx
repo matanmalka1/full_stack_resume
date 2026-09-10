@@ -24,8 +24,8 @@ const sizeButtonClasses = {
    Disabled is a flat neutral fill, the same idiom every text control on this design
    system already disables with (`Input`, `Select`: `disabled:bg-cv-surface-muted
    disabled:text-cv-text-muted`) - not the accent colour dimmed by opacity. Dimming
-   `cv-accent` with opacity keeps its hue: at 60% over a white surface the saturated blue
-   composites to a pale blue-violet that a reader can still mistake for the same button,
+   `cv-accent` with opacity keeps its hue: at 60% over a white surface the brand colour
+   still reads as a faded version of the same button and can be mistaken for something
    pressable. Flattening to the surface-muted/text-muted pair reads as "not this one"
    regardless of which variant it disables. */
 const variantButtonClasses: Record<ButtonVariant, string> = {

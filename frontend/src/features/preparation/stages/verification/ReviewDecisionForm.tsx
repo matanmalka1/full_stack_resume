@@ -82,7 +82,7 @@ const RiskAcknowledgement = ({
   disabled: boolean;
   onChange: (checked: boolean) => void;
 }) => (
-  <div className="rounded-control border border-cv-warning/40 border-s-2 border-s-cv-warning bg-cv-warning-soft/60 p-4">
+  <div className="rounded-control border border-cv-warning/40 border-s-2 border-s-cv-warning bg-cv-warning-soft p-4">
     <Switch checked={checked} description={description} disabled={disabled} onChange={onChange}>
       {children}
     </Switch>

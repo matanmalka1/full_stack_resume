@@ -59,10 +59,25 @@ const collectFiles = (dir) =>
     return statSync(full).isDirectory() ? collectFiles(full) : /\.(ts|tsx)$/.test(full) ? [full] : [];
   });
 
-const readTokens = (prefix) => {
+/* The at-rule itself, anchored to the start of a line: the file's opening comment
+   names `@theme` in prose, and matching that instead sliced the comment plus the
+   private `:root` palette - a block holding no `--color-*` token at all, so every
+   semantic utility in the product read as unknown. */
+const themeBlock = () => {
   const theme = readFileSync(stylesPath, "utf8");
-  const block = theme.slice(theme.indexOf("@theme"), theme.indexOf("\n}", theme.indexOf("@theme")));
-  return new Set([...block.matchAll(new RegExp(`--${prefix}-([a-z0-9-]+):`, "g"))].map((match) => match[1]));
+  const start = theme.search(/^@theme\s*\{/m);
+  if (start === -1) {
+    throw new Error("no @theme block in src/styles.css");
+  }
+
+  const end = theme.indexOf("\n}", start);
+  return theme.slice(start, end === -1 ? undefined : end);
+};
+
+const readTokens = (prefix) => {
+  return new Set(
+    [...themeBlock().matchAll(new RegExp(`--${prefix}-([a-z0-9-]+):`, "g"))].map((match) => match[1]),
+  );
 };
 
 const colorTokens = readTokens("color");
