@@ -102,7 +102,9 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, removal }
             title="השורה מנותקת מהעובדה הקנונית"
             tone="warning"
           >
-            <p dir="auto">העריכה משנה את הניסוח בלי לשנות את מה שעומד מאחורי השורה. שחזור הטקסט הקודם מחבר אותה מחדש.</p>
+            <p dir="auto">
+              העריכה משנה את הניסוח בלי לשנות את מה שעומד מאחורי השורה. שחזור הטקסט הקודם מחבר אותה מחדש.
+            </p>
           </Callout>
         )}
 

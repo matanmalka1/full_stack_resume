@@ -1,4 +1,4 @@
-import { classificationFromAnalysis } from "@/api/analyses";
+import { classificationFromAnalysis, lowFitAcceptedFromAnalysis } from "@/api/analyses";
 import type { ApplicationDetail } from "@/api/contracts";
 import { Disclosure } from "@/ui/Disclosure";
 import { openDecisionCount, openDecisions, resolvedByReviewDecision } from "../model/reviewDecisions";
@@ -38,22 +38,17 @@ export const PreparationView = ({
   const plan = workflowActionPlan(detail);
   const open = openDecisions(detail);
   const decisionCount = openDecisionCount(open);
+  const lowFitAccepted = lowFitAcceptedFromAnalysis(detail);
   const hasRecommendation = detail.review_reasons.some(resolvedByReviewDecision) || detail.recommended_action != null;
   const selectionPlanAction = plan.createSelectionPlan;
 
-  /* The banner is the verdict for the phase that acts on it: while there is no draft yet,
-     the analysis fit is what decides whether to draft, and an open decision is always its
-     to announce. Once a draft exists and nothing is open, that verdict is history - the
-     work has moved to approving a validated draft, and a warning reading "a decision is
-     required before creating a draft" beside the draft it already produced is a
-     contradiction. The diagnosis stays in the collapsed disclosure below; it is simply no
-     longer the headline of a step it is behind. The pre-analysis and superseded notes are
-     always shown, because there is no later step standing in for them. */
-  const draftExists = detail.working_draft_state !== "none";
+  /* Open decisions stay visible until answered. A recorded low-fit acceptance remains as
+     useful history, but with copy that names it as closed. The absence of a draft is not
+     itself a reason to keep an otherwise completed verdict on screen. */
   const incompleteAnalysisAccepted =
     classification?.fit === "unknown" && !open.incompleteAnalysis && detail.preparation_state !== "needs_analysis";
   const showBanner =
-    supersededAnalysis || classification === null || decisionCount > 0 || !draftExists || incompleteAnalysisAccepted;
+    supersededAnalysis || classification === null || decisionCount > 0 || lowFitAccepted || incompleteAnalysisAccepted;
 
   return (
     <div className="flex flex-col gap-4">
@@ -66,6 +61,8 @@ export const PreparationView = ({
           classification={classification}
           hasOpenDecisions={decisionCount > 0}
           incompleteAnalysisAccepted={incompleteAnalysisAccepted}
+          lowFitAccepted={lowFitAccepted}
+          lowFitDecisionOpen={open.fit}
           supersededAnalysis={supersededAnalysis}
         />
       ) : null}

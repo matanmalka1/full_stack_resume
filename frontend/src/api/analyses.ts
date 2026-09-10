@@ -361,3 +361,15 @@ export const classificationFromAnalysis = (detail: ApplicationDetail): Classific
     approvalReasons: stringsFrom(analysis.approval_reasons),
   };
 };
+
+/* Acceptances are durable facts on the analysis, while `review_reasons` says whether
+   they are still being requested. Read the exact stored value so an absent reason alone
+   is never presented as proof that the user approved low fit. */
+export const lowFitAcceptedFromAnalysis = (detail: ApplicationDetail): boolean => {
+  const record = detail.latest_analysis;
+  if (record == null || record.id !== detail.active_analysis_id) {
+    return false;
+  }
+  const override = isRecord(record.analysis.user_override) ? record.analysis.user_override : {};
+  return override.fit === "accepted-low-fit";
+};

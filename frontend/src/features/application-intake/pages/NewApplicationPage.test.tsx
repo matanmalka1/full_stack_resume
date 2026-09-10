@@ -449,7 +449,9 @@ describe("NewApplicationPage", () => {
   it("shows a refused creation as a blocker with the server's safe detail", async () => {
     stubFetch({
       [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [] })],
-      [CREATE_PATH]: [problemResponse(412, "PRECONDITION_FAILED", "job text is required")],
+      /* A code this client's table does not translate, so the fallback path is what is
+         under test: the server's own `detail` sentence, verbatim. */
+      [CREATE_PATH]: [problemResponse(412, "UNRECOGNIZED_REFUSAL", "job text is required")],
     });
     renderPage();
 
@@ -463,7 +465,7 @@ describe("NewApplicationPage", () => {
        refusal in a vocabulary the reader cannot act on. What this test guards is that a
        refusal is reported as a blocker carrying the server's safe detail - never the
        exception text, and never a message this screen invented. */
-    expect(screen.queryByText(/PRECONDITION_FAILED/)).toBeNull();
+    expect(screen.queryByText(/UNRECOGNIZED_REFUSAL/)).toBeNull();
   });
 
   it("refuses to submit an empty form and never calls the API", async () => {

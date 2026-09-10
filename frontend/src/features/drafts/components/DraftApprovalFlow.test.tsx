@@ -228,7 +228,9 @@ describe("DraftApprovalDialog", () => {
     fireEvent.click(openApproval);
     fireEvent.click(await screen.findByRole("button", { name: "אישור הגרסה" }));
     const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("approval changed");
+    /* STATE_CONFLICT is a known code, so the callout shows the client's own translation
+       rather than the server's literal `detail` - the assertion is on that text. */
+    expect(dialog).toHaveTextContent("הפעולה מתנגשת במצב העדכני. יש לרענן ולנסות שוב.");
     expect(dialog).toHaveAttribute("open");
   });
 

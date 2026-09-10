@@ -77,15 +77,19 @@ export const problemFieldIssues = (problem: ProblemDetails): string[] => {
   const issues = problem.context?.issues;
   if (!Array.isArray(issues)) return [];
 
-  return issues.flatMap((issue) => {
-    if (typeof issue !== "object" || issue === null || !("location" in issue) || !Array.isArray(issue.location)) {
-      return [];
-    }
-    const field = [...issue.location]
-      .reverse()
-      .find((part): part is string => typeof part === "string" && part !== "body");
-    return field === undefined ? [] : [`${fieldLabels[field] ?? "אחד השדות"}: הערך אינו תקין.`];
-  });
+  return [
+    ...new Set(
+      issues.flatMap((issue) => {
+        if (typeof issue !== "object" || issue === null || !("location" in issue) || !Array.isArray(issue.location)) {
+          return [];
+        }
+        const field = issue.location
+          .toReversed()
+          .find((part: unknown): part is string => typeof part === "string" && part !== "body");
+        return field === undefined ? [] : [`${fieldLabels[field] ?? "אחד השדות"}: הערך אינו תקין.`];
+      }),
+    ),
+  ];
 };
 
 const validationIssueMessages: Record<string, string> = {

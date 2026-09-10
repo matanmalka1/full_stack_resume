@@ -18,7 +18,15 @@ const problemDetailsFrom = (error: unknown): ProblemDetails | null => {
   }
 
   const problem = error.problem;
-  if (typeof problem !== "object" || problem === null || !("title" in problem) || !("detail" in problem)) {
+  if (
+    typeof problem !== "object" ||
+    problem === null ||
+    !("title" in problem) ||
+    !("detail" in problem) ||
+    !("code" in problem) ||
+    !("type" in problem) ||
+    !("status" in problem)
+  ) {
     return null;
   }
 
@@ -56,8 +64,8 @@ export const ErrorCallout = ({
       <p dir={presentation?.known === false ? "auto" : undefined}>{presentation?.detail ?? fallbackDetail}</p>
       {fieldIssues.length === 0 ? null : (
         <ul className="mt-2 list-disc space-y-1 ps-5">
-          {fieldIssues.map((issue, index) => (
-            <li key={`${index}:${issue}`}>{issue}</li>
+          {fieldIssues.map((issue) => (
+            <li key={issue}>{issue}</li>
           ))}
         </ul>
       )}

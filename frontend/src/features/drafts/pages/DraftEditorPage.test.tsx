@@ -679,10 +679,12 @@ describe("DraftEditorPage selection changes", () => {
       selectionChange: () =>
         jsonResponse(
           {
-            type: "about:blank#precondition_failed",
-            title: "Precondition Failed",
+            type: "about:blank#unrecognized-refusal",
+            title: "Unrecognized Refusal",
+            /* A code this client's table does not translate, so the backend's own detail
+               is what reaches the screen verbatim - which is the point under test. */
             status: 412,
-            code: "PRECONDITION_FAILED",
+            code: "UNRECOGNIZED_REFUSAL",
             detail: "this draft carries manual wording that a deterministic rebuild would discard",
           },
           412,

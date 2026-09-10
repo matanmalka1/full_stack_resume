@@ -32,6 +32,8 @@ const bannerContent = (
   hasOpenDecisions: boolean,
   supersededAnalysis: boolean,
   incompleteAnalysisAccepted: boolean,
+  lowFitDecisionOpen: boolean,
+  lowFitAccepted: boolean,
 ): BannerContent => {
   if (supersededAnalysis) {
     return {
@@ -57,16 +59,29 @@ const bannerContent = (
     };
   }
 
+  if (classification.fit === "low" && lowFitAccepted) {
+    return {
+      body: "המשך התהליך למרות ההתאמה הנמוכה אושר ונשמר כהחלטה על הניתוח הזה.",
+      title: "המשך עם התאמה נמוכה אושר",
+      tone: "neutral",
+    };
+  }
+
   /* Fit and confidence are recorded independently - a classification may carry one
      without the other - so the headline states whichever exists rather than a sentence
      that would be wrong when only one is present. */
   const fitPart = classification.fit === null ? "הניתוח הושלם" : fitLabels[classification.fit];
   const confidencePart =
     classification.confidence === null ? null : `רמת ביטחון ${confidenceText(classification.confidence)}`;
-  const explanation =
-    classification.fit === null
-      ? "הניתוח נשמר ללא דירוג התאמה. פרטי האבחון המלאים מראים מה כן נקרא מהמשרה."
-      : fitDescriptions[classification.fit];
+  const explanation = (() => {
+    if (classification.fit === null) {
+      return "הניתוח נשמר ללא דירוג התאמה. פרטי האבחון המלאים מראים מה כן נקרא מהמשרה.";
+    }
+    if (classification.fit === "low" && !lowFitDecisionOpen) {
+      return "דירוג ההתאמה שנקבע הוא נמוך. פרטי האבחון המלאים מראים את הפערים שנמצאו.";
+    }
+    return fitDescriptions[classification.fit];
+  })();
 
   return {
     body: explanation,
@@ -86,6 +101,8 @@ export const AnalysisStatusBanner = ({
   hasOpenDecisions,
   supersededAnalysis,
   incompleteAnalysisAccepted = false,
+  lowFitDecisionOpen,
+  lowFitAccepted,
 }: {
   classification: Classification | null;
   hasOpenDecisions: boolean;
@@ -93,12 +110,16 @@ export const AnalysisStatusBanner = ({
   /* Once the dedicated review reason has been resolved, the unread analysis is history
      rather than an instruction that still claims a decision is required. */
   incompleteAnalysisAccepted?: boolean;
+  lowFitDecisionOpen: boolean;
+  lowFitAccepted: boolean;
 }) => {
   const { body, title, tone } = bannerContent(
     classification,
     hasOpenDecisions,
     supersededAnalysis,
     incompleteAnalysisAccepted,
+    lowFitDecisionOpen,
+    lowFitAccepted,
   );
 
   return (

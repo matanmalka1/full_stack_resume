@@ -317,7 +317,9 @@ describe("RecruitmentManagerButton", () => {
     fireEvent.change(await screen.findByLabelText("הפעולה הבאה"), { target: { value: "Try again tomorrow" } });
     fireEvent.click(screen.getByRole("button", { name: "שמירת שינויים" }));
 
-    expect(await screen.findByText("Invalid next action")).toBeInTheDocument();
+    /* The server's own `title` is never shown, known code or not - only `detail` falls
+       back to the server's literal sentence for a code this client's table lacks. */
+    expect(await screen.findByText("הבקשה נכשלה")).toBeInTheDocument();
     expect(screen.getByText("הפעולה השתנתה בשרת. יש לרענן ולנסות שוב.")).toBeInTheDocument();
   });
 

@@ -145,7 +145,7 @@ describe("the review decision, on the Application screen", () => {
   it("states the analysis verdict above the decisions it explains", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(() => Promise.resolve(jsonResponse(detail()))),
+      vi.fn(() => Promise.resolve(jsonResponse(detail({ review_reasons: [reason("LOW_FIT_REQUIRES_ACCEPTANCE")] })))),
     );
 
     renderPage();
@@ -156,6 +156,49 @@ describe("the review decision, on the Application screen", () => {
     const banner = await screen.findByText(/התאמה נמוכה מחייבת אישור מפורש/);
     const decision = screen.getByRole("heading", { name: "החלטות נדרשות כדי להמשיך" });
     expect(banner.compareDocumentPosition(decision) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("presents an accepted low-fit decision as closed after the projection refreshes", async () => {
+    let applied = false;
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      if (String(input) === APPLY_PATH) {
+        applied = true;
+        return Promise.resolve(
+          jsonResponse(
+            {
+              application_id: "app-1",
+              job_analysis_id: "analysis-2",
+              selection_plan_id: "plan-2",
+              created_analysis: true,
+              analysis: {},
+              plan: {},
+            },
+            201,
+          ),
+        );
+      }
+      const refreshed = detail({
+        review_reasons: [],
+        preparation_state: "ready_to_draft",
+        available_actions: ["create_draft"],
+        recommended_action: "create_draft",
+      });
+      refreshed.latest_analysis!.analysis.user_override = { fit: "accepted-low-fit" };
+      return Promise.resolve(
+        jsonResponse(applied ? refreshed : detail({ review_reasons: [reason("LOW_FIT_REQUIRES_ACCEPTANCE")] })),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("switch", { name: /ההתאמה הנמוכה/ }));
+    fireEvent.click(screen.getByRole("button", { name: "שמירת ההחלטות" }));
+
+    expect(await screen.findByText("המשך עם התאמה נמוכה אושר")).toBeInTheDocument();
+    expect(screen.getByText(/נשמר כהחלטה על הניתוח הזה/)).toBeInTheDocument();
+    expect(screen.queryByText(/התאמה נמוכה מחייבת אישור מפורש/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "יצירת טיוטה" })).toBeInTheDocument();
   });
 
   it("requires every displayed decision before enabling the single commit", async () => {
@@ -347,7 +390,9 @@ describe("the review decision, on the Application screen", () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url === APPLY_PATH) {
-        return Promise.resolve(problemResponse("PRECONDITION_FAILED", "the submitted decisions change nothing"));
+        /* A code this client's table does not translate, so the fallback path is what is
+           under test: the server's own `detail` sentence, verbatim. */
+        return Promise.resolve(problemResponse("UNRECOGNIZED_REFUSAL", "the submitted decisions change nothing"));
       }
       return Promise.resolve(jsonResponse(detail()));
     });
