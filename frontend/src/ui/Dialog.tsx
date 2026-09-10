@@ -60,7 +60,7 @@ export const Dialog = ({
     <dialog
       aria-labelledby={headingId}
       className={surfaceClasses(
-        `${heightClass} w-full ${
+        `${heightClass} m-auto w-full ${
           size === "wide" ? "max-w-3xl" : "max-w-xl"
         } overflow-hidden bg-cv-surface p-0 text-cv-text shadow-overlay backdrop:transition-opacity`,
       )}

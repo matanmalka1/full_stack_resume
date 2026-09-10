@@ -38,12 +38,16 @@ export const ValidationReportView = ({ report }: { report: ValidationReport }) =
         <StatusBadge className="gap-1.5 px-2.5" icon={CircleCheck} tone="success">
           {passedGroups} קבוצות עברו
         </StatusBadge>
-        <StatusBadge className="gap-1.5 px-2.5" icon={ShieldAlert} tone="blocker">
-          {hard.length} חסימות
-        </StatusBadge>
-        <StatusBadge className="gap-1.5 px-2.5" icon={TriangleAlert} tone="warning">
-          {warnings.length} אזהרות
-        </StatusBadge>
+        {hard.length === 0 ? null : (
+          <StatusBadge className="gap-1.5 px-2.5" icon={ShieldAlert} tone="blocker">
+            {hard.length} חסימות
+          </StatusBadge>
+        )}
+        {warnings.length === 0 ? null : (
+          <StatusBadge className="gap-1.5 px-2.5" icon={TriangleAlert} tone="warning">
+            {warnings.length} אזהרות
+          </StatusBadge>
+        )}
       </div>
 
       {/* Blockers in full: each is a thing to go and fix, and its resolution line is the
