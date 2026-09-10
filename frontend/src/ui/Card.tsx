@@ -1,16 +1,14 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
-import { surfaceClasses } from "./surface";
+import { flatSurfaceClasses } from "./surface";
 
 interface CardProps extends HTMLAttributes<HTMLElement> {
   children: ReactNode;
 }
 
-/* Shared radius+border pairing for every bordered surface. Background, shadow, and
-   padding vary per call site (muted/raised bg, inner/document/floating shadow, custom
-   padding) and are supplied via className rather than baked in, since this project's
-   `cx` is a plain concat with no conflict resolution: a default here would collide
-   unpredictably with a caller's override. */
+/* A Card is a content boundary, not automatically a floating object. Its default is
+   therefore a flat hairline; dialogs, menus and popovers opt into rounded elevation
+   through `surfaceClasses` at their own call sites. */
 export const Card = ({ children, className, ...rest }: CardProps) => {
   /* `<output>` carries an implicit "status" role, so a status card becomes one instead
      of stamping `role="status"` on a generic section; any other role (e.g. "alert",
@@ -18,14 +16,14 @@ export const Card = ({ children, className, ...rest }: CardProps) => {
   if (rest.role === "status") {
     const { role: _role, ...outputRest } = rest;
     return (
-      <output className={surfaceClasses(className)} {...outputRest}>
+      <output className={flatSurfaceClasses(className)} {...outputRest}>
         {children}
       </output>
     );
   }
 
   return (
-    <section className={surfaceClasses(className)} {...rest}>
+    <section className={flatSurfaceClasses(className)} {...rest}>
       {children}
     </section>
   );

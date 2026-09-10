@@ -5,7 +5,7 @@ import { preparationStateLabels } from "@/features/preparation";
 import { Button } from "@/ui/Button";
 import { Input } from "@/ui/Input";
 import { Select } from "@/ui/Select";
-import { surfaceClasses } from "@/ui/surface";
+import { flatSurfaceClasses } from "@/ui/surface";
 import { ViewSwitch } from "@/ui/ViewSwitch";
 import { type ViewMode, viewModeOptions } from "../model/applicationViews";
 import { type RecruitmentStageId, recruitmentStages } from "../model/recruitmentStages";
@@ -83,7 +83,7 @@ export const ApplicationListToolbar = ({
   <div className="flex flex-col gap-2">
     <search
       aria-label="סינון וחיפוש מועמדויות"
-      className={surfaceClasses("flex flex-wrap items-center gap-2 bg-cv-surface px-3 py-2.5 shadow-surface")}
+      className={flatSurfaceClasses("flex flex-wrap items-center gap-2 bg-cv-surface px-3 py-2.5")}
     >
       <label className="sr-only" htmlFor="list-search">
         חיפוש במועמדויות

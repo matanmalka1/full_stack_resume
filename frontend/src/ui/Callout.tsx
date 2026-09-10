@@ -4,12 +4,12 @@ import { type ClassValue, cx } from "./cx";
 import { type Tone, tonePresentation } from "./tone";
 
 const toneClasses: Record<Tone, string> = {
-  success: "border-cv-success/20 border-s-cv-success bg-cv-success-soft/60",
-  warning: "border-cv-warning/20 border-s-cv-warning bg-cv-warning-soft/60",
-  blocker: "border-cv-blocker/20 border-s-cv-blocker bg-cv-blocker-soft/60",
-  info: "border-cv-info/20 border-s-cv-info bg-cv-info-soft/60",
-  progress: "border-cv-accent/20 border-s-cv-accent bg-cv-accent-soft/60",
-  neutral: "border-cv-border border-s-cv-text-muted bg-cv-surface-muted",
+  success: "border-s-cv-success",
+  warning: "border-s-cv-warning",
+  blocker: "border-s-cv-blocker",
+  info: "border-s-cv-info",
+  progress: "border-s-cv-accent",
+  neutral: "border-s-cv-text-muted",
 };
 
 const toneIconClasses: Record<Tone, string> = {
@@ -60,7 +60,7 @@ export const Callout = ({ action, children, className, emphasis, role, title, to
   return (
     <Tag
       className={cx(
-        banner ? "rounded-surface border p-card-padding" : "rounded-control border border-s-2 px-3.5 py-2.5",
+        banner ? "rounded-surface border p-card-padding" : "border-s-2 py-1 ps-3",
         banner ? bannerToneClasses[tone] : toneClasses[tone],
         className,
       )}
@@ -85,7 +85,7 @@ export const Callout = ({ action, children, className, emphasis, role, title, to
             <div
               className={cx(
                 "leading-6",
-                banner ? cx("text-body font-bold", toneIconClasses[tone]) : "text-support font-semibold text-cv-text",
+                banner ? cx("text-body font-bold", toneIconClasses[tone]) : cx("text-support font-semibold", toneIconClasses[tone]),
               )}
               dir="auto"
             >
@@ -100,7 +100,7 @@ export const Callout = ({ action, children, className, emphasis, role, title, to
               {children}
             </div>
           )}
-          {action === undefined ? null : <div className="mt-2.5">{action}</div>}
+          {action === undefined ? null : <div className="mt-1.5 inline-flex">{action}</div>}
         </div>
       </div>
     </Tag>

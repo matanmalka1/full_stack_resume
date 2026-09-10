@@ -52,16 +52,20 @@ export const PageShell = ({
       )}
     >
       {navigation === undefined ? null : <div className="mb-5">{navigation}</div>}
-      {landmark === undefined ? null : <div className="mb-5">{landmark}</div>}
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 border-b border-cv-border pb-2">
+      <div className={cx(landmark === undefined ? undefined : "lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-page-gap")}>
+        {landmark === undefined ? null : <aside className="mb-5 lg:mb-0">{landmark}</aside>}
         <div className="min-w-0">
-          <PageHeading description={description} eyebrow={eyebrow} eyebrowTone={eyebrowTone} id="route-heading">
-            {title}
-          </PageHeading>
+          <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 border-b border-cv-hairline pb-2">
+            <div className="min-w-0">
+              <PageHeading description={description} eyebrow={eyebrow} eyebrowTone={eyebrowTone} id="route-heading">
+                {title}
+              </PageHeading>
+            </div>
+            {actions}
+          </div>
+          {children === undefined ? null : <div className="mt-section-gap flex flex-col gap-section-gap">{children}</div>}
         </div>
-        {actions}
       </div>
-      {children === undefined ? null : <div className="mt-6 flex flex-col gap-6">{children}</div>}
     </section>
   );
 };

@@ -6,7 +6,6 @@ import { buttonClasses } from "@/ui/Button";
 import { GlobalSearch } from "../search/GlobalSearch";
 import { boardPath } from "../boardReturn";
 import { routePaths } from "../routePaths";
-import { useInWorkflow } from "../workflowRoutes";
 import { AppNavigation } from "./AppNavigation";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -22,61 +21,40 @@ const GlobalActivityBar = () => {
   }
 
   return (
-    <span aria-hidden="true" className="absolute inset-x-0 bottom-0 h-0.5 bg-cv-accent motion-safe:animate-pulse" />
+    <span
+      aria-hidden="true"
+      className="absolute inset-x-0 bottom-0 h-0.5 bg-cv-accent motion-safe:animate-pulse lg:fixed lg:inset-x-0 lg:top-0 lg:bottom-auto lg:z-toast"
+    />
   );
 };
-
-/* The shell masthead: where the reader is (primary navigation), how to get anywhere
-   (the wordmark and the search palette), and the one action that is global rather than
-   any page's - starting a new Application.
-
-   It knows nothing about the record on screen. An Application names itself in its own
-   heading, and the header carrying a second copy of that made the record's identity a
-   shell concern.
-
-   Inside a wizard step it draws itself down to the wordmark. Primary navigation, search,
-   and the new-Application button are how a reader chooses which work to do; on a step
-   they are more destinations sitting over the one thing the step is
-   asking, and the "משרה חדשה" button in particular offers starting a second Application
-   above the one being prepared. The step keeps its own way out - the board link above the
-   spine - so the global destinations remain reachable after deliberately leaving the flow. */
 export const AppHeader = () => {
-  const inWorkflow = useInWorkflow();
-
   return (
-    <header className="sticky top-0 z-navigation border-b border-cv-border bg-cv-surface/85 backdrop-blur-xl">
-      <div className="page-gutter">
-        <div className="page-frame flex min-h-16 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2">
-          <div className="flex min-w-0 items-center gap-4 sm:gap-6">
+    <header className="sticky top-0 z-navigation border-b border-cv-hairline bg-cv-canvas/90 backdrop-blur-xl lg:col-start-1 lg:row-start-1 lg:h-screen lg:border-b-0 lg:border-e lg:bg-cv-canvas lg:backdrop-blur-none">
+      <div className="page-gutter lg:flex lg:h-full lg:flex-col lg:px-4 lg:py-5">
+        <div className="page-frame flex min-h-16 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2 lg:mx-0 lg:min-h-0 lg:w-full lg:flex-1 lg:flex-col lg:items-stretch lg:justify-start lg:gap-6 lg:py-0">
+          <div className="flex min-w-0 items-center gap-4 sm:gap-6 lg:flex-col lg:items-stretch lg:gap-6">
             <Link className="group shrink-0 rounded-control" to={boardPath()}>
               <span className="block text-heading-sm font-extrabold tracking-tight text-cv-text">קורות חיים</span>
               <span className="block h-0.5 w-8 bg-cv-accent transition-all duration-200 group-hover:w-full" />
             </Link>
 
-            {inWorkflow ? null : (
-              <>
-                <div className="hidden h-5 w-px bg-cv-border sm:block" />
-
-                <AppNavigation />
-              </>
-            )}
+            <div className="hidden h-5 w-px bg-cv-hairline sm:block lg:hidden" />
+            <AppNavigation />
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 lg:mt-auto lg:flex-wrap">
             <ThemeToggle />
 
-            <GlobalSearch showTrigger={!inWorkflow} />
+            <GlobalSearch showTrigger />
 
-            {inWorkflow ? null : (
-              <Link
-                aria-label="קליטת משרה חדשה"
-                className={buttonClasses("primary", undefined, "compact")}
-                to={routePaths.newApplication}
-              >
-                <Plus aria-hidden="true" className="size-4" />
-                <span className="hidden sm:inline">משרה חדשה</span>
-              </Link>
-            )}
+            <Link
+              aria-label="קליטת משרה חדשה"
+              className={buttonClasses("primary", "lg:flex-1", "compact")}
+              to={routePaths.newApplication}
+            >
+              <Plus aria-hidden="true" className="size-4" />
+              <span className="hidden sm:inline">משרה חדשה</span>
+            </Link>
           </div>
         </div>
       </div>

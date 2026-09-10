@@ -8,6 +8,8 @@ describe("Callout", () => {
 
     expect(screen.getByText("מידע")).toBeInTheDocument();
     expect(screen.getByText("מידע")).toHaveClass("text-cv-info");
-    expect(screen.getByText("הנתונים עודכנו").closest("div.rounded-control")).toHaveClass("bg-cv-info-soft/60");
+    const callout = screen.getByText("הנתונים עודכנו").closest("div.border-s-2");
+    expect(callout).toHaveClass("border-s-cv-info");
+    expect(callout).not.toHaveClass("bg-cv-info-soft/60");
   });
 });

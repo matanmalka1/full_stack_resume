@@ -5,3 +5,7 @@ import { cx } from "./cx";
    dialogs, and document previews semantically intact instead of forcing them through
    the section-based Card component. */
 export const surfaceClasses = (className?: string): string => cx("rounded-surface border border-cv-border", className);
+
+/* The default content separator: flat, square and shadowless. Rounded surfaces are
+   reserved for controls and content that genuinely floats above the page. */
+export const flatSurfaceClasses = (className?: string): string => cx("border border-cv-hairline", className);

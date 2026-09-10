@@ -54,7 +54,7 @@ describe("workflow shell", () => {
     expect(screen.getByRole("link", { name: "מאגר העובדות" })).toHaveAttribute("aria-current", "page");
   });
 
-  it("hides global destinations but keeps the command palette shortcut in a wizard step", () => {
+  it("keeps the persistent navigation available in a wizard step", () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
         <MemoryRouter initialEntries={["/applications/app-1/draft"]}>
@@ -63,8 +63,8 @@ describe("workflow shell", () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.queryByRole("button", { name: "מעבר מהיר למועמדות (Cmd+K)" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "קליטת משרה חדשה" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "מעבר מהיר למועמדות (Cmd+K)" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "קליטת משרה חדשה" })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: "k", metaKey: true });
     expect(screen.getByRole("dialog", { name: "מעבר מהיר למועמדות" })).toBeInTheDocument();

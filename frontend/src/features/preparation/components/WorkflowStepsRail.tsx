@@ -3,7 +3,6 @@ import { Fragment } from "react";
 import { Check } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { surfaceClasses } from "@/ui/surface";
 import { cx } from "@/ui/cx";
 
 type WorkflowStepState = "complete" | "current" | "upcoming";
@@ -24,7 +23,7 @@ interface WorkflowStepsRailProps {
    set to scroll, what it actually did was cut the flow's last steps off the frame at the
    widths this screen is read at. Nothing here is positioned outside the box, so the corners
    survive without it. */
-const railClasses = surfaceClasses("w-full min-w-0 bg-cv-surface shadow-surface");
+const railClasses = "w-full min-w-0";
 
 const stepMarkClasses: Record<WorkflowStepState, string> = {
   complete: "border-cv-success/25 bg-cv-success-soft text-cv-success",
@@ -48,12 +47,12 @@ const StepMark = ({ index, state }: { index: number; state: WorkflowStepState })
   <span
     aria-hidden="true"
     className={cx(
-      "relative z-content-raised flex size-6 shrink-0 items-center justify-center rounded-pill border",
-      "text-[0.6875rem] font-bold transition-[background-color,border-color,color] duration-200",
+      "relative z-content-raised flex size-8 shrink-0 items-center justify-center rounded-pill border",
+      "text-support font-bold transition-[background-color,border-color,color] duration-200",
       stepMarkClasses[state],
     )}
   >
-    {state === "complete" ? <Check className="size-3 [stroke-width:var(--stroke-icon-strong)]" /> : index + 1}
+    {state === "complete" ? <Check className="size-icon-md [stroke-width:var(--stroke-icon-strong)]" /> : index + 1}
   </span>
 );
 
@@ -73,10 +72,9 @@ const StepBody = ({ index, step }: { index: number; step: WorkflowStep }) => (
       /* Tightens rather than truncates: below the wide breakpoints the padding and the gap
          between mark and label give up their room first, so the words themselves never
          have to. */
-      "relative flex shrink-0 items-center gap-1.5 rounded-pill px-1.5 py-1 text-support transition-colors duration-200",
-      "lg:gap-2 lg:px-2.5 lg:py-1.5",
+      "relative flex shrink-0 items-center gap-3 py-1 text-heading-sm transition-colors duration-200",
       stepLabelClasses[step.state],
-      step.state === "current" && "bg-cv-accent-soft/55",
+      step.state === "current" && "font-bold",
       step.here === true && step.state !== "current" && "bg-cv-surface-muted",
       step.href !== undefined && "group-hover:bg-cv-surface-muted",
     )}
@@ -86,10 +84,10 @@ const StepBody = ({ index, step }: { index: number; step: WorkflowStep }) => (
   </span>
 );
 
-/* Orientation, not a page section: which of the three stages the work is on, in one
-   compact row a reader passes on the way to the content that actually needs the space.
-   It used to spend a header band and a full row of large cards to say what the row below
-   now says by itself - three marks, three labels, and the line between them. */
+/* The workflow's route-level axis. `PageShell` places it beside the active stage content
+   on wide screens; here it owns the large marks, labels and continuous vertical line.
+   On narrow screens the same landmark stacks above the content without changing its
+   order or accessible description. */
 export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
   const current = steps.find((step) => step.state === "current");
   const position = current === undefined ? null : steps.indexOf(current) + 1;
@@ -125,11 +123,11 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
       : `שלב ${position} מתוך ${steps.length}`;
 
   const content = (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-2.5 sm:px-4">
+    <div className="flex flex-col gap-4 py-1">
       {/* Decorative: the nav's own `aria-label` already states the label and the
           position in words, so this repeats it for sighted readers only. */}
       <div aria-hidden="true" className="flex shrink-0 items-baseline gap-x-2">
-        <span className="text-support font-bold text-cv-text">{label}</span>
+        <span className="text-heading-sm font-bold text-cv-text">{label}</span>
         {progressText === null ? null : <span className="text-[0.75rem] text-cv-text-muted">{progressText}</span>}
       </div>
 
@@ -143,8 +141,8 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
           padding, the gaps and the connectors tighten instead. Below that - a phone, a
           split window - a second line is better than a row running off the frame, so the
           row may shrink and wrap again. */}
-      <div className="min-w-0 shrink lg:shrink-0">
-        <div className="flex flex-wrap items-center gap-y-1 lg:flex-nowrap">
+      <div className="min-w-0">
+        <div className="flex flex-col items-start">
           {steps.map((step, index) => {
             const body = <StepBody index={index} step={step} />;
             const next = steps[index + 1];
@@ -161,7 +159,7 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
                         ? `פתיחת שלב ${step.label}`
                         : `${step.state === "complete" ? "חזרה" : "מעבר"} לשלב ${step.label}`
                     }
-                    className="group flex min-h-11 items-center rounded-pill"
+                    className="group flex min-h-11 items-center"
                     to={step.href}
                   >
                     {body}
@@ -172,7 +170,7 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
                   <span
                     aria-hidden="true"
                     className={cx(
-                      "mx-0.5 h-0.5 w-3 shrink-0 rounded-pill lg:mx-1 lg:w-5 xl:w-8",
+                      "ms-[0.95rem] h-7 w-px shrink-0",
                       connectorClasses[next.state],
                     )}
                   />
