@@ -1,0 +1,61 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "react", "jsx-a11y", "import", "promise", "vitest", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "env": {
+    "browser": true,
+    "es2024": true
+  },
+  "settings": {
+    "react": {
+      "version": "19.0"
+    }
+  },
+  "rules": {
+    "no-console": "warn",
+    "eqeqeq": [
+      "error",
+      "always",
+      {
+        "null": "ignore"
+      }
+    ],
+    "import/no-cycle": "error",
+    "import/no-default-export": "error",
+    "unicorn/prefer-node-protocol": "error",
+    "typescript/consistent-type-imports": "warn",
+    "typescript/no-explicit-any": "error",
+    "react/react-in-jsx-scope": "off",
+    "unicorn/consistent-function-scoping": "off",
+    "vitest/require-mock-type-parameters": "off"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx", "e2e/**", "src/test/**"],
+      "rules": {
+        "no-console": "off",
+        "typescript/no-explicit-any": "off",
+        "vitest/no-conditional-expect": "off",
+        "import/no-unassigned-import": "off"
+      }
+    },
+    {
+      "files": ["vite.config.ts", "playwright.config.ts", "scripts/**"],
+      "rules": {
+        "import/no-default-export": "off",
+        "no-console": "off"
+      }
+    },
+    {
+      "files": ["src/main.tsx"],
+      "rules": {
+        "import/no-unassigned-import": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["dist", "node_modules", "test-results", "playwright-report", "coverage"]
+}
