@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { NotFoundPage } from "@/app/layout/NotFoundPage";
+import { ApiProblem } from "@/api/client";
 import { ErrorCallout } from "./ErrorCallout";
 import { cx } from "./cx";
 
@@ -32,6 +34,10 @@ export const QueryState = ({
   loadingLabel,
   loadingState,
 }: QueryStateProps) => {
+  if (error instanceof ApiProblem && error.problem.status === 404) {
+    return <NotFoundPage />;
+  }
+
   const errorState =
     error !== null && error !== undefined && fallbackTitle !== undefined ? (
       <ErrorCallout className={className} error={error} fallbackDetail={fallbackDetail} fallbackTitle={fallbackTitle} />

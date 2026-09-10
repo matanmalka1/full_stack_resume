@@ -37,6 +37,7 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
     submittedAt,
   } = useRevisionData(approvedRevisionId);
   const { canCreate, createDraft, operation, watch } = useRevisionDraftGeneration(revision, detail);
+  const pageQueryError = revisionQuery.error ?? applicationQuery.error;
 
   /* One step back from "מוכן" is the draft it was approved from - the editor where a
      correction is actually made. With no draft to return to, the step behind it is the
@@ -129,6 +130,7 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
           <span dir="auto">{applicationLabel(detail.application.company, detail.application.target_role)}</span>
         )
       }
+      queryError={pageQueryError}
       stage="ready"
       /* The stage's own name everywhere except where the record does not actually meet it:
          a revision that is approved but not deliverable is not "מוכן למסירה", and saying so
@@ -136,7 +138,7 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
       title={revision?.ready_qualified === false ? "גרסה מאושרת" : undefined}
     >
       <QueryState
-        error={revisionQuery.error ?? applicationQuery.error}
+        error={pageQueryError}
         fallbackTitle="לא ניתן לטעון את הגרסה המוכנה"
         loading={revision === undefined}
         loadingLabel="טוען את הגרסה…"

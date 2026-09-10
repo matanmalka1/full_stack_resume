@@ -43,7 +43,7 @@
 
 ## P1 — נכונות מצב
 
-- [ ] **P1-1** רשומה חסרה מוצגת כתהליך שהושלם ועוד שגיאה באנגלית —
+- [x] **P1-1** רשומה חסרה מוצגת כתהליך שהושלם ועוד שגיאה באנגלית —
       `WizardStepShell` · `QueryState` · `RevisionPage` · `/revisions/:badId` מצייר ארבעה שלבים
       ירוקים ו"הושלם 4 מתוך 4" מעל `unknown approved revision: …`, כי הרצועה והכותרת מצוירות
       מחוץ ל-`QueryState` · ענף 404 ב-`QueryState` שמציג את מסגור `NotFoundPage`, ו-

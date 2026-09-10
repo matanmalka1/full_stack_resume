@@ -10,6 +10,36 @@ afterEach(() => {
 });
 
 describe("RevisionPage", () => {
+  it("shows the route not-found frame without presenting a missing revision as completed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve(
+          json(
+            {
+              type: "about:blank#not-found",
+              title: "Not found",
+              status: 404,
+              code: "APPROVED_REVISION_NOT_FOUND",
+              detail: "unknown approved revision: missing-revision",
+            },
+            404,
+            { "Content-Type": "application/problem+json" },
+          ),
+        ),
+      ),
+    );
+
+    renderRoute("/revisions/missing-revision", "/revisions/:revisionId", <RevisionPage />);
+
+    expect(await screen.findByRole("heading", { name: "העמוד לא נמצא" })).toBeInTheDocument();
+    expect(screen.getByText("404")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "חזרה ללוח המועמדויות" })).toHaveAttribute("href", "/");
+    expect(screen.queryByRole("navigation", { name: "שלבי הכנת קורות החיים" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/הושלם 4 מתוך 4/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/unknown approved revision/)).not.toBeInTheDocument();
+  });
+
   it("frames and downloads the exact Ready artifacts", async () => {
     vi.stubGlobal(
       "fetch",

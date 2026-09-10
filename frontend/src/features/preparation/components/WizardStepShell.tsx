@@ -15,6 +15,10 @@ interface WizardStepShellProps {
   /* The projection the spine reads the work's position from. Absent while in flight, and
      absent on intake, where there is nothing to read yet. */
   detail?: ApplicationDetail;
+  /* A failed page query owns the whole route surface through QueryState (including its
+     404 frame). In that state there is no workflow position to announce, so the wizard
+     frame must not draw a heading or progress rail around it. */
+  queryError?: unknown;
   /* Who the CV is for. Supplied by the page rather than derived here: the words that name
      an Application belong to the Application feature, and preparation is reached into
      rather than reaching back. */
@@ -48,10 +52,15 @@ export const WizardStepShell = ({
   detail,
   eyebrow,
   measure = "wizard",
+  queryError,
   stage,
   title,
 }: WizardStepShellProps) => {
   const [commitBarTarget, setCommitBarTarget] = useState<HTMLDivElement | null>(null);
+
+  if (queryError !== null && queryError !== undefined) {
+    return children;
+  }
 
   return (
     <CommitBarTargetContext.Provider value={commitBarTarget}>
