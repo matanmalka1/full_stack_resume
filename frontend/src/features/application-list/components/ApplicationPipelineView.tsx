@@ -84,22 +84,20 @@ export const ApplicationPipelineView = ({ items, onRequestUpdate }: ApplicationP
       : [...populatedOrActiveColumns, { id: "other", title: "שלב אחר", statuses: unknownStatuses, tone: "neutral" }];
 
   return (
-    <div
+    <ul
       aria-label="מועמדויות לפי שלב גיוס"
       className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-4"
-      role="list"
     >
       {columns.map((column) => {
         const stageItems = items.filter((item) => column.statuses.includes(item.recruitment_status));
 
         return (
-          <section
+          <li
             className={cx(
               "flex min-h-96 flex-col rounded-surface border p-3 shadow-surface",
               pipelineToneClasses[column.tone],
             )}
             key={column.id}
-            role="listitem"
           >
             <div className="mb-2 flex items-center justify-between gap-3 border-b border-cv-border px-1 pb-2.5">
               <h2 className="text-support font-extrabold text-cv-text">{column.title}</h2>
@@ -118,9 +116,9 @@ export const ApplicationPipelineView = ({ items, onRequestUpdate }: ApplicationP
                 ))}
               </div>
             )}
-          </section>
+          </li>
         );
       })}
-    </div>
+    </ul>
   );
 };

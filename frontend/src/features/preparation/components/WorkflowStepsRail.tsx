@@ -187,6 +187,9 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
 
   if (!navigable) {
     return (
+      // The rail's real elements are exposed via aria-hidden; role="img" presents the
+      // composite as one image for assistive tech, which `<img>` (a void element) cannot do.
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
       <div aria-label={description} className={railClasses} role="img">
         <div aria-hidden="true">{content}</div>
       </div>

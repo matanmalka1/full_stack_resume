@@ -109,6 +109,9 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
             </Button>
           }
           className="mt-4"
+          // role="status" is a Callout prop, not a DOM role; Callout already renders an
+          // <output> for it.
+          // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
           role="status"
           title="נשמר תצלום משרה חדש"
           tone="success"

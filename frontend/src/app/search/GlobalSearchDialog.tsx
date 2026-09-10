@@ -144,6 +144,9 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
         </kbd>
       </div>
 
+      {/* Custom JS-driven combobox (ARIA authoring-practices pattern): rich item content
+          and keyboard-managed selection that a native <select>/<option> can't render. */}
+      {/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role */}
       <div className="max-h-[60vh] overflow-y-auto p-2" id={LISTBOX_ID} role="listbox">
         {trimmed === "" && items.length > 0 ? (
           <p className="px-3 py-1.5 text-support font-semibold text-cv-text-muted">דורש טיפול</p>
@@ -184,6 +187,9 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
               key={item.id}
               onClick={() => selectItem(item)}
               onMouseEnter={() => setSelectedIndex(index)}
+              // Same combobox pattern as the listbox above: rich item content a native
+              // <option> can't render.
+              // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
               role="option"
             >
               <ApplicationSummary item={item} />

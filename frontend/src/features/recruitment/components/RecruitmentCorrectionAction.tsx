@@ -105,6 +105,9 @@ export const RecruitmentCorrectionAction = ({ detail, onChanged }: RecruitmentCo
               />
             )}
             {eventChangedOnServer ? (
+              // role="status" is a Callout prop, not a DOM role; Callout already renders
+              // an <output> for it.
+              // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
               <Callout className="lg:col-span-2" role="status" title="ציר הזמן השתנה בשרת" tone="warning">
                 האירוע שבחרת נשמר בטופס ולא הוחלף. כדאי לבדוק אותו לפני השמירה.
               </Callout>

@@ -112,10 +112,9 @@ export const ApplicationListToolbar = ({
       </div>
     </div>
 
-    <div
+    <search
       aria-label="סינון וחיפוש מועמדויות"
       className="flex flex-wrap items-center gap-2 border-t border-cv-border pt-3"
-      role="search"
     >
       <label className="sr-only" htmlFor="list-search">
         חיפוש במועמדויות
@@ -206,6 +205,6 @@ export const ApplicationListToolbar = ({
           </Button>
         ) : null}
       </div>
-    </div>
+    </search>
   </div>
 );

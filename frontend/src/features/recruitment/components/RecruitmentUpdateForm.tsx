@@ -52,6 +52,9 @@ export const RecruitmentUpdateForm = ({
         />
       )}
       {serverChanged ? (
+        // role="status" is a Callout prop, not a DOM role; Callout already renders an
+        // <output> for it.
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
         <Callout role="status" title="פרטי המועמדות השתנו בשרת" tone="warning">
           הערכים שהקלדת נשמרו בטופס ולא הוחלפו. כדאי לבדוק אותם לפני השמירה.
         </Callout>

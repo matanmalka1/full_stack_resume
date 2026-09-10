@@ -92,6 +92,9 @@ export const FactAttachmentControl = ({ fact, profile, sections }: FactAttachmen
         צירוף העובדה לסעיף
       </Button>
       {attachment.isSuccess ? (
+        // role="status" is a Callout prop, not a DOM role; Callout already renders an
+        // <output> for it.
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
         <Callout role="status" title="העובדה צורפה" tone="success">
           העובדה זמינה כעת למבחר של הסעיף בפרופיל הפעיל.
         </Callout>

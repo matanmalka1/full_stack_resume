@@ -13,6 +13,9 @@ const FactPoolRow = ({ entry: { fact, outOfSync } }: { entry: FactPoolEntry }) =
           <span
             aria-label="מצב העובדה אינו תואם למצב האחרון ביומן"
             className="inline-flex items-center gap-1 text-cv-blocker"
+            // The icon inside is aria-hidden; role="img" presents the pair as one image
+            // for assistive tech, which `<img>` (a void element) cannot do.
+            // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
             role="img"
           >
             <AlertTriangle aria-hidden="true" className="size-4" />

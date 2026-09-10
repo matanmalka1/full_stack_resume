@@ -155,6 +155,9 @@ export const ClaimFactResolution = ({
       ) : detailQuery.data === undefined ? (
         <QueryState className="mt-4 text-support" loading loadingLabel="טוען את העובדה…" />
       ) : useFact.isSuccess ? (
+        // role="status" is a Callout prop, not a DOM role; Callout already renders an
+        // <output> for it.
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
         <Callout className="mt-4" role="status" title="העובדה אושרה ונבחרה" tone="success">
           נוצרה תוכנית בחירה חדשה. הטיוטה הנוכחית נשמרה, ומסך המועמדות יציע לבנות אותה מחדש מהתוכנית החדשה.
         </Callout>

@@ -49,15 +49,19 @@ interface CalloutProps {
 export const Callout = ({ action, children, className, emphasis, role, title, tone }: CalloutProps) => {
   const { icon: Icon, label } = tonePresentation[tone];
   const banner = emphasis === "banner";
+  /* `<output>` carries an implicit "status" role, so a status callout becomes one
+     instead of stamping `role="status"` on a generic div; "alert" has no native tag
+     to swap in, so it stays a div with the role attribute. */
+  const Tag = role === "status" ? "output" : "div";
 
   return (
-    <div
+    <Tag
       className={cx(
         banner ? "rounded-surface border p-4" : "rounded-control border border-s-2 px-3.5 py-2.5",
         banner ? bannerToneClasses[tone] : toneClasses[tone],
         className,
       )}
-      role={role}
+      role={role === "status" ? undefined : role}
     >
       <div className={cx("flex items-start", banner ? "gap-3.5" : "gap-2.5")}>
         <Icon
@@ -96,6 +100,6 @@ export const Callout = ({ action, children, className, emphasis, role, title, to
           {action === undefined ? null : <div className="mt-2.5">{action}</div>}
         </div>
       </div>
-    </div>
+    </Tag>
   );
 };

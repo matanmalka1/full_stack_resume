@@ -27,6 +27,9 @@ const presetTabs: readonly { id: PresetSelection; label: string; urgent: boolean
 ];
 
 export const ApplicationPresetTabs = ({ counts, onSelect, value }: ApplicationPresetTabsProps) => (
+  // A non-form group of toggle buttons; role="group" is the ARIA authoring-practices
+  // pattern here, and none of the suggested native tags (fieldset, etc.) fit.
+  // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
   <div aria-label="סינון מהיר לפי מצב" className="flex flex-wrap items-center gap-1" role="group">
     {presetTabs.map(({ id, label, urgent }) => {
       const active = id === value;

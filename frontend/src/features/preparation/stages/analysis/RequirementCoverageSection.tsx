@@ -126,6 +126,9 @@ export const RequirementCoverageSection = ({
         </Callout>
       )}
       {factsQuery.isLoading ? (
+        // role="status" is a Callout prop, not a DOM role; Callout already renders an
+        // <output> for it.
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
         <Callout className="mb-3" role="status" title="טוען את הראיות התומכות…" tone="progress" />
       ) : factsQuery.error === null ? null : (
         <ErrorCallout

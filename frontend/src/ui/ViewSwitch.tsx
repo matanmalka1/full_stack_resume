@@ -33,6 +33,9 @@ export const ViewSwitch = <TValue extends string>({
     <div
       aria-label={label}
       className={surfaceClasses("inline-flex gap-1 bg-cv-surface-muted p-1 shadow-inner")}
+      // A non-form group of toggle buttons; role="group" is the ARIA authoring-practices
+      // pattern here, and none of the suggested native tags (fieldset, etc.) fit.
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
       role="group"
     >
       {options.map((option) => {

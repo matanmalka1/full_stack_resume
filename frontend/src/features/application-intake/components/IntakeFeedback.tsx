@@ -11,6 +11,9 @@ interface IntakeFeedbackProps {
 export const IntakeFeedback = ({ error, isStale }: IntakeFeedbackProps) => (
   <>
     {isStale ? (
+      // role="status" is a Callout prop, not a DOM role; Callout already renders an
+      // <output> for it.
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
       <Callout role="status" title="הקלט השתנה מאז הבדיקה" tone="neutral">
         בדיקת הכפילויות רצה על טקסט קודם, ולכן התשובה שלה אינה חלה על מה שמופיע עכשיו. יש ללחוץ שוב על יצירת מועמדות כדי
         לבדוק את הקלט הנוכחי.

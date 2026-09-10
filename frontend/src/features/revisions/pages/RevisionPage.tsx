@@ -200,6 +200,9 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
         <ErrorCallout error={createDraft.error} fallbackTitle="לא ניתן ליצור טיוטה חדשה" />
       )}
       {submissionRecorded ? (
+        // role="status" is a Callout prop, not a DOM role; Callout already renders an
+        // <output> for it.
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
         <Callout role="status" title="ההגשה נרשמה" tone="success">
           הגרסה וקובץ ה־PDF המדויקים נוספו להיסטוריית המועמדות.
         </Callout>

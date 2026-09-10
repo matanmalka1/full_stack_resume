@@ -52,6 +52,9 @@ export const ReconciliationReport = ({ report }: { report: ReconciliationReportD
   return (
     <div aria-label="דוח בדיקת התאמה" className="flex w-full flex-col gap-5">
       <Callout
+        // role="status" is a Callout prop, not a DOM role; Callout already renders an
+        // <output> for it.
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
         role="status"
         title={report.passed ? "הנתונים והתוצרים תקינים" : "נמצאה בעיית תקינות"}
         tone={report.passed ? "success" : "blocker"}

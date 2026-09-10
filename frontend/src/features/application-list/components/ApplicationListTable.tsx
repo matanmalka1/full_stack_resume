@@ -77,6 +77,8 @@ export const ApplicationListTable = ({ items, onRequestClose, onRequestUpdate }:
 const skeletonRows = ["skeleton-1", "skeleton-2", "skeleton-3", "skeleton-4"];
 
 export const ApplicationListTableSkeleton = () => (
+  // role="status" is a Card prop, not a DOM role; Card already renders an <output> for it.
+  // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
   <Card aria-label="טוען את המועמדויות" className="overflow-hidden bg-cv-surface-raised shadow-surface" role="status">
     <div className="hidden h-10 border-b border-cv-border bg-cv-surface-muted lg:block" />
     <div className="divide-y divide-cv-border">

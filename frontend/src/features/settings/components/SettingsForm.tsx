@@ -154,7 +154,12 @@ export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
           }
         />
       </form>
-      {save.isSuccess ? <Callout role="status" title="ההגדרות נשמרו" tone="success" /> : null}
+      {save.isSuccess ? (
+        // role="status" is a Callout prop, not a DOM role; Callout already renders an
+        // <output> for it.
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+        <Callout role="status" title="ההגדרות נשמרו" tone="success" />
+      ) : null}
       {save.error === null ? null : (
         <ErrorCallout error={save.error} fallbackDetail={briefServerFailureDetail} fallbackTitle="ההגדרות לא נשמרו" />
       )}
