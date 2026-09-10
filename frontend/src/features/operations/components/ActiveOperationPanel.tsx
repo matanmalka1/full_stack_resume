@@ -1,4 +1,5 @@
 import { Check } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import type { Operation } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
@@ -23,6 +24,23 @@ const reasoningEffortLabels: Record<NonNullable<Operation["reasoning_effort"]>, 
   low: "נמוך",
   medium: "בינוני",
   high: "גבוה",
+};
+
+const CANCEL_REVEAL_DELAY_MS = 4_000;
+
+const useCancelVisibility = (operation: Operation): boolean => {
+  const elapsed = Math.max(0, Date.now() - Date.parse(operation.created_at));
+  const [revealedOperationId, setRevealedOperationId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (operation.is_terminal || elapsed >= CANCEL_REVEAL_DELAY_MS) return;
+
+    const remaining = CANCEL_REVEAL_DELAY_MS - elapsed;
+    const timeout = window.setTimeout(() => setRevealedOperationId(operation.id), remaining);
+    return () => window.clearTimeout(timeout);
+  }, [elapsed, operation.id, operation.is_terminal]);
+
+  return operation.is_terminal || elapsed >= CANCEL_REVEAL_DELAY_MS || revealedOperationId === operation.id;
 };
 
 /* Work in progress, on the screen that queued it.
@@ -53,6 +71,7 @@ export const ActiveOperationPanel = ({
   onQueued: (operationId: string) => void;
   operation: Operation;
 }) => {
+  const showCancel = useCancelVisibility(operation);
   const terminal = isTerminalOperation(operation);
   const progressLabel = operationProgressLabel(operation);
   const failure = operation.failure_code == null ? null : failurePresentations[operation.failure_code];
@@ -180,7 +199,7 @@ export const ActiveOperationPanel = ({
         {/* Cancel and retry, which are the Operation's own actions and belong wherever it
             is shown. The panel passes no return link: this is the screen the user is
             already on. */}
-        <OperationActions onQueued={onQueued} operation={operation} />
+        <OperationActions onQueued={onQueued} operation={operation} showCancel={showCancel} />
       </div>
     </Card>
   );

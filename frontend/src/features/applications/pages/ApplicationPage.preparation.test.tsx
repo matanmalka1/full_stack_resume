@@ -191,6 +191,9 @@ describe("ApplicationPage at the preparation route", () => {
 
     expect((await screen.findAllByText("הושלמה")).length).toBeGreaterThan(0);
     expect(screen.queryByText("המועמדות נוצרה, הניתוח רץ")).not.toBeInTheDocument();
+    expect(screen.queryByText("המשרה טרם נותחה")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "ניתוח המשרה" })).not.toBeInTheDocument();
+    expect(screen.queryByText("חומר עזר")).not.toBeInTheDocument();
   });
 
   it("names the application without restoring the old record hierarchy", async () => {
@@ -379,6 +382,9 @@ describe("ApplicationPage at the preparation route", () => {
     /* The accepted `202` is seeded as the panel's first state, so the queued Operation is
        reported on this screen rather than on one the user was sent to. */
     expect(await screen.findByRole("heading", { name: "הרצת ניתוח המשרה", level: 2 })).toBeInTheDocument();
+    expect(screen.queryByText("המשרה טרם נותחה")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "ניתוח המשרה" })).not.toBeInTheDocument();
+    expect(screen.queryByText("חומר עזר")).not.toBeInTheDocument();
 
     const request = fetchMock.mock.calls.find((call) => call[0] === ANALYSES_PATH);
     expect(request?.[0]).toBe(ANALYSES_PATH);

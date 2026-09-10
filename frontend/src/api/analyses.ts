@@ -134,10 +134,15 @@ export const applyAnalysisDecisions = async (
   decisions: ClassificationDecisions,
   activeSelectionPlanId: string | null,
 ): Promise<AnalysisDecisions> => {
-  /* The fact overlay is omitted by type, not merely left unset: naming it in the `Omit`
-     is what makes adding a field here a compile error rather than a quiet change of what
-     this screen commits. */
-  const body: Omit<ApplyAnalysisDecisionsRequest, "pinned_fact_ids" | "excluded_fact_ids"> = {
+  /* The fact overlay and requirement-interpretation corrections are omitted by type, not
+     merely left unset. Each belongs to a dedicated control; this classification form must
+     not manufacture an empty decision for a field it does not present. Naming them in the
+     `Omit` keeps the payload honest while the request schema's server-side defaults retain
+     the existing values. */
+  const body: Omit<
+    ApplyAnalysisDecisionsRequest,
+    "pinned_fact_ids" | "excluded_fact_ids" | "requirement_interpretations"
+  > = {
     application_id: applicationId,
     accept_low_fit: decisions.accept_low_fit,
     accept_incomplete_analysis: decisions.accept_incomplete_analysis,

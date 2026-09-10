@@ -21,9 +21,18 @@ interface OperationActionsProps {
      because the screen holding the Operation did not hold the Application; every screen
      that shows an Operation now does. */
   onQueued: (operationId: string) => void;
+  /* Short Operations should not flash a destructive control that cannot realistically be
+     used. The host reveals it after its own "taking longer" threshold; a terminal action
+     surface can leave this at the default. */
+  showCancel?: boolean;
 }
 
-export const OperationActions = ({ collapsed = false, onQueued, operation }: OperationActionsProps) => {
+export const OperationActions = ({
+  collapsed = false,
+  onQueued,
+  operation,
+  showCancel = true,
+}: OperationActionsProps) => {
   const queryClient = useQueryClient();
   /* One key per original Operation: an uncertain response can be retried safely, while
      navigating to the newly queued Operation rotates the key for its own future retry.
@@ -48,7 +57,7 @@ export const OperationActions = ({ collapsed = false, onQueued, operation }: Ope
   });
 
   const error = cancel.error ?? retry.error;
-  const canCancel = operation.available_actions.includes("cancel");
+  const canCancel = showCancel && operation.available_actions.includes("cancel");
   const canRetry = operation.available_actions.includes("retry");
   /* Retry on a run that succeeded re-runs work that has a result on record and
      supersedes it, so it is offered without being recommended: the loud control on the

@@ -11,6 +11,7 @@ import { QueryState } from "@/ui/QueryState";
 import { ActiveOperationPanel } from "@/features/operations";
 import { PreparationView, WizardStepShell, useAutomaticDraft } from "@/features/preparation";
 import { applicationLabel } from "../model/applicationPresentation";
+import { analysisViewState } from "../model/analysisViewState";
 import { ApplicationArtifacts } from "../components/ApplicationArtifacts";
 import { JobSnapshotPanel } from "../components/JobSnapshotPanel";
 
@@ -54,6 +55,11 @@ export const ApplicationPage = () => {
 
   const createdApplication = (location.state as { createdApplication?: CreatedApplicationState } | null)
     ?.createdApplication;
+  const viewState = analysisViewState({
+    analysisWasQueuedOnCreate: createdApplication?.analysisQueued === true,
+    detail,
+    operation: watched,
+  });
 
   /* The files exist only after a revision is rendered, so their reference section is drawn
      only once there is something in it - never as an empty disclosure the reader opens onto
@@ -80,6 +86,13 @@ export const ApplicationPage = () => {
         fallbackTitle="לא ניתן לטעון את פרטי המועמדות"
         loading={detail === undefined}
         loadingLabel="טוען את פרטי המועמדות…"
+        loadingState={
+          viewState === "processing" ? (
+            <p aria-live="polite" className="text-body text-cv-text-muted" role="status">
+              יוצרים את המועמדות ומנתחים את המשרה…
+            </p>
+          ) : undefined
+        }
       >
         {detail === undefined ? null : (
           <div className="space-y-6">
@@ -95,10 +108,28 @@ export const ApplicationPage = () => {
               </Callout>
             )}
 
-            {/* Live work, reported once above the step it belongs to. */}
-            {watched === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={watched} />}
-
-            <PreparationView detail={detail} onQueued={watch} />
+            {/* Analysis work and preparation content are mutually exclusive product
+                states. The projection can still say `needs_analysis` for a poll after
+                the Operation starts (and after it succeeds); rendering both exposed the
+                internal state machine as a flash of an obsolete call to action. */}
+            {viewState === "processing" || viewState === "analysis_failed" ? (
+              watched === undefined ? (
+                <p aria-live="polite" className="text-body text-cv-text-muted" role="status">
+                  יוצרים את המועמדות ומנתחים את המשרה…
+                </p>
+              ) : (
+                <ActiveOperationPanel onQueued={watch} operation={watched} />
+              )
+            ) : (
+              <>
+                {/* A terminal result is real history, not a transport state. Keep its
+                    compact success/retry row once the projection has caught up; other
+                    operation types retain the reporting surface they had before this
+                    analysis-only view contract was introduced. */}
+                {watched === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={watched} />}
+                <PreparationView detail={detail} onQueued={watch} />
+              </>
+            )}
 
             {/* The posting the CV is tailored to, and the files the work produced: reference
                 the reader checks or downloads, folded away so the step above stays the
@@ -108,23 +139,25 @@ export const ApplicationPage = () => {
                 column at the same weight as the step reads as another panel of it - which
                 is how a step turns back into a record with sections. The line says where
                 the step ends and the material about it begins. */}
-            <div className="flex flex-col gap-2 border-t border-cv-border pt-5">
-              <p className="text-support font-semibold text-cv-text-muted">חומר עזר</p>
+            {viewState === "content" ? (
+              <div className="flex flex-col gap-2 border-t border-cv-border pt-5">
+                <p className="text-support font-semibold text-cv-text-muted">חומר עזר</p>
 
-              <Disclosure summary="צפייה בנוסח המשרה שנשמר">
-                <div className="pt-2">
-                  <JobSnapshotPanel detail={detail} />
-                </div>
-              </Disclosure>
-
-              {hasArtifacts ? (
-                <Disclosure summary="גרסאות וקבצים">
+                <Disclosure summary="צפייה בנוסח המשרה שנשמר">
                   <div className="pt-2">
-                    <ApplicationArtifacts applicationId={applicationId} />
+                    <JobSnapshotPanel detail={detail} />
                   </div>
                 </Disclosure>
-              ) : null}
-            </div>
+
+                {hasArtifacts ? (
+                  <Disclosure summary="גרסאות וקבצים">
+                    <div className="pt-2">
+                      <ApplicationArtifacts applicationId={applicationId} />
+                    </div>
+                  </Disclosure>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         )}
       </QueryState>

@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Operation } from "@/api/contracts";
 import { ActiveOperationPanel } from "./ActiveOperationPanel";
@@ -31,6 +31,10 @@ const renderPanel = (value: Operation) => {
 };
 
 describe("ActiveOperationPanel progress", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("presents a queued operation as one status", () => {
     renderPanel(operation({ status: "queued", phase: "queued" }));
 
@@ -72,5 +76,20 @@ describe("ActiveOperationPanel progress", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent("לא ניתן להשלים את בדיקות הפעולה");
     expect(screen.queryByText("Operation execution failed.")).not.toBeInTheDocument();
+  });
+
+  it("reveals cancellation only when live work is taking unusually long", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-10T08:00:00Z"));
+    renderPanel(
+      operation({
+        available_actions: ["cancel"],
+        created_at: "2026-09-10T08:00:00Z",
+      }),
+    );
+
+    expect(screen.queryByRole("button", { name: "ביטול הפעולה" })).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(4_000));
+    expect(screen.getByRole("button", { name: "ביטול הפעולה" })).toBeInTheDocument();
   });
 });
