@@ -73,13 +73,10 @@ const listBody = (items: ApplicationListItem[], counts: Counts = {}): Applicatio
      the stage menu must not collapse to the one stage its own filter selected. */
   const stage_counts =
     counts.stageCounts ??
-    items.reduce<Record<string, number>>(
-      (totals, entry) => {
-        totals[entry.preparation_state] = (totals[entry.preparation_state] ?? 0) + 1;
-        return totals;
-      },
-      {},
-    );
+    items.reduce<Record<string, number>>((totals, entry) => {
+      totals[entry.preparation_state] = (totals[entry.preparation_state] ?? 0) + 1;
+      return totals;
+    }, {});
   const recruitment_status_counts =
     counts.recruitmentStatusCounts ??
     items.reduce<Record<string, number>>((totals, entry) => {

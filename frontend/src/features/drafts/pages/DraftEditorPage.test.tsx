@@ -744,7 +744,9 @@ describe("DraftEditorPage regeneration", () => {
       selection_plan_id: "sp-1",
       claim_id: "c-headline",
     });
-    expect(((call?.[1] as RequestInit | undefined)?.headers as Headers | undefined)?.get("Idempotency-Key")).toBe("wd-1:4:c-headline");
+    expect(((call?.[1] as RequestInit | undefined)?.headers as Headers | undefined)?.get("Idempotency-Key")).toBe(
+      "wd-1:4:c-headline",
+    );
   });
 
   it("withholds regeneration while an edit is still unsaved, and says why", async () => {
