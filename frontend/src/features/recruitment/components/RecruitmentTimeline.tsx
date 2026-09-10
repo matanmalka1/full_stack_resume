@@ -83,7 +83,7 @@ export const RecruitmentTimeline = ({ items }: { items: RecruitmentTimelineItem[
         })}
       </ol>
       {items.length <= initialTimelineItems ? null : (
-        <Button className="mt-4 px-0" onClick={() => setExpanded((value) => !value)} variant="ghost">
+        <Button className="mt-4" onClick={() => setExpanded((value) => !value)} size="flush" variant="ghost">
           {expanded ? "הצגת פחות אירועים" : `הצגת כל ההיסטוריה (${items.length})`}
         </Button>
       )}

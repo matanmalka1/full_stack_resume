@@ -67,16 +67,11 @@ const ArtifactGroupCard = ({ group, latest }: { group: ArtifactGroup; latest: bo
         </div>
         <div className="flex flex-wrap items-center gap-1">
           {group.revisionId === null ? null : (
-            <Link className={buttonClasses("ghost", "min-h-9 px-2.5")} to={routePaths.revision(group.revisionId)}>
+            <Link className={buttonClasses("ghost", undefined, "compact")} to={routePaths.revision(group.revisionId)}>
               פתיחת הגרסה
             </Link>
           )}
-          <Button
-            aria-expanded={open}
-            className="min-h-9 px-2.5"
-            onClick={() => setOpen((value) => !value)}
-            variant="ghost"
-          >
+          <Button aria-expanded={open} onClick={() => setOpen((value) => !value)} size="compact" variant="ghost">
             {open ? "הסתרת הקבצים" : `הצגת הקבצים (${group.artifacts.length})`}
           </Button>
         </div>

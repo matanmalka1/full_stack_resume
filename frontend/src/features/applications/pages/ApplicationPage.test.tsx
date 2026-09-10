@@ -134,10 +134,7 @@ describe("ApplicationPage", () => {
       ),
     );
 
-    expect(await screen.findByRole("link", { name: /מוכן למסירה/ })).toHaveAttribute(
-      "href",
-      "/revisions/revision-7",
-    );
+    expect(await screen.findByRole("link", { name: /מוכן למסירה/ })).toHaveAttribute("href", "/revisions/revision-7");
   });
 
   it("keeps recruitment state off the CV preparation step", async () => {

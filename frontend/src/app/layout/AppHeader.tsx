@@ -68,7 +68,7 @@ export const AppHeader = () => {
             {inWorkflow ? null : (
               <Link
                 aria-label="קליטת משרה חדשה"
-                className={buttonClasses("primary", "py-1.5 px-3 text-support")}
+                className={buttonClasses("primary", undefined, "compact")}
                 to={routePaths.newApplication}
               >
                 <Plus aria-hidden="true" className="size-4" />

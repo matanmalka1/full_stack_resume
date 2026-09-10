@@ -224,10 +224,7 @@ describe("RevisionPage", () => {
     fireEvent.click(await screen.findByText("אפשרויות נוספות"));
     const newDraft = await screen.findByRole("button", { name: "יצירת טיוטה חדשה" });
     expect(screen.getByRole("link", { name: "חזרה ללוח המועמדויות" })).toHaveAttribute("href", "/");
-    expect(screen.getByRole("link", { name: "חזרה לשלב ניתוח והתאמה" })).toHaveAttribute(
-      "href",
-      "/applications/app-1",
-    );
+    expect(screen.getByRole("link", { name: "חזרה לשלב ניתוח והתאמה" })).toHaveAttribute("href", "/applications/app-1");
     expect(screen.getByRole("heading", { name: "מוכן למסירה" })).toBeInTheDocument();
     fireEvent.click(newDraft);
     await waitFor(() => expect(fetchMock.mock.calls.some((call) => call[1]?.method === "POST")).toBe(true));

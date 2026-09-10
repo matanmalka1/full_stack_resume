@@ -71,6 +71,7 @@ test.describe("the Job Detail screen", () => {
 
     expect(results.violations).toEqual([]);
 
+    await page.getByText("צפייה בנוסח המשרה שנשמר", { exact: true }).click();
     await page.getByRole("button", { name: "עדכון נוסח המשרה" }).click();
     await expect(page.getByRole("dialog", { name: "יצירת תצלום משרה חדש" })).toBeVisible();
     const dialogResults = await new AxeBuilder({ page })

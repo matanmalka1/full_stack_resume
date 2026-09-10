@@ -36,9 +36,9 @@ test.describe("the application shell", () => {
   });
 
   test("moves focus to the page heading after a route change", async ({ page }) => {
-    await page.goto("/applications/new");
-    await page.getByRole("link", { name: "הגדרות" }).click();
+    await page.goto("/settings");
+    await page.getByRole("link", { name: "לוח המועמדויות" }).click();
 
-    await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
+    await expect(page.getByRole("heading", { level: 1, name: "לוח מועמדויות" })).toBeFocused();
   });
 });

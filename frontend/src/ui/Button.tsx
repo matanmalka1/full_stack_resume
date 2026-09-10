@@ -13,6 +13,8 @@ const baseButtonClasses =
 const sizeButtonClasses = {
   compact: "min-h-8 px-2.5",
   default: "min-h-11 px-4",
+  icon: "size-11 px-0",
+  flush: "min-h-11 px-0",
 } as const;
 
 /* Lift is reserved for the one emphasized action on a screen (A.1). A secondary or
