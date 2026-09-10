@@ -1,4 +1,5 @@
 import { Code2, Lock, ShieldCheck } from "lucide-react";
+import type { ReactNode } from "react";
 
 import type { ApprovedRevision } from "@/api/contracts";
 import { approvedPreviewSrc, type DecisionMarkdownDownload } from "@/api/revisions";
@@ -12,11 +13,12 @@ import { surfaceClasses } from "@/ui/surface";
 import { ValidationReportView } from "./ValidationReportView";
 
 interface RevisionRecordProps {
+  additionalOptions?: ReactNode;
   decision: DecisionMarkdownDownload | undefined;
   revision: ApprovedRevision;
 }
 
-export const RevisionRecord = ({ decision, revision }: RevisionRecordProps) => {
+export const RevisionRecord = ({ additionalOptions, decision, revision }: RevisionRecordProps) => {
   const downloadDecision = () => {
     if (decision === undefined) return;
     const href = URL.createObjectURL(new Blob([decision.content], { type: "text/markdown;charset=utf-8" }));
@@ -75,23 +77,35 @@ export const RevisionRecord = ({ decision, revision }: RevisionRecordProps) => {
           <ValidationReportView report={revision.ready_validation} />
         </Card>
 
+        {/* Secondary actions belong beside the record they affect. On the wide Ready
+            layout this fills the space below validation instead of leaving the aside
+            empty while the controls sit below the entire document grid; when the grid
+            stacks, the same slot preserves their reading order after validation. */}
+        {additionalOptions}
+
+        {/* The third of three peers in this aside, and for a while the only one drawn by
+            hand: a bare `<details>` on a filled panel, opened by the user agent's own
+            triangle, beside a `Disclosure` and a `Card`. It is the same kind of thing as
+            "פרטים טכניים וביקורת" - a long document held closed - so it is now the same
+            component, and the chevron and surface come from there rather than from here. */}
         {decision === undefined ? null : (
-          <details className={surfaceClasses("bg-cv-surface-muted p-4")}>
-            <summary className="cursor-pointer font-semibold text-cv-text">הסבר ההחלטות של הגרסה</summary>
-            <p className="mt-2 text-support text-cv-text-muted">
-              מסמך קריא שמסביר מה נבחר, אילו פערים התקבלו ואילו חריגות נרשמו.
-            </p>
-            <pre
-              className="mt-4 max-h-96 overflow-auto whitespace-pre-wrap rounded-control border border-cv-border bg-cv-surface p-4 text-support"
-              dir="auto"
-            >
-              {decision.content}
-            </pre>
-            <Button className="mt-3" onClick={downloadDecision} variant="secondary">
-              <Code2 aria-hidden="true" className="size-icon-md" />
-              הורדת מסמך ההחלטה
-            </Button>
-          </details>
+          <Disclosure summary="הסבר ההחלטות של הגרסה">
+            <Card className="bg-cv-surface p-4 shadow-surface">
+              <p className="text-support text-cv-text-muted">
+                מסמך קריא שמסביר מה נבחר, אילו פערים התקבלו ואילו חריגות נרשמו.
+              </p>
+              <pre
+                className="mt-4 max-h-96 overflow-auto whitespace-pre-wrap rounded-control border border-cv-border bg-cv-surface-sunken p-4 text-support"
+                dir="auto"
+              >
+                {decision.content}
+              </pre>
+              <Button className="mt-3" onClick={downloadDecision} variant="secondary">
+                <Code2 aria-hidden="true" className="size-icon-md" />
+                הורדת מסמך ההחלטה
+              </Button>
+            </Card>
+          </Disclosure>
         )}
       </aside>
     </div>

@@ -23,8 +23,8 @@ interface WizardStepShellProps {
      an Application belong to the Application feature, and preparation is reached into
      rather than reaching back. */
   eyebrow?: ReactNode;
-  /* The draft editor is the one step whose content is a document beside the evidence for
-     each of its lines, and that split of two readable columns needs the wide frame. Every
+  /* The two document steps - the draft editor and the ready step - put the CV beside the
+     evidence for it, and that split of two readable columns needs the wide frame. Every
      other step asks one thing and takes the narrower wizard measure. */
   measure?: "wide" | "wizard";
   /* Which step of the flow this screen is, and what the spine marks as current. The

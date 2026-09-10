@@ -126,9 +126,15 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
     <div className="flex flex-col gap-4 py-1">
       {/* Decorative: the nav's own `aria-label` already states the label and the
           position in words, so this repeats it for sighted readers only. */}
-      <div aria-hidden="true" className="flex shrink-0 items-baseline gap-x-2">
+      <div aria-hidden="true" className="flex shrink-0 flex-wrap items-baseline gap-x-2">
         <span className="text-heading-sm font-bold text-cv-text">{label}</span>
-        {progressText === null ? null : <span className="text-caption text-cv-text-muted">{progressText}</span>}
+        {/* The count never breaks across lines. Beside a two-line label in the 13rem
+            spine column there is room for about half of it, and the wrap fell inside the
+            phrase - "הושלם 4" over "מתוך 4" - which reads as two numbers rather than one
+            ratio. Held together it drops to its own line instead. */}
+        {progressText === null ? null : (
+          <span className="text-caption whitespace-nowrap text-cv-text-muted">{progressText}</span>
+        )}
       </div>
 
       {/* Every step, always drawn. This used to be a bar-less horizontal scroller, on the

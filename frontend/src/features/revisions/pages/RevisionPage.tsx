@@ -147,6 +147,12 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
           <span dir="auto">{applicationLabel(detail.application.company, detail.application.target_role)}</span>
         )
       }
+      /* The same reason the draft editor takes it: this step's body is the finished
+         document beside the record and validation report that answer for it, and a split
+         of two readable columns needs the room. At the wizard measure the aside claimed
+         its 19rem minimum and left the page itself under 60% of A4 - the one thing on the
+         screen the reader came to look at, drawn smallest. */
+      measure="wide"
       queryError={pageQueryError}
       stage="ready"
       /* The stage's own name everywhere except where the record does not actually meet it:
@@ -191,25 +197,30 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
             ) : null}
 
             <RevisionSummary detail={detail} revision={revision} submittedAt={submittedAt} />
-            <RevisionRecord decision={decisionQuery.data} revision={revision} />
-            {revision.ready_qualified && (newDraftButton !== null || submittedAt !== null) ? (
-              <Disclosure summary="אפשרויות נוספות">
-                <div className="pt-2">
-                  <p className="mb-3 text-support text-cv-text-muted">
-                    הפעולות כאן אינן חלק מהשלמת המסירה הנוכחית ואינן משנות את הגרסה המוכנה הזו.
-                  </p>
-                  <div className="flex flex-wrap gap-3">
-                    {submittedAt !== null ? (
-                      <Button onClick={() => setSubmissionOpen(true)} variant="secondary">
-                        <Send aria-hidden="true" className="size-icon-md" />
-                        רישום הגשה נוספת
-                      </Button>
-                    ) : null}
-                    {newDraftButton}
-                  </div>
-                </div>
-              </Disclosure>
-            ) : null}
+            <RevisionRecord
+              additionalOptions={
+                revision.ready_qualified && (newDraftButton !== null || submittedAt !== null) ? (
+                  <Disclosure summary="אפשרויות נוספות">
+                    <div className="pt-2">
+                      <p className="mb-3 text-support text-cv-text-muted">
+                        הפעולות כאן אינן חלק מהשלמת המסירה הנוכחית ואינן משנות את הגרסה המוכנה הזו.
+                      </p>
+                      <div className="flex flex-wrap gap-3">
+                        {submittedAt !== null ? (
+                          <Button onClick={() => setSubmissionOpen(true)} variant="secondary">
+                            <Send aria-hidden="true" className="size-icon-md" />
+                            רישום הגשה נוספת
+                          </Button>
+                        ) : null}
+                        {newDraftButton}
+                      </div>
+                    </div>
+                  </Disclosure>
+                ) : undefined
+              }
+              decision={decisionQuery.data}
+              revision={revision}
+            />
           </>
         )}
       </QueryState>

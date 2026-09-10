@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { detail, json, operation, renderRoute, revision } from "@/test/fixtures";
@@ -192,7 +192,8 @@ describe("RevisionPage", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
 
-    fireEvent.click(await screen.findByText("אפשרויות נוספות"));
+    const revisionAside = await screen.findByRole("complementary", { name: "פרטי הגרסה והאימות" });
+    fireEvent.click(within(revisionAside).getByText("אפשרויות נוספות"));
     fireEvent.click(await screen.findByRole("button", { name: "רישום הגשה נוספת" }));
     expect(await screen.findByText("הגרסה הזו כבר נרשמה כמוגשת")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "אישור ורישום ההגשה" })).toBeDisabled();

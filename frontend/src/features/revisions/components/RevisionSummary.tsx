@@ -26,25 +26,35 @@ interface RevisionSummaryProps {
 export const RevisionSummary = ({ detail, revision, submittedAt }: RevisionSummaryProps) => {
   return (
     <Card aria-labelledby="revision-summary-heading" className="bg-cv-surface p-4 shadow-surface sm:p-5">
-      <div className="flex min-w-0 items-start gap-3">
-        <span className="grid size-11 shrink-0 place-items-center rounded-pill bg-cv-success-soft text-cv-success">
-          <FileCheck2 aria-hidden="true" className="size-icon-lg" />
-        </span>
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-heading-sm font-bold text-cv-text" id="revision-summary-heading">
-              {revision.ready_qualified ? "גרסה מוכנה למסירה" : "גרסה מאושרת וקבועה"}
-            </h2>
-            <StatusBadge tone={revision.ready_qualified ? "success" : "warning"}>
-              {revision.ready_qualified ? "מוכן למסירה" : "ממתינה לקבצים תקינים"}
-            </StatusBadge>
+      {/* Two sides, because the card is as wide as the step is. What the revision is
+          reads from the opening edge; when it happened is a second, smaller column at the
+          closing one. Stacked into a single left-hand block they left most of a
+          full-width card empty and the dates trailing under the company name as though
+          they were part of it. Below `sm` the row wraps and the old stack returns. */}
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="grid size-11 shrink-0 place-items-center rounded-pill bg-cv-success-soft text-cv-success">
+            <FileCheck2 aria-hidden="true" className="size-icon-lg" />
+          </span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-heading-sm font-bold text-cv-text" id="revision-summary-heading">
+                {revision.ready_qualified ? "גרסה מוכנה למסירה" : "גרסה מאושרת וקבועה"}
+              </h2>
+              <StatusBadge tone={revision.ready_qualified ? "success" : "warning"}>
+                {revision.ready_qualified ? "מוכן למסירה" : "ממתינה לקבצים תקינים"}
+              </StatusBadge>
+            </div>
+            {detail === undefined ? null : (
+              <p className="mt-1 text-support text-cv-text-muted" dir="auto">
+                {applicationLabel(detail.application.company, detail.application.target_role)}
+              </p>
+            )}
           </div>
-          {detail === undefined ? null : (
-            <p className="mt-1 text-support text-cv-text-muted" dir="auto">
-              {applicationLabel(detail.application.company, detail.application.target_role)}
-            </p>
-          )}
-          <p className="mt-1 text-support text-cv-text-muted">
+        </div>
+
+        <div className="min-w-0 shrink-0">
+          <p className="text-support text-cv-text-muted">
             אושרה {formatDateTime(revision.approved_at, "short")} · גרסה {revision.version_number}
           </p>
           {submittedAt === null ? null : (

@@ -56,7 +56,11 @@ export const CommitBarTargetContext = createContext<HTMLElement | null | undefin
    screen - and it is this component, at all three, that makes the answer one shape. */
 const CommitBarSurface = ({ back, children, label, primary, result }: CommitBarProps) => (
   <div className="sticky bottom-4 z-(--cv-z-sticky) rounded-surface border border-cv-border bg-cv-surface/95 p-card-padding shadow-floating backdrop-blur-xl">
-    <div className="grid grid-cols-[minmax(0,1fr)_max-content] items-center gap-4">
+    {/* Two sides only where there is room for two. The action column is `max-content`, so
+        on a phone it took the width of "רישום הגשת הגרסה הזו" plus "הורדת PDF" and left
+        the sentence beside it about ninety pixels - one word per line, for four lines.
+        Below `sm` the bar is one column: what the step is waiting on, then what to do. */}
+    <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_max-content] sm:items-center">
       <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
         {back}
         {label === undefined ? (
@@ -68,7 +72,7 @@ const CommitBarSurface = ({ back, children, label, primary, result }: CommitBarP
           </div>
         )}
       </div>
-      <div className="flex flex-wrap items-center justify-self-end gap-3">{primary}</div>
+      <div className="flex flex-wrap items-center gap-3 sm:justify-self-end">{primary}</div>
     </div>
     {result === undefined ? null : (
       <LiveRegion
