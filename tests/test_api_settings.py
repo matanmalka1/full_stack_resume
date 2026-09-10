@@ -48,7 +48,7 @@ def test_settings_api_returns_pure_defaults_etag_and_no_secret_surface(api_worke
     assert response.headers["ETag"] == '"settings-0"'
     assert response.json() == {
         "edit_version": 0,
-        "auto_generate_when_review_not_required": True,
+        "auto_generate_when_review_not_required": False,
         "ai_enabled": False,
         "ai_enabled_override": None,
         "default_execution_mode": "deterministic",

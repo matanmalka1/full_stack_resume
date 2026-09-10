@@ -758,6 +758,7 @@ POST   /api/v1/applications
 GET    /api/v1/applications
 POST   /api/v1/applications/duplicate-check
 GET    /api/v1/applications/{id}
+PATCH  /api/v1/applications/{id}/notes
 POST   /api/v1/applications/{id}/job-snapshots
 POST   /api/v1/applications/{id}/analyses
 GET    /api/v1/applications/{id}/artifacts

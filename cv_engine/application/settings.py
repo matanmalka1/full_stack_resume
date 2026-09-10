@@ -25,7 +25,7 @@ UiTextSize = Literal["normal", "large"]
 
 class StoredSettings(BoundaryDTO):
     edit_version: int = 0
-    auto_generate_when_review_not_required: bool = True
+    auto_generate_when_review_not_required: bool = False
     ai_enabled_override: bool | None = None
     default_execution_mode: ExecutionMode = "deterministic"
     default_ai_model: AIModel | None = None

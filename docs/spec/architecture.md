@@ -488,8 +488,11 @@ require historical-read coverage even when no Alembic migration is needed.
 
 Malformed thresholds are invalid provider output; well-formed thresholds with an
 unsupported scale yield undetermined coverage. Optional provider tags alone cannot
-establish boundary applicability or positive coverage. The detailed mapping and
-validation contracts must be resolved before extraction is connected to activation.
+establish boundary applicability or positive coverage. Extraction is active under
+these conservative rules: an unmapped concept or unresolved applicability remains
+`undetermined` and may block through `ANALYSIS_INCOMPLETE`; expanding deterministic
+coverage requires explicit mapping and validation contracts rather than optimistic
+inference.
 
 Each task receives minimal allowed context. Provider text and fact IDs pass schema and
 semantic support validation. A valid ID paired with strengthened wording fails. Claims

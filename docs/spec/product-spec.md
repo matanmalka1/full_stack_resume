@@ -174,8 +174,9 @@ The product includes:
 - A Ready projection over a qualifying ApprovedRevision.
 - Contextual fact inspection and the pending -> confirmed -> canonical -> attached
   lifecycle without a general Knowledge Manager.
-- OpenAI Responses API integration for the seven AI tasks through strict structured
-  Proposal contracts.
+- OpenAI Responses API integration for six implemented Proposal tasks through strict
+  structured contracts. The approved seventh target task, `assess_claim_support`, is
+  delivered only with the D1 evidence lifecycle described in sections 10–12.
 - A deterministic offline flow through Ready when no OpenAI key is configured.
 - A Dashboard, Application Detail, unified timeline, recruitment tracking, next action,
   internal and external submissions, status correction, and overdue warnings after the
@@ -292,8 +293,10 @@ root. There is no selectable root, marker, or runtime identity file.
 ## 8. Job intake and snapshots
 
 The initial form requires company, target role, and full job text. Source URL is
-optional. Source label and notes belong to Application Detail and do not burden the
-creation form.
+optional. Mutable notes belong to Application Detail and do not burden the creation
+form. An optional source label, when supplied by a snapshot-creation client, is
+JobSnapshot provenance inside `source_metadata`; it is not a second mutable Application
+field and the primary Web UI need not expose it.
 
 The `create_application` command is deterministic and fast. It creates the Application
 and its first immutable JobSnapshot and does not call AI. In the Web intake flow, a
@@ -457,7 +460,7 @@ the later tracking milestone, not the first vertical slice.
 
 The application implements one OpenAI adapter behind the provider-neutral `AIProvider`
 protocol.
-The seven AI tasks are:
+The AI task catalog has six implemented tasks and one approved target task:
 
 - `propose_requirement_extraction` — quoted requirements and explicit interpretation;
   it cannot decide coverage, gaps, Fit, or approval.
@@ -466,8 +469,10 @@ The seven AI tasks are:
 - `draft_resume`
 - `regenerate_section`
 - `regenerate_claim`
-- `assess_claim_support` — separate semantic review of wording against supplied
-  canonical sources and contextual attribution, returning evidence proposals only.
+- `assess_claim_support` — approved target, not yet implemented; separate semantic
+  review of wording against supplied canonical sources and contextual attribution,
+  returning evidence proposals only. It must not be advertised as available until the
+  evidence, clarification, staleness, and activation contracts in §10.1 are implemented.
 
 The support reviewer runs separately from the writer and does not use the writer's
 self-assessment as evidence. Separation of calls is not a guarantee of independent
@@ -793,7 +798,9 @@ v2.0 is Release Ready only when all of the following are demonstrably true:
 - [ ] The central failure paths are exercised through the same slice.
 - [ ] Review is exception-based and every review reason is explicit and resolvable.
 - [ ] The deterministic offline workflow completes through Ready.
-- [ ] The seven AI tasks return Proposals and cannot bypass deterministic policy.
+- [ ] The six current AI tasks return Proposals and cannot bypass deterministic policy;
+      the seventh task, `assess_claim_support`, is implemented with its evidence lifecycle
+      before D1 wording is enabled.
 - [ ] D1 accepts fully reviewed supported wording without individual confirmation,
       blocks uncertainty/contradiction, preserves evidence attribution and staleness,
       and passes the Connecteam and WeDev acceptance scenarios.

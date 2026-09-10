@@ -419,8 +419,12 @@ magnitude and recorded in API/config contracts.
 
 ## 11. Accessibility, RTL, and browser coverage
 
-Automated axe checks cover every screen the frontend ships, and a new screen is
-expected to arrive with its scan.
+Automated axe checks currently cover New Application, Application Detail (including the
+new-snapshot dialog), and Settings/Reconciliation. Release coverage must additionally
+exercise the Dashboard, Resume view, Draft Editor, and Revision screens. A new screen is
+expected to arrive with its scan; until a route-derived coverage guard exists, the
+acceptance report lists the routed screens and their corresponding axe scenarios so a
+missing scan is visible rather than implied to pass.
 
 Manual/automated assertions include keyboard access, focus management, labels, status
 announcements, contrast, Hebrew RTL shell, explicit LTR islands, and isolated CV
