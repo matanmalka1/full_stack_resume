@@ -16,7 +16,7 @@ import { type QueuedOperation, isTerminalOperation, operationQueryKey, operation
 import { executionProvider, settingsQueryOptions } from "@/api/settings";
 import { useSettings } from "@/api/useSettings";
 import { routePaths } from "@/app/routePaths";
-import { type AutoDraftSources, autoDraftSources } from "../model/autoDraft";
+import { type AutoDraftSources, autoDraftIsContinuing, autoDraftSources } from "../model/autoDraft";
 import type { WorkflowActionPlan } from "../model/workflowActionPlan";
 
 /* Every command the preparation screen sends, and the guards that say when each may be
@@ -204,6 +204,33 @@ export const useAutomaticDraft = ({
     sessionStorage.setItem(draftNavigationKey(operation.id), "completed");
     navigate(routePaths.draft(applicationId), { replace: true });
   }, [applicationId, navigate, operation]);
+
+  /* What the screen reporting this Application's work should say instead of reporting a
+     finished run, while this hook is about to start or move to the next one.
+
+     The same two continuations the effects above own, asked one render earlier: between a
+     succeeded analyze and the generate that follows it, and between a succeeded generate
+     and the editor this hook navigates to. Both windows last a poll or an effect tick, and
+     in both the panel used to shrink to its one-line "הושלמה" and grow straight back for
+     what came next - announcing a stop the flow never made, at the one moment the reader
+     had been waiting to look at.
+
+     A dispatch that failed ends the first: with no continuation coming, the analysis has
+     genuinely finished and its run settles like any other. The second is keyed on the
+     navigation marker rather than on the Operation's type, for the reason the effect above
+     gives - the marker says this screen started the generate, which a reload arriving at a
+     long-finished one does not, and only the screen that started it is going anywhere. */
+  const continuation =
+    operation?.status !== "succeeded"
+      ? undefined
+      : !automaticDraft.isError &&
+          (automaticDraft.isPending || autoDraftIsContinuing(operation, settingsQuery.data?.settings, detail))
+        ? "הניתוח הושלם. יצירת הטיוטה מתחילה מיד."
+        : sessionStorage.getItem(draftNavigationKey(operation.id)) === null
+          ? undefined
+          : "הטיוטה נוצרה. מעבר לעורך הטיוטה…";
+
+  return { continuation };
 };
 
 /* A.1: which actions are offered comes from the projection, read by `workflowActionPlan`

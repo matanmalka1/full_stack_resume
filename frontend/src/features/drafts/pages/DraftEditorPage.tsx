@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { isTerminalOperation } from "@/api/operations";
 import { routePaths } from "@/app/routePaths";
 import { useRequiredParam } from "@/app/useRequiredParam";
 import { QueryState } from "@/ui/QueryState";
@@ -65,15 +64,38 @@ export const DraftEditorPage = () => {
       ? (detail.latest_approved_revision_id ?? null)
       : null);
 
+  const renderFinished =
+    operation?.operation_type === "render_revision" && operation.status === "succeeded" && renderRevisionId !== null;
+
   useEffect(() => {
-    if (
-      operation?.operation_type === "render_revision" &&
-      operation.status === "succeeded" &&
-      renderRevisionId !== null
-    ) {
+    if (renderFinished) {
       navigate(routePaths.revision(renderRevisionId), { replace: true });
     }
-  }, [navigate, operation, renderRevisionId]);
+  }, [navigate, renderFinished, renderRevisionId]);
+
+  /* The generate this screen was opened by has succeeded and activated its draft, and the
+     projection naming that draft is a poll behind. Read from the run's own outputs rather
+     than from a list of the Operation types that write drafts, so a new one that produces
+     the same output is covered without being registered here.
+
+     Without it the screen answered the gap with `DraftEmptyState` - "אין כרגע טיוטה פעילה"
+     over a link back - which is the pre-generate state, shown for a poll to a reader who
+     had just watched the draft being written, and taken away again by the projection that
+     arrived next. */
+  const draftArriving =
+    workingDraftId === null &&
+    operation?.status === "succeeded" &&
+    operation.outputs.some((output) => output.active && output.output_type === "working_draft");
+
+  /* Both windows where this screen's work is finished but the screen is not stopping here:
+     it is loading the draft that was just written, or leaving for the ready step. Either
+     way the run's card holds its shape and says what is happening, instead of collapsing
+     to "הושלמה" for the tick before the next thing replaces it. */
+  const continuation = renderFinished
+    ? "הקבצים נוצרו. מעבר לגרסה המוכנה…"
+    : draftArriving
+      ? "הטיוטה נוצרה. טוענים את העורך…"
+      : undefined;
 
   /* Hiding the rows must not strand text still sitting in the buffer, so the document
      view settles it first. */
@@ -124,7 +146,9 @@ export const DraftEditorPage = () => {
 
           {/* Live work, reported beside the draft it is rewriting rather than on a screen
               the user has to leave the text for. */}
-          {operation === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={operation} />}
+          {operation === undefined ? null : (
+            <ActiveOperationPanel continuation={continuation} onQueued={watch} operation={operation} />
+          )}
 
           {/* The projection's own blockers, reported by the one region that reports them.
               A claim with no fact behind it raises PENDING_FACT_REQUIRES_RESOLUTION there,
@@ -134,7 +158,7 @@ export const DraftEditorPage = () => {
               refuses approval without naming anything the reader could do about it. */}
           <PreparationAlerts detail={detail} screen="draft" />
 
-          {workingDraftId === null && renderRevisionId === null ? (
+          {workingDraftId === null && renderRevisionId === null && !draftArriving ? (
             <DraftEmptyState applicationId={applicationId} />
           ) : null}
         </>
@@ -145,11 +169,12 @@ export const DraftEditorPage = () => {
           approvedRevisionId={renderRevisionId}
           autoStart={approvedRevisionId !== null}
           onQueued={watch}
-          /* The live render is reported once, by `ActiveOperationPanel` above. This tells
-             the render panel to stand down while that is true, so the approved box and its
-             "create the files" CTA never appear beside the operation already creating
-             them. */
-          rendering={operation?.operation_type === "render_revision" && !isTerminalOperation(operation)}
+          /* The render is reported once, by `ActiveOperationPanel` above. This tells the
+             render panel whether that is happening, so the approved box and its "create the
+             files" CTA never appear beside the operation already creating them - and so the
+             render panel knows to report the wait itself in the window before there is an
+             Operation to report. */
+          rendering={operation?.operation_type === "render_revision"}
         />
       ) : null}
 

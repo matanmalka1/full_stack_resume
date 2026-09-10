@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { operationQueryKey } from "@/api/operations";
 import { approvedRevisionQueryOptions, renderApprovedRevision } from "@/api/revisions";
 import { routePaths } from "@/app/routePaths";
+import { PendingWorkCard, operationTypeLabels } from "@/features/operations";
 import { CommitBar, NEXT_STEP_LABEL } from "@/features/preparation";
 import { Button, buttonClasses } from "@/ui/Button";
 import { ErrorCallout } from "@/ui/ErrorCallout";
@@ -16,11 +17,12 @@ interface DraftRenderPanelProps {
      an older approved state remains passive, so a visit never queues artifact work by
      itself. */
   autoStart?: boolean;
-  /* Whether a render Operation for this revision is queued or running right now, read from
-     the same watched Operation the host screen shows in `ActiveOperationPanel`. That panel
-     is the single live status of the render; while it is up, this panel must not also offer
-     a "create the files" button - the file creation is already under way, so the approved
-     box and its CTA are a second, contradictory account of the same moment. */
+  /* Whether the host screen's `ActiveOperationPanel` is reporting a render Operation for
+     this revision, of any status. That panel is the single account of the render; while it
+     is up, this panel must not also offer a "create the files" button - the file creation
+     is already under way or already failed with its own retry there, so the approved box
+     and its CTA are a second, contradictory account of the same moment. It is also what
+     says whether the wait below is already being reported by something else. */
   rendering?: boolean;
   /* What this panel just queued, handed to the editor that holds it. Rendering used to
      navigate to the Operation's own screen, which took the approved draft off the display
@@ -79,7 +81,18 @@ export const DraftRenderPanel = ({
      panel to report - then the retry below is the only way on. */
   const renderInFlight = rendering || render.isPending || (autoStart && !ready && render.error === null);
   if (renderInFlight) {
-    return null;
+    /* Stepping aside is right only when something else is reporting the wait. In the
+       window this screen opens with - approval accepted, the render command sent, no
+       Operation named yet - nothing was: the editor had already been replaced by this
+       step, this panel returned nothing, and the run's own panel had no record to show,
+       so the page went briefly blank between the approval and the first status. The same
+       card that reports the run reports the wait for it. */
+    return rendering ? null : (
+      <PendingWorkCard
+        heading={<>הרצת {operationTypeLabels.render_revision}</>}
+        note="הגרסה אושרה. יצירת ה־HTML וה־PDF מתחילה."
+      />
+    );
   }
 
   return (

@@ -49,10 +49,13 @@ export const analysisViewState = ({
        output, not a stale projection waiting to expose it. Timestamps distinguish it from
        the opposite re-analysis race, where the projection still carries the older record. */
     const activeAnalysis = detail.latest_analysis;
+    /* Both sides absent is not a match. With no analysis on record and no active id, the
+       optional chain and the field are each `undefined` and compared equal - which read as
+       "the projection's active analysis is the latest one" for a projection carrying
+       neither, and then took the timestamp off nothing. That is the catch-up window this
+       function exists for, so the comparison states the record's presence itself. */
     const activeAnalysisTime =
-      activeAnalysis !== null &&
-      activeAnalysis !== undefined &&
-      activeAnalysis.id === detail.active_analysis_id
+      activeAnalysis != null && activeAnalysis.id === detail.active_analysis_id
         ? Date.parse(activeAnalysis.created_at)
         : NaN;
     const operationFinishedTime = operation.finished_at == null ? NaN : Date.parse(operation.finished_at);
