@@ -66,18 +66,17 @@ export const FactsPage = () => {
 
       <FactsIntegrityCheck />
 
-      <Card className="cv-fields-compact bg-cv-surface p-3 shadow-surface sm:p-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-0 grow">
-            <FactPoolFilters filters={filters} onChange={setFilters} sources={sources} tags={tags} />
-          </div>
-          <span className="shrink-0 pb-2 text-support font-semibold whitespace-nowrap text-cv-text-muted">
-            {visible.length === entries.length
-              ? `${entries.length} עובדות`
-              : `${visible.length} מתוך ${entries.length}`}
-          </span>
-        </div>
-      </Card>
+      {/* The count reads under the bar rather than inside it, as it does on the board.
+          Sitting in the filter row it was the one thing there with no label above it and
+          no control below it, so it took a field's slot while looking like neither. */}
+      <div className="flex flex-col gap-2">
+        <Card className="cv-fields-compact bg-cv-surface p-3 shadow-surface sm:p-4">
+          <FactPoolFilters filters={filters} onChange={setFilters} sources={sources} tags={tags} />
+        </Card>
+        <p aria-live="polite" className="text-support text-cv-text-muted tabular-nums">
+          {visible.length === entries.length ? `${entries.length} עובדות` : `${visible.length} מתוך ${entries.length}`}
+        </p>
+      </div>
 
       {mutationsBlocked ? null : (
         <FactCreationDialog

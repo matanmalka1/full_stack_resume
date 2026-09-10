@@ -51,7 +51,10 @@ export const ApplicationRecommendedAction = ({
   const readyRevisionLink =
     item.latest_ready_revision_id == null ? null : (
       <Link className={revisionLinkClasses[variant]} to={routePaths.revision(item.latest_ready_revision_id)}>
-        <FileCheck2 aria-hidden="true" className={variant === "row" ? "size-icon-sm shrink-0" : "size-icon-md shrink-0"} />
+        <FileCheck2
+          aria-hidden="true"
+          className={variant === "row" ? "size-icon-sm shrink-0" : "size-icon-md shrink-0"}
+        />
         הגרסה המוכנה
       </Link>
     );

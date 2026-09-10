@@ -166,7 +166,6 @@ export const ApplicationListToolbar = ({
           </option>
         ))}
       </Select>
-
     </search>
 
     {/* What matched, and how it is drawn, on one line under the bar. The presentation

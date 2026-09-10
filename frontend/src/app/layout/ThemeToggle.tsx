@@ -52,7 +52,7 @@ export const ThemeToggle = () => {
   };
 
   return (
-    <Tooltip label={label} placement="bottom">
+    <Tooltip label={label} placement="shell">
       <button
         aria-label={label}
         className={buttonClasses("secondary", "shrink-0", "icon")}

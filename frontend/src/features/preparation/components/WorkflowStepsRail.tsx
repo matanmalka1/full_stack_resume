@@ -169,10 +169,7 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
                 {next === undefined ? null : (
                   <span
                     aria-hidden="true"
-                    className={cx(
-                      "ms-[0.95rem] h-7 w-px shrink-0",
-                      connectorClasses[next.state],
-                    )}
+                    className={cx("ms-[0.95rem] h-7 w-px shrink-0", connectorClasses[next.state])}
                   />
                 )}
               </Fragment>

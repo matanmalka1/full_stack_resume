@@ -79,7 +79,11 @@ export const ApplicationListRow = ({ ambiguous, item, onRequestClose, onRequestU
   return (
     <tr
       aria-label={`${item.target_role} אצל ${item.company}`}
-      className="group relative grid cursor-pointer grid-cols-[1fr_auto] gap-x-3 p-4 transition-colors hover:bg-cv-surface-muted focus-visible:bg-cv-surface-muted lg:table-row lg:border-b lg:border-cv-border lg:p-0 lg:last:border-b-0 lg:[&>td:first-child]:ps-4 lg:[&>td:last-child]:pe-4"
+      /* Below the table breakpoint the row is a grid, and a grid item's automatic
+         minimum is its content: a long job title or company URL therefore held the whole
+         row wider than the phone it was drawn on, and the board scrolled sideways. The
+         cells are told they may shrink; the text inside them already wraps and clamps. */
+      className="group relative grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] gap-x-3 p-4 transition-colors hover:bg-cv-surface-muted focus-visible:bg-cv-surface-muted lg:table-row lg:border-b lg:border-cv-border lg:p-0 lg:last:border-b-0 lg:[&>td:first-child]:ps-4 lg:[&>td:last-child]:pe-4 [&>td]:min-w-0"
       onClick={openRow}
       onKeyDown={openRowFromKeyboard}
       tabIndex={0}

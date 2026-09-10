@@ -86,7 +86,9 @@ export const DuplicateChoices = ({ matches }: DuplicateChoicesProps) => {
                       {match.target_role}
                     </span>
                     <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-cv-warning">
-                      {ReasonIcon === undefined ? null : <ReasonIcon aria-hidden="true" className="size-icon-md shrink-0" />}
+                      {ReasonIcon === undefined ? null : (
+                        <ReasonIcon aria-hidden="true" className="size-icon-md shrink-0" />
+                      )}
                       {match.matched_on.map((matchedReason) => matchReasons[matchedReason].label).join(" · ")}
                     </span>
                   </span>

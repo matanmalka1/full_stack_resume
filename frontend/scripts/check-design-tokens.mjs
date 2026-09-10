@@ -77,17 +77,13 @@ const themeBlock = () => {
 const stylesheet = () => readFileSync(stylesPath, "utf8");
 
 const readTokens = (prefix) => {
-  return new Set(
-    [...themeBlock().matchAll(new RegExp(`--${prefix}-([a-z0-9-]+):`, "g"))].map((match) => match[1]),
-  );
+  return new Set([...themeBlock().matchAll(new RegExp(`--${prefix}-([a-z0-9-]+):`, "g"))].map((match) => match[1]));
 };
 
 const colorTokens = readTokens("color");
 const radiusTokens = readTokens("radius");
 const shadowTokens = readTokens("shadow");
-const zIndexTokens = new Set(
-  [...stylesheet().matchAll(/--cv-z-([a-z0-9-]+):/g)].map((match) => match[1]),
-);
+const zIndexTokens = new Set([...stylesheet().matchAll(/--cv-z-([a-z0-9-]+):/g)].map((match) => match[1]));
 
 const rules = [
   {
@@ -156,7 +152,12 @@ for (const file of collectFiles(sourceRoot)) {
     }
   }
 
-  for (const match of source.matchAll(/\bz-([a-z][a-z0-9-]*)\b/g)) {
+  /* Only a bare named utility is an error. The lookarounds keep this off the two shapes
+     that are not one: `z-(--cv-z-sticky)`, whose parenthesis follows immediately, and the
+     token name inside it, which begins right after `--cv-`. Without them the guard
+     reported every correct layer utility in the codebase as an unknown token, and the
+     check that was meant to protect the stack failed on the stack itself. */
+  for (const match of source.matchAll(/(?<!--cv-)\bz-(?!\()([a-z][a-z0-9-]*)\b/g)) {
     if (match[1] === "auto") {
       continue;
     }

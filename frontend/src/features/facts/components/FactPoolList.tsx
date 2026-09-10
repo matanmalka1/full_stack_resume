@@ -24,6 +24,7 @@ const statusToneClasses = {
   success: "text-cv-success",
   warning: "text-cv-warning",
   blocker: "text-cv-blocker",
+  info: "text-cv-info",
   progress: "text-cv-accent",
   neutral: "text-cv-text-muted",
 } as const;

@@ -23,6 +23,7 @@ const markerFor = (event: RecruitmentTimelineItem): { classes: string; icon: Luc
   const tone = recruitmentStatusTone(event.to_status ?? "saved");
   const classes = {
     blocker: "border-cv-blocker/30 bg-cv-blocker-soft text-cv-blocker",
+    info: "border-cv-info/30 bg-cv-info-soft text-cv-info",
     neutral: "border-cv-border bg-cv-surface text-cv-text-muted",
     progress: "border-cv-accent/30 bg-cv-accent-soft text-cv-accent",
     success: "border-cv-success/30 bg-cv-success-soft text-cv-success",

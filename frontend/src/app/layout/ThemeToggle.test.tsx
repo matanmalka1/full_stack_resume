@@ -11,7 +11,10 @@ afterEach(() => {
 
 describe("ThemeToggle", () => {
   it("follows the system until the user selects and persists a theme", () => {
-    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn(() => ({ matches: true })),
+    );
     render(<ThemeToggle />);
 
     expect(document.documentElement).not.toHaveAttribute("data-theme");

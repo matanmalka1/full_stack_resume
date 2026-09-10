@@ -85,7 +85,9 @@ export const Callout = ({ action, children, className, emphasis, role, title, to
             <div
               className={cx(
                 "leading-6",
-                banner ? cx("text-body font-bold", toneIconClasses[tone]) : cx("text-support font-semibold", toneIconClasses[tone]),
+                banner
+                  ? cx("text-body font-bold", toneIconClasses[tone])
+                  : cx("text-support font-semibold", toneIconClasses[tone]),
               )}
               dir="auto"
             >
