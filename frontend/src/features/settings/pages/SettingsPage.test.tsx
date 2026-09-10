@@ -86,7 +86,7 @@ describe("SettingsPage", () => {
                     status: "canonical",
                     tags: ["backend"],
                   },
-                  recorded_status: null,
+                  recorded_status: "confirmed",
                 },
               ],
             })

@@ -25,7 +25,7 @@ describe("RevisionPage", () => {
     );
     renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
     const frame = await screen.findByTitle("תצוגה מאושרת של קורות החיים");
-    expect(await screen.findByRole("button", { name: "עדכון סטטוס ומשימות" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "רישום הגשת הגרסה הזו" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "גרסה מוכנה למסירה" })).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "פרטי הגרסה והאימות" })).toBeInTheDocument();
     const technicalDetails = screen.getByText("פרטים טכניים וביקורת");

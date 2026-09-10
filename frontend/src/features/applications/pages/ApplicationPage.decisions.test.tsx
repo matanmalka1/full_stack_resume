@@ -117,7 +117,7 @@ afterEach(() => {
 });
 
 describe("the review decision, on the Application screen", () => {
-  it("opens on the decision and keeps the diagnosis behind its own tab", async () => {
+  it("opens on the decision and keeps the diagnosis behind its own disclosure", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(() => Promise.resolve(jsonResponse(detail()))),
@@ -128,21 +128,20 @@ describe("the review decision, on the Application screen", () => {
     /* The screen opens on what it needs from the reader. The analysis it is about is
        still one press away rather than a scroll below every decision card, and the
        diagnosis is not read as a second thing to act on. */
-    expect(await screen.findByRole("heading", { name: "נדרשת החלטה כדי להמשיך" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /החלטות נדרשות/ })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "פרטי ניתוח ואבחון" })).toHaveAttribute("aria-selected", "false");
-    expect(screen.queryByRole("heading", { name: "ניתוח המשרה" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "החלטות נדרשות כדי להמשיך" })).toBeInTheDocument();
+    const diagnosis = screen.getByText("פרטי הניתוח והאבחון");
+    const diagnosisDisclosure = diagnosis.closest("details");
+    expect(diagnosisDisclosure).not.toBeNull();
+    expect(diagnosisDisclosure).not.toHaveAttribute("open");
 
-    fireEvent.click(screen.getByRole("tab", { name: "פרטי ניתוח ואבחון" }));
+    fireEvent.click(diagnosis);
+    expect(diagnosisDisclosure).toHaveAttribute("open");
     expect(screen.getByRole("heading", { name: "ניתוח המשרה" })).toBeInTheDocument();
 
     expect(screen.queryByRole("region", { name: "התראות" })).not.toBeInTheDocument();
-    expect(screen.getByText(/יש להשלים את כל ההחלטות/)).toBeInTheDocument();
   });
 
-  /* The verdict the decisions are about is stated before them, not under them: the banner
-     carries the fit and the confidence the analysis recorded, and says how many decisions
-     are open. */
+  /* The verdict the decisions are about is stated before them, not under them. */
   it("states the analysis verdict above the decisions it explains", async () => {
     vi.stubGlobal(
       "fetch",
@@ -155,9 +154,8 @@ describe("the review decision, on the Application screen", () => {
        it used to stand in the analysis masthead and in the decision panel's preamble as
        well, three copies of one explanation on one screen. */
     const banner = await screen.findByText(/התאמה נמוכה מחייבת אישור מפורש/);
-    const decision = screen.getByRole("heading", { name: "נדרשת החלטה כדי להמשיך" });
+    const decision = screen.getByRole("heading", { name: "החלטות נדרשות כדי להמשיך" });
     expect(banner.compareDocumentPosition(decision) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(banner).toHaveTextContent("נדרשת החלטה אחת לפני שאפשר להמשיך.");
   });
 
   it("requires every displayed decision before enabling the single commit", async () => {
@@ -176,7 +174,7 @@ describe("the review decision, on the Application screen", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: "נדרשות 2 החלטות כדי להמשיך" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "החלטות נדרשות כדי להמשיך" })).toBeInTheDocument();
     const save = screen.getByRole("button", { name: "שמירת ההחלטות" });
     fireEvent.change(screen.getByLabelText("מסלול"), { target: { value: "tech-sales" } });
     expect(save).toBeDisabled();
@@ -244,7 +242,12 @@ describe("the review decision, on the Application screen", () => {
       return Promise.resolve(
         jsonResponse(
           applied
-            ? detail({ review_reasons: [], preparation_state: "ready_to_draft" })
+            ? detail({
+                review_reasons: [],
+                preparation_state: "ready_to_draft",
+                available_actions: ["create_draft"],
+                recommended_action: "create_draft",
+              })
             : detail({ review_reasons: [reason("HARD_GAP_REQUIRES_DECISION")] }),
         ),
       );
@@ -257,7 +260,7 @@ describe("the review decision, on the Application screen", () => {
     fireEvent.change(screen.getByLabelText(/סיבת הקבלה/), { target: { value: "נסגר בראיון" } });
     fireEvent.click(screen.getByRole("button", { name: "שמירת ההחלטות" }));
 
-    expect(await screen.findByText("מוכן ליצירת טיוטה")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "יצירת טיוטה" })).toBeInTheDocument();
 
     const applyCall = fetchMock.mock.calls.find((call) => call[0] === APPLY_PATH);
     expect(applyCall).toBeDefined();
@@ -299,7 +302,16 @@ describe("the review decision, on the Application screen", () => {
       void init;
       /* The decision closed the reason, which the refreshed projection is what reports. */
       return Promise.resolve(
-        jsonResponse(applied ? detail({ review_reasons: [], preparation_state: "ready_to_draft" }) : detail()),
+        jsonResponse(
+          applied
+            ? detail({
+                review_reasons: [],
+                preparation_state: "ready_to_draft",
+                available_actions: ["create_draft"],
+                recommended_action: "create_draft",
+              })
+            : detail(),
+        ),
       );
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -312,7 +324,7 @@ describe("the review decision, on the Application screen", () => {
 
     /* The refreshed projection reports the state that follows - here, that the reason
        closed - on the screen the user never left. */
-    expect(await screen.findByText("מוכן ליצירת טיוטה")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "יצירת טיוטה" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: /החלט.*כדי להמשיך/ })).not.toBeInTheDocument();
 
     const applyCall = fetchMock.mock.calls.find((call) => call[0] === APPLY_PATH);
@@ -324,6 +336,7 @@ describe("the review decision, on the Application screen", () => {
       accept_low_fit: false,
       accept_incomplete_analysis: false,
       track_override: "tech-sales",
+      profile_override: "account-manager",
       emphasis_override: "leadership",
       /* No gap was marked, so the acceptance is empty and carries no plan id with it. */
       accepted_requirement_ids: [],
@@ -346,11 +359,10 @@ describe("the review decision, on the Application screen", () => {
     fireEvent.click(screen.getByRole("button", { name: "שמירת ההחלטות" }));
 
     expect(await screen.findByText("the submitted decisions change nothing")).toBeInTheDocument();
-    /* Still on the screen, with the decision still selected: nothing safe was lost. The
-       heading names the Application, not the workflow - preparation is a tab of this
-       screen rather than a screen of its own. */
-    expect(screen.getByRole("heading", { level: 1, name: "Backend Engineer" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /החלטות נדרשות/ })).toHaveAttribute("aria-selected", "true");
+    /* Still on the analysis step, with the decision surface and selection intact: nothing
+       safe was lost. */
+    expect(screen.getByRole("heading", { level: 1, name: "ניתוח והתאמה" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "החלטות נדרשות כדי להמשיך" })).toBeInTheDocument();
     expect(screen.getByLabelText("מסלול")).toHaveValue("tech-sales");
   });
 
