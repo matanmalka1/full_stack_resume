@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DraftClaim, DraftFact } from "@/api/contracts";
@@ -56,5 +56,30 @@ describe("DraftClaimRow", () => {
     expect(rowActions.onEdit).toHaveBeenLastCalledWith(claim, claim.text);
     expect(rowActions.onCommit).toHaveBeenCalled();
     expect(screen.queryByText("השורה מנותקת מהעובדה הקנונית")).not.toBeInTheDocument();
+  });
+
+  it("does not remove the line until the confirmation dialog is accepted", () => {
+    const rowActions = actions();
+    render(<DraftClaimRow actions={rowActions} claim={claim} facts={facts} removal={{ route: "selection" }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "הסרת השורה" }));
+    expect(rowActions.onRemove).not.toHaveBeenCalled();
+
+    const dialog = screen.getByRole("dialog", { name: "הסרת השורה?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "אישור ההסרה" }));
+
+    expect(rowActions.onRemove).toHaveBeenCalledWith(claim);
+  });
+
+  it("closes the confirmation dialog on cancel without removing the line", () => {
+    const rowActions = actions();
+    render(<DraftClaimRow actions={rowActions} claim={claim} facts={facts} removal={{ route: "patch" }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "הסרת השורה" }));
+    const dialog = screen.getByRole("dialog", { name: "הסרת השורה?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "ביטול" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(rowActions.onRemove).not.toHaveBeenCalled();
   });
 });

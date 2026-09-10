@@ -4,6 +4,7 @@ import { Check, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import type { DraftClaim, DraftFact } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
+import { Dialog } from "@/ui/Dialog";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { Textarea } from "@/ui/Input";
 import type { DraftClaimActions } from "../model/drafts.types";
@@ -43,6 +44,11 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, removal }
   }
 
   const [editing, setEditing] = useState(false);
+
+  /* A single misclick on a dense list of rows must not be able to discard a line or
+     exclude the fact behind it - the confirmation is the only gate before either takes
+     effect. */
+  const [confirmingRemoval, setConfirmingRemoval] = useState(false);
 
   /* The line as it stood when this edit began, so a revert hands back exactly what the
      backend still counts as canonical rather than a value guessed after the fact. */
@@ -175,7 +181,7 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, removal }
           <Button
             aria-label="הסרת השורה"
             className={rowActionClasses}
-            onClick={() => actions.onRemove(claim)}
+            onClick={() => setConfirmingRemoval(true)}
             title={
               removal.route === "selection"
                 ? "הסרת השורה מחריגה את העובדה שמאחוריה ובונה את הטיוטה מחדש בלעדיה."
@@ -187,6 +193,37 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, removal }
           </Button>
         )}
       </div>
+
+      {removal.route === "none" ? null : (
+        <Dialog
+          footer={
+            <>
+              <Button onClick={() => setConfirmingRemoval(false)} variant="secondary">
+                ביטול
+              </Button>
+              <Button
+                onClick={() => {
+                  actions.onRemove(claim);
+                  setConfirmingRemoval(false);
+                }}
+                variant="destructive"
+              >
+                אישור ההסרה
+              </Button>
+            </>
+          }
+          headingId={`remove-claim-heading-${claim.claim_id}`}
+          onClose={() => setConfirmingRemoval(false)}
+          open={confirmingRemoval}
+          title="הסרת השורה?"
+        >
+          <p dir="auto">
+            {removal.route === "selection"
+              ? "הפעולה מחריגה את העובדה שמאחורי השורה ובונה את הטיוטה מחדש בלעדיה. אפשר לבטל את ההסרה זמן קצר לאחר מכן."
+              : "השורה תוסר מהטיוטה. אפשר לבטל את ההסרה זמן קצר לאחר מכן."}
+          </p>
+        </Dialog>
+      )}
     </li>
   );
 };

@@ -690,11 +690,28 @@ describe("DraftEditorPage selection changes", () => {
     });
   });
 
-  it("removes a fact-backed line by excluding its facts, not by patching the claim", async () => {
+  it("asks for confirmation before removing a line, then stages it behind an undo window", async () => {
     const fetchMock = stubReads({ facts: () => jsonResponse(omittedFacts()) });
 
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "הסרת השורה" }));
+
+    /* A single click on the trash icon must not fire the removal by itself. */
+    const dialog = await screen.findByRole("dialog", { name: "הסרת השורה?" });
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/apply-selection-change"))).toBe(false);
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "אישור ההסרה" }));
+
+    /* Confirming stages the removal instead of sending it straight away, offering an undo. */
+    expect(await screen.findByRole("button", { name: "ביטול ההסרה" })).toBeVisible();
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/apply-selection-change"))).toBe(false);
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await vi.advanceTimersByTimeAsync(6000);
+    } finally {
+      vi.useRealTimers();
+    }
 
     await waitFor(() =>
       expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/apply-selection-change"))).toBe(true),
@@ -702,6 +719,20 @@ describe("DraftEditorPage selection changes", () => {
     const call = fetchMock.mock.calls.find((entry) => String(entry[0]).endsWith("/apply-selection-change"));
     expect(JSON.parse(String((call?.[1] as RequestInit | undefined)?.body)).excluded_fact_ids).toEqual(["f-1"]);
     expect(fetchMock.mock.calls.some((entry) => (entry[1] as RequestInit)?.method === "PATCH")).toBe(false);
+  });
+
+  it("cancels a staged removal with the undo action, never sending the exclusion", async () => {
+    const fetchMock = stubReads({ facts: () => jsonResponse(omittedFacts()) });
+
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "הסרת השורה" }));
+    const dialog = await screen.findByRole("dialog", { name: "הסרת השורה?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "אישור ההסרה" }));
+
+    fireEvent.click(await screen.findByRole("button", { name: "ביטול ההסרה" }));
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: "ביטול ההסרה" })).not.toBeInTheDocument());
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/apply-selection-change"))).toBe(false);
   });
 
   it("presents the manual-wording refusal as the backend states it", async () => {
