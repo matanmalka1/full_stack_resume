@@ -59,7 +59,7 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
      qualify has no PDF to hand over, so the step's action is the way back to fixing it -
      which is the back link itself, and the bar draws nothing rather than a primary that
      repeats it. */
-  const recruiterPdfArtifactId = revision?.ready_qualified === true ? revision.pdf_artifact_version_id : null;
+  const recruiterPdfArtifactId = revision?.ready_qualified === true ? (revision.pdf_artifact_version_id ?? null) : null;
   const submissionExists = submittedAt !== null || submissionRecorded;
   const newDraftButton = !canCreate ? null : (
     <Button

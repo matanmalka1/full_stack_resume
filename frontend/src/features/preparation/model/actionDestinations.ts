@@ -58,7 +58,7 @@ type ResumeProjection = Pick<
 
 const resumeDestination = (application: ResumeProjection): string => {
   const recommended =
-    application.recommended_action === null ? null : actionDestination(application.recommended_action, application.id);
+    application.recommended_action == null ? null : actionDestination(application.recommended_action, application.id);
 
   if (recommended !== null) {
     return recommended;
