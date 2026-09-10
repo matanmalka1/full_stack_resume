@@ -30,6 +30,7 @@ from pydantic import Field
 from ...application.commands import FactEventView
 from ...domain.contracts.knowledge import Fact, FactStatus
 from ...domain.contracts.selection import SelectionPlan
+from ...domain.contracts.taxonomy import ProfileName
 from ...domain.facts import FACT_SOURCE_NAMES, source_name_of
 from .health import HttpSchema
 
@@ -116,6 +117,23 @@ class FactListResponse(HttpSchema):
 class FactDetailResponse(HttpSchema):
     fact: FactResponse
     events: list[FactEventResponse]
+
+
+class FactAttachmentSectionTargetResponse(HttpSchema):
+    section: str
+    label: str
+    attached: bool
+    pinned: bool
+
+
+class FactAttachmentProfileTargetResponse(HttpSchema):
+    profile: ProfileName
+    label: str
+    sections: list[FactAttachmentSectionTargetResponse]
+
+
+class FactAttachmentTargetsResponse(HttpSchema):
+    profiles: list[FactAttachmentProfileTargetResponse]
 
 
 class FactHistoryResponse(HttpSchema):

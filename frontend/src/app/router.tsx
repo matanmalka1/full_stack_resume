@@ -4,14 +4,16 @@ import { NewApplicationPage } from "@/features/application-intake";
 import { ApplicationListPage } from "@/features/application-list";
 import { ApplicationPage, ApplicationResumePage } from "@/features/applications";
 import { DraftEditorPage } from "@/features/drafts";
+import { FactsPage } from "@/features/facts";
 import { RevisionPage } from "@/features/revisions";
 import { SettingsPage } from "@/features/settings";
 import { AppLayout } from "./layout/AppLayout";
 import { NotFoundPage } from "./layout/NotFoundPage";
 import { RootRouteErrorBoundary, RouteErrorBoundary } from "./layout/RouteErrorBoundary";
 
-/* Six screens carry the workflow: the board, intake, the Application hub, its preparation
-   tab, the draft editor, and the approved revision.
+/* The preparation workflow is carried by the board, intake, the Application hub, its
+   preparation tab, the draft editor, and the approved revision. Candidate facts and
+   settings are durable product areas outside that per-Application workflow.
 
    Validation, approval, and render are not among them. Each was a screen holding a single
    button, and each acted on the draft the editor was already showing, so reaching one
@@ -58,6 +60,7 @@ export const router = createBrowserRouter([
          whatever revision is current instead of the one named. */
           { path: "revisions/:revisionId", element: <RevisionPage /> },
 
+          { path: "facts", element: <FactsPage /> },
           { path: "settings", element: <SettingsPage /> },
 
           { path: "*", element: <NotFoundPage /> },

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { defaultFactSource, emptyFactForm, factFieldRules, parseFactTags } from "./factForm";
+import type { Fact } from "@/api/contracts";
+import { defaultFactSource, emptyFactForm, factFieldRules, parseFactTags, replacementFactForm } from "./factForm";
 
 describe("where a new fact is filed", () => {
   it("files it under the active Profile's own track", () => {
@@ -32,6 +33,28 @@ describe("the fact form's starting state", () => {
 
   it("starts blank when no meaning is supplied", () => {
     expect(emptyFactForm(null).meaning).toBe("");
+  });
+
+  it("copies a fact into a replacement draft without changing its meaning", () => {
+    const fact = {
+      fact_id: "fact.original",
+      meaning: "Built APIs",
+      provenance: "candidate notes",
+      renderings: { en: "Built APIs", he: "בניית ממשקים" },
+      resume_style: "bullet",
+      source: "development.md",
+      status: "canonical",
+      tags: ["backend", "api"],
+    } satisfies Fact;
+    expect(replacementFactForm(fact)).toEqual({
+      english: "Built APIs",
+      hebrew: "בניית ממשקים",
+      meaning: "Built APIs",
+      provenance: "candidate notes",
+      source: "development.md",
+      style: "bullet",
+      tags: "backend, api",
+    });
   });
 });
 

@@ -33,14 +33,27 @@ describe("useInWorkflow", () => {
     expect(at(path)).toBe("wizard");
   });
 
-  /* The board and settings are not steps: they are where a reader goes to choose work
-     rather than to do one piece of it, and they keep the full shell. */
-  it.each(["/", "/settings", "/nowhere"])("treats %s as outside the wizard", (path) => {
+  /* The board, candidate facts, and settings are not steps: they are durable product
+     areas rather than one piece of an Application workflow, and keep the full shell. */
+  it.each(["/", "/facts", "/settings", "/nowhere"])("treats %s as outside the wizard", (path) => {
     expect(at(path)).toBe("dashboard");
   });
 });
 
 describe("workflow shell", () => {
+  it("offers the candidate facts surface as a primary destination outside a wizard", () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter initialEntries={["/facts"]}>
+          <AppHeader />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByRole("link", { name: "תיק הקריירה" })).toHaveAttribute("href", "/facts");
+    expect(screen.getByRole("link", { name: "תיק הקריירה" })).toHaveAttribute("aria-current", "page");
+  });
+
   it("hides global destinations but keeps the command palette shortcut in a wizard step", () => {
     render(
       <QueryClientProvider client={new QueryClient()}>

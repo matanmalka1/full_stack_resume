@@ -73,38 +73,18 @@ describe("SettingsPage", () => {
     expect(saveButton).toBeDisabled();
   });
 
-  it("shows canonical facts read-only and reports a missing audit status", async () => {
-    const fetchMock = vi.fn((input: string | URL | Request) =>
-      Promise.resolve(
-        String(input) === "/api/v1/facts"
-          ? json({
-              items: [
-                {
-                  fact: {
-                    fact_id: "fact-1",
-                    meaning: "Built backend services",
-                    provenance: "Confirmed by candidate",
-                    renderings: { en: "Built backend services" },
-                    resume_style: "bullet",
-                    source: "development.md",
-                    status: "canonical",
-                    tags: ["backend"],
-                  },
-                  recorded_status: "confirmed",
-                },
-              ],
-            })
-          : json(settings(), 200, { ETag: '"settings-0"' }),
-      ),
-    );
+  it("links to the dedicated candidate-facts surface without loading the pool", async () => {
+    const requestedUrls: string[] = [];
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      requestedUrls.push(String(input));
+      return Promise.resolve(json(settings(), 200, { ETag: '"settings-0"' }));
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     renderRoute("/settings", "/settings", <SettingsPage />);
 
-    expect(await screen.findByText("Built backend services")).toBeInTheDocument();
-    expect(screen.getByText("מקור אמת")).toBeInTheDocument();
-    expect(screen.getByText(/מצב העובדה אינו תואם למצב האחרון ביומן/)).toBeInTheDocument();
-    expect(fetchMock.mock.calls.filter((call) => String(call[0]) === "/api/v1/facts")).toHaveLength(1);
+    expect(await screen.findByRole("link", { name: "פתיחת תיק הקריירה" })).toHaveAttribute("href", "/facts");
+    expect(requestedUrls).not.toContain("/api/v1/facts");
   });
 });
 

@@ -172,8 +172,11 @@ The product includes:
   rendering.
 - Explicit Web approval and immutable provenance for the exact approved content.
 - A Ready projection over a qualifying ApprovedRevision.
-- Contextual fact inspection and the pending -> confirmed -> canonical -> attached
-  lifecycle without a general Knowledge Manager.
+- A dedicated candidate-facts surface for listing and inspecting candidate facts,
+  creating pending facts, explicit confirmation and promotion, canonical correction
+  through a replacement fact, and attachment to existing Profile sections. Contextual
+  claim capture and use remain available in preparation flows. This surface is not a
+  general Knowledge Manager and does not edit Profile definitions or arbitrary Knowledge.
 - OpenAI Responses API integration for six implemented Proposal tasks through strict
   structured contracts. The approved seventh target task, `assess_claim_support`, is
   delivered only with the D1 evidence lifecycle described in sections 10–12.
@@ -202,7 +205,9 @@ The following are not part of the product:
   against explicitly supplied canonical fact links is in scope under §10–12; review
   does not create canonical facts or grant access to facts outside the allowed pool.
 - Arbitrary user prompts, arbitrary provider model IDs, or per-operation model selection.
-- A general Knowledge Manager or Web editing of Profiles, policies, prompts, or rules.
+- A general Knowledge Manager or arbitrary Web editing of Knowledge files, Profiles,
+  policies, prompts, taxonomies, or rules. The dedicated candidate-facts lifecycle
+  surface defined in scope is not a general Knowledge Manager.
 - A general WYSIWYG editor, section reordering, or drag-and-drop.
 - Mobile-first flows or a full internationalization framework.
 - Notifications, calendar integration, recurring reminders, or follow-up automation.
@@ -689,8 +694,11 @@ knowledge carried over from v1, which keeps them; nothing creates new ones.
 The UI does not expose fact-ID creation. A system-generated human slug may exist but is
 not identity.
 
-The contextual Web flow supports viewing facts, creating a pending fact, explicit
-confirmation/promotion, attachment to a Profile section, and use in a new SelectionPlan.
+The Web supports these lifecycle operations both on the dedicated candidate-facts
+surface and, where the operation depends on a claim or active analysis, in its contextual
+preparation flow: viewing facts, creating a pending fact, explicit confirmation/promotion,
+attachment to an existing Profile section, and use in a new SelectionPlan. The dedicated
+surface may list valid attachment targets; listing them does not grant Profile editing.
 The shortcut `Confirm and add to source of truth` still records
 pending -> confirmed -> canonical transitions separately. `Confirm and use` is one
 logical command that promotes, attaches, and creates the new plan or reports a complete
@@ -702,6 +710,11 @@ tags, provenance, dates, and other metadata require explicit input.
 Canonical corrections create a new fact with a `replaces` relationship rather than
 mutating old content. `POST /api/v1/facts` accepts `replaces`; the new fact enters at
 `pending` like any other, so a correction is confirmed and promoted explicitly.
+
+This candidate-facts surface does not add deletion, archival, withdrawal, retirement,
+or a `known-incorrect` transition. Those operations have distinct consequences for
+Profile pools, selection, stale drafts, warnings, and historical evidence and require a
+separate approved lifecycle contract. Canonical facts are never edited in place.
 
 Cross-store Knowledge mutations use a narrow durable journal with old/new hashes,
 paths, staged path, DB mutation identity, and deterministic recovery. An unreconciled

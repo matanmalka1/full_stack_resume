@@ -36,5 +36,15 @@ object store. Runtime configuration supports one `.env` below the real process
 environment; `OPENAI_API_KEY` is environment-only and configured secrets are masked at
 reporting boundaries. `spec/architecture.md` owns these contracts.
 
+## Product surfaces
+
+The Web keeps candidate facts separate from both system configuration and a specific
+Application. `/facts` is the dedicated candidate-facts lifecycle surface: it lists,
+creates, confirms, promotes, corrects through replacement, and attaches facts to existing
+Profile sections. Settings retains execution policy and Knowledge reconciliation. Draft
+Editor retains claim-specific capture and `confirm-and-use`; it links to `/facts` for
+general lifecycle management. This is not a general Knowledge Manager and exposes no
+Profile-definition or arbitrary Knowledge-file editing.
+
 Closed milestone records and the v1 archive were removed on 2026-08-30; they are in Git
 history.

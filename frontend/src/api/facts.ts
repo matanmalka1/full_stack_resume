@@ -8,6 +8,7 @@ import type {
   ConfirmAndUseFactRequest,
   CreateFactRequest,
   FactAttachment,
+  FactAttachmentTargets,
   FactDetail,
   FactHistory,
   FactList,
@@ -23,6 +24,8 @@ export const factsQueryPrefix = ["facts"] as const;
 export const factsQueryKey = (status?: FactStatus) => [...factsQueryPrefix, status ?? "all"] as const;
 export const factDetailQueryKey = (factId: string) => ["fact", factId] as const;
 export const factHistoryQueryKey = ["fact-history"] as const;
+export const factAttachmentTargetsQueryKey = (factId?: string) =>
+  [...factsQueryPrefix, "attachment-targets", factId ?? "all"] as const;
 
 export const factsQueryOptions = (status?: FactStatus) =>
   queryOptions({
@@ -43,6 +46,18 @@ export const factHistoryQueryOptions = queryOptions({
   queryKey: factHistoryQueryKey,
   queryFn: async ({ signal }) => (await apiRequest<FactHistory>(`${factsPath}/history` as ApiPath, { signal })).data,
 });
+
+export const factAttachmentTargetsQueryOptions = (factId?: string) =>
+  queryOptions({
+    queryKey: factAttachmentTargetsQueryKey(factId),
+    queryFn: async ({ signal }) => {
+      const path =
+        factId === undefined
+          ? (`${factsPath}/attachment-targets` as ApiPath)
+          : (`${factsPath}/attachment-targets?fact_id=${encodeURIComponent(factId)}` as ApiPath);
+      return (await apiRequest<FactAttachmentTargets>(path, { signal })).data;
+    },
+  });
 
 export const createPendingFact = async (body: CreateFactRequest): Promise<FactMutation> =>
   (await apiRequest<FactMutation>(factsPath, { method: "POST", body })).data;

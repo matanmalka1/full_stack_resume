@@ -50,7 +50,11 @@ export const analysisViewState = ({
        the opposite re-analysis race, where the projection still carries the older record. */
     const activeAnalysis = detail.latest_analysis;
     const activeAnalysisTime =
-      activeAnalysis?.id === detail.active_analysis_id ? Date.parse(activeAnalysis.created_at) : NaN;
+      activeAnalysis !== null &&
+      activeAnalysis !== undefined &&
+      activeAnalysis.id === detail.active_analysis_id
+        ? Date.parse(activeAnalysis.created_at)
+        : NaN;
     const operationFinishedTime = operation.finished_at == null ? NaN : Date.parse(operation.finished_at);
     if (
       Number.isFinite(activeAnalysisTime) &&

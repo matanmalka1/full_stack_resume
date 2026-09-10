@@ -1,46 +1,43 @@
 import { useState } from "react";
 
-import type { Fact } from "@/api/contracts";
-import { ErrorCallout } from "@/ui/ErrorCallout";
+import type { Fact, FactAttachmentTargets } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Checkbox } from "@/ui/Checkbox";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Field } from "@/ui/Field";
 import { Select } from "@/ui/Select";
+import { profileLabels } from "@/features/preparation";
 import { useAttachFact } from "../api/mutations";
 import { defaultFactSource } from "../model/factForm";
 import { factSourceLabel, isCrossTrackFact } from "../model/factLabels";
 
 interface FactAttachmentControlProps {
   fact: Fact;
-  profile: string | null;
-  sections: string[];
+  targets: FactAttachmentTargets;
 }
 
-/* Attaching a canonical fact to a section of the active Profile, so the next selection
-   plan can draw on it. Only canonical facts are attachable - anything earlier in the
-   lifecycle has not been established as true yet - and the attachment needs a Profile
-   and a section to land in, so the absence of either is stated rather than left as a
-   dead button. */
-export const FactAttachmentControl = ({ fact, profile, sections }: FactAttachmentControlProps) => {
-  const [section, setSection] = useState(sections[0] ?? "");
+export const FactAttachmentControl = ({ fact, targets }: FactAttachmentControlProps) => {
+  const firstProfile = targets.profiles[0];
+  const [profileId, setProfileId] = useState(firstProfile?.profile ?? "");
+  const profile = targets.profiles.find((item) => item.profile === profileId) ?? firstProfile;
+  const firstSection = profile?.sections[0];
+  const [sectionId, setSectionId] = useState(firstSection?.section ?? "");
+  const section = profile?.sections.find((item) => item.section === sectionId) ?? firstSection;
   const [pinned, setPinned] = useState(false);
   const [crossTrackAccepted, setCrossTrackAccepted] = useState(false);
   const attachment = useAttachFact(fact.fact_id);
 
-  if (fact.status !== "canonical") {
-    return null;
-  }
-
-  if (profile === null || sections.length === 0) {
+  if (fact.status !== "canonical") return null;
+  if (profile === undefined || section === undefined) {
     return (
-      <Callout title="אין יעד צירוף בהקשר הנוכחי" tone="neutral">
-        נדרש פרופיל פעיל וסעיף בטיוטה כדי לצרף את העובדה.
+      <Callout title="לא הוגדרו יעדי צירוף" tone="neutral">
+        אין בפרופילים הקיימים סעיף שאליו ניתן לצרף עובדה.
       </Callout>
     );
   }
 
-  const crossTrack = isCrossTrackFact(fact.source, defaultFactSource(profile));
+  const crossTrack = isCrossTrackFact(fact.source, defaultFactSource(profile.profile));
 
   return (
     <div className="flex flex-col gap-3 rounded-control border border-cv-border bg-cv-surface p-4">
@@ -48,56 +45,75 @@ export const FactAttachmentControl = ({ fact, profile, sections }: FactAttachmen
         <ErrorCallout
           error={attachment.error}
           fallbackDetail="מקור הידע לא השתנה ואפשר לנסות שוב."
-          fallbackTitle="לא ניתן לעדכן את העובדה"
+          fallbackTitle="לא ניתן לצרף את העובדה"
         />
       )}
-      <Field label="סעיף בפרופיל הפעיל">
-        {(control) => (
-          <Select {...control} onChange={(event) => setSection(event.target.value)} value={section}>
-            {sections.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </Select>
-        )}
-      </Field>
-      <Checkbox
-        checked={pinned}
-        hint="מקבילה ל'קיבוע העובדה' בהכנת קורות החיים, ולהכללת עובדה בכרטיס 'ביסוס עובדתי' בעורך הטיוטה."
-        onChange={(event) => setPinned(event.currentTarget.checked)}
-      >
-        קיבוע העובדה בתוכנית הבחירה הבאה
-      </Checkbox>
-      {crossTrack ? (
-        <Callout title="עובדה זו נלקחה ממסלול קריירה אחר" tone="warning">
-          <p>
-            מקור העובדה: {factSourceLabel(fact.source)}. הצירוף עלול שלא להתאים למסלול או לדגש הפעיל. להמשיך בכל זאת?
-          </p>
-          <div className="mt-2.5">
-            <Checkbox
-              checked={crossTrackAccepted}
-              onChange={(event) => setCrossTrackAccepted(event.currentTarget.checked)}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="פרופיל יעד">
+          {(control) => (
+            <Select
+              {...control}
+              onChange={(event) => {
+                const next = targets.profiles.find((item) => item.profile === event.target.value);
+                if (next === undefined) return;
+                setProfileId(next.profile);
+                setSectionId(next.sections[0]?.section ?? "");
+                setCrossTrackAccepted(false);
+              }}
+              value={profile.profile}
             >
-              מודע/ת שהעובדה שייכת למסלול אחר ומאשר/ת צירוף בכל זאת
-            </Checkbox>
-          </div>
+              {targets.profiles.map((item) => (
+                <option key={item.profile} value={item.profile}>
+                  {profileLabels[item.profile]} · {item.label}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field label="סעיף יעד">
+          {(control) => (
+            <Select {...control} onChange={(event) => setSectionId(event.target.value)} value={section.section}>
+              {profile.sections.map((item) => (
+                <option key={item.section} value={item.section}>
+                  {item.label}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+      </div>
+      {section.attached ? (
+        <Callout title="העובדה כבר משויכת ליעד הזה" tone="neutral">
+          {section.pinned ? "העובדה גם מקובעת בסעיף." : "אפשר לבחור פרופיל או סעיף אחר."}
+        </Callout>
+      ) : (
+        <Checkbox checked={pinned} onChange={(event) => setPinned(event.currentTarget.checked)}>
+          קיבוע העובדה במבחר של הסעיף
+        </Checkbox>
+      )}
+      {crossTrack ? (
+        <Callout title="מקור העובדה שייך למסלול קריירה אחר" tone="warning">
+          <p>מקור העובדה: {factSourceLabel(fact.source)}.</p>
+          <Checkbox
+            checked={crossTrackAccepted}
+            className="mt-2"
+            onChange={(event) => setCrossTrackAccepted(event.currentTarget.checked)}
+          >
+            בדקתי את ההתאמה ומאשר/ת את הצירוף
+          </Checkbox>
         </Callout>
       ) : null}
       <Button
-        disabled={crossTrack && !crossTrackAccepted}
-        onClick={() => attachment.mutate({ pin: pinned, profile, section })}
+        disabled={section.attached || (crossTrack && !crossTrackAccepted)}
+        onClick={() => attachment.mutate({ pin: pinned, profile: profile.profile, section: section.section })}
         pending={attachment.isPending}
       >
         צירוף העובדה לסעיף
       </Button>
       {attachment.isSuccess ? (
-        // role="status" is a Callout prop, not a DOM role; Callout already renders an
-        // <output> for it.
+        // role="status" is a Callout prop; Callout renders a semantic <output>.
         // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-        <Callout role="status" title="העובדה צורפה" tone="success">
-          העובדה זמינה כעת למבחר של הסעיף בפרופיל הפעיל.
-        </Callout>
+        <Callout role="status" title="העובדה צורפה" tone="success" />
       ) : null}
     </div>
   );

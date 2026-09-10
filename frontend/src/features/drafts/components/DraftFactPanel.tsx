@@ -1,6 +1,8 @@
 import { Database, Plus } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import type { DraftFact, WorkingDraftFacts } from "@/api/contracts";
+import { routePaths } from "@/app/routePaths";
 import { Button } from "@/ui/Button";
 import { QueryState } from "@/ui/QueryState";
 import { omissionReasonLabels, selectionOutcomeLabels } from "@/features/preparation";
@@ -51,8 +53,7 @@ export const DraftFactPanel = ({ busy, facts, onInclude }: DraftFactPanelProps) 
         <>
           <p className="text-support leading-6 text-cv-text-muted">
             הכללה של עובדה קובעת אותה במפורש ובונה את הטיוטה מחדש. שאר ההחלטות שכבר נקבעו נשמרות. זו אותה פעולה כמו
-            סימון "קיבוע העובדה" בהכנת קורות החיים, וכמו "קיבוע העובדה בתוכנית הבחירה הבאה" בפאנל מחזור חיי העובדות
-            שלמטה.
+            סימון "קיבוע העובדה" בהכנת קורות החיים. ניהול המקור, המעמד והשיוכים הקבועים נמצא בתיק הקריירה.
           </p>
           <ul className="flex flex-col divide-y divide-cv-border">
             {omitted.map((fact) => (
@@ -76,6 +77,12 @@ export const DraftFactPanel = ({ busy, facts, onInclude }: DraftFactPanelProps) 
                       .filter((part): part is string => part !== undefined && part !== "")
                       .join(" · ")}
                   </p>
+                  <Link
+                    className="mt-1 inline-flex text-support font-semibold text-cv-accent hover:text-cv-accent-hover"
+                    to={`${routePaths.facts}?fact=${encodeURIComponent(fact.fact_id)}`}
+                  >
+                    ניהול העובדה בתיק הקריירה
+                  </Link>
                 </div>
                 <Button
                   /* The row names the fact; the button says what happens to it. Its full

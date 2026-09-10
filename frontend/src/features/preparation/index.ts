@@ -44,7 +44,7 @@ export {
   preparationResumeDestination,
   preparationResumeDestinationFromDetail,
 } from "./model/actionDestinations";
-export { fitLevelIcon, fitLevelLabel, fitLevelTone, trackLabel } from "./model/analysisLabels";
+export { fitLevelIcon, fitLevelLabel, fitLevelTone, profileLabels, trackLabel } from "./model/analysisLabels";
 export {
   actionLabel,
   preparationStateIcons,

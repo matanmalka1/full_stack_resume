@@ -8,7 +8,6 @@ import { QueryState } from "@/ui/QueryState";
 import { ActiveOperationPanel } from "@/features/operations";
 import { applicationLabel } from "@/features/applications";
 import { PreparationAlerts, WizardStepShell } from "@/features/preparation";
-import { FactLifecyclePanel } from "@/features/facts";
 import { DraftApprovalBar } from "../components/DraftApprovalBar";
 import { DraftApprovalDialog } from "../components/DraftApprovalDialog";
 import { DraftConflictDialog } from "../components/DraftConflictDialog";
@@ -184,11 +183,6 @@ export const DraftEditorPage = () => {
                 />
 
                 <DraftFactPanel busy={editing.selectionPending} facts={facts} onInclude={editing.includeFact} />
-
-                <FactLifecyclePanel
-                  profile={detail?.application.profile ?? null}
-                  sections={draft.outline.sections.map((section) => section.name)}
-                />
               </>
             }
             mode={mode}

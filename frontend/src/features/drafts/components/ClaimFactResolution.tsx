@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 
 /* Cached history is copied before reversal; ES2022 does not expose Array#toReversed. */
 /* oxlint-disable unicorn/no-array-reverse */
@@ -14,6 +15,7 @@ import {
   factsQueryPrefix,
 } from "@/api/facts";
 import { workingDraftFactsQueryKey } from "@/api/drafts";
+import { routePaths } from "@/app/routePaths";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import {
   emptyFactForm,
@@ -173,6 +175,12 @@ export const ClaimFactResolution = ({
               {factLabelInLanguage(detailQuery.data.fact, language)}
             </p>
             <p className="text-support text-cv-text-muted">מצב: {factStatusLabel(detailQuery.data.fact.status)}</p>
+            <Link
+              className="mt-1 inline-flex text-support font-semibold text-cv-accent hover:text-cv-accent-hover"
+              to={`${routePaths.facts}?fact=${encodeURIComponent(detailQuery.data.fact.fact_id)}`}
+            >
+              פתיחת העובדה בתיק הקריירה
+            </Link>
           </div>
           <FactEventHistory events={detailQuery.data.events} />
           {analysisId === null || profile === null ? (

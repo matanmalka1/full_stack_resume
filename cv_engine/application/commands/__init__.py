@@ -10,7 +10,10 @@ from __future__ import annotations
 from ._base import BoundaryDTO, DuplicateMatchReason, WriteClient
 from .knowledge import (
     ConfirmAndUseFactResult,
+    FactAttachmentProfileTarget,
     FactAttachmentResult,
+    FactAttachmentSectionTarget,
+    FactAttachmentTargetsResult,
     FactDetailResult,
     FactEventView,
     FactHistoryResult,
@@ -132,6 +135,9 @@ __all__ = [
     "FactDetailResult",
     "FactHistoryResult",
     "FactMutationResult",
+    "FactAttachmentSectionTarget",
+    "FactAttachmentProfileTarget",
+    "FactAttachmentTargetsResult",
     "FactAttachmentResult",
     "ConfirmAndUseFactResult",
     "FactReconciliationResult",

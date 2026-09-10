@@ -610,12 +610,47 @@ through the API but is not the primary human export.
 
 ## 17. Knowledge commands
 
+### `list_facts(status=None)` / `show_fact(fact_id)` / `fact_history(fact_id=None)`
+
+Synchronous reads over the candidate Fact pool and its immutable lifecycle events.
+`list_facts` may filter by lifecycle status. `show_fact` returns one fact with its events.
+The dedicated candidate-facts surface uses these reads without requiring an Application,
+JobAnalysis, WorkingDraft, or SelectionPlan context.
+
+### `list_fact_attachment_targets`
+
+Returns the existing Profiles and their sections as read-only attachment targets. Stable
+Profile and section identifiers plus display labels are returned; stored paths, Profile
+editing capabilities, policies, and other Knowledge documents are not exposed. This is a
+query convenience over existing Profile definitions, not candidate or Profile CRUD.
+
 ### `create_pending_fact`
 
 Creates a UUID-identified pending fact through the Knowledge mutation journal. Input
 contains language-neutral meaning, exact English rendering, optional Hebrew rendering,
 tags, provenance, dates/replacement, proposed Profile section, and source
 Application/claim. Fact identity is not user-editable.
+
+When `replaces` names a canonical fact, the command creates a pending correction. The
+original fact is not mutated; confirmation and promotion remain separate explicit
+transitions.
+
+### `confirm_fact(fact_id)`
+
+Moves exactly one fact from `pending` to `confirmed` after explicit user attestation.
+It refuses every other source status and never resolves a latest fact implicitly.
+
+### `promote_fact(fact_id)`
+
+Moves exactly one fact from `confirmed` to `canonical` after a second explicit user
+attestation. Promoting a replacement makes the original fact superseded for warning and
+staleness purposes; it does not rewrite or remove the original record or historical use.
+
+### `attach_fact(fact_id, profile, section, pin=False)`
+
+Offers one canonical fact to an explicitly named existing Profile section. It may pin the
+fact within that section. It does not edit Profile structure, select the fact for a CV, or
+create a SelectionPlan. Non-canonical facts are refused.
 
 ### `confirm_and_use_fact`
 
@@ -640,6 +675,12 @@ complete.
 
 Canonical correction creates a replacement fact carrying `replaces`; it never mutates
 the old fact content.
+
+Deletion, archive, withdrawal, retirement, and `known-incorrect` transitions are not
+commands in this lifecycle. Adding them requires a separate contract for their effects on
+Profile pools, selection, WorkingDraft staleness, warnings, validation, reconciliation,
+and immutable historical revisions. Their absence must not be presented by a client as
+an available removal action.
 
 ## 18. Tracking commands
 

@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { Settings, ShieldCheck } from "lucide-react";
+import { BookOpen, Settings, ShieldCheck } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { settingsQueryOptions } from "@/api/settings";
-import { FactPoolBrowser } from "@/features/facts";
 import { boardPath } from "@/app/boardReturn";
+import { routePaths } from "@/app/routePaths";
 import { Breadcrumbs } from "@/ui/Breadcrumbs";
+import { buttonClasses } from "@/ui/Button";
 import { Card } from "@/ui/Card";
 import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
@@ -44,7 +46,18 @@ export const SettingsPage = () => {
         </QueryState>
       </Card>
       <ReconciliationPanel />
-      <FactPoolBrowser />
+      <Card className="bg-cv-surface p-5 shadow-surface sm:p-6">
+        <SectionHeader
+          actions={
+            <Link className={buttonClasses("secondary")} to={routePaths.facts}>
+              פתיחת תיק הקריירה
+            </Link>
+          }
+          description="עובדות המועמד, מקורותיהן ומחזור החיים שלהן מנוהלים במסך ייעודי."
+          icon={BookOpen}
+          title="מאגר העובדות"
+        />
+      </Card>
     </PageShell>
   );
 };

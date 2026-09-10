@@ -1,3 +1,4 @@
+import type { Fact } from "@/api/contracts";
 import type { FactSource, FactStyle } from "./factLabels";
 
 /* The one shape both fact-writing forms bind to. The two call sites send different
@@ -28,6 +29,16 @@ export const emptyFactForm = (profile: string | null, meaning = ""): FactFormFie
   source: defaultFactSource(profile),
   style: "bullet",
   tags: "",
+});
+
+export const replacementFactForm = (fact: Fact): FactFormFields => ({
+  english: fact.renderings.en ?? "",
+  hebrew: fact.renderings.he ?? "",
+  meaning: fact.meaning,
+  provenance: fact.provenance,
+  source: fact.source as FactSource,
+  style: fact.resume_style as FactStyle,
+  tags: fact.tags.join(", "),
 });
 
 export const parseFactTags = (value: string): string[] =>

@@ -17,7 +17,10 @@ from ....domain.selection import build_selection
 from ....util import new_id, utc_now
 from ...commands import (
     ConfirmAndUseFactResult,
+    FactAttachmentProfileTarget,
     FactAttachmentResult,
+    FactAttachmentSectionTarget,
+    FactAttachmentTargetsResult,
     FactDetailResult,
     FactHistoryResult,
     FactListItem,
@@ -71,6 +74,37 @@ class KnowledgeService(KnowledgeMutationEngine):
         return FactDetailResult(
             fact=fact,
             events=[fact_event_view(row) for row in self.repo.fact_events(fact_id)],
+        )
+
+    def fact_attachment_targets(self, fact_id: str | None = None) -> FactAttachmentTargetsResult:
+        """Read existing Profile sections without exposing mutable Profile documents."""
+        facts, profiles, _policies = self.knowledge()
+        if fact_id is not None:
+            try:
+                facts.get(fact_id)
+            except FactStoreError as exc:
+                raise UnknownRecord(str(exc)) from exc
+        return FactAttachmentTargetsResult(
+            profiles=[
+                FactAttachmentProfileTarget(
+                    profile=profile.profile,
+                    label=profile.normalized_role,
+                    sections=[
+                        FactAttachmentSectionTarget(
+                            section=section.name_en,
+                            label=section.name_he,
+                            attached=fact_id in section.fact_ids if fact_id is not None else False,
+                            pinned=fact_id in section.pinned_fact_ids
+                            if fact_id is not None
+                            else False,
+                        )
+                        for section in profile.sections
+                    ],
+                )
+                for profile in sorted(
+                    profiles.profiles.values(), key=lambda item: item.profile.value
+                )
+            ]
         )
 
     def fact_history(self, fact_id: str | None = None) -> FactHistoryResult:

@@ -11,6 +11,7 @@ const application = (applicationId: string): string => `/applications/${segment(
 export const routePaths = {
   home: "/",
   newApplication: "/applications/new",
+  facts: "/facts",
   settings: "/settings",
   /* One address for the screen that prepares one Application's CV. It once carried a
      second name, `preparation`, resolving to `/applications/:id/preparation` - the same

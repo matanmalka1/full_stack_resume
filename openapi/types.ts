@@ -614,6 +614,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/facts/attachment-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List existing Profile sections that may receive a fact
+         * @description A read-only projection; it does not expose or edit Profile documents.
+         */
+        get: operations["read_fact_attachment_targets_api_v1_facts_attachment_targets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/facts/from-claim": {
         parameters: {
             query?: never;
@@ -2225,6 +2245,14 @@ export interface components {
             /** Submitted At */
             submitted_at: string;
         };
+        /** FactAttachmentProfileTargetResponse */
+        FactAttachmentProfileTargetResponse: {
+            /** Label */
+            label: string;
+            profile: components["schemas"]["ProfileName"];
+            /** Sections */
+            sections: components["schemas"]["FactAttachmentSectionTargetResponse"][];
+        };
         /**
          * FactAttachmentResponse
          * @description Where the fact was offered, not where that Profile is stored.
@@ -2252,6 +2280,22 @@ export interface components {
             profile_store_version: string;
             /** Section */
             section: string;
+        };
+        /** FactAttachmentSectionTargetResponse */
+        FactAttachmentSectionTargetResponse: {
+            /** Attached */
+            attached: boolean;
+            /** Label */
+            label: string;
+            /** Pinned */
+            pinned: boolean;
+            /** Section */
+            section: string;
+        };
+        /** FactAttachmentTargetsResponse */
+        FactAttachmentTargetsResponse: {
+            /** Profiles */
+            profiles: components["schemas"]["FactAttachmentProfileTargetResponse"][];
         };
         /**
          * FactContentRequest
@@ -4540,6 +4584,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FactMutationResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    read_fact_attachment_targets_api_v1_facts_attachment_targets_get: {
+        parameters: {
+            query?: {
+                fact_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FactAttachmentTargetsResponse"];
                 };
             };
             /** @description The request did not match the API contract. */

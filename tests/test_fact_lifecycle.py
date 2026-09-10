@@ -11,7 +11,12 @@ from sqlalchemy import delete, update
 from sqlalchemy.exc import ProgrammingError
 
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand
-from cv_engine.application.errors import KnowledgeRejected, MissingFactRendering, PreconditionFailed
+from cv_engine.application.errors import (
+    KnowledgeRejected,
+    MissingFactRendering,
+    PreconditionFailed,
+    UnknownRecord,
+)
 from cv_engine.application.knowledge_mutations import PrepareKnowledgeMutation
 from cv_engine.domain.facts import FactStore
 from cv_engine.domain.models import FactStatus
@@ -53,6 +58,31 @@ def test_contextual_pending_fact_gets_a_generated_uuid(services: Services) -> No
     assert result.fact.status is FactStatus.PENDING
     with pytest.raises(KnowledgeRejected, match="not user-editable"):
         services.knowledge_lifecycle.create_pending_fact("situational_skills.md", dict(NEW_FACT))
+
+
+def test_attachment_target_projection_exposes_sections_without_profile_documents(
+    services: Services,
+) -> None:
+    targets = services.knowledge_lifecycle.fact_attachment_targets()
+    development = next(item for item in targets.profiles if item.profile == "development")
+    assert development.label
+    assert development.sections
+    assert all(not section.attached and not section.pinned for section in development.sections)
+
+    knowledge = services.knowledge_lifecycle.load_knowledge()
+    source_profile = knowledge.profiles.get("development")
+    source_section = next(section for section in source_profile.sections if section.fact_ids)
+    existing_id = source_section.fact_ids[0]
+    existing = services.knowledge_lifecycle.fact_attachment_targets(existing_id)
+    projected_profile = next(item for item in existing.profiles if item.profile == "development")
+    projected_section = next(
+        item for item in projected_profile.sections if item.section == source_section.name_en
+    )
+    assert projected_section.attached
+    assert projected_section.pinned is (existing_id in source_section.pinned_fact_ids)
+
+    with pytest.raises(UnknownRecord, match="unknown fact_id"):
+        services.knowledge_lifecycle.fact_attachment_targets("does-not-exist")
 
 
 def test_create_fact_from_claim_preserves_exact_claim_text(drafted_application) -> None:

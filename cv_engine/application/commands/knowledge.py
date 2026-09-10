@@ -6,6 +6,7 @@ from typing import Any
 
 from ...domain.contracts.knowledge import Fact
 from ...domain.contracts.selection import SelectionPlan
+from ...domain.contracts.taxonomy import ProfileName
 from ._base import BoundaryDTO
 
 
@@ -47,6 +48,23 @@ class FactListResult(BoundaryDTO):
 class FactDetailResult(BoundaryDTO):
     fact: Fact
     events: list[FactEventView]
+
+
+class FactAttachmentSectionTarget(BoundaryDTO):
+    section: str
+    label: str
+    attached: bool
+    pinned: bool
+
+
+class FactAttachmentProfileTarget(BoundaryDTO):
+    profile: ProfileName
+    label: str
+    sections: list[FactAttachmentSectionTarget]
+
+
+class FactAttachmentTargetsResult(BoundaryDTO):
+    profiles: list[FactAttachmentProfileTarget]
 
 
 class FactHistoryResult(BoundaryDTO):

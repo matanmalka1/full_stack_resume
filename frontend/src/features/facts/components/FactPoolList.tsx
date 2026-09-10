@@ -1,13 +1,27 @@
 import { AlertTriangle } from "lucide-react";
+import { Link } from "react-router-dom";
 
+import { cx } from "@/ui/cx";
 import type { FactPoolEntry } from "../model/factPool";
 import { FactProvenance, FactTags, FactWording } from "./FactIdentity";
 import { FactStatusBadge } from "./FactStatusBadge";
 
-const FactPoolRow = ({ entry: { fact, outOfSync } }: { entry: FactPoolEntry }) => (
-  <li className="p-4 transition-colors hover:bg-cv-surface-muted">
+const defaultFactHref = (factId: string): string => `?fact=${encodeURIComponent(factId)}`;
+
+const FactPoolRow = ({
+  entry: { fact, outOfSync },
+  selected,
+  to,
+}: {
+  entry: FactPoolEntry;
+  selected: boolean;
+  to: string;
+}) => (
+  <li className={cx("p-4 transition-colors hover:bg-cv-surface-muted", selected && "bg-cv-accent-soft")}>
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <FactWording className="min-w-0 flex-1" fact={fact} />
+      <Link aria-current={selected ? "true" : undefined} className="min-w-0 flex-1" to={to}>
+        <FactWording fact={fact} />
+      </Link>
       <div className="flex shrink-0 items-center gap-2">
         {outOfSync ? (
           <span
@@ -33,13 +47,26 @@ const FactPoolRow = ({ entry: { fact, outOfSync } }: { entry: FactPoolEntry }) =
 /* The stored facts as a scannable list: wording, then status, then where it came from.
    Read-only - every write to a fact happens through the lifecycle controls, never by
    editing a row here. */
-export const FactPoolList = ({ entries }: { entries: FactPoolEntry[] }) => (
+export const FactPoolList = ({
+  entries,
+  factHref = defaultFactHref,
+  selectedFactId,
+}: {
+  entries: FactPoolEntry[];
+  factHref?: (factId: string) => string;
+  selectedFactId?: string | null;
+}) => (
   <ul
-    aria-label="רשימת העובדות הקנוניות"
+    aria-label="רשימת העובדות"
     className="max-h-[32rem] divide-y divide-cv-border overflow-y-auto rounded-control border border-cv-border"
   >
     {entries.map((entry) => (
-      <FactPoolRow entry={entry} key={entry.fact.fact_id} />
+      <FactPoolRow
+        entry={entry}
+        key={entry.fact.fact_id}
+        selected={entry.fact.fact_id === selectedFactId}
+        to={factHref(entry.fact.fact_id)}
+      />
     ))}
   </ul>
 );

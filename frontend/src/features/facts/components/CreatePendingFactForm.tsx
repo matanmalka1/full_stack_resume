@@ -13,15 +13,26 @@ import {
 } from "./FactFormFieldset";
 
 interface CreatePendingFactFormProps {
+  initialValues?: FactFormFields;
   onCreated: (factId: string) => void;
   profile: string | null;
+  reason?: string;
+  replaces?: string;
+  submitLabel?: string;
 }
 
 /* A new fact entered by hand, which always starts pending: nothing typed here becomes
    canonical without a separate, explicit confirmation. The Hebrew rendering is optional
    because the English one is what the CV is built from. */
-export const CreatePendingFactForm = ({ onCreated, profile }: CreatePendingFactFormProps) => {
-  const form = useAppForm<FactFormFields>({ defaultValues: emptyFactForm(profile) });
+export const CreatePendingFactForm = ({
+  initialValues,
+  onCreated,
+  profile,
+  reason = "created from the contextual draft fact panel",
+  replaces,
+  submitLabel = "יצירת עובדה ממתינה",
+}: CreatePendingFactFormProps) => {
+  const form = useAppForm<FactFormFields>({ defaultValues: initialValues ?? emptyFactForm(profile) });
   const {
     formState: { errors },
     register,
@@ -43,7 +54,8 @@ export const CreatePendingFactForm = ({ onCreated, profile }: CreatePendingFactF
       tags: parseFactTags(fields.tags),
       provenance: fields.provenance.trim(),
       resume_style: fields.style,
-      reason: "created from the contextual draft fact panel",
+      ...(replaces === undefined ? {} : { replaces }),
+      reason,
     });
 
   return (
@@ -65,7 +77,7 @@ export const CreatePendingFactForm = ({ onCreated, profile }: CreatePendingFactF
       <FactProvenanceField errors={errors} register={register} />
 
       <Button className="lg:col-span-2" pending={create.isPending} pendingLabel="יוצר…" type="submit">
-        יצירת עובדה ממתינה
+        {submitLabel}
       </Button>
     </form>
   );

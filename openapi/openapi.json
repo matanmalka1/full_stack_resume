@@ -2964,6 +2964,32 @@
         "title": "ExternalSubmissionRequest",
         "type": "object"
       },
+      "FactAttachmentProfileTargetResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ProfileName"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/FactAttachmentSectionTargetResponse"
+            },
+            "title": "Sections",
+            "type": "array"
+          }
+        },
+        "required": [
+          "profile",
+          "label",
+          "sections"
+        ],
+        "title": "FactAttachmentProfileTargetResponse",
+        "type": "object"
+      },
       "FactAttachmentResponse": {
         "additionalProperties": false,
         "description": "Where the fact was offered, not where that Profile is stored.\n\nThe application result also carries `profile_source`, the Profile\ndocument's repository-relative path. `profile` and `section` already say\nwhich pool the fact joined, so the location is dropped here rather than\npublished: architecture 14 forbids an endpoint exposing a stored path, and\nthat rule is about the value, not about whether its field name happens to\nmatch the guard's pattern.",
@@ -3011,6 +3037,52 @@
           "profile_store_version"
         ],
         "title": "FactAttachmentResponse",
+        "type": "object"
+      },
+      "FactAttachmentSectionTargetResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "attached": {
+            "title": "Attached",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "pinned": {
+            "title": "Pinned",
+            "type": "boolean"
+          },
+          "section": {
+            "title": "Section",
+            "type": "string"
+          }
+        },
+        "required": [
+          "section",
+          "label",
+          "attached",
+          "pinned"
+        ],
+        "title": "FactAttachmentSectionTargetResponse",
+        "type": "object"
+      },
+      "FactAttachmentTargetsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/FactAttachmentProfileTargetResponse"
+            },
+            "title": "Profiles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "profiles"
+        ],
+        "title": "FactAttachmentTargetsResponse",
         "type": "object"
       },
       "FactContentRequest": {
@@ -7646,6 +7718,56 @@
           }
         },
         "summary": "Create a pending fact",
+        "tags": [
+          "facts"
+        ]
+      }
+    },
+    "/api/v1/facts/attachment-targets": {
+      "get": {
+        "description": "A read-only projection; it does not expose or edit Profile documents.",
+        "operationId": "read_fact_attachment_targets_api_v1_facts_attachment_targets_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "fact_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Fact Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactAttachmentTargetsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "List existing Profile sections that may receive a fact",
         "tags": [
           "facts"
         ]

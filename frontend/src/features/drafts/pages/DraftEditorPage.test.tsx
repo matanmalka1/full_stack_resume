@@ -450,18 +450,22 @@ describe("DraftEditorPage", () => {
     renderPage();
 
     expect(await screen.findByText("מצב: אושרה", {}, { timeout: 5_000 })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "פתיחת העובדה בתיק הקריירה" })).toHaveAttribute(
+      "href",
+      "/facts?fact=f-captured",
+    );
     expect(screen.getByText("ממתינה לאישור ← אושרה · explicit confirmation")).toBeInTheDocument();
     expect(screen.queryByText(/\bpending\b|\bconfirmed\b/)).not.toBeInTheDocument();
   }, 10_000);
 
-  it("keeps fact creation and lifecycle management inside the draft context", async () => {
+  it("does not duplicate general fact lifecycle management inside the draft", async () => {
     stubReads({});
 
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: "מחזור חיי העובדות" })).toBeInTheDocument();
-    expect(screen.getByText(/יצירה וקידום כאן משנים את מקור הידע הקבוע/)).toBeInTheDocument();
-    expect(screen.getByText("יצירת עובדה ממתינה חדשה")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "ביסוס עובדתי" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "מחזור חיי העובדות" })).not.toBeInTheDocument();
+    expect(screen.queryByText("יצירת עובדה ממתינה חדשה")).not.toBeInTheDocument();
   });
 
   it("refreshes the conflict comparison and reapplies against the current ETag", async () => {

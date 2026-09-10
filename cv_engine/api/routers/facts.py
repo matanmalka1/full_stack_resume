@@ -22,7 +22,10 @@ from ..schemas.facts import (
     CaptureClaimFactRequest,
     ConfirmAndUseFactRequest,
     ConfirmAndUseFactResponse,
+    FactAttachmentProfileTargetResponse,
     FactAttachmentResponse,
+    FactAttachmentSectionTargetResponse,
+    FactAttachmentTargetsResponse,
     FactContentRequest,
     FactDetailResponse,
     FactHistoryResponse,
@@ -64,6 +67,32 @@ def read_fact_history(services: Services) -> FactHistoryResponse:
     """Declared before `/{fact_id}`, so `history` is not read as a fact ID."""
     result = services.knowledge.fact_history(None)
     return FactHistoryResponse(events=[fact_event_response(event) for event in result.events])
+
+
+@router.get(
+    "/attachment-targets",
+    response_model=FactAttachmentTargetsResponse,
+    summary="List existing Profile sections that may receive a fact",
+)
+def read_fact_attachment_targets(
+    services: Services,
+    fact_id: Annotated[str | None, Query()] = None,
+) -> FactAttachmentTargetsResponse:
+    """A read-only projection; it does not expose or edit Profile documents."""
+    result = services.knowledge.fact_attachment_targets(fact_id)
+    return FactAttachmentTargetsResponse(
+        profiles=[
+            FactAttachmentProfileTargetResponse(
+                profile=profile.profile,
+                label=profile.label,
+                sections=[
+                    FactAttachmentSectionTargetResponse.model_validate(section.model_dump())
+                    for section in profile.sections
+                ],
+            )
+            for profile in result.profiles
+        ]
+    )
 
 
 @router.get(
