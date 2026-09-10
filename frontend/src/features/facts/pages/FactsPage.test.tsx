@@ -104,6 +104,9 @@ describe("FactsPage", () => {
     renderRoute("/facts?fact=fact.backend", "/facts", <FactsPage />);
 
     expect(await screen.findByRole("link", { name: /בניית שירותי Backend/ })).toHaveAttribute("aria-current", "true");
+    expect(screen.getByRole("heading", { name: "בניית שירותי Backend" })).toBeInTheDocument();
+    expect(screen.getByText("משמעות עובדתית")).toBeInTheDocument();
+    expect(screen.getByText("מזהה קנוני")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("מעמד"), { target: { value: "pending" } });
     expect(screen.getByText("Managed accounts")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /בניית שירותי Backend/ })).not.toBeInTheDocument();

@@ -17,7 +17,7 @@ import { routePaths } from "../routePaths";
    `key` of its own so a changing query does not remount the link. */
 const areas = () => [
   { icon: LayoutDashboard, key: routePaths.home, label: "לוח המועמדויות", to: boardPath() },
-  { icon: BookOpen, key: routePaths.facts, label: "תיק הקריירה", to: routePaths.facts },
+  { icon: BookOpen, key: routePaths.facts, label: "מאגר העובדות", to: routePaths.facts },
   { icon: Settings, key: routePaths.settings, label: "הגדרות", to: routePaths.settings },
 ];
 

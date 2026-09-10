@@ -1,3 +1,4 @@
+import { Link2 } from "lucide-react";
 import { useState } from "react";
 
 import type { Fact, FactAttachmentTargets } from "@/api/contracts";
@@ -40,7 +41,23 @@ export const FactAttachmentControl = ({ fact, targets }: FactAttachmentControlPr
   const crossTrack = isCrossTrackFact(fact.source, defaultFactSource(profile.profile));
 
   return (
-    <div className="flex flex-col gap-3 rounded-control border border-cv-border bg-cv-surface p-4">
+    <section
+      aria-labelledby="fact-attachment-heading"
+      className="flex flex-col gap-4 rounded-control border border-cv-border bg-cv-surface-muted p-4"
+    >
+      <div className="flex items-start gap-2.5">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-cv-accent-soft text-cv-accent">
+          <Link2 aria-hidden="true" className="size-4" />
+        </span>
+        <div>
+          <h3 className="text-body font-semibold text-cv-text" id="fact-attachment-heading">
+            שיוך לפרופיל
+          </h3>
+          <p className="mt-0.5 text-support text-cv-text-muted">
+            בחרו היכן העובדה תוכל להשתתף בבניית קורות החיים.
+          </p>
+        </div>
+      </div>
       {attachment.error === null ? null : (
         <ErrorCallout
           error={attachment.error}
@@ -104,6 +121,7 @@ export const FactAttachmentControl = ({ fact, targets }: FactAttachmentControlPr
         </Callout>
       ) : null}
       <Button
+        className="self-start sm:self-end"
         disabled={section.attached || (crossTrack && !crossTrackAccepted)}
         onClick={() => attachment.mutate({ pin: pinned, profile: profile.profile, section: section.section })}
         pending={attachment.isPending}
@@ -115,6 +133,6 @@ export const FactAttachmentControl = ({ fact, targets }: FactAttachmentControlPr
         // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
         <Callout role="status" title="העובדה צורפה" tone="success" />
       ) : null}
-    </div>
+    </section>
   );
 };

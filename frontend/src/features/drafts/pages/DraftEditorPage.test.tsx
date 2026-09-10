@@ -450,7 +450,7 @@ describe("DraftEditorPage", () => {
     renderPage();
 
     expect(await screen.findByText("מצב: אושרה", {}, { timeout: 5_000 })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "פתיחת העובדה בתיק הקריירה" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "פתיחת העובדה במאגר העובדות" })).toHaveAttribute(
       "href",
       "/facts?fact=f-captured",
     );

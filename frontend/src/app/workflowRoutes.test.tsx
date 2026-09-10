@@ -50,8 +50,8 @@ describe("workflow shell", () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByRole("link", { name: "תיק הקריירה" })).toHaveAttribute("href", "/facts");
-    expect(screen.getByRole("link", { name: "תיק הקריירה" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "מאגר העובדות" })).toHaveAttribute("href", "/facts");
+    expect(screen.getByRole("link", { name: "מאגר העובדות" })).toHaveAttribute("aria-current", "page");
   });
 
   it("hides global destinations but keeps the command palette shortcut in a wizard step", () => {

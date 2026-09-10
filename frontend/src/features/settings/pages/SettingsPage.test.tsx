@@ -83,7 +83,7 @@ describe("SettingsPage", () => {
 
     renderRoute("/settings", "/settings", <SettingsPage />);
 
-    expect(await screen.findByRole("link", { name: "פתיחת תיק הקריירה" })).toHaveAttribute("href", "/facts");
+    expect(await screen.findByRole("link", { name: "פתיחת מאגר העובדות" })).toHaveAttribute("href", "/facts");
     expect(requestedUrls).not.toContain("/api/v1/facts");
   });
 });

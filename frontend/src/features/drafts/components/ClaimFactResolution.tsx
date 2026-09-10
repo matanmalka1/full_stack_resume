@@ -179,7 +179,7 @@ export const ClaimFactResolution = ({
               className="mt-1 inline-flex text-support font-semibold text-cv-accent hover:text-cv-accent-hover"
               to={`${routePaths.facts}?fact=${encodeURIComponent(detailQuery.data.fact.fact_id)}`}
             >
-              פתיחת העובדה בתיק הקריירה
+              פתיחת העובדה במאגר העובדות
             </Link>
           </div>
           <FactEventHistory events={detailQuery.data.events} />

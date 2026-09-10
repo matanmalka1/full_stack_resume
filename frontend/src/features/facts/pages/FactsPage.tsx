@@ -41,11 +41,11 @@ export const FactsPage = () => {
     <PageShell
       description="יצירה, אישור, קידום ושיוך של עובדות המועמד. עובדה קנונית מתוקנת באמצעות עובדה מחליפה ואינה נערכת במקום."
       measure="wide"
-      navigation={<Breadcrumbs items={[{ label: "מועמדויות", to: boardPath() }, { label: "תיק הקריירה" }]} />}
+      navigation={<Breadcrumbs items={[{ label: "מועמדויות", to: boardPath() }, { label: "מאגר העובדות" }]} />}
       title={
         <span className="inline-flex items-center gap-2">
           <BookOpen aria-hidden="true" className="size-6 text-cv-accent" />
-          תיק הקריירה
+          מאגר העובדות
         </span>
       }
     >
@@ -102,7 +102,7 @@ export const FactsPage = () => {
             empty={!poolQuery.isPending && poolQuery.error === null && entries.length === 0}
             emptyState={
               <EmptyState>
-                <p>יש ליצור עובדה כדי להתחיל לנהל את תיק הקריירה.</p>
+                <p>יש ליצור עובדה כדי להתחיל לנהל את מאגר העובדות.</p>
               </EmptyState>
             }
             error={detailQuery.error}

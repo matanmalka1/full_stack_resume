@@ -53,7 +53,7 @@ export const DraftFactPanel = ({ busy, facts, onInclude }: DraftFactPanelProps) 
         <>
           <p className="text-support leading-6 text-cv-text-muted">
             הכללה של עובדה קובעת אותה במפורש ובונה את הטיוטה מחדש. שאר ההחלטות שכבר נקבעו נשמרות. זו אותה פעולה כמו
-            סימון "קיבוע העובדה" בהכנת קורות החיים. ניהול המקור, המעמד והשיוכים הקבועים נמצא בתיק הקריירה.
+            סימון "קיבוע העובדה" בהכנת קורות החיים. ניהול המקור, המעמד והשיוכים הקבועים נמצא במאגר העובדות.
           </p>
           <ul className="flex flex-col divide-y divide-cv-border">
             {omitted.map((fact) => (
@@ -81,7 +81,7 @@ export const DraftFactPanel = ({ busy, facts, onInclude }: DraftFactPanelProps) 
                     className="mt-1 inline-flex text-support font-semibold text-cv-accent hover:text-cv-accent-hover"
                     to={`${routePaths.facts}?fact=${encodeURIComponent(fact.fact_id)}`}
                   >
-                    ניהול העובדה בתיק הקריירה
+                    ניהול העובדה במאגר העובדות
                   </Link>
                 </div>
                 <Button

@@ -50,7 +50,7 @@ export const SettingsPage = () => {
         <SectionHeader
           actions={
             <Link className={buttonClasses("secondary")} to={routePaths.facts}>
-              פתיחת תיק הקריירה
+              פתיחת מאגר העובדות
             </Link>
           }
           description="עובדות המועמד, מקורותיהן ומחזור החיים שלהן מנוהלים במסך ייעודי."
