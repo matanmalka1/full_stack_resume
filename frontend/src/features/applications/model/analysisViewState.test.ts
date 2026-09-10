@@ -58,6 +58,7 @@ describe("analysisViewState", () => {
     const succeeded = operation({
       status: "succeeded",
       is_terminal: true,
+      finished_at: "2026-09-10T08:00:10Z",
       outputs: [{ output_type: "job_analysis", output_id: "analysis-2", active: true }],
     });
 
@@ -73,6 +74,27 @@ describe("analysisViewState", () => {
         analysisWasQueuedOnCreate: false,
         detail: detail({ active_analysis_id: "analysis-2" }),
         operation: succeeded,
+      }),
+    ).toBe("content");
+  });
+
+  it("allows progress when a saved decision derives an analysis newer than the watched run", () => {
+    expect(
+      analysisViewState({
+        analysisWasQueuedOnCreate: false,
+        detail: detail({
+          active_analysis_id: "analysis-2",
+          latest_analysis: {
+            id: "analysis-2",
+            created_at: "2026-09-10T08:00:11Z",
+          } as ApplicationDetail["latest_analysis"],
+        }),
+        operation: operation({
+          status: "succeeded",
+          is_terminal: true,
+          finished_at: "2026-09-10T08:00:10Z",
+          outputs: [{ output_type: "job_analysis", output_id: "analysis-1", active: true }],
+        }),
       }),
     ).toBe("content");
   });

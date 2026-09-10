@@ -40,7 +40,27 @@ export const analysisViewState = ({
     (output) => output.active && output.output_type === "job_analysis",
   )?.output_id;
   if (activatedAnalysisId !== undefined) {
-    return detail.active_analysis_id === activatedAnalysisId ? "content" : "processing";
+    if (detail.active_analysis_id === activatedAnalysisId) {
+      return "content";
+    }
+
+    /* Applying review decisions is synchronous and may derive another analysis after the
+       watched analyze Operation. That newer active record is progress beyond the watched
+       output, not a stale projection waiting to expose it. Timestamps distinguish it from
+       the opposite re-analysis race, where the projection still carries the older record. */
+    const activeAnalysis = detail.latest_analysis;
+    const activeAnalysisTime =
+      activeAnalysis?.id === detail.active_analysis_id ? Date.parse(activeAnalysis.created_at) : NaN;
+    const operationFinishedTime = operation.finished_at == null ? NaN : Date.parse(operation.finished_at);
+    if (
+      Number.isFinite(activeAnalysisTime) &&
+      Number.isFinite(operationFinishedTime) &&
+      activeAnalysisTime >= operationFinishedTime
+    ) {
+      return "content";
+    }
+
+    return "processing";
   }
 
   return detail.active_analysis_id === null || detail.active_analysis_id === undefined ? "processing" : "content";
