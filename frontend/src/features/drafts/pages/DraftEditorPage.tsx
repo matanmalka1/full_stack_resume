@@ -215,12 +215,12 @@ export const DraftEditorPage = () => {
               validation.error !== null && validation.error !== undefined
                 ? "לא ניתן להשלים את האימות. פרטי השגיאה מופיעים לצד הטיוטה."
                 : validation.lastRun === undefined
-                ? undefined
-                : validation.lastRun.passed && validation.exactPassingRunId !== null
-                  ? "האימות הושלם בהצלחה. הטיוטה מוכנה לאישור."
-                  : validation.lastRun.passed
-                    ? "האימות הושלם, אך הטיוטה השתנתה מאז. יש להריץ אימות חדש."
-                    : "האימות הושלם והטיוטה לא עברה. פרטי הכשל מופיעים לצד הטיוטה."
+                  ? undefined
+                  : validation.lastRun.passed && validation.exactPassingRunId !== null
+                    ? "האימות הושלם בהצלחה. הטיוטה מוכנה לאישור."
+                    : validation.lastRun.passed
+                      ? "האימות הושלם, אך הטיוטה השתנתה מאז. יש להריץ אימות חדש."
+                      : "האימות הושלם והטיוטה לא עברה. פרטי הכשל מופיעים לצד הטיוטה."
             }
           />
 
