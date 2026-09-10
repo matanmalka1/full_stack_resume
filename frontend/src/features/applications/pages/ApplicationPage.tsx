@@ -8,7 +8,7 @@ import { useWatchedOperation } from "@/features/operations";
 import { Callout } from "@/ui/Callout";
 import { Disclosure } from "@/ui/Disclosure";
 import { QueryState } from "@/ui/QueryState";
-import { ActiveOperationPanel } from "@/features/operations";
+import { ActiveOperationPanel, PendingWorkCard, operationTypeLabels } from "@/features/operations";
 import { PreparationView, WizardStepShell, useAutomaticDraft } from "@/features/preparation";
 import { applicationLabel } from "../model/applicationPresentation";
 import { analysisViewState } from "../model/analysisViewState";
@@ -22,6 +22,21 @@ interface CreatedApplicationState {
   analysisProblem?: ProblemDetails | null;
   analysisQueued?: unknown;
 }
+
+/* The wait before this screen holds an Operation to report, in the one shape every later
+   moment of the same work is reported in.
+
+   Two guards can reach it - the projection not yet resolved, and resolved with the watch
+   not yet opened - and they are two moments of one fact, so they render one card from one
+   copy rather than each writing its own line of text. */
+const analysisPending = (
+  <PendingWorkCard
+    /* The heading the panel that replaces this will carry, from the same table, so the
+       card keeps its title through the swap instead of renaming itself. */
+    heading={<>הרצת {operationTypeLabels.analyze_job}</>}
+    note="יוצרים את המועמדות ומנתחים את המשרה…"
+  />
+);
 
 /* One step of the workflow wizard for one Application: preparing its CV.
 
@@ -45,7 +60,7 @@ export const ApplicationPage = () => {
   const detail = query.data;
   const { operation: watched, watch, operationId: watchedId } = useWatchedOperation(applicationId, detail);
 
-  useAutomaticDraft({
+  const { continuation } = useAutomaticDraft({
     applicationId,
     detail,
     operation: watched,
@@ -86,13 +101,7 @@ export const ApplicationPage = () => {
         fallbackTitle="לא ניתן לטעון את פרטי המועמדות"
         loading={detail === undefined}
         loadingLabel="טוען את פרטי המועמדות…"
-        loadingState={
-          viewState === "processing" ? (
-            <output aria-live="polite" className="text-body text-cv-text-muted">
-              יוצרים את המועמדות ומנתחים את המשרה…
-            </output>
-          ) : undefined
-        }
+        loadingState={viewState === "processing" ? analysisPending : undefined}
       >
         {detail === undefined ? null : (
           <div className="space-y-6">
@@ -111,25 +120,16 @@ export const ApplicationPage = () => {
             {/* Analysis work and preparation content are mutually exclusive product
                 states. The projection can still say `needs_analysis` for a poll after
                 the Operation starts (and after it succeeds); rendering both exposed the
-                internal state machine as a flash of an obsolete call to action. */}
-            {viewState === "processing" || viewState === "analysis_failed" ? (
-              watched === undefined ? (
-                <output aria-live="polite" className="text-body text-cv-text-muted">
-                  יוצרים את המועמדות ומנתחים את המשרה…
-                </output>
-              ) : (
-                <ActiveOperationPanel onQueued={watch} operation={watched} />
-              )
-            ) : (
-              <>
-                {/* A terminal result is real history, not a transport state. Keep its
-                    compact success/retry row once the projection has caught up; other
-                    operation types retain the reporting surface they had before this
-                    analysis-only view contract was introduced. */}
-                {watched === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={watched} />}
-                <PreparationView detail={detail} onQueued={watch} />
-              </>
+                internal state machine as a flash of an obsolete call to action. One
+                Operation panel call site covers every viewState - it is the same report
+                whether analysis is still running or already history. */}
+            {(viewState === "processing" || viewState === "analysis_failed") && watched === undefined
+              ? analysisPending
+              : null}
+            {watched === undefined ? null : (
+              <ActiveOperationPanel continuation={continuation} onQueued={watch} operation={watched} />
             )}
+            {viewState === "content" ? <PreparationView detail={detail} onQueued={watch} /> : null}
 
             {/* The posting the CV is tailored to, and the files the work produced: reference
                 the reader checks or downloads, folded away so the step above stays the

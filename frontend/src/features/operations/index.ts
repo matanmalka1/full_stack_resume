@@ -10,6 +10,10 @@
    with the panel, so `OperationActions` is not exported: a caller that shows an Operation
    shows this panel. */
 export { ActiveOperationPanel } from "./components/ActiveOperationPanel";
+/* The same card before there is an Operation to put in it. Exported beside the panel
+   because the two are one report between them: a screen that shows work in flight shows
+   this until the record arrives, and the panel from then on. */
+export { PendingWorkCard } from "./components/WorkCard";
 /* Watching one Application's live work, on whichever screen queued it. It is
    Operation-shaped and every consumer of it already shows this panel, so it sits with
    the panel rather than as root-level infrastructure. */

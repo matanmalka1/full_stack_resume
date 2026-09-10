@@ -394,6 +394,26 @@ dialog::backdrop {
   background-size: 6px 4px;
 }
 
+/* The few moments where a region genuinely changes shape rather than merely changing
+   words: a run that finished collapsing to its one-line result, and the cancel control
+   arriving into the space held for it. Both are real news, so they are eased in over a
+   frame or two instead of cut in - the change reads as the state moving rather than as
+   the page glitching. Everything that is only a text or badge swap keeps its geometry and
+   needs nothing here. `prefers-reduced-motion` above collapses this like every other
+   animation on the page. */
+@keyframes cv-settle-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.cv-settle-in {
+  animation: cv-settle-in 180ms ease-out;
+}
+
 /* The workflow rail's one decorative beacon: a soft ring breathing behind the current
    stage's mark. `prefers-reduced-motion` above already collapses every animation on the
    page to a single, near-instant frame, so this needs no separate opt-out. */

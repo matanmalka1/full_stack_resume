@@ -1,5 +1,5 @@
 import { Check } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import type { Operation } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
@@ -19,6 +19,7 @@ import {
   statusTones,
 } from "../model/operationLabels";
 import { operationProgressLabel } from "../model/operationProgress";
+import { WorkCardFrame } from "./WorkCard";
 
 const reasoningEffortLabels: Record<NonNullable<Operation["reasoning_effort"]>, string> = {
   low: "נמוך",
@@ -59,9 +60,22 @@ const useCancelVisibility = (operation: Operation): boolean => {
    column of identifiers, and the identifiers are no longer shown anywhere. A link
    promising more detail that leads to less is worse than no link. */
 export const ActiveOperationPanel = ({
+  continuation,
   onQueued,
   operation,
 }: {
+  /* What happens next by itself, when this run succeeding is not the end of the work.
+
+     A run that finished collapses to a single line, which is right when the workflow is
+     then waiting on the reader. It is wrong when the screen is already starting the next
+     run or leaving for the next step: the panel shrank to announce "done" and grew back a
+     tick later for the continuation, so the one moment the reader was told to look at was
+     a state the flow had passed through rather than one it stopped in.
+
+     Supplied by the screen, because the screen is what knows a continuation is coming -
+     the Operation record cannot say that its success will be followed. Its presence keeps
+     the full frame and its words say what is starting; absent, a finished run settles. */
+  continuation?: string;
   /* Handed down to the retry inside: a re-queued Operation belongs to the same watch the
      host screen is already keeping, so it is reported here rather than followed. Required,
      because every screen that shows an Operation holds such a watch - a panel with
@@ -69,6 +83,9 @@ export const ActiveOperationPanel = ({
   onQueued: (operationId: string) => void;
   operation: Operation;
 }) => {
+  /* The collapsed row's own, for the same reason `WorkCardFrame` mints one: a settled run
+     can share a screen with the next step's card. */
+  const settledHeadingId = useId();
   const showCancel = useCancelVisibility(operation);
   const terminal = isTerminalOperation(operation);
   const progressLabel = operationProgressLabel(operation);
@@ -92,8 +109,11 @@ export const ActiveOperationPanel = ({
      took the top of the screen - heading, badge, progress sentence, actions, link - to
      say that finished work had finished, and pushed the thing it produced below the
      fold. Failure keeps the full panel: there the status, the safe detail, and the way
-     on are the screen's most important content. */
-  const settled = terminal && operation.status === "succeeded" && failure === null;
+     on are the screen's most important content.
+
+     Nothing left to watch is exactly what a continuation contradicts, so a screen that
+     names one holds the frame open until the run it is starting arrives to fill it. */
+  const settled = terminal && operation.status === "succeeded" && failure === null && continuation === undefined;
 
   if (settled) {
     return (
@@ -104,11 +124,11 @@ export const ActiveOperationPanel = ({
          muted body text on one baseline, and the only marks that survive are the
          status word, which carries the outcome, and the two controls. */
       <Card
-        aria-labelledby="active-operation-heading"
-        className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-cv-surface-muted px-4 py-2.5 text-support text-cv-text-muted"
+        aria-labelledby={settledHeadingId}
+        className="cv-settle-in flex flex-wrap items-center gap-x-3 gap-y-2 bg-cv-surface-muted px-4 py-2.5 text-support text-cv-text-muted"
       >
         <Check aria-hidden="true" className="size-4 shrink-0 text-cv-success" />
-        <h2 className="font-medium text-cv-text" id="active-operation-heading">
+        <h2 className="font-medium text-cv-text" id={settledHeadingId}>
           הרצת {operationTypeLabels[operation.operation_type]}
         </h2>
         <p dir="auto">
@@ -133,72 +153,82 @@ export const ActiveOperationPanel = ({
   }
 
   return (
-    <Card aria-labelledby="active-operation-heading" className="p-5">
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-        {/* The run, not its subject. `operationTypeLabels` names the work ("ניתוח
-            המשרה"), which is also what the panel reporting the resulting analysis calls
-            itself - two adjacent regions carrying one accessible name, which reads as a
-            duplicated section rather than as a run and its conclusion. Naming the event
-            here keeps the noun for the panel that owns the result. */}
-        <h2 className="text-body font-semibold text-cv-text" id="active-operation-heading">
-          הרצת {operationTypeLabels[operation.operation_type]}
-        </h2>
-        <div className="flex flex-wrap items-center gap-3">
-          <StatusBadge tone={statusTones[operation.status]}>{progressLabel}</StatusBadge>
-        </div>
-      </div>
-
+    <WorkCardFrame
+      badge={<StatusBadge tone={statusTones[operation.status]}>{progressLabel}</StatusBadge>}
+      /* The run, not its subject. `operationTypeLabels` names the work ("ניתוח המשרה"),
+         which is also what the panel reporting the resulting analysis calls itself - two
+         adjacent regions carrying one accessible name, which reads as a duplicated section
+         rather than as a run and its conclusion. Naming the event here keeps the noun for
+         the panel that owns the result. */
+      heading={<>הרצת {operationTypeLabels[operation.operation_type]}</>}
+    >
       {/* A.5: announce the same single progress sentence shown in the badge, so an
           identical poll tick re-renders without speaking. */}
-      <LiveRegion>{progressLabel}</LiveRegion>
+      <LiveRegion>{continuation ?? progressLabel}</LiveRegion>
 
-      <div className="mt-4 flex flex-col gap-4">
-        {executionDetail}
-        <p className="text-support leading-6 text-cv-text-muted" dir="auto">
-          {terminal
+      {executionDetail}
+      <p className="text-support leading-6 text-cv-text-muted" dir="auto">
+        {continuation ??
+          (terminal
             ? produced.length === 0
               ? "הפעולה הסתיימה."
               : `הפעולה הושלמה ויצרה ${joinHebrewList(produced)}.`
-            : "העמוד מתעדכן מעצמו עד לסיום הפעולה."}
+            : "העמוד מתעדכן מעצמו עד לסיום הפעולה.")}
+      </p>
+
+      {/* A.3: the backend's safe progress line is English today, so it picks its own
+          direction rather than inheriting the RTL shell.
+
+          Its place is held open while the run is live rather than mounted when the first
+          message arrives: the line appears partway through a run, and a paragraph
+          appearing between two poll ticks pushed everything below it down mid-read. */}
+      {operation.message !== "" ? (
+        <p className="text-body leading-7" dir="auto">
+          {operation.message}
         </p>
+      ) : terminal ? null : (
+        <div aria-hidden="true" className="h-7" />
+      )}
 
-        {/* A.3: the backend's safe progress line is English today, so it picks its own
-            direction rather than inheriting the RTL shell. */}
-        {operation.message === "" ? null : (
-          <p className="text-body leading-7" dir="auto">
-            {operation.message}
-          </p>
-        )}
+      {failure === null && operation.safe_failure_detail == null ? null : (
+        <Callout
+          role="alert"
+          title={failure?.title ?? statusLabels[operation.status]}
+          tone={failureTones[operation.status] ?? "warning"}
+        >
+          {failure === null && operation.safe_failure_detail != null ? (
+            <p dir="auto">{operation.safe_failure_detail}</p>
+          ) : null}
+          {failure === null ? null : (
+            <p className="mt-2" dir="auto">
+              {failure.guidance}
+            </p>
+          )}
+        </Callout>
+      )}
 
-        {failure === null && operation.safe_failure_detail == null ? null : (
-          <Callout
-            role="alert"
-            title={failure?.title ?? statusLabels[operation.status]}
-            tone={failureTones[operation.status] ?? "warning"}
-          >
-            {failure === null && operation.safe_failure_detail != null ? (
-              <p dir="auto">{operation.safe_failure_detail}</p>
-            ) : null}
-            {failure === null ? null : (
-              <p className="mt-2" dir="auto">
-                {failure.guidance}
-              </p>
-            )}
-          </Callout>
-        )}
+      {operation.cancellation_requested_at != null && !operation.is_terminal ? (
+        <Callout title="בקשת הביטול התקבלה" tone="neutral">
+          הביטול של פעולה שכבר התחילה הוא מיטבי. גם אם העבודה החיצונית תסתיים, התוצאה שלה לא תופעל; המצב כאן ימשיך
+          להתעדכן עד שיירשם המצב הסופי.
+        </Callout>
+      ) : null}
 
-        {operation.cancellation_requested_at != null && !operation.is_terminal ? (
-          <Callout title="בקשת הביטול התקבלה" tone="neutral">
-            הביטול של פעולה שכבר התחילה הוא מיטבי. גם אם העבודה החיצונית תסתיים, התוצאה שלה לא תופעל; המצב כאן ימשיך
-            להתעדכן עד שיירשם המצב הסופי.
-          </Callout>
-        ) : null}
+      {/* Cancel and retry, which are the Operation's own actions and belong wherever it
+          is shown. The panel passes no return link: this is the screen the user is
+          already on.
 
-        {/* Cancel and retry, which are the Operation's own actions and belong wherever it
-            is shown. The panel passes no return link: this is the screen the user is
-            already on. */}
-        <OperationActions onQueued={onQueued} operation={operation} showCancel={showCancel} />
-      </div>
-    </Card>
+          A continuation withdraws them: there is nothing to cancel on a run that
+          succeeded, and re-running it would supersede the result that the work now
+          starting is built on. */}
+      {continuation === undefined ? (
+        <OperationActions
+          onQueued={onQueued}
+          operation={operation}
+          reserve={!terminal && operation.available_actions.includes("cancel")}
+          showCancel={showCancel}
+        />
+      ) : null}
+    </WorkCardFrame>
   );
 };

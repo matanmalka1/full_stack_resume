@@ -48,3 +48,36 @@ export const autoDraftIsAnticipated = (
   detail !== undefined &&
   detail.working_draft_state === "none" &&
   detail.active_operation?.operation_type === "analyze_job";
+
+/* The same opt-in guard once more, asked at the moment between the two above: the analysis
+   has succeeded and the generate has not been sent yet. It answers "is this run's success
+   the end of the work, or is this screen about to start the next run", which is what
+   decides whether a finished Operation may be reported as finished.
+
+   Deliberately not `autoDraftSources`. That one is the dispatch authority and must be
+   certain, so it reads the projection's active analysis, selection plan and live work -
+   the exact fields that lag while the projection catches up with the Operation. Asked here
+   those absences would read as "no continuation" for the poll or two before the projection
+   arrives, which is the whole window this exists to cover.
+
+   The last clause is what keeps a looser question from latching. A continuation this
+   predicts must actually be able to happen, and the generate needs a selection plan: with
+   the projection caught up far enough to name the analysis but carrying no plan, no
+   dispatch is coming and the run has genuinely finished. Before that - no analysis on
+   record at all, while the run that just produced one is being reported succeeded - the
+   projection is still behind by construction, so its silence is not an answer yet.
+
+   A dispatch that then fails is not this function's to know: the caller holds the mutation
+   that would say so. */
+export const autoDraftIsContinuing = (
+  operation: Operation | undefined,
+  settings: Settings | undefined,
+  detail: ApplicationDetail | undefined,
+): boolean =>
+  settings?.auto_generate_when_review_not_required === true &&
+  operation?.operation_type === "analyze_job" &&
+  operation.status === "succeeded" &&
+  detail !== undefined &&
+  detail.working_draft_state === "none" &&
+  detail.review_reasons.length === 0 &&
+  (detail.active_selection_plan_id != null || detail.active_analysis_id == null);
