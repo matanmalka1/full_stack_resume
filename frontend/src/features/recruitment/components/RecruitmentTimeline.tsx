@@ -60,7 +60,7 @@ export const RecruitmentTimeline = ({ items }: { items: RecruitmentTimelineItem[
               <span
                 aria-hidden="true"
                 className={cx(
-                  "relative z-content-raised inline-flex size-8 items-center justify-center rounded-full border",
+                  "relative z-(--cv-z-content-raised) inline-flex size-8 items-center justify-center rounded-full border",
                   marker.classes,
                 )}
               >

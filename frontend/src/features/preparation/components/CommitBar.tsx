@@ -55,7 +55,7 @@ export const CommitBarTargetContext = createContext<HTMLElement | null | undefin
    a pinned approval in the editor, a download inside the identity card on the ready
    screen - and it is this component, at all three, that makes the answer one shape. */
 const CommitBarSurface = ({ back, children, label, primary, result }: CommitBarProps) => (
-  <div className="sticky bottom-4 z-sticky rounded-surface border border-cv-border bg-cv-surface/95 p-card-padding shadow-floating backdrop-blur-xl">
+  <div className="sticky bottom-4 z-(--cv-z-sticky) rounded-surface border border-cv-border bg-cv-surface/95 p-card-padding shadow-floating backdrop-blur-xl">
     <div className="grid grid-cols-[minmax(0,1fr)_max-content] items-center gap-4">
       <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
         {back}

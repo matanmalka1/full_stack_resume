@@ -147,7 +147,7 @@ export const FactPoolList = ({
   >
     {groupBySource(entries).map(({ entries: grouped, source }) => (
       <section key={source}>
-        <h3 className="sticky top-0 z-content-raised flex items-baseline justify-between gap-control-gap border-b border-cv-border bg-cv-surface-sunken px-3 py-1.5 text-support font-semibold text-cv-text-muted">
+        <h3 className="sticky top-0 z-(--cv-z-content-raised) flex items-baseline justify-between gap-control-gap border-b border-cv-border bg-cv-surface-sunken px-3 py-1.5 text-support font-semibold text-cv-text-muted">
           <span dir="auto">{factSourceLabel(source)}</span>
           <span className="font-normal">{grouped.length}</span>
         </h3>

@@ -50,7 +50,7 @@ export const ActionBar = ({ align = "end", className, primary, secondary, sticky
             ? "justify-start"
             : "justify-end",
         sticky && !split
-          ? "sticky bottom-0 z-sticky -mx-4 mt-1 border-t border-cv-border bg-cv-surface/90 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6"
+          ? "sticky bottom-0 z-(--cv-z-sticky) -mx-4 mt-1 border-t border-cv-border bg-cv-surface/90 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6"
           : undefined,
         className,
       )}

@@ -14,7 +14,7 @@ const IconField = ({ children, icon: Icon }: { children: ReactNode; icon: Lucide
   <span className="relative block">
     <Icon
       aria-hidden="true"
-      className="pointer-events-none absolute start-3.5 top-1/2 z-content-raised size-icon-md -translate-y-1/2 text-cv-text-muted"
+      className="pointer-events-none absolute start-3.5 top-1/2 z-(--cv-z-content-raised) size-icon-md -translate-y-1/2 text-cv-text-muted"
     />
     {children}
   </span>

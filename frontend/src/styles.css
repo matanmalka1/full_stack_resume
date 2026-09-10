@@ -17,6 +17,14 @@
   --cv-shadow-edge: light-dark(transparent, rgb(255 255 255 / 0.08));
   --cv-shadow-medium: light-dark(rgb(33 37 41 / 0.4), rgb(0 0 0 / 0.9));
   --cv-shadow-strong: light-dark(rgb(33 37 41 / 0.45), rgb(0 0 0 / 0.95));
+  --cv-spacing-unit: 0.25rem;
+  --cv-z-content-raised: 10;
+  --cv-z-sticky: 20;
+  --cv-z-navigation: 30;
+  --cv-z-overlay: 50;
+  --cv-z-toast: 60;
+  --stroke-icon: 2;
+  --stroke-icon-strong: 3;
 }
 
 :root[data-theme="light"] {
@@ -88,7 +96,7 @@
     sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
-  /* A.2 typography scale: 16px body, 14px supporting text, 20/24/32px headings.
+  /* A.2 typography scale: 15px body, 13px supporting text, 16/22/36px headings.
      Line heights run slightly taller than the Latin defaults: Hebrew has no
      ascender/descender rhythm to lean on, so the extra leading is what keeps a
      paragraph legible rather than dense. */
@@ -105,23 +113,14 @@
 
   /* A.2 spacing: 4px base, so the 8/12/16/24/32px gaps are 2/3/4/6/8. */
   --spacing: 0.25rem;
-  --spacing-control-gap: calc(var(--spacing) * 2);
-  --spacing-field-gap: calc(var(--spacing) * 3);
-  --spacing-card-padding: calc(var(--spacing) * 4);
-  --spacing-section-gap: calc(var(--spacing) * 6);
-  --spacing-page-gap: calc(var(--spacing) * 8);
+  --spacing-control-gap: calc(var(--cv-spacing-unit) * 2);
+  --spacing-field-gap: calc(var(--cv-spacing-unit) * 3);
+  --spacing-card-padding: calc(var(--cv-spacing-unit) * 4);
+  --spacing-section-gap: calc(var(--cv-spacing-unit) * 6);
+  --spacing-page-gap: calc(var(--cv-spacing-unit) * 8);
   --spacing-icon-sm: 0.875rem;
   --spacing-icon-md: 1rem;
   --spacing-icon-lg: 1.25rem;
-
-  --z-index-content-raised: 10;
-  --z-index-sticky: 20;
-  --z-index-navigation: 30;
-  --z-index-overlay: 50;
-  --z-index-toast: 60;
-
-  --stroke-icon: 2;
-  --stroke-icon-strong: 3;
 
   /* Dark elevation adds a faint light edge as well as a restrained black drop;
      a black shadow alone disappears between two near-black surfaces. */
@@ -247,30 +246,30 @@ select {
   --text-body: 1.125rem;
   --text-heading-sm: 1.375rem;
   --text-heading-md: 1.625rem;
-  --text-heading-lg: 2.125rem;
+  --text-heading-lg: 2.5rem;
   --spacing-icon-sm: 1rem;
   --spacing-icon-md: 1.125rem;
   --spacing-icon-lg: 1.375rem;
 }
 
 [data-density="compact"] {
-  --spacing: 0.2rem;
+  --cv-spacing-unit: 0.2rem;
 }
 
 [data-route-density="work"] {
-  --spacing-control-gap: calc(var(--spacing) * 1.75);
-  --spacing-field-gap: calc(var(--spacing) * 2.625);
-  --spacing-card-padding: calc(var(--spacing) * 3.5);
-  --spacing-section-gap: calc(var(--spacing) * 5.25);
-  --spacing-page-gap: calc(var(--spacing) * 7);
+  --spacing-control-gap: calc(var(--cv-spacing-unit) * 1.75);
+  --spacing-field-gap: calc(var(--cv-spacing-unit) * 2.625);
+  --spacing-card-padding: calc(var(--cv-spacing-unit) * 3.5);
+  --spacing-section-gap: calc(var(--cv-spacing-unit) * 5.25);
+  --spacing-page-gap: calc(var(--cv-spacing-unit) * 7);
 }
 
 [data-route-density="focus"] {
-  --spacing-control-gap: calc(var(--spacing) * 2.25);
-  --spacing-field-gap: calc(var(--spacing) * 3.375);
-  --spacing-card-padding: calc(var(--spacing) * 4.5);
-  --spacing-section-gap: calc(var(--spacing) * 6.75);
-  --spacing-page-gap: calc(var(--spacing) * 9);
+  --spacing-control-gap: calc(var(--cv-spacing-unit) * 2.25);
+  --spacing-field-gap: calc(var(--cv-spacing-unit) * 3.375);
+  --spacing-card-padding: calc(var(--cv-spacing-unit) * 4.5);
+  --spacing-section-gap: calc(var(--cv-spacing-unit) * 6.75);
+  --spacing-page-gap: calc(var(--cv-spacing-unit) * 9);
 }
 
 @media (forced-colors: active) {
@@ -390,9 +389,9 @@ select {
   color: var(--color-cv-text-muted);
 }
 
-.cv-field:focus {
+.cv-field:focus-visible {
   outline: 2px solid var(--color-cv-field-focus);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
 .cv-field[aria-invalid="true"] {

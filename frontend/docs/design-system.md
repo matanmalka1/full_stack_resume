@@ -51,11 +51,12 @@ filenames and code. Do not add tracking to Hebrew text.
 
 ## Spacing
 
-The comfortable Tailwind scale is based on 4px. Semantic spacing is calculated from
-that base, so compact density scales both raw utilities and named layout decisions.
-Route intent is a second axis: work/list routes tighten semantic layout spacing, while
-workflow/focus routes expand it. The user's comfortable/compact preference remains
-independent and continues to affect both route types.
+The Tailwind spacing scale stays fixed at 4px. Semantic spacing is calculated from the
+separate `--cv-spacing-unit`, so compact density changes named layout decisions without
+silently resizing every raw `p-*`, `m-*`, `gap-*`, width or height utility. Route intent
+is a second axis: work/list routes tighten semantic layout spacing, while workflow/focus
+routes expand it. The user's comfortable/compact preference remains independent and
+continues to affect both route types.
 
 | Token / utility suffix | Value | Use |
 | --- | ---: | --- |
@@ -90,13 +91,14 @@ compact marker for dense lists, tables and small state summaries.
 
 ## Elevation and stacking
 
-Use only named z-index utilities:
+The z-index variables are ordinary root-level CSS tokens, not Tailwind theme namespaces.
+Use them through Tailwind's custom-property syntax:
 
-1. `z-content-raised` — marks above local tracks and sticky headings.
-2. `z-sticky` — sticky action bars and local dropdowns.
-3. `z-navigation` — the application header.
-4. `z-overlay` — non-native overlay surfaces; native `<dialog>` uses the browser top layer.
-5. `z-toast` — notifications that must remain visible above overlays.
+1. `z-(--cv-z-content-raised)` — marks above local tracks and sticky headings.
+2. `z-(--cv-z-sticky)` — sticky action bars and local dropdowns.
+3. `z-(--cv-z-navigation)` — the application header.
+4. `z-(--cv-z-overlay)` — non-native overlay surfaces; native `<dialog>` uses the browser top layer.
+5. `z-(--cv-z-toast)` — notifications that must remain visible above overlays.
 
 Shadows follow the same progression: `surface`, `floating`, `overlay`, `document`.
 Dark shadows combine a faint light edge with a black drop so adjacent dark surfaces

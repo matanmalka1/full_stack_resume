@@ -74,6 +74,8 @@ const themeBlock = () => {
   return theme.slice(start, end === -1 ? undefined : end);
 };
 
+const stylesheet = () => readFileSync(stylesPath, "utf8");
+
 const readTokens = (prefix) => {
   return new Set(
     [...themeBlock().matchAll(new RegExp(`--${prefix}-([a-z0-9-]+):`, "g"))].map((match) => match[1]),
@@ -83,7 +85,9 @@ const readTokens = (prefix) => {
 const colorTokens = readTokens("color");
 const radiusTokens = readTokens("radius");
 const shadowTokens = readTokens("shadow");
-const zIndexTokens = readTokens("z-index");
+const zIndexTokens = new Set(
+  [...stylesheet().matchAll(/--cv-z-([a-z0-9-]+):/g)].map((match) => match[1]),
+);
 
 const rules = [
   {
@@ -104,7 +108,7 @@ const rules = [
   {
     name: "numeric-z-index",
     pattern: /\bz-(?:\d+|\[[^\]]+\])\b/g,
-    message: "numeric z-index utility; use a named --z-index-* layer",
+    message: "numeric z-index utility; use a --cv-z-* custom-property layer",
   },
 ];
 
@@ -153,7 +157,16 @@ for (const file of collectFiles(sourceRoot)) {
   }
 
   for (const match of source.matchAll(/\bz-([a-z][a-z0-9-]*)\b/g)) {
-    if (match[1] === "auto" || zIndexTokens.has(match[1])) {
+    if (match[1] === "auto") {
+      continue;
+    }
+
+    const line = source.slice(0, match.index).split("\n").length;
+    errors.push(`${relativePath}:${line} unknown z-index token (${match[0]})`);
+  }
+
+  for (const match of source.matchAll(/\bz-\(--cv-z-([a-z0-9-]+)\)/g)) {
+    if (zIndexTokens.has(match[1])) {
       continue;
     }
 

@@ -47,7 +47,7 @@ const StepMark = ({ index, state }: { index: number; state: WorkflowStepState })
   <span
     aria-hidden="true"
     className={cx(
-      "relative z-content-raised flex size-8 shrink-0 items-center justify-center rounded-pill border",
+      "relative z-(--cv-z-content-raised) flex size-8 shrink-0 items-center justify-center rounded-pill border",
       "text-support font-bold transition-[background-color,border-color,color] duration-200",
       stepMarkClasses[state],
     )}
