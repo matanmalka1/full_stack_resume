@@ -20,8 +20,15 @@ export const AnalysisStage = ({
   plan: WorkflowActionPlan;
   showGaps: boolean;
 }) => (
-  <>
-    <AnalysisPanel classification={classification} detail={detail} showGaps={showGaps} />
-    <ReanalyzeCard detail={detail} onQueued={onQueued} plan={plan} />
-  </>
+  <AnalysisPanel
+    classification={classification}
+    detail={detail}
+    /* Asked here rather than left to the card's own early return: the panel gives its
+       footer a band of its own, and a card that renders nothing would still have cost a
+       divider and a band of padding at the foot of the panel. */
+    footer={
+      plan.analyze?.reanalysis === true ? <ReanalyzeCard detail={detail} onQueued={onQueued} plan={plan} /> : undefined
+    }
+    showGaps={showGaps}
+  />
 );

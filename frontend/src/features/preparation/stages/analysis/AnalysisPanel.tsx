@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import type { Classification } from "@/api/analyses";
 import type { ApplicationDetail } from "@/api/contracts";
 import { Disclosure } from "@/ui/Disclosure";
@@ -34,10 +36,16 @@ import { RequirementsSection } from "./RequirementsSection";
 export const AnalysisPanel = ({
   classification,
   detail,
+  footer,
   showGaps,
 }: {
   classification: Classification;
   detail: ApplicationDetail;
+  /* A last band inside the panel's own rhythm, for a control that acts on the analysis
+     being reported rather than on the workflow - re-running it. Drawn as a sibling below
+     the panel it carried a rule of its own, which landed just under the card's border and
+     read as a second, misaligned edge outside the surface it belonged to. */
+  footer?: ReactNode;
   /* False while the projection is asking for a gap decision. The gaps are then shown
      with their acceptance controls beside the decision they answer, and drawing them
      here as well would be the same finding in two places - one of them read-only and
@@ -84,6 +92,8 @@ export const AnalysisPanel = ({
           </div>
         </Disclosure>
       </section>
+
+      {footer === undefined ? null : <section>{footer}</section>}
     </div>
   </section>
 );

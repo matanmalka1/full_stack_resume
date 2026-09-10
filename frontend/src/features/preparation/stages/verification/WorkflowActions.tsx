@@ -13,6 +13,9 @@ import { ReplaceDraftDialog } from "./ReplaceDraftDialog";
 
 interface WorkflowActionsProps {
   detail: ApplicationDetail;
+  /* Whether the projection names one specific action rather than merely permitting
+     several. Only the notes region's name depends on it. */
+  hasRecommendation: boolean;
   /* What this component just queued. The projection reports an Operation only on its next
      read, so without this the panel would appear a poll later than the press that caused
      it - and a command that failed before the worker picked it up might never be reported
@@ -24,7 +27,7 @@ interface WorkflowActionsProps {
   plan: WorkflowActionPlan;
 }
 
-export const WorkflowActions = ({ detail, onQueued, plan }: WorkflowActionsProps) => {
+export const WorkflowActions = ({ detail, hasRecommendation, onQueued, plan }: WorkflowActionsProps) => {
   const { analyze, archive, commandsBlocked, draft, editVersion, error, provider, replace, settings, workInFlight } =
     useWorkflowCommands(detail, plan, onQueued);
 
@@ -159,25 +162,41 @@ export const WorkflowActions = ({ detail, onQueued, plan }: WorkflowActionsProps
     inWorkflowOrder.find((entry) => entry.emphasized) ?? inWorkflowOrder[inWorkflowOrder.length - 1];
   const restButtons = inWorkflowOrder.filter((entry) => entry !== emphasizedEntry).map((entry) => entry.node);
 
+  /* Whether this component draws anything that stays on the step. Its commit bar is
+     portalled to the shell's action slot and its replacement dialog is closed, so on a
+     step whose plan offers only a route - "צפייה בגרסה המוכנה" on a finished Application -
+     everything below renders somewhere else or not at all. The named region used to wrap
+     that outcome anyway, leaving a labelled landmark of zero height that a screen reader
+     announced and then had nothing to read out of. It now wraps the notes themselves and
+     exists only when there are notes. */
+  const hasNotes =
+    error !== null ||
+    plan.unbuiltRecommendation !== null ||
+    (plan.createDraft !== null && settings !== undefined) ||
+    plan.replaceDraft !== null ||
+    plan.archiveDraft !== null;
+
   return (
     <div className="flex flex-col gap-4">
-      {error === null ? null : (
-        <ErrorCallout
-          error={error}
-          fallbackDetail="לא ניתן להפעיל את הפעולה. מצב המועמדות לא השתנה ואפשר לנסות שוב."
-          fallbackTitle="הפעולה לא בוצעה"
-        />
-      )}
+      {!hasNotes ? null : (
+        <section aria-label={hasRecommendation ? "הפעולה המומלצת" : "פעולות זמינות"} className="flex flex-col gap-4">
+          {error === null ? null : (
+            <ErrorCallout
+              error={error}
+              fallbackDetail="לא ניתן להפעיל את הפעולה. מצב המועמדות לא השתנה ואפשר לנסות שוב."
+              fallbackTitle="הפעולה לא בוצעה"
+            />
+          )}
 
-      {plan.unbuiltRecommendation === null ? null : (
-        <Callout title={`הפעולה המומלצת כעת היא ${actionLabel(plan.unbuiltRecommendation)}`} tone="neutral">
-          {plan.unbuiltRecommendation === "create_draft" && plan.draftWouldReplace
-            ? "הטיוטה הפעילה נשמרת כפי שהיא. החלפתה דורשת החלטה מפורשת."
-            : "אין לה כרגע מסך שמבצע אותה, ולכן אין לאן להפנות. הפעולות שכן מוצעות למטה הן הדרך להמשיך מכאן."}
-        </Callout>
-      )}
+          {plan.unbuiltRecommendation === null ? null : (
+            <Callout title={`הפעולה המומלצת כעת היא ${actionLabel(plan.unbuiltRecommendation)}`} tone="neutral">
+              {plan.unbuiltRecommendation === "create_draft" && plan.draftWouldReplace
+                ? "הטיוטה הפעילה נשמרת כפי שהיא. החלפתה דורשת החלטה מפורשת."
+                : "אין לה כרגע מסך שמבצע אותה, ולכן אין לאן להפנות. הפעולות שכן מוצעות למטה הן הדרך להמשיך מכאן."}
+            </Callout>
+          )}
 
-      {/* One line above the bar, and only about the action the bar leads with.
+          {/* One line above the bar, and only about the action the bar leads with.
 
           What stood here was up to three stacked paragraphs of caveat between the reader
           and the button they came to press. Every sentence in them is still on the screen;
@@ -189,35 +208,39 @@ export const WorkflowActions = ({ detail, onQueued, plan }: WorkflowActionsProps
           The generate note names its sources and its cost in one sentence. Which cost is
           read from the same `provider` value the command is sent with, so the sentence
           cannot describe a run different from the one the press would start. */}
-      {plan.createDraft === null || settings === undefined ? null : (
-        <p className="text-support leading-6 text-cv-text-muted">
-          הטיוטה נוצרת מהניתוח ומתוכנית הבחירה הפעילים — שתי רשומות שאינן משתנות.{" "}
-          {provider === undefined
-            ? "היצירה רצה במסלול הדטרמיניסטי, ללא קריאת AI, והעבודה מתבצעת ברקע."
-            : "היצירה כוללת קריאת AI בתשלום, והעבודה מתבצעת ברקע."}
-        </p>
-      )}
+          {plan.createDraft === null || settings === undefined ? null : (
+            <p className="text-support leading-6 text-cv-text-muted">
+              הטיוטה נוצרת מהניתוח ומתוכנית הבחירה הפעילים — שתי רשומות שאינן משתנות.{" "}
+              {provider === undefined
+                ? "היצירה רצה במסלול הדטרמיניסטי, ללא קריאת AI, והעבודה מתבצעת ברקע."
+                : "היצירה כוללת קריאת AI בתשלום, והעבודה מתבצעת ברקע."}
+            </p>
+          )}
 
-      {/* What each of the two draft-level commands does. Beside a stale-draft alert both
+          {/* What each of the two draft-level commands does. Beside a stale-draft alert both
           are offered and what the reader has not been told is that they are not variants
           of one another; after a failed validation only replacement is offered, and naming
           an archive button that is not on the screen would send the reader looking for it.
           So each sentence is tied to the button it explains. */}
-      {plan.replaceDraft === null && plan.archiveDraft === null ? null : (
-        <p className="text-support leading-6 text-cv-text-muted">
-          {plan.replaceDraft === null ? null : "החלפה בונה טיוטה חדשה מהניתוח ומתוכנית הבחירה הפעילים. "}
-          {plan.archiveDraft === null ? null : "העברה לארכיון שומרת עותק היסטורי ומשאירה את המועמדות בלי טיוטה פעילה."}
-        </p>
-      )}
+          {plan.replaceDraft === null && plan.archiveDraft === null ? null : (
+            <p className="text-support leading-6 text-cv-text-muted">
+              {plan.replaceDraft === null ? null : "החלפה בונה טיוטה חדשה מהניתוח ומתוכנית הבחירה הפעילים. "}
+              {plan.archiveDraft === null
+                ? null
+                : "העברה לארכיון שומרת עותק היסטורי ומשאירה את המועמדות בלי טיוטה פעילה."}
+            </p>
+          )}
 
-      {/* Why the controls are inert rather than missing. A button that vanishes while work
+          {/* Why the controls are inert rather than missing. A button that vanishes while work
           runs reads as a command that is no longer offered; one that is disabled with the
           reason beside it reads as the same command, later. */}
-      {workInFlight && (plan.replaceDraft !== null || plan.archiveDraft !== null) ? (
-        <p className="text-support leading-6 text-cv-text-muted">
-          פעולה על הטיוטה מתבצעת כעת. החלפה והעברה לארכיון יהיו זמינות שוב כשהיא תסתיים.
-        </p>
-      ) : null}
+          {workInFlight && (plan.replaceDraft !== null || plan.archiveDraft !== null) ? (
+            <p className="text-support leading-6 text-cv-text-muted">
+              פעולה על הטיוטה מתבצעת כעת. החלפה והעברה לארכיון יהיו זמינות שוב כשהיא תסתיים.
+            </p>
+          ) : null}
+        </section>
+      )}
 
       {/* The step's action, in the one place every step puts it, and last so the bar it
           pins to the viewport has nothing of this region left underneath it. It used to

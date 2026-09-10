@@ -46,16 +46,19 @@ export const VerificationStage = ({
 
       <ReviewDecisionPanel classification={classification} detail={detail} />
 
+      {/* The step's action, not a card around it. The action used to sit in an emphasized
+          bordered box to mark it as recommended - but on a wizard step the action is the
+          subject of the screen, not one card competing among others, and when it is a
+          single "go to the editor" link the box was chrome around one button saying
+          nothing the button did not. It stands on the page; its own primary styling is the
+          emphasis.
+
+          The named region moved inside `WorkflowActions`, which is the only place that can
+          tell whether anything is actually left here to name: the commit bar portals out
+          to the shell's action slot, so a labelled landmark drawn around it from here was
+          empty on every step that offers a route and nothing else. */}
       {!decisionOpen && hasWorkflowActionsContent(plan) ? (
-        /* The step's action, not a card around it. The action used to sit in an emphasized
-           bordered box to mark it as recommended - but on a wizard step the action is the
-           subject of the screen, not one card competing among others, and when it is a
-           single "go to the editor" link the box was chrome around one button saying
-           nothing the button did not. It stands on the page; its own primary styling is the
-           emphasis. */
-        <section aria-label={hasRecommendation ? "הפעולה המומלצת" : "פעולות זמינות"}>
-          <WorkflowActions detail={detail} onQueued={onQueued} plan={plan} />
-        </section>
+        <WorkflowActions detail={detail} hasRecommendation={hasRecommendation} onQueued={onQueued} plan={plan} />
       ) : null}
     </>
   );

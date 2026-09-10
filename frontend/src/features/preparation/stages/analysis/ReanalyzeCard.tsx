@@ -29,7 +29,9 @@ export const ReanalyzeCard = ({
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 border-t border-cv-border pt-4">
+    /* No rule of its own: the panel's `divide-y` draws the one above it, in the same
+       rhythm as every finding it follows. */
+    <div className="flex flex-wrap items-center justify-between gap-4">
       <p className="max-w-md text-support leading-6 text-cv-text-muted">
         {plan.draftWouldReplace
           ? "ניתוח מחדש יוצר ניתוח חדש ונפרד לאותו תצלום משרה. הטיוטה הפעילה נשמרת כפי שהיא, אך תסומן כלא מעודכנת מולו."
