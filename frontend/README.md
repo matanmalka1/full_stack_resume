@@ -2,6 +2,9 @@
 
 The frontend uses the local FastAPI service as its only backend.
 
+The visual language, theme contract, RTL rules and semantic tokens are documented in
+[`docs/design-system.md`](docs/design-system.md).
+
 For development, configure the backend process with the exact Vite origin:
 
 ```text

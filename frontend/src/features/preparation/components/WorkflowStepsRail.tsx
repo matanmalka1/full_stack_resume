@@ -48,12 +48,12 @@ const StepMark = ({ index, state }: { index: number; state: WorkflowStepState })
   <span
     aria-hidden="true"
     className={cx(
-      "relative z-10 flex size-6 shrink-0 items-center justify-center rounded-pill border",
+      "relative z-content-raised flex size-6 shrink-0 items-center justify-center rounded-pill border",
       "text-[0.6875rem] font-bold transition-[background-color,border-color,color] duration-200",
       stepMarkClasses[state],
     )}
   >
-    {state === "complete" ? <Check className="size-3 stroke-[3]" /> : index + 1}
+    {state === "complete" ? <Check className="size-3 [stroke-width:var(--stroke-icon-strong)]" /> : index + 1}
   </span>
 );
 

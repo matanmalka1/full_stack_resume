@@ -13,6 +13,7 @@ import { LiveRegion } from "@/ui/LiveRegion";
 import { ApplicationAttentionSummary } from "../components/ApplicationAttentionSummary";
 import { ApplicationListResults } from "../components/ApplicationListResults";
 import { ApplicationListToolbar } from "../components/ApplicationListToolbar";
+import { ApplicationPresetTabs } from "../components/ApplicationPresetTabs";
 import { ApplicationListTableSkeleton } from "../components/ApplicationListTable";
 import { CloseApplicationDialog } from "../components/CloseApplicationDialog";
 import { useApplicationListMutations } from "../api/mutations";
@@ -92,8 +93,22 @@ export const ApplicationListPage = () => {
     undoCloseMutation.mutate({ ...closedResult, eventId: closedResult.eventId });
   };
 
+  /* The named slices sit in the masthead, beside the title: they are the first choice
+     the reader makes, and reading them on the same line as the page name says which
+     board is on screen. They appear once there is a board to slice. */
+  const presetTabs =
+    page === undefined || page.total === 0 ? undefined : (
+      <div className="self-center">
+        <ApplicationPresetTabs
+          counts={page.preset_counts}
+          onSelect={(preset) => updateQuery({ ...query, preset: preset === "all" ? undefined : preset })}
+          value={query.preset ?? "all"}
+        />
+      </div>
+    );
+
   return (
-    <PageShell measure="wide" title="לוח מועמדויות">
+    <PageShell actions={presetTabs} measure="wide" title="לוח מועמדויות">
       {closedResult === null ? null : (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-cv-success/20 bg-cv-success-soft/60 px-3.5 py-2.5 text-support text-cv-text">
           <LiveRegion visuallyHidden={false}>
@@ -166,7 +181,6 @@ export const ApplicationListPage = () => {
               onActivityChange={(activity) => updateQuery({ ...query, activity })}
               onClearFilters={clearFilters}
               onPreparationStateChange={(stage) => updateQuery({ ...query, stages: stage ? [stage] : [] })}
-              onPresetSelect={(preset) => updateQuery({ ...query, preset: preset === "all" ? undefined : preset })}
               onRecruitmentStageChange={(stageId) => {
                 const stage = recruitmentStages.find((candidate) => candidate.id === stageId);
                 updateQuery({ ...query, recruitmentStatuses: stage?.statuses ?? [] });
@@ -175,8 +189,6 @@ export const ApplicationListPage = () => {
               onSortChange={(sort) => updateQuery({ ...query, sort })}
               onViewModeChange={setViewMode}
               preparationState={query.stages?.[0]}
-              preset={query.preset ?? "all"}
-              presetCounts={page.preset_counts}
               recruitmentStage={selectedStage(query.recruitmentStatuses)}
               recruitmentStageCounts={recruitmentStageCounts}
               resultSummary={

@@ -5,10 +5,10 @@ import { preparationStateLabels } from "@/features/preparation";
 import { Button } from "@/ui/Button";
 import { Input } from "@/ui/Input";
 import { Select } from "@/ui/Select";
+import { surfaceClasses } from "@/ui/surface";
 import { ViewSwitch } from "@/ui/ViewSwitch";
 import { type ViewMode, viewModeOptions } from "../model/applicationViews";
 import { type RecruitmentStageId, recruitmentStages } from "../model/recruitmentStages";
-import { ApplicationPresetTabs, type PresetSelection } from "./ApplicationPresetTabs";
 
 const activityLabels: Record<ActivityFilter, string> = {
   open: "פעילות",
@@ -23,14 +23,17 @@ const sortLabels: Record<ApplicationSort, string> = {
   stage: "לפי מצב קורות החיים",
 };
 
-const fieldClasses = "w-full min-w-0 sm:w-44";
+/* Sized by the longest option rather than by a shared fixed width: "כל מצבי קורות
+   החיים" is a good deal longer than "פעילות", and one width for both either clipped
+   that label under the native arrow or padded the short menu out with empty space.
+   The bounds keep the row from turning ragged - nothing narrower than a real target,
+   nothing wide enough to push the rest of the bar off the line. */
+const fieldClasses = "w-full min-w-0 sm:w-auto sm:min-w-36 sm:max-w-64";
 
 interface ApplicationListToolbarProps {
   activity: ActivityFilter;
   filtered: boolean;
   preparationState: PreparationState | undefined;
-  preset: PresetSelection;
-  presetCounts: Record<string, number> | undefined;
   recruitmentStage: RecruitmentStageId | null;
   recruitmentStageCounts: Partial<Record<RecruitmentStageId, number>>;
   resultSummary: string;
@@ -41,32 +44,27 @@ interface ApplicationListToolbarProps {
   onActivityChange: (activity: ActivityFilter) => void;
   onClearFilters: () => void;
   onPreparationStateChange: (stage: PreparationState | undefined) => void;
-  onPresetSelect: (preset: PresetSelection) => void;
   onRecruitmentStageChange: (stage: RecruitmentStageId | null) => void;
   onSearchChange: (search: string) => void;
   onSortChange: (sort: ApplicationSort) => void;
   onViewModeChange: (view: ViewMode) => void;
 }
 
-/* Everything that decides which Applications are on screen and how they are drawn, in
-   one band, on the page's own ground rather than inside a surface of its own. A card
-   here would be the third border above the board and would read as content; these are
-   controls for the content below them.
-   
-   The two rows are two different questions. The first is which slice, and how it is
-   presented - the answer the reader changes often and reads at a glance. The second is
-   how that slice is narrowed, and what it currently matches.
-   
+/* Everything that narrows the board and everything that decides how it is drawn, in
+   one bar. The named slices moved up beside the page title, where the reader picks a
+   slice before asking anything else; what is left here is one row - the question on
+   the reading side, the presentation controls pushed to the far end - inside a single
+   surface, so the controls read as one object above the board rather than as loose
+   fields on the page's ground.
+
    A control that is set says so by showing its own value, so nothing is restated as a
-   removable chip underneath: one control, one place, plus a single way to put every
-   filter back to its default. Sort survives that reset, because it orders the list
-   rather than narrowing it. */
+   removable chip: one control, one place, plus a single way to put every filter back to
+   its default. Sort survives that reset, because it orders the list rather than
+   narrowing it. The count of what matched sits under the bar, next to that reset. */
 export const ApplicationListToolbar = ({
   activity,
   filtered,
   preparationState,
-  preset,
-  presetCounts,
   recruitmentStage,
   recruitmentStageCounts,
   resultSummary,
@@ -77,44 +75,15 @@ export const ApplicationListToolbar = ({
   onActivityChange,
   onClearFilters,
   onPreparationStateChange,
-  onPresetSelect,
   onRecruitmentStageChange,
   onSearchChange,
   onSortChange,
   onViewModeChange,
 }: ApplicationListToolbarProps) => (
-  <div className="flex flex-col gap-3">
-    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-      <ApplicationPresetTabs counts={presetCounts} onSelect={onPresetSelect} value={preset} />
-
-      <div className="flex items-center gap-2">
-        <label className="sr-only" htmlFor="list-sort">
-          סדר
-        </label>
-        <Select
-          className="w-40"
-          id="list-sort"
-          onChange={(event) => onSortChange(event.target.value as ApplicationSort)}
-          value={sort}
-        >
-          {(Object.keys(sortLabels) as ApplicationSort[]).map((key) => (
-            <option key={key} value={key}>
-              {sortLabels[key]}
-            </option>
-          ))}
-        </Select>
-        <ViewSwitch
-          label="בחירת תצוגת מועמדויות"
-          onChange={onViewModeChange}
-          options={viewModeOptions}
-          value={viewMode}
-        />
-      </div>
-    </div>
-
+  <div className="flex flex-col gap-2">
     <search
       aria-label="סינון וחיפוש מועמדויות"
-      className="flex flex-wrap items-center gap-2 border-t border-cv-border pt-3"
+      className={surfaceClasses("flex flex-wrap items-center gap-2 bg-cv-surface px-3 py-2.5 shadow-surface")}
     >
       <label className="sr-only" htmlFor="list-search">
         חיפוש במועמדויות
@@ -196,15 +165,39 @@ export const ApplicationListToolbar = ({
       </Select>
 
       <div className="flex items-center gap-2 sm:ms-auto">
-        <p aria-live="polite" className="text-support text-cv-text-muted tabular-nums">
-          {resultSummary}
-        </p>
-        {filtered ? (
-          <Button onClick={onClearFilters} size="compact" variant="ghost">
-            ניקוי סינון
-          </Button>
-        ) : null}
+        <label className="sr-only" htmlFor="list-sort">
+          סדר
+        </label>
+        <Select
+          className="w-40"
+          id="list-sort"
+          onChange={(event) => onSortChange(event.target.value as ApplicationSort)}
+          value={sort}
+        >
+          {(Object.keys(sortLabels) as ApplicationSort[]).map((key) => (
+            <option key={key} value={key}>
+              {sortLabels[key]}
+            </option>
+          ))}
+        </Select>
+        <ViewSwitch
+          label="בחירת תצוגת מועמדויות"
+          onChange={onViewModeChange}
+          options={viewModeOptions}
+          value={viewMode}
+        />
       </div>
     </search>
+
+    <div className="flex items-center justify-end gap-2">
+      <p aria-live="polite" className="text-support text-cv-text-muted tabular-nums">
+        {resultSummary}
+      </p>
+      {filtered ? (
+        <Button onClick={onClearFilters} size="compact" variant="ghost">
+          ניקוי סינון
+        </Button>
+      ) : null}
+    </div>
   </div>
 );

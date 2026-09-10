@@ -23,7 +23,7 @@ export const Tooltip = ({ children, className, label, placement = "top" }: Toolt
     {children}
     <span
       className={cx(
-        "pointer-events-none absolute start-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-control bg-cv-text px-2 py-1 text-support font-medium text-cv-on-accent opacity-0 shadow-floating transition-opacity delay-0 duration-150 group-hover/tooltip:delay-300 group-hover/tooltip:opacity-100 group-focus-within/tooltip:delay-300 group-focus-within/tooltip:opacity-100 rtl:translate-x-1/2",
+        "pointer-events-none absolute start-1/2 z-content-raised -translate-x-1/2 whitespace-nowrap rounded-control bg-cv-text px-2 py-1 text-support font-medium text-cv-on-accent opacity-0 shadow-floating transition-opacity delay-0 duration-150 group-hover/tooltip:delay-300 group-hover/tooltip:opacity-100 group-focus-within/tooltip:delay-300 group-focus-within/tooltip:opacity-100 rtl:translate-x-1/2",
         placementClasses[placement],
       )}
       role="tooltip"

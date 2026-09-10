@@ -9,6 +9,7 @@
  *   2. raw Tailwind palette utilities, which bypass the semantic tokens of A.2;
  *   3. outline-none / outline-hidden, since the global :focus-visible rule owns focus;
  *   4. a cv- color, radius, or shadow utility whose token does not exist.
+ *   5. numeric z-index utilities, which bypass the named layer stack.
  *
  * EXCEPTIONS is deliberately empty. Add an entry only with a reason, so forgetting to
  * register something fails instead of passing.
@@ -67,6 +68,7 @@ const readTokens = (prefix) => {
 const colorTokens = readTokens("color");
 const radiusTokens = readTokens("radius");
 const shadowTokens = readTokens("shadow");
+const zIndexTokens = readTokens("z-index");
 
 const rules = [
   {
@@ -83,6 +85,11 @@ const rules = [
     name: "focus-opt-out",
     pattern: /\boutline-(?:none|hidden)\b/g,
     message: "the global :focus-visible rule owns focus; do not clear the outline",
+  },
+  {
+    name: "numeric-z-index",
+    pattern: /\bz-(?:\d+|\[[^\]]+\])\b/g,
+    message: "numeric z-index utility; use a named --z-index-* layer",
   },
 ];
 
@@ -129,6 +136,15 @@ for (const file of collectFiles(sourceRoot)) {
       errors.push(`${relativePath}:${line} unknown ${prefix} token (${match[0]})`);
     }
   }
+
+  for (const match of source.matchAll(/\bz-([a-z][a-z0-9-]*)\b/g)) {
+    if (match[1] === "auto" || zIndexTokens.has(match[1])) {
+      continue;
+    }
+
+    const line = source.slice(0, match.index).split("\n").length;
+    errors.push(`${relativePath}:${line} unknown z-index token (${match[0]})`);
+  }
 }
 
 if (errors.length > 0) {
@@ -140,5 +156,5 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `design-token guard passed: ${colorTokens.size} color, ${radiusTokens.size} radius, ${shadowTokens.size} shadow tokens.`,
+  `design-token guard passed: ${colorTokens.size} color, ${radiusTokens.size} radius, ${shadowTokens.size} shadow, ${zIndexTokens.size} z-index tokens.`,
 );

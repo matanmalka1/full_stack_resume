@@ -42,7 +42,7 @@ export const FactManagementDetail = ({ detail, mutationsBlocked = false, onCreat
           {targets.data === undefined ? null : <FactAttachmentControl fact={fact} targets={targets.data} />}
         </QueryState>
       ) : fact.status !== "canonical" && !mutationsBlocked ? (
-        <Callout title="שיוך לפרופיל יתאפשר לאחר הקידום למקור אמת" tone="neutral" />
+        <Callout title="שיוך לפרופיל יתאפשר לאחר הקידום למקור אמת" tone="info" />
       ) : null}
 
       <div className="flex flex-col gap-3 border-t border-cv-border pt-4">

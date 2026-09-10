@@ -126,7 +126,7 @@ export const ApplicationRecordActions = ({
   }, [open]);
 
   return (
-    <div className="relative z-10 shrink-0" ref={containerRef}>
+    <div className="relative z-content-raised shrink-0" ref={containerRef}>
       <Tooltip label="פעולות נוספות">
         <button
           aria-controls={menuId}
@@ -143,7 +143,7 @@ export const ApplicationRecordActions = ({
       </Tooltip>
       {open ? (
         <div
-          className="absolute end-0 top-full z-20 mt-1 min-w-52 rounded-control border border-cv-border bg-cv-surface-raised p-1 shadow-floating"
+          className="absolute end-0 top-full z-sticky mt-1 min-w-52 rounded-control border border-cv-border bg-cv-surface-raised p-1 shadow-floating"
           id={menuId}
           onKeyDown={(event) => {
             if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;

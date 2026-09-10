@@ -8,6 +8,7 @@ const toneClasses: Record<Tone, string> = {
   success: "border-cv-success/30 bg-cv-success/10 text-cv-success",
   warning: "border-cv-warning/30 bg-cv-warning/10 text-cv-warning",
   blocker: "border-cv-blocker/30 bg-cv-blocker/10 text-cv-blocker",
+  info: "border-cv-info/30 bg-cv-info-soft text-cv-info",
   progress: "border-cv-accent/30 bg-cv-accent-soft text-cv-accent",
   neutral: "border-cv-border bg-cv-surface-muted text-cv-text-muted",
 };
@@ -40,7 +41,7 @@ export const StatusBadge = ({ children, className, icon, tone }: StatusBadgeProp
           claim the row was working when it is not. */}
       <Icon
         aria-hidden="true"
-        className={cx("size-4 shrink-0", icon === undefined && tone === "progress" && "animate-spin")}
+        className={cx("size-icon-md shrink-0", icon === undefined && tone === "progress" && "animate-spin")}
       />
       {children ?? label}
     </span>

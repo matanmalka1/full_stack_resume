@@ -8,6 +8,7 @@ import { boardPath } from "../boardReturn";
 import { routePaths } from "../routePaths";
 import { useInWorkflow } from "../workflowRoutes";
 import { AppNavigation } from "./AppNavigation";
+import { ThemeToggle } from "./ThemeToggle";
 
 /* Whether the application is currently talking to the server, anywhere. Decorative: the
    screens announce their own loading in words through `QueryState`, and a bar that also
@@ -43,7 +44,7 @@ export const AppHeader = () => {
   const inWorkflow = useInWorkflow();
 
   return (
-    <header className="sticky top-0 z-30 border-b border-cv-border bg-cv-surface/85 backdrop-blur-xl">
+    <header className="sticky top-0 z-navigation border-b border-cv-border bg-cv-surface/85 backdrop-blur-xl">
       <div className="page-gutter">
         <div className="page-frame flex min-h-16 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2">
           <div className="flex min-w-0 items-center gap-4 sm:gap-6">
@@ -62,6 +63,8 @@ export const AppHeader = () => {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            <ThemeToggle />
+
             <GlobalSearch showTrigger={!inWorkflow} />
 
             {inWorkflow ? null : (

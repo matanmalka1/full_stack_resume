@@ -103,7 +103,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
   return (
     <dialog
       aria-label="מעבר מהיר למועמדות"
-      className="fixed left-1/2 top-24 z-50 m-0 flex max-h-[75vh] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 flex-col rounded-surface border border-cv-border bg-cv-surface p-0 text-cv-text shadow-floating backdrop:bg-cv-text/40 backdrop:backdrop-blur-sm"
+      className="fixed left-1/2 top-24 z-overlay m-0 flex max-h-[75vh] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 flex-col rounded-surface border border-cv-border bg-cv-surface p-0 text-cv-text shadow-floating backdrop:bg-cv-text/40 backdrop:backdrop-blur-sm"
       onClick={(event) => {
         if (event.target === dialogRef.current) {
           onClose();

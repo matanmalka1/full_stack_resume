@@ -1,5 +1,100 @@
 @import "tailwindcss";
 
+/* Raw palette values are deliberately private: components consume only the
+   semantic --color-cv-* layer exposed through @theme. A theme can therefore
+   change meaning without changing a single component utility. */
+:root {
+  color-scheme: light;
+  --cv-neutral-0: #ffffff;
+  --cv-neutral-25: #f8fafc;
+  --cv-neutral-50: #f5f7fa;
+  --cv-neutral-100: #f1f3f7;
+  --cv-neutral-150: #eceff4;
+  --cv-neutral-200: #e3e7ee;
+  --cv-neutral-225: #e2e6ee;
+  --cv-neutral-600: #5b6577;
+  --cv-neutral-900: #111827;
+  --cv-blue-50: #e6edfd;
+  --cv-blue-500: #2f6fed;
+  --cv-blue-700: #1d4ed8;
+  --cv-blue-800: #1739a8;
+  --cv-blue-950: #132a5e;
+  --cv-sky-50: #e5f4fb;
+  --cv-sky-700: #08658f;
+  --cv-amber-50: #fdf0dc;
+  --cv-amber-700: #9c4a07;
+  --cv-green-50: #e4f5ea;
+  --cv-green-700: #136c34;
+  --cv-orange-50: #fdf0d9;
+  --cv-orange-700: #8a4f08;
+  --cv-red-50: #fce8e5;
+  --cv-red-700: #c02617;
+  --cv-red-800: #9a1e12;
+  --cv-shadow-rgb: 17 24 39;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --cv-neutral-0: #151b26;
+  --cv-neutral-25: #1a2230;
+  --cv-neutral-50: #202a3a;
+  --cv-neutral-100: #0d121b;
+  --cv-neutral-150: #111824;
+  --cv-neutral-200: #2a3547;
+  --cv-neutral-225: #344155;
+  --cv-neutral-600: #aeb9ca;
+  --cv-neutral-900: #f3f6fb;
+  --cv-blue-50: #172c53;
+  --cv-blue-500: #83b4ff;
+  --cv-blue-700: #8bb9ff;
+  --cv-blue-800: #b4d1ff;
+  --cv-blue-950: #d7e5ff;
+  --cv-sky-50: #102f3f;
+  --cv-sky-700: #74c9ed;
+  --cv-amber-50: #3c2814;
+  --cv-amber-700: #f3b56f;
+  --cv-green-50: #153322;
+  --cv-green-700: #7ed69b;
+  --cv-orange-50: #3a2b12;
+  --cv-orange-700: #efbd72;
+  --cv-red-50: #421d1b;
+  --cv-red-700: #ff9b8f;
+  --cv-red-800: #ffc0b8;
+  --cv-shadow-rgb: 0 0 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --cv-neutral-0: #151b26;
+    --cv-neutral-25: #1a2230;
+    --cv-neutral-50: #202a3a;
+    --cv-neutral-100: #0d121b;
+    --cv-neutral-150: #111824;
+    --cv-neutral-200: #2a3547;
+    --cv-neutral-225: #344155;
+    --cv-neutral-600: #aeb9ca;
+    --cv-neutral-900: #f3f6fb;
+    --cv-blue-50: #172c53;
+    --cv-blue-500: #83b4ff;
+    --cv-blue-700: #8bb9ff;
+    --cv-blue-800: #b4d1ff;
+    --cv-blue-950: #d7e5ff;
+    --cv-sky-50: #102f3f;
+    --cv-sky-700: #74c9ed;
+    --cv-amber-50: #3c2814;
+    --cv-amber-700: #f3b56f;
+    --cv-green-50: #153322;
+    --cv-green-700: #7ed69b;
+    --cv-orange-50: #3a2b12;
+    --cv-orange-700: #efbd72;
+    --cv-red-50: #421d1b;
+    --cv-red-700: #ff9b8f;
+    --cv-red-800: #ffc0b8;
+    --cv-shadow-rgb: 0 0 0;
+  }
+}
+
 /* Hebrew-first typography. Heebo is a true Hebrew family with matching Latin
    glyphs, so a mixed line does not switch face mid-sentence; index.html loads it.
    The fallbacks below are real Hebrew faces rather than a generic sans, so an
@@ -18,38 +113,40 @@
      colours are deliberately darker than their mid-palette equivalents - a
      lighter blue or green reads well as a fill but fails as 14px text on its own
      soft chip, which is exactly how `StatusBadge` uses it. */
-  --color-cv-canvas: #f1f3f7;
-  --color-cv-canvas-strong: #e3e7ee;
-  --color-cv-surface: #ffffff;
-  --color-cv-surface-muted: #f5f7fa;
-  --color-cv-surface-raised: #ffffff;
-  --color-cv-surface-sunken: #eceff4;
-  --color-cv-border: #e2e6ee;
+  --color-cv-canvas: var(--cv-neutral-100);
+  --color-cv-canvas-strong: var(--cv-neutral-200);
+  --color-cv-surface: var(--cv-neutral-0);
+  --color-cv-surface-muted: var(--cv-neutral-50);
+  --color-cv-surface-raised: var(--cv-neutral-0);
+  --color-cv-surface-sunken: var(--cv-neutral-150);
+  --color-cv-border: var(--cv-neutral-225);
   /* Strong edges remain available for checkboxes and multiline editors. */
-  --color-cv-border-strong: #5b6577;
+  --color-cv-border-strong: var(--cv-neutral-600);
   /* Input/select reference: Main.dc.html. */
-  --color-cv-field-border: #e3e8ef;
-  --color-cv-field-background: #f8fafc;
-  --color-cv-field-focus: #2f6fed;
+  --color-cv-field-border: var(--cv-neutral-200);
+  --color-cv-field-background: var(--cv-neutral-25);
+  --color-cv-field-focus: var(--cv-blue-500);
 
   --text-field: 1rem;
-  --color-cv-text: #111827;
-  --color-cv-text-muted: #5b6577;
-  --color-cv-accent: #1d4ed8;
-  --color-cv-accent-hover: #1739a8;
-  --color-cv-accent-soft: #e6edfd;
-  --color-cv-brand-deep: #132a5e;
-  --color-cv-brass: #9c4a07;
-  --color-cv-brass-soft: #fdf0dc;
-  --color-cv-success: #136c34;
-  --color-cv-success-soft: #e4f5ea;
-  --color-cv-warning: #8a4f08;
-  --color-cv-warning-soft: #fdf0d9;
-  --color-cv-blocker: #c02617;
-  --color-cv-blocker-hover: #9a1e12;
-  --color-cv-blocker-soft: #fce8e5;
-  --color-cv-focus: #1d4ed8;
-  --color-cv-on-accent: #ffffff;
+  --color-cv-text: var(--cv-neutral-900);
+  --color-cv-text-muted: var(--cv-neutral-600);
+  --color-cv-accent: var(--cv-blue-700);
+  --color-cv-accent-hover: var(--cv-blue-800);
+  --color-cv-accent-soft: var(--cv-blue-50);
+  --color-cv-info: var(--cv-sky-700);
+  --color-cv-info-soft: var(--cv-sky-50);
+  --color-cv-brand-deep: var(--cv-blue-950);
+  --color-cv-brass: var(--cv-amber-700);
+  --color-cv-brass-soft: var(--cv-amber-50);
+  --color-cv-success: var(--cv-green-700);
+  --color-cv-success-soft: var(--cv-green-50);
+  --color-cv-warning: var(--cv-orange-700);
+  --color-cv-warning-soft: var(--cv-orange-50);
+  --color-cv-blocker: var(--cv-red-700);
+  --color-cv-blocker-hover: var(--cv-red-800);
+  --color-cv-blocker-soft: var(--cv-red-50);
+  --color-cv-focus: var(--cv-blue-700);
+  --color-cv-on-accent: var(--cv-neutral-0);
   --font-sans:
     "Heebo", "Assistant", "Rubik", "Arial Hebrew", "Noto Sans Hebrew", system-ui, -apple-system, "Segoe UI", Arial,
     sans-serif;
@@ -72,6 +169,22 @@
 
   /* A.2 spacing: 4px base, so the 8/12/16/24/32px gaps are 2/3/4/6/8. */
   --spacing: 0.25rem;
+  --spacing-control-gap: 0.5rem;
+  --spacing-field-gap: 0.75rem;
+  --spacing-card-padding: 1rem;
+  --spacing-section-gap: 1.5rem;
+  --spacing-page-gap: 2rem;
+  --spacing-icon-sm: 0.875rem;
+  --spacing-icon-md: 1rem;
+  --spacing-icon-lg: 1.25rem;
+
+  --z-index-content-raised: 10;
+  --z-index-sticky: 20;
+  --z-index-navigation: 30;
+  --z-index-overlay: 50;
+
+  --stroke-icon: 2;
+  --stroke-icon-strong: 3;
 
   /* A.2 surfaces: harmonious radii and restrained elevation. The shadows are
      cast in the same cool neutral as the canvas rather than in black, so a card
@@ -79,10 +192,10 @@
   --radius-control: 0.5rem;
   --radius-surface: 0.875rem;
   --radius-pill: 9999px;
-  --shadow-surface: 0 1px 2px rgb(17 24 39 / 0.05), 0 8px 20px -16px rgb(17 24 39 / 0.3);
-  --shadow-floating: 0 2px 4px rgb(17 24 39 / 0.06), 0 18px 40px -24px rgb(17 24 39 / 0.4);
-  --shadow-overlay: 0 28px 70px -24px rgb(17 24 39 / 0.45);
-  --shadow-document: 0 1px 3px rgb(17 24 39 / 0.09), 0 24px 56px -32px rgb(17 24 39 / 0.45);
+  --shadow-surface: 0 1px 2px rgb(var(--cv-shadow-rgb) / 0.05), 0 8px 20px -16px rgb(var(--cv-shadow-rgb) / 0.3);
+  --shadow-floating: 0 2px 4px rgb(var(--cv-shadow-rgb) / 0.06), 0 18px 40px -24px rgb(var(--cv-shadow-rgb) / 0.4);
+  --shadow-overlay: 0 28px 70px -24px rgb(var(--cv-shadow-rgb) / 0.45);
+  --shadow-document: 0 1px 3px rgb(var(--cv-shadow-rgb) / 0.09), 0 24px 56px -32px rgb(var(--cv-shadow-rgb) / 0.45);
 }
 :root {
   color: var(--color-cv-text);

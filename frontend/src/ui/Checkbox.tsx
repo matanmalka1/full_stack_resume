@@ -60,8 +60,7 @@ export const Checkbox = ({
         />
         <Check
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 m-auto size-3.5 text-cv-on-accent opacity-0 transition-opacity peer-checked:opacity-100"
-          strokeWidth={3}
+          className="pointer-events-none absolute inset-0 m-auto size-icon-sm text-cv-on-accent opacity-0 [stroke-width:var(--stroke-icon-strong)] transition-opacity peer-checked:opacity-100"
         />
       </span>
       <span className="flex flex-col gap-1">

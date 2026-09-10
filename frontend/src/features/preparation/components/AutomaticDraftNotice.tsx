@@ -19,7 +19,7 @@ export const AutomaticDraftNotice = ({ detail }: { detail: ApplicationDetail }) 
   }
 
   return (
-    <Callout title="טיוטה תיווצר אוטומטית בסיום הניתוח" tone="neutral">
+    <Callout title="טיוטה תיווצר אוטומטית בסיום הניתוח" tone="info">
       אם הניתוח לא יעלה נושא שדורש החלטה, יצירת הטיוטה תתחיל מיד עם סיומו בלי לחיצה נוספת. ההגדרה נמצאת ב
       <Link className="text-cv-accent hover:underline" to={routePaths.settings}>
         הגדרות

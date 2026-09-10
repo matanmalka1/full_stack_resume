@@ -101,7 +101,7 @@ export const Dialog = ({
               onClick={onClose}
             >
               <svg aria-hidden="true" className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" strokeWidth={1.75} />
+                <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" strokeWidth="var(--stroke-icon)" />
               </svg>
             </IconButton>
           ) : null}

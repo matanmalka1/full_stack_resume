@@ -208,7 +208,7 @@ export const ActiveOperationPanel = ({
       )}
 
       {operation.cancellation_requested_at != null && !operation.is_terminal ? (
-        <Callout title="בקשת הביטול התקבלה" tone="neutral">
+        <Callout title="בקשת הביטול התקבלה" tone="info">
           הביטול של פעולה שכבר התחילה הוא מיטבי. גם אם העבודה החיצונית תסתיים, התוצאה שלה לא תופעל; המצב כאן ימשיך
           להתעדכן עד שיירשם המצב הסופי.
         </Callout>

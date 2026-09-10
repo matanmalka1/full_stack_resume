@@ -7,6 +7,7 @@ const toneClasses: Record<Tone, string> = {
   success: "border-cv-success/20 border-s-cv-success bg-cv-success-soft/60",
   warning: "border-cv-warning/20 border-s-cv-warning bg-cv-warning-soft/60",
   blocker: "border-cv-blocker/20 border-s-cv-blocker bg-cv-blocker-soft/60",
+  info: "border-cv-info/20 border-s-cv-info bg-cv-info-soft/60",
   progress: "border-cv-accent/20 border-s-cv-accent bg-cv-accent-soft/60",
   neutral: "border-cv-border border-s-cv-text-muted bg-cv-surface-muted",
 };
@@ -15,6 +16,7 @@ const toneIconClasses: Record<Tone, string> = {
   success: "text-cv-success",
   warning: "text-cv-warning",
   blocker: "text-cv-blocker",
+  info: "text-cv-info",
   progress: "text-cv-accent",
   neutral: "text-cv-text-muted",
 };
@@ -27,6 +29,7 @@ const bannerToneClasses: Record<Tone, string> = {
   success: "border-cv-success/30 bg-cv-success-soft",
   warning: "border-cv-warning/30 bg-cv-warning-soft",
   blocker: "border-cv-blocker/30 bg-cv-blocker-soft",
+  info: "border-cv-info/30 bg-cv-info-soft",
   progress: "border-cv-accent/30 bg-cv-accent-soft",
   neutral: "border-cv-border bg-cv-surface-muted",
 };
@@ -57,7 +60,7 @@ export const Callout = ({ action, children, className, emphasis, role, title, to
   return (
     <Tag
       className={cx(
-        banner ? "rounded-surface border p-4" : "rounded-control border border-s-2 px-3.5 py-2.5",
+        banner ? "rounded-surface border p-card-padding" : "rounded-control border border-s-2 px-3.5 py-2.5",
         banner ? bannerToneClasses[tone] : toneClasses[tone],
         className,
       )}
@@ -68,7 +71,7 @@ export const Callout = ({ action, children, className, emphasis, role, title, to
           aria-hidden="true"
           className={cx(
             "mt-0.5 shrink-0",
-            banner ? "size-5" : "size-4",
+            banner ? "size-icon-lg" : "size-icon-md",
             toneIconClasses[tone],
             tone === "progress" && "motion-safe:animate-spin",
           )}
