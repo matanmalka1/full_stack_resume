@@ -6,7 +6,13 @@ import { Callout } from "@/ui/Callout";
 import { Card } from "@/ui/Card";
 import { Disclosure } from "@/ui/Disclosure";
 import { type PreparationScreen, actionDestination, screenPath } from "../../model/actionDestinations";
-import { actionLabel, blockedReasonLabel, reasonTitle, warningTitle } from "../../model/preparationLabels";
+import {
+  actionLabel,
+  blockedReasonLabel,
+  reasonTitle,
+  warningDetail,
+  warningTitle,
+} from "../../model/preparationLabels";
 import { resolvedByReviewDecision } from "../../model/reviewDecisions";
 
 /* Review reasons and stale reasons carry the same shape, and both are reported as a
@@ -131,13 +137,28 @@ export const PreparationAlerts = ({
         />
       ))}
 
-      {detail.warnings.map((warning) => (
-        <Callout key={warning.code} title={warningTitle(warning.code)} tone="warning">
-          <Disclosure summary="פרטי האזהרה">
-            <p dir="auto">{warning.message}</p>
-          </Disclosure>
-        </Callout>
-      ))}
+      {/* A code this build knows says its own sentence, in the open, exactly as the ready
+          screen already says it - `warningDetail` is the table both read from, and this
+          was the one call site that skipped it and printed the server's raw string
+          instead. So the same warning was a localized line on one step of the workflow
+          and an English line behind a press on another. A code with no entry keeps the
+          disclosure, which is this screen's rule for an unlocalized server message: the
+          evidence stays reachable without several of them becoming a wall of text. */}
+      {detail.warnings.map((warning) => {
+        const localized = warningDetail(warning.code, "");
+
+        return (
+          <Callout key={warning.code} title={warningTitle(warning.code)} tone="warning">
+            {localized === "" ? (
+              <Disclosure summary="פרטי האזהרה">
+                <p dir="auto">{warning.message}</p>
+              </Disclosure>
+            ) : (
+              localized
+            )}
+          </Callout>
+        );
+      })}
 
       {exceptionalBlockedActions.map((blocked) => (
         <Callout key={blocked.action} title={`הפעולה ${actionLabel(blocked.action)} חסומה כרגע`} tone="blocker">

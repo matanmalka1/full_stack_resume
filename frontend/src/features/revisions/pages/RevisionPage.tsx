@@ -227,7 +227,11 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
 
       {operation === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={operation} />}
       {createDraft.error === null ? null : (
-        <ErrorCallout error={createDraft.error} fallbackTitle="לא ניתן ליצור טיוטה חדשה" />
+        <ErrorCallout
+          error={createDraft.error}
+          fallbackDetail="הגרסה המוכנה הזו לא השתנתה, ואפשר לנסות שוב."
+          fallbackTitle="לא ניתן ליצור טיוטה חדשה"
+        />
       )}
       {submissionRecorded ? (
         // role="status" is a Callout prop, not a DOM role; Callout already renders an
