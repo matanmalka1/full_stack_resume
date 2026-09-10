@@ -1,6 +1,7 @@
 import type { ApplicationListItem } from "@/api/contracts";
 import { Card } from "@/ui/Card";
 import { cx } from "@/ui/cx";
+import { duplicatedApplicationIdentityIds } from "../model/applicationListPresentation";
 import { ApplicationListRow } from "./ApplicationListRow";
 
 /* Recruitment and preparation remain adjacent but independent: the former says where
@@ -15,19 +16,6 @@ const columns = [
   { key: "actions", label: "פעולות", width: "w-12" },
 ] as const;
 
-/* A visual hint only: rows with the same company and role emphasize their dates so the
-   reader can distinguish them. It does not represent domain duplicate detection. */
-const duplicatedIdentities = (items: readonly ApplicationListItem[]): ReadonlySet<string> => {
-  const byIdentity = new Map<string, string[]>();
-
-  for (const item of items) {
-    const key = `${item.company}\n${item.target_role}`;
-    byIdentity.set(key, [...(byIdentity.get(key) ?? []), item.id]);
-  }
-
-  return new Set([...byIdentity.values()].filter((ids) => ids.length > 1).flat());
-};
-
 interface ApplicationListTableProps {
   items: readonly ApplicationListItem[];
   onRequestClose: (item: ApplicationListItem) => void;
@@ -35,7 +23,7 @@ interface ApplicationListTableProps {
 }
 
 export const ApplicationListTable = ({ items, onRequestClose, onRequestUpdate }: ApplicationListTableProps) => {
-  const ambiguous = duplicatedIdentities(items);
+  const ambiguous = duplicatedApplicationIdentityIds(items);
 
   return (
     /* One semantic table becomes stacked rows below the tablet breakpoint. Keeping one

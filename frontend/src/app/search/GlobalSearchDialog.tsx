@@ -41,11 +41,12 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
   /* Empty query: the board's own "needs_attention" preset, so the palette opens on the
      same answer to "what needs me" the board already gives rather than an arbitrary
      recency slice. Typing replaces that question with the server's free-text search. */
-  const query = useQuery(
-    applicationListQueryOptions(
+  const query = useQuery({
+    ...applicationListQueryOptions(
       deferredSearch === "" ? { preset: "needs_attention", limit: 8 } : { search: deferredSearch, limit: 8 },
     ),
-  );
+    enabled: open,
+  });
   const items = query.data?.items ?? [];
   const selected = items[selectedIndex];
 
@@ -54,7 +55,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
      empty state is for. */
   useEffect(() => {
     const dialog = dialogRef.current;
-    if (dialog === null || dialog.open) {
+    if (!open || dialog === null || dialog.open) {
       return;
     }
 
@@ -64,7 +65,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
     setSelectedIndex(0);
     dialog.showModal();
     inputRef.current?.focus();
-  }, []);
+  }, [open]);
 
   const selectItem = (item: ApplicationListItem) => {
     onClose();

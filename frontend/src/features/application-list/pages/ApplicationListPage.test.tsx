@@ -161,6 +161,12 @@ const stubList = (items: ApplicationListItem[], counts: Counts = {}) => {
   };
 };
 
+const boardReadCount = (fetchMock: ReturnType<typeof vi.fn>): number =>
+  fetchMock.mock.calls.filter(([url, options]) => {
+    const requestUrl = new URL(String(url), "http://localhost");
+    return options?.method !== "POST" && requestUrl.searchParams.get("limit") === "25";
+  }).length;
+
 const HistoryBack = () => {
   const navigate = useNavigate();
   return <button onClick={() => navigate(-1)}>בדיקת חזרה</button>;
@@ -371,7 +377,7 @@ describe("ApplicationListPage", () => {
     renderPage();
 
     expect(await screen.findByRole("table")).toBeInTheDocument();
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(boardReadCount(fetchMock)).toBe(1));
 
     fireEvent.click(screen.getByRole("button", { name: "כרטיסים" }));
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
@@ -391,10 +397,10 @@ describe("ApplicationListPage", () => {
     expect(within(pipeline).getByRole("link", { name: "Acme" })).toHaveAttribute("href", "/applications/app-1");
     expect(within(pipeline).getAllByText("ממתין לניתוח המשרה")).toHaveLength(3);
     expect(within(pipeline).getByText("Follow up")).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(boardReadCount(fetchMock)).toBe(1);
   });
 
-  it("summarizes due work from the visible server projection and clears only its reminder", async () => {
+  it("summarizes due work from its own attention preset and clears only its reminder", async () => {
     const { fetchMock } = stubList([item({ next_action: "Follow up with recruiter", next_action_date: "2020-01-01" })]);
 
     renderPage();
@@ -413,6 +419,31 @@ describe("ApplicationListPage", () => {
         }),
       ),
     );
+  });
+
+  it("keeps duplicate attention rows distinguishable and disables only the reminder being cleared", async () => {
+    const first = item({ next_action: "Follow up", next_action_date: "2020-01-01" });
+    const second = item({
+      id: "app-2",
+      created_at: "2026-08-25T07:00:00Z",
+      next_action: "Follow up",
+      next_action_date: "2020-01-02",
+    });
+    const fetchMock = vi.fn(async (url: unknown, options?: RequestInit) => {
+      if (options?.method === "PATCH") return new Promise<Response>(() => undefined);
+      const requestUrl = new URL(String(url), "http://localhost");
+      return jsonResponse(listBody(requestUrl.searchParams.get("preset") === "needs_attention" ? [first, second] : []));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+
+    const hub = await screen.findByRole("region", { name: "מוקד פעולות" });
+    expect(within(hub).getAllByText(/קיימת עוד מועמדות לאותה חברה ולאותו תפקיד/)).toHaveLength(2);
+    const clearButtons = within(hub).getAllByRole("button", { name: "הסרת תזכורת" });
+    fireEvent.click(clearButtons[0]);
+    expect(clearButtons[0]).toBeDisabled();
+    expect(clearButtons[1]).toBeEnabled();
   });
 
   it("loads preset metrics from authoritative server counts and applies a selected metric", async () => {
@@ -626,13 +657,13 @@ describe("ApplicationListPage", () => {
     });
 
     expect(await screen.findByDisplayValue("second")).toBeInTheDocument();
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(boardReadCount(fetchMock)).toBe(1));
 
     fireEvent.click(screen.getByRole("button", { name: "בדיקת חזרה" }));
 
     expect(screen.getByDisplayValue("first")).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(boardReadCount(fetchMock)).toBe(1);
+    await waitFor(() => expect(boardReadCount(fetchMock)).toBe(2));
     expect(fetchMock).toHaveBeenLastCalledWith(
       expect.stringContaining("search=first"),
       expect.objectContaining({ method: "GET" }),

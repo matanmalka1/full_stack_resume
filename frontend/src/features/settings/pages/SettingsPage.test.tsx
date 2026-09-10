@@ -40,7 +40,10 @@ describe("SettingsPage", () => {
     const autoGenerate = await screen.findByRole("switch", {
       name: "יצירת טיוטה אוטומטית כשלא נדרשת סקירה",
     });
+    const saveButton = screen.getByRole("button", { name: "שמירת הגדרות" });
+    expect(saveButton).toBeDisabled();
     fireEvent.click(autoGenerate);
+    expect(saveButton).toBeEnabled();
     fireEvent.change(screen.getByLabelText("צפיפות תצוגה"), {
       target: { value: "compact" },
     });
@@ -53,7 +56,7 @@ describe("SettingsPage", () => {
     fireEvent.change(screen.getByLabelText("מאמץ חשיבה"), {
       target: { value: "high" },
     });
-    fireEvent.click(await screen.findByRole("button", { name: "שמירת הגדרות" }));
+    fireEvent.click(saveButton);
     await screen.findByRole("status");
     const request = fetchMock.mock.calls.find((call) => call[1]?.method === "PATCH");
     expect((request?.[1]?.headers as Headers | undefined)?.get("If-Match")).toBe('"settings-1"');
@@ -67,6 +70,7 @@ describe("SettingsPage", () => {
       ui_text_size: "large",
     });
     await waitFor(() => expect(autoGenerate).not.toBeChecked());
+    expect(saveButton).toBeDisabled();
   });
 
   it("shows canonical facts read-only and reports a missing audit status", async () => {

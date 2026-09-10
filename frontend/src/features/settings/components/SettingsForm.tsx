@@ -1,7 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 
 import type { Settings, UpdateSettingsRequest } from "@/api/contracts";
 import { settingsQueryKey, updateSettings } from "@/api/settings";
+import { useDisplaySettingsPreview } from "@/app/layout/DisplaySettingsPreview";
 import { briefServerFailureDetail, ErrorCallout } from "@/ui/ErrorCallout";
 import { useAppForm } from "@/hooks/useAppForm";
 import { ActionBar } from "@/ui/ActionBar";
@@ -21,12 +23,24 @@ interface SettingsFormProps {
 
 export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
   const queryClient = useQueryClient();
+  const setDisplayPreview = useDisplaySettingsPreview();
   const values = editableSettings(settings);
-  const { handleSubmit, register, reset, setValue, watch } = useAppForm<UpdateSettingsRequest>({
+  const {
+    formState: { isDirty },
+    handleSubmit,
+    register,
+    reset,
+    setValue,
+    watch,
+  } = useAppForm<UpdateSettingsRequest>({
     defaultValues: values,
     values,
   });
   const form = watch();
+  useEffect(() => {
+    setDisplayPreview({ ui_density: form.ui_density, ui_text_size: form.ui_text_size });
+    return () => setDisplayPreview(null);
+  }, [form.ui_density, form.ui_text_size, setDisplayPreview]);
   const save = useMutation({
     mutationFn: async (fields: UpdateSettingsRequest) => {
       if (etag === null) {
@@ -148,7 +162,7 @@ export const SettingsForm = ({ etag, settings }: SettingsFormProps) => {
 
         <ActionBar
           primary={
-            <Button pending={save.isPending} pendingLabel="שומר…" type="submit">
+            <Button disabled={!isDirty} pending={save.isPending} pendingLabel="שומר…" type="submit">
               שמירת הגדרות
             </Button>
           }

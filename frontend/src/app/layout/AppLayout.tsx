@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Outlet } from "react-router-dom";
 
 import { settingsQueryOptions } from "@/api/settings";
 import { AppHeader } from "./AppHeader";
+import { type DisplaySettings, DisplaySettingsPreviewProvider } from "./DisplaySettingsPreview";
 import { RouteFocusManager } from "./RouteFocusManager";
 
 /* The frame every route renders inside: the masthead, the content column, and the two
@@ -12,19 +14,23 @@ import { RouteFocusManager } from "./RouteFocusManager";
    document, so they are set once here rather than by each screen. */
 export const AppLayout = () => {
   const settings = useQuery(settingsQueryOptions).data?.settings;
+  const [displayPreview, setDisplayPreview] = useState<DisplaySettings | null>(null);
+  const displaySettings = displayPreview ?? settings;
 
   return (
     <div
       className="min-h-screen text-cv-text"
-      data-density={settings?.ui_density ?? "comfortable"}
-      data-text-size={settings?.ui_text_size ?? "normal"}
+      data-density={displaySettings?.ui_density ?? "comfortable"}
+      data-text-size={displaySettings?.ui_text_size ?? "normal"}
     >
       <RouteFocusManager />
       <AppHeader />
 
-      <main className="page-gutter py-5 sm:py-6">
-        <Outlet />
-      </main>
+      <DisplaySettingsPreviewProvider onPreview={setDisplayPreview}>
+        <main className="page-gutter py-5 sm:py-6">
+          <Outlet />
+        </main>
+      </DisplaySettingsPreviewProvider>
     </div>
   );
 };

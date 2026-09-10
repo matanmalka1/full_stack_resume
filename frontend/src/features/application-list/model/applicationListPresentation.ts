@@ -6,6 +6,19 @@ import { formatDateTime } from "@/utils/formatDateTime";
 
 export const formatApplicationDate = (value: string): string => formatDateTime(value, "date");
 
+/* A visual hint only: records with the same company and role need their dates exposed
+   so two distinct Applications do not read as one repeated row. */
+export const duplicatedApplicationIdentityIds = (items: readonly ApplicationListItem[]): ReadonlySet<string> => {
+  const byIdentity = new Map<string, string[]>();
+
+  for (const item of items) {
+    const key = `${item.company}\n${item.target_role}`;
+    byIdentity.set(key, [...(byIdentity.get(key) ?? []), item.id]);
+  }
+
+  return new Set([...byIdentity.values()].filter((ids) => ids.length > 1).flat());
+};
+
 /* This is a visual comparison against the reader's local date. It does not affect
    filtering, workflow state, or any server-side deadline decision. */
 const dateOnlyKey = (value: string | null | undefined): string | null => {

@@ -1,25 +1,32 @@
+import { useQuery } from "@tanstack/react-query";
 import { BellOff, ChevronDown, ChevronLeft, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { applicationListQueryOptions } from "@/api/applications";
 import type { ApplicationListItem } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { StatusBadge } from "@/ui/StatusBadge";
-import { attentionHubItems } from "../model/applicationListPresentation";
+import {
+  attentionHubItems,
+  duplicatedApplicationIdentityIds,
+  formatApplicationDate,
+} from "../model/applicationListPresentation";
 
 interface ApplicationAttentionSummaryProps {
   clearingApplicationId: string | null;
-  items: readonly ApplicationListItem[];
   onClearNextAction: (application: ApplicationListItem) => void;
   onOpenStatusDialog: (application: ApplicationListItem) => void;
 }
 
 export const ApplicationAttentionSummary = ({
   clearingApplicationId,
-  items,
   onClearNextAction,
   onOpenStatusDialog,
 }: ApplicationAttentionSummaryProps) => {
-  const displayItems = attentionHubItems(items);
+  const attentionQuery = useQuery(applicationListQueryOptions({ preset: "needs_attention", limit: 3 }));
+  const sourceItems = attentionQuery.data?.items ?? [];
+  const displayItems = attentionHubItems(sourceItems);
+  const ambiguous = duplicatedApplicationIdentityIds(sourceItems);
 
   if (displayItems.length === 0) {
     return null;
@@ -66,12 +73,21 @@ export const ApplicationAttentionSummary = ({
                 <p className="truncate text-support text-cv-text-muted">
                   {item.application.company} · {item.subtitle}
                 </p>
+                {ambiguous.has(item.application.id) ? (
+                  <p
+                    className="truncate text-support font-medium text-cv-text"
+                    title="קיימת עוד מועמדות לאותה חברה ולאותו תפקיד"
+                  >
+                    קיימת עוד מועמדות לאותה חברה ולאותו תפקיד · נפתחה ב־
+                    {formatApplicationDate(item.application.created_at)}
+                  </p>
+                ) : null}
               </div>
               <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
                 {item.type === "overdue" || item.type === "due_today" ? (
                   <Button
                     className="text-cv-text-muted hover:text-cv-success"
-                    disabled={clearingApplicationId !== null}
+                    disabled={clearingApplicationId === item.application.id}
                     onClick={() => onClearNextAction(item.application)}
                     pending={clearingApplicationId === item.application.id}
                     pendingLabel="מסיר…"

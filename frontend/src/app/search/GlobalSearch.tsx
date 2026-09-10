@@ -15,7 +15,7 @@ const isTypingTarget = (target: EventTarget | null): boolean => {
 /* The palette and the two ways in: the trigger the header shows and the shortcut that
    works anywhere. Both live here so the header composes one element and holds no state
    about a dialog it does not otherwise know. */
-export const GlobalSearch = () => {
+export const GlobalSearch = ({ showTrigger = true }: { showTrigger?: boolean }) => {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -38,18 +38,20 @@ export const GlobalSearch = () => {
 
   return (
     <>
-      <button
-        aria-label="מעבר מהיר למועמדות (Cmd+K)"
-        className="inline-flex items-center gap-2 rounded-control border border-cv-border bg-cv-surface-muted px-3 py-1.5 text-support text-cv-text-muted transition-colors hover:border-cv-border-strong hover:bg-cv-surface hover:text-cv-text"
-        onClick={() => setOpen(true)}
-        type="button"
-      >
-        <Search aria-hidden="true" className="size-4 shrink-0 text-cv-accent" />
-        <span className="hidden md:inline">מעבר מהיר…</span>
-        <kbd className="hidden rounded border border-cv-border bg-cv-surface px-1.5 py-0.5 text-support font-mono text-cv-text-muted sm:inline-block">
-          ⌘K
-        </kbd>
-      </button>
+      {showTrigger ? (
+        <button
+          aria-label="מעבר מהיר למועמדות (Cmd+K)"
+          className="inline-flex items-center gap-2 rounded-control border border-cv-border bg-cv-surface-muted px-3 py-1.5 text-support text-cv-text-muted transition-colors hover:border-cv-border-strong hover:bg-cv-surface hover:text-cv-text"
+          onClick={() => setOpen(true)}
+          type="button"
+        >
+          <Search aria-hidden="true" className="size-4 shrink-0 text-cv-accent" />
+          <span className="hidden md:inline">מעבר מהיר…</span>
+          <kbd className="hidden rounded border border-cv-border bg-cv-surface px-1.5 py-0.5 text-support font-mono text-cv-text-muted sm:inline-block">
+            ⌘K
+          </kbd>
+        </button>
+      ) : null}
 
       <GlobalSearchDialog onClose={() => setOpen(false)} open={open} />
     </>

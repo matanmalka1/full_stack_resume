@@ -110,7 +110,6 @@ export const ApplicationListPage = () => {
       )}
       <ApplicationAttentionSummary
         clearingApplicationId={clearNextActionMutation.isPending ? (clearNextActionMutation.variables ?? null) : null}
-        items={items}
         onClearNextAction={(application) => clearNextActionMutation.mutate(application.id)}
         onOpenStatusDialog={(application) => setUpdatingApplicationId(application.id)}
       />

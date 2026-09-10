@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
@@ -41,7 +41,7 @@ describe("useInWorkflow", () => {
 });
 
 describe("workflow shell", () => {
-  it("removes global destinations while the reader is completing a wizard step", () => {
+  it("hides global destinations but keeps the command palette shortcut in a wizard step", () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
         <MemoryRouter initialEntries={["/applications/app-1/draft"]}>
@@ -52,5 +52,8 @@ describe("workflow shell", () => {
 
     expect(screen.queryByRole("button", { name: "מעבר מהיר למועמדות (Cmd+K)" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "קליטת משרה חדשה" })).not.toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    expect(screen.getByRole("dialog", { name: "מעבר מהיר למועמדות" })).toBeInTheDocument();
   });
 });

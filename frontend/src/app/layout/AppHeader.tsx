@@ -62,7 +62,7 @@ export const AppHeader = () => {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            {inWorkflow ? null : <GlobalSearch />}
+            <GlobalSearch showTrigger={!inWorkflow} />
 
             {inWorkflow ? null : (
               <Link
