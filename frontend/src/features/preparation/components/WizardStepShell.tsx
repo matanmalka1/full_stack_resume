@@ -27,9 +27,11 @@ interface WizardStepShellProps {
      each of its lines, and that split of two readable columns needs the wide frame. Every
      other step asks one thing and takes the narrower wizard measure. */
   measure?: "wide" | "wizard";
-  /* Which step of the flow this screen *is* - not where the work stands, which the spine
-     reads from the projection. The two differ on purpose: the analysis screen is still the
-     analysis step when it is opened against a draft awaiting approval. */
+  /* Which step of the flow this screen is, and what the spine marks as current. The
+     projection still marks which *other* steps read as already complete - a step ahead of
+     this one, reached by revisiting an earlier screen - but it never moves the current
+     chip: an in-flight edit can make the projection dip to an earlier state than the
+     screen the reader is looking at, and the chip must not chase that back and forth. */
   stage: WorkflowStage;
   /* Only where the record does not actually meet its stage - an approved revision that is
      not deliverable is not "מוכן למסירה", and saying so in the heading is a distinction
@@ -67,16 +69,7 @@ export const WizardStepShell = ({
       <PageShell
         description={description}
         eyebrow={eyebrow}
-        /* The spine states the position it reads from the projection. Only a screen with no
-           Application to read it from - intake - names its own, which is exactly the case
-           where there is no id either. */
-        landmark={
-          <PreparationWorkflowSteps
-            applicationId={applicationId}
-            detail={detail}
-            stage={applicationId === undefined ? stage : undefined}
-          />
-        }
+        landmark={<PreparationWorkflowSteps applicationId={applicationId} detail={detail} stage={stage} />}
         measure={measure}
         title={title ?? workflowStageLabels[stage]}
       >

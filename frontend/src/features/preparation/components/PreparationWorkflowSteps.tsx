@@ -24,47 +24,50 @@ interface PreparationWorkflowStepsProps {
   /* Absent while the record naming the Application has not loaded: no stage has a
      destination yet, so the bar is an indicator until one does. */
   applicationId?: string;
-  /* Absent while the projection is in flight. The stage the work is on is the
-     projection's to state, not this component's to guess, so no stage is marked. */
+  /* Read only for which steps *ahead* of the current one already show a checkmark - a
+     stage reached by revisiting an earlier screen. It never moves the current chip. */
   detail?: ApplicationDetail;
-  /* The stage to mark current, stated rather than derived. The intake step has no
-     projection to read it from - the Application does not exist yet - so the create screen
-     names its own position. When given, it overrides what `detail` would imply. */
-  stage?: WorkflowStage;
+  /* The stage to mark current, stated by the open screen rather than read from the
+     projection: the screen open is a fact the reader can see, and the chip must agree with
+     it even while the projection is mid-refetch. */
+  stage: WorkflowStage;
 }
 
-const stepsFor = (stage: WorkflowStage | undefined, destinations: StageDestinations): WorkflowStep[] => {
-  const current = stage === undefined ? -1 : workflowStages.indexOf(stage);
-  /* `ready` completes its own stage: everything is done, so nothing is in progress. An
-     unknown stage completes nothing - with intake off the bar there is no stage an
-     Application is past merely by existing. */
-  const completed = stage === undefined ? 0 : stage === "ready" ? current + 1 : current;
+const stepsFor = (
+  stage: WorkflowStage,
+  detail: ApplicationDetail | undefined,
+  destinations: StageDestinations,
+): WorkflowStep[] => {
+  const current = workflowStages.indexOf(stage);
+  const projectionStage = detail === undefined ? undefined : stageForPreparationState[detail.preparation_state];
+  const projectionIndex = projectionStage === undefined ? -1 : workflowStages.indexOf(projectionStage);
+  /* Never below `current`: the screen open is at least that far along regardless of what a
+     transient projection dip reports mid-edit. May sit above `current` when the projection
+     is ahead of the screen the reader chose to revisit - that only raises earlier chips to
+     "complete", never the open screen's own chip (below). */
+  const completed = Math.max(current, projectionStage === "ready" ? projectionIndex + 1 : projectionIndex);
 
   return workflowStages.map((entry, index) => {
-    const state: WorkflowStep["state"] = index < completed ? "complete" : index === current ? "current" : "upcoming";
+    /* The open screen's own chip is never read off `completed`: it would otherwise flip to
+       "complete" the moment the projection runs ahead of the screen the reader is on, and
+       leave nothing marked "current" at all. `ready` is the one stage where being on the
+       screen already means everything, including it, is done. */
+    const state: WorkflowStep["state"] =
+      index === current ? (stage === "ready" ? "complete" : "current") : index < completed ? "complete" : "upcoming";
 
     return Object.assign(
       { label: workflowStageLabels[entry], state },
-      /* Never forward. The current stage is included because "current" is a position in
-         the projection, not a claim about which screen is open: at `ready_for_approval`
-         read from the preparation screen, טיוטה ואימות is current and its screen is the
-         editor, one the reader is not on. A future stage has no record to open. */
+      /* Never forward. A future stage has no record to open. */
       state !== "upcoming" && destinations[entry] !== undefined ? { href: destinations[entry] } : {},
     );
   });
 };
 
-export const PreparationWorkflowSteps = ({
-  applicationId,
-  detail,
-  stage: stageOverride,
-}: PreparationWorkflowStepsProps) => {
+export const PreparationWorkflowSteps = ({ applicationId, detail, stage }: PreparationWorkflowStepsProps) => {
   const { pathname } = useLocation();
 
-  const stage =
-    stageOverride ?? (detail === undefined ? undefined : stageForPreparationState[detail.preparation_state]);
   const destinations = applicationId === undefined ? {} : workflowDestinations(applicationId, detail);
-  const steps = stepsFor(stage, destinations);
+  const steps = stepsFor(stage, detail, destinations);
 
   /* Which of the three stages the open screen belongs to, found by matching a stage's
      destination against the open path. The current stage wins a tie where one arises. */
