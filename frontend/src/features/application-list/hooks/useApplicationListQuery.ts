@@ -30,7 +30,7 @@ export const useApplicationListQuery = () => {
   const previousUrlSearch = useRef(urlSearch);
 
   const updateQuery = useCallback(
-    (next: ApplicationListQuery, { resetOffset = true, replace = true }: QueryUpdateOptions = {}) => {
+    (next: ApplicationListQuery, { resetOffset = true, replace = false }: QueryUpdateOptions = {}) => {
       setParams(paramsFromQuery(resetOffset ? { ...next, offset: 0 } : next), { replace });
     },
     [setParams],
@@ -64,7 +64,7 @@ export const useApplicationListQuery = () => {
       return;
     }
     if (settledSearch !== (query.search ?? "")) {
-      updateQuery({ ...query, search: settledSearch === "" ? undefined : settledSearch });
+      updateQuery({ ...query, search: settledSearch === "" ? undefined : settledSearch }, { replace: true });
     }
   }, [query, settledSearch, updateQuery]);
 

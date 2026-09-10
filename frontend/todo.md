@@ -76,10 +76,10 @@
 
 ## P2 — חיכוך ואי-עקביות
 
-- [ ] **P2-1** כפתור Back לא מבטל סינון אף שהקוד מבטיח שכן —
-      `useApplicationListQuery.updateQuery` · `applicationListParams.ts` · כל סינון/חיפוש/מיון הוא
-      `replace`, עימוד לבדו הוא `push` — אותה מחווה, שתי התנהגויות · push לשינויי פקד (preset,
-      מסננים, מיון, ערך חיפוש מיוצב), replace רק לכתיבות הביניים של ה-debounce.
+- [x] **P2-1** כפתור Back לא ביטל סינון — תוקן.
+      `useApplicationListQuery.updateQuery` ברירת מחדל הפוכה ל-`push` (`replace = false`);
+      כתיבת ה-debounce המיושב (`settledSearch`) היחידה שנשארה `replace: true` מפורש.
+      עימוד ממשיך להעביר `replace: false` מפורש (מיותר כעת אך תקין).
 - [ ] **P2-2** תצוגת המסמך נחתכת בדיוק במסך שנבנה לקריאתה —
       `DraftWorkspace` · `DraftPreview` · `RevisionRecord` · ה-iframe מקבל 717px מול עמוד A4 של
       ~794px, כל שורה נחתכת באמצע מילה, וה-iframe cross-origin ולכן אין גלילה אופקית נגישה;

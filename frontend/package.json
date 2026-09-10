@@ -22,7 +22,7 @@
     "e2e:ui": "playwright test --ui",
     "preview": "vite preview",
     "typecheck": "tsc -b",
-    "check": "npm run typecheck && npm run lint:tokens && npm run lint && npm run test"
+    "check": "npm run typecheck && npm run lint:tokens && npm run lint:strict && npm run test"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.102.2",
