@@ -257,7 +257,7 @@ def build_api_services(
     max_body_bytes = API_MAX_BODY_BYTES_DEFAULT
     dev_origin: str | None = None
     if config is not None:
-        max_body_bytes = int(config.get("api_max_body_bytes"))
+        max_body_bytes = config.get("api_max_body_bytes")
         dev_origin = config.get("api_dev_origin")
     return ApiServices(
         applications=services.applications,

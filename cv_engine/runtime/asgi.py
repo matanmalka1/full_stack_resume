@@ -56,8 +56,8 @@ def build_app() -> FastAPI:
         build_api_services(services, config=config),
         # Where the API is reached, which is what the origin policy allows.
         # Serving on another port means telling the app so, not only uvicorn.
-        host=str(config.get("api_host")),
-        port=int(config.get("api_port")),
+        host=config.get("api_host"),
+        port=config.get("api_port"),
         frontend_dist=frontend_dist,
         event_sink=server_logger,
     )

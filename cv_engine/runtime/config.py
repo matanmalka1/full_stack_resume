@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -40,6 +40,11 @@ class Setting:
     default: Any = None
     secret: bool = False
     environment_only: bool = False
+    cast: Callable[[str], Any] | None = None
+    """Coerce a string-sourced value (environment, `.env`, project config) to
+    the setting's real type. Applied once, here, so every call site reads a
+    value already in the type it expects instead of each caller re-parsing
+    the same field. Not applied to `default`, which is already typed."""
 
 
 # The HTTP body limit lives here rather than in the API package because the
@@ -85,8 +90,10 @@ SETTINGS: dict[str, Setting] = {
         # policy allows. Serving on a different port without setting these
         # refuses every state-changing request from the app's own UI.
         Setting("api_host", "CV_API_HOST", default=DEFAULT_HOST),
-        Setting("api_port", "CV_API_PORT", default=DEFAULT_PORT),
-        Setting("api_max_body_bytes", "CV_API_MAX_BODY_BYTES", default=API_MAX_BODY_BYTES_DEFAULT),
+        Setting("api_port", "CV_API_PORT", default=DEFAULT_PORT, cast=int),
+        Setting(
+            "api_max_body_bytes", "CV_API_MAX_BODY_BYTES", default=API_MAX_BODY_BYTES_DEFAULT, cast=int
+        ),
         # Unset in production: the built UI is served same-origin, so there is no
         # second origin to allow. A value here is the one development Vite origin
         # and nothing else — never a wildcard, never a list.
@@ -254,11 +261,20 @@ def resolve_config(
     values: dict[str, Resolved] = {}
     for name, setting in SETTINGS.items():
         if env.get(setting.env):
-            values[name] = Resolved(env[setting.env], "environment")
+            values[name] = Resolved(_cast(setting, env[setting.env]), "environment")
         elif not setting.environment_only and env_file.get(setting.env):
-            values[name] = Resolved(env_file[setting.env], "env-file")
+            values[name] = Resolved(_cast(setting, env_file[setting.env]), "env-file")
         elif not setting.environment_only and stored.get(name) is not None:
-            values[name] = Resolved(stored[name], "project-config")
+            values[name] = Resolved(_cast(setting, stored[name]), "project-config")
         else:
             values[name] = Resolved(setting.default, "default")
     return RuntimeConfig(values)
+
+
+def _cast(setting: Setting, raw: Any) -> Any:
+    if setting.cast is None:
+        return raw
+    try:
+        return setting.cast(raw)
+    except (TypeError, ValueError) as exc:
+        raise ConfigError(f"{setting.env}={raw!r} is not a valid value for {setting.name}: {exc}") from exc
