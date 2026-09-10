@@ -40,7 +40,9 @@ export const RecruitmentTimeline = ({ items }: { items: RecruitmentTimelineItem[
 
   if (items.length === 0) return <p className="mt-3 text-support text-cv-text-muted">עדיין אין אירועים.</p>;
 
-  const newestFirst = items.toReversed();
+  // The spread protects props from mutation; the runtime target is ES2022.
+  // oxlint-disable-next-line unicorn/no-array-reverse
+  const newestFirst = [...items].reverse();
   const visibleItems = expanded ? newestFirst : newestFirst.slice(0, initialTimelineItems);
 
   return (

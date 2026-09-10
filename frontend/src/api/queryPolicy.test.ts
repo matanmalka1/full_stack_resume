@@ -102,7 +102,9 @@ describe("query cache policy", () => {
       .filter(({ source }) => /invalidateQueries\(\{ queryKey: applicationDetailQueryKey\(/.test(source))
       .map(({ file }) => file)
       .filter((file) => file !== "api/applications.ts")
-      .toSorted();
+      // This pipeline already creates a new array; the project targets ES2022.
+      // oxlint-disable-next-line unicorn/no-array-sort
+      .sort();
 
     expect(detailOnly.filter((file) => !Object.hasOwn(detailOnlyByDesign, file))).toEqual([]);
     /* An exception that no longer describes anything is a rule nobody is following any

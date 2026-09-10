@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 
+/* Cached history is copied before reversal; ES2022 does not expose Array#toReversed. */
+/* oxlint-disable unicorn/no-array-reverse */
+
 import { applicationDetailQueryKey } from "@/api/applications";
 import type { DraftClaim, WorkingDraft } from "@/api/contracts";
 import {
@@ -71,8 +74,10 @@ export const ClaimFactResolution = ({
      step instead of offering to capture the same claim twice. */
   const recoveredFactId = useMemo(
     () =>
-      (historyQuery.data?.events ?? [])
-        .toReversed()
+      // The spread protects cached query data; the runtime target is ES2022.
+      // oxlint-disable-next-line unicorn/no-array-reverse
+      [...(historyQuery.data?.events ?? [])]
+        .reverse()
         .find((event) => event.application_id === applicationId && event.claim_id === claim.claim_id)?.fact_id ?? null,
     [applicationId, claim.claim_id, historyQuery.data],
   );

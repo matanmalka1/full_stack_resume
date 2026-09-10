@@ -41,7 +41,7 @@ const stepsFor = (stage: WorkflowStage | undefined, destinations: StageDestinati
   const completed = stage === undefined ? 0 : stage === "ready" ? current + 1 : current;
 
   return workflowStages.map((entry, index) => {
-    const state = index < completed ? "complete" : index === current ? "current" : "upcoming";
+    const state: WorkflowStep["state"] = index < completed ? "complete" : index === current ? "current" : "upcoming";
 
     return Object.assign(
       { label: workflowStageLabels[entry], state },

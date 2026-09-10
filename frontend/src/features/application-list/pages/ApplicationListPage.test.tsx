@@ -473,7 +473,9 @@ describe("ApplicationListPage", () => {
           const requestUrl = new URL(String(url), "http://localhost");
           return (
             requestUrl.searchParams.get("limit") === "25" &&
-            requestUrl.searchParams.getAll("recruitment_status").toSorted().join(",") === "assignment,interview"
+            // getAll returns a fresh array; the project targets ES2022.
+            // oxlint-disable-next-line unicorn/no-array-sort
+            requestUrl.searchParams.getAll("recruitment_status").sort().join(",") === "assignment,interview"
           );
         }),
       ).toBe(true),

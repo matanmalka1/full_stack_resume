@@ -140,9 +140,11 @@ export const ApplicationArtifacts = ({ applicationId }: { applicationId: string 
      never narrowed here - both groups below are rendered, one behind a press. */
   // Old records are immutable, but the retired render image is no longer part
   // of the product surface and must not reappear for historical revisions.
-  const ordered = (query.data?.items ?? [])
+  const ordered = [...(query.data?.items ?? [])]
     .filter((artifact) => artifact.artifact_type !== "visual_evidence")
-    .toSorted((left, right) => right.created_at.localeCompare(left.created_at));
+    // The copied array is safe to mutate; the runtime target is ES2022.
+    // oxlint-disable-next-line unicorn/no-array-sort
+    .sort((left, right) => right.created_at.localeCompare(left.created_at));
   const deliverables = ordered.filter((artifact) => isDeliverableArtifact(artifact.artifact_type));
   const internal = ordered.filter((artifact) => !isDeliverableArtifact(artifact.artifact_type));
 

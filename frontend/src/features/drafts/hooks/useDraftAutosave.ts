@@ -226,7 +226,7 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
         clearTimeout(timer.current);
         timer.current = null;
       }
-      void latestSend.current();
+      void sendRef.current();
     },
     [],
   );

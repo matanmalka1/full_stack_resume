@@ -29,7 +29,9 @@ const coveragePriority: Record<RequirementCoverage, number> = {
 };
 
 const orderedRequirements = (requirements: Requirement[]): Requirement[] =>
-  requirements.toSorted(
+  // The spread already protects the input from mutation; ES2022 does not expose toSorted.
+  // oxlint-disable-next-line unicorn/no-array-sort
+  [...requirements].sort(
     (left, right) =>
       Number(right.mandatory) - Number(left.mandatory) ||
       coveragePriority[left.coverage] - coveragePriority[right.coverage],
