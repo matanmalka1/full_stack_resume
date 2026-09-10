@@ -386,7 +386,7 @@ describe("ApplicationPage at the preparation route", () => {
     /* The source is explicit: an analyze command that picked its own snapshot could
        classify something other than what the screen was showing. */
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({ job_snapshot_id: "snap-1" });
-    expect((request?.[1]?.headers as Headers).get("Idempotency-Key")).not.toBeNull();
+    expect((request?.[1]?.headers as Headers | undefined)?.get("Idempotency-Key")).not.toBeNull();
   });
 
   it("shows the frozen AI execution and its calculated cost", async () => {

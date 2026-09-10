@@ -52,7 +52,7 @@ const setup = (onSaved = vi.fn(), onConflict = vi.fn().mockResolvedValue('"9-has
 const bodyOf = (call: unknown[] | undefined) => JSON.parse(String((call?.[1] as RequestInit)?.body));
 
 const headerOf = (call: unknown[] | undefined, name: string) =>
-  ((call?.[1] as RequestInit)?.headers as Headers).get(name);
+  ((call?.[1] as RequestInit | undefined)?.headers as Headers | undefined)?.get(name);
 
 afterEach(() => {
   vi.unstubAllGlobals();

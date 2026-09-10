@@ -183,7 +183,7 @@ describe("SelectionPlanPanel", () => {
     expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual(
       expect.objectContaining({ mode: "ai", pinned_fact_ids: [], excluded_fact_ids: [] }),
     );
-    expect((fetchMock.mock.calls[0]?.[1]?.headers as Headers).get("Idempotency-Key")).not.toBeNull();
+    expect((fetchMock.mock.calls[0]?.[1]?.headers as Headers | undefined)?.get("Idempotency-Key")).not.toBeNull();
   });
 
   it("submits absolute manual choices against the plan and versions shown", async () => {

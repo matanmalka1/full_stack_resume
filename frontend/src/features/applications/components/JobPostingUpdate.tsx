@@ -45,7 +45,6 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
     formState: { errors },
     handleSubmit,
     register,
-    setValue,
   } = useAppForm<PostingFields>({
     defaultValues: {
       job_text: typeof snapshot.job_text === "string" ? snapshot.job_text : "",

@@ -3,7 +3,6 @@ import { Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { buttonClasses } from "@/ui/Button";
-import { Tooltip } from "@/ui/Tooltip";
 import { GlobalSearch } from "../search/GlobalSearch";
 import { boardPath } from "../boardReturn";
 import { routePaths } from "../routePaths";

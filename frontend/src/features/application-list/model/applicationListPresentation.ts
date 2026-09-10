@@ -110,13 +110,6 @@ export interface HubItem {
   type: HubItemType;
 }
 
-interface ApplicationAttentionSummaryProps {
-  clearingApplicationId: string | null;
-  items: readonly ApplicationListItem[];
-  onClearNextAction: (application: ApplicationListItem) => void;
-  onOpenStatusDialog: (application: ApplicationListItem) => void;
-}
-
 /* This is a priority summary of the current server-projected page, not a second list
    filter. Attention comes from the projection's reason collections, Ready comes from
    its active ready revision, and the date comparison is only a local presentation of a

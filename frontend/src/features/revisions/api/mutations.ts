@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { invalidateApplicationViews, startDraftGeneration } from "@/api/applications";
+import { startDraftGeneration } from "@/api/applications";
 import type { ApplicationDetail, ApprovedRevision } from "@/api/contracts";
 import { operationQueryKey } from "@/api/operations";
 import { useWatchedOperation } from "@/features/operations";

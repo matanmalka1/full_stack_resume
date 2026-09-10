@@ -121,7 +121,7 @@ describe("RevisionPage", () => {
   });
 
   it("names a revision already on record as submitted and asks before recording a second one", async () => {
-    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+    const fetchMock = vi.fn((input: string | URL | Request) => {
       const url = String(input);
       if (url.includes("decision-markdown")) {
         return Promise.resolve(

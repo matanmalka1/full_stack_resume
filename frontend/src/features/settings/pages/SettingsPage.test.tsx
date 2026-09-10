@@ -56,7 +56,7 @@ describe("SettingsPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "שמירת הגדרות" }));
     await screen.findByRole("status");
     const request = fetchMock.mock.calls.find((call) => call[1]?.method === "PATCH");
-    expect((request?.[1]?.headers as Headers).get("If-Match")).toBe('"settings-1"');
+    expect((request?.[1]?.headers as Headers | undefined)?.get("If-Match")).toBe('"settings-1"');
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({
       ai_enabled_override: null,
       auto_generate_when_review_not_required: true,

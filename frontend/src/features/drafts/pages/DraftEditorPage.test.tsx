@@ -7,7 +7,6 @@ import type { ApplicationDetail, WorkingDraft, WorkingDraftFacts } from "@/api/c
 import { settingsQueryKey } from "@/api/settings";
 import { DraftEditorPage } from "./DraftEditorPage";
 
-const DETAIL_PATH = "/api/v1/applications/app-1";
 const DRAFT_PATH = "/api/v1/working-drafts/wd-1";
 
 const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =>
@@ -653,7 +652,7 @@ describe("DraftEditorPage selection changes", () => {
     const call = fetchMock.mock.calls.find((entry) => String(entry[0]).endsWith("/apply-selection-change"));
     /* Absolute lists: the existing pin is resent alongside the new one, because the plan
        is built from the overlay alone. */
-    expect(JSON.parse(String((call?.[1] as RequestInit).body))).toEqual({
+    expect(JSON.parse(String((call?.[1] as RequestInit | undefined)?.body))).toEqual({
       expected_edit_version: 4,
       pinned_fact_ids: ["f-pinned", "f-out"],
       excluded_fact_ids: [],
@@ -670,7 +669,7 @@ describe("DraftEditorPage selection changes", () => {
       expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/apply-selection-change"))).toBe(true),
     );
     const call = fetchMock.mock.calls.find((entry) => String(entry[0]).endsWith("/apply-selection-change"));
-    expect(JSON.parse(String((call?.[1] as RequestInit).body)).excluded_fact_ids).toEqual(["f-1"]);
+    expect(JSON.parse(String((call?.[1] as RequestInit | undefined)?.body)).excluded_fact_ids).toEqual(["f-1"]);
     expect(fetchMock.mock.calls.some((entry) => (entry[1] as RequestInit)?.method === "PATCH")).toBe(false);
   });
 
@@ -737,7 +736,7 @@ describe("DraftEditorPage regeneration", () => {
     const call = fetchMock.mock.calls.find((entry) => String(entry[0]).endsWith("/regenerate-claim"));
     /* All three parts of the draft's identity: that is what makes a save landing mid
        flight fail as SOURCE_CHANGED instead of overwriting the user's edit. */
-    expect(JSON.parse(String((call?.[1] as RequestInit).body))).toEqual({
+    expect(JSON.parse(String((call?.[1] as RequestInit | undefined)?.body))).toEqual({
       application_id: "app-1",
       expected_edit_version: 4,
       expected_content_hash: "hash-4",
@@ -745,7 +744,7 @@ describe("DraftEditorPage regeneration", () => {
       selection_plan_id: "sp-1",
       claim_id: "c-headline",
     });
-    expect(((call?.[1] as RequestInit).headers as Headers).get("Idempotency-Key")).toBe("wd-1:4:c-headline");
+    expect(((call?.[1] as RequestInit | undefined)?.headers as Headers | undefined)?.get("Idempotency-Key")).toBe("wd-1:4:c-headline");
   });
 
   it("withholds regeneration while an edit is still unsaved, and says why", async () => {
