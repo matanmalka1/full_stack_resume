@@ -29,18 +29,16 @@ const reasoningEffortLabels: Record<NonNullable<Operation["reasoning_effort"]>, 
 const CANCEL_REVEAL_DELAY_MS = 4_000;
 
 const useCancelVisibility = (operation: Operation): boolean => {
-  const elapsed = Math.max(0, Date.now() - Date.parse(operation.created_at));
   const [revealedOperationId, setRevealedOperationId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (operation.is_terminal || elapsed >= CANCEL_REVEAL_DELAY_MS) return;
+    if (operation.is_terminal) return;
 
-    const remaining = CANCEL_REVEAL_DELAY_MS - elapsed;
-    const timeout = window.setTimeout(() => setRevealedOperationId(operation.id), remaining);
+    const timeout = window.setTimeout(() => setRevealedOperationId(operation.id), CANCEL_REVEAL_DELAY_MS);
     return () => window.clearTimeout(timeout);
-  }, [elapsed, operation.id, operation.is_terminal]);
+  }, [operation.id, operation.is_terminal]);
 
-  return operation.is_terminal || elapsed >= CANCEL_REVEAL_DELAY_MS || revealedOperationId === operation.id;
+  return operation.is_terminal || revealedOperationId === operation.id;
 };
 
 /* Work in progress, on the screen that queued it.

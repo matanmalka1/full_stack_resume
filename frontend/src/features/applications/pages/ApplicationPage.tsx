@@ -88,9 +88,9 @@ export const ApplicationPage = () => {
         loadingLabel="טוען את פרטי המועמדות…"
         loadingState={
           viewState === "processing" ? (
-            <p aria-live="polite" className="text-body text-cv-text-muted" role="status">
+            <output aria-live="polite" className="text-body text-cv-text-muted">
               יוצרים את המועמדות ומנתחים את המשרה…
-            </p>
+            </output>
           ) : undefined
         }
       >
@@ -114,9 +114,9 @@ export const ApplicationPage = () => {
                 internal state machine as a flash of an obsolete call to action. */}
             {viewState === "processing" || viewState === "analysis_failed" ? (
               watched === undefined ? (
-                <p aria-live="polite" className="text-body text-cv-text-muted" role="status">
+                <output aria-live="polite" className="text-body text-cv-text-muted">
                   יוצרים את המועמדות ומנתחים את המשרה…
-                </p>
+                </output>
               ) : (
                 <ActiveOperationPanel onQueued={watch} operation={watched} />
               )
