@@ -94,9 +94,7 @@ describe("the way out of a stale draft (§14)", () => {
      replacement withheld here leaves a draft that can neither be approved nor rebuilt.
      Archive stays withheld: nothing is out of date, and discarding is not a repair. */
   it("offers the rebuild - and only the rebuild - when validation failed without a stale reason", () => {
-    const plan = workflowActionPlan(
-      staleDetail({ stale_reasons: [], working_draft_state: "validation_failed" }),
-    );
+    const plan = workflowActionPlan(staleDetail({ stale_reasons: [], working_draft_state: "validation_failed" }));
 
     expect(plan.replaceDraft).toEqual({
       analysisId: "analysis-1",

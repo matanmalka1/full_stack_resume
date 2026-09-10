@@ -27,16 +27,12 @@ describe("preparationResumeDestination", () => {
 
   it("opens the exact rendered revision for a completed flow", () => {
     expect(
-      preparationResumeDestination(
-        item({ preparation_state: "ready", latest_ready_revision_id: "revision / 1" }),
-      ),
+      preparationResumeDestination(item({ preparation_state: "ready", latest_ready_revision_id: "revision / 1" })),
     ).toBe("/revisions/revision%20%2F%201");
   });
 
   it("falls back to analysis when no later record exists", () => {
-    expect(preparationResumeDestination(item({ preparation_state: "ready_to_draft" }))).toBe(
-      "/applications/app-1",
-    );
+    expect(preparationResumeDestination(item({ preparation_state: "ready_to_draft" }))).toBe("/applications/app-1");
   });
 });
 

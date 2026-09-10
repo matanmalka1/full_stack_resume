@@ -58,9 +58,7 @@ type ResumeProjection = Pick<
 
 const resumeDestination = (application: ResumeProjection): string => {
   const recommended =
-    application.recommended_action === null
-      ? null
-      : actionDestination(application.recommended_action, application.id);
+    application.recommended_action === null ? null : actionDestination(application.recommended_action, application.id);
 
   if (recommended !== null) {
     return recommended;
@@ -87,10 +85,7 @@ export const preparationResumeDestination = (application: ApplicationListItem): 
 /* Duplicate detection intentionally returns identity evidence only. Its resume route can
    read the full projection before choosing a screen, so the duplicate contract does not
    grow a second, soon-stale copy of workflow state merely to build a link. */
-export const preparationResumeDestinationFromDetail = (
-  applicationId: string,
-  detail: ApplicationDetail,
-): string =>
+export const preparationResumeDestinationFromDetail = (applicationId: string, detail: ApplicationDetail): string =>
   resumeDestination({
     id: applicationId,
     latest_ready_revision_id: detail.latest_ready_revision_id,

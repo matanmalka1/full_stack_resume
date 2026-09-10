@@ -11,7 +11,10 @@ afterEach(() => {
 });
 
 const renderResume = (projection = detail()) => {
-  vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(json(projection))));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() => Promise.resolve(json(projection))),
+  );
 
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>

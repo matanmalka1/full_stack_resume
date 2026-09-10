@@ -206,9 +206,7 @@ export const WorkflowActions = ({ detail, onQueued, plan }: WorkflowActionsProps
       {plan.replaceDraft === null && plan.archiveDraft === null ? null : (
         <p className="text-support leading-6 text-cv-text-muted">
           {plan.replaceDraft === null ? null : "החלפה בונה טיוטה חדשה מהניתוח ומתוכנית הבחירה הפעילים. "}
-          {plan.archiveDraft === null
-            ? null
-            : "העברה לארכיון שומרת עותק היסטורי ומשאירה את המועמדות בלי טיוטה פעילה."}
+          {plan.archiveDraft === null ? null : "העברה לארכיון שומרת עותק היסטורי ומשאירה את המועמדות בלי טיוטה פעילה."}
         </p>
       )}
 

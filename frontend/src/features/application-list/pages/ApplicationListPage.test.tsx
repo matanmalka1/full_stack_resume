@@ -355,9 +355,7 @@ describe("ApplicationListPage", () => {
   });
 
   it("opens the exact ready revision when the workflow is complete", async () => {
-    stubList([
-      item({ latest_ready_revision_id: "revision-1", preparation_state: "ready", recommended_action: null }),
-    ]);
+    stubList([item({ latest_ready_revision_id: "revision-1", preparation_state: "ready", recommended_action: null })]);
 
     renderPage();
 

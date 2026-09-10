@@ -29,12 +29,9 @@ describe("useInWorkflow", () => {
     "/applications/app-1/resume",
     "/applications/app-1/draft",
     "/revisions/rev-1",
-  ])(
-    "treats %s as a wizard step",
-    (path) => {
-      expect(at(path)).toBe("wizard");
-    },
-  );
+  ])("treats %s as a wizard step", (path) => {
+    expect(at(path)).toBe("wizard");
+  });
 
   /* The board and settings are not steps: they are where a reader goes to choose work
      rather than to do one piece of it, and they keep the full shell. */
