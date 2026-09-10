@@ -197,7 +197,7 @@ describe("the review decision, on the Application screen", () => {
 
     expect(await screen.findByText("המשך עם התאמה נמוכה אושר")).toBeInTheDocument();
     expect(screen.getByText(/נשמר כהחלטה על הניתוח הזה/)).toBeInTheDocument();
-    expect(screen.getByText("הצלחה")).toBeInTheDocument();
+    expect(screen.getByText("הושלם")).toBeInTheDocument();
     expect(screen.queryByText(/התאמה נמוכה מחייבת אישור מפורש/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "יצירת טיוטה" })).toBeInTheDocument();
   });

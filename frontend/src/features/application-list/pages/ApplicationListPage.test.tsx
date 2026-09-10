@@ -442,7 +442,7 @@ describe("ApplicationListPage", () => {
     expect(within(hub).getAllByText(/קיימת עוד מועמדות לאותה חברה ולאותו תפקיד/)).toHaveLength(2);
     const clearButtons = within(hub).getAllByRole("button", { name: "הסרת תזכורת" });
     fireEvent.click(clearButtons[0]);
-    expect(clearButtons[0]).toBeDisabled();
+    await waitFor(() => expect(clearButtons[0]).toBeDisabled());
     expect(clearButtons[1]).toBeEnabled();
   });
 
