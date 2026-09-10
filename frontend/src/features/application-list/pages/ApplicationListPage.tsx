@@ -170,7 +170,8 @@ export const ApplicationListPage = () => {
         error={listQuery.error}
         fallbackTitle="לא ניתן לטעון את המועמדויות"
         loading={listQuery.isPending}
-        loadingLabel="טוען את המועמדויות…"
+        /* No `loadingLabel`: `loadingState` always wins over it, so a label here would be
+           a string that never renders. The skeleton announces the wait itself. */
         loadingState={<ApplicationListTableSkeleton />}
       >
         {page === undefined ? null : (

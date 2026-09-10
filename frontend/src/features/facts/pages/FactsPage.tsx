@@ -10,7 +10,9 @@ import { Callout } from "@/ui/Callout";
 import { Card } from "@/ui/Card";
 import { EmptyState } from "@/ui/EmptyState";
 import { PageShell } from "@/ui/PageShell";
+import { LiveRegion } from "@/ui/LiveRegion";
 import { QueryState } from "@/ui/QueryState";
+import { Skeleton } from "@/ui/Skeleton";
 import { useFactDetail, useFactPool } from "../api/queries";
 import { FactCreationDialog } from "../components/FactCreationDialog";
 import { FactsIntegrityCheck } from "../components/FactsIntegrityCheck";
@@ -18,6 +20,36 @@ import { FactManagementDetail } from "../components/FactManagementDetail";
 import { FactPoolFilters } from "../components/FactPoolFilters";
 import { FactPoolList } from "../components/FactPoolList";
 import { emptyFactFilters, filterFactEntries } from "../model/factFilters";
+
+/* The two halves of this screen wait at their own shape: a run of rows on the pool side,
+   a record's heading and body on the detail side. Both used to wait as one line of muted
+   text, which on a two-column screen read as two empty cards rather than as one screen
+   arriving. */
+const factPoolLoading = (
+  <div className="flex flex-col gap-3">
+    <LiveRegion>טוען עובדות…</LiveRegion>
+    {["a", "b", "c", "d", "e", "f"].map((row) => (
+      <div className="flex items-start gap-3" key={row}>
+        <Skeleton className="block size-icon-md shrink-0" />
+        <span className="flex-1 space-y-1.5">
+          <Skeleton className="block h-4 w-3/4" />
+          <Skeleton className="block h-3 w-1/2" />
+        </span>
+      </div>
+    ))}
+  </div>
+);
+
+const factDetailLoading = (
+  <div className="flex flex-col gap-4">
+    <LiveRegion>טוען את פרטי העובדה…</LiveRegion>
+    <Skeleton className="block h-4 w-24" />
+    <Skeleton className="block h-6 w-2/3" />
+    <Skeleton className="block h-24 w-full" />
+    <Skeleton className="block h-4 w-1/2" />
+    <Skeleton className="block h-32 w-full" />
+  </div>
+);
 
 export const FactsPage = () => {
   const [filters, setFilters] = useState(emptyFactFilters);
@@ -73,9 +105,16 @@ export const FactsPage = () => {
         <Card className="cv-fields-compact bg-cv-surface p-3 shadow-surface sm:p-4">
           <FactPoolFilters filters={filters} onChange={setFilters} sources={sources} tags={tags} />
         </Card>
-        <p aria-live="polite" className="text-support text-cv-text-muted tabular-nums">
-          {visible.length === entries.length ? `${entries.length} עובדות` : `${visible.length} מתוך ${entries.length}`}
-        </p>
+        {/* Silent until there is something to count. While the read was in flight this
+            said "0 עובדות" beside a skeleton of six rows - a number that was not a
+            finding, next to a placeholder saying the finding was still coming. */}
+        {poolQuery.isPending ? null : (
+          <p aria-live="polite" className="text-support text-cv-text-muted tabular-nums">
+            {visible.length === entries.length
+              ? `${entries.length} עובדות`
+              : `${visible.length} מתוך ${entries.length}`}
+          </p>
+        )}
       </div>
 
       {mutationsBlocked ? null : (
@@ -108,7 +147,7 @@ export const FactsPage = () => {
             error={poolQuery.error}
             fallbackTitle="מאגר העובדות לא נטען"
             loading={poolQuery.isPending}
-            loadingLabel="טוען עובדות…"
+            loadingState={factPoolLoading}
           >
             <FactPoolList
               entries={visible}
@@ -131,8 +170,11 @@ export const FactsPage = () => {
             }
             error={detailQuery.error}
             fallbackTitle="פרטי העובדה לא נטענו"
-            loading={detailQuery.isPending && selectedId !== null}
-            loadingLabel="טוען את פרטי העובדה…"
+            /* Also while the pool is in flight: nothing can be selected yet, so without
+               this the detail half rendered an empty card beside the pool's skeleton and
+               the two halves of one screen waited in two different ways. */
+            loading={poolQuery.isPending || (detailQuery.isPending && selectedId !== null)}
+            loadingState={factDetailLoading}
           >
             {detailQuery.data === undefined ? null : (
               <FactManagementDetail

@@ -8,6 +8,7 @@ import { useWatchedOperation } from "@/features/operations";
 import { Callout } from "@/ui/Callout";
 import { Disclosure } from "@/ui/Disclosure";
 import { QueryState } from "@/ui/QueryState";
+import { LiveRegion } from "@/ui/LiveRegion";
 import { Skeleton } from "@/ui/Skeleton";
 import { ActiveOperationPanel, PendingWorkCard, operationTypeLabels } from "@/features/operations";
 import { PreparationView, WizardStepShell, useAutomaticDraft } from "@/features/preparation";
@@ -30,6 +31,20 @@ interface CreatedApplicationState {
    Two guards can reach it - the projection not yet resolved, and resolved with the watch
    not yet opened - and they are two moments of one fact, so they render one card from one
    copy rather than each writing its own line of text. */
+/* The step at its own size while the record is read: the verdict banner it opens with,
+   and the collapsed rows under it. The screen is linked to directly from the board, so
+   this is the reader's first sight of it - and the two wizard steps after it, the editor
+   and the ready screen, already wait this way. A line of muted text here made the first
+   of the three the odd one out. */
+const preparationLoading = (
+  <div className="flex flex-col gap-4">
+    <LiveRegion>טוען את פרטי המועמדות…</LiveRegion>
+    <Skeleton className="block h-20 w-full" />
+    <Skeleton className="block h-5 w-2/3" />
+    <Skeleton className="block h-5 w-1/2" />
+  </div>
+);
+
 const analysisPending = (
   <PendingWorkCard
     /* The heading the panel that replaces this will carry, from the same table, so the
@@ -106,8 +121,7 @@ export const ApplicationPage = () => {
         error={query.error}
         fallbackTitle="לא ניתן לטעון את פרטי המועמדות"
         loading={detail === undefined}
-        loadingLabel="טוען את פרטי המועמדות…"
-        loadingState={viewState === "processing" ? analysisPending : undefined}
+        loadingState={viewState === "processing" ? analysisPending : preparationLoading}
       >
         {detail === undefined ? null : (
           <div className="space-y-6">

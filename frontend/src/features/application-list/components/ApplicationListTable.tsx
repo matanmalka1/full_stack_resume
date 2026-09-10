@@ -1,5 +1,6 @@
 import type { ApplicationListItem } from "@/api/contracts";
 import { Card } from "@/ui/Card";
+import { Skeleton } from "@/ui/Skeleton";
 import { cx } from "@/ui/cx";
 import { duplicatedApplicationIdentityIds } from "../model/applicationListPresentation";
 import { ApplicationListRow } from "./ApplicationListRow";
@@ -69,24 +70,32 @@ export const ApplicationListTableSkeleton = () => (
   // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
   <Card aria-label="טוען את המועמדויות" className="overflow-hidden bg-cv-surface-raised shadow-surface" role="status">
     <div className="hidden h-10 border-b border-cv-border bg-cv-surface-muted lg:block" />
+    {/* Drawn with the `Skeleton` primitive rather than by hand. The hand-rolled version
+        pulsed - `animate-pulse` on the whole row - while every other waiting region in
+        the product sweeps, so the one screen a reader opens first was also the one that
+        waited differently. It also missed what the primitive carries: the
+        `forced-colors` rule is keyed to `.cv-skeleton`, so in Windows high contrast these
+        bars had their background replaced by the system and vanished, leaving a blank
+        pulsing card. Radius comes from the primitive; a `rounded-pill` passed here would
+        collide with its own `rounded-surface` and `cx` resolves no conflicts. */}
     <div className="divide-y divide-cv-border">
       {skeletonRows.map((key) => (
         <div
-          className="grid min-h-32 animate-pulse grid-cols-[1fr_auto] gap-4 p-4 lg:grid-cols-[25%_15%_22%_24%_10%_3rem] lg:items-start lg:py-3"
+          className="grid min-h-32 grid-cols-[minmax(0,1fr)_auto] gap-4 p-4 lg:grid-cols-[25%_15%_22%_24%_10%_3rem] lg:items-start lg:py-3"
           key={key}
         >
           <div className="flex gap-2">
-            <span className="size-9 shrink-0 rounded-control bg-cv-surface-muted" />
+            <Skeleton className="block size-9 shrink-0" />
             <span className="flex-1 space-y-2">
-              <span className="block h-4 w-4/5 rounded-pill bg-cv-surface-muted" />
-              <span className="block h-3 w-3/5 rounded-pill bg-cv-surface-muted" />
+              <Skeleton className="block h-4 w-4/5" />
+              <Skeleton className="block h-3 w-3/5" />
             </span>
           </div>
-          <span className="size-9 rounded-control bg-cv-surface-muted lg:order-last" />
-          <span className="col-span-2 h-4 w-24 rounded-pill bg-cv-surface-muted lg:col-span-1" />
-          <span className="col-span-2 h-7 w-36 rounded-pill bg-cv-surface-muted lg:col-span-1" />
-          <span className="col-span-2 h-4 w-2/3 rounded-pill bg-cv-surface-muted lg:col-span-1" />
-          <span className="hidden h-4 w-16 rounded-pill bg-cv-surface-muted lg:block" />
+          <Skeleton className="block size-9 lg:order-last" />
+          <Skeleton className="col-span-2 block h-4 w-24 lg:col-span-1" />
+          <Skeleton className="col-span-2 block h-7 w-36 lg:col-span-1" />
+          <Skeleton className="col-span-2 block h-4 w-2/3 lg:col-span-1" />
+          <Skeleton className="hidden h-4 w-16 lg:block" />
         </div>
       ))}
     </div>

@@ -43,29 +43,33 @@ export const PreparationView = ({
   const selectionPlanAction = plan.createSelectionPlan;
 
   /* Open decisions stay visible until answered. A recorded low-fit acceptance remains as
-     useful history, but with copy that names it as closed. The absence of a draft is not
-     itself a reason to keep an otherwise completed verdict on screen. */
+     useful history, but with copy that names it as closed. */
   const incompleteAnalysisAccepted =
     classification?.fit === "unknown" && !open.incompleteAnalysis && detail.preparation_state !== "needs_analysis";
-  const showBanner =
-    supersededAnalysis || classification === null || decisionCount > 0 || lowFitAccepted || incompleteAnalysisAccepted;
 
   return (
     <div className="flex flex-col gap-4">
       <AutomaticDraftNotice detail={detail} />
 
-      {/* The verdict the step is about, stated once and first - while it is still the
-          step's verdict. */}
-      {showBanner ? (
-        <AnalysisStatusBanner
-          classification={classification}
-          hasOpenDecisions={decisionCount > 0}
-          incompleteAnalysisAccepted={incompleteAnalysisAccepted}
-          lowFitAccepted={lowFitAccepted}
-          lowFitDecisionOpen={open.fit}
-          supersededAnalysis={supersededAnalysis}
-        />
-      ) : null}
+      {/* The verdict the step is about, stated once and first.
+
+          It used to be drawn only when something was wrong or had been decided - a
+          superseded analysis, a missing one, an open decision, an accepted risk. A clean
+          analysis that nobody had to rule on therefore said nothing, and because every
+          other part of this step is collapsed by default, a finished Application opened
+          on a step with no subject at all: a heading over four closed rows. The verdict of
+          a settled analysis is still the verdict, and `bannerContent` has always had the
+          sentence for it - fit and confidence, in the verdict's own tone. The banner now
+          renders whenever this step renders, and which of its branches speaks stays that
+          function's decision rather than being pre-empted here. */}
+      <AnalysisStatusBanner
+        classification={classification}
+        hasOpenDecisions={decisionCount > 0}
+        incompleteAnalysisAccepted={incompleteAnalysisAccepted}
+        lowFitAccepted={lowFitAccepted}
+        lowFitDecisionOpen={open.fit}
+        supersededAnalysis={supersededAnalysis}
+      />
 
       {/* The one thing to do now: run the analysis, resolve the open decisions, or generate
           the draft and move to the editor. Everything else on the screen is below it and

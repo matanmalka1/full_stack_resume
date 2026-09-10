@@ -75,7 +75,7 @@ const StepBody = ({ index, step }: { index: number; step: WorkflowStep }) => (
       "relative flex shrink-0 items-center gap-3 py-1 text-heading-sm transition-colors duration-200",
       stepLabelClasses[step.state],
       step.state === "current" && "font-bold",
-      step.here === true && step.state !== "current" && "bg-cv-surface-muted",
+      step.here === true && "rounded-control bg-cv-accent-soft",
       step.href !== undefined && "group-hover:bg-cv-surface-muted",
     )}
   >

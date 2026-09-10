@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { NotFoundPage } from "@/app/layout/NotFoundPage";
 import { ApiProblem } from "@/api/client";
 import { ErrorCallout } from "./ErrorCallout";
+import { LiveRegion } from "./LiveRegion";
 import { cx } from "./cx";
 
 interface QueryStateProps {
@@ -43,9 +44,20 @@ export const QueryState = ({
       <ErrorCallout className={className} error={error} fallbackDetail={fallbackDetail} fallbackTitle={fallbackTitle} />
     ) : null;
 
+  /* The word is announced as well as printed. A region that hands its own `loadingState`
+     over already says so - the board's skeleton is a `role="status"` output, the draft and
+     revision skeletons open with a `LiveRegion` - while the plain sentence this falls back
+     to was a bare paragraph, so the four screens that take the fallback said nothing to a
+     reader who cannot see it. Visible and announced are the same node here, which is what
+     keeps the two from drifting apart. */
   if (loading) {
     return (
-      errorState ?? loadingState ?? <p className={cx("text-body text-cv-text-muted", className)}>{loadingLabel}</p>
+      errorState ??
+      loadingState ?? (
+        <LiveRegion className={cx("text-body text-cv-text-muted", className)} visuallyHidden={false}>
+          {loadingLabel}
+        </LiveRegion>
+      )
     );
   }
 
