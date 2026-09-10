@@ -1,9 +1,6 @@
-import { useEffect, useRef } from "react";
-
 import { briefServerFailureDetail, ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
-import { LiveRegion } from "@/ui/LiveRegion";
 import { ValidationReportView } from "@/features/revisions";
 import type { DraftValidation } from "../hooks/useDraftValidation";
 
@@ -19,21 +16,12 @@ interface DraftValidationPanelProps {
    open - is derived upstream from the same values, so nothing is reported back out of
    here through an effect. */
 export const DraftValidationPanel = ({ validation }: DraftValidationPanelProps) => {
-  const summaryRef = useRef<HTMLHeadingElement>(null);
-  const { canValidate, error, isPending, lastRun, run, stale, validate } = validation;
-
-  /* A run the user asked for: the verdict is what they are waiting for, so the heading
-     that carries it takes focus once it arrives. A run read back with the draft moves
-     nothing. */
-  const lastRunId = lastRun?.validation_run_id ?? null;
-  useEffect(() => {
-    if (lastRunId !== null) summaryRef.current?.focus();
-  }, [lastRunId]);
+  const { canValidate, error, isPending, run, stale, validate } = validation;
 
   return (
     <section aria-labelledby="validation-summary" className="flex flex-col gap-3 border-t border-cv-border pt-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-heading-sm font-bold text-cv-text" id="validation-summary" ref={summaryRef} tabIndex={-1}>
+        <h2 className="text-heading-sm font-bold text-cv-text" id="validation-summary">
           {run === undefined ? "אימות הטיוטה" : run.passed ? "הטיוטה עברה אימות" : "הטיוטה לא עברה אימות"}
         </h2>
         <Button disabled={!canValidate} onClick={validate} pending={isPending} pendingLabel="מאמת…" variant="secondary">
@@ -62,10 +50,6 @@ export const DraftValidationPanel = ({ validation }: DraftValidationPanelProps) 
       ) : (
         <ValidationReportView report={run.report} />
       )}
-
-      <LiveRegion>
-        {lastRun === undefined ? "" : lastRun.passed ? "האימות הושלם בהצלחה." : "האימות הושלם והטיוטה לא עברה."}
-      </LiveRegion>
     </section>
   );
 };

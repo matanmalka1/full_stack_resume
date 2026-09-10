@@ -3,6 +3,7 @@ import { FileText, RefreshCw } from "lucide-react";
 
 import type { WorkingDraft } from "@/api/contracts";
 import { draftPreviewSrc } from "@/api/drafts";
+import { DocumentFrame } from "@/ui/DocumentFrame";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { StatusBadge } from "@/ui/StatusBadge";
 
@@ -47,11 +48,10 @@ export const DraftPreview = ({ draft }: { draft: WorkingDraft }) => {
 
       {/* The document is the thing; a mat around it was a card wrapping a card. The frame
           keeps its own hairline and nothing else sits between it and the page. */}
-      <iframe
-        className="h-[72vh] w-full rounded-control border border-cv-border bg-cv-surface"
+      <DocumentFrame
+        className="w-full"
         key={draft.edit_version}
         onLoad={() => setLoadedVersion(draft.edit_version)}
-        sandbox=""
         src={draftPreviewSrc(draft.id, draft.edit_version)}
         title="תצוגה מקדימה של הטיוטה"
       />

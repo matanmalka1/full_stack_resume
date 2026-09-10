@@ -19,6 +19,7 @@ interface DraftApprovalBarProps {
   reviewBlocked: boolean;
   /* An approval was refused because the draft moved after the run it named. */
   stale: boolean;
+  validationResult?: string;
 }
 
 /* The one decision this screen exists for, in the place every step puts its action.
@@ -38,6 +39,7 @@ export const DraftApprovalBar = ({
   onApprove,
   reviewBlocked,
   stale,
+  validationResult,
 }: DraftApprovalBarProps) => {
   const reason = reviewBlocked
     ? "יש חסימה שדורשת החלטה לפני אישור."
@@ -56,6 +58,7 @@ export const DraftApprovalBar = ({
         </Link>
       }
       label={NEXT_STEP_LABEL}
+      result={validationResult}
       primary={
         <Button disabled={exactPassingRunId === null} onClick={onApprove}>
           <ShieldCheck aria-hidden="true" className="size-4" />

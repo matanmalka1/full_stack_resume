@@ -6,6 +6,7 @@ import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Card } from "@/ui/Card";
 import { Disclosure } from "@/ui/Disclosure";
+import { DocumentFrame } from "@/ui/DocumentFrame";
 import { SummaryList } from "@/ui/SummaryList";
 import { surfaceClasses } from "@/ui/surface";
 import { ValidationReportView } from "./ValidationReportView";
@@ -36,9 +37,8 @@ export const RevisionRecord = ({ decision, revision }: RevisionRecordProps) => {
             הגרסה המאושרת נשמרה, אך תצוגת המסמך תופיע רק לאחר יצירת הארטיפקט הרשום.
           </Callout>
         ) : (
-          <iframe
-            className={surfaceClasses("h-[46rem] w-full bg-cv-surface-raised shadow-document")}
-            sandbox=""
+          <DocumentFrame
+            className={surfaceClasses("w-full bg-cv-surface-raised shadow-document")}
             src={approvedPreviewSrc(revision.id, revision.html_artifact_version_id)}
             title="תצוגה מאושרת של קורות החיים"
           />

@@ -77,6 +77,13 @@ export const NewApplicationPage = () => {
           </Link>
         }
         label={NEXT_STEP_LABEL}
+        result={
+          submission.duplicateMatches === null
+            ? undefined
+            : submission.duplicateMatches.length === 1
+              ? "נמצאה מועמדות דומה. אפשר לפתוח אותה או לאשר יצירת מועמדות נוספת."
+              : `נמצאו ${submission.duplicateMatches.length} מועמדויות דומות. אפשר לפתוח אחת מהן או לאשר יצירת מועמדות נוספת.`
+        }
         primary={
           submission.duplicateMatches === null ? (
             <Button

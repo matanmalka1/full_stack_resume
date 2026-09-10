@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import type { ApplicationListItem } from "@/api/contracts";
+import type { ApplicationListItem, RecruitmentStatus } from "@/api/contracts";
 import { routePaths } from "@/app/routePaths";
 import { RecruitmentUpdateDialog } from "@/features/recruitment";
-import { buttonClasses } from "@/ui/Button";
+import { Button, buttonClasses } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
+import { LiveRegion } from "@/ui/LiveRegion";
 import { ApplicationAttentionSummary } from "../components/ApplicationAttentionSummary";
 import { ApplicationListResults } from "../components/ApplicationListResults";
 import { ApplicationListToolbar } from "../components/ApplicationListToolbar";
@@ -23,6 +24,13 @@ import { type RecruitmentStageId, recruitmentStages, selectedStage } from "../mo
 const findApplication = (items: readonly ApplicationListItem[], id: string | null) =>
   id === null ? null : (items.find((item) => item.id === id) ?? null);
 
+interface ClosedResult {
+  applicationId: string;
+  eventId: string | null;
+  label: string;
+  previousStatus: RecruitmentStatus;
+}
+
 /* The board reads top to bottom as four answers: where the reader is, what is waiting
    for them, which slice of the work they are looking at, and the work itself.
 
@@ -34,9 +42,22 @@ export const ApplicationListPage = () => {
   const { listQuery, query, searchInput, setSearchInput, updateQuery } = useApplicationListQuery();
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
   const [closingApplicationId, setClosingApplicationId] = useState<string | null>(null);
+  const [closedResult, setClosedResult] = useState<ClosedResult | null>(null);
   const [updatingApplicationId, setUpdatingApplicationId] = useState<string | null>(null);
-  const { clearNextActionMutation, closeMutation } = useApplicationListMutations({
-    onApplicationClosed: () => setClosingApplicationId(null),
+  const { clearNextActionMutation, closeMutation, undoCloseMutation } = useApplicationListMutations({
+    onApplicationClosed: (applicationId, eventId) => {
+      const application = findApplication(items, applicationId);
+      setClosingApplicationId(null);
+      if (application !== null) {
+        setClosedResult({
+          applicationId,
+          eventId: eventId ?? null,
+          label: application.company,
+          previousStatus: application.recruitment_status as RecruitmentStatus,
+        });
+      }
+    },
+    onCloseUndone: () => setClosedResult(null),
     onNextActionCleared: (applicationId) => {
       if (updatingApplicationId === applicationId) setUpdatingApplicationId(null);
     },
@@ -62,9 +83,31 @@ export const ApplicationListPage = () => {
     (query.stages?.length ?? 0) > 0 ||
     (query.recruitmentStatuses?.length ?? 0) > 0;
   const clearFilters = () => updateQuery({ sort: query.sort });
+  const undoClose = () => {
+    if (closedResult === null || closedResult.eventId === null) return;
+    undoCloseMutation.mutate({ ...closedResult, eventId: closedResult.eventId });
+  };
 
   return (
     <PageShell measure="wide" title="לוח מועמדויות">
+      {closedResult === null ? null : (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-cv-success/20 bg-cv-success-soft/60 px-3.5 py-2.5 text-support text-cv-text">
+          <LiveRegion visuallyHidden={false}>
+            <span dir="auto">המועמדות של {closedResult.label} נסגרה והועברה למועמדויות הסגורות.</span>
+          </LiveRegion>
+          {closedResult.eventId === null ? null : (
+            <Button
+              onClick={undoClose}
+              pending={undoCloseMutation.isPending}
+              pendingLabel="מבטל סגירה…"
+              size="compact"
+              variant="secondary"
+            >
+              ביטול הסגירה
+            </Button>
+          )}
+        </div>
+      )}
       <ApplicationAttentionSummary
         clearingApplicationId={clearNextActionMutation.isPending ? (clearNextActionMutation.variables ?? null) : null}
         items={items}
@@ -83,6 +126,13 @@ export const ApplicationListPage = () => {
           error={closeMutation.error}
           fallbackDetail="המועמדות לא נסגרה. אפשר לנסות שוב."
           fallbackTitle="סגירת המועמדות נכשלה"
+        />
+      )}
+      {undoCloseMutation.error === null ? null : (
+        <ErrorCallout
+          error={undoCloseMutation.error}
+          fallbackDetail="הסגירה נשארה בתוקף. אפשר לנסות שוב או לתקן את האירוע מתוך המועמדות."
+          fallbackTitle="לא ניתן לבטל את הסגירה"
         />
       )}
 

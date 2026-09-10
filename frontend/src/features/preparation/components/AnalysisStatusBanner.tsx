@@ -55,7 +55,7 @@ const bannerContent = (
     return {
       body: "המערכת לא הצליחה לקרוא את דרישות המשרה. ההמשך ללא דירוג התאמה אושר ונשמר כהחלטה על הניתוח הזה.",
       title: "המשך ללא ניתוח דרישות אושר",
-      tone: "neutral",
+      tone: hasOpenDecisions ? "warning" : "success",
     };
   }
 
@@ -63,7 +63,7 @@ const bannerContent = (
     return {
       body: "המשך התהליך למרות ההתאמה הנמוכה אושר ונשמר כהחלטה על הניתוח הזה.",
       title: "המשך עם התאמה נמוכה אושר",
-      tone: "neutral",
+      tone: hasOpenDecisions ? "warning" : "success",
     };
   }
 

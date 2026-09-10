@@ -278,6 +278,11 @@ describe("NewApplicationPage", () => {
     submitForm();
 
     expect(await screen.findByText("נמצאה מועמדות דומה")).toBeInTheDocument();
+    const duplicateResult = screen.getByText(
+      "נמצאה מועמדות דומה. אפשר לפתוח אותה או לאשר יצירת מועמדות נוספת.",
+    );
+    expect(duplicateResult.closest(".sticky")).not.toBeNull();
+    expect(duplicateResult.closest('[role="status"]')).not.toBeNull();
     expect(screen.getByText("אותה כתובת מקור · אותה חברה ואותו תפקיד")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "פתיחת המועמדות הקיימת: Acme — Backend Engineer" })).toHaveAttribute(
       "href",

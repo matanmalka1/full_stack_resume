@@ -663,5 +663,22 @@ describe("ApplicationListPage", () => {
       expect(queryClient.getQueryState(closedListKey)?.isInvalidated).toBe(true);
       expect(queryClient.getQueryState(detailKey)?.isInvalidated).toBe(true);
     });
+
+    expect(screen.getByRole("status")).toHaveTextContent("המועמדות של Acme נסגרה");
+    fireEvent.click(screen.getByRole("button", { name: "ביטול הסגירה" }));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/v1/applications/app-1/status-corrections",
+        expect.objectContaining({
+          body: JSON.stringify({
+            corrects_event_id: "event-1",
+            reason: "ביטול סגירת המועמדות",
+            target_status: "saved",
+          }),
+          method: "POST",
+        }),
+      ),
+    );
+    await waitFor(() => expect(screen.queryByText("המועמדות של Acme נסגרה")).not.toBeInTheDocument());
   });
 });

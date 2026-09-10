@@ -152,7 +152,9 @@ const updateResponse = (editVersion: number): Response =>
 /* One route per read, so a test states which answer it is giving rather than depending on
    the order the screen happens to request them in. */
 const stubReads = (
-  answers: Partial<Record<"detail" | "draft" | "facts" | "selectionChange" | "regenerate", () => Response>>,
+  answers: Partial<
+    Record<"detail" | "draft" | "facts" | "selectionChange" | "regenerate" | "validation", () => Response>
+  >,
 ): ReturnType<typeof vi.fn> => {
   const fetchMock = vi.fn((input: unknown) => {
     const url = String(input);
@@ -172,6 +174,9 @@ const stubReads = (
             plan: {},
           }),
       );
+    }
+    if (url.endsWith("/validate")) {
+      return Promise.resolve(answers.validation?.() ?? jsonResponse({}, 500));
     }
     if (url.startsWith(`${DRAFT_PATH}/facts`)) {
       return Promise.resolve(answers.facts?.() ?? jsonResponse(facts()));
@@ -244,6 +249,32 @@ describe("DraftEditorPage", () => {
 
     expect(await screen.findByRole("button", { name: "מסמך לאישור" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "בדיקת עובדות ועריכה" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("reports a requested validation in the pinned commit bar", async () => {
+    stubReads({
+      validation: () =>
+        jsonResponse({
+          application_id: "app-1",
+          content_hash: "hash-4",
+          edit_version: 4,
+          passed: false,
+          report: {
+            evidence: {},
+            groups: { facts: false },
+            issues: [{ code: "MISSING_FACT", group: "facts", hard: true, message: "Missing fact" }],
+          },
+          validation_run_id: "run-1",
+          working_draft_id: "wd-1",
+        }),
+    });
+
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "אימות הטיוטה" }));
+
+    const result = await screen.findByText("האימות הושלם והטיוטה לא עברה. פרטי הכשל מופיעים לצד הטיוטה.");
+    expect(result.closest(".sticky")).not.toBeNull();
+    expect(result.closest('[role="status"]')).not.toBeNull();
   });
 
   it("gates AI regeneration through effective Settings without offering a silent fallback", async () => {

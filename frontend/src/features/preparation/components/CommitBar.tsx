@@ -3,6 +3,7 @@ import { createContext, useContext, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { cx } from "@/ui/cx";
+import { LiveRegion } from "@/ui/LiveRegion";
 
 /* What every pinned bar in the flow calls itself when it is a wizard step's action rather
    than a form's commit. Named "מה עושים עכשיו" and not "הצעד הבא": the bar carries the
@@ -25,6 +26,10 @@ interface CommitBarProps {
      named by the panel it closes. */
   label?: ReactNode;
   primary: ReactNode;
+  /* The outcome of the command this bar owns. Keeping it inside the pinned surface means
+     a result never lands outside the reader's viewport. The same node is the single live
+     announcement for that result, so callers must not announce it again elsewhere. */
+  result?: ReactNode;
 }
 
 /* A workflow page owns one physical action position even when the component deciding
@@ -49,20 +54,30 @@ export const CommitBarTargetContext = createContext<HTMLElement | null | undefin
    do now" in a shape of its own - a row of buttons in the flow on the preparation screen,
    a pinned approval in the editor, a download inside the identity card on the ready
    screen - and it is this component, at all three, that makes the answer one shape. */
-const CommitBarSurface = ({ back, children, label, primary }: CommitBarProps) => (
-  <div className="sticky bottom-4 z-20 flex flex-wrap items-center justify-between gap-4 rounded-surface border border-cv-border bg-cv-surface/95 p-4 shadow-floating backdrop-blur-xl">
-    <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
-      {back}
-      {label === undefined ? (
-        children
-      ) : (
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="text-[0.75rem] font-bold text-cv-text-muted">{label}</span>
-          {children}
-        </div>
-      )}
+const CommitBarSurface = ({ back, children, label, primary, result }: CommitBarProps) => (
+  <div className="sticky bottom-4 z-20 rounded-surface border border-cv-border bg-cv-surface/95 p-4 shadow-floating backdrop-blur-xl">
+    <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
+        {back}
+        {label === undefined ? (
+          children
+        ) : (
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-[0.75rem] font-bold text-cv-text-muted">{label}</span>
+            {children}
+          </div>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-3">{primary}</div>
     </div>
-    <div className="flex flex-wrap items-center gap-3">{primary}</div>
+    {result === undefined ? null : (
+      <LiveRegion
+        className="mt-3 border-t border-cv-border pt-3 text-support font-medium text-cv-text"
+        visuallyHidden={false}
+      >
+        {result}
+      </LiveRegion>
+    )}
   </div>
 );
 

@@ -1,25 +1,49 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { closeApplication, invalidateApplicationViews } from "@/api/applications";
-import { setNextAction } from "@/api/tracking";
+import type { RecruitmentStatus } from "@/api/contracts";
+import { correctRecruitmentStatus, setNextAction } from "@/api/tracking";
 
 interface ApplicationListMutationOptions {
-  onApplicationClosed: (applicationId: string) => void;
+  onApplicationClosed: (applicationId: string, eventId: string | null | undefined) => void;
+  onCloseUndone: () => void;
   onNextActionCleared: (applicationId: string) => void;
 }
 
 /** Keeps command state and cache invalidation out of list presentation. */
 export const useApplicationListMutations = ({
   onApplicationClosed,
+  onCloseUndone,
   onNextActionCleared,
 }: ApplicationListMutationOptions) => {
   const queryClient = useQueryClient();
 
   const closeMutation = useMutation({
     mutationFn: closeApplication,
-    onSuccess: async (_result, applicationId) => {
-      onApplicationClosed(applicationId);
+    onSuccess: async (result, applicationId) => {
+      onApplicationClosed(applicationId, result.event_id);
       await invalidateApplicationViews(queryClient, applicationId);
+    },
+  });
+
+  const undoCloseMutation = useMutation({
+    mutationFn: ({
+      applicationId,
+      eventId,
+      previousStatus,
+    }: {
+      applicationId: string;
+      eventId: string;
+      previousStatus: RecruitmentStatus;
+    }) =>
+      correctRecruitmentStatus(applicationId, {
+        corrects_event_id: eventId,
+        reason: "ביטול סגירת המועמדות",
+        target_status: previousStatus,
+      }),
+    onSuccess: async (_result, variables) => {
+      onCloseUndone();
+      await invalidateApplicationViews(queryClient, variables.applicationId);
     },
   });
 
@@ -31,5 +55,5 @@ export const useApplicationListMutations = ({
     },
   });
 
-  return { clearNextActionMutation, closeMutation };
+  return { clearNextActionMutation, closeMutation, undoCloseMutation };
 };
