@@ -1,17 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Settings, ShieldCheck } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Settings, ShieldCheck } from "lucide-react";
 
 import { settingsQueryOptions } from "@/api/settings";
 import { boardPath } from "@/app/boardReturn";
-import { routePaths } from "@/app/routePaths";
 import { Breadcrumbs } from "@/ui/Breadcrumbs";
-import { buttonClasses } from "@/ui/Button";
 import { Card } from "@/ui/Card";
 import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
 import { SectionHeader } from "@/ui/SectionHeader";
-import { ReconciliationPanel } from "../components/ReconciliationPanel";
 import { SettingsForm } from "../components/SettingsForm";
 
 export const SettingsPage = () => {
@@ -19,7 +15,7 @@ export const SettingsPage = () => {
 
   return (
     <PageShell
-      description="מדיניות ביצוע, תצוגת הממשק ובדיקות התקינות של מאגר הידע והתוצרים."
+      description="מדיניות ביצוע ותצוגת הממשק."
       measure="form"
       navigation={<Breadcrumbs items={[{ label: "מועמדויות", to: boardPath() }, { label: "הגדרות" }]} />}
       title={
@@ -44,19 +40,6 @@ export const SettingsPage = () => {
         >
           {query.data === undefined ? null : <SettingsForm etag={query.data.etag} settings={query.data.settings} />}
         </QueryState>
-      </Card>
-      <ReconciliationPanel />
-      <Card className="bg-cv-surface p-5 shadow-surface sm:p-6">
-        <SectionHeader
-          actions={
-            <Link className={buttonClasses("secondary")} to={routePaths.facts}>
-              פתיחת מאגר העובדות
-            </Link>
-          }
-          description="עובדות המועמד, מקורותיהן ומחזור החיים שלהן מנוהלים במסך ייעודי."
-          icon={BookOpen}
-          title="מאגר העובדות"
-        />
       </Card>
     </PageShell>
   );

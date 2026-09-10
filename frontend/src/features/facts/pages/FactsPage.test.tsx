@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Fact } from "@/api/contracts";
-import { json, renderRoute } from "@/test/fixtures";
+import { json, reconciliationReport, renderRoute } from "@/test/fixtures";
 import { FactsPage } from "./FactsPage";
 
 const fact = (overrides: Partial<Fact> = {}): Fact => ({
@@ -213,5 +213,61 @@ describe("FactsPage", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: /בדקתי את תוכן העובדה/ }));
     fireEvent.click(button);
     await waitFor(() => expect(requests).toContain(`/api/v1/facts/fact.backend/${command}`));
+  });
+});
+
+describe("Facts integrity check", () => {
+  it("runs the check in place and states the verdict on one line", async () => {
+    const item = fact();
+    const report = reconciliationReport({
+      passed: false,
+      problems: ["missing artifact: artifacts/outputs/revision-1/resume.pdf"],
+      fact_lifecycle: { ...reconciliationReport().fact_lifecycle, passed: false, problems: ["fact audit mismatch"] },
+    });
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/v1/maintenance/reconciliations" && init?.method === "POST")
+        return Promise.resolve(json(report));
+      if (url === "/api/v1/facts")
+        return Promise.resolve(json({ items: [{ fact: item, recorded_status: "canonical" }] }));
+      if (url.endsWith("/fact.backend")) return Promise.resolve(json({ fact: item, events: [event(item)] }));
+      if (url.includes("/attachment-targets")) return Promise.resolve(json(targets()));
+      return Promise.resolve(json({}, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderRoute("/facts", "/facts", <FactsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "הפעלה" }));
+
+    expect(
+      await screen.findByText("1 אי־התאמות בעובדות, 1 בעיות בתוצרים — הבדיקה מדווחת בלבד ואינה מתקנת נתונים."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("הבעיות שנמצאו (2)")).toBeInTheDocument();
+    expect(screen.getByText("fact audit mismatch")).toBeInTheDocument();
+    expect(screen.getByText("missing artifact: artifacts/outputs/revision-1/resume.pdf")).toBeInTheDocument();
+    /* The report describes the store as it is now, so the pool is refetched behind it. */
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.filter((call) => String(call[0]) === "/api/v1/facts")).toHaveLength(2),
+    );
+  });
+
+  it("reports a passing check with the counts it covered", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/v1/maintenance/reconciliations" && init?.method === "POST")
+          return Promise.resolve(json(reconciliationReport()));
+        if (url === "/api/v1/facts") return Promise.resolve(json({ items: [] }));
+        return Promise.resolve(json({}, 404));
+      }),
+    );
+
+    renderRoute("/facts", "/facts", <FactsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "הפעלה" }));
+
+    expect(await screen.findByText("תקין — 4 עובדות, 4 גרסאות תוצר.")).toBeInTheDocument();
+    expect(screen.queryByText(/הבעיות שנמצאו/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "בדיקה מחדש" })).toBeInTheDocument();
   });
 });

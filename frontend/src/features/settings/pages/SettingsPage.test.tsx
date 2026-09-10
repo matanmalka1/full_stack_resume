@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { json, reconciliationReport, renderRoute, settings } from "@/test/fixtures";
+import { json, renderRoute, settings } from "@/test/fixtures";
 import { SettingsPage } from "./SettingsPage";
 
 afterEach(() => {
@@ -13,27 +13,36 @@ describe("SettingsPage", () => {
   it("shows provider availability and keeps AI mode unavailable without one", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn((input: string | URL | Request) =>
-        Promise.resolve(
-          String(input) === "/api/v1/facts" ? json({ items: [] }) : json(settings(), 200, { ETag: '"settings-0"' }),
-        ),
-      ),
+      vi.fn(() => Promise.resolve(json(settings(), 200, { ETag: '"settings-0"' }))),
     );
     renderRoute("/settings", "/settings", <SettingsPage />);
     expect(screen.getByRole("link", { name: "מועמדויות" })).toHaveAttribute("href", "/");
     expect(screen.getByText("הגדרות")).toHaveAttribute("aria-current", "page");
     expect(await screen.findByText("לא הוגדר ספק AI בסביבת הריצה.")).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "AI" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "הפעלת בדיקת התאמה" })).toBeInTheDocument();
+  });
+
+  it("owns policy and display only: the fact store and its check live on the facts screen", async () => {
+    const requestedUrls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string | URL | Request) => {
+        requestedUrls.push(String(input));
+        return Promise.resolve(json(settings(), 200, { ETag: '"settings-0"' }));
+      }),
+    );
+
+    renderRoute("/settings", "/settings", <SettingsPage />);
+    await screen.findByRole("button", { name: "שמירת הגדרות" });
+
+    expect(screen.queryByRole("button", { name: "הפעלת בדיקת תקינות" })).not.toBeInTheDocument();
+    expect(screen.queryByText("מאגר העובדות")).not.toBeInTheDocument();
+    expect(requestedUrls).not.toContain("/api/v1/facts");
   });
 
   it("saves all product settings under the read ETag", async () => {
-    const fetchMock = vi.fn((input: string | URL | Request, _init?: RequestInit) =>
-      Promise.resolve(
-        String(input) === "/api/v1/facts"
-          ? json({ items: [] })
-          : json(settings({ edit_version: 1 }), 200, { ETag: '"settings-1"' }),
-      ),
+    const fetchMock = vi.fn((_input: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(json(settings({ edit_version: 1 }), 200, { ETag: '"settings-1"' })),
     );
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/settings", "/settings", <SettingsPage />);
@@ -71,58 +80,5 @@ describe("SettingsPage", () => {
     });
     await waitFor(() => expect(autoGenerate).not.toBeChecked());
     expect(saveButton).toBeDisabled();
-  });
-
-  it("links to the dedicated candidate-facts surface without loading the pool", async () => {
-    const requestedUrls: string[] = [];
-    const fetchMock = vi.fn((input: string | URL | Request) => {
-      requestedUrls.push(String(input));
-      return Promise.resolve(json(settings(), 200, { ETag: '"settings-0"' }));
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    renderRoute("/settings", "/settings", <SettingsPage />);
-
-    expect(await screen.findByRole("link", { name: "פתיחת מאגר העובדות" })).toHaveAttribute("href", "/facts");
-    expect(requestedUrls).not.toContain("/api/v1/facts");
-  });
-});
-
-describe("Settings reconciliation", () => {
-  it("runs reconciliation in place and presents the complete report", async () => {
-    const report = reconciliationReport({
-      passed: false,
-      problems: ["missing artifact: artifacts/outputs/revision-1/resume.pdf"],
-      fact_lifecycle: {
-        ...reconciliationReport().fact_lifecycle,
-        passed: false,
-        problems: ["fact audit mismatch"],
-        journal_quarantined: 1,
-      },
-    });
-    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
-      if (String(input).includes("/maintenance/reconciliations") && init?.method === "POST") {
-        return Promise.resolve(json(report));
-      }
-      return Promise.resolve(
-        String(input) === "/api/v1/facts" ? json({ items: [] }) : json(settings(), 200, { ETag: '"settings-0"' }),
-      );
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    renderRoute("/settings", "/settings", <SettingsPage />);
-
-    fireEvent.click(await screen.findByRole("button", { name: "הפעלת בדיקת התאמה" }));
-
-    expect(await screen.findByRole("status")).toHaveTextContent("נמצאה בעיית תקינות");
-    expect(screen.getByText("קבצים חסרים: 1")).toBeInTheDocument();
-    expect(screen.getByText("מה צריך לעשות")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("פרטים טכניים"));
-    expect(screen.getByText("missing artifact: artifacts/outputs/revision-1/resume.pdf")).toBeInTheDocument();
-    expect(screen.getByText("fact audit mismatch")).toBeInTheDocument();
-    expect(screen.getByText("תוצרים — 4 גרסאות נבדקו")).toBeInTheDocument();
-    expect(screen.getByText("facts-version-1")).toBeInTheDocument();
-    const request = fetchMock.mock.calls.find((call) => String(call[0]).includes("/maintenance/reconciliations"));
-    expect(request?.[0]).toBe("/api/v1/maintenance/reconciliations");
-    expect(request?.[1]?.method).toBe("POST");
   });
 });

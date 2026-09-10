@@ -112,7 +112,7 @@ const FactPoolRow = ({
    so it always says which store the rows under the cursor belong to.
 
    Groups keep the order the pool arrived in rather than being sorted here: the store's
-   own order is what the settings screen and the reconciliation report show. */
+   own order is what the store itself and the integrity report show. */
 const groupBySource = (entries: FactPoolEntry[]): { entries: FactPoolEntry[]; source: string }[] => {
   const groups = new Map<string, FactPoolEntry[]>();
 

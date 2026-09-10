@@ -13,6 +13,7 @@ import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
 import { useFactDetail, useFactPool } from "../api/queries";
 import { FactCreationDialog } from "../components/FactCreationDialog";
+import { FactsIntegrityCheck } from "../components/FactsIntegrityCheck";
 import { FactManagementDetail } from "../components/FactManagementDetail";
 import { FactPoolFilters } from "../components/FactPoolFilters";
 import { FactPoolList } from "../components/FactPoolList";
@@ -59,9 +60,11 @@ export const FactsPage = () => {
     >
       {poolQuery.data?.outOfSyncCount ? (
         <Callout role="alert" title="נמצאה אי־התאמה ביומן העובדות" tone="blocker">
-          יש להפעיל בדיקת התאמה בהגדרות לפני קידום עובדות או שימוש בהן.
+          יש להפעיל את בדיקת התקינות שבמסך זה ולברר את הפער לפני קידום עובדות או שימוש בהן.
         </Callout>
       ) : null}
+
+      <FactsIntegrityCheck />
 
       <Card className="cv-fields-compact bg-cv-surface p-3 shadow-surface sm:p-4">
         <div className="flex flex-wrap items-end gap-3">
